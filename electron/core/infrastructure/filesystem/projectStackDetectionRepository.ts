@@ -33,7 +33,10 @@ export class ProjectStackDetectionRepository {
         stack.add('python')
         const lines = fs.readFileSync(reqPath, 'utf-8').split(/\r?\n/)
         for (const l of lines) {
-          const pkg = l.split(/[=<>~]/)[0].trim().toLowerCase()
+          const pkg = l
+            .split(/[=<>~]/)[0]
+            .trim()
+            .toLowerCase()
           if (pkg && !pkg.startsWith('#')) stack.add(pkg)
         }
       }

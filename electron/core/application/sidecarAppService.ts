@@ -1,5 +1,3 @@
-
-
 import path from 'node:path'
 import os from 'node:os'
 import { randomUUID } from 'node:crypto'
@@ -31,18 +29,18 @@ export function getAnomalyRemediation(anomalyType: string): string {
     return 'Risposta JSON del modello troncata o non valida. Aumenta num_ctx o passa a un modello coding dedicato (es. qwen2.5-coder:7b).'
   }
   if (anomalyType.includes('TOOL_LOOP')) {
-    return 'Loop di chiamate identiche rilevato. Riformula il prompt o interrompi l\'agente per evitare consumo inutile di token.'
+    return "Loop di chiamate identiche rilevato. Riformula il prompt o interrompi l'agente per evitare consumo inutile di token."
   }
   if (anomalyType.includes('GATEWAY_TIMEOUT') || anomalyType.includes('OLLAMA_TIMEOUT')) {
     return 'Connessione a Ollama o Sidecar scaduta o rifiutata. Verifica che il demone Ollama sia attivo sulla porta 11434.'
   }
   if (anomalyType.includes('CIRCUIT_BREAKER')) {
-    return 'Intervento del Circuit Breaker di sicurezza: l\'esecuzione è stata arrestata per prevenire loop infiniti.'
+    return "Intervento del Circuit Breaker di sicurezza: l'esecuzione è stata arrestata per prevenire loop infiniti."
   }
   if (anomalyType.includes('FS_PERMISSIONS')) {
     return 'Errore nei permessi del filesystem (EPERM/EACCES). Assicurati che OnlyRag abbia i permessi di scrittura nel workspace.'
   }
-  return 'Controlla i log completi e verifica la corretta configurazione dell\'ambiente di esecuzione.'
+  return "Controlla i log completi e verifica la corretta configurazione dell'ambiente di esecuzione."
 }
 
 export class SidecarAppService {
@@ -77,7 +75,7 @@ export class SidecarAppService {
     normalizationModel?: string,
     numCtx?: number,
     taskId?: string,
-    normalizationThink?: boolean
+    normalizationThink?: boolean,
   ) {
     if (typeof filePath !== 'string' || !filePath.trim()) {
       return { success: false, error: 'Invalid file path' }
@@ -86,7 +84,7 @@ export class SidecarAppService {
     logger.log(
       'INFO',
       'SidecarApp',
-      `Ingesting file path (streaming): ${filePath} (normalizeWithLlm=${normalizeWithLlm}, normalizationModel=${normalizationModel})`
+      `Ingesting file path (streaming): ${filePath} (normalizeWithLlm=${normalizeWithLlm}, normalizationModel=${normalizationModel})`,
     )
     try {
       const resolvedPath = path.resolve(filePath)
@@ -117,9 +115,9 @@ export class SidecarAppService {
             () => {
               if (cancelRequest) cancelRequest()
             },
-            { sourcePath: resolvedPath }
+            { sourcePath: resolvedPath },
           )
-        }
+        },
       )
 
       if (result.success && result.data) {
@@ -179,15 +177,7 @@ export class SidecarAppService {
     return { success: false, error: result.error || 'Failed to update document' }
   }
 
-  async translateDocumentInplace(
-    docId: string,
-    sourceLang: string,
-    targetLang: string,
-    model?: string,
-    targetDir?: string,
-    numCtx?: number,
-    think?: boolean
-  ) {
+  async translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string, targetDir?: string, numCtx?: number, think?: boolean) {
     if (!docId || typeof docId !== 'string') {
       return { success: false, error: 'Invalid document ID' }
     }
@@ -207,7 +197,7 @@ export class SidecarAppService {
           task_id: taskId,
         },
         (event) => this.rendererEvents.send('ingest:translate-progress', { ...event, taskId }),
-        (cancel) => taskRunner.registerActiveTask(taskId, 'translation', cancel)
+        (cancel) => taskRunner.registerActiveTask(taskId, 'translation', cancel),
       )
     } finally {
       taskRunner.unregisterActiveTask(taskId)
@@ -296,7 +286,7 @@ export class SidecarAppService {
         completed_at: payload.completedAt,
       },
       5000,
-      { success: false }
+      { success: false },
     )
   }
 
@@ -309,27 +299,17 @@ export class SidecarAppService {
 
   removePromptHistoryForSessions(sessionIds: string[]): Promise<{ success: boolean }> {
     if (!sessionIds || sessionIds.length === 0) return Promise.resolve({ success: true })
-    return sidecarHttpClient.postJson<{ success: boolean }>(
-      '/history/remove',
-      { session_ids: sessionIds },
-      4000,
-      { success: false }
-    )
+    return sidecarHttpClient.postJson<{ success: boolean }>('/history/remove', { session_ids: sessionIds }, 4000, { success: false })
   }
 
   removePromptHistoryForProject(projectPath: string): Promise<{ success: boolean }> {
-    return sidecarHttpClient.postJson<{ success: boolean }>(
-      '/history/remove',
-      { project_path: projectPath },
-      4000,
-      { success: false }
-    )
+    return sidecarHttpClient.postJson<{ success: boolean }>('/history/remove', { project_path: projectPath }, 4000, { success: false })
   }
 
   async exportDocument(
     markdownContent: string,
     format: string,
-    outputFolder?: string
+    outputFolder?: string,
   ): Promise<{ success: boolean; message?: string; filePath?: string; error?: string }> {
     if (typeof markdownContent !== 'string' || !markdownContent.trim()) {
       return { success: false, error: 'Il contenuto del documento è vuoto.' }
@@ -412,17 +392,13 @@ export class SidecarAppService {
       logger.log(
         'INFO',
         'SidecarApp',
-        `Sidecar log analysis: ${res.data.scanned_files.length} files, ${res.data.anomalies.length} anomalies. Critical: ${res.data.has_critical}`
+        `Sidecar log analysis: ${res.data.scanned_files.length} files, ${res.data.anomalies.length} anomalies. Critical: ${res.data.has_critical}`,
       )
       return res.data
     }
 
     const failureReason = !res.success ? res.error : 'unknown sidecar response'
-    logger.log(
-      'WARN',
-      'SidecarApp',
-      `Sidecar analysis unavailable (${failureReason}), switching to native Electron log scanner fallback...`
-    )
+    logger.log('WARN', 'SidecarApp', `Sidecar analysis unavailable (${failureReason}), switching to native Electron log scanner fallback...`)
     return this.analyzeLogsNativeFallback(extraPaths)
   }
 
@@ -544,13 +520,15 @@ export class SidecarAppService {
       for (const a of report.anomalies) {
         counts[a.anomaly_type] = (counts[a.anomaly_type] || 0) + 1
       }
-      report.summary = `Anomalie rilevate — ${Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join(', ')}`
+      report.summary = `Anomalie rilevate — ${Object.entries(counts)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(', ')}`
     }
 
     logger.log(
       'INFO',
       'SidecarApp',
-      `Native fallback log analysis: ${report.scanned_files.length} files (${report.total_lines_scanned} lines) → ${report.anomalies.length} anomalies.`
+      `Native fallback log analysis: ${report.scanned_files.length} files (${report.total_lines_scanned} lines) → ${report.anomalies.length} anomalies.`,
     )
     return report
   }

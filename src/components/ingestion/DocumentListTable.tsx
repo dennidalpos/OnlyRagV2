@@ -10,12 +10,7 @@ interface DocumentListTableProps {
   onDeleteDoc: (docId: string, filename: string) => void
 }
 
-export const DocumentListTable: React.FC<DocumentListTableProps> = ({
-  documents,
-  selectedDoc,
-  onSelectDoc,
-  onDeleteDoc,
-}) => {
+export const DocumentListTable: React.FC<DocumentListTableProps> = ({ documents, selectedDoc, onSelectDoc, onDeleteDoc }) => {
   const { t } = useTranslation()
   const [searchFilter, setSearchFilter] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -55,13 +50,9 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
 
       <div className="space-y-1.5 flex-1 overflow-y-auto pr-1" role="list" aria-label={t('ingestion.indexedDocuments')}>
         {documents.length === 0 ? (
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-xs text-slate-400 italic">
-            {t('ingestion.noDocuments')}
-          </div>
+          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-xs text-slate-400 italic">{t('ingestion.noDocuments')}</div>
         ) : filteredDocs.length === 0 ? (
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-xs text-slate-400 italic">
-            {t('common.none')}
-          </div>
+          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-xs text-slate-400 italic">{t('common.none')}</div>
         ) : (
           filteredDocs.map((doc) => {
             const isSelected = selectedDoc?.id === doc.id
@@ -97,7 +88,8 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
                       )}
                     </div>
                     <div className="text-[10px] text-slate-400 font-mono">
-                      {doc.numPages > 0 ? `${doc.numPages} ${t('ingestion.pages')}` : ''} • {doc.numChunks} {t('ingestion.chunks')} • {(doc.fileSize / 1024).toFixed(0)} KB
+                      {doc.numPages > 0 ? `${doc.numPages} ${t('ingestion.pages')}` : ''} • {doc.numChunks} {t('ingestion.chunks')} •{' '}
+                      {(doc.fileSize / 1024).toFixed(0)} KB
                     </div>
                   </div>
                 </button>

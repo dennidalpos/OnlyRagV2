@@ -4,7 +4,9 @@ import { probeDevTool, probeToolchain } from './devToolchainTools'
 describe('development toolchain tools', () => {
   it('reports a version returned by the injected probe', () => {
     expect(probeDevTool('git', () => 'git version 2.43.0')).toMatchObject({
-      id: 'git', installed: true, version: '2.43.0',
+      id: 'git',
+      installed: true,
+      version: '2.43.0',
     })
   })
 
@@ -13,8 +15,6 @@ describe('development toolchain tools', () => {
   })
 
   it('keeps the allow-list as the inventory source', () => {
-    expect(probeToolchain(() => null).map((status) => status.id)).toEqual([
-      'node', 'npm', 'pnpm', 'git', 'python', 'ollama',
-    ])
+    expect(probeToolchain(() => null).map((status) => status.id)).toEqual(['node', 'npm', 'pnpm', 'git', 'python', 'ollama'])
   })
 })

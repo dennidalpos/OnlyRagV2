@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import {
-  notifyDocumentsChanged,
-  notifyTabChanged,
-  DOCUMENTS_CHANGED_EVENT,
-  TAB_CHANGED_EVENT,
-} from './useIngestedDocuments'
+import { notifyDocumentsChanged, notifyTabChanged, DOCUMENTS_CHANGED_EVENT, TAB_CHANGED_EVENT } from './useIngestedDocuments'
 
 describe('useIngestedDocuments event synchronization', () => {
   let dispatchEventSpy: any

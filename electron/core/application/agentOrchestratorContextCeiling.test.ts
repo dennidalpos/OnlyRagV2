@@ -32,7 +32,9 @@ function contextWith(modelMetrics: Record<string, OllamaModelMetrics>): TurnDisp
     modelMetrics,
     session: {} as TurnDispatchContext['session'],
     sessionNumCtxBox: { value: null },
-    emitLog: (_type: string, message: string) => { logs.push(message) },
+    emitLog: (_type: string, message: string) => {
+      logs.push(message)
+    },
   } as unknown as TurnDispatchContext
 }
 

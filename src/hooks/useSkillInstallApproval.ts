@@ -20,11 +20,14 @@ export function useSkillInstallApproval(settings?: AppSettings, activeRunIdentit
     setPendingRequests((prev) => prev.filter((req) => matchesAgentRunIdentity(activeRunIdentity, req)))
   }, [activeRunIdentity])
 
-  const respond = useCallback((requestId: string, approved: boolean) => {
-    const request = pendingRequests.find((candidate) => candidate.requestId === requestId)
-    if (request) window.electronAPI?.respondAgentSkillInstall?.(requestId, approved, request)
-    setPendingRequests((prev) => prev.filter((req) => req.requestId !== requestId))
-  }, [pendingRequests])
+  const respond = useCallback(
+    (requestId: string, approved: boolean) => {
+      const request = pendingRequests.find((candidate) => candidate.requestId === requestId)
+      if (request) window.electronAPI?.respondAgentSkillInstall?.(requestId, approved, request)
+      setPendingRequests((prev) => prev.filter((req) => req.requestId !== requestId))
+    },
+    [pendingRequests],
+  )
 
   return {
     activeRequest: pendingRequests[0] || null,

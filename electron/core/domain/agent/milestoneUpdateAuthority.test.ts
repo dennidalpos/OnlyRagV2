@@ -184,7 +184,7 @@ describe('a milestone the loop guard abandoned', () => {
             current: milestone('pending'),
             requestedStatus,
             deliverableStatus: 'unsatisfied',
-          }).kind
+          }).kind,
         ).toBe('apply')
       }
     })

@@ -60,29 +60,18 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
     return new SessionDebtTracker({
       sessionId,
       // The evidence that closed each milestone is carried into the tracker, not just the fact that it closed.
-      completedTasks: milestones
-        .filter((m) => m.status === 'verified')
-        .map((m) => `${m.id}: ${m.title}${m.notes ? ` — ${m.notes}` : ''}`),
-      unresolvedIssues: milestones
-        .filter((m) => m.status === 'failed')
-        .map((m) => `${m.id}: ${m.title}${m.notes ? ` (${m.notes})` : ''}`),
-      nextSteps: milestones
-        .filter((m) => m.status === 'pending' || m.status === 'in_progress')
-        .map((m) => `${m.id}: ${m.title}`),
+      completedTasks: milestones.filter((m) => m.status === 'verified').map((m) => `${m.id}: ${m.title}${m.notes ? ` — ${m.notes}` : ''}`),
+      unresolvedIssues: milestones.filter((m) => m.status === 'failed').map((m) => `${m.id}: ${m.title}${m.notes ? ` (${m.notes})` : ''}`),
+      nextSteps: milestones.filter((m) => m.status === 'pending' || m.status === 'in_progress').map((m) => `${m.id}: ${m.title}`),
       modifiedFiles: Array.from(sessionChangedFiles.keys()),
       summaryText,
     })
   }
 
-  const persistCurrentState = async (
-    terminationReason?: AgentSessionTerminationReason,
-    completionStatus?: AgentCompletionStatus
-  ) => {
+  const persistCurrentState = async (terminationReason?: AgentSessionTerminationReason, completionStatus?: AgentCompletionStatus) => {
     // Only the plan's completion flag is persisted: every other field of the compact
     // state is a projection of planMilestones, which is already stored below.
-    const isPlanCompleted = goalPlanner.hasPlan()
-      ? goalPlanner.getCompactState(userTask).isCompleted
-      : false
+    const isPlanCompleted = goalPlanner.hasPlan() ? goalPlanner.getCompactState(userTask).isCompleted : false
 
     await agentSessionStateRepository.saveSessionState({
       sessionId,
@@ -97,9 +86,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
       userTask,
       initialUserTask,
       updatedAt: new Date().toISOString(),
-      status: completionStatus
-        ? completionStatus === 'verified' ? 'COMPLETED' : 'FAILED'
-        : isPlanCompleted ? 'COMPLETED' : 'IN_PROGRESS',
+      status: completionStatus ? (completionStatus === 'verified' ? 'COMPLETED' : 'FAILED') : isPlanCompleted ? 'COMPLETED' : 'IN_PROGRESS',
       terminationReason,
       completionStatus,
       executionPhase: phaseController.getPhase(),
@@ -139,15 +126,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
   // it should not have can be traced to the exact step and rule that closed it.
   if (settings.enableCodingAgentDebugLog) {
     goalPlanner.onMilestoneTransition((transition) => {
-      codingAgentLogger.logMilestoneTransition(
-        sessionId,
-        stepCountBox.value,
-        transition.id,
-        transition.title,
-        transition.from,
-        transition.to,
-        transition.cause
-      )
+      codingAgentLogger.logMilestoneTransition(sessionId, stepCountBox.value, transition.id, transition.title, transition.from, transition.to, transition.cause)
     })
   }
 

@@ -1,8 +1,4 @@
-import {
-  DEV_TOOL_ALLOWLIST,
-  extractVersion,
-  type DevToolStatus,
-} from '../../devToolchain'
+import { DEV_TOOL_ALLOWLIST, extractVersion, type DevToolStatus } from '../../devToolchain'
 
 export type VersionProbe = (binary: string, versionArgs: string[]) => string | null
 

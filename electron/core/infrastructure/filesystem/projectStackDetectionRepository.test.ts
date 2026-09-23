@@ -25,7 +25,7 @@ describe('ProjectStackDetectionRepository Unit Tests', () => {
     fs.writeFileSync(
       path.join(tempDir, 'package.json'),
       JSON.stringify({ dependencies: { react: '^19.0.0', '@tailwindcss/vite': '^4.0.0' }, devDependencies: { vitest: '^4.0.0' } }),
-      'utf-8'
+      'utf-8',
     )
     const stack = repo.detect(tempDir)
     expect(stack).toContain('react')

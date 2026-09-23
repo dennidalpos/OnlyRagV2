@@ -54,11 +54,7 @@ export class ProjectRegistryAppService {
       try {
         const onlyragDir = path.join(projectPath, '.onlyrag')
         // Strict guard: ensure path ends with '.onlyrag', is strictly a child directory, and exists
-        if (
-          path.basename(onlyragDir) === '.onlyrag' &&
-          onlyragDir !== projectPath &&
-          documentIoRepository.exists(onlyragDir)
-        ) {
+        if (path.basename(onlyragDir) === '.onlyrag' && onlyragDir !== projectPath && documentIoRepository.exists(onlyragDir)) {
           await documentIoRepository.removeDirectory(onlyragDir)
           logger.log('INFO', 'ProjectRegistryAppService', `Purged internal .onlyrag metadata at ${onlyragDir}`)
         }
@@ -77,7 +73,7 @@ export class ProjectRegistryAppService {
   async migrateLegacyProjects(rawProjects: unknown): Promise<{ migrated: number }> {
     if (!Array.isArray(rawProjects) || rawProjects.length === 0) return { migrated: 0 }
     const valid = rawProjects.filter(
-      (p): p is WorkspaceProject => !!p && typeof p.path === 'string' && p.path && typeof p.name === 'string' && typeof p.addedAt === 'string'
+      (p): p is WorkspaceProject => !!p && typeof p.path === 'string' && p.path && typeof p.name === 'string' && typeof p.addedAt === 'string',
     )
     const migrated = await projectRegistryRepository.mergeLegacy(valid)
     logger.log('INFO', 'ProjectRegistryAppService', `Migrated ${migrated} legacy project(s) from localStorage to the main-process registry.`)

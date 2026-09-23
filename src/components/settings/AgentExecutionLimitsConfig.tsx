@@ -12,11 +12,7 @@ interface AgentExecutionLimitsConfigProps {
 const QUEUE_STATUS_POLL_MS = 3000
 
 /** Agent execution limits. */
-export const AgentExecutionLimitsConfig: React.FC<AgentExecutionLimitsConfigProps> = ({
-  settings,
-  onUpdateSettings,
-  isActive = true,
-}) => {
+export const AgentExecutionLimitsConfig: React.FC<AgentExecutionLimitsConfigProps> = ({ settings, onUpdateSettings, isActive = true }) => {
   const { t } = useTranslation()
   const [queueStatus, setQueueStatus] = useState<TaskQueueStatus | null>(null)
 
@@ -82,7 +78,7 @@ export const AgentExecutionLimitsConfig: React.FC<AgentExecutionLimitsConfigProp
             max={200}
             step={5}
             disabled={settings.maxToolCallSteps === 0}
-            value={settings.maxToolCallSteps === 0 ? 25 : settings.maxToolCallSteps ?? 25}
+            value={settings.maxToolCallSteps === 0 ? 25 : (settings.maxToolCallSteps ?? 25)}
             onChange={(e) => {
               const val = parseInt(e.target.value, 10)
               onUpdateSettings({ maxToolCallSteps: val })
@@ -96,7 +92,11 @@ export const AgentExecutionLimitsConfig: React.FC<AgentExecutionLimitsConfigProp
               : t('settings.toolCallStepsValue', { steps: settings.maxToolCallSteps ?? 25 })}
           </span>
           <label className="flex items-center gap-1 text-xs text-slate-200">
-            <input type="checkbox" checked={settings.maxToolCallSteps === 0} onChange={(event) => onUpdateSettings({ maxToolCallSteps: event.target.checked ? 0 : 25 })} />
+            <input
+              type="checkbox"
+              checked={settings.maxToolCallSteps === 0}
+              onChange={(event) => onUpdateSettings({ maxToolCallSteps: event.target.checked ? 0 : 25 })}
+            />
             {t('settings.toolCallStepsUnlimited')}
           </label>
         </div>

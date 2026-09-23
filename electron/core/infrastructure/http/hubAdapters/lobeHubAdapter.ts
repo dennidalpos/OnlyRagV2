@@ -49,19 +49,13 @@ ${desc}
 
 export class LobeHubAdapter implements ISkillHubAdapter {
   canHandle(source: SkillHubSource): boolean {
-    return (
-      source.id === 'lobehub-skills' ||
-      source.url.includes('lobehub.com') ||
-      source.url.includes('chat-plugins.lobehub.com')
-    )
+    return source.id === 'lobehub-skills' || source.url.includes('lobehub.com') || source.url.includes('chat-plugins.lobehub.com')
   }
 
   async fetchSkills(source: SkillHubSource): Promise<HubSkillItem[]> {
     logger.log('INFO', 'LobeHubAdapter', 'Fetching LobeHub Skills and Plugins registry')
 
-    const targetUrl = source.url.startsWith('http') && source.url.includes('chat-plugins')
-      ? source.url
-      : 'https://chat-plugins.lobehub.com'
+    const targetUrl = source.url.startsWith('http') && source.url.includes('chat-plugins') ? source.url : 'https://chat-plugins.lobehub.com'
 
     try {
       const res = await webClient.fetchWebContent(targetUrl, 150000)
@@ -73,7 +67,10 @@ export class LobeHubAdapter implements ISkillHubAdapter {
       try {
         parsed = JSON.parse(res.content)
       } catch {
-        const cleaned = res.content.replace(/^```(json)?/i, '').replace(/```$/, '').trim()
+        const cleaned = res.content
+          .replace(/^```(json)?/i, '')
+          .replace(/```$/, '')
+          .trim()
         parsed = JSON.parse(cleaned)
       }
 

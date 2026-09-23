@@ -86,8 +86,7 @@ export const en: TranslationSchema = {
     switchLanguage: 'Switch Language (IT/EN)',
     contributionsAndInfo: 'Info & Credits',
     quickStatus: 'Resource Status',
-    settingsLoadFailed:
-      'Saved settings could not be read: {error}. The file is left untouched and automatic diagnostics stay paused until loading succeeds.',
+    settingsLoadFailed: 'Saved settings could not be read: {error}. The file is left untouched and automatic diagnostics stay paused until loading succeeds.',
     settingsLoadRetry: 'Retry',
   },
   chat: {

@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  declaredDependencies,
-  majorOf,
-  findVersionReality,
-  buildVersionRealityDirective,
-} from './dependencyVersionReality'
+import { declaredDependencies, majorOf, findVersionReality, buildVersionRealityDirective } from './dependencyVersionReality'
 
 /** The manifest run 10 of 2026-08-25 wrote, which took that session to 0/12. */
 const RUN_10_MANIFEST = {
@@ -14,12 +9,11 @@ const RUN_10_MANIFEST = {
 
 describe('declaredDependencies', () => {
   it('reads both dependency blocks', () => {
-    expect(declaredDependencies(RUN_10_MANIFEST).map((d) => d.name).sort()).toEqual([
-      '@tailwindcss/react',
-      'react',
-      'typescript',
-      'vite',
-    ])
+    expect(
+      declaredDependencies(RUN_10_MANIFEST)
+        .map((d) => d.name)
+        .sort(),
+    ).toEqual(['@tailwindcss/react', 'react', 'typescript', 'vite'])
   })
 
   it('survives a manifest that declares nothing', () => {
@@ -59,12 +53,10 @@ describe('findVersionReality', () => {
   it('reports declared ranges that match no published version', () => {
     const findings = findVersionReality(
       [{ name: 'react-dom', range: '^19.8.0' }],
-      [{ name: 'react-dom', exists: true, latest: '19.2.0', versions: ['19.1.0', '19.2.0'] }]
+      [{ name: 'react-dom', exists: true, latest: '19.2.0', versions: ['19.1.0', '19.2.0'] }],
     )
 
-    expect(findings.unpublished).toEqual([
-      { name: 'react-dom', declared: '^19.8.0', latest: '19.2.0' },
-    ])
+    expect(findings.unpublished).toEqual([{ name: 'react-dom', declared: '^19.8.0', latest: '19.2.0' }])
   })
 
   it('never reports a package the registry could not be reached about', () => {
@@ -154,26 +146,20 @@ describe('packages whose major bump rewrites the configuration', () => {
         { name: 'typescript', exists: true, latest: '7.0.2' },
         { name: 'tailwindcss', exists: true, latest: '4.3.3' },
         { name: 'eslint', exists: true, latest: '10.9.1' },
-      ]
+      ],
     )
 
     expect(findings.outdated).toEqual([])
   })
 
   it('still reports a runtime library, where the version is the whole change', () => {
-    const findings = findVersionReality(
-      [{ name: 'react', range: '^18.2.0' }],
-      [{ name: 'react', exists: true, latest: '19.2.0' }]
-    )
+    const findings = findVersionReality([{ name: 'react', range: '^18.2.0' }], [{ name: 'react', exists: true, latest: '19.2.0' }])
 
     expect(findings.outdated).toEqual([{ name: 'react', declared: '^18.2.0', latest: '19.2.0' }])
   })
 
   it('still reports a non-existent package even when it is a build tool', () => {
-    const findings = findVersionReality(
-      [{ name: 'typescript', range: '^5.0.0' }],
-      [{ name: 'typescript', exists: false }]
-    )
+    const findings = findVersionReality([{ name: 'typescript', range: '^5.0.0' }], [{ name: 'typescript', exists: false }])
 
     expect(findings.nonexistent).toEqual(['typescript'])
   })

@@ -35,7 +35,13 @@ describe('CodingAgentLogger Unit Tests', () => {
 
   it('should format and write tool call and tool execution result', () => {
     loggerInstance.logSessionStart('test-session-123', 'Task', 'auto', 'model', null, true)
-    loggerInstance.logToolCall('test-session-123', 1, 'write_file', { filePath: 'src/Counter.tsx', content: 'export const Counter = () => null' }, 'Creating counter')
+    loggerInstance.logToolCall(
+      'test-session-123',
+      1,
+      'write_file',
+      { filePath: 'src/Counter.tsx', content: 'export const Counter = () => null' },
+      'Creating counter',
+    )
     loggerInstance.logToolResult('test-session-123', 1, 'write_file', 'Successfully wrote file src/Counter.tsx')
 
     const content = fs.readFileSync(logPath, 'utf-8')
@@ -47,12 +53,7 @@ describe('CodingAgentLogger Unit Tests', () => {
 
   it('records turn-policy denials as failed tool results', () => {
     loggerInstance.logToolCall('policy-session', 1, 'write_file', { filePath: 'src/App.tsx' })
-    loggerInstance.logToolResult(
-      'policy-session',
-      1,
-      'write_file',
-      '[TURN TOOL POLICY DENIED] Tool "write_file" is not available for this phase.',
-    )
+    loggerInstance.logToolResult('policy-session', 1, 'write_file', '[TURN TOOL POLICY DENIED] Tool "write_file" is not available for this phase.')
     loggerInstance.logSessionEnd('policy-session', 1, false, 'Tool denied by turn policy.')
 
     const content = fs.readFileSync(logPath, 'utf-8')
@@ -130,12 +131,24 @@ PLAN: step 1`
   it('elides the prefix a later prompt shares with the previous step', () => {
     loggerInstance.logSessionStart('elide-session', 'Task', 'auto', 'model', null, true)
     const head = 'STABLE HEAD '.repeat(60)
-    loggerInstance.logTurnPrompt('elide-session', 1, 'qwen2.5-coder:7b', 8192, `${head}
-PLAN: step 1`)
+    loggerInstance.logTurnPrompt(
+      'elide-session',
+      1,
+      'qwen2.5-coder:7b',
+      8192,
+      `${head}
+PLAN: step 1`,
+    )
     const afterBaseline = fs.readFileSync(logPath, 'utf-8').length
 
-    loggerInstance.logTurnPrompt('elide-session', 2, 'qwen2.5-coder:7b', 8192, `${head}
-PLAN: step 2 with new trajectory`)
+    loggerInstance.logTurnPrompt(
+      'elide-session',
+      2,
+      'qwen2.5-coder:7b',
+      8192,
+      `${head}
+PLAN: step 2 with new trajectory`,
+    )
     const content = fs.readFileSync(logPath, 'utf-8')
     const secondEntry = content.slice(afterBaseline)
 
@@ -161,14 +174,26 @@ PLAN: step 2 with new trajectory`)
   it('starts a fresh baseline for a session reusing an id after it ended', () => {
     loggerInstance.logSessionStart('reuse-session', 'Task', 'auto', 'model', null, true)
     const head = 'STABLE HEAD '.repeat(60)
-    loggerInstance.logTurnPrompt('reuse-session', 1, 'qwen2.5-coder:7b', 8192, `${head}
-first run`)
+    loggerInstance.logTurnPrompt(
+      'reuse-session',
+      1,
+      'qwen2.5-coder:7b',
+      8192,
+      `${head}
+first run`,
+    )
     loggerInstance.logSessionEnd('reuse-session', 1, true, 'done')
     const afterEnd = fs.readFileSync(logPath, 'utf-8').length
 
     loggerInstance.logSessionStart('reuse-session', 'Task', 'auto', 'model', null, true)
-    loggerInstance.logTurnPrompt('reuse-session', 1, 'qwen2.5-coder:7b', 8192, `${head}
-second run`)
+    loggerInstance.logTurnPrompt(
+      'reuse-session',
+      1,
+      'qwen2.5-coder:7b',
+      8192,
+      `${head}
+second run`,
+    )
     const newEntry = fs.readFileSync(logPath, 'utf-8').slice(afterEnd)
 
     expect(newEntry).toContain('Baseline: full prompt')
@@ -183,7 +208,7 @@ second run`)
       'Create src/components/TaskCard.tsx',
       'in_progress',
       'verified',
-      'Verified: "src/components/TaskCard.tsx" was written for this milestone.'
+      'Verified: "src/components/TaskCard.tsx" was written for this milestone.',
     )
 
     const content = fs.readFileSync(logPath, 'utf-8')

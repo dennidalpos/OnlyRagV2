@@ -1,11 +1,6 @@
 import { checkOllamaStatus } from '../../diagnostics'
 import type { OllamaGenerationOptions } from '../../../shared/types'
-import {
-  ollamaHttpClient,
-  type OllamaModelMetrics,
-  type OllamaStructuredRequest,
-  type OllamaStructuredResponse,
-} from '../infrastructure/http/ollamaHttpClient'
+import { ollamaHttpClient, type OllamaModelMetrics, type OllamaStructuredRequest, type OllamaStructuredResponse } from '../infrastructure/http/ollamaHttpClient'
 import { normalizeOllamaHost } from '../../../shared/domain/ollamaHost'
 export type { OllamaModelMetrics, OllamaStructuredRequest, OllamaStructuredResponse }
 import { ollamaInstallerRepository } from '../infrastructure/process/ollamaInstallerRepository'
@@ -17,7 +12,11 @@ export class OllamaAppService {
     return ollamaInstallerRepository.installOrLaunch()
   }
 
-  async pullModel(modelName: string, host?: string, onProgress?: (progress: { status: string; completed?: number; total?: number }) => void): Promise<{ success: boolean; data?: string; error?: string }> {
+  async pullModel(
+    modelName: string,
+    host?: string,
+    onProgress?: (progress: { status: string; completed?: number; total?: number }) => void,
+  ): Promise<{ success: boolean; data?: string; error?: string }> {
     if (!ollamaModelUpdateAppService.acquireUpdateLock(modelName)) {
       return {
         success: false,
@@ -48,7 +47,7 @@ export class OllamaAppService {
     onDone: () => void,
     customOptions?: OllamaGenerationOptions,
     host?: string,
-    operationId?: string
+    operationId?: string,
   ) {
     return ollamaHttpClient.generateStream(model, prompt, onChunk, onDone, customOptions, host, operationId)
   }

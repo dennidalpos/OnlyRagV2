@@ -36,10 +36,7 @@ describe('readWorkspaceManifest', () => {
   })
 
   it('reads the declared scripts', () => {
-    fs.writeFileSync(
-      path.join(tempDir, 'package.json'),
-      JSON.stringify({ scripts: { build: 'tsc && vite build', dev: 'vite' } })
-    )
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ scripts: { build: 'tsc && vite build', dev: 'vite' } }))
     expect(readWorkspaceManifest(tempDir).packageJson?.scripts?.build).toBe('tsc && vite build')
   })
 
@@ -56,10 +53,7 @@ describe('readWorkspaceManifest', () => {
 describe('reader and resolver together, on the project the agent actually produced', () => {
   it('offers the build command a real generated project declares', () => {
     // package.json as written by the agent in session-1787485700613-o3tx.
-    fs.writeFileSync(
-      path.join(tempDir, 'package.json'),
-      JSON.stringify({ scripts: { dev: 'vite', build: 'tsc && vite build', serve: 'vite preview' } })
-    )
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ scripts: { dev: 'vite', build: 'tsc && vite build', serve: 'vite preview' } }))
     fs.writeFileSync(path.join(tempDir, 'tsconfig.json'), '{}')
 
     const commands = resolveVerificationCommands(readWorkspaceManifest(tempDir))

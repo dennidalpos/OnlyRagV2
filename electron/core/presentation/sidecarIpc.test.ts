@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const handlers = new Map<string, (...args: any[]) => any>()
 
 vi.mock('electron', async (importOriginal) => ({
-  ...await importOriginal<typeof import('electron')>(),
+  ...(await importOriginal<typeof import('electron')>()),
   ipcMain: {
     handle: vi.fn((channel: string, handler: (...args: any[]) => any) => {
       handlers.set(channel, handler)
@@ -52,7 +52,7 @@ describe('sidecar IPC facade', () => {
       'normalizer',
       8192,
       'ingest-test-1',
-      undefined
+      undefined,
     )
     expect(() => handler?.(trustedEvent, ' ')).toThrow('Invalid IPC payload for ingest:file')
     expect(sidecarAppService.ingestFile).toHaveBeenCalledTimes(1)

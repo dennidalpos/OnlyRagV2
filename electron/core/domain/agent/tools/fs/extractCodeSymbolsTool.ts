@@ -41,9 +41,7 @@ export async function executeExtractCodeSymbolsTool(
       }
     }
 
-    const formatted = result.symbols
-      .map((symbol) => `Line ${symbol.startLine}: [${symbol.kind}] ${symbol.name} -> \`${symbol.signature}\``)
-      .join('\n')
+    const formatted = result.symbols.map((symbol) => `Line ${symbol.startLine}: [${symbol.kind}] ${symbol.name} -> \`${symbol.signature}\``).join('\n')
     const output = `[CODE SYMBOLS: ${targetPath} (${result.symbols.length} symbols found)]\n${formatted}\n[END CODE SYMBOLS]`
     return {
       outcome: 'success',

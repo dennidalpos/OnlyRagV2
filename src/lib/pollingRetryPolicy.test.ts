@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  DEFAULT_RETRY_POLICY,
-  nextRetryDelayMs,
-  shouldReportFailure,
-  RetryPolicy,
-} from './pollingRetryPolicy'
+import { DEFAULT_RETRY_POLICY, nextRetryDelayMs, shouldReportFailure, RetryPolicy } from './pollingRetryPolicy'
 
 describe('pollingRetryPolicy — backoff', () => {
   it('starts at the base delay and doubles per consecutive failure', () => {

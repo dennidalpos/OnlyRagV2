@@ -106,9 +106,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
 
           <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center md:col-span-2">
             <span className="text-slate-400 font-medium">⚙️ {t('sidebar.quickStatus')}:</span>
-            <span className="font-mono text-slate-200 font-semibold">
-              {ocrEngine === 'native_cuda' ? 'CUDA Native' : 'Vision Model'}
-            </span>
+            <span className="font-mono text-slate-200 font-semibold">{ocrEngine === 'native_cuda' ? 'CUDA Native' : 'Vision Model'}</span>
           </div>
         </div>
       </div>
@@ -127,8 +125,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
         <div className="space-y-3">
           <div className="p-3.5 rounded-xl bg-cyan-950/40 border border-cyan-800/80 text-xs text-cyan-300 space-y-2">
             <div className="flex items-center gap-2 font-bold">
-              <Download className="w-4 h-4 text-cyan-400" />{' '}
-              {t('hardwareWizard.modelsToPull', { count: missingModels.length })}
+              <Download className="w-4 h-4 text-cyan-400" /> {t('hardwareWizard.modelsToPull', { count: missingModels.length })}
             </div>
             <div className="font-mono text-[11px] bg-slate-950 p-2 rounded border border-cyan-900/60 text-slate-200 space-y-1">
               {missingModels.map((m) => {
@@ -136,11 +133,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
                 return (
                   <div key={m} className="flex items-center justify-between gap-2 py-0.5 border-b border-slate-800/40 last:border-0">
                     <span className="truncate">• {m}</span>
-                    {approxSize && (
-                      <span className="text-[10px] text-slate-400 shrink-0 font-sans">
-                        ~{approxSize} GB
-                      </span>
-                    )}
+                    {approxSize && <span className="text-[10px] text-slate-400 shrink-0 font-sans">~{approxSize} GB</span>}
                   </div>
                 )
               })}
@@ -173,10 +166,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
                 <span className="text-cyan-400 font-bold">{pullProgressPercent}%</span>
               </div>
               <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
-                <div
-                  className="bg-cyan-500 h-full transition-all duration-300"
-                  style={{ width: `${Math.max(0, Math.min(100, pullProgressPercent))}%` }}
-                />
+                <div className="bg-cyan-500 h-full transition-all duration-300" style={{ width: `${Math.max(0, Math.min(100, pullProgressPercent))}%` }} />
               </div>
               <div className="flex items-center justify-end gap-2">
                 {onSkipCurrentPull && (
@@ -234,9 +224,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
           <Check className="w-5 h-5 text-emerald-400 shrink-0" />
           <div>
             <div className="font-bold">Tutti i modelli sono già installati e pronti!</div>
-            <div className="text-[11px] text-emerald-400/80">
-              Puoi completare la configurazione e iniziare subito a utilizzare OnlyRag.
-            </div>
+            <div className="text-[11px] text-emerald-400/80">Puoi completare la configurazione e iniziare subito a utilizzare OnlyRag.</div>
           </div>
         </div>
       )}

@@ -1,5 +1,3 @@
-
-
 /** Entry files a bundler-based web project is expected to boot from, in preference order. */
 export const CONVENTIONAL_ENTRY_PATHS = [
   'src/main.tsx',

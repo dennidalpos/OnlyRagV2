@@ -14,17 +14,7 @@ import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 import { useOllamaGenerationState } from './useOllamaGenerationState'
 import { resolveOllamaThinkingPreference } from '../../shared/domain/agent/ollamaThinkingPolicy'
 
-export const LANGUAGES = [
-  'English',
-  'Italian',
-  'German',
-  'French',
-  'Spanish',
-  'Portuguese',
-  'Russian',
-  'Chinese',
-  'Japanese',
-]
+export const LANGUAGES = ['English', 'Italian', 'German', 'French', 'Spanish', 'Portuguese', 'Russian', 'Chinese', 'Japanese']
 
 export function splitMarkdownForTranslation(markdown: string, maxChunkLength: number = 3500): string[] {
   if (!markdown || !markdown.trim()) return []
@@ -59,11 +49,7 @@ export function splitMarkdownForTranslation(markdown: string, maxChunkLength: nu
         insideCodeFence = !insideCodeFence
       }
 
-      if (
-        !insideCodeFence &&
-        (currentChunk + '\n\n' + para).length > maxChunkLength &&
-        currentChunk.length > 0
-      ) {
+      if (!insideCodeFence && (currentChunk + '\n\n' + para).length > maxChunkLength && currentChunk.length > 0) {
         finalChunks.push(currentChunk.trim())
         currentChunk = para
       } else {
@@ -95,7 +81,11 @@ const isLayoutTranslatable = (doc: IngestedDocument) => doc.fileType === 'pdf' |
  * State shared by the Markdown and the layout-preserving translators: document selection, language pair,
  * the cross-module task lock, and the model/context/thinking options resolved from settings.
  */
-function useTranslationBase(settings: AppSettings | undefined, diagnostics: DiagnosticsData | null | undefined, acceptsDocument?: (doc: IngestedDocument) => boolean) {
+function useTranslationBase(
+  settings: AppSettings | undefined,
+  diagnostics: DiagnosticsData | null | undefined,
+  acceptsDocument?: (doc: IngestedDocument) => boolean,
+) {
   const { t } = useI18n()
   const { metrics: modelMetrics } = useOllamaModelMetrics(settings?.ollamaHost)
   const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics || null))
@@ -267,9 +257,10 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     setCurrentChunkIndex(0)
 
     try {
-      const sourceMarkdown = pageViewMode === 'page' && selectedDoc.numPages > 1
-        ? extractPageMarkdown(selectedDoc.extractedMarkdown || '', currentPage)
-        : (selectedDoc.extractedMarkdown || '')
+      const sourceMarkdown =
+        pageViewMode === 'page' && selectedDoc.numPages > 1
+          ? extractPageMarkdown(selectedDoc.extractedMarkdown || '', currentPage)
+          : selectedDoc.extractedMarkdown || ''
 
       const chunks = splitMarkdownForTranslation(sourceMarkdown)
       setTotalChunks(chunks.length)
@@ -299,12 +290,19 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
           activeStreamIdRef.current = operationId
           trackOperation(operationId)
           try {
-            const result = await window.electronAPI.generateOllamaStream(generation.model, prompt, (c) => {
-              if (abortTranslationRef.current) return
-              currentChunkTranslation += c
-              const livePreview = accumulatedResults + (accumulatedResults ? '\n\n' : '') + currentChunkTranslation
-              setTranslatedMarkdown(livePreview)
-            }, { num_ctx: generation.numCtx, think: generation.think }, settings?.ollamaHost, operationId)
+            const result = await window.electronAPI.generateOllamaStream(
+              generation.model,
+              prompt,
+              (c) => {
+                if (abortTranslationRef.current) return
+                currentChunkTranslation += c
+                const livePreview = accumulatedResults + (accumulatedResults ? '\n\n' : '') + currentChunkTranslation
+                setTranslatedMarkdown(livePreview)
+              },
+              { num_ctx: generation.numCtx, think: generation.think },
+              settings?.ollamaHost,
+              operationId,
+            )
             if (!result.success) throw new Error(result.error || 'Ollama translation failed.')
             if (!currentChunkTranslation.trim()) throw new Error('Ollama returned an empty translation.')
           } finally {

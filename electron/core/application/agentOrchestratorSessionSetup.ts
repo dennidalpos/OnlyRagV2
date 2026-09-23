@@ -56,9 +56,7 @@ export function buildDefaultAgentSettings(): AppSettings {
 
 /** Renders every attached RAG document into the `[ATTACHED DOCUMENT: ...]` prompt block. */
 export function buildAttachedContextBlock(payload: Pick<AgentTaskPayload, 'attachedDocs'>): string {
-  return (payload.attachedDocs || [])
-    .map((d) => `[ATTACHED DOCUMENT: ${d.filename}]\n${(d.extractedMarkdown || '').slice(0, 3000)}`)
-    .join('\n\n')
+  return (payload.attachedDocs || []).map((d) => `[ATTACHED DOCUMENT: ${d.filename}]\n${(d.extractedMarkdown || '').slice(0, 3000)}`).join('\n\n')
 }
 
 /**

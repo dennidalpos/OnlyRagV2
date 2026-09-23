@@ -5,13 +5,7 @@ import type { AgentToolCall } from './agentTypes'
 export type RepeatOutcomeKind = 'succeeding' | 'failing' | 'unknown'
 
 /** Which repetition pattern tripped the detector. */
-export type LoopPattern =
-  | 'shell_tool_confusion'
-  | 'exact_repeat'
-  | 'unchanged_failing_repeat'
-  | 'cycle'
-  | 'same_file_edits'
-  | 'same_target_reads'
+export type LoopPattern = 'shell_tool_confusion' | 'exact_repeat' | 'unchanged_failing_repeat' | 'cycle' | 'same_file_edits' | 'same_target_reads'
 
 export interface LoopCheckResult {
   isLooping: boolean
@@ -46,8 +40,18 @@ interface SignatureOutcomeRecord {
 const CHECK_TOOLS = new Set(['run_command', 'run_tests'])
 /** Tools whose execution can change what a check sees (a failed command may still write or install). */
 const STATE_CHANGING_TOOLS = new Set([
-  'write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'copy_file',
-  'move_file', 'create_directory', 'download_file', 'ensure_tool', 'git_commit', 'run_command', 'run_tests',
+  'write_file',
+  'replace_file_content',
+  'multi_replace_file_content',
+  'delete_file',
+  'copy_file',
+  'move_file',
+  'create_directory',
+  'download_file',
+  'ensure_tool',
+  'git_commit',
+  'run_command',
+  'run_tests',
 ])
 
 function accumulate(previous: SignatureOutcomeRecord | undefined, succeeded: boolean): SignatureOutcomeRecord {
@@ -148,11 +152,24 @@ export class AgentActionLoopDetector {
 
     // 0.5 Shell-Command Tool-Keyword Loop Check: Detects when the model repeatedly passes a tool name as a shell command (e.g.
     const SHELL_TOOL_KEYWORDS = [
-      'write_file', 'read_file', 'replace_file_content', 'multi_replace_file_content',
-      'delete_file', 'list_dir', 'list_files_recursive', 'grep_search',
-      'extract_code_symbols', 'create_directory', 'copy_file', 'move_file',
-      'web_search', 'fetch_web_content', 'download_file', 'inspect_os_env',
-      'ask', 'finish',
+      'write_file',
+      'read_file',
+      'replace_file_content',
+      'multi_replace_file_content',
+      'delete_file',
+      'list_dir',
+      'list_files_recursive',
+      'grep_search',
+      'extract_code_symbols',
+      'create_directory',
+      'copy_file',
+      'move_file',
+      'web_search',
+      'fetch_web_content',
+      'download_file',
+      'inspect_os_env',
+      'ask',
+      'finish',
     ]
     if (toolCall.tool === 'run_command' && toolCall.parameters?.command) {
       const rawCmd = String(toolCall.parameters.command).trimStart()
@@ -160,7 +177,7 @@ export class AgentActionLoopDetector {
       if (matchedKeyword) {
         const recentRunCmds = this.targetHistory.slice(-5)
         const consecutiveToolKeywordCmds = recentRunCmds.filter(
-          (rec) => rec.tool === 'run_command' && rec.target?.trimStart().startsWith(matchedKeyword)
+          (rec) => rec.tool === 'run_command' && rec.target?.trimStart().startsWith(matchedKeyword),
         ).length
         if (consecutiveToolKeywordCmds >= 2) {
           return {
@@ -213,9 +230,10 @@ export class AgentActionLoopDetector {
       const record = this.outcomeBySignature.get(signature)
 
       // A repeat whose previous runs SUCCEEDED needs the opposite advice: there is no error to investigate and no alternative approach to find — the action already did its job and its effect is on disk.
-      const suggestedIntervention = repeatOutcome === 'succeeding'
-        ? `[REDUNDANT ACTION: "${toolCall.tool}" ALREADY SUCCEEDED ${record?.successes || 1} TIME(S)]\nYou have re-issued the exact same "${toolCall.tool}" call ${duplicateCount} times. Every previous execution SUCCEEDED — nothing is broken and there is no error to fix.\nIts effect is ALREADY applied${target ? ` to "${target}"` : ''}: re-running it changes nothing and wastes a step.\nDirectives:\n1. Treat this action as DONE and move to the NEXT unfinished step of your active milestone.\n2. If the milestone's deliverable is already in place, run its verification command via run_command, then mark it with update_plan.\n3. If every milestone is complete and verified, invoke the "finish" tool with your final report.`
-        : `[CRITICAL LOOP INTERVENTION: REPEATED ACTION DETECTED]\nYou have attempted the exact same "${toolCall.tool}" action ${duplicateCount} times without progressing.\nDO NOT repeat this tool call with the same parameters.\nDirectives:\n1. If a file edit or replace failed, read the file first to inspect exact lines and whitespace.\n2. If a command or build failed, investigate the error stack trace and try an alternative approach.\n3. If you are stuck or require human guidance, use the "ask" tool to explain the blocker.`
+      const suggestedIntervention =
+        repeatOutcome === 'succeeding'
+          ? `[REDUNDANT ACTION: "${toolCall.tool}" ALREADY SUCCEEDED ${record?.successes || 1} TIME(S)]\nYou have re-issued the exact same "${toolCall.tool}" call ${duplicateCount} times. Every previous execution SUCCEEDED — nothing is broken and there is no error to fix.\nIts effect is ALREADY applied${target ? ` to "${target}"` : ''}: re-running it changes nothing and wastes a step.\nDirectives:\n1. Treat this action as DONE and move to the NEXT unfinished step of your active milestone.\n2. If the milestone's deliverable is already in place, run its verification command via run_command, then mark it with update_plan.\n3. If every milestone is complete and verified, invoke the "finish" tool with your final report.`
+          : `[CRITICAL LOOP INTERVENTION: REPEATED ACTION DETECTED]\nYou have attempted the exact same "${toolCall.tool}" action ${duplicateCount} times without progressing.\nDO NOT repeat this tool call with the same parameters.\nDirectives:\n1. If a file edit or replace failed, read the file first to inspect exact lines and whitespace.\n2. If a command or build failed, investigate the error stack trace and try an alternative approach.\n3. If you are stuck or require human guidance, use the "ask" tool to explain the blocker.`
 
       return {
         isLooping: true,
@@ -241,7 +259,7 @@ export class AgentActionLoopDetector {
     if (target && ['replace_file_content', 'multi_replace_file_content', 'write_file'].includes(toolCall.tool)) {
       const recentTargets = this.targetHistory.slice(-6)
       const sameFileEdits = recentTargets.filter(
-        (rec) => rec.target === target && ['replace_file_content', 'multi_replace_file_content', 'write_file'].includes(rec.tool)
+        (rec) => rec.target === target && ['replace_file_content', 'multi_replace_file_content', 'write_file'].includes(rec.tool),
       ).length
 
       if (sameFileEdits >= 4) {
@@ -265,7 +283,7 @@ export class AgentActionLoopDetector {
     if (target && ['read_file', 'list_dir', 'grep_search', 'extract_code_symbols'].includes(toolCall.tool)) {
       const recentTargets = this.targetHistory.slice(-5)
       const consecutiveReads = recentTargets.filter(
-        (rec) => rec.target === target && ['read_file', 'list_dir', 'grep_search', 'extract_code_symbols'].includes(rec.tool)
+        (rec) => rec.target === target && ['read_file', 'list_dir', 'grep_search', 'extract_code_symbols'].includes(rec.tool),
       ).length
 
       if (consecutiveReads >= 4) {

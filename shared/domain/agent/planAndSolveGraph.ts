@@ -94,14 +94,10 @@ export class GoalDecompositionPlanner {
     })
     if (inProgressUnsatisfied) return inProgressUnsatisfied
 
-    const nextPending = this.milestones.find(
-      (milestone) => milestone.status === 'pending' && !isCompletionMilestoneTitle(milestone)
-    )
+    const nextPending = this.milestones.find((milestone) => milestone.status === 'pending' && !isCompletionMilestoneTitle(milestone))
     if (nextPending) return nextPending
 
-    const anyInProgress = this.milestones.find(
-      (milestone) => milestone.status === 'in_progress' && !isCompletionMilestoneTitle(milestone)
-    )
+    const anyInProgress = this.milestones.find((milestone) => milestone.status === 'in_progress' && !isCompletionMilestoneTitle(milestone))
     if (anyInProgress) return anyInProgress
 
     return this.milestones.find((milestone) => milestone.status === 'pending' || milestone.status === 'in_progress')
@@ -109,9 +105,7 @@ export class GoalDecompositionPlanner {
 
   public findMilestone(idOrIndex: string | number): PlanMilestone | undefined {
     if (typeof idOrIndex === 'number') return this.milestones[idOrIndex]
-    return this.milestones.find(
-      (milestone) => milestone.id === idOrIndex || milestone.title.toLowerCase().includes(idOrIndex.toLowerCase())
-    )
+    return this.milestones.find((milestone) => milestone.id === idOrIndex || milestone.title.toLowerCase().includes(idOrIndex.toLowerCase()))
   }
 
   public updateMilestone(idOrIndex: string | number, status: PlanMilestone['status'], notes?: string): boolean {
@@ -191,10 +185,7 @@ export class GoalDecompositionPlanner {
     return GoalDecompositionPlanner.getCompactStateFromMilestones(this.milestones, customObjective)
   }
 
-  public static getCompactStateFromMilestones(
-    milestones: ReadonlyArray<PlanMilestone>,
-    customObjective?: string
-  ): CompactPlanState {
+  public static getCompactStateFromMilestones(milestones: ReadonlyArray<PlanMilestone>, customObjective?: string): CompactPlanState {
     const completedMilestones = milestones.filter((milestone) => milestone.status === 'verified')
     const pendingMilestones = milestones.filter((milestone) => milestone.status !== 'verified')
     const lastCompleted = completedMilestones.at(-1)
@@ -211,9 +202,7 @@ export class GoalDecompositionPlanner {
     }
   }
 
-  public compileProgressPrompt(context?: {
-    directive?: { blockDirective?: string | null; closureStepDirective?: string | null } | null
-  }): string {
+  public compileProgressPrompt(context?: { directive?: { blockDirective?: string | null; closureStepDirective?: string | null } | null }): string {
     if (this.milestones.length === 0) return ''
     const blockDirective = context?.directive?.blockDirective
     const progress = this.getProgressSummary()
@@ -229,13 +218,7 @@ export class GoalDecompositionPlanner {
     }
 
     for (const { milestone, planIndex } of promptWindow.entries) {
-      const icon = milestone.status === 'verified'
-        ? '[x]'
-        : milestone.status === 'in_progress'
-          ? '[>]'
-          : milestone.status === 'failed'
-            ? '[!]'
-            : '[ ]'
+      const icon = milestone.status === 'verified' ? '[x]' : milestone.status === 'in_progress' ? '[>]' : milestone.status === 'failed' ? '[!]' : '[ ]'
       let line = `${planIndex + 1}. ${icon} **${milestone.id}: ${milestone.title}**`
       if (milestone.filePaths?.length) {
         line += ` — *Files:* ${milestone.filePaths.map((filePath) => `\`${filePath}\``).join(', ')}`
@@ -257,14 +240,15 @@ export class GoalDecompositionPlanner {
     const failedMilestones = this.milestones.filter((milestone) => milestone.status === 'failed')
     if (progress.completed === progress.total && progress.total > 0) {
       lines.push(
-        '\n[ALL CHECKLIST MILESTONES COMPLETED - FINAL REPORT REQUIRED]\nAll operational checklist tasks are complete. DO NOT execute any more file edits or commands.\nReply with a comprehensive final report (in the user\'s language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Final Conclusion\nThe application will independently evaluate the evidence and close the session; no finish tool is required.'
+        "\n[ALL CHECKLIST MILESTONES COMPLETED - FINAL REPORT REQUIRED]\nAll operational checklist tasks are complete. DO NOT execute any more file edits or commands.\nReply with a comprehensive final report (in the user's language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Final Conclusion\nThe application will independently evaluate the evidence and close the session; no finish tool is required.",
       )
     } else if (!activeMilestone || isCompletionMilestoneTitle(activeMilestone)) {
-      const failedList = failedMilestones.length > 0
-        ? `\nThe following milestones were abandoned and MUST be reported as incomplete in your summary:\n${failedMilestones.map((milestone) => `- ${milestone.id}: ${milestone.title}`).join('\n')}`
-        : ''
+      const failedList =
+        failedMilestones.length > 0
+          ? `\nThe following milestones were abandoned and MUST be reported as incomplete in your summary:\n${failedMilestones.map((milestone) => `- ${milestone.id}: ${milestone.title}`).join('\n')}`
+          : ''
       lines.push(
-        `\n[NO OPERATIONAL MILESTONES REMAIN - FINAL REPORT REQUIRED]\nEvery milestone that can still be worked on is either verified or abandoned. DO NOT execute any more file edits or commands, and DO NOT ask the user a question.\nReply with a comprehensive final report (in the user's language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Work left incomplete and why\n5. Final Conclusion\nThe application will independently evaluate the evidence and close the session; no finish tool is required.${failedList}`
+        `\n[NO OPERATIONAL MILESTONES REMAIN - FINAL REPORT REQUIRED]\nEvery milestone that can still be worked on is either verified or abandoned. DO NOT execute any more file edits or commands, and DO NOT ask the user a question.\nReply with a comprehensive final report (in the user's language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Work left incomplete and why\n5. Final Conclusion\nThe application will independently evaluate the evidence and close the session; no finish tool is required.${failedList}`,
       )
     } else if (blockDirective) {
       lines.push(`\n${blockDirective}`)
@@ -283,7 +267,7 @@ export class GoalDecompositionPlanner {
           '3. Never repeat identical file writes or commands in a loop. If configuration or boilerplate files are already created, advance immediately to implementing components in src/.',
           '4. Do NOT invoke "finish" until all operational checklist milestones are completed and verified.',
           '5. If a scaffolding command fails or hangs, create only the files named by the active milestone; preserve the accepted stack and existing infrastructure.',
-        ].join('\n')
+        ].join('\n'),
       )
     }
 

@@ -12,13 +12,7 @@ interface SourcePagePreviewProps {
   zoomLevel?: number
 }
 
-export const SourcePagePreview: React.FC<SourcePagePreviewProps> = ({
-  docId,
-  pageNumber,
-  totalPages,
-  pageContent,
-  zoomLevel = 100,
-}) => {
+export const SourcePagePreview: React.FC<SourcePagePreviewProps> = ({ docId, pageNumber, totalPages, pageContent, zoomLevel = 100 }) => {
   const { t } = useTranslation()
   const [imageBase64, setImageBase64] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
@@ -87,10 +81,7 @@ export const SourcePagePreview: React.FC<SourcePagePreviewProps> = ({
               />
             </div>
           ) : (
-            <RenderedPagePreview
-              pageNumber={pageNumber}
-              pageContent={pageContent}
-            />
+            <RenderedPagePreview pageNumber={pageNumber} pageContent={pageContent} />
           )}
         </div>
       </div>

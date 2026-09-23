@@ -1,17 +1,5 @@
 import React from 'react'
-import {
-  FileCheck2,
-  Folder,
-  ArrowLeftRight,
-  Play,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-  X,
-  FileText,
-} from 'lucide-react'
+import { FileCheck2, Folder, ArrowLeftRight, Play, Loader2, AlertCircle, CheckCircle2, AlertTriangle, Info, X, FileText } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
 import { useInplaceTranslation, LANGUAGES } from '../../hooks/useTranslation'
 import { useTranslation } from '../../i18n'
@@ -22,19 +10,11 @@ interface InplaceTranslationPanelProps {
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
 }
 
-export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = ({
-  settings,
-  diagnostics,
-  onUpdateSettings,
-}) => {
+export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = ({ settings, diagnostics, onUpdateSettings }) => {
   const { t } = useTranslation()
   const inp = useInplaceTranslation(settings, diagnostics)
 
-  const isFormValid =
-    Boolean(inp.selectedDoc) &&
-    Boolean(inp.targetDir.trim()) &&
-    inp.sourceLang !== inp.targetLang &&
-    !inp.isTranslating
+  const isFormValid = Boolean(inp.selectedDoc) && Boolean(inp.targetDir.trim()) && inp.sourceLang !== inp.targetLang && !inp.isTranslating
 
   const progressPercent = inp.translateProgress?.percent ?? 0
   const currentPhase = inp.translateProgress?.phase
@@ -66,9 +46,7 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
                   PDF &bull; DOCX
                 </span>
               </h2>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                {t('translation.inplaceSubtitle')}
-              </p>
+              <p className="text-xs text-slate-300 leading-relaxed">{t('translation.inplaceSubtitle')}</p>
               <div className="flex items-center gap-2 text-[11px] text-sky-300/80 pt-1 font-sans">
                 <Info className="w-3.5 h-3.5 shrink-0" />
                 <span>{t('translation.inplacePreserveNotice')}</span>
@@ -87,16 +65,15 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
                 <span>{t('translation.inplaceSelectDoc')}</span>
               </label>
               <span className="text-[11px] text-slate-400 font-mono">
-                {inp.documents.length} {t('common.document')}{inp.documents.length === 1 ? '' : 's'} PDF/DOCX
+                {inp.documents.length} {t('common.document')}
+                {inp.documents.length === 1 ? '' : 's'} PDF/DOCX
               </span>
             </div>
 
             {inp.documents.length === 0 ? (
               <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-800/40 text-amber-300 text-xs flex items-start gap-2.5">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
-                <p className="leading-relaxed">
-                  {t('translation.inplaceNoCompatibleDocs')}
-                </p>
+                <p className="leading-relaxed">{t('translation.inplaceNoCompatibleDocs')}</p>
               </div>
             ) : (
               <select
@@ -223,9 +200,7 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
                 </button>
               )}
             </div>
-            <p className="text-[11px] text-slate-400">
-              {t('translation.inplaceTargetDirNotice')}
-            </p>
+            <p className="text-[11px] text-slate-400">{t('translation.inplaceTargetDirNotice')}</p>
           </div>
 
           {/* Live Translation Progress Box */}

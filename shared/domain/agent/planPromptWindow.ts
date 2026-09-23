@@ -12,7 +12,7 @@ export interface PromptMilestoneWindow {
 export function selectPromptMilestoneWindow(
   milestones: readonly PlanMilestone[],
   activeMilestoneId?: string,
-  limit: number = MAX_PROMPT_MILESTONES
+  limit: number = MAX_PROMPT_MILESTONES,
 ): PromptMilestoneWindow {
   if (!Array.isArray(milestones) || milestones.length === 0) {
     return { entries: [], omittedBefore: 0, omittedAfter: 0 }
@@ -29,9 +29,7 @@ export function selectPromptMilestoneWindow(
 
   const activeIndex = milestones.findIndex((milestone) => milestone.id === activeMilestoneId)
   const anchor = activeIndex >= 0 ? activeIndex : milestones.length - 1
-  const start = windowSize === 1
-    ? anchor
-    : Math.max(0, Math.min(anchor - 1, milestones.length - windowSize))
+  const start = windowSize === 1 ? anchor : Math.max(0, Math.min(anchor - 1, milestones.length - windowSize))
   const end = start + windowSize
 
   return {

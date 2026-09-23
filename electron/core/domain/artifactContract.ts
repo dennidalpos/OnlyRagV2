@@ -8,12 +8,16 @@ const artifactKind = z.enum(['html', 'svg', 'markdown'])
 export const artifactsListPayloadSchema = z.object({ workspacePath }).strict()
 export const artifactsGetPayloadSchema = z.object({ workspacePath, artifactId }).strict()
 export const artifactsDeletePayloadSchema = z.object({ workspacePath, artifactId }).strict()
-export const artifactsSavePayloadSchema = z.object({
-  workspacePath,
-  input: z.object({
-    id: artifactId.optional(),
-    name: artifactName,
-    kind: artifactKind,
-    content: z.string().max(2_000_000),
-  }).strict(),
-}).strict()
+export const artifactsSavePayloadSchema = z
+  .object({
+    workspacePath,
+    input: z
+      .object({
+        id: artifactId.optional(),
+        name: artifactName,
+        kind: artifactKind,
+        content: z.string().max(2_000_000),
+      })
+      .strict(),
+  })
+  .strict()

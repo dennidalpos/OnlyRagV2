@@ -3,7 +3,8 @@ const WINDOWS_PATH_PATTERN = /(?:[A-Za-z]:[\\/]|\\\\)[^\s"'<>]+/g
 const POSIX_PATH_PATTERN = /(?<![\w])\/(?:[^\/\s"'<>]+\/)+[^\/\s"'<>]*/g
 const EXCEPTION_DETAIL_PATTERN = /(^|\n)([^\n]*(?:failed|failure|error|exception|could not|unable)[^:\n]*:\s*)([^\n]+)/gi
 const AUTH_HEADER_PATTERN = /(\b(?:authorization\s*:\s*bearer|proxy-authorization\s*:\s*bearer)\s+)[^\s,;]+/gi
-const SECRET_ASSIGNMENT_PATTERN = /((?:["']?\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|passwd|secret|token|authorization)\b["']?\s*[=:]\s*["']?(?:bearer\s+)?))[^\s"',;}]+/gi
+const SECRET_ASSIGNMENT_PATTERN =
+  /((?:["']?\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|passwd|secret|token|authorization)\b["']?\s*[=:]\s*["']?(?:bearer\s+)?))[^\s"',;}]+/gi
 const SECRET_QUERY_PATTERN = /([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|token)=)[^&\s]+/gi
 const URL_CREDENTIAL_PATTERN = /(\b(?:https?|ftp):\/\/)[^/\s:@]+:[^@\s/]+@/gi
 

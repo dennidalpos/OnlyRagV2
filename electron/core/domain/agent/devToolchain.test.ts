@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  normalizeToolId,
-  resolveInstallTarget,
-  buildInstallCommand,
-  extractVersion,
-  formatToolchainInventory,
-  DEV_TOOL_ALLOWLIST,
-} from './devToolchain'
+import { normalizeToolId, resolveInstallTarget, buildInstallCommand, extractVersion, formatToolchainInventory, DEV_TOOL_ALLOWLIST } from './devToolchain'
 
 describe('devToolchain — allow-list policy', () => {
   it('should accept allow-listed tools and their common aliases', () => {
@@ -48,7 +41,7 @@ describe('devToolchain — allow-list policy', () => {
 })
 
 describe('devToolchain — probing and reporting', () => {
-  it('should extract the version number from each tool\'s own output format', () => {
+  it("should extract the version number from each tool's own output format", () => {
     expect(extractVersion('v20.11.1')).toBe('20.11.1')
     expect(extractVersion('git version 2.43.0.windows.1')).toBe('2.43.0')
     expect(extractVersion('Python 3.12.2')).toBe('3.12.2')
@@ -68,9 +61,7 @@ describe('devToolchain — probing and reporting', () => {
   })
 
   it('should state plainly when nothing is missing', () => {
-    const inventory = formatToolchainInventory([
-      { id: 'node', displayName: 'Node.js', installed: true, version: '20.11.1' },
-    ])
+    const inventory = formatToolchainInventory([{ id: 'node', displayName: 'Node.js', installed: true, version: '20.11.1' }])
     expect(inventory).toContain('All probed development tools are available.')
     expect(inventory).not.toContain('MISSING')
   })

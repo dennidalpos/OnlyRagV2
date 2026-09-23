@@ -55,11 +55,14 @@ describe('agentOrchestratorSessionSetup', () => {
     const stateDir = path.join(os.tmpdir(), `test_scratch_protected_${Date.now()}`)
     createdDirs.push(stateDir)
     const scratch = new StandaloneScratchWorkspace(stateDir)
-    const resolved = resolveWorkspacePath({
-      workspacePath: 'C:\\Program Files\\OnlyRag V2',
-      isStandaloneMode: true,
-      sessionId,
-    }, scratch)
+    const resolved = resolveWorkspacePath(
+      {
+        workspacePath: 'C:\\Program Files\\OnlyRag V2',
+        isStandaloneMode: true,
+        sessionId,
+      },
+      scratch,
+    )
     expect(resolved).not.toBeNull()
     expect(resolved).toBe(path.join(stateDir, 'agent-scratch'))
     expect(fs.existsSync(resolved!)).toBe(true)

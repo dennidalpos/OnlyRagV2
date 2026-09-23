@@ -1,5 +1,3 @@
-
-
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import http from 'node:http'
 import fs from 'node:fs'
@@ -59,9 +57,7 @@ type MockRoute = {
 function createMockSidecar(routes: MockRoute[]): Promise<{ server: http.Server; baseUrl: string }> {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
-      const route = routes.find(
-        (r) => r.method === req.method && r.path === req.url
-      )
+      const route = routes.find((r) => r.method === req.method && r.path === req.url)
       if (route) {
         res.writeHead(route.status, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(route.body))
@@ -82,21 +78,25 @@ function createMockSidecar(routes: MockRoute[]): Promise<{ server: http.Server; 
 // service sends (mirrors SidecarSlmBridgeService.analyzeLogs()).
 // ---------------------------------------------------------------------------
 
-async function callAnalyzeLogs(
-  baseUrl: string,
-  extraPaths?: string[]
-): Promise<unknown> {
+async function callAnalyzeLogs(baseUrl: string, extraPaths?: string[]): Promise<unknown> {
   return new Promise((resolve) => {
     const body = JSON.stringify({ extra_paths: extraPaths ?? [] })
     const url = new URL('/agent/logs/analyze', baseUrl)
     const req = http.request(
-      { hostname: url.hostname, port: Number(url.port), path: url.pathname, method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
+      {
+        hostname: url.hostname,
+        port: Number(url.port),
+        path: url.pathname,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      },
       (res) => {
         let raw = ''
-        res.on('data', (c) => { raw += c })
+        res.on('data', (c) => {
+          raw += c
+        })
         res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(raw) }))
-      }
+      },
     )
     req.on('error', (e) => resolve({ status: 0, error: e.message }))
     req.write(body)
@@ -109,7 +109,6 @@ async function callAnalyzeLogs(
 // ---------------------------------------------------------------------------
 
 describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
-
   // ── 1. /agent/logs/analyze — clean log (no anomalies) ───────────────────
 
   describe('POST /agent/logs/analyze — clean log report', () => {
@@ -117,17 +116,17 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     let baseUrl: string
 
     beforeAll(async () => {
-      const mock = await createMockSidecar([
-        { method: 'POST', path: '/agent/logs/analyze', status: 200, body: MOCK_LOG_REPORT_CLEAN },
-      ])
+      const mock = await createMockSidecar([{ method: 'POST', path: '/agent/logs/analyze', status: 200, body: MOCK_LOG_REPORT_CLEAN }])
       server = mock.server
       baseUrl = mock.baseUrl
     })
 
-    afterAll(() => { server.close() })
+    afterAll(() => {
+      server.close()
+    })
 
     it('returns 200 with empty anomalies and has_critical=false for clean logs', async () => {
-      const res = await callAnalyzeLogs(baseUrl) as any
+      const res = (await callAnalyzeLogs(baseUrl)) as any
       expect(res.status).toBe(200)
       expect(res.body.has_critical).toBe(false)
       expect(res.body.anomalies).toHaveLength(0)
@@ -135,7 +134,7 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     })
 
     it('response body matches SlmLogDiagnosticReport schema shape', async () => {
-      const res = await callAnalyzeLogs(baseUrl) as any
+      const res = (await callAnalyzeLogs(baseUrl)) as any
       expect(res.body).toHaveProperty('scanned_files')
       expect(res.body).toHaveProperty('total_lines_scanned')
       expect(res.body).toHaveProperty('anomalies')
@@ -149,7 +148,7 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     it('forwards extra_paths in the request body', async () => {
       // Verify our caller serialises extra_paths correctly (mock ignores it,
       // but the request must still succeed — no schema error)
-      const res = await callAnalyzeLogs(baseUrl, ['/custom/logs/']) as any
+      const res = (await callAnalyzeLogs(baseUrl, ['/custom/logs/'])) as any
       expect(res.status).toBe(200)
     })
   })
@@ -161,17 +160,17 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     let baseUrl: string
 
     beforeAll(async () => {
-      const mock = await createMockSidecar([
-        { method: 'POST', path: '/agent/logs/analyze', status: 200, body: MOCK_LOG_REPORT_CRITICAL },
-      ])
+      const mock = await createMockSidecar([{ method: 'POST', path: '/agent/logs/analyze', status: 200, body: MOCK_LOG_REPORT_CRITICAL }])
       server = mock.server
       baseUrl = mock.baseUrl
     })
 
-    afterAll(() => { server.close() })
+    afterAll(() => {
+      server.close()
+    })
 
     it('returns has_critical=true with CUDA_OOM and TOOL_LOOP anomalies', async () => {
-      const res = await callAnalyzeLogs(baseUrl) as any
+      const res = (await callAnalyzeLogs(baseUrl)) as any
       expect(res.status).toBe(200)
       expect(res.body.has_critical).toBe(true)
       expect(res.body.anomalies.length).toBeGreaterThanOrEqual(2)
@@ -182,7 +181,7 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     })
 
     it('each anomaly record has all required fields', async () => {
-      const res = await callAnalyzeLogs(baseUrl) as any
+      const res = (await callAnalyzeLogs(baseUrl)) as any
       for (const anomaly of res.body.anomalies) {
         expect(anomaly).toHaveProperty('anomaly_type')
         expect(anomaly).toHaveProperty('severity')
@@ -195,7 +194,7 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     })
 
     it('CRITICAL anomalies have severity CRITICAL', async () => {
-      const res = await callAnalyzeLogs(baseUrl) as any
+      const res = (await callAnalyzeLogs(baseUrl)) as any
       const criticals = res.body.anomalies.filter((a: any) => a.anomaly_type === 'CUDA_OOM')
       expect(criticals.length).toBeGreaterThan(0)
       expect(criticals[0].severity).toBe('CRITICAL')
@@ -209,7 +208,7 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     const deadPort = 19999
 
     it('analyzeLogs() returns a response (error surfaced, not thrown) when sidecar is down', async () => {
-      const res = await callAnalyzeLogs(`http://127.0.0.1:${deadPort}`) as any
+      const res = (await callAnalyzeLogs(`http://127.0.0.1:${deadPort}`)) as any
       expect(res).toBeDefined()
       expect(res.status === 0 || res.error).toBeTruthy()
     })

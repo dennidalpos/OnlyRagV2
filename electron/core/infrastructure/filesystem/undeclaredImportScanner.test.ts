@@ -29,11 +29,12 @@ function manifest(deps: Record<string, string>, dev: Record<string, string> = {}
 describe('scanUndeclaredImports', () => {
   it('finds the undeclared plugin in the config file and names the importer', () => {
     manifest({ react: '^18.0.0' }, { vite: '^4.0.0' })
-    write('vite.config.ts', "import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\nexport default defineConfig({ plugins: [react()] })\n")
+    write(
+      'vite.config.ts',
+      "import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\nexport default defineConfig({ plugins: [react()] })\n",
+    )
 
-    expect(scanUndeclaredImports(workspace)).toEqual([
-      { packageName: '@vitejs/plugin-react', importedBy: ['vite.config.ts'] },
-    ])
+    expect(scanUndeclaredImports(workspace)).toEqual([{ packageName: '@vitejs/plugin-react', importedBy: ['vite.config.ts'] }])
   })
 
   it('collects every file importing the same undeclared package', () => {
@@ -81,9 +82,7 @@ describe('scanUndeclaredImports', () => {
     write('package.json', JSON.stringify({ name: 'too-early' }))
     write('src/App.tsx', "import React from 'react'\nexport default React\n")
 
-    expect(scanUndeclaredImports(workspace)).toEqual([
-      { packageName: 'react', importedBy: ['src/App.tsx'] },
-    ])
+    expect(scanUndeclaredImports(workspace)).toEqual([{ packageName: 'react', importedBy: ['src/App.tsx'] }])
   })
 
   it('never walks into node_modules', () => {

@@ -23,16 +23,12 @@ describe('validateNodeTemplate', () => {
 
   it('flags a master template that dropped a required partial', () => {
     const issues = validateNodeTemplate('coding:master', 'You are an agent.\n{{> tools}}')
-    expect(issues).toContainEqual(
-      expect.objectContaining({ code: 'missing-partial', tokenName: 'directives', severity: 'error' })
-    )
+    expect(issues).toContainEqual(expect.objectContaining({ code: 'missing-partial', tokenName: 'directives', severity: 'error' }))
   })
 
   it('flags a partial referenced twice, which would double-send the block', () => {
     const issues = validateNodeTemplate('coding:master', '{{> directives}}{{> tools}}{{> tools}}')
-    expect(issues).toContainEqual(
-      expect.objectContaining({ code: 'duplicate-partial', tokenName: 'tools', severity: 'error' })
-    )
+    expect(issues).toContainEqual(expect.objectContaining({ code: 'duplicate-partial', tokenName: 'tools', severity: 'error' }))
   })
 
   it('accepts a variable used more than once', () => {
@@ -42,9 +38,7 @@ describe('validateNodeTemplate', () => {
 
   it('warns, without blocking, about a variable the module never supplies', () => {
     const issues = validateNodeTemplate('translation', 'From {{sourceLang}} to {{targetLang}}. {{nonsense}}')
-    expect(issues).toEqual([
-      expect.objectContaining({ code: 'unknown-variable', tokenName: 'nonsense', severity: 'warning' }),
-    ])
+    expect(issues).toEqual([expect.objectContaining({ code: 'unknown-variable', tokenName: 'nonsense', severity: 'warning' })])
     expect(hasBlockingIssues(issues)).toBe(false)
   })
 

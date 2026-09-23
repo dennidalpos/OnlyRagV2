@@ -33,7 +33,7 @@ function complete(
     verificationCommand?: string
     sourceInterventionId?: string
   }>,
-  overrides: Record<string, unknown> = {}
+  overrides: Record<string, unknown> = {},
 ) {
   return {
     status: 'complete' as const,
@@ -74,12 +74,11 @@ describe('PlanGenerationAppService', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('returns a canonical structured plan', async () => {
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
-      intervention('m-1', 'The schema accepts credentials', 'src/schema.ts'),
-      intervention('m-2', 'The endpoint logs users in', 'src/auth.ts'),
-    ], {
-      assumptions: [{ id: 'a-1', statement: 'Reuse the existing auth module', rationale: 'The project facts expose it.' }],
-    }))
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(
+      complete([intervention('m-1', 'The schema accepts credentials', 'src/schema.ts'), intervention('m-2', 'The endpoint logs users in', 'src/auth.ts')], {
+        assumptions: [{ id: 'a-1', statement: 'Reuse the existing auth module', rationale: 'The project facts expose it.' }],
+      }),
+    )
 
     const result = await planGenerationAppService.generatePlanText({ prompt: 'Add login', settings })
 
@@ -90,22 +89,24 @@ describe('PlanGenerationAppService', () => {
     const request = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
     expect(request.model).toBe('qwen2.5-coder:7b')
     expect(request.keepAlive).toBe('30m')
-    expect(request.options?.num_predict).toBe(calculateAvailableOutputTokens(
-      `${request.systemPrompt}\n${request.userContent}`,
-      request.options?.num_ctx || 0,
-    ))
+    expect(request.options?.num_predict).toBe(calculateAvailableOutputTokens(`${request.systemPrompt}\n${request.userContent}`, request.options?.num_ctx || 0))
     expect(request.think).toBe(false)
     expect(JSON.parse(request.userContent).request).toBe('Add login')
     expect(request.format).toEqual(expect.objectContaining({ type: 'object' }))
   })
 
   it('assigns canonical IDs instead of trusting model labels', async () => {
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
-      { ...intervention('first', 'Create schema'), id: 'first' },
-      { ...intervention('second', 'Create endpoint'), id: 'step_two' },
-    ], {
-      assumptions: [{ id: 'assumption_one', statement: 'Reuse the stack', rationale: 'It is declared.' }],
-    }))
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(
+      complete(
+        [
+          { ...intervention('first', 'Create schema'), id: 'first' },
+          { ...intervention('second', 'Create endpoint'), id: 'step_two' },
+        ],
+        {
+          assumptions: [{ id: 'assumption_one', statement: 'Reuse the stack', rationale: 'It is declared.' }],
+        },
+      ),
+    )
 
     const result = await planGenerationAppService.generatePlanText({ prompt: 'Add login', settings })
 
@@ -115,9 +116,7 @@ describe('PlanGenerationAppService', () => {
 
   it('clamps the saved setup window to the model trained context', async () => {
     vi.mocked(ollamaAppService.getModelContextLength).mockResolvedValueOnce(4096)
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
-      intervention('m-1', 'Create endpoint'),
-    ]))
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('m-1', 'Create endpoint')]))
 
     await planGenerationAppService.generatePlanText({
       prompt: 'Add endpoint',
@@ -126,19 +125,23 @@ describe('PlanGenerationAppService', () => {
 
     const request = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
     expect(request.options?.num_ctx).toBe(4096)
-    expect(request.options?.num_predict).toBe(calculateAvailableOutputTokens(
-      `${request.systemPrompt}\n${request.userContent}`,
-      4096,
-    ))
+    expect(request.options?.num_predict).toBe(calculateAvailableOutputTokens(`${request.systemPrompt}\n${request.userContent}`, 4096))
   })
 
   it('drops invented prior-work references from a fresh plan', async () => {
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([{
-      ...intervention('m-1', 'Persist locally'),
-      sourceInterventionId: 'invented-prior-work',
-    }], {
-      supersededWork: [{ interventionId: 'also-invented', reason: 'Not selected.' }],
-    }))
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(
+      complete(
+        [
+          {
+            ...intervention('m-1', 'Persist locally'),
+            sourceInterventionId: 'invented-prior-work',
+          },
+        ],
+        {
+          supersededWork: [{ interventionId: 'also-invented', reason: 'Not selected.' }],
+        },
+      ),
+    )
 
     const result = await planGenerationAppService.generatePlanText({ prompt: 'Persist locally', settings })
 
@@ -149,29 +152,23 @@ describe('PlanGenerationAppService', () => {
 
   it('preserves evidence and requires every residual intervention to be carried or superseded', async () => {
     const previous = previousPlan()
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
-      { ...intervention('m-1', 'Finish pending work'), sourceInterventionId: 'm-2' },
-    ]))
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([{ ...intervention('m-1', 'Finish pending work'), sourceInterventionId: 'm-2' }]))
 
     const result = await planGenerationAppService.generatePlanText({ prompt: 'Continue', settings, previousPlan: previous })
     expect(result.status, JSON.stringify(result)).toBe('success')
-    expect(result.retainedEvidence).toEqual([
-      { interventionId: 'm-1', summary: 'Completed work', verificationReferences: ['npm test'] },
-    ])
+    expect(result.retainedEvidence).toEqual([{ interventionId: 'm-1', summary: 'Completed work', verificationReferences: ['npm test'] }])
     expect(result.decisions).toEqual(previous.decisions)
 
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
-      intervention('m-1', 'Replacement work'),
-    ]))
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('m-1', 'Replacement work')]))
     const dropped = await planGenerationAppService.generatePlanText({ prompt: 'Continue', settings, previousPlan: previous })
     expect(dropped).toMatchObject({ status: 'error', milestones: [] })
     expect(dropped.error).toContain('dropped pending interventions')
   })
 
   it('records superseded work explicitly', async () => {
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
-      intervention('m-1', 'Replacement work'),
-    ], { supersededWork: [{ interventionId: 'm-2', reason: 'The new request replaces it.' }] }))
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(
+      complete([intervention('m-1', 'Replacement work')], { supersededWork: [{ interventionId: 'm-2', reason: 'The new request replaces it.' }] }),
+    )
 
     const result = await planGenerationAppService.generatePlanText({ prompt: 'Replace scope', settings, previousPlan: previousPlan() })
     expect(result.status).toBe('success')
@@ -180,14 +177,18 @@ describe('PlanGenerationAppService', () => {
 
   it('keeps transport, incomplete, schema, and invented-command failures non-executable', async () => {
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
-      status: 'transport_error', content: '', error: 'connection refused',
+      status: 'transport_error',
+      content: '',
+      error: 'connection refused',
     })
     const transport = await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })
     expect(transport).toMatchObject({ status: 'error', milestones: [] })
     expect(transport.error).toContain('connection refused')
 
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
-      status: 'incomplete', content: '{', error: 'Ollama response incomplete (length)',
+      status: 'incomplete',
+      content: '{',
+      error: 'Ollama response incomplete (length)',
     })
     const incomplete = await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })
     expect(incomplete).toMatchObject({ status: 'error', milestones: [] })
@@ -196,9 +197,9 @@ describe('PlanGenerationAppService', () => {
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({ status: 'complete', content: '{}' })
     expect((await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })).error).toContain('Invalid plan response')
 
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
-      { id: 'm-1', objective: 'Build passes', filePaths: [], acceptanceCriteria: ['Build exits 0'], verificationCommand: 'npm run invented' },
-    ]))
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(
+      complete([{ id: 'm-1', objective: 'Build passes', filePaths: [], acceptanceCriteria: ['Build exits 0'], verificationCommand: 'npm run invented' }]),
+    )
     expect((await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })).error).toContain('unavailable verification command')
   })
 
@@ -210,23 +211,18 @@ describe('PlanGenerationAppService', () => {
 
     try {
       vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
-        status: 'transport_error', content: '', error: 'connection refused',
+        status: 'transport_error',
+        content: '',
+        error: 'connection refused',
       })
       await planGenerationAppService.generatePlanText({
         operationId: 'plan-audit-failure',
         prompt: 'Task',
         settings: debugSettings,
       })
-      expect(logSessionEnd).toHaveBeenCalledWith(
-        'plan-audit-failure',
-        0,
-        false,
-        expect.stringContaining('connection refused'),
-      )
+      expect(logSessionEnd).toHaveBeenCalledWith('plan-audit-failure', 0, false, expect.stringContaining('connection refused'))
 
-      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
-        intervention('m-1', 'Create the requested behavior'),
-      ]))
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('m-1', 'Create the requested behavior')]))
       const compilePlanMilestones = vi.spyOn(planCompilation, 'compilePlanMilestones').mockReturnValueOnce([])
       const zeroMilestoneResult = await planGenerationAppService.generatePlanText({
         operationId: 'plan-audit-empty',
@@ -239,12 +235,7 @@ describe('PlanGenerationAppService', () => {
         status: 'error',
         error: 'Plan response contained no executable interventions',
       })
-      expect(logSessionEnd).toHaveBeenCalledWith(
-        'plan-audit-empty',
-        0,
-        false,
-        expect.stringContaining('no executable interventions'),
-      )
+      expect(logSessionEnd).toHaveBeenCalledWith('plan-audit-empty', 0, false, expect.stringContaining('no executable interventions'))
     } finally {
       logSessionStart.mockRestore()
       logPlanGeneration.mockRestore()
@@ -253,9 +244,9 @@ describe('PlanGenerationAppService', () => {
   })
 
   it('drops unavailable verification commands from file-backed interventions', async () => {
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
-      { ...intervention('m-1', 'Create manifest', 'package.json'), verificationCommand: 'npm init -y' },
-    ]))
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(
+      complete([{ ...intervention('m-1', 'Create manifest', 'package.json'), verificationCommand: 'npm init -y' }]),
+    )
 
     const result = await planGenerationAppService.generatePlanText({ prompt: 'Create a React app', settings })
 
@@ -281,9 +272,7 @@ describe('PlanGenerationAppService', () => {
 
     beforeEach(() => {
       workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-plan-'))
-      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
-        intervention('m-1', 'The dashboard renders', 'src/Dashboard.tsx'),
-      ]))
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('m-1', 'The dashboard renders', 'src/Dashboard.tsx')]))
     })
 
     afterEach(() => fs.rmSync(workspacePath, { recursive: true, force: true }))
@@ -303,9 +292,9 @@ describe('PlanGenerationAppService', () => {
 
     it('adds only the accepted greenfield stack and preserves existing infrastructure', async () => {
       const result = await planGenerationAppService.generatePlanText({ prompt: 'Create a React TypeScript web app', settings, workspacePath })
-      expect(result.milestones.flatMap((item) => item.filePaths || [])).toEqual(expect.arrayContaining([
-        'package.json', 'tsconfig.json', 'index.html', 'src/main.tsx',
-      ]))
+      expect(result.milestones.flatMap((item) => item.filePaths || [])).toEqual(
+        expect.arrayContaining(['package.json', 'tsconfig.json', 'index.html', 'src/main.tsx']),
+      )
       const manifestStep = result.milestones.find((item) => item.filePaths?.includes('package.json'))
       expect(manifestStep?.proposedVerificationCommand).toBe('npm run build')
       expect(manifestStep).not.toHaveProperty('verificationCommand')
@@ -316,13 +305,17 @@ describe('PlanGenerationAppService', () => {
     })
 
     it('maps a command-only setup intervention to the canonical greenfield scaffold', async () => {
-      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([{
-        id: 'm-1',
-        objective: 'Initialize the project',
-        filePaths: [],
-        acceptanceCriteria: ['The project is initialized'],
-        verificationCommand: 'npx create-react-app project-dashboard-task',
-      }]))
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(
+        complete([
+          {
+            id: 'm-1',
+            objective: 'Initialize the project',
+            filePaths: [],
+            acceptanceCriteria: ['The project is initialized'],
+            verificationCommand: 'npx create-react-app project-dashboard-task',
+          },
+        ]),
+      )
 
       const result = await planGenerationAppService.generatePlanText({
         prompt: 'Create a React app',

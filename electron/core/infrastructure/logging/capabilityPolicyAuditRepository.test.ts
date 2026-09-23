@@ -39,7 +39,7 @@ describe('CapabilityPolicyAuditRepository', () => {
   it('ignores malformed persisted entries and invalid new events', async () => {
     const filePath = path.join(tempDir, 'audit.json')
     fs.writeFileSync(filePath, JSON.stringify([event(1), { invalid: true }]), 'utf-8')
-    expect((await repository.load())).toHaveLength(1)
+    expect(await repository.load()).toHaveLength(1)
     expect(await repository.append({ invalid: true } as any)).toBe(false)
   })
 

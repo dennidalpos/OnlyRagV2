@@ -1,5 +1,3 @@
-
-
 import { useState, useCallback, useRef } from 'react'
 import type { SlmLogDiagnosticReport } from '../types'
 
@@ -40,40 +38,37 @@ export function useSlmOrchestration(): UseSlmOrchestrationReturn {
   // Note: we don't use useEffect cleanup here because the hook may be used
   // in long-lived views; instead we guard each setState call.
 
-  const analyzeLogs = useCallback(
-    async (extraPaths?: string[]): Promise<SlmLogDiagnosticReport | null> => {
-      if (!window.electronAPI?.agentLogsAnalyze) {
-        const msg = 'agentLogsAnalyze not available: ensure Electron preload is loaded.'
+  const analyzeLogs = useCallback(async (extraPaths?: string[]): Promise<SlmLogDiagnosticReport | null> => {
+    if (!window.electronAPI?.agentLogsAnalyze) {
+      const msg = 'agentLogsAnalyze not available: ensure Electron preload is loaded.'
+      setAnalyzeLogsError(msg)
+      return null
+    }
+
+    setIsAnalyzingLogs(true)
+    setAnalyzeLogsError(null)
+
+    try {
+      const report = await window.electronAPI.agentLogsAnalyze!(extraPaths)
+      if (mountedRef.current) {
+        setLastReport(report)
+        if (!report) {
+          setAnalyzeLogsError('Log analysis returned no report (sidecar offline?).')
+        }
+      }
+      return report
+    } catch (err: any) {
+      const msg = err?.message ?? 'Unknown log analysis error'
+      if (mountedRef.current) {
         setAnalyzeLogsError(msg)
-        return null
       }
-
-      setIsAnalyzingLogs(true)
-      setAnalyzeLogsError(null)
-
-      try {
-        const report = await window.electronAPI.agentLogsAnalyze!(extraPaths)
-        if (mountedRef.current) {
-          setLastReport(report)
-          if (!report) {
-            setAnalyzeLogsError('Log analysis returned no report (sidecar offline?).')
-          }
-        }
-        return report
-      } catch (err: any) {
-        const msg = err?.message ?? 'Unknown log analysis error'
-        if (mountedRef.current) {
-          setAnalyzeLogsError(msg)
-        }
-        return null
-      } finally {
-        if (mountedRef.current) {
-          setIsAnalyzingLogs(false)
-        }
+      return null
+    } finally {
+      if (mountedRef.current) {
+        setIsAnalyzingLogs(false)
       }
-    },
-    []
-  )
+    }
+  }, [])
 
   const reset = useCallback(() => {
     setIsAnalyzingLogs(false)

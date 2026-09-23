@@ -43,7 +43,12 @@ try {
   await page.waitForFunction(() => Boolean(window.electronAPI), undefined, { timeout: 20_000 })
   await page.waitForTimeout(2_000)
 
-  const recorded = fs.readFileSync(auditPath, 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line))
+  const recorded = fs
+    .readFileSync(auditPath, 'utf8')
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
   const external = [...recorded.map(({ address }) => address), ...requests].filter((address) => {
     const url = new URL(address)
     return ['http:', 'https:'].includes(url.protocol) && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)

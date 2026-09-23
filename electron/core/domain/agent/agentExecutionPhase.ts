@@ -1,9 +1,4 @@
-export type AgentExecutionPhase =
-  | 'collect_context'
-  | 'propose_action'
-  | 'apply_action'
-  | 'verify'
-  | 'outcome'
+export type AgentExecutionPhase = 'collect_context' | 'propose_action' | 'apply_action' | 'verify' | 'outcome'
 
 const allowedTransitions: Record<AgentExecutionPhase, readonly AgentExecutionPhase[]> = {
   collect_context: ['propose_action', 'outcome'],

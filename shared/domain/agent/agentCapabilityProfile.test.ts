@@ -7,12 +7,14 @@ describe('Agent capability profile', () => {
   })
 
   it('keeps explicit permissions and bounds the run budget', () => {
-    expect(resolveAgentCapabilityProfile({
-      allowFileModifications: true,
-      allowTerminalExecution: true,
-      capabilityPolicyMode: 'network-approved',
-      maxToolCallSteps: 1000,
-    })).toEqual({
+    expect(
+      resolveAgentCapabilityProfile({
+        allowFileModifications: true,
+        allowTerminalExecution: true,
+        capabilityPolicyMode: 'network-approved',
+        maxToolCallSteps: 1000,
+      }),
+    ).toEqual({
       allowFileModifications: true,
       allowTerminalExecution: true,
       capabilityPolicyMode: 'network-approved',

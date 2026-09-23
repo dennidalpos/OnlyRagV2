@@ -39,32 +39,10 @@ const MUTATING_COMMANDS = new Set([
 ])
 
 /** Commands that exit 0 regardless of the workspace, so their exit code proves nothing. */
-const VACUOUS_COMMANDS = new Set([
-  'echo',
-  'true',
-  ':',
-  'cd',
-  'exit',
-  'set-location',
-  'write-host',
-  'write-output',
-])
+const VACUOUS_COMMANDS = new Set(['echo', 'true', ':', 'cd', 'exit', 'set-location', 'write-host', 'write-output'])
 
 /** Commands that print a file or list a directory: they exit 0 for anything that exists, whatever it contains. */
-const EXISTENCE_ONLY_COMMANDS = new Set([
-  'cat',
-  'type',
-  'get-content',
-  'gc',
-  'head',
-  'tail',
-  'ls',
-  'dir',
-  'get-childitem',
-  'gci',
-  'test-path',
-  'stat',
-])
+const EXISTENCE_ONLY_COMMANDS = new Set(['cat', 'type', 'get-content', 'gc', 'head', 'tail', 'ls', 'dir', 'get-childitem', 'gci', 'test-path', 'stat'])
 
 /** Terminal editors and pagers. */
 const INTERACTIVE_PROGRAMS = new Set([
@@ -168,7 +146,11 @@ function firstToken(segment: string): string {
 }
 
 function tokens(segment: string): string[] {
-  return segment.trim().split(/\s+/).filter(Boolean).map((t) => t.toLowerCase())
+  return segment
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => t.toLowerCase())
 }
 
 /** Decides whether a command may stand as proof that a milestone is done. */
@@ -232,7 +214,8 @@ export function checkVerificationCommandSafety(rawCommand: string): Verification
     if (isGuiModeVerificationSegment(segment)) {
       return {
         isSafe: false,
-        reason: 'it launches a test runner in graphical mode, which waits for a human and reports only whether the window was closed — use the headless subcommand (e.g. `cypress run`, `playwright test`) instead',
+        reason:
+          'it launches a test runner in graphical mode, which waits for a human and reports only whether the window was closed — use the headless subcommand (e.g. `cypress run`, `playwright test`) instead',
       }
     }
 

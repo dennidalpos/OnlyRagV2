@@ -1,12 +1,11 @@
-
-
 import { extractDeliverablePaths } from './milestoneDeliverableResolver'
 import { isCompletionMilestoneTitle, type PlanMilestone } from './planAndSolveGraph'
 
 /** A backticked token is the plan format's way of pointing at something concrete — a path (`src/App.tsx`) or a command (`npm run build`). */
 /** A backticked token that something could actually run: a command has whitespace between its program and its arguments (`npm run build`, `pytest -q`), and a path has an extension, which `extractDeliverablePaths` already recognises on its own. */
 const BACKTICKED_TOKEN = /`([^`\n]+)`/g
-const DIRECTORY_MUTATION_TOKEN = /^(?:(?:mkdir|md|move|mv|copy|cp|rename|ren|rmdir|rd|remove|rm)\b|git\s+(?:mv|rm)\b|(?:\.{1,2}[\\/]|[a-z0-9_.-]+[\\/])[^`\n]*\s+(?:to|into|->|→)\s+(?:\.{1,2}[\\/]|[a-z0-9_.-]+[\\/]))/i
+const DIRECTORY_MUTATION_TOKEN =
+  /^(?:(?:mkdir|md|move|mv|copy|cp|rename|ren|rmdir|rd|remove|rm)\b|git\s+(?:mv|rm)\b|(?:\.{1,2}[\\/]|[a-z0-9_.-]+[\\/])[^`\n]*\s+(?:to|into|->|→)\s+(?:\.{1,2}[\\/]|[a-z0-9_.-]+[\\/]))/i
 
 function hasRunnableBacktickedCommand(title: string): boolean {
   for (const match of title.matchAll(BACKTICKED_TOKEN)) {

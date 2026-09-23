@@ -9,10 +9,7 @@ import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSo
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
-import {
-  closeAgentRunFromEvidence,
-  type ApplicationClosureContext,
-} from './agentOrchestratorApplicationClosure'
+import { closeAgentRunFromEvidence, type ApplicationClosureContext } from './agentOrchestratorApplicationClosure'
 
 vi.mock('./agentOrchestratorVerificationRunner', () => ({
   runProjectVerification: vi.fn(),
@@ -30,21 +27,19 @@ describe('application-owned agent closure', () => {
     fs.rmSync(workspacePath, { recursive: true, force: true })
   })
 
-  function makeContext(options?: {
-    active?: boolean
-    milestoneStatus?: 'pending' | 'in_progress' | 'verified' | 'failed'
-    hasFileMutations?: boolean
-  }) {
+  function makeContext(options?: { active?: boolean; milestoneStatus?: 'pending' | 'in_progress' | 'verified' | 'failed'; hasFileMutations?: boolean }) {
     const filePath = path.join(workspacePath, 'src', 'app.ts')
     fs.mkdirSync(path.dirname(filePath), { recursive: true })
     fs.writeFileSync(filePath, 'export const value = 1\n')
 
     const goalPlanner = new GoalDecompositionPlanner()
-    goalPlanner.initializePlan([{
-      id: 'm-1',
-      title: 'Create `src/app.ts`',
-      status: options?.milestoneStatus ?? 'in_progress',
-    }])
+    goalPlanner.initializePlan([
+      {
+        id: 'm-1',
+        title: 'Create `src/app.ts`',
+        status: options?.milestoneStatus ?? 'in_progress',
+      },
+    ])
     const persistCurrentState = vi.fn(async () => {})
     const finalizeSession = vi.fn()
     const emitDone = vi.fn()
@@ -73,13 +68,23 @@ describe('application-owned agent closure', () => {
       emitLog,
       emitDone,
       persistCurrentState,
-      buildSessionTracker: (summaryText?: string) => new SessionDebtTracker({
-        completedTasks: goalPlanner.getMilestones().filter((m) => m.status === 'verified').map((m) => `${m.id}: ${m.title}`),
-        unresolvedIssues: goalPlanner.getMilestones().filter((m) => m.status === 'failed').map((m) => `${m.id}: ${m.title}`),
-        nextSteps: goalPlanner.getMilestones().filter((m) => m.status === 'pending' || m.status === 'in_progress').map((m) => `${m.id}: ${m.title}`),
-        modifiedFiles: [filePath],
-        summaryText,
-      }),
+      buildSessionTracker: (summaryText?: string) =>
+        new SessionDebtTracker({
+          completedTasks: goalPlanner
+            .getMilestones()
+            .filter((m) => m.status === 'verified')
+            .map((m) => `${m.id}: ${m.title}`),
+          unresolvedIssues: goalPlanner
+            .getMilestones()
+            .filter((m) => m.status === 'failed')
+            .map((m) => `${m.id}: ${m.title}`),
+          nextSteps: goalPlanner
+            .getMilestones()
+            .filter((m) => m.status === 'pending' || m.status === 'in_progress')
+            .map((m) => `${m.id}: ${m.title}`),
+          modifiedFiles: [filePath],
+          summaryText,
+        }),
       finalizeSession,
       setExecutionPhase,
       getExecutionPhase: () => 'verify',
@@ -89,7 +94,9 @@ describe('application-owned agent closure', () => {
         digest: 'sha256:test',
         options: { num_ctx: 8192, num_predict: 2048, maxContextChars: 24000, temperature: 0.1, top_p: 0.9, repeat_penalty: 1.1, stop: [] },
       },
-      recordVerificationEvidence: (evidence) => { ctx.lastVerification = evidence },
+      recordVerificationEvidence: (evidence) => {
+        ctx.lastVerification = evidence
+      },
     }
 
     return { ctx, emitDone, emitLog, persistCurrentState, finalizeSession, setExecutionPhase, filePath }
@@ -129,7 +136,7 @@ describe('application-owned agent closure', () => {
       'info',
       'Diagnostica sessione: verified',
       expect.stringContaining('Recupero schema: 0/2'),
-      expect.objectContaining({ category: 'generic_info', modelName: 'qwen2.5-coder:7b' })
+      expect.objectContaining({ category: 'generic_info', modelName: 'qwen2.5-coder:7b' }),
     )
     expect(setExecutionPhase).toHaveBeenCalledWith('outcome')
     expect(finalizeSession).toHaveBeenCalledTimes(1)
@@ -207,8 +214,7 @@ describe('application-owned agent closure', () => {
     await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: 'Model requested closure.' })
 
     expect(ctx.requestApproval).toHaveBeenCalledTimes(2)
-    expect(execFileSync('git', ['log', '-1', '--format=%s'], { cwd: workspacePath, encoding: 'utf8' }).trim())
-      .toBe('Agent Coding: publish reviewed changes')
+    expect(execFileSync('git', ['log', '-1', '--format=%s'], { cwd: workspacePath, encoding: 'utf8' }).trim()).toBe('Agent Coding: publish reviewed changes')
   })
 
   it('keeps partial delivery and the failure reason when verification blocks closure', async () => {
@@ -282,7 +288,12 @@ describe('application-owned agent closure', () => {
     expect(ctx.state.guardEvents).toEqual(expected)
     expect(outcome).toMatchObject({ outcome: 'closed', result: { evidence: { guardEvents: expected } } })
     expect(emitDone).toHaveBeenCalledWith(false, expect.any(String), 'blocked', expect.objectContaining({ guardEvents: expected }))
-    expect(emitLog).toHaveBeenCalledWith('info', 'Diagnostica sessione: blocked', expect.stringContaining('Guard: loop_exact_repeat, no_mutation(stop)'), expect.anything())
+    expect(emitLog).toHaveBeenCalledWith(
+      'info',
+      'Diagnostica sessione: blocked',
+      expect.stringContaining('Guard: loop_exact_repeat, no_mutation(stop)'),
+      expect.anything(),
+    )
   })
 
   it('closes a guard-stopped run as blocked even without an operational plan or failing check', async () => {

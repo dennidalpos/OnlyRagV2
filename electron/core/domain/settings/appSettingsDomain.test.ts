@@ -28,16 +28,20 @@ describe('AppSettingsDomain Unit Tests', () => {
   })
 
   it('sanitizes independent per-model thinking preferences', () => {
-    expect(sanitizeModelThinkingPreferences({
-      ' qwen3:4b ': true,
-      'gpt-oss:20b': false,
-      invalid: 'yes',
-      '': true,
-    })).toEqual({ 'qwen3:4b': true, 'gpt-oss:20b': false })
+    expect(
+      sanitizeModelThinkingPreferences({
+        ' qwen3:4b ': true,
+        'gpt-oss:20b': false,
+        invalid: 'yes',
+        '': true,
+      }),
+    ).toEqual({ 'qwen3:4b': true, 'gpt-oss:20b': false })
 
-    expect(sanitizeAppSettings({
-      modelThinkingPreferences: { 'qwen3:4b': true, invalid: 1 },
-    }).modelThinkingPreferences).toEqual({ 'qwen3:4b': true })
+    expect(
+      sanitizeAppSettings({
+        modelThinkingPreferences: { 'qwen3:4b': true, invalid: 1 },
+      }).modelThinkingPreferences,
+    ).toEqual({ 'qwen3:4b': true })
   })
 
   it('preserves the saved sensitive-payload preference while logging is off', () => {

@@ -7,12 +7,7 @@ import type { AgentSessionTerminationReason } from '../infrastructure/filesystem
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
-export type EmitLog = (
-  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
-  message: string,
-  detail?: string,
-  meta?: Partial<AgentLogEntry>
-) => void
+export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface SessionWatchdogParams {
   session: AgentSession

@@ -10,7 +10,12 @@ export function getDiagnosticsPollDelay(sidecarStatus: DiagnosticsData['sidecar'
   return sidecarStatus === 'online' ? intervalMs : Math.min(intervalMs, DIAGNOSTICS_STARTUP_RETRY_MS)
 }
 
-export function useDiagnostics(settings: AppSettings, onSelectDefaultModelIfUnset: (model: string) => void, settingsReady: boolean, intervalMs: number = 10000) {
+export function useDiagnostics(
+  settings: AppSettings,
+  onSelectDefaultModelIfUnset: (model: string) => void,
+  settingsReady: boolean,
+  intervalMs: number = 10000,
+) {
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null)
   const [isScanning, setIsScanning] = useState<boolean>(false)
   const prevSidecarStatusRef = useRef<string | null>(null)

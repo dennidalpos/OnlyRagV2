@@ -3,11 +3,7 @@ import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import path from 'node:path'
 import type { AgentToolCall, AgentLogEntry } from '../domain/agent/agentTypes'
 import type { ClassifiedToolExecutionResult } from './agentToolExecutorService'
-import {
-  DiagnosticOutputReducer,
-  extractErrorDiagnostics,
-  formatDiagnosticPrompt,
-} from '../domain/agent/diagnosticOutputReducer'
+import { DiagnosticOutputReducer, extractErrorDiagnostics, formatDiagnosticPrompt } from '../domain/agent/diagnosticOutputReducer'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { runCircuitBreaker, recordMutationSideEffects, recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
@@ -29,14 +25,14 @@ export function isToolExecutionFailure(toolRes: ClassifiedToolExecutionResult): 
  * merely malformed (live full task and TS2614 runs of 2026-09-23: build 1/2, rejected write 2/2).
  */
 export function shouldSpendExecutionRecoveryBudget(toolRes: ClassifiedToolExecutionResult): boolean {
-  return isToolExecutionFailure(toolRes) &&
+  return (
+    isToolExecutionFailure(toolRes) &&
     !toolRes.outputForHistory.includes('[FILE VERSION CONFLICT:') &&
     !toolRes.outputForHistory.startsWith('[PRE-COMMIT AST VALIDATION ERROR')
+  )
 }
 
-export function terminalOutcomeFor(
-  toolRes: ClassifiedToolExecutionResult
-): Extract<ToolResultProcessingOutcome, { outcome: 'return' }> | null {
+export function terminalOutcomeFor(toolRes: ClassifiedToolExecutionResult): Extract<ToolResultProcessingOutcome, { outcome: 'return' }> | null {
   if (toolRes.terminalCode !== 'MODEL_UNSUITABLE') return null
   return { outcome: 'return', result: { success: false, summary: toolRes.outputForHistory, completionStatus: 'blocked' } }
 }
@@ -53,8 +49,7 @@ export function updateVersionConflictRecovery(ctx: Pick<ToolResultProcessingCont
   if (ctx.toolRes.outcome !== 'success' && conflict) {
     const conflictPath = conflict[1].trim()
     ctx.recoveryState.versionedReadEvidence = undefined
-    const missingNewFile = ctx.parsedTool.tool === 'write_file'
-      && /\nCurrent:\s*missing(?:\r?\n|$)/i.test(ctx.toolRes.outputForHistory)
+    const missingNewFile = ctx.parsedTool.tool === 'write_file' && /\nCurrent:\s*missing(?:\r?\n|$)/i.test(ctx.toolRes.outputForHistory)
     if (missingNewFile) {
       ctx.recoveryState.pendingVersionConflictReadPath = undefined
       return { changed: true }
@@ -80,7 +75,7 @@ const VERSIONED_EDIT_TOOLS = new Set(['write_file', 'replace_file_content', 'mul
 
 export function applyVersionedReadEvidence(
   toolCall: AgentToolCall,
-  state: Pick<ToolResultProcessingContext['recoveryState'], 'versionedReadEvidence'>
+  state: Pick<ToolResultProcessingContext['recoveryState'], 'versionedReadEvidence'>,
 ): { toolCall: AgentToolCall; consumed: boolean } {
   const evidence = state.versionedReadEvidence
   if (!evidence || !VERSIONED_EDIT_TOOLS.has(toolCall.tool)) return { toolCall, consumed: false }
@@ -181,16 +176,13 @@ function emitWorkspaceFileVersions(ctx: ToolResultProcessingContext, filePaths: 
 
 function resolvedMutationPaths(ctx: ToolResultProcessingContext, isToolFailure: boolean): string[] {
   if (isToolFailure || !ctx.workspacePath) return []
-  const resolve = (value: unknown) => typeof value === 'string'
-    ? (path.isAbsolute(value) ? value : path.resolve(ctx.workspacePath!, value))
-    : undefined
+  const resolve = (value: unknown) => (typeof value === 'string' ? (path.isAbsolute(value) ? value : path.resolve(ctx.workspacePath!, value)) : undefined)
   const parameters = ctx.parsedTool.parameters
   if (ctx.parsedTool.tool === 'copy_file') return [resolve(parameters.targetPath || parameters.destination)].filter((value): value is string => Boolean(value))
   if (ctx.parsedTool.tool === 'move_file') {
-    return [
-      resolve(parameters.sourcePath || parameters.filePath),
-      resolve(parameters.targetPath || parameters.destination),
-    ].filter((value): value is string => Boolean(value))
+    return [resolve(parameters.sourcePath || parameters.filePath), resolve(parameters.targetPath || parameters.destination)].filter((value): value is string =>
+      Boolean(value),
+    )
   }
   return []
 }
@@ -222,8 +214,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   const nonRollbackEffect = describeNonRollbackEffect(parsedTool, toolRes, targetParam)
   if (nonRollbackEffect) ctx.recordNonRollbackEffect?.(nonRollbackEffect)
   const isMutating =
-    ['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool) &&
-    !toolRes.noOpMutation
+    ['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool) && !toolRes.noOpMutation
 
   // Closes the loop detector's feedback path: it records INTENT before the tool runs, and only this line tells it what actually happened.
   ctx.loopDetector.recordOutcome(parsedTool, !isToolFailure)
@@ -235,16 +226,20 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     const signature = `${parsedTool.tool}:${targetParam || ''}:${toolRes.logMessage.toLowerCase()}`
     const decision = ctx.recoveryState.progress.onExecutionFailure(signature)
     if (toolRes.effectOutcome === 'uncertain' || decision.action === 'stop') {
-      const reason = toolRes.effectOutcome === 'uncertain'
-        ? `Effetto incerto dopo "${parsedTool.tool}": l'operazione non viene ripetuta automaticamente.`
-        : recoveryStopDiagnostic('execution', decision.state)
-      ctx.episodicCompactor.recordStep({
-        step: ctx.stepCount,
-        tool: parsedTool.tool,
-        target: targetParam,
-        status: 'FAILURE',
-        summary: toolRes.logMessage,
-      }, distilledOutput)
+      const reason =
+        toolRes.effectOutcome === 'uncertain'
+          ? `Effetto incerto dopo "${parsedTool.tool}": l'operazione non viene ripetuta automaticamente.`
+          : recoveryStopDiagnostic('execution', decision.state)
+      ctx.episodicCompactor.recordStep(
+        {
+          step: ctx.stepCount,
+          tool: parsedTool.tool,
+          target: targetParam,
+          status: 'FAILURE',
+          summary: toolRes.logMessage,
+        },
+        distilledOutput,
+      )
       ctx.emitLog('terminal', reason, toolRes.logDetail, {
         category: parsedTool.tool === 'run_command' ? 'command_execution' : 'tool_execution',
         toolName: parsedTool.tool,
@@ -280,7 +275,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
       status: isToolFailure ? 'FAILURE' : 'SUCCESS',
       summary: toolRes.logMessage,
     },
-    distilledOutput
+    distilledOutput,
   )
   if (versionRecovery.changed) await ctx.persistCurrentState()
 
@@ -293,20 +288,21 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   for (const filePath of [...commandTouchedPaths, ...resolvedMutationPaths(ctx, isToolFailure)]) {
     ctx.recordChangedFile?.(filePath)
   }
-  emitWorkspaceFileVersions(ctx, [
-    toolRes.changeStats?.filePath,
-    ...commandTouchedPaths,
-    ...resolvedMutationPaths(ctx, isToolFailure),
-  ])
+  emitWorkspaceFileVersions(ctx, [toolRes.changeStats?.filePath, ...commandTouchedPaths, ...resolvedMutationPaths(ctx, isToolFailure)])
   trackVerification(ctx, isToolFailure)
 
   const remappedMilestones = remapPlanAfterMove(ctx, isToolFailure)
   if (remappedMilestones.length > 0) {
-    ctx.emitLog('info', `Piano aggiornato dopo lo spostamento: ${remappedMilestones.join(', ')} ora puntano a ${String(parsedTool.parameters.targetPath || parsedTool.parameters.destination)}.`, undefined, {
-      category: 'system_alert',
-      toolName: parsedTool.tool,
-      target: targetParam,
-    })
+    ctx.emitLog(
+      'info',
+      `Piano aggiornato dopo lo spostamento: ${remappedMilestones.join(', ')} ora puntano a ${String(parsedTool.parameters.targetPath || parsedTool.parameters.destination)}.`,
+      undefined,
+      {
+        category: 'system_alert',
+        toolName: parsedTool.tool,
+        target: targetParam,
+      },
+    )
     await ctx.persistCurrentState()
   }
 
@@ -318,17 +314,20 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     // Nothing was created or edited, so the panel must not claim it was: the agent log is the
     // user's account of what the run did to their workspace. `logMessage` already says so.
     category = 'tool_execution'
-  } else if (['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'copy_file', 'move_file', 'create_directory'].includes(toolName)) {
+  } else if (
+    ['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'copy_file', 'move_file', 'create_directory'].includes(toolName)
+  ) {
     category = 'file_mutation'
-    verb = toolName === 'write_file' || toolName === 'create_directory'
-      ? 'Created'
-      : toolName === 'delete_file'
-      ? 'Deleted'
-      : toolName === 'move_file'
-      ? 'Moved'
-      : toolName === 'copy_file'
-      ? 'Copied'
-      : 'Edited'
+    verb =
+      toolName === 'write_file' || toolName === 'create_directory'
+        ? 'Created'
+        : toolName === 'delete_file'
+          ? 'Deleted'
+          : toolName === 'move_file'
+            ? 'Moved'
+            : toolName === 'copy_file'
+              ? 'Copied'
+              : 'Edited'
   } else if (toolName === 'run_command') {
     category = 'command_execution'
     verb = 'Ran'
@@ -342,10 +341,13 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     verb = toolName === 'web_search' ? 'Search' : toolName === 'fetch_web_content' ? 'Fetch' : 'Download'
   }
 
-  const testRunMeta = toolName === 'run_tests' ? {
-    isPass: !isToolFailure,
-    summary: toolRes.logMessage,
-  } : undefined
+  const testRunMeta =
+    toolName === 'run_tests'
+      ? {
+          isPass: !isToolFailure,
+          summary: toolRes.logMessage,
+        }
+      : undefined
 
   const structuredMeta = {
     category,
@@ -372,9 +374,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
       trigger: 'protocol_error',
       reason: terminalOutcome.result.summary,
     })
-    return closure.outcome === 'closed'
-      ? { outcome: 'return', result: closure.result }
-      : { outcome: 'continue' }
+    return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
   }
 
   return { outcome: 'continue' }

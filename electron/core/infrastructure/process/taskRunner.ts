@@ -54,12 +54,7 @@ export function normalizePowerShellCommand(command: string): string {
 export class TaskRunner {
   private activeTasksMap = new Map<string, ActiveTask>()
 
-  registerActiveTask(
-    id: string,
-    type: ActiveTaskType,
-    destroyFn: () => void,
-    paths: ActiveTaskPaths = {}
-  ): string {
+  registerActiveTask(id: string, type: ActiveTaskType, destroyFn: () => void, paths: ActiveTaskPaths = {}): string {
     const task: ActiveTask = {
       id,
       type,
@@ -132,11 +127,7 @@ export class TaskRunner {
     const userAppData = app?.getPath ? app.getPath('userData') : path.join(os.tmpdir(), 'OnlyRagV2_userData')
     const tempDir = app?.getPath ? app.getPath('temp') : os.tmpdir()
 
-    const dirsToClean = [
-      path.join(userAppData, 'data', 'exports'),
-      path.join(tempDir, 'OnlyRagV2_tmp'),
-      path.join(tempDir, 'onlyrag_temp'),
-    ]
+    const dirsToClean = [path.join(userAppData, 'data', 'exports'), path.join(tempDir, 'OnlyRagV2_tmp'), path.join(tempDir, 'onlyrag_temp')]
 
     for (const d of dirsToClean) {
       if (fs.existsSync(d)) {
@@ -177,11 +168,7 @@ export class TaskRunner {
     })
   }
 
-  async executePowerShellCommand(
-    command: string,
-    targetCwd?: string,
-    timeoutMs?: number
-  ): Promise<{ success: boolean; output: string; error?: string }> {
+  async executePowerShellCommand(command: string, targetCwd?: string, timeoutMs?: number): Promise<{ success: boolean; output: string; error?: string }> {
     return this.executeTerminalCommand(command, targetCwd, undefined, timeoutMs)
   }
 
@@ -189,14 +176,18 @@ export class TaskRunner {
     command: string,
     targetCwd?: string,
     onChunk?: (chunk: string) => void,
-    timeoutMs?: number
+    timeoutMs?: number,
   ): Promise<{ success: boolean; output: string; error?: string }> {
     if (typeof command !== 'string' || !command.trim()) {
       return { success: false, output: '', error: 'Invalid command' }
     }
     const normalizedCommand = normalizePowerShellCommand(command)
     const effectiveTimeoutMs = Math.min(Math.max(timeoutMs || 300000, 5000), 1800000)
-    logger.log('INFO', 'TaskRunner', `Executing PowerShell command: ${normalizedCommand}${targetCwd ? ` (CWD: ${targetCwd})` : ''} [Timeout: ${effectiveTimeoutMs / 1000}s]`)
+    logger.log(
+      'INFO',
+      'TaskRunner',
+      `Executing PowerShell command: ${normalizedCommand}${targetCwd ? ` (CWD: ${targetCwd})` : ''} [Timeout: ${effectiveTimeoutMs / 1000}s]`,
+    )
 
     let executionCwd = app?.getPath ? app.getPath('userData') : process.cwd()
     if (targetCwd && typeof targetCwd === 'string' && fs.existsSync(targetCwd)) {
@@ -231,26 +222,18 @@ export class TaskRunner {
       return new Promise((resolve) => {
         let isCompleted = false
 
-        const psProcess = spawn(
-          'powershell.exe',
-          ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', normalizedCommand],
-          {
-            cwd: executionCwd,
-            env: execEnv,
-            windowsHide: true,
-          }
-        )
+        const psProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', normalizedCommand], {
+          cwd: executionCwd,
+          env: execEnv,
+          windowsHide: true,
+        })
 
         let stdout = ''
         let stderr = ''
 
         const timeoutTimer = setTimeout(() => {
           if (!isCompleted && !psProcess.killed && psProcess.pid) {
-            logger.log(
-              'WARN',
-              'TaskRunner',
-              `Command timed out after ${effectiveTimeoutMs / 1000}s. Terminating process tree PID ${psProcess.pid}...`
-            )
+            logger.log('WARN', 'TaskRunner', `Command timed out after ${effectiveTimeoutMs / 1000}s. Terminating process tree PID ${psProcess.pid}...`)
             if (process.platform === 'win32') {
               spawn('taskkill', ['/pid', psProcess.pid.toString(), '/f', '/t'])
             } else {
@@ -270,11 +253,7 @@ export class TaskRunner {
           isCompleted = true
           clearTimeout(timeoutTimer)
           logger.log('INFO', 'TaskRunner', `PowerShell process PID ${psProcess.pid} finished with exit code ${code}`)
-          const output = (
-            stdout ||
-            stderr ||
-            (code === 0 ? 'Command executed successfully.' : `Process exited with code ${code}`)
-          ).trim()
+          const output = (stdout || stderr || (code === 0 ? 'Command executed successfully.' : `Process exited with code ${code}`)).trim()
           resolve({
             success: code === 0,
             output,
@@ -312,11 +291,7 @@ export class TaskRunner {
 
             const timeoutTimer = setTimeout(() => {
               if (!isCompleted && ptyProcess.pid) {
-                logger.log(
-                  'WARN',
-                  'TaskRunner',
-                  `node-pty command timed out after ${effectiveTimeoutMs / 1000}s. Terminating process PID ${ptyProcess.pid}...`
-                )
+                logger.log('WARN', 'TaskRunner', `node-pty command timed out after ${effectiveTimeoutMs / 1000}s. Terminating process PID ${ptyProcess.pid}...`)
                 if (process.platform === 'win32') {
                   spawn('taskkill', ['/pid', ptyProcess.pid.toString(), '/f', '/t'])
                 } else {

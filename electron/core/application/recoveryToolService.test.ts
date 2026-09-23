@@ -12,10 +12,7 @@ describe('RecoveryToolService rollback_workspace', () => {
   })
 
   it('is idempotent when the journal has nothing left to restore', () => {
-    const rollbackAll = vi
-      .fn()
-      .mockReturnValueOnce({ restoredCount: 1, errors: [] })
-      .mockReturnValueOnce({ restoredCount: 0, errors: [] })
+    const rollbackAll = vi.fn().mockReturnValueOnce({ restoredCount: 1, errors: [] }).mockReturnValueOnce({ restoredCount: 0, errors: [] })
     const service = new RecoveryToolService({ rollbackAll, rollbackLastStep: vi.fn(), canRollbackLastStep: false })
 
     const first = service.executeRollbackWorkspace()

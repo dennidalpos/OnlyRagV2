@@ -18,13 +18,7 @@ const ALL_KINDS: PlanDirectiveKind[] = [
   'focus',
 ]
 
-const OPTIONAL_FLAGS = [
-  'includeProjectMap',
-  'includeAttachedRag',
-  'includeSkills',
-  'includePinnedFiles',
-  'includeActiveFile',
-] as const
+const OPTIONAL_FLAGS = ['includeProjectMap', 'includeAttachedRag', 'includeSkills', 'includePinnedFiles', 'includeActiveFile'] as const
 
 describe('resolveTurnContextPolicy', () => {
   it('returns a fully populated policy for every directive kind', () => {
@@ -85,13 +79,7 @@ describe('resolveTurnContextPolicy', () => {
 
 describe('omittedBlockNames', () => {
   it('names each withheld block for the turn log', () => {
-    expect(omittedBlockNames(resolveTurnContextPolicy('verification_due'))).toEqual([
-      'repo map',
-      'RAG docs',
-      'skills',
-      'pinned files',
-      'active file',
-    ])
+    expect(omittedBlockNames(resolveTurnContextPolicy('verification_due'))).toEqual(['repo map', 'RAG docs', 'skills', 'pinned files', 'active file'])
   })
 })
 
@@ -101,7 +89,7 @@ describe('states that order a file rewrite keep the channel that carries the fil
     '%s admits pinned files, the channel the directive target is injected on',
     (kind) => {
       expect(resolveTurnContextPolicy(kind).includePinnedFiles).toBe(true)
-    }
+    },
   )
 
   it('command-only states do not, because no file content could change the command', () => {

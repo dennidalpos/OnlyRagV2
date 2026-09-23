@@ -18,13 +18,9 @@ function distillTurn(userText: string, botText: string): string {
   const cleanUser = (userText || '').replace(/\s+/g, ' ').trim()
   const cleanBot = (botText || '').replace(/\s+/g, ' ').trim()
 
-  const summarizedUser = cleanUser.length > 250
-    ? TextRankSummarizer.summarize(cleanUser, { targetSentences: 2 }) || cleanUser.slice(0, 240)
-    : cleanUser
+  const summarizedUser = cleanUser.length > 250 ? TextRankSummarizer.summarize(cleanUser, { targetSentences: 2 }) || cleanUser.slice(0, 240) : cleanUser
 
-  const summarizedBot = cleanBot.length > 350
-    ? TextRankSummarizer.summarize(cleanBot, { targetSentences: 2 }) || cleanBot.slice(0, 340)
-    : cleanBot
+  const summarizedBot = cleanBot.length > 350 ? TextRankSummarizer.summarize(cleanBot, { targetSentences: 2 }) || cleanBot.slice(0, 340) : cleanBot
 
   return `User: ${summarizedUser}\nAssistant: ${summarizedBot}`
 }
@@ -37,17 +33,16 @@ export function compactChatHistory(
   messages: ChatMessage[],
   budget: ChatContextBudget,
   hasSelectedDocs: boolean,
-  availableChars?: number
+  availableChars?: number,
 ): ChatCompactionResult {
   // Filter out empty messages and the initial placeholder greeting only
-  const dialogueMessages = messages
-    .filter((m) => {
-      if (!m.text || !m.text.trim()) return false
-      if (m.sender === 'bot' && m.id === '1') {
-        return false
-      }
-      return true
-    })
+  const dialogueMessages = messages.filter((m) => {
+    if (!m.text || !m.text.trim()) return false
+    if (m.sender === 'bot' && m.id === '1') {
+      return false
+    }
+    return true
+  })
 
   if (dialogueMessages.length === 0) {
     return {
@@ -95,9 +90,7 @@ export function compactChatHistory(
   }
 
   // Build full uncompacted dialogue
-  const fullDialogue = turnPairs
-    .map((t) => (t.assistant ? `User: ${t.user}\nAssistant: ${t.assistant}` : `User: ${t.user}`))
-    .join('\n\n')
+  const fullDialogue = turnPairs.map((t) => (t.assistant ? `User: ${t.user}\nAssistant: ${t.assistant}` : `User: ${t.user}`)).join('\n\n')
 
   const totalOriginalChars = fullDialogue.length
 
@@ -114,7 +107,7 @@ export function compactChatHistory(
   }
 
   // If over budget, dynamically allocate 80% to recent turns and distill older turns
-  const recentBudget = Math.floor(baseBudget * 0.80)
+  const recentBudget = Math.floor(baseBudget * 0.8)
   const recentTurns: typeof turnPairs = []
   let recentChars = 0
 
@@ -134,16 +127,13 @@ export function compactChatHistory(
   const summaryPoints = olderTurns.map((turn) => distillTurn(turn.user, turn.assistant))
   const summarySection = summaryPoints.join('\n\n')
 
-  const recentSection = recentTurns
-    .map((t) => (t.assistant ? `User: ${t.user}\nAssistant: ${t.assistant}` : `User: ${t.user}`))
-    .join('\n\n')
+  const recentSection = recentTurns.map((t) => (t.assistant ? `User: ${t.user}\nAssistant: ${t.assistant}` : `User: ${t.user}`)).join('\n\n')
 
   const combined = [summarySection, recentSection].filter(Boolean).join('\n\n')
 
   // Hard ceiling.
-  const bounded = combined.length > baseBudget
-    ? `[...older conversation trimmed to fit the context window]\n\n${combined.slice(combined.length - baseBudget)}`
-    : combined
+  const bounded =
+    combined.length > baseBudget ? `[...older conversation trimmed to fit the context window]\n\n${combined.slice(combined.length - baseBudget)}` : combined
 
   return {
     historyBlock: bounded,

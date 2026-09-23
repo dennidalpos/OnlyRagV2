@@ -27,10 +27,7 @@ export interface RegistryInstallRefusal extends InstallRefusal {
 type LookupPackages = (names: string[]) => Promise<InstallPackageFacts[]>
 
 /** Returns the first explicitly requested package that the registry says is absent. */
-export async function firstNonexistentInstallTarget(
-  command: string,
-  lookupPackages: LookupPackages,
-): Promise<string | null> {
+export async function firstNonexistentInstallTarget(command: string, lookupPackages: LookupPackages): Promise<string | null> {
   const requested = extractRequestedPackages(command)
   if (requested.length === 0) return null
   const facts = await lookupPackages(requested.map((request) => request.name))

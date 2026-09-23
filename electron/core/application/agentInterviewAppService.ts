@@ -1,27 +1,13 @@
-
-
 import os from 'node:os'
 import { CODING_MODEL_KEEP_ALIVE, HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import { logger } from '../infrastructure/logging/logger'
 import { getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
-import type {
-  AppSettings,
-  InterviewAnalysisResult,
-  InterviewQuestion,
-  UserInterviewAnswer,
-} from '../../../shared/types'
+import type { AppSettings, InterviewAnalysisResult, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
 import { composeInterviewDecisionPrompt } from '../../../shared/domain/agent/interviewDecisionContext'
 import { explicitAlternativeInterviewFallback } from '../../../shared/domain/agent/planInterviewPolicy'
-import {
-  validateInterviewAnswers,
-  validateInterviewQuestionLanguage,
-} from '../../../shared/domain/agent/interviewValidation'
-import {
-  interviewPhaseResponseSchema,
-  toOllamaJsonSchema,
-  validateStructuredContent,
-} from '../domain/agent/ollamaStructuredResponse'
+import { validateInterviewAnswers, validateInterviewQuestionLanguage } from '../../../shared/domain/agent/interviewValidation'
+import { interviewPhaseResponseSchema, toOllamaJsonSchema, validateStructuredContent } from '../domain/agent/ollamaStructuredResponse'
 import { collectProjectPlanningFacts, type ProjectPlanningFacts } from './projectPlanningFacts'
 import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
@@ -59,7 +45,7 @@ export class AgentInterviewAppService {
     settings: AppSettings,
     workspacePath?: string | null,
     previousDecisions: readonly UserInterviewAnswer[] = [],
-    operationId?: string
+    operationId?: string,
   ): Promise<InterviewAnalysisResult> {
     const modelToUse = model || settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
     const cachedGpu = getCachedGpuInfo()
@@ -72,41 +58,34 @@ export class AgentInterviewAppService {
     })
     const trainedContext = await ollamaAppService.getModelContextLength(modelToUse, settings.ollamaHost)
     const modelMetrics = await ollamaAppService.getModelMetrics(settings.ollamaHost)
-    runtimeOpts.num_ctx = resolveModelContextLength(
-      modelToUse,
-      settings.modelContextLengths,
-      runtimeOpts.num_ctx,
-      trainedContext,
-    )
+    runtimeOpts.num_ctx = resolveModelContextLength(modelToUse, settings.modelContextLengths, runtimeOpts.num_ctx, trainedContext)
     runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx)
     runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx)
 
     try {
       const { facts } = collectProjectPlanningFacts(workspacePath, prompt, previousDecisions)
       const userContent = JSON.stringify({ request: prompt, projectFacts: facts })
-      runtimeOpts.num_predict = calculateAvailableOutputTokens(
-        `${INTERVIEW_SYSTEM_PROMPT}\n${userContent}`,
-        runtimeOpts.num_ctx,
+      runtimeOpts.num_predict = calculateAvailableOutputTokens(`${INTERVIEW_SYSTEM_PROMPT}\n${userContent}`, runtimeOpts.num_ctx)
+      const response = await generateStructuredWithRecovery(
+        {
+          operationId,
+          model: modelToUse,
+          systemPrompt: INTERVIEW_SYSTEM_PROMPT,
+          userContent,
+          format: toOllamaJsonSchema(interviewPhaseResponseSchema),
+          think: resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics).think,
+          host: settings.ollamaHost,
+          keepAlive: CODING_MODEL_KEEP_ALIVE,
+          options: runtimeOpts,
+        },
+        (content) => {
+          const validated = validateStructuredContent(content, interviewPhaseResponseSchema)
+          if (validated.status === 'invalid') return validated
+          const unresolvedQuestions = validated.data.questions.filter((question) => !questionResolvedByFacts(question, facts))
+          const languageError = validateInterviewQuestionLanguage(prompt, unresolvedQuestions)
+          return languageError ? { status: 'invalid', error: languageError } : { status: 'valid', data: { response: validated.data, unresolvedQuestions } }
+        },
       )
-      const response = await generateStructuredWithRecovery({
-        operationId,
-        model: modelToUse,
-        systemPrompt: INTERVIEW_SYSTEM_PROMPT,
-        userContent,
-        format: toOllamaJsonSchema(interviewPhaseResponseSchema),
-        think: resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics).think,
-        host: settings.ollamaHost,
-        keepAlive: CODING_MODEL_KEEP_ALIVE,
-        options: runtimeOpts,
-      }, (content) => {
-        const validated = validateStructuredContent(content, interviewPhaseResponseSchema)
-        if (validated.status === 'invalid') return validated
-        const unresolvedQuestions = validated.data.questions.filter((question) => !questionResolvedByFacts(question, facts))
-        const languageError = validateInterviewQuestionLanguage(prompt, unresolvedQuestions)
-        return languageError
-          ? { status: 'invalid', error: languageError }
-          : { status: 'valid', data: { response: validated.data, unresolvedQuestions } }
-      })
 
       if (response.status === 'error') {
         const fallbackQuestions = explicitAlternativeInterviewFallback(prompt)
@@ -156,11 +135,7 @@ export class AgentInterviewAppService {
   /**
    * Enriches the original user prompt with the confirmed interview answers.
    */
-  enrichPromptWithAnswers(
-    originalPrompt: string,
-    answers: UserInterviewAnswer[],
-    questions: InterviewQuestion[]
-  ): string {
+  enrichPromptWithAnswers(originalPrompt: string, answers: UserInterviewAnswer[], questions: InterviewQuestion[]): string {
     const validated = validateInterviewAnswers(questions || [], answers || [])
     if (!validated.valid) throw new Error(`Invalid interview answers: ${validated.error}`)
     return composeInterviewDecisionPrompt(originalPrompt, validated.answers)

@@ -1,6 +1,12 @@
 import path from 'node:path'
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
-import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone, extractDeliverablePaths, findUnsatisfiedDeliverables, AWAITING_VERIFICATION_MARKER } from '../../../shared/domain/agent/milestoneDeliverableResolver'
+import {
+  resolveMilestoneDeliverableStatus,
+  isDeliverableOfMilestone,
+  extractDeliverablePaths,
+  findUnsatisfiedDeliverables,
+  AWAITING_VERIFICATION_MARKER,
+} from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { captureMilestoneFileEvidence, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import {
   awaitingVerificationNote,
@@ -56,9 +62,7 @@ export async function runCircuitBreaker(ctx: ToolResultProcessingContext, isMuta
     reason: cbRes.reason,
     modelSummary: userSummary,
   })
-  return closure.outcome === 'closed'
-    ? { outcome: 'return', result: closure.result }
-    : { outcome: 'continue' }
+  return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
 }
 
 /** Hands the model the list of files its active milestone still owes. */
@@ -66,12 +70,12 @@ function reportPartialDelivery(
   ctx: ToolResultProcessingContext,
   milestone: { id: string; title: string },
   evidencePath: string,
-  probe: ReturnType<typeof createWorkspaceDeliverableProbe>
+  probe: ReturnType<typeof createWorkspaceDeliverableProbe>,
 ) {
   // `evidencePath` arrives as whatever the tool reported — a workspace-relative path from write_file, an absolute one from a command scan — while the deliverables come out of the title in relative form.
   const normalisedEvidence = evidencePath.replace(/\\/g, '/')
   const missing = findUnsatisfiedDeliverables(milestone, probe).filter(
-    (candidate) => normalisedEvidence !== candidate && !normalisedEvidence.endsWith(`/${candidate}`)
+    (candidate) => normalisedEvidence !== candidate && !normalisedEvidence.endsWith(`/${candidate}`),
   )
   // Empty when the file just written is itself the unsatisfied one — a placeholder body, say.
   if (missing.length === 0) return
@@ -86,14 +90,9 @@ function reportPartialDelivery(
       status: 'BLOCKED',
       summary: `Write accepted — milestone ${milestone.id} still owes ${missing.join(', ')}`,
     },
-    directive
-  )
-  ctx.emitLog(
-    'info',
-    `📄 Milestone ${milestone.id}: mancano ancora ${missing.map((m) => `"${m}"`).join(', ')}.`,
     directive,
-    { category: 'system_alert' }
   )
+  ctx.emitLog('info', `📄 Milestone ${milestone.id}: mancano ancora ${missing.map((m) => `"${m}"`).join(', ')}.`, directive, { category: 'system_alert' })
 }
 
 /**
@@ -104,7 +103,7 @@ function reportRedelivery(
   ctx: ToolResultProcessingContext,
   milestone: { id: string; title: string },
   evidencePath: string,
-  probe: ReturnType<typeof createWorkspaceDeliverableProbe>
+  probe: ReturnType<typeof createWorkspaceDeliverableProbe>,
 ) {
   const active = ctx.goalPlanner.getActiveMilestone()
   const nextNeed =
@@ -124,14 +123,11 @@ function reportRedelivery(
       status: 'BLOCKED',
       summary: `Write accepted — milestone ${milestone.id} was already complete before it`,
     },
-    directive
-  )
-  ctx.emitLog(
-    'info',
-    `🔁 Milestone ${milestone.id} era gia' completa: la riscrittura di "${evidencePath}" non ha fatto avanzare il piano.`,
     directive,
-    { category: 'system_alert' }
   )
+  ctx.emitLog('info', `🔁 Milestone ${milestone.id} era gia' completa: la riscrittura di "${evidencePath}" non ha fatto avanzare il piano.`, directive, {
+    category: 'system_alert',
+  })
 }
 
 /** Advances the active milestone when the file mutation that just landed is evidence for it. */
@@ -161,10 +157,7 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, muta
       // Awaiting verification note indicates milestone was complete before this write (re-delivery).
       const wasAlreadySatisfied = Boolean(milestone.notes && milestone.notes.includes(AWAITING_VERIFICATION_MARKER))
       ctx.goalPlanner.updateMilestone(milestone.id, 'in_progress', awaitingVerificationNote(evidencePath))
-      ctx.emitLog(
-        'info',
-        `✏️ Milestone ${milestone.id}: scritto "${evidencePath}", tutti i file richiesti sono presenti. In attesa di una verifica che passi.`
-      )
+      ctx.emitLog('info', `✏️ Milestone ${milestone.id}: scritto "${evidencePath}", tutti i file richiesti sono presenti. In attesa di una verifica che passi.`)
       if (wasAlreadySatisfied) reportRedelivery(ctx, milestone, evidencePath, probe)
       advancedAny = true
       continue
@@ -205,7 +198,7 @@ export async function recordMutationSideEffects(ctx: ToolResultProcessingContext
     if (!stagCheck.allowed && stagCheck.suggestedAction) {
       ctx.episodicCompactor.recordStep(
         { step: ctx.stepCount, tool: ctx.parsedTool.tool, status: 'BLOCKED', summary: stagCheck.reason || 'State Stagnation' },
-        stagCheck.suggestedAction
+        stagCheck.suggestedAction,
       )
       recordGuardEvent(ctx.recoveryState.guardEvents, 'fs_oscillation', 'advise', ctx.stepCount)
       ctx.emitLog('info', `⚡ ExecutionGuard: ${stagCheck.reason}`)
@@ -234,7 +227,7 @@ function reportNestedProjectDirs(ctx: ToolResultProcessingContext, createdDirs: 
         ? `Failed command left ${createdDirs.length} directory(ies) in the workspace root`
         : `Command created ${createdDirs.length} nested project directory(ies) in the workspace root`,
     },
-    directive
+    directive,
   )
   ctx.emitLog(
     'info',
@@ -242,7 +235,7 @@ function reportNestedProjectDirs(ctx: ToolResultProcessingContext, createdDirs: 
       ? `🧹 Il comando fallito ha lasciato ${dirList} nel workspace: richiesta pulizia all'agente.`
       : `📁 Il comando ha creato ${dirList} annidata nel workspace: il progetto deve stare nella radice.`,
     directive,
-    { category: 'system_alert' }
+    { category: 'system_alert' },
   )
 }
 
@@ -269,10 +262,7 @@ export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, comm
   ctx.flags.hasFileMutations = true
   invalidateVerifiedBuild(ctx)
   if (newlyTracked > 0) {
-    ctx.emitLog(
-      'info',
-      `📂 ${newlyTracked} file tracciati dal comando eseguito${scan.truncated ? ' (scansione troncata: workspace molto grande)' : ''}.`
-    )
+    ctx.emitLog('info', `📂 ${newlyTracked} file tracciati dal comando eseguito${scan.truncated ? ' (scansione troncata: workspace molto grande)' : ''}.`)
   }
 
   // A scaffolder or codegen step can perfectly well deliver the active milestone's file,
@@ -286,13 +276,11 @@ export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, comm
  */
 export function selectMilestonesAwaitingVerification(
   deps: Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner'>,
-  verificationCommand: string
+  verificationCommand: string,
 ): { id: string; title: string }[] {
   if (!deps.workspacePath) return []
   const probe = createWorkspaceDeliverableProbe(deps.workspacePath)
-  return selectMilestonesProvenByVerification(deps.goalPlanner.getMilestones(), verificationCommand, (m) =>
-    resolveMilestoneDeliverableStatus(m, probe)
-  )
+  return selectMilestonesProvenByVerification(deps.goalPlanner.getMilestones(), verificationCommand, (m) => resolveMilestoneDeliverableStatus(m, probe))
 }
 
 /**
@@ -300,7 +288,7 @@ export function selectMilestonesAwaitingVerification(
  */
 export function promoteMilestonesProvenBy(
   deps: Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner' | 'emitLog'>,
-  verificationCommand: string
+  verificationCommand: string,
 ): number {
   const proven = selectMilestonesAwaitingVerification(deps, verificationCommand)
   if (proven.length === 0) return 0
@@ -316,7 +304,7 @@ export function promoteMilestonesProvenBy(
   const progress = deps.goalPlanner.getProgressSummary()
   deps.emitLog(
     'info',
-    `✅ ${proven.length} milestone verificate da "${verificationCommand}": ${proven.map((m) => m.id).join(', ')} (${progress.completed}/${progress.total}).`
+    `✅ ${proven.length} milestone verificate da "${verificationCommand}": ${proven.map((m) => m.id).join(', ')} (${progress.completed}/${progress.total}).`,
   )
   return proven.length
 }
@@ -328,7 +316,7 @@ export function resolvePlanDirectiveForTurn(
   hasVerifiedBuild: boolean,
   episodes: readonly { tool: string; target?: string; status: 'SUCCESS' | 'FAILURE' | 'BLOCKED' }[] = [],
   /** The raw output of the last failing verification, when the caller can supply it. */
-  lastVerificationFailureOutput: string | null = null
+  lastVerificationFailureOutput: string | null = null,
 ): PlanDirectiveDecision {
   if (!workspacePath) return { kind: 'focus', blockDirective: null, closureStepDirective: null }
 
@@ -359,13 +347,10 @@ export function resolvePlanDirectiveForTurn(
       ? buildDiagnosticFixDirective(
           lastVerificationFailureOutput,
           (pkg) => (workspacePath ? readPackageExports(workspacePath, pkg) : []),
-          (importingFile, specifier) =>
-            workspacePath ? readLocalModuleExports(workspacePath, importingFile, specifier) : []
+          (importingFile, specifier) => (workspacePath ? readLocalModuleExports(workspacePath, importingFile, specifier) : []),
         )
       : null,
-    verificationFailureTargetFile: lastVerificationFailureOutput
-      ? diagnosticFixTargetFile(lastVerificationFailureOutput)
-      : null,
+    verificationFailureTargetFile: lastVerificationFailureOutput ? diagnosticFixTargetFile(lastVerificationFailureOutput) : null,
     verificationFailureTools: lastVerificationFailureOutput ? diagnosticFixRequiredTools(lastVerificationFailureOutput) : [],
     disconnectedEntrypoint: resolveDisconnectedEntrypoint(workspacePath, probe),
   })
@@ -375,7 +360,7 @@ export function resolvePlanDirectiveForTurn(
 export function isActiveMilestoneDelivered(
   workspacePath: string | null | undefined,
   goalPlanner: GoalDecompositionPlanner,
-  loopTarget?: string | null
+  loopTarget?: string | null,
 ): boolean {
   if (!workspacePath) return false
   const active = goalPlanner.getActiveMilestone()
@@ -397,11 +382,7 @@ export function isActiveMilestoneDelivered(
  * A browser preview is evidence for the user, but cannot establish build/typecheck/test health.
  */
 export function trackVerification(ctx: ToolResultProcessingContext, isToolFailure: boolean) {
-  if (
-    ctx.parsedTool.tool === 'run_command' &&
-    isToolFailure &&
-    extractRequestedPackages(ctx.parsedTool.parameters?.command || '').length > 0
-  ) {
+  if (ctx.parsedTool.tool === 'run_command' && isToolFailure && extractRequestedPackages(ctx.parsedTool.parameters?.command || '').length > 0) {
     // A failed dependency install invalidates a prior green check even when npm left no files behind: the check predates the dependency-resolution attempt and cannot prove the current dependency state.
     invalidateVerifiedBuild(ctx)
   }
@@ -424,7 +405,7 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
       ctx.emitLog(
         'info',
         `👁️ Anteprima aperta su "${previewTarget}": non vale come verifica, non è una pagina renderizzata.`,
-        'Esegui una build, un typecheck o un test per verificare il progetto.'
+        'Esegui una build, un typecheck o un test per verificare il progetto.',
       )
       return
     }
@@ -432,7 +413,7 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
     ctx.emitLog(
       'info',
       `👁️ Anteprima aperta su "${previewTarget}": evidenza raccolta, ma non promuove il milestone a verified.`,
-      'Esegui build, typecheck o test con esito positivo per ottenere la verifica del progetto.'
+      'Esegui build, typecheck o test con esito positivo per ottenere la verifica del progetto.',
     )
     return
   }
@@ -441,12 +422,10 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
 
   const rawCmd = ctx.parsedTool.parameters?.command || ''
   const normalizedCommand = rawCmd.trim().replace(/\s+/g, ' ').toLowerCase()
-  const projectChecks = ctx.workspacePath
-    ? resolvePrimaryProfileVerificationTargets(discoverProjectProfile(ctx.workspacePath))
-    : []
-  const isVerificationCmd = projectChecks.some((target) =>
-    target.command.trim().replace(/\s+/g, ' ').toLowerCase() === normalizedCommand
-  ) && checkVerificationCommandSafety(rawCmd).isSafe
+  const projectChecks = ctx.workspacePath ? resolvePrimaryProfileVerificationTargets(discoverProjectProfile(ctx.workspacePath)) : []
+  const isVerificationCmd =
+    projectChecks.some((target) => target.command.trim().replace(/\s+/g, ' ').toLowerCase() === normalizedCommand) &&
+    checkVerificationCommandSafety(rawCmd).isSafe
   if (isVerificationCmd && !ctx.toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') && !isToolFailure) {
     ctx.flags.hasVerifiedBuild = true
     promoteMilestonesProvenBy(ctx, ctx.parsedTool.parameters?.command || 'verification command')
@@ -456,7 +435,7 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
 /** The project's HTML entry page when it loads none of the project's own code, or null. */
 function resolveDisconnectedEntrypoint(
   workspacePath: string,
-  probe: ReturnType<typeof createWorkspaceDeliverableProbe>
+  probe: ReturnType<typeof createWorkspaceDeliverableProbe>,
 ): { htmlPath: string; expectedEntry: string } | null {
   const html = probe('index.html')
   // No page, or one too large to have been read back: nothing to judge either way.

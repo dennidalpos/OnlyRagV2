@@ -1,5 +1,3 @@
-
-
 /** `Cannot find module 'x'` / `Cannot find module "x"`, in tsc and bundler phrasing alike. */
 const CANNOT_FIND_MODULE = /cannot find module\s+['"`]([^'"`]+)['"`]/gi
 
@@ -29,10 +27,7 @@ export function unresolvedPackages(output: string): string[] {
 }
 
 /** Decides which of the two causes the output describes. */
-export function classifyModuleDiagnostic(
-  output: string,
-  isPackageInstalled: (pkg: string) => boolean
-): ModuleDiagnosticCause {
+export function classifyModuleDiagnostic(output: string, isPackageInstalled: (pkg: string) => boolean): ModuleDiagnosticCause {
   const packages = unresolvedPackages(output)
   if (packages.length === 0) return 'none'
   if (!packages.every((pkg) => isPackageInstalled(pkg))) return 'missing_dependency'

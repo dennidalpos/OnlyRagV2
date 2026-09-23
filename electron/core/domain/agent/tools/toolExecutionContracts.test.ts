@@ -43,22 +43,26 @@ describe('tool execution contracts', () => {
   })
 
   it('validates the common dispatcher result envelope', () => {
-    expect(toolExecutionResultSchema.safeParse({
-      outcome: 'success',
-      outputForHistory: 'done',
-      logMessage: 'Tool completed',
-      isTerminal: true,
-      verification: { ran: true, passed: true },
-    }).success).toBe(true)
+    expect(
+      toolExecutionResultSchema.safeParse({
+        outcome: 'success',
+        outputForHistory: 'done',
+        logMessage: 'Tool completed',
+        isTerminal: true,
+        verification: { ran: true, passed: true },
+      }).success,
+    ).toBe(true)
   })
 
   it('accepts the terminal MODEL_UNSUITABLE outcome', () => {
-    expect(toolExecutionResultSchema.safeParse({
-      outcome: 'blocked',
-      outputForHistory: 'The requested tool capability is unavailable.',
-      logMessage: 'Model capability unavailable',
-      isTerminal: true,
-      terminalCode: 'MODEL_UNSUITABLE',
-    }).success).toBe(true)
+    expect(
+      toolExecutionResultSchema.safeParse({
+        outcome: 'blocked',
+        outputForHistory: 'The requested tool capability is unavailable.',
+        logMessage: 'Model capability unavailable',
+        isTerminal: true,
+        terminalCode: 'MODEL_UNSUITABLE',
+      }).success,
+    ).toBe(true)
   })
 })

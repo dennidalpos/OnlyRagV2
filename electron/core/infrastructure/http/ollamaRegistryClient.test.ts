@@ -22,15 +22,11 @@ function createMockResponse(statusCode: number): IncomingMessage {
   return Object.assign(new EventEmitter(), { statusCode, headers: {} }) as IncomingMessage
 }
 
-function mockRegistryRequest(
-  request: MockClientRequest,
-  response?: IncomingMessage,
-  onResponse?: (response: IncomingMessage) => void
-): void {
+function mockRegistryRequest(request: MockClientRequest, response?: IncomingMessage, onResponse?: (response: IncomingMessage) => void): void {
   vi.spyOn(https, 'request').mockImplementation(((
     _options: string | URL | RequestOptions,
     optionsOrCallback?: RequestOptions | ((response: IncomingMessage) => void),
-    callback?: (response: IncomingMessage) => void
+    callback?: (response: IncomingMessage) => void,
   ) => {
     const responseCallback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
     if (response && responseCallback) {

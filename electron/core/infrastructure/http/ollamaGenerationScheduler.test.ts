@@ -3,7 +3,9 @@ import { OllamaGenerationCancelledError, OllamaGenerationScheduler } from './oll
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((done) => { resolve = done })
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
   return { promise, resolve }
 }
 
@@ -75,10 +77,14 @@ describe('OllamaGenerationScheduler', () => {
   it('keeps cancelling and failed operations available to the status reader', async () => {
     const scheduler = new OllamaGenerationScheduler()
     const gate = deferred<string>()
-    const active = scheduler.schedule('structured', async (setCancel) => {
-      setCancel(() => {})
-      return gate.promise
-    }, 'cancelled-id')
+    const active = scheduler.schedule(
+      'structured',
+      async (setCancel) => {
+        setCancel(() => {})
+        return gate.promise
+      },
+      'cancelled-id',
+    )
 
     await Promise.resolve()
     expect(scheduler.cancel('cancelled-id')).toBe(true)
@@ -86,7 +92,13 @@ describe('OllamaGenerationScheduler', () => {
     gate.resolve('ignored')
     await expect(active.promise).rejects.toBeInstanceOf(OllamaGenerationCancelledError)
 
-    const failed = scheduler.schedule('structured', async () => { throw new Error('offline') }, 'failed-id')
+    const failed = scheduler.schedule(
+      'structured',
+      async () => {
+        throw new Error('offline')
+      },
+      'failed-id',
+    )
     await expect(failed.promise).rejects.toThrow('offline')
     expect(scheduler.getStatus().operations).toContainEqual({ id: 'failed-id', label: 'structured', state: 'failed' })
   })

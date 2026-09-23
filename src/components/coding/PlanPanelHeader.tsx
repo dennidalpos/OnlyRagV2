@@ -44,8 +44,7 @@ export const PlanPanelHeader: React.FC<PlanPanelHeaderProps> = ({
               </button>
 
               <span className="font-bold text-cyan-300 px-1 flex items-center gap-1">
-                <History className="w-3 h-3 text-cyan-400" />
-                v{plan.version || activePlanIndex + 1}/{planHistory.length}
+                <History className="w-3 h-3 text-cyan-400" />v{plan.version || activePlanIndex + 1}/{planHistory.length}
               </span>
 
               <button
@@ -77,17 +76,23 @@ export const PlanPanelHeader: React.FC<PlanPanelHeaderProps> = ({
               plan.status === 'approved'
                 ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                 : plan.status === 'generating'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-800 animate-pulse'
-                : plan.status === 'rejected'
-                ? 'bg-rose-950 text-rose-300 border border-rose-800'
-                : plan.status === 'error'
-                ? 'bg-rose-950 text-rose-300 border border-rose-800'
-                : plan.status === 'cancelled'
-                ? 'bg-slate-900 text-slate-400 border border-slate-700'
-                : 'bg-amber-950 text-amber-300 border border-amber-800'
+                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-800 animate-pulse'
+                  : plan.status === 'rejected'
+                    ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                    : plan.status === 'error'
+                      ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                      : plan.status === 'cancelled'
+                        ? 'bg-slate-900 text-slate-400 border border-slate-700'
+                        : 'bg-amber-950 text-amber-300 border border-amber-800'
             }`}
           >
-            {plan.status === 'ready' ? 'In attesa di Approvazione' : plan.status === 'error' ? 'Errore' : plan.status === 'cancelled' ? 'Annullato' : plan.status}
+            {plan.status === 'ready'
+              ? 'In attesa di Approvazione'
+              : plan.status === 'error'
+                ? 'Errore'
+                : plan.status === 'cancelled'
+                  ? 'Annullato'
+                  : plan.status}
           </span>
         </div>
       )}

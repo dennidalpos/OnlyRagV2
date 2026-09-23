@@ -22,9 +22,7 @@ export class AutoHealingLogCapper {
     }
 
     const { preamble, blocks } = this.parseBlocks(historyText)
-    const autoHealingIndexes = blocks
-      .map((block, idx) => (block.isAutoHealing ? idx : -1))
-      .filter((idx) => idx !== -1)
+    const autoHealingIndexes = blocks.map((block, idx) => (block.isAutoHealing ? idx : -1)).filter((idx) => idx !== -1)
 
     const totalBlocks = autoHealingIndexes.length
     if (totalBlocks <= maxBlocks) {

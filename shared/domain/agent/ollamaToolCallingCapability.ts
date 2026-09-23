@@ -1,5 +1,3 @@
-
-
 const NATIVE_TOOL_CALLING_FAMILY_PREFIXES = [
   'llama3.1',
   'llama3.2',
@@ -34,7 +32,7 @@ export interface ToolCallingRoute {
 export function resolveToolCallingRoute(
   modelName: string,
   capabilities: ModelCapabilitiesMap | undefined,
-  observed?: ObservedToolCallingProtocol
+  observed?: ObservedToolCallingProtocol,
 ): ToolCallingRoute {
   const reported = capabilities?.[modelName]
   if (Array.isArray(reported) && reported.length > 0) {

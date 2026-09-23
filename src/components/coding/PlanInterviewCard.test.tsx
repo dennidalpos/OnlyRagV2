@@ -21,44 +21,52 @@ describe('PlanInterviewCard', () => {
 
   it('does not treat the displayed recommendation as confirmation', async () => {
     const onConfirm = vi.fn()
-    await act(async () => root.render(<PlanInterviewCard
-      questions={[{
-        id: 'storage',
-        question: 'Quale persistenza preferisci?',
-        rationale: 'La scelta cambia portabilità e gestione dei dati.',
-        options: ['SQLite', 'File JSON'],
-        recommendedIndex: 0,
-      }]}
-      onConfirm={onConfirm}
-      onSkipWithRecommended={vi.fn()}
-    />))
+    await act(async () =>
+      root.render(
+        <PlanInterviewCard
+          questions={[
+            {
+              id: 'storage',
+              question: 'Quale persistenza preferisci?',
+              rationale: 'La scelta cambia portabilità e gestione dei dati.',
+              options: ['SQLite', 'File JSON'],
+              recommendedIndex: 0,
+            },
+          ]}
+          onConfirm={onConfirm}
+          onSkipWithRecommended={vi.fn()}
+        />,
+      ),
+    )
 
-    const confirm = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Conferma e Genera Piano'))!
+    const confirm = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Conferma e Genera Piano'))!
     expect(confirm.disabled).toBe(true)
 
-    const recommended = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('SQLite'))!
+    const recommended = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('SQLite'))!
     await act(async () => recommended.click())
     expect(confirm.disabled).toBe(false)
   })
 
   it('disables incompatible actions while generating the plan', async () => {
-    await act(async () => root.render(<PlanInterviewCard
-      questions={[{
-        id: 'storage',
-        question: 'Quale persistenza preferisci?',
-        rationale: 'La scelta cambia portabilità e gestione dei dati.',
-        options: ['SQLite', 'File JSON'],
-        recommendedIndex: 0,
-      }]}
-      onConfirm={vi.fn()}
-      onSkipWithRecommended={vi.fn()}
-      isGenerating
-    />))
+    await act(async () =>
+      root.render(
+        <PlanInterviewCard
+          questions={[
+            {
+              id: 'storage',
+              question: 'Quale persistenza preferisci?',
+              rationale: 'La scelta cambia portabilità e gestione dei dati.',
+              options: ['SQLite', 'File JSON'],
+              recommendedIndex: 0,
+            },
+          ]}
+          onConfirm={vi.fn()}
+          onSkipWithRecommended={vi.fn()}
+          isGenerating
+        />,
+      ),
+    )
 
-    expect(Array.from(container.querySelectorAll('button, input')).every((control) => (
-      control as HTMLButtonElement | HTMLInputElement
-    ).disabled)).toBe(true)
+    expect(Array.from(container.querySelectorAll('button, input')).every((control) => (control as HTMLButtonElement | HTMLInputElement).disabled)).toBe(true)
   })
 })

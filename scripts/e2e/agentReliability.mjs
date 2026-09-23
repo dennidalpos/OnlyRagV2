@@ -472,7 +472,10 @@ try {
     await waitForQueueIdle(page)
     serverState.chatBehaviors.length = 0
     const guardEvents = done.evidence?.guardEvents || []
-    const logs = await page.evaluate((runId) => window.__onlyragE2E.logs.filter((event) => event.runId === runId).map((event) => event.message), runIdentity.runId)
+    const logs = await page.evaluate(
+      (runId) => window.__onlyragE2E.logs.filter((event) => event.runId === runId).map((event) => event.message),
+      runIdentity.runId,
+    )
     console.log(`  guards: ${guardEvents.map((event) => `${event.guard}:${event.action}@${event.step}`).join(' ') || 'none'} -> ${done.completionStatus}`)
     return { done, guardEvents, logs, stop: guardEvents.filter((event) => event.action === 'stop').map((event) => event.guard) }
   }
@@ -503,11 +506,18 @@ try {
 
   console.log('[guard 3/4] the same successful write repeated')
   const sameWrite = writeCall('guard-fixtures/repeated.txt', 'same content\n')
-  const repeated = await runGuardScenario('repeated-write', Array.from({ length: 12 }, () => sameWrite), {
-    capabilityProfile: { allowTerminalExecution: true, allowFileModifications: true, capabilityPolicyMode: 'network-approved', maxToolCallSteps: 10 },
-  })
+  const repeated = await runGuardScenario(
+    'repeated-write',
+    Array.from({ length: 12 }, () => sameWrite),
+    {
+      capabilityProfile: { allowTerminalExecution: true, allowFileModifications: true, capabilityPolicyMode: 'network-approved', maxToolCallSteps: 10 },
+    },
+  )
   assert.equal(repeated.done.success, false)
-  assert(repeated.guardEvents.some((event) => event.guard === 'redundant_success'), describe(repeated))
+  assert(
+    repeated.guardEvents.some((event) => event.guard === 'redundant_success'),
+    describe(repeated),
+  )
   assert.deepEqual(repeated.stop, ['step_budget'], describe(repeated))
   assert.equal(repeated.done.completionStatus, 'blocked')
 

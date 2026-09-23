@@ -4,25 +4,25 @@ import { webClient } from '../webClient'
 import { logger } from '../../logging/logger'
 
 export const ANTHROPIC_KNOWN_SKILLS: Record<string, { description: string; category: SkillCategory; triggers: string[]; tags: string[] }> = {
-  'pdf': {
+  pdf: {
     description: 'PDF text extraction, form filling, page rotation, merging, splitting, OCR, and document generation.',
     category: 'backend',
     triggers: ['pdf', 'pypdf', 'pdf-form', 'extract-pdf', 'merge-pdf', 'ocr'],
     tags: ['pdf', 'document', 'anthropic', 'extraction'],
   },
-  'docx': {
+  docx: {
     description: 'Word document (.docx) generation, styling, tables, paragraph formatting, and template population.',
     category: 'backend',
     triggers: ['docx', 'word', 'doc', 'document', 'word-doc'],
     tags: ['docx', 'word', 'office', 'anthropic'],
   },
-  'pptx': {
+  pptx: {
     description: 'PowerPoint (.pptx) presentation generation, slide layout design, styling, and charts.',
     category: 'frontend',
     triggers: ['pptx', 'powerpoint', 'presentation', 'slides', 'deck'],
     tags: ['pptx', 'powerpoint', 'presentation', 'anthropic'],
   },
-  'xlsx': {
+  xlsx: {
     description: 'Excel (.xlsx) spreadsheets, formulas, financial modeling, chart generation, and data analysis.',
     category: 'database',
     triggers: ['xlsx', 'excel', 'spreadsheet', 'sheet', 'openpyxl', 'formula'],
@@ -134,7 +134,9 @@ const ANTHROPIC_DETAILED_DIRECTIVES: Record<string, string> = {
 }
 
 function generateAnthropicSkillContent(name: string, info: { description: string; category: SkillCategory; triggers: string[]; tags: string[] }): string {
-  const customDirectives = ANTHROPIC_DETAILED_DIRECTIVES[name] || `## 2. Best Practices & Tool Workflows
+  const customDirectives =
+    ANTHROPIC_DETAILED_DIRECTIVES[name] ||
+    `## 2. Best Practices & Tool Workflows
 - Quando operi su file o istruzioni pertinenti a \`${name}\`, rispetta le convenzioni di sicurezza e architettura standard \`agentskills.io\`.
 - Esegui i comandi e le manipolazioni di formato verificando sempre la corretta codifica UTF-8 e la validazione dei dati di input.`
 

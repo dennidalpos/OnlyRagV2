@@ -12,9 +12,7 @@ describe('checkVerificationCommandSafety', () => {
     // Both ran as "verification" and left src/App.tsx and src/pages/Tasks.tsx as UTF-16
     // garbage, then reported "Verification command passed".
     expect(checkVerificationCommandSafety('touch src/App.tsx').isSafe).toBe(false)
-    expect(
-      checkVerificationCommandSafety('echo "import React from \'react\';\\n\\nfunction App() {}" > src/App.tsx').isSafe
-    ).toBe(false)
+    expect(checkVerificationCommandSafety('echo "import React from \'react\';\\n\\nfunction App() {}" > src/App.tsx').isSafe).toBe(false)
     expect(checkVerificationCommandSafety('npm init -y').isSafe).toBe(false)
     expect(checkVerificationCommandSafety('npx tailwindcss init -p').isSafe).toBe(false)
   })
@@ -136,22 +134,13 @@ describe('checkVerificationCommandSafety', () => {
   })
 
   it('still accepts a content search, which fails when the file exists but is wrong', () => {
-    for (const command of [
-      'grep -q "createRoot" src/main.tsx',
-      'findstr /C:"createRoot" src\\main.tsx',
-      'Select-String -Pattern "createRoot" src/main.tsx',
-    ]) {
+    for (const command of ['grep -q "createRoot" src/main.tsx', 'findstr /C:"createRoot" src\\main.tsx', 'Select-String -Pattern "createRoot" src/main.tsx']) {
       expect(checkVerificationCommandSafety(command).isSafe, command).toBe(true)
     }
   })
 
   it('refuses a test runner started in its windowed mode but keeps the headless one', () => {
-    for (const command of [
-      'npx cypress open',
-      'cypress open',
-      'npx playwright test --ui',
-      'npx playwright test --headed',
-    ]) {
+    for (const command of ['npx cypress open', 'cypress open', 'npx playwright test --ui', 'npx playwright test --headed']) {
       expect(checkVerificationCommandSafety(command).isSafe, command).toBe(false)
     }
     for (const command of ['npx cypress run', 'npx playwright test', 'npx vitest run']) {

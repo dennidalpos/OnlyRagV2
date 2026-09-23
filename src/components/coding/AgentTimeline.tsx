@@ -53,10 +53,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   const { t } = useTranslation()
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
 
-  const quickActions = useMemo(
-    () => resolveWorkspaceQuickActions(workspacePath, files),
-    [workspacePath, files]
-  )
+  const quickActions = useMemo(() => resolveWorkspaceQuickActions(workspacePath, files), [workspacePath, files])
   const latestCompletedPrompt = useMemo(
     () => [...(activeSession?.executedPrompts || [])].reverse().find((prompt) => prompt.outcome !== 'running'),
     [activeSession?.executedPrompts],
@@ -81,11 +78,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   })
 
   return (
-    <div
-      ref={scrollContainerRef}
-      onScroll={onScroll}
-      className="flex-1 overflow-y-auto p-3 space-y-1.5 text-xs font-mono select-text relative"
-    >
+    <div ref={scrollContainerRef} onScroll={onScroll} className="flex-1 overflow-y-auto p-3 space-y-1.5 text-xs font-mono select-text relative">
       {/* Floating Scroll-to-Bottom Button */}
       {isScrolledUp && (
         <button
@@ -108,9 +101,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
             <div className="font-semibold text-slate-200 text-sm">
               {(activeSession?.executedPrompts?.length ?? 0) > 0 ? activeSession?.title : t('coding.headerTitle')}
             </div>
-            <p className="text-xs max-w-xs leading-relaxed text-slate-400 mt-1">
-              {workspacePath ? t('coding.subtitle') : t('coding.noProjectAttached')}
-            </p>
+            <p className="text-xs max-w-xs leading-relaxed text-slate-400 mt-1">{workspacePath ? t('coding.subtitle') : t('coding.noProjectAttached')}</p>
           </div>
 
           {!workspacePath && onSelectWorkspaceFolder ? (
@@ -126,9 +117,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
             </div>
           ) : quickActions.length > 0 ? (
             <div className="w-full max-w-sm pt-3 space-y-1.5 text-left font-sans">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">
-                {t('common.actions')}
-              </div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">{t('common.actions')}</div>
               <div className="flex flex-col gap-1.5">
                 {quickActions.map((action) => (
                   <button
@@ -138,9 +127,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
                     className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-[11px] text-slate-300 hover:text-cyan-200 transition-all text-left focus-ring active:scale-98 font-mono flex items-center justify-between cursor-pointer"
                   >
                     <span>{action.command}</span>
-                    {action.description && (
-                      <span className="text-[10px] font-sans text-slate-500">{action.description}</span>
-                    )}
+                    {action.description && <span className="text-[10px] font-sans text-slate-500">{action.description}</span>}
                   </button>
                 ))}
               </div>
@@ -185,13 +172,12 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
-              <span className="font-semibold text-slate-100 truncate">
-                {currentStatusText || `${t('coding.runTask')}...`}
-              </span>
+              <span className="font-semibold text-slate-100 truncate">{currentStatusText || `${t('coding.runTask')}...`}</span>
             </div>
             {currentStep !== undefined && currentStep > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-800/40 text-cyan-300 font-mono text-[10px] font-bold shrink-0 shadow-sm">
-                Step {currentStep}{maxSteps ? ` / ${maxSteps}` : ''}
+                Step {currentStep}
+                {maxSteps ? ` / ${maxSteps}` : ''}
               </span>
             )}
           </div>
@@ -202,13 +188,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
           )}
         </div>
       )}
-      {!isExecuting && latestCompletedPrompt && (
-        <AgentEvidenceCard
-          prompt={latestCompletedPrompt}
-          onOpenFile={onOpenFile}
-          onOpenRightTab={onOpenRightTab}
-        />
-      )}
+      {!isExecuting && latestCompletedPrompt && <AgentEvidenceCard prompt={latestCompletedPrompt} onOpenFile={onOpenFile} onOpenRightTab={onOpenRightTab} />}
       <div ref={bottomRef} />
     </div>
   )

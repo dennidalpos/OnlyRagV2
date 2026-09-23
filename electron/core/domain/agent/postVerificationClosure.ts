@@ -1,5 +1,3 @@
-
-
 import { isCompletionMilestoneTitle } from '../../../../shared/domain/agent/planAndSolveGraph'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
@@ -27,9 +25,7 @@ export interface ClosureInput {
 
 /** Milestones that still hold the plan open. */
 function selectOpenMilestones(milestones: readonly PlanMilestone[]) {
-  return milestones.filter(
-    (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m)
-  )
+  return milestones.filter((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m))
 }
 
 export function assessPostVerificationClosure(input: ClosureInput): ClosureAssessment {

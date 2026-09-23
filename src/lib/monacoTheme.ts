@@ -1,4 +1,3 @@
-
 import * as monaco from 'monaco-editor'
 import { loader } from '@monaco-editor/react'
 
@@ -72,16 +71,7 @@ export interface MonacoOptionsConfig {
  * smooth scrolling, and cursor aesthetics.
  */
 export function getStandardMonacoOptions(config: MonacoOptionsConfig = {}) {
-  const {
-    wordWrap = true,
-    readOnly = false,
-    minimap = false,
-    lineNumbers = 'on',
-    fontSize = 14,
-    lineHeight = 22,
-    renderSideBySide = false,
-    ...rest
-  } = config
+  const { wordWrap = true, readOnly = false, minimap = false, lineNumbers = 'on', fontSize = 14, lineHeight = 22, renderSideBySide = false, ...rest } = config
 
   return {
     fontFamily: "'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace",

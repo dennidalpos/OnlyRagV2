@@ -162,27 +162,18 @@ export class WebClient {
       }
 
       // URL keeps IPv6 literals bracketed ("[::1]"), so compare the bare address.
-      const host = u.hostname.toLowerCase().trim().replace(/^\[|\]$/g, '')
+      const host = u.hostname
+        .toLowerCase()
+        .trim()
+        .replace(/^\[|\]$/g, '')
 
       // Block known cloud metadata hostnames & IP
-      if (
-        host === '169.254.169.254' ||
-        host === 'metadata.google.internal' ||
-        host === 'metadata.internal' ||
-        host === 'instance-data'
-      ) {
+      if (host === '169.254.169.254' || host === 'metadata.google.internal' || host === 'metadata.internal' || host === 'instance-data') {
         return { safeUrl: null, error: 'Access to cloud metadata endpoints is strictly blocked (SSRF Protection).' }
       }
 
       // Block localhost, IPv6 loopback, and local domain variants
-      if (
-        host === 'localhost' ||
-        host === '127.0.0.1' ||
-        host === '::1' ||
-        host === '0.0.0.0' ||
-        host.endsWith('.localhost') ||
-        host.endsWith('.local')
-      ) {
+      if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0' || host.endsWith('.localhost') || host.endsWith('.local')) {
         return { safeUrl: null, error: 'Access to loopback/localhost addresses is forbidden (SSRF Protection).' }
       }
 
@@ -322,7 +313,7 @@ export class WebClient {
               title,
             })
           })
-        }
+        },
       )
 
       req.on('error', (err: any) => {
@@ -335,10 +326,14 @@ export class WebClient {
         resolve({ success: false, error: `Request timed out (15s limit) for URL ${urlStr}` })
       })
 
-      signal?.addEventListener('abort', () => {
-        req.destroy()
-        resolve({ success: false, error: 'Request cancelled by AbortSignal' })
-      }, { once: true })
+      signal?.addEventListener(
+        'abort',
+        () => {
+          req.destroy()
+          resolve({ success: false, error: 'Request cancelled by AbortSignal' })
+        },
+        { once: true },
+      )
     })
   }
 
@@ -443,7 +438,7 @@ export class WebClient {
               resolve({ success: true, downloadedBytes })
             })
           })
-        }
+        },
       )
 
       req.on('error', (err) => {
@@ -454,9 +449,13 @@ export class WebClient {
         cleanupAndFail('Download request timed out (60s limit)', true)
       })
 
-      signal?.addEventListener('abort', () => {
-        cleanupAndFail('Download cancelled by AbortSignal', true)
-      }, { once: true })
+      signal?.addEventListener(
+        'abort',
+        () => {
+          cleanupAndFail('Download cancelled by AbortSignal', true)
+        },
+        { once: true },
+      )
     })
   }
 }

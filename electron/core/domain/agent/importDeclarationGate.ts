@@ -1,5 +1,3 @@
-
-
 import ts from 'typescript'
 import { builtinModules } from 'node:module'
 import { scriptKindForPath } from './sourceScriptKind'
@@ -96,11 +94,7 @@ export function extractBareImportSpecifiers(filePath: string, content: string): 
 }
 
 /** Judges one written file against the project's declarations. */
-export function evaluateFileImportIntegrity(
-  filePath: string,
-  content: string,
-  declared: DeclaredPackages
-): ImportIntegrityVerdict {
+export function evaluateFileImportIntegrity(filePath: string, content: string, declared: DeclaredPackages): ImportIntegrityVerdict {
   const specifiers = extractBareImportSpecifiers(filePath, content)
   if (specifiers.length === 0) return { ok: true, undeclared: [] }
 
@@ -116,8 +110,8 @@ export function evaluateFileImportIntegrity(
       specifiers
         .filter((specifier) => !aliasPrefixes.some((prefix) => prefix && specifier.startsWith(prefix)))
         .map(packageNameOfSpecifier)
-        .filter((pkg) => !declared.names.has(pkg))
-    )
+        .filter((pkg) => !declared.names.has(pkg)),
+    ),
   ).sort()
 
   if (undeclared.length === 0) return { ok: true, undeclared: [] }

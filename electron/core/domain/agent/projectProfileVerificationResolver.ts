@@ -14,7 +14,7 @@ export function resolveProfileVerificationTargets(profile: ProjectProfile): Proj
       projectId: project.id,
       projectRelativePath: project.relativePath,
       projectRootPath: project.rootPath,
-    }))
+    })),
   )
 }
 
@@ -23,11 +23,13 @@ export function resolvePrimaryProfileVerificationTargets(profile: ProjectProfile
   return profile.projects.flatMap((project) => {
     const verification = project.verificationCommands.find((command) => command.coverage === 'whole-project') ?? project.verificationCommands[0]
     if (!verification) return []
-    return [{
-      ...verification,
-      projectId: project.id,
-      projectRelativePath: project.relativePath,
-      projectRootPath: project.rootPath,
-    }]
+    return [
+      {
+        ...verification,
+        projectId: project.id,
+        projectRelativePath: project.relativePath,
+        projectRootPath: project.rootPath,
+      },
+    ]
   })
 }

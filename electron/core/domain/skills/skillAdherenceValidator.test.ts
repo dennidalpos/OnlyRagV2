@@ -13,11 +13,7 @@ const TAILWIND_SKILL = [
 
 describe('validateSkillAdherence', () => {
   it('rejects legacy Tailwind directives explicitly forbidden by the active skill', () => {
-    const result = validateSkillAdherence(
-      'src/index.css',
-      '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n',
-      TAILWIND_SKILL
-    )
+    const result = validateSkillAdherence('src/index.css', '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n', TAILWIND_SKILL)
 
     expect(result).toEqual({
       skillName: 'tailwind-css-v4',
@@ -36,12 +32,7 @@ describe('validateSkillAdherence', () => {
   })
 
   it('ignores positive code spans after an explicit alternative pivot', () => {
-    const guidelines = [
-      '### SKILL: example',
-      '```markdown',
-      '- Never use `legacy()`; instead use `modern()`.',
-      '```',
-    ].join('\n')
+    const guidelines = ['### SKILL: example', '```markdown', '- Never use `legacy()`; instead use `modern()`.', '```'].join('\n')
 
     expect(validateSkillAdherence('src/app.ts', 'modern()', guidelines)).toBeNull()
     expect(validateSkillAdherence('src/app.ts', 'legacy()', guidelines)).toEqual({

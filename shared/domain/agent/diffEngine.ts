@@ -1,5 +1,3 @@
-
-
 import { diffLines } from 'diff'
 
 export type DiffLineType = 'add' | 'del' | 'context'
@@ -41,7 +39,6 @@ export interface DiffStats {
   additions: number
   deletions: number
 }
-
 
 function stripPathPrefix(rawPath: string): string {
   const trimmed = rawPath.trim().replace(/^"|"$/g, '')
@@ -171,7 +168,6 @@ export function parseUnifiedDiff(rawDiff: string): DiffFileChange[] {
   return files
 }
 
-
 /**
  * Myers line diff between two file revisions using the standard `diff` engine.
  * Generates exact per-line add/del/context blocks with 1-based line numbering.
@@ -290,7 +286,7 @@ export function groupDiffIntoHunks(lines: ReadonlyArray<DiffLine>): DiffHunkGrou
 export function reconstructWithApprovedHunks(
   lines: ReadonlyArray<DiffLine>,
   hunks: ReadonlyArray<DiffHunkGroup>,
-  approvedHunkIds: ReadonlySet<number>
+  approvedHunkIds: ReadonlySet<number>,
 ): string {
   const out: string[] = []
   let hunkIndex = 0
@@ -321,7 +317,7 @@ export function reconstructWithApprovedHunks(
 /** Collapses long runs of unchanged lines so a small edit in a large file doesn't render thousands of untouched rows. */
 export function collapseContext(
   lines: ReadonlyArray<DiffLine>,
-  contextRadius: number = 3
+  contextRadius: number = 3,
 ): Array<{ kind: 'line'; line: DiffLine } | { kind: 'gap'; hiddenCount: number }> {
   const keep = new Array<boolean>(lines.length).fill(false)
   for (let i = 0; i < lines.length; i++) {

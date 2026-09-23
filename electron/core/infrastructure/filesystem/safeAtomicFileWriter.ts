@@ -77,8 +77,8 @@ export async function safeAtomicWrite(filePath: string, content: string | Buffer
         if (fileWriteQueues.get(normalizedPath) === currentOp) {
           fileWriteQueues.delete(normalizedPath)
         }
-      }
-    )
+      },
+    ),
   )
 
   return currentOp

@@ -64,90 +64,99 @@ export function useOllamaModelUpdates(ollamaHost?: string, onRefreshDiagnostics?
     }
   }, [downloadProgress.lastCompletedModel, onRefreshDiagnostics])
 
-  const checkForUpdates = useCallback(async (customHost?: string) => {
-    if (!window.electronAPI?.checkOllamaModelUpdates) return
-    if (isCheckingRef.current) return
+  const checkForUpdates = useCallback(
+    async (customHost?: string) => {
+      if (!window.electronAPI?.checkOllamaModelUpdates) return
+      if (isCheckingRef.current) return
 
-    isCheckingRef.current = true
-    broadcastUpdates({
-      ...globalUpdatesState,
-      isCheckingUpdates: true,
-      error: null,
-    })
-
-    try {
-      logger.info('useOllamaModelUpdates', 'Checking model updates on user request...')
-      const results = await window.electronAPI.checkOllamaModelUpdates(customHost || ollamaHost)
-      
-      const availableMap: Record<string, boolean> = {}
-      const infoMap: Record<string, OllamaModelUpdateInfo> = {}
-
-      if (results && typeof results === 'object') {
-        for (const [name, info] of Object.entries(results)) {
-          infoMap[name] = info
-          if (info.updateAvailable) {
-            availableMap[name] = true
-          }
-        }
-      }
-
-      broadcastUpdates({
-        updateAvailableMap: availableMap,
-        updateInfoMap: infoMap,
-        isCheckingUpdates: false,
-        lastCheckedAt: Date.now(),
-        error: null,
-      })
-    } catch (err: any) {
-      logger.warn('useOllamaModelUpdates', `Failed checking model updates: ${err?.message}`)
+      isCheckingRef.current = true
       broadcastUpdates({
         ...globalUpdatesState,
-        isCheckingUpdates: false,
-        error: err?.message || 'Update check failed',
+        isCheckingUpdates: true,
+        error: null,
       })
-    } finally {
-      isCheckingRef.current = false
-    }
-  }, [ollamaHost])
 
-  const triggerUpdateModel = useCallback(async (modelName: string): Promise<{ success: boolean; error?: string }> => {
-    if (!modelName || typeof modelName !== 'string') {
-      return { success: false, error: 'Invalid model name' }
-    }
+      try {
+        logger.info('useOllamaModelUpdates', 'Checking model updates on user request...')
+        const results = await window.electronAPI.checkOllamaModelUpdates(customHost || ollamaHost)
 
-    const currentDownload = getGlobalDownloadState()
-    if (currentDownload.isDownloading && currentDownload.modelName && currentDownload.modelName !== modelName) {
-      return {
-        success: false,
-        error: `Un altro modello (${currentDownload.modelName}) è attualmente in fase di aggiornamento. Attendi il completamento per evitare saturazione.`,
-      }
-    }
+        const availableMap: Record<string, boolean> = {}
+        const infoMap: Record<string, OllamaModelUpdateInfo> = {}
 
-    if (!window.electronAPI?.pullOllamaModel) {
-      return { success: false, error: 'Ollama pull API unavailable' }
-    }
-
-    try {
-      logger.info('useOllamaModelUpdates', `Starting controlled update for model: ${modelName}`)
-      const res = await window.electronAPI.pullOllamaModel(modelName, ollamaHost)
-      if (res.success) {
-        clearModelUpdateAvailable(modelName)
-        if (onRefreshDiagnostics) {
-          onRefreshDiagnostics()
+        if (results && typeof results === 'object') {
+          for (const [name, info] of Object.entries(results)) {
+            infoMap[name] = info
+            if (info.updateAvailable) {
+              availableMap[name] = true
+            }
+          }
         }
-        return { success: true }
-      } else {
-        return { success: false, error: res.error || 'Update failed' }
-      }
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Error updating model' }
-    }
-  }, [ollamaHost, onRefreshDiagnostics])
 
-  const isModelUpdating = useCallback((modelName?: string): boolean => {
-    if (!modelName) return false
-    return downloadProgress.isDownloading && downloadProgress.modelName === modelName
-  }, [downloadProgress.isDownloading, downloadProgress.modelName])
+        broadcastUpdates({
+          updateAvailableMap: availableMap,
+          updateInfoMap: infoMap,
+          isCheckingUpdates: false,
+          lastCheckedAt: Date.now(),
+          error: null,
+        })
+      } catch (err: any) {
+        logger.warn('useOllamaModelUpdates', `Failed checking model updates: ${err?.message}`)
+        broadcastUpdates({
+          ...globalUpdatesState,
+          isCheckingUpdates: false,
+          error: err?.message || 'Update check failed',
+        })
+      } finally {
+        isCheckingRef.current = false
+      }
+    },
+    [ollamaHost],
+  )
+
+  const triggerUpdateModel = useCallback(
+    async (modelName: string): Promise<{ success: boolean; error?: string }> => {
+      if (!modelName || typeof modelName !== 'string') {
+        return { success: false, error: 'Invalid model name' }
+      }
+
+      const currentDownload = getGlobalDownloadState()
+      if (currentDownload.isDownloading && currentDownload.modelName && currentDownload.modelName !== modelName) {
+        return {
+          success: false,
+          error: `Un altro modello (${currentDownload.modelName}) è attualmente in fase di aggiornamento. Attendi il completamento per evitare saturazione.`,
+        }
+      }
+
+      if (!window.electronAPI?.pullOllamaModel) {
+        return { success: false, error: 'Ollama pull API unavailable' }
+      }
+
+      try {
+        logger.info('useOllamaModelUpdates', `Starting controlled update for model: ${modelName}`)
+        const res = await window.electronAPI.pullOllamaModel(modelName, ollamaHost)
+        if (res.success) {
+          clearModelUpdateAvailable(modelName)
+          if (onRefreshDiagnostics) {
+            onRefreshDiagnostics()
+          }
+          return { success: true }
+        } else {
+          return { success: false, error: res.error || 'Update failed' }
+        }
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Error updating model' }
+      }
+    },
+    [ollamaHost, onRefreshDiagnostics],
+  )
+
+  const isModelUpdating = useCallback(
+    (modelName?: string): boolean => {
+      if (!modelName) return false
+      return downloadProgress.isDownloading && downloadProgress.modelName === modelName
+    },
+    [downloadProgress.isDownloading, downloadProgress.modelName],
+  )
 
   const isAnyModelUpdating = downloadProgress.isDownloading
   const currentlyUpdatingModel = downloadProgress.isDownloading ? downloadProgress.modelName : null

@@ -44,7 +44,7 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
   const [documents, setDocuments] = useState<IngestedDocument[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [isLoaded, setIsLoaded] = useState<boolean>(false)
-  
+
   const onDocsUpdatedRef = useRef(onDocsUpdated)
   useEffect(() => {
     onDocsUpdatedRef.current = onDocsUpdated
@@ -57,10 +57,7 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
 
   const isFetchingRef = useRef(false)
 
-  const retryPolicy = useMemo(
-    () => ({ ...DEFAULT_RETRY_POLICY, baseDelayMs: retryBaseDelayMs }),
-    [retryBaseDelayMs]
-  )
+  const retryPolicy = useMemo(() => ({ ...DEFAULT_RETRY_POLICY, baseDelayMs: retryBaseDelayMs }), [retryBaseDelayMs])
 
   // Consecutive failed fetches of the current outage. Drives both the retry backoff and the log
   // throttling, and resets to 0 the moment the sidecar answers again.
@@ -74,11 +71,11 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
         logger.warn(
           'useIngestedDocuments',
           `Document list unavailable (${reason}); keeping the previous list and selection. ` +
-            `Failed attempts so far: ${failures}; retrying in ${nextRetryDelayMs(failures, retryPolicy)} ms.`
+            `Failed attempts so far: ${failures}; retrying in ${nextRetryDelayMs(failures, retryPolicy)} ms.`,
         )
       }
     },
-    [retryPolicy]
+    [retryPolicy],
   )
 
   const fetchDocuments = useCallback(async () => {
@@ -94,10 +91,7 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
         return
       }
       if (consecutiveFailuresRef.current > 0) {
-        logger.info(
-          'useIngestedDocuments',
-          `Document list recovered after ${consecutiveFailuresRef.current} failed attempts.`
-        )
+        logger.info('useIngestedDocuments', `Document list recovered after ${consecutiveFailuresRef.current} failed attempts.`)
         consecutiveFailuresRef.current = 0
       }
       setDocuments(docs)

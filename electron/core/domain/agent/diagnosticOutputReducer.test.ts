@@ -12,7 +12,7 @@ describe('DiagnosticOutputReducer Unit Tests', () => {
     it('keeps the error text when the command also wrote a banner to stdout', () => {
       // The exact shape that made every `npm run build` failure unreadable: npm's own two
       // banner lines on stdout, the reason on stderr. Selecting one stream dropped the reason.
-      const stdout = "> project-dashboard-task@0.1.0 build\n> tsc && vite build"
+      const stdout = '> project-dashboard-task@0.1.0 build\n> tsc && vite build'
       const stderr = "'tsc' is not recognized as an internal or external command"
 
       const composed = DiagnosticOutputReducer.composeCommandOutput(stdout, stderr, 1)

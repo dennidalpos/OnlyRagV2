@@ -27,8 +27,12 @@ describe('local-only capability policy', () => {
   })
 
   it('blocks remote Git and external shell egress while allowing local filesystem', () => {
-    expect(authorizeLocalOnly({ ...base, capability: 'git', operation: 'connect', toolName: 'git_fetch', target: 'https://github.com/example/repo' }).allowed).toBe(false)
-    expect(authorizeLocalOnly({ ...base, capability: 'shell', operation: 'execute', toolName: 'run_command', target: 'curl https://example.test' }).allowed).toBe(false)
+    expect(
+      authorizeLocalOnly({ ...base, capability: 'git', operation: 'connect', toolName: 'git_fetch', target: 'https://github.com/example/repo' }).allowed,
+    ).toBe(false)
+    expect(
+      authorizeLocalOnly({ ...base, capability: 'shell', operation: 'execute', toolName: 'run_command', target: 'curl https://example.test' }).allowed,
+    ).toBe(false)
     expect(authorizeLocalOnly({ ...base, capability: 'filesystem', operation: 'read', toolName: 'read_file' }).allowed).toBe(true)
   })
 })

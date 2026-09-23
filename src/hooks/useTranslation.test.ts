@@ -63,4 +63,3 @@ describe('useTranslation helper tests', () => {
     expect(target).toBe('Italian')
   })
 })
-

@@ -67,10 +67,12 @@ describe('FileSystemRepository Unit Tests', () => {
     expect(recordedOriginal).toBe('user revision')
 
     const created = path.join(tempDir, 'created.txt')
-    expect(repo.writeFileVersioned(created, 'new', undefined, (original) => {
-      snapshots++
-      recordedOriginal = original
-    }).success).toBe(true)
+    expect(
+      repo.writeFileVersioned(created, 'new', undefined, (original) => {
+        snapshots++
+        recordedOriginal = original
+      }).success,
+    ).toBe(true)
     expect(fs.readFileSync(created, 'utf-8')).toBe('new')
     expect(recordedOriginal).toBeNull()
   })
@@ -81,12 +83,7 @@ describe('FileSystemRepository Unit Tests', () => {
     const interleavedRepo = new FileSystemRepository((filePath) => fs.writeFileSync(filePath, 'external edit'))
     let snapshots = 0
 
-    const result = interleavedRepo.writeFileVersioned(
-      existing,
-      'agent edit',
-      contentVersion('initial'),
-      () => snapshots++,
-    )
+    const result = interleavedRepo.writeFileVersioned(existing, 'agent edit', contentVersion('initial'), () => snapshots++)
 
     expect(result).toMatchObject({
       success: false,
@@ -105,11 +102,8 @@ describe('FileSystemRepository Unit Tests', () => {
     const journal = new AtomicWorkspaceJournal()
     const interleavedRepo = new FileSystemRepository((filePath) => fs.writeFileSync(filePath, 'external edit'))
 
-    const result = interleavedRepo.writeFileVersioned(
-      existing,
-      'agent edit',
-      contentVersion('initial'),
-      (original) => journal.recordOriginalState(existing, original),
+    const result = interleavedRepo.writeFileVersioned(existing, 'agent edit', contentVersion('initial'), (original) =>
+      journal.recordOriginalState(existing, original),
     )
     journal.endStep()
 

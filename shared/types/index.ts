@@ -198,14 +198,7 @@ export interface AgentActionLog extends Partial<AgentRunIdentity> {
   meta?: Record<string, any>
 }
 
-import type {
-  AgentCompletionEvidence,
-  AgentCompletionStatus,
-  ExecutedPrompt,
-  ExecutedPromptOutcome,
-  QueuedPromptRecord,
-  WorkspaceProject,
-} from './workspace'
+import type { AgentCompletionEvidence, AgentCompletionStatus, ExecutedPrompt, ExecutedPromptOutcome, QueuedPromptRecord, WorkspaceProject } from './workspace'
 
 export * from './workspace'
 

@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import {
-  sidecarExportPayloadSchema,
-  sidecarIngestFilePayloadSchema,
-  sidecarSearchPayloadSchema,
-  sidecarTranslatePayloadSchema,
-} from './sidecarContract'
+import { sidecarExportPayloadSchema, sidecarIngestFilePayloadSchema, sidecarSearchPayloadSchema, sidecarTranslatePayloadSchema } from './sidecarContract'
 
 describe('sidecar IPC contract', () => {
   it('accepts bounded ingestion and translation payloads', () => {
-    expect(sidecarIngestFilePayloadSchema.parse({ filePath: 'D:/docs/a.pdf', numCtx: 8192, taskId: 'ingest-1' })).toMatchObject({ numCtx: 8192, taskId: 'ingest-1' })
+    expect(sidecarIngestFilePayloadSchema.parse({ filePath: 'D:/docs/a.pdf', numCtx: 8192, taskId: 'ingest-1' })).toMatchObject({
+      numCtx: 8192,
+      taskId: 'ingest-1',
+    })
     expect(sidecarTranslatePayloadSchema.parse({ docId: 'doc-1', sourceLang: 'it', targetLang: 'en' })).toMatchObject({ docId: 'doc-1' })
   })
 

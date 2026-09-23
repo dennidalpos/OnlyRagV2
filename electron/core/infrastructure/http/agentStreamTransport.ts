@@ -62,7 +62,7 @@ export class AgentStreamTransport {
       return Promise.reject(new Error('Agent run cancelled.'))
     }
     const scheduled = ollamaGenerationScheduler.schedule('agent', (setActiveCancel) =>
-      this.streamCompletionNow({ ...session, onCancelHandle: setActiveCancel })
+      this.streamCompletionNow({ ...session, onCancelHandle: setActiveCancel }),
     )
     session.onCancelHandle?.(scheduled.cancel)
     return scheduled.promise
@@ -93,159 +93,160 @@ export class AgentStreamTransport {
     const ollamaUrl = resolveOllamaUrl('/api/generate', ollamaEndpoint)
 
     return new Promise<string>((resolve, reject) => {
-          const postData = JSON.stringify({
-            model: targetModel,
-            prompt,
-            stream: true,
-            think: session.think === true,
-            keep_alive: keepAlive || '30m',
-            ...(previousContext && previousContext.length > 0 ? { context: previousContext } : {}),
-            options: {
-              num_ctx: runtimeOpts.num_ctx,
-              temperature: runtimeOpts.temperature,
-              top_p: runtimeOpts.top_p,
-              repeat_penalty: runtimeOpts.repeat_penalty,
-              ...(runtimeOpts.num_thread ? { num_thread: runtimeOpts.num_thread } : {}),
-              ...(runtimeOpts.num_predict ? { num_predict: runtimeOpts.num_predict } : {}),
-              ...(runtimeOpts.stop?.length ? { stop: runtimeOpts.stop } : {}),
-            },
-          })
+      const postData = JSON.stringify({
+        model: targetModel,
+        prompt,
+        stream: true,
+        think: session.think === true,
+        keep_alive: keepAlive || '30m',
+        ...(previousContext && previousContext.length > 0 ? { context: previousContext } : {}),
+        options: {
+          num_ctx: runtimeOpts.num_ctx,
+          temperature: runtimeOpts.temperature,
+          top_p: runtimeOpts.top_p,
+          repeat_penalty: runtimeOpts.repeat_penalty,
+          ...(runtimeOpts.num_thread ? { num_thread: runtimeOpts.num_thread } : {}),
+          ...(runtimeOpts.num_predict ? { num_predict: runtimeOpts.num_predict } : {}),
+          ...(runtimeOpts.stop?.length ? { stop: runtimeOpts.stop } : {}),
+        },
+      })
 
-          let responseTimer: NodeJS.Timeout | null = setTimeout(() => {
-            req.destroy(new Error(`Ollama initial response timeout (45s): model '${targetModel}' loading stalled.`))
-          }, 45000)
+      let responseTimer: NodeJS.Timeout | null = setTimeout(() => {
+        req.destroy(new Error(`Ollama initial response timeout (45s): model '${targetModel}' loading stalled.`))
+      }, 45000)
 
-          let tokenStallTimer: NodeJS.Timeout | null = null
-          const requestStartedAt = Date.now()
+      let tokenStallTimer: NodeJS.Timeout | null = null
+      const requestStartedAt = Date.now()
 
-          const resetTokenStallTimer = () => {
-            if (tokenStallTimer) clearTimeout(tokenStallTimer)
-            tokenStallTimer = setTimeout(() => {
-              req.destroy(new Error(`Ollama stream stalled: no tokens received for 30s from model '${targetModel}'.`))
-            }, 30000)
+      const resetTokenStallTimer = () => {
+        if (tokenStallTimer) clearTimeout(tokenStallTimer)
+        tokenStallTimer = setTimeout(() => {
+          req.destroy(new Error(`Ollama stream stalled: no tokens received for 30s from model '${targetModel}'.`))
+        }, 30000)
+      }
+
+      const cleanupTimers = () => {
+        if (responseTimer) {
+          clearTimeout(responseTimer)
+          responseTimer = null
+        }
+        if (tokenStallTimer) {
+          clearTimeout(tokenStallTimer)
+          tokenStallTimer = null
+        }
+      }
+
+      const req = requestOllama(
+        ollamaUrl,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+          },
+        },
+        (res) => {
+          if (responseTimer) {
+            clearTimeout(responseTimer)
+            responseTimer = null
           }
 
-          const cleanupTimers = () => {
-            if (responseTimer) {
-              clearTimeout(responseTimer)
-              responseTimer = null
-            }
-            if (tokenStallTimer) {
-              clearTimeout(tokenStallTimer)
-              tokenStallTimer = null
-            }
-          }
-
-          const req = requestOllama(
-            ollamaUrl,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(postData),
-              },
-            },
-            (res) => {
-              if (responseTimer) {
-                clearTimeout(responseTimer)
-                responseTimer = null
-              }
-
-              if (res.statusCode && res.statusCode !== 200) {
-                cleanupTimers()
-                let errBody = ''
-                res.on('data', (chunk) => {
-                  errBody += chunk.toString()
-                })
-                res.on('end', () => {
-                  const msg =
-                    res.statusCode === 404
-                      ? `Model '${targetModel}' is not pulled in Ollama. Please run 'ollama pull ${targetModel}'.`
-                      : `Ollama HTTP Error ${res.statusCode}: ${errBody.slice(0, 300)}`
-                  reject(new Error(msg))
-                })
-                return
-              }
-
-              resetTokenStallTimer()
-
-              let buffer = ''
-              let fullText = ''
-              let sawDone = false
-              let doneReason: string | undefined
-              let completedTelemetry: OllamaStreamTelemetry | undefined
-
-              res.on('data', (chunk) => {
-                if (isCancelled()) {
-                  cleanupTimers()
-                  req.destroy()
-                  resolve(fullText)
-                  return
-                }
-                resetTokenStallTimer()
-                buffer = consumeNdjsonChunk(
-                  buffer,
-                  chunk,
-                  (parsed) => {
-                    const thinkingDelta = parsed.thinking ?? parsed.message?.thinking
-                    if (thinkingDelta && onThoughtChunk) {
-                      onThoughtChunk(thinkingDelta)
-                    }
-                    if (parsed.response) {
-                      fullText += parsed.response
-                      if (onTokenChunk) {
-                        onTokenChunk(parsed.response)
-                      }
-                    }
-                    if (parsed.done && Array.isArray(parsed.context) && onContextReceived) {
-                      onContextReceived(parsed.context, targetModel)
-                    }
-                    if (parsed.done === true) {
-                      sawDone = true
-                      doneReason = parsed.done_reason
-                      completedTelemetry = streamTelemetry(parsed, targetModel, runtimeOpts.num_ctx, requestStartedAt)
-                    }
-                  },
-                  (jsonErr) => {
-                    logger.log('WARN', 'AgentStreamTransport', `Partial stream JSON parse skipped: ${jsonErr.message}`)
-                  }
-                )
-              })
-
-              res.on('end', () => {
-                cleanupTimers()
-                if (!isCancelled() && (!sawDone || doneReason === 'length')) {
-                  reject(new Error(`Ollama response incomplete${doneReason ? ` (${doneReason})` : ''}`))
-                  return
-                }
-                if (completedTelemetry) onGenerationTelemetry?.(completedTelemetry)
-                resolve(fullText)
-              })
-            }
-          )
-
-          req.on('error', (err: any) => {
+          if (res.statusCode && res.statusCode !== 200) {
             cleanupTimers()
-            if (err.code === 'ECONNREFUSED') {
-              reject(new Error(`Ollama service is not reachable at ${normalizeOllamaHost(ollamaEndpoint)}. Please ensure Ollama is running.`))
-            } else {
-              reject(err)
+            let errBody = ''
+            res.on('data', (chunk) => {
+              errBody += chunk.toString()
+            })
+            res.on('end', () => {
+              const msg =
+                res.statusCode === 404
+                  ? `Model '${targetModel}' is not pulled in Ollama. Please run 'ollama pull ${targetModel}'.`
+                  : `Ollama HTTP Error ${res.statusCode}: ${errBody.slice(0, 300)}`
+              reject(new Error(msg))
+            })
+            return
+          }
+
+          resetTokenStallTimer()
+
+          let buffer = ''
+          let fullText = ''
+          let sawDone = false
+          let doneReason: string | undefined
+          let completedTelemetry: OllamaStreamTelemetry | undefined
+
+          res.on('data', (chunk) => {
+            if (isCancelled()) {
+              cleanupTimers()
+              req.destroy()
+              resolve(fullText)
+              return
             }
+            resetTokenStallTimer()
+            buffer = consumeNdjsonChunk(
+              buffer,
+              chunk,
+              (parsed) => {
+                const thinkingDelta = parsed.thinking ?? parsed.message?.thinking
+                if (thinkingDelta && onThoughtChunk) {
+                  onThoughtChunk(thinkingDelta)
+                }
+                if (parsed.response) {
+                  fullText += parsed.response
+                  if (onTokenChunk) {
+                    onTokenChunk(parsed.response)
+                  }
+                }
+                if (parsed.done && Array.isArray(parsed.context) && onContextReceived) {
+                  onContextReceived(parsed.context, targetModel)
+                }
+                if (parsed.done === true) {
+                  sawDone = true
+                  doneReason = parsed.done_reason
+                  completedTelemetry = streamTelemetry(parsed, targetModel, runtimeOpts.num_ctx, requestStartedAt)
+                }
+              },
+              (jsonErr) => {
+                logger.log('WARN', 'AgentStreamTransport', `Partial stream JSON parse skipped: ${jsonErr.message}`)
+              },
+            )
           })
 
-          const abortRequest = () => req.destroy(new Error('Agent run cancelled.'))
-          if (onCancelHandle) onCancelHandle(abortRequest)
-          signal?.addEventListener('abort', abortRequest, { once: true })
-          req.on('close', () => signal?.removeEventListener('abort', abortRequest))
+          res.on('end', () => {
+            cleanupTimers()
+            if (!isCancelled() && (!sawDone || doneReason === 'length')) {
+              reject(new Error(`Ollama response incomplete${doneReason ? ` (${doneReason})` : ''}`))
+              return
+            }
+            if (completedTelemetry) onGenerationTelemetry?.(completedTelemetry)
+            resolve(fullText)
+          })
+        },
+      )
 
-          req.write(postData)
-          req.end()
+      req.on('error', (err: any) => {
+        cleanupTimers()
+        if (err.code === 'ECONNREFUSED') {
+          reject(new Error(`Ollama service is not reachable at ${normalizeOllamaHost(ollamaEndpoint)}. Please ensure Ollama is running.`))
+        } else {
+          reject(err)
+        }
+      })
+
+      const abortRequest = () => req.destroy(new Error('Agent run cancelled.'))
+      if (onCancelHandle) onCancelHandle(abortRequest)
+      signal?.addEventListener('abort', abortRequest, { once: true })
+      req.on('close', () => signal?.removeEventListener('abort', abortRequest))
+
+      req.write(postData)
+      req.end()
     })
   }
 
   /** Native tool-calling path: POST /api/chat with a `tools` array, streamed (stream:true) and parsed incrementally like streamCompletion's /api/generate path (AGT7) — Ollama's tool_calls field only arrives on the final NDJSON line (done:true), but message.content */
   private static async streamChatWithTools(session: StreamSession): Promise<string> {
-    const { targetModel, prompt, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, onThoughtChunk, isCancelled, signal, onCancelHandle, toolCatalog } = session
+    const { targetModel, prompt, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, onThoughtChunk, isCancelled, signal, onCancelHandle, toolCatalog } =
+      session
 
     const chatUrl = resolveOllamaUrl('/api/chat', ollamaEndpoint)
 
@@ -364,7 +365,7 @@ export class AgentStreamTransport {
               },
               (jsonErr) => {
                 logger.log('WARN', 'AgentStreamTransport', `Partial chat stream JSON parse skipped: ${jsonErr.message}`)
-              }
+              },
             )
           })
 
@@ -378,7 +379,7 @@ export class AgentStreamTransport {
             session.onToolProtocolObserved?.(resolvedToolCall ? 'native' : 'text')
             resolve(resolvedToolCall ?? fullText)
           })
-        }
+        },
       )
 
       req.on('error', (err: any) => {

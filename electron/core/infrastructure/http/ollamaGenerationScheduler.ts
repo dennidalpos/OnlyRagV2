@@ -31,11 +31,7 @@ export class OllamaGenerationScheduler {
   private active: GenerationJob<unknown> | null = null
   private terminalOperations: OllamaGenerationOperation[] = []
 
-  schedule<T>(
-    label: string,
-    run: (setActiveCancel: (cancel: () => void) => void) => Promise<T>,
-    id: string = randomUUID()
-  ): ScheduledGeneration<T> {
+  schedule<T>(label: string, run: (setActiveCancel: (cancel: () => void) => void) => Promise<T>, id: string = randomUUID()): ScheduledGeneration<T> {
     let job!: GenerationJob<T>
     const promise = new Promise<T>((resolve, reject) => {
       job = { id, label, run, resolve, reject, cancelled: false, state: 'queued' }
@@ -79,11 +75,7 @@ export class OllamaGenerationScheduler {
     return {
       active: this.active ? { id: this.active.id, label: this.active.label } : null,
       queued: this.queue.map((job) => ({ id: job.id, label: job.label })),
-      operations: [
-        ...(this.active ? [this.toOperation(this.active)] : []),
-        ...this.queue.map((job) => this.toOperation(job)),
-        ...this.terminalOperations,
-      ],
+      operations: [...(this.active ? [this.toOperation(this.active)] : []), ...this.queue.map((job) => this.toOperation(job)), ...this.terminalOperations],
     }
   }
 
@@ -100,12 +92,13 @@ export class OllamaGenerationScheduler {
     next.state = 'running'
     let completed = false
     try {
-      const value = await next.run((cancel) => { next.activeCancel = cancel })
+      const value = await next.run((cancel) => {
+        next.activeCancel = cancel
+      })
       if (!next.cancelled) {
         completed = true
         next.resolve(value)
-      }
-      else next.reject(new OllamaGenerationCancelledError('Active Ollama generation cancelled.'))
+      } else next.reject(new OllamaGenerationCancelledError('Active Ollama generation cancelled.'))
     } catch (error) {
       next.reject(next.cancelled ? new OllamaGenerationCancelledError('Active Ollama generation cancelled.') : error)
     } finally {
@@ -124,10 +117,7 @@ export class OllamaGenerationScheduler {
   }
 
   private rememberTerminal<T>(job: GenerationJob<T>): void {
-    this.terminalOperations = [
-      this.toOperation(job),
-      ...this.terminalOperations.filter((item) => item.id !== job.id),
-    ].slice(0, 12)
+    this.terminalOperations = [this.toOperation(job), ...this.terminalOperations.filter((item) => item.id !== job.id)].slice(0, 12)
   }
 }
 

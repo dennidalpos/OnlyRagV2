@@ -1,5 +1,3 @@
-
-
 import path from 'node:path'
 import fs from 'node:fs'
 import depcheck from 'depcheck'
@@ -18,10 +16,7 @@ export interface DependencyScanResult {
 
 const NOT_SCANNED: DependencyScanResult = { missing: {}, scanned: false }
 
-export async function scanWorkspaceDependencies(
-  workspacePath: string | null | undefined,
-  timeoutMs = 60_000
-): Promise<DependencyScanResult> {
+export async function scanWorkspaceDependencies(workspacePath: string | null | undefined, timeoutMs = 60_000): Promise<DependencyScanResult> {
   if (!workspacePath) return NOT_SCANNED
   const root = path.resolve(workspacePath)
   // No manifest means nothing declares dependencies, so nothing can be undeclared.
@@ -29,9 +24,7 @@ export async function scanWorkspaceDependencies(
 
   try {
     const scan = depcheck(root, { ignorePatterns: IGNORED, skipMissing: false })
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`depcheck timed out after ${timeoutMs} ms`)), timeoutMs)
-    )
+    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`depcheck timed out after ${timeoutMs} ms`)), timeoutMs))
     const result = await Promise.race([scan, timeout])
     return { missing: (result.missing || {}) as MissingDependencyMap, scanned: true }
   } catch (err: any) {

@@ -81,29 +81,29 @@ function normalizeExecutedPrompt(raw: any, sessionId: string, fallbackTimestamp:
   const verificationStatuses = ['verified', 'failed', 'unavailable']
   const evidenceLevels = ['structural', 'behavioral']
   const verification = raw.evidence?.verification
-  const evidence = raw.evidence && cancellationStatuses.includes(raw.evidence.cancellationStatus)
-    ? {
-        changedFiles: Array.isArray(raw.evidence.changedFiles)
-          ? raw.evidence.changedFiles.filter((value: unknown): value is string => typeof value === 'string')
-          : [],
-        verification: verification && verificationStatuses.includes(verification.status) && typeof verification.checkedAt === 'string'
-          ? {
-              status: verification.status,
-              checkedAt: toIsoTimestamp(verification.checkedAt, fallbackTimestamp),
-              command: typeof verification.command === 'string' ? verification.command : undefined,
-              evidenceLevel: evidenceLevels.includes(verification.evidenceLevel) ? verification.evidenceLevel : undefined,
-              detail: typeof verification.detail === 'string' ? verification.detail : undefined,
-            }
-          : undefined,
-        cancellationStatus: raw.evidence.cancellationStatus,
-        rollbackRestoredFiles: Number.isFinite(raw.evidence.rollbackRestoredFiles)
-          ? Math.max(0, Number(raw.evidence.rollbackRestoredFiles))
-          : undefined,
-        nonRollbackEffects: Array.isArray(raw.evidence.nonRollbackEffects)
-          ? raw.evidence.nonRollbackEffects.filter((value: unknown): value is string => typeof value === 'string')
-          : [],
-      }
-    : undefined
+  const evidence =
+    raw.evidence && cancellationStatuses.includes(raw.evidence.cancellationStatus)
+      ? {
+          changedFiles: Array.isArray(raw.evidence.changedFiles)
+            ? raw.evidence.changedFiles.filter((value: unknown): value is string => typeof value === 'string')
+            : [],
+          verification:
+            verification && verificationStatuses.includes(verification.status) && typeof verification.checkedAt === 'string'
+              ? {
+                  status: verification.status,
+                  checkedAt: toIsoTimestamp(verification.checkedAt, fallbackTimestamp),
+                  command: typeof verification.command === 'string' ? verification.command : undefined,
+                  evidenceLevel: evidenceLevels.includes(verification.evidenceLevel) ? verification.evidenceLevel : undefined,
+                  detail: typeof verification.detail === 'string' ? verification.detail : undefined,
+                }
+              : undefined,
+          cancellationStatus: raw.evidence.cancellationStatus,
+          rollbackRestoredFiles: Number.isFinite(raw.evidence.rollbackRestoredFiles) ? Math.max(0, Number(raw.evidence.rollbackRestoredFiles)) : undefined,
+          nonRollbackEffects: Array.isArray(raw.evidence.nonRollbackEffects)
+            ? raw.evidence.nonRollbackEffects.filter((value: unknown): value is string => typeof value === 'string')
+            : [],
+        }
+      : undefined
   return {
     id: typeof raw.id === 'string' && raw.id ? raw.id : `${sessionId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     sessionId,

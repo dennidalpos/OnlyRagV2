@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  renderPromptTemplate,
-  collectTemplateTokens,
-  collapseBlankRuns,
-  TemplateSyntaxError,
-} from '../../../../shared/domain/agent/promptTemplateEngine'
+import { renderPromptTemplate, collectTemplateTokens, collapseBlankRuns, TemplateSyntaxError } from '../../../../shared/domain/agent/promptTemplateEngine'
 
 describe('renderPromptTemplate', () => {
   it('substitutes variables without HTML-escaping them', () => {
@@ -49,7 +44,7 @@ describe('collectTemplateTokens', () => {
         { type: 'partial', name: 'p', occurrences: 1 },
         { type: 'invertedSection', name: 'flag', occurrences: 1 },
         { type: 'section', name: 'on', occurrences: 1 },
-      ])
+      ]),
     )
   })
 

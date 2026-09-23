@@ -53,7 +53,7 @@ describe('NDJSON Stream Parser Unit Tests', () => {
       buffer,
       '{"valid": true}\nINVALID_JSON_HERE\n{"valid_again": 123}\n',
       (obj) => parsed.push(obj),
-      (_err, line) => warnings.push(line)
+      (_err, line) => warnings.push(line),
     )
 
     expect(buffer).toBe('')

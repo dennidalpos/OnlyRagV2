@@ -62,11 +62,7 @@ describe('isVerificationFailing', () => {
   })
 
   it('reads the most recent attempt, not the first', () => {
-    const episodes = [
-      step('run_command', BUILD, 'FAILURE'),
-      step('write_file', 'src/App.tsx', 'SUCCESS'),
-      step('run_command', BUILD, 'FAILURE'),
-    ]
+    const episodes = [step('run_command', BUILD, 'FAILURE'), step('write_file', 'src/App.tsx', 'SUCCESS'), step('run_command', BUILD, 'FAILURE')]
 
     expect(isVerificationFailing(episodes, BUILD)).toBe(true)
   })
@@ -125,7 +121,7 @@ describe('buildVerificationFailingDirective — carrying the diagnostic', () => 
     expect(directive).toContain('only after the above has actually changed a file')
   })
 
-  it('carries exactly one prescription — the diagnostic\'s own', () => {
+  it("carries exactly one prescription — the diagnostic's own", () => {
     const directive = buildVerificationFailingDirective(BUILD_CMD, DIAGNOSTIC)
     // The rule this module records: two places must never both prescribe the next action. What
     // changed is which channel delivers the single prescription, not how many there are.

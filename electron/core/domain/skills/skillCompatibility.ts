@@ -24,7 +24,11 @@ export function assessHubSkillCompatibility(input: SkillCompatibilityInput): Hub
   const { item, installed, remoteChecksum } = input
   const matchedModel = findModel(item.requiredModel, input.localModels)
   const modelStatus: HubSkillCompatibility['modelStatus'] = item.requiredModel
-    ? (matchedModel ? 'available' : input.localModels.length > 0 ? 'missing' : 'unknown')
+    ? matchedModel
+      ? 'available'
+      : input.localModels.length > 0
+        ? 'missing'
+        : 'unknown'
     : 'not_required'
 
   const localChecksum = installed?.originChecksum
@@ -36,13 +40,14 @@ export function assessHubSkillCompatibility(input: SkillCompatibilityInput): Hub
         ? 'match'
         : 'changed'
 
-  const status: HubSkillCompatibility['status'] = modelStatus === 'missing'
-    ? 'incompatible'
-    : checksumStatus === 'changed'
-      ? 'modified'
-      : modelStatus === 'unknown' || checksumStatus === 'unknown'
-        ? 'unknown'
-        : 'compatible'
+  const status: HubSkillCompatibility['status'] =
+    modelStatus === 'missing'
+      ? 'incompatible'
+      : checksumStatus === 'changed'
+        ? 'modified'
+        : modelStatus === 'unknown' || checksumStatus === 'unknown'
+          ? 'unknown'
+          : 'compatible'
 
   return { status, modelStatus, checksumStatus, localChecksum, remoteChecksum, matchedModel }
 }

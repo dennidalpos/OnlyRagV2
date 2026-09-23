@@ -6,7 +6,6 @@ import { sidecarAppService } from '../application/sidecarAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 
 export function registerDiagnosticsIpcHandlers() {
-
   ipcMain.handle('diagnostics:run', async (_, host?: string) => {
     const sidecarState = await sidecarAppService.checkHealth()
     return await runFullDiagnostics(sidecarState, host)

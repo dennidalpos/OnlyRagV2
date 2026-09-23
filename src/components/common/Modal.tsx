@@ -10,8 +10,7 @@ export const MODAL_LAYER = {
 
 export type ModalLayer = keyof typeof MODAL_LAYER
 
-export const DEFAULT_PANEL_CLASS =
-  'bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-2xl max-h-[85vh] flex flex-col overflow-hidden'
+export const DEFAULT_PANEL_CLASS = 'bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-2xl max-h-[85vh] flex flex-col overflow-hidden'
 
 export interface ModalProps {
   isOpen: boolean
@@ -69,14 +68,10 @@ export const Modal: React.FC<ModalProps> = ({
         if (dismissible && event.target === event.currentTarget) onClose()
       }}
     >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        className={`w-full outline-none ${panelClassName}`}
-      >
+      <div ref={panelRef} tabIndex={-1} className={`w-full outline-none ${panelClassName}`}>
         {children}
       </div>
     </div>,
-    document.body
+    document.body,
   )
 }

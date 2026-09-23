@@ -68,17 +68,17 @@ export function evaluateAgentCodingPreflight(input: AgentCodingPreflightInput): 
       id: 'qualification',
       passed: modelInstalled && supportsNativeToolCalling(input.codingModel, { [input.codingModel]: metric?.capabilities || [] }),
       blocking: true,
-      detail: modelInstalled && supportsNativeToolCalling(input.codingModel, { [input.codingModel]: metric?.capabilities || [] })
-        ? 'Model supports Agent Coding tool calls.'
-        : 'Model does not qualify for Agent Coding tool calls.',
+      detail:
+        modelInstalled && supportsNativeToolCalling(input.codingModel, { [input.codingModel]: metric?.capabilities || [] })
+          ? 'Model supports Agent Coding tool calls.'
+          : 'Model does not qualify for Agent Coding tool calls.',
     },
     {
       id: 'context',
       passed: typeof metric?.contextLength === 'number' && metric.contextLength >= MIN_AGENT_CONTEXT_TOKENS,
       blocking: true,
-      detail: typeof metric?.contextLength === 'number'
-        ? `Model context: ${metric.contextLength} tokens.`
-        : 'Model context capacity is unavailable from Ollama.',
+      detail:
+        typeof metric?.contextLength === 'number' ? `Model context: ${metric.contextLength} tokens.` : 'Model context capacity is unavailable from Ollama.',
     },
     {
       id: 'workspace',

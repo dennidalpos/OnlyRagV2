@@ -35,10 +35,7 @@ describe('ensureScaffoldMilestones', () => {
   })
 
   it('adds only what the plan is missing', () => {
-    const withEntry = [
-      { id: 'm-1', title: 'The entry script mounts the app — `src/main.tsx`', status: 'pending' as const },
-      ...pagePlan,
-    ]
+    const withEntry = [{ id: 'm-1', title: 'The entry script mounts the app — `src/main.tsx`', status: 'pending' as const }, ...pagePlan]
 
     const plan = ensureScaffoldMilestones(withEntry, web)
 
@@ -104,13 +101,15 @@ describe('application-owned closure compilation', () => {
       objective: 'Ship authentication',
       decisions: [{ id: 'q-1', statement: 'Storage: local', source: 'explicit_user' }],
       retainedEvidence: [{ interventionId: 'm-0', summary: 'Schema verified', verificationReferences: ['npm test'] }],
-      milestones: [{
-        id: 'm-1',
-        title: 'Login works',
-        status: 'pending',
-        filePaths: ['src/auth.ts'],
-        acceptanceCriteria: ['Valid credentials create a session'],
-      }],
+      milestones: [
+        {
+          id: 'm-1',
+          title: 'Login works',
+          status: 'pending',
+          filePaths: ['src/auth.ts'],
+          acceptanceCriteria: ['Valid credentials create a session'],
+        },
+      ],
       supersededWork: [{ interventionId: 'm-old', reason: 'Replaced by the new endpoint.' }],
     })
 
@@ -143,8 +142,6 @@ describe('application-owned closure compilation', () => {
 
     expect(compiled).toHaveLength(source.length)
     expect(compiled.map((milestone) => milestone.id)).toEqual(source.map((milestone) => milestone.id))
-    expect(compiled.map((milestone) => milestone.verificationCommand)).toEqual(
-      source.map((milestone) => milestone.verificationCommand)
-    )
+    expect(compiled.map((milestone) => milestone.verificationCommand)).toEqual(source.map((milestone) => milestone.verificationCommand))
   })
 })

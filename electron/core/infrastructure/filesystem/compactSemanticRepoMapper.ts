@@ -1,5 +1,3 @@
-
-
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as ts from 'typescript'
@@ -79,9 +77,7 @@ export function generateCompactRepoMap(workspacePath: string, maxFiles = 100): s
           if (['.ts', '.tsx', '.js', '.jsx'].includes(ext)) {
             const symbols = extractFileSymbols(fullPath)
             if (symbols.length > 0) {
-              const symStr = symbols
-                .map((s) => `${s.exported ? 'export ' : ''}${s.kind} ${s.name}`)
-                .join(', ')
+              const symStr = symbols.map((s) => `${s.exported ? 'export ' : ''}${s.kind} ${s.name}`).join(', ')
               lines.push(`📄 ${relPath} ➔ { ${symStr} }`)
             } else {
               lines.push(`📄 ${relPath}`)

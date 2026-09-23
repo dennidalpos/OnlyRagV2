@@ -17,7 +17,7 @@ export interface PromotionCandidate {
 export function selectMilestonesProvenByVerification(
   milestones: readonly PlanMilestone[],
   verificationCommand: string,
-  deliverableStatusOf: (milestone: PlanMilestone) => MilestoneDeliverableStatus
+  deliverableStatusOf: (milestone: PlanMilestone) => MilestoneDeliverableStatus,
 ): PromotionCandidate[] {
   const executed = verificationCommand.trim().toLowerCase()
   return milestones
@@ -29,9 +29,7 @@ export function selectMilestonesProvenByVerification(
 }
 
 export function verificationEvidenceKind(verificationCommand: string): 'compilation' | 'behavior' {
-  return /(^|[\s:&|])(test(?::\S+)?|pytest|vitest|jest|mocha)([\s:&|]|$)/i.test(verificationCommand)
-    ? 'behavior'
-    : 'compilation'
+  return /(^|[\s:&|])(test(?::\S+)?|pytest|vitest|jest|mocha)([\s:&|]|$)/i.test(verificationCommand) ? 'behavior' : 'compilation'
 }
 
 /** Records command evidence separately from the artifact prerequisite. */
@@ -46,11 +44,7 @@ export function awaitingVerificationNote(evidencePath: string): string {
 }
 
 /** Names missing deliverables so the model does not rewrite completed files. */
-export function partialDeliveryDirective(
-  milestoneId: string,
-  writtenPath: string,
-  missingPaths: readonly string[]
-): string {
+export function partialDeliveryDirective(milestoneId: string, writtenPath: string, missingPaths: readonly string[]): string {
   const list = missingPaths.map((p) => `"${p}"`).join(', ')
   const plural = missingPaths.length === 1 ? 'file' : 'files'
 
@@ -71,7 +65,7 @@ export function partialDeliveryDirective(
 export function redeliveredMilestoneDirective(
   milestoneId: string,
   rewrittenPath: string,
-  nextNeed: { milestoneId: string; missingPaths: readonly string[] } | null
+  nextNeed: { milestoneId: string; missingPaths: readonly string[] } | null,
 ): string {
   const lines = [
     `[MILESTONE ${milestoneId} WAS ALREADY COMPLETE — THIS REWRITE CHANGED NOTHING IN THE PLAN]`,
@@ -83,12 +77,12 @@ export function redeliveredMilestoneDirective(
     const list = nextNeed.missingPaths.map((p) => `"${p}"`).join(', ')
     lines.push(
       `1. Stop editing "${rewrittenPath}". Write ${list} next: ${nextNeed.milestoneId} is the active milestone and ${nextNeed.missingPaths.length === 1 ? 'that file does' : 'those files do'} not exist yet.`,
-      `2. Do not rewrite a file that is already correct in order to look busy. If you believe "${rewrittenPath}" is genuinely wrong, say what is wrong with it in your explanation before changing it.`
+      `2. Do not rewrite a file that is already correct in order to look busy. If you believe "${rewrittenPath}" is genuinely wrong, say what is wrong with it in your explanation before changing it.`,
     )
   } else {
     lines.push(
       `1. Stop editing "${rewrittenPath}". Move to the next milestone in the checklist that is not yet verified.`,
-      `2. Do not rewrite a file that is already correct in order to look busy.`
+      `2. Do not rewrite a file that is already correct in order to look busy.`,
     )
   }
 

@@ -21,16 +21,7 @@ const PROJECT_MANIFESTS = [
   'build.gradle.kts',
   'composer.json',
 ]
-const LOCKFILES = [
-  'package-lock.json',
-  'npm-shrinkwrap.json',
-  'yarn.lock',
-  'pnpm-lock.yaml',
-  'poetry.lock',
-  'Pipfile.lock',
-  'Cargo.lock',
-  'composer.lock',
-]
+const LOCKFILES = ['package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', 'poetry.lock', 'Pipfile.lock', 'Cargo.lock', 'composer.lock']
 const IGNORED_DIRECTORIES = new Set(['.git', 'node_modules', 'dist', 'build', 'coverage', '.venv', 'out'])
 
 function isDirectory(targetPath: string): boolean {
@@ -75,11 +66,26 @@ function detectToolchain(rootPath: string, manifestFiles: string[]): ProjectProf
     }
   }
   if (manifestFiles.includes('requirements.txt') || manifestFiles.includes('pyproject.toml')) languages.add('python')
-  if (manifestFiles.includes('Cargo.toml')) { languages.add('rust'); packageManagers.add('cargo') }
-  if (manifestFiles.includes('go.mod')) { languages.add('go'); packageManagers.add('go') }
-  if (manifestFiles.includes('pom.xml')) { languages.add('java'); packageManagers.add('maven') }
-  if (manifestFiles.includes('build.gradle') || manifestFiles.includes('build.gradle.kts')) { languages.add('java'); packageManagers.add('gradle') }
-  if (manifestFiles.includes('composer.json')) { languages.add('php'); packageManagers.add('composer') }
+  if (manifestFiles.includes('Cargo.toml')) {
+    languages.add('rust')
+    packageManagers.add('cargo')
+  }
+  if (manifestFiles.includes('go.mod')) {
+    languages.add('go')
+    packageManagers.add('go')
+  }
+  if (manifestFiles.includes('pom.xml')) {
+    languages.add('java')
+    packageManagers.add('maven')
+  }
+  if (manifestFiles.includes('build.gradle') || manifestFiles.includes('build.gradle.kts')) {
+    languages.add('java')
+    packageManagers.add('gradle')
+  }
+  if (manifestFiles.includes('composer.json')) {
+    languages.add('php')
+    packageManagers.add('composer')
+  }
 
   return {
     languages: [...languages].sort(),

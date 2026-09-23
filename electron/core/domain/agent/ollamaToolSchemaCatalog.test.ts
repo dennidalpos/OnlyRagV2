@@ -29,9 +29,7 @@ describe('buildToolSchemaCorrectionDirective', () => {
   it('names the tool, the reason, the mandatory parameters and the exact shape to emit', () => {
     // Replaces "mandatory input parameters were missing or malformed. Please ensure you
     // provide valid JSON with all required parameters" — which named none of these.
-    const directive = buildToolSchemaCorrectionDirective('write_file', [
-      "Missing required parameter 'filePath' for write_file",
-    ])
+    const directive = buildToolSchemaCorrectionDirective('write_file', ["Missing required parameter 'filePath' for write_file"])
 
     expect(directive).toContain('write_file')
     expect(directive).toContain("Missing required parameter 'filePath'")

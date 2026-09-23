@@ -34,7 +34,10 @@ export class SessionCheckpointRepository {
 
   public async saveCheckpoint(snapshot: BaselineSnapshot, backups: SessionBackup[] = []): Promise<boolean> {
     const parsed = baselineSnapshotSchema.safeParse(snapshot)
-    if (!parsed.success || backups.some((backup) => !isPathWithinRoot(parsed.data.workspaceRoot, path.resolve(parsed.data.workspaceRoot, backup.relativePath), false))) {
+    if (
+      !parsed.success ||
+      backups.some((backup) => !isPathWithinRoot(parsed.data.workspaceRoot, path.resolve(parsed.data.workspaceRoot, backup.relativePath), false))
+    ) {
       logger.log('WARN', 'SessionCheckpointRepo', `Rejected invalid checkpoint ${snapshot?.snapshotId || 'unknown'}`)
       return false
     }
@@ -53,7 +56,7 @@ export class SessionCheckpointRepository {
       }
       return await safeAtomicWrite(
         path.join(this.getStorageDir(parsed.data.workspaceRoot), `.session_checkpoint_${safeId(parsed.data.snapshotId)}.json`),
-        JSON.stringify(parsed.data, null, 2)
+        JSON.stringify(parsed.data, null, 2),
       )
     } catch (err: any) {
       logger.log('WARN', 'SessionCheckpointRepo', `Failed saving checkpoint ${parsed.data.snapshotId}: ${err.message}`)

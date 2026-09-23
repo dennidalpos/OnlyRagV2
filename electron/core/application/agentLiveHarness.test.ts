@@ -46,7 +46,7 @@ describe('snapshotLiveAuditLogs', () => {
         label: 'missing',
         sourceLogPath: path.join(root, 'coding_agent_audit.log'),
         destinationRoot: path.join(root, 'snapshots'),
-      })
+      }),
     ).toThrow('No coding agent audit log found for live run session-2')
   })
 })

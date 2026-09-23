@@ -75,9 +75,10 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
   } = input
 
   // Format combined user task if initial task exists and differs from turn prompt
-  const effectiveTaskText = initialUserTask && initialUserTask.trim() !== userTask.trim()
-    ? `PRIMARY OVERALL GOAL / PROJECT SPECIFICATION:\n"""\n${initialUserTask.trim()}\n"""\n\nCURRENT TURN INSTRUCTION / FOLLOW-UP ANSWER:\n"""\n${userTask.trim()}\n"""`
-    : userTask.trim()
+  const effectiveTaskText =
+    initialUserTask && initialUserTask.trim() !== userTask.trim()
+      ? `PRIMARY OVERALL GOAL / PROJECT SPECIFICATION:\n"""\n${initialUserTask.trim()}\n"""\n\nCURRENT TURN INSTRUCTION / FOLLOW-UP ANSWER:\n"""\n${userTask.trim()}\n"""`
+      : userTask.trim()
 
   const now = new Date()
   const formattedDate = now.toLocaleDateString('it-IT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
@@ -88,12 +89,12 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
     {
       agentMode: agentMode.toUpperCase(),
       userTask: effectiveTaskText,
-      workspacePath: isStandaloneMode ? 'Standalone (No Workspace)' : (workspacePath || 'No Folder Selected'),
+      workspacePath: isStandaloneMode ? 'Standalone (No Workspace)' : workspacePath || 'No Folder Selected',
       currentDate,
     },
     settings,
     toolCallingCapable,
-    availableToolNames ? renderToolPromptCatalog(availableToolNames) : undefined
+    availableToolNames ? renderToolPromptCatalog(availableToolNames) : undefined,
   )
 
   // Priority 1.5: Dynamic Execution Plan & Goal Decomposition
@@ -103,9 +104,7 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
   const activeFileBlock = activeFile
     ? `Active File Open in Editor: ${activeFile.name} (${activeFile.path})\n[EDITOR VERSION: ${activeFile.versionHash}]\nSnippet:\n${activeFile.content.slice(0, 8000)}\n`
     : ''
-  const pinnedBlock = pinnedFilesContextStr
-    ? `EXPLICITLY REFERENCED (PINNED) WORKSPACE FILES:\n${pinnedFilesContextStr.slice(0, 16000)}\n`
-    : ''
+  const pinnedBlock = pinnedFilesContextStr ? `EXPLICITLY REFERENCED (PINNED) WORKSPACE FILES:\n${pinnedFilesContextStr.slice(0, 16000)}\n` : ''
 
   // Priority 2.5: Contextual Domain Skills & Guidelines
   const skillsSection = skillsBlock ? `${skillsBlock}\n` : ''
@@ -133,8 +132,9 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
     }
   }
 
-  const stableParts = [baseSystemPrompt, planSection, pinnedBlock, activeFileBlock, skillsSection, attachedBlock, mapBlock]
-    .filter((p) => Boolean(p && p.trim()))
+  const stableParts = [baseSystemPrompt, planSection, pinnedBlock, activeFileBlock, skillsSection, attachedBlock, mapBlock].filter((p) =>
+    Boolean(p && p.trim()),
+  )
   const stableSection = stableParts.join('\n\n')
 
   const maxStepsLabel = maxSteps === Infinity || maxSteps === 0 ? '∞' : String(maxSteps)

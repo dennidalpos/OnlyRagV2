@@ -7,7 +7,7 @@ export function useAgentTimelineScroll(
   streamingText: string,
   isExecuting: boolean,
   autoScroll: boolean,
-  onToggleAutoScroll: () => void
+  onToggleAutoScroll: () => void,
 ) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)

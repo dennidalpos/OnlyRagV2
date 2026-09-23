@@ -3,10 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import {
-  promoteMilestonesProvenBy,
-  selectMilestonesAwaitingVerification,
-} from './agentOrchestratorCircuitBreakerAndVerification'
+import { promoteMilestonesProvenBy, selectMilestonesAwaitingVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { ToolResultProcessingContext } from './agentOrchestratorToolResultTypes'
 
@@ -15,10 +12,7 @@ import type { ToolResultProcessingContext } from './agentOrchestratorToolResultT
 const LIVE_MILESTONE_TITLES: readonly [string, string][] = [
   ['m-1', 'The project declares its dependencies and its build script — `package.json`'],
   ['m-2', 'The TypeScript compiler knows which files to check — `tsconfig.json`'],
-  [
-    'm-3',
-    'The app has its Tailwind base styles — `src/styles/globals.css`; The project has a clean architecture — `src/services/`',
-  ],
+  ['m-3', 'The app has its Tailwind base styles — `src/styles/globals.css`; The project has a clean architecture — `src/services/`'],
   ['m-4', 'The entrypoint loads the application — `index.html`'],
   ['m-5', 'The root component mounts the application — `src/main.tsx`'],
   ['m-6', 'The Dashboard page is created — `src/pages/DashboardPage.tsx`'],
@@ -102,9 +96,7 @@ describe('milestone promotion on the live-full-task workspace', () => {
     writeLiveWorkspace(LIVE_WRITTEN_FILES)
     const plan = livePlan()
 
-    expect(selectMilestonesAwaitingVerification(makeDeps(plan), 'npm run build').map((m) => m.id)).toEqual(
-      LIVE_MILESTONE_TITLES.map(([id]) => id)
-    )
+    expect(selectMilestonesAwaitingVerification(makeDeps(plan), 'npm run build').map((m) => m.id)).toEqual(LIVE_MILESTONE_TITLES.map(([id]) => id))
   })
 
   it('promotes the historical plan with the application-owned check', () => {

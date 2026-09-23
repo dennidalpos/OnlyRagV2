@@ -38,7 +38,8 @@ export function executeFileInfoTool(
       }
     }
 
-    const infoStr = `[FILE INFO: ${targetPath}]\n` +
+    const infoStr =
+      `[FILE INFO: ${targetPath}]\n` +
       `Type: ${info.isDirectory ? 'Directory' : 'File'}\n` +
       `Size: ${info.sizeBytes} bytes (${(info.sizeBytes / 1024).toFixed(2)} KB)\n` +
       `Is Binary: ${info.isBinary}\n` +

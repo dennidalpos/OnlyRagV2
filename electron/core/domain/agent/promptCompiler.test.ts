@@ -1,17 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import {
-  PromptCompiler,
-  getEffectivePrompt,
-  compilePromptWithSampleVars,
-  resolveNodeTemplate,
-} from '../../../../shared/domain/agent/promptCompiler'
+import { PromptCompiler, getEffectivePrompt, compilePromptWithSampleVars, resolveNodeTemplate } from '../../../../shared/domain/agent/promptCompiler'
 import { CODING_TOOLS_BLOCK, CODING_CORE_DIRECTIVES } from '../../../../shared/domain/agent/promptPresets'
 import type { AppSettings } from '../../../../shared/types'
 
 const baseSettings = { customPromptOverrides: {} } as AppSettings
 
-const withOverride = (nodeId: string, value: string): AppSettings =>
-  ({ customPromptOverrides: { [nodeId]: value } }) as unknown as AppSettings
+const withOverride = (nodeId: string, value: string): AppSettings => ({ customPromptOverrides: { [nodeId]: value } }) as unknown as AppSettings
 
 const codingVars = {
   agentMode: 'AGENT',

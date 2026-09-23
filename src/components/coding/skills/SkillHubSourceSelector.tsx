@@ -130,9 +130,7 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
               {isAllSources ? (
                 <span className="px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-800 text-[10px] font-mono text-cyan-300">Global</span>
               ) : selectedSource?.isBuiltin ? (
-                <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-[10px] font-mono text-emerald-300">
-                  Official
-                </span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-[10px] font-mono text-emerald-300">Official</span>
               ) : (
                 <span className="px-1.5 py-0.5 rounded bg-purple-950/80 border border-purple-800 text-[10px] font-mono text-purple-300">
                   {selectedSource?.type || 'Custom'}
@@ -163,7 +161,18 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
             role="listbox"
             className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-800/60 backdrop-blur-md animate-in fade-in slide-in-from-top-1 duration-150"
           >
-            {[{ id: ALL_SKILL_SOURCES, name: `${t('common.all')} sources`, description: 'Global ranking across configured hubs.', type: 'builtin' as const, isBuiltin: true, isReadOnly: true, url: '' }, ...sources].map((s) => {
+            {[
+              {
+                id: ALL_SKILL_SOURCES,
+                name: `${t('common.all')} sources`,
+                description: 'Global ranking across configured hubs.',
+                type: 'builtin' as const,
+                isBuiltin: true,
+                isReadOnly: true,
+                url: '',
+              },
+              ...sources,
+            ].map((s) => {
               const isSelected = s.id === selectedSourceId
               return (
                 <div
@@ -179,40 +188,28 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
                     }
                   }}
                   className={`px-3.5 py-2.5 flex items-start justify-between gap-3 cursor-pointer transition-colors focus-ring ${
-                    isSelected
-                      ? 'bg-cyan-950/60 text-cyan-200'
-                      : 'hover:bg-slate-800/80 text-slate-300'
+                    isSelected ? 'bg-cyan-950/60 text-cyan-200' : 'hover:bg-slate-800/80 text-slate-300'
                   }`}
                 >
                   <div className="flex items-start gap-2.5 min-w-0">
-                    <div className="mt-0.5 shrink-0">
-                      {getSourceIcon(s.type, s.isBuiltin)}
-                    </div>
+                    <div className="mt-0.5 shrink-0">{getSourceIcon(s.type, s.isBuiltin)}</div>
                     <div className="min-w-0 space-y-0.5">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-xs text-slate-100">{s.name}</span>
-                      {s.id === ALL_SKILL_SOURCES ? (
-                        <span className="px-1.5 py-0.2 rounded bg-cyan-950 border border-cyan-800 text-[9px] font-mono text-cyan-300">Global</span>
-                      ) : s.isBuiltin ? (
-                          <span className="px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-800 text-[9px] font-mono text-emerald-400">
-                            Official
-                          </span>
+                        {s.id === ALL_SKILL_SOURCES ? (
+                          <span className="px-1.5 py-0.2 rounded bg-cyan-950 border border-cyan-800 text-[9px] font-mono text-cyan-300">Global</span>
+                        ) : s.isBuiltin ? (
+                          <span className="px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-800 text-[9px] font-mono text-emerald-400">Official</span>
                         ) : (
-                          <span className="px-1.5 py-0.2 rounded bg-purple-950 border border-purple-800 text-[9px] font-mono text-purple-300">
-                            {s.type}
-                          </span>
+                          <span className="px-1.5 py-0.2 rounded bg-purple-950 border border-purple-800 text-[9px] font-mono text-purple-300">{s.type}</span>
                         )}
                       </div>
-                      {s.description && (
-                        <p className="text-[11px] text-slate-400 line-clamp-1">{s.description}</p>
-                      )}
+                      {s.description && <p className="text-[11px] text-slate-400 line-clamp-1">{s.description}</p>}
                       <p className="text-[10px] font-mono text-slate-400 truncate">{s.url}</p>
                     </div>
                   </div>
 
-                  {isSelected && (
-                    <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-1" />
-                  )}
+                  {isSelected && <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-1" />}
                 </div>
               )
             })}

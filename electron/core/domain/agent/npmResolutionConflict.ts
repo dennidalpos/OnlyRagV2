@@ -1,5 +1,3 @@
-
-
 import { majorOf } from './dependencyVersionReality'
 
 /** The two sides of an ERESOLVE peer conflict, as npm reported them. */
@@ -101,9 +99,7 @@ export function installableRange(requiredRange: string, installedVersion?: strin
   if (nonDowngrading.length === 0) return null
   if (nonDowngrading.length === 1) return nonDowngrading[0].replace(/\s+/g, '')
 
-  return nonDowngrading
-    .reduce((best, candidate) => (Number(majorOf(candidate) ?? -1) > Number(majorOf(best) ?? -1) ? candidate : best))
-    .replace(/\s+/g, '')
+  return nonDowngrading.reduce((best, candidate) => (Number(majorOf(candidate) ?? -1) > Number(majorOf(best) ?? -1) ? candidate : best)).replace(/\s+/g, '')
 }
 
 export function buildNpmResolutionDirective(conflict: NpmResolutionConflict): string {

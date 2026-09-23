@@ -10,7 +10,8 @@ export interface ExtractedErrorFrame {
 }
 
 const ERROR_HEADER_REGEX = /(?:Error|Exception|TypeError|ReferenceError|SyntaxError|FAIL|Failed): (.*)/i
-const FILE_LINE_REGEX = /(?:at\s+(?:.*?\()|at\s+|in\s+|^|\s)([a-zA-Z]:[\\/][^\s:]+\.(?:ts|tsx|js|jsx|py|json)|[a-zA-Z0-9_./\\-]+\.(?:ts|tsx|js|jsx|py|json)):(\d+)(?::(\d+))?/i
+const FILE_LINE_REGEX =
+  /(?:at\s+(?:.*?\()|at\s+|in\s+|^|\s)([a-zA-Z]:[\\/][^\s:]+\.(?:ts|tsx|js|jsx|py|json)|[a-zA-Z0-9_./\\-]+\.(?:ts|tsx|js|jsx|py|json)):(\d+)(?::(\d+))?/i
 
 export class DiagnosticOutputReducer {
   public static stripAnsi(text: string): string {
@@ -39,7 +40,8 @@ export class DiagnosticOutputReducer {
     const lines = clean.split(/\r?\n/)
     const totalLines = lines.length
 
-    const errorPattern = /(?:FAIL|ERROR|Error:|AssertionError|SyntaxError|TypeError|ReferenceError|Exception|failed|UnhandledPromiseRejection|TS\d{4}:|\sat\s|>>>|\berror\b)/i
+    const errorPattern =
+      /(?:FAIL|ERROR|Error:|AssertionError|SyntaxError|TypeError|ReferenceError|Exception|failed|UnhandledPromiseRejection|TS\d{4}:|\sat\s|>>>|\berror\b)/i
     const summaryPattern = /(?:Test Files|Tests|Passed|Failed|Duration|Exit code|npm ERR!|error Command failed)/i
 
     const highlightedLines: string[] = []
@@ -63,11 +65,7 @@ export class DiagnosticOutputReducer {
     const headLines = lines.slice(0, 5).filter((l) => l.trim().length > 0)
     const tailLines = lines.slice(-5).filter((l) => l.trim().length > 0)
 
-    const distilledParts: string[] = [
-      `[TERMINAL OUTPUT DISTILLED: original was ${totalLines} lines / ${clean.length} chars]`,
-      '--- HEAD ---',
-      ...headLines,
-    ]
+    const distilledParts: string[] = [`[TERMINAL OUTPUT DISTILLED: original was ${totalLines} lines / ${clean.length} chars]`, '--- HEAD ---', ...headLines]
 
     if (highlightedLines.length > 0) {
       distilledParts.push('--- RELEVANT DIAGNOSTICS / FAILURES ---')

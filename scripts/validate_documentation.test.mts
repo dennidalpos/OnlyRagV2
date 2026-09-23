@@ -18,7 +18,10 @@ describe('documentation validation', () => {
   it('accepts existing local links and npm scripts', () => {
     fs.writeFileSync(path.join(tempDir, 'docs', 'index.md'), '[Architecture](architecture.md)\n`npm run build`')
     fs.writeFileSync(path.join(tempDir, 'docs', 'architecture.md'), '# Architecture')
-    expect(validateDocumentation({ docsRoot: path.join(tempDir, 'docs'), packageJsonPath: path.join(tempDir, 'package.json') })).toEqual({ filesChecked: 2, errors: [] })
+    expect(validateDocumentation({ docsRoot: path.join(tempDir, 'docs'), packageJsonPath: path.join(tempDir, 'package.json') })).toEqual({
+      filesChecked: 2,
+      errors: [],
+    })
   })
 
   it('reports broken links and unknown npm scripts', () => {
@@ -33,15 +36,21 @@ describe('documentation validation', () => {
     const readmePath = path.join(tempDir, 'README.md')
     fs.writeFileSync(readmePath, '[Architecture](docs/architecture.md)')
     fs.writeFileSync(path.join(tempDir, 'docs', 'architecture.md'), '# Architecture')
-    expect(validateDocumentation({
-      docsRoot: path.join(tempDir, 'docs'),
-      packageJsonPath: path.join(tempDir, 'package.json'),
-      additionalFiles: [readmePath],
-    })).toEqual({ filesChecked: 2, errors: [] })
+    expect(
+      validateDocumentation({
+        docsRoot: path.join(tempDir, 'docs'),
+        packageJsonPath: path.join(tempDir, 'package.json'),
+        additionalFiles: [readmePath],
+      }),
+    ).toEqual({ filesChecked: 2, errors: [] })
   })
 
   it('exits non-zero when the CLI finds a documentation error', () => {
     fs.writeFileSync(path.join(tempDir, 'docs', 'index.md'), '[Missing](missing.md)')
-    expect(() => execFileSync(process.execPath, [path.resolve('scripts/validate_documentation.mjs'), path.join(tempDir, 'docs'), path.join(tempDir, 'package.json')], { stdio: 'pipe' })).toThrow()
+    expect(() =>
+      execFileSync(process.execPath, [path.resolve('scripts/validate_documentation.mjs'), path.join(tempDir, 'docs'), path.join(tempDir, 'package.json')], {
+        stdio: 'pipe',
+      }),
+    ).toThrow()
   })
 })

@@ -21,7 +21,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
 
   it('should preserve environment variable state across sequential commands', async () => {
     session = new PersistentPowerShellSession(process.cwd())
-    
+
     // Command 1: Set environment variable
     await session.execute('$env:ONLYRAG_TEST_VAR = "StatePreserved42"')
 
@@ -60,12 +60,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
 
     const startedAt = Date.now()
     // Emits a recognizable interactive-prompt pattern, then would hang on Start-Sleep if the guard did not abort first — a large timeoutMs proves the abort is prompt-triggered, not a coincidental timeout.
-    const res = await session.execute(
-      'Write-Output "Overwrite existing file? [y/n]"; Start-Sleep -Seconds 30',
-      undefined,
-      undefined,
-      25000
-    )
+    const res = await session.execute('Write-Output "Overwrite existing file? [y/n]"; Start-Sleep -Seconds 30', undefined, undefined, 25000)
     const elapsedMs = Date.now() - startedAt
 
     expect(res.interruptedByPrompt).toBe(true)

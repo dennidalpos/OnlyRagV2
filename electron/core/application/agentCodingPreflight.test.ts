@@ -38,9 +38,7 @@ describe('Agent Coding preflight', () => {
         modelMetrics: { 'qwen2.5-coder:7b': { capabilities: ['completion'], contextLength: 2048 } },
       })
       expect(result.ready).toBe(false)
-      expect(result.checks.filter((check) => check.blocking && !check.passed).map((check) => check.id)).toEqual([
-        'ollama', 'model', 'qualification', 'context',
-      ])
+      expect(result.checks.filter((check) => check.blocking && !check.passed).map((check) => check.id)).toEqual(['ollama', 'model', 'qualification', 'context'])
     } finally {
       fs.rmSync(workspacePath, { recursive: true, force: true })
     }

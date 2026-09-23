@@ -1,5 +1,3 @@
-
-
 export interface DevToolDefinition {
   id: string
   displayName: string
@@ -45,7 +43,9 @@ export interface DevToolStatus {
 
 /** Canonical allow-list id for a name the model produced, or null when not allow-listed. */
 export function normalizeToolId(rawName: string): string | null {
-  const key = String(rawName || '').trim().toLowerCase()
+  const key = String(rawName || '')
+    .trim()
+    .toLowerCase()
   if (!key) return null
   const aliased = TOOL_ALIASES[key] || key
   return DEV_TOOL_ALLOWLIST.some((tool) => tool.id === aliased) ? aliased : null
@@ -88,11 +88,7 @@ export function extractVersion(rawOutput: string): string {
 export function formatToolchainInventory(statuses: ReadonlyArray<DevToolStatus>): string {
   if (statuses.length === 0) return 'Toolchain: no tools probed.'
 
-  const lines = statuses.map((status) =>
-    status.installed
-      ? `- ${status.id}: OK (${status.version || 'version unknown'})`
-      : `- ${status.id}: MISSING`
-  )
+  const lines = statuses.map((status) => (status.installed ? `- ${status.id}: OK (${status.version || 'version unknown'})` : `- ${status.id}: MISSING`))
 
   const missing = statuses.filter((s) => !s.installed).map((s) => s.id)
   const footer = missing.length

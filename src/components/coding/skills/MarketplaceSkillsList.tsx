@@ -38,13 +38,7 @@ interface MarketplaceSkillsListProps {
   onInstallFromUrl: (url: string, customName?: string) => void
 }
 
-export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
-  hubSkills,
-  isLoading,
-  installingSkillId,
-  onInstallSkill,
-  onInstallFromUrl,
-}) => {
+export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({ hubSkills, isLoading, installingSkillId, onInstallSkill, onInstallFromUrl }) => {
   const { t } = useTranslation()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
@@ -84,12 +78,18 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
-      case 'frontend': return <Code className="w-3.5 h-3.5 text-cyan-400" />
-      case 'backend': return <Globe className="w-3.5 h-3.5 text-emerald-400" />
-      case 'database': return <Database className="w-3.5 h-3.5 text-amber-400" />
-      case 'security': return <Shield className="w-3.5 h-3.5 text-rose-400" />
-      case 'ai-ml': return <Cpu className="w-3.5 h-3.5 text-purple-400" />
-      default: return <Layers className="w-3.5 h-3.5 text-indigo-400" />
+      case 'frontend':
+        return <Code className="w-3.5 h-3.5 text-cyan-400" />
+      case 'backend':
+        return <Globe className="w-3.5 h-3.5 text-emerald-400" />
+      case 'database':
+        return <Database className="w-3.5 h-3.5 text-amber-400" />
+      case 'security':
+        return <Shield className="w-3.5 h-3.5 text-rose-400" />
+      case 'ai-ml':
+        return <Cpu className="w-3.5 h-3.5 text-purple-400" />
+      default:
+        return <Layers className="w-3.5 h-3.5 text-indigo-400" />
     }
   }
 
@@ -211,16 +211,16 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
                       {getCategoryIcon(hubItem.category)}
                       <h3 className="text-sm font-bold text-slate-200">{hubItem.name}</h3>
                     </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                      v{hubItem.version}
-                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">v{hubItem.version}</span>
                   </div>
                   <p className="text-xs text-slate-400 leading-relaxed">{hubItem.description}</p>
                   <div className="flex items-center gap-2 text-[10px] font-mono text-cyan-300">
                     {hubItem.globalRank ? <span>#{hubItem.globalRank}</span> : null}
                     {hubItem.qualityScore !== undefined ? <span>quality {hubItem.qualityScore.toFixed(0)}/100</span> : null}
                     {hubItem.compatibility && hubItem.compatibility.status !== 'compatible' ? (
-                      <span className="text-amber-300" title="Local compatibility probe">{hubItem.compatibility.status}</span>
+                      <span className="text-amber-300" title="Local compatibility probe">
+                        {hubItem.compatibility.status}
+                      </span>
                     ) : null}
                   </div>
                   <div className="flex flex-wrap gap-1">
@@ -300,8 +300,8 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
                       hubItem.isInstalled
                         ? 'bg-slate-800/80 text-slate-400 cursor-default border border-slate-700/50'
                         : isInstallingThis
-                        ? 'bg-cyan-900/80 text-cyan-200 cursor-wait border border-cyan-500/50'
-                        : 'bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold active:scale-95 shadow-sm shadow-cyan-950/40'
+                          ? 'bg-cyan-900/80 text-cyan-200 cursor-wait border border-cyan-500/50'
+                          : 'bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold active:scale-95 shadow-sm shadow-cyan-950/40'
                     }`}
                   >
                     {hubItem.isInstalled ? (

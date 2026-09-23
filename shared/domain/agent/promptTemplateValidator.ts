@@ -5,12 +5,7 @@ import { findPromptNode, type PromptNodeId } from './promptHierarchyRegistry'
 
 export type PromptIssueSeverity = 'error' | 'warning'
 
-export type PromptIssueCode =
-  | 'syntax'
-  | 'empty'
-  | 'missing-partial'
-  | 'duplicate-partial'
-  | 'unknown-variable'
+export type PromptIssueCode = 'syntax' | 'empty' | 'missing-partial' | 'duplicate-partial' | 'unknown-variable'
 
 export interface PromptIssue {
   severity: PromptIssueSeverity

@@ -1,5 +1,3 @@
-
-
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 
 /** Replaces focus directive 2 when the active milestone names no artefact. */
@@ -15,7 +13,7 @@ export function buildUnprovableMilestoneDirective(milestone: Pick<PlanMilestone,
 /** Whether the plan block should carry the directive above. */
 export function shouldDirectUnprovableClosure(
   activeMilestone: Pick<PlanMilestone, 'id' | 'title' | 'verificationCommand'> | null | undefined,
-  deliverableStatus: 'satisfied' | 'unsatisfied' | 'not_applicable'
+  deliverableStatus: 'satisfied' | 'unsatisfied' | 'not_applicable',
 ): boolean {
   if (!activeMilestone || deliverableStatus !== 'not_applicable') return false
   return !activeMilestone.verificationCommand?.trim()

@@ -15,9 +15,7 @@ export function decodeSettingsFile(value: unknown): { settings: AppSettings; nee
     if (envelope.version !== SETTINGS_FORMAT_VERSION) throw new Error('Unsupported settings version')
     return { settings: sanitizeAppSettings(envelope.settings), needsMigration: false }
   }
-  const legacy = value && typeof value === 'object' && !Array.isArray(value)
-    ? { ...value as Record<string, unknown> }
-    : {}
+  const legacy = value && typeof value === 'object' && !Array.isArray(value) ? { ...(value as Record<string, unknown>) } : {}
   if (typeof legacy.maxToolCallSteps === 'number' && legacy.maxToolCallSteps >= 200) {
     legacy.maxToolCallSteps = 0
   }

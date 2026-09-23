@@ -5,11 +5,7 @@ import { AppSettings } from '../../types'
 import type { CodingAgentState } from '../../hooks/useCodingAgent'
 import { useTranslation } from '../../i18n'
 import { getLanguageFromExtension, getBreadcrumbParts } from './codingEditorUtils'
-import {
-  ONLYRAG_MONACO_THEME_NAME,
-  defineOnlyRagMonacoTheme,
-  getStandardMonacoOptions,
-} from '../../lib/monacoTheme'
+import { ONLYRAG_MONACO_THEME_NAME, defineOnlyRagMonacoTheme, getStandardMonacoOptions } from '../../lib/monacoTheme'
 
 /** The editor buffer fields the Monaco view reads and writes. */
 export type CodingEditorContentModel = Pick<CodingAgentState, 'selectedFile' | 'originalContent' | 'editorContent' | 'setEditorContent' | 'setIsSaved'>
@@ -23,14 +19,7 @@ interface CodingEditorContentProps {
   onShowWorkspaceSidebar: () => void
 }
 
-export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
-  c,
-  settings,
-  isDiffMode,
-  copiedPath,
-  onCopyPath,
-  onShowWorkspaceSidebar,
-}) => {
+export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({ c, settings, isDiffMode, copiedPath, onCopyPath, onShowWorkspaceSidebar }) => {
   const { t } = useTranslation()
   const isWordWrap = settings?.editorWordWrap !== false
 
@@ -42,9 +31,7 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
           <div className="flex items-center gap-1 truncate">
             {getBreadcrumbParts(c.selectedFile.path, t('common.noFileOpen')).map((part, idx, arr) => (
               <React.Fragment key={idx}>
-                <span className={idx === arr.length - 1 ? 'text-slate-200 font-semibold' : 'text-slate-400'}>
-                  {part}
-                </span>
+                <span className={idx === arr.length - 1 ? 'text-slate-200 font-semibold' : 'text-slate-400'}>{part}</span>
                 {idx < arr.length - 1 && <ChevronRight className="w-3 h-3 text-slate-700 shrink-0" />}
               </React.Fragment>
             ))}
@@ -103,9 +90,7 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
           <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-3 text-slate-400 font-sans select-text">
             <FileCode2 className="w-10 h-10 text-cyan-500/30" />
             <div className="text-slate-300 font-semibold text-sm">{t('coding.noFilesOpen')}</div>
-            <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
-              {t('coding.emptyLogs')}
-            </p>
+            <p className="text-xs text-slate-400 max-w-sm leading-relaxed">{t('coding.emptyLogs')}</p>
             <button
               type="button"
               onClick={onShowWorkspaceSidebar}

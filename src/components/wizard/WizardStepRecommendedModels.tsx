@@ -1,18 +1,9 @@
 import React from 'react'
-import {
-  Code,
-  MessageSquare,
-  Eye,
-  Activity,
-  Sparkles,
-} from 'lucide-react'
+import { Code, MessageSquare, Eye, Activity, Sparkles } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
 import type { ModelFitVerdict } from '../../services/hardwareRecommendationEngine'
-import type {
-  HardwareWizardModelOptions,
-  HardwareWizardModelSuite,
-} from '../../../shared/domain/hardware/hardwareModelCatalog'
+import type { HardwareWizardModelOptions, HardwareWizardModelSuite } from '../../../shared/domain/hardware/hardwareModelCatalog'
 import { buildOllamaModelOptions } from '../../services/ollamaModelOptions'
 import { ModelSelect } from '../settings/ModelSelect'
 
@@ -69,11 +60,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
   const isModelInstalled = (name: string) => isOllamaModelInstalled(name, downloadedModels)
 
   const buildOptions = (currentValue: string | undefined, catalog: string[], recommendation: string) => {
-    return buildOllamaModelOptions(
-      [...catalog, ...downloadedModels],
-      currentValue,
-      [recommendation]
-    )
+    return buildOllamaModelOptions([...catalog, ...downloadedModels], currentValue, [recommendation])
   }
 
   // A native <option> renders text only, so the VRAM verdict is appended to the label rather
@@ -110,7 +97,8 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
       <div className="p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/30 flex items-center gap-2.5 text-xs text-cyan-200">
         <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
         <span>
-          Configurazione della suite di modelli funzionali raccomandati per il tuo profilo hardware. Ciascun modello lavora in modo dedicato senza swapping continuo di memoria.
+          Configurazione della suite di modelli funzionali raccomandati per il tuo profilo hardware. Ciascun modello lavora in modo dedicato senza swapping
+          continuo di memoria.
         </span>
       </div>
 
@@ -128,15 +116,10 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-cyan-300">Modello di Sviluppo Principale</span>
               <span className="text-[10px] text-cyan-400 font-mono">Workhorse</span>
             </div>
-            <ModelSelect
-              ariaLabel="Seleziona Modello Coding Principale"
-              value={selectedCoding}
-              onChange={(e) => onChangeCoding(e.target.value)}
-            >
+            <ModelSelect ariaLabel="Seleziona Modello Coding Principale" value={selectedCoding} onChange={(e) => onChangeCoding(e.target.value)}>
               {buildOptions(selectedCoding, modelOptions.coding, recommendedModels.coding).map((m) => renderOption(m))}
             </ModelSelect>
           </div>
-
         </div>
       </div>
 
@@ -154,11 +137,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-purple-300">Modello RAG Chat</span>
               <span className="text-[10px] text-purple-400 font-mono">Conversazione</span>
             </div>
-            <ModelSelect
-              ariaLabel="Seleziona Modello RAG Chat"
-              value={selectedChat}
-              onChange={(e) => onChangeChat(e.target.value)}
-            >
+            <ModelSelect ariaLabel="Seleziona Modello RAG Chat" value={selectedChat} onChange={(e) => onChangeChat(e.target.value)}>
               {buildOptions(selectedChat, modelOptions.chat, recommendedModels.chat).map((m) => renderOption(m))}
             </ModelSelect>
           </div>
@@ -169,11 +148,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-sky-300">Modello Traduzione</span>
               <span className="text-[10px] text-sky-400 font-mono">Localizzazione</span>
             </div>
-            <ModelSelect
-              ariaLabel="Seleziona Modello Traduzione"
-              value={selectedTranslation}
-              onChange={(e) => onChangeTranslation(e.target.value)}
-            >
+            <ModelSelect ariaLabel="Seleziona Modello Traduzione" value={selectedTranslation} onChange={(e) => onChangeTranslation(e.target.value)}>
               {buildOptions(selectedTranslation, modelOptions.translation, recommendedModels.translation).map((m) => renderOption(m))}
             </ModelSelect>
           </div>
@@ -194,11 +169,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-amber-300">Vision &amp; OCR Multimodale</span>
               <span className="text-[10px] text-amber-400 font-mono">Immagini / PDF</span>
             </div>
-            <ModelSelect
-              ariaLabel="Seleziona Modello Visione"
-              value={selectedVision}
-              onChange={(e) => onChangeVision(e.target.value)}
-            >
+            <ModelSelect ariaLabel="Seleziona Modello Visione" value={selectedVision} onChange={(e) => onChangeVision(e.target.value)}>
               {buildOptions(selectedVision, modelOptions.vision, recommendedModels.vision).map((m) => renderOption(m))}
             </ModelSelect>
           </div>
@@ -209,11 +180,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-purple-300">Embedding Vettoriale (LanceDB)</span>
               <span className="text-[10px] text-purple-400 font-mono">Semantica</span>
             </div>
-            <ModelSelect
-              ariaLabel="Seleziona Modello Embedding"
-              value={selectedEmbedding}
-              onChange={(e) => onChangeEmbedding(e.target.value)}
-            >
+            <ModelSelect ariaLabel="Seleziona Modello Embedding" value={selectedEmbedding} onChange={(e) => onChangeEmbedding(e.target.value)}>
               {buildOptions(selectedEmbedding, modelOptions.embedding, recommendedModels.embedding).map((m) => renderOption(m))}
             </ModelSelect>
           </div>
@@ -234,11 +201,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-rose-300">Dominio Medico / Clinico</span>
               <span className="text-[10px] text-rose-400 font-mono">Healthcare</span>
             </div>
-            <ModelSelect
-              ariaLabel="Seleziona Modello Medico"
-              value={selectedMedical || ''}
-              onChange={(e) => onChangeMedical(e.target.value || undefined)}
-            >
+            <ModelSelect ariaLabel="Seleziona Modello Medico" value={selectedMedical || ''} onChange={(e) => onChangeMedical(e.target.value || undefined)}>
               <option value="">(Usa Modello RAG Chat)</option>
               {buildOptions(selectedMedical, modelOptions.medical, '').map((m) => renderOption(m))}
             </ModelSelect>
@@ -250,11 +213,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-amber-300">Dominio Legale / Giuridico</span>
               <span className="text-[10px] text-amber-400 font-mono">Normativa</span>
             </div>
-            <ModelSelect
-              ariaLabel="Seleziona Modello Legale"
-              value={selectedLegal || ''}
-              onChange={(e) => onChangeLegal(e.target.value || undefined)}
-            >
+            <ModelSelect ariaLabel="Seleziona Modello Legale" value={selectedLegal || ''} onChange={(e) => onChangeLegal(e.target.value || undefined)}>
               <option value="">(Usa Modello RAG Chat)</option>
               {buildOptions(selectedLegal, modelOptions.legal, '').map((m) => renderOption(m))}
             </ModelSelect>

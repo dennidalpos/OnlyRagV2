@@ -17,10 +17,13 @@ describe('collectProjectPlanningFacts', () => {
   it('collects stack, relevant files, checks and previous decisions', () => {
     const root = workspace()
     fs.mkdirSync(path.join(root, 'src'))
-    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
-      scripts: { test: 'vitest run' },
-      devDependencies: { typescript: '^5.0.0', vitest: '^4.0.0' },
-    }))
+    fs.writeFileSync(
+      path.join(root, 'package.json'),
+      JSON.stringify({
+        scripts: { test: 'vitest run' },
+        devDependencies: { typescript: '^5.0.0', vitest: '^4.0.0' },
+      }),
+    )
     fs.writeFileSync(path.join(root, 'src', 'Dashboard.ts'), 'export function Dashboard() {}')
     fs.writeFileSync(path.join(root, 'src', 'Other.ts'), 'export function Other() {}')
 

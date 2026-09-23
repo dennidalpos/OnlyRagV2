@@ -456,7 +456,8 @@ console.log("App initialized");
   })
 
   it('should parse tool calls with JS backtick template literals in content parameter', () => {
-    const raw = '```json\n{\n  "tool": "write_file",\n  "parameters": {\n    "filePath": "src/App.tsx",\n    "content": `import React from "react";\nimport Dashboard from "./components/Dashboard";\n\nfunction App() {\n  return <Dashboard />;\n}\n\nexport default App;\n`\n  },\n  "explanation": "Creating initial App.tsx file"\n}\n```'
+    const raw =
+      '```json\n{\n  "tool": "write_file",\n  "parameters": {\n    "filePath": "src/App.tsx",\n    "content": `import React from "react";\nimport Dashboard from "./components/Dashboard";\n\nfunction App() {\n  return <Dashboard />;\n}\n\nexport default App;\n`\n  },\n  "explanation": "Creating initial App.tsx file"\n}\n```'
     const result = parseAgentToolCall(raw)
     expect(result).not.toBeNull()
     expect(result?.tool).toBe('write_file')
@@ -466,7 +467,8 @@ console.log("App initialized");
   })
 
   it('should parse Windows single-backslash file paths without corrupting escape characters', () => {
-    const raw = '```json\n{\n  "tool": "write_file",\n  "parameters": {\n    "filePath": "C:\\Users\\Utente\\Desktop\\test_app\\project-dashboard-task\\src\\App.tsx",\n    "content": "export const test = 1;"\n  }\n}\n```'
+    const raw =
+      '```json\n{\n  "tool": "write_file",\n  "parameters": {\n    "filePath": "C:\\Users\\Utente\\Desktop\\test_app\\project-dashboard-task\\src\\App.tsx",\n    "content": "export const test = 1;"\n  }\n}\n```'
     const result = parseAgentToolCall(raw)
     expect(result).not.toBeNull()
     expect(result?.tool).toBe('write_file')
@@ -475,7 +477,8 @@ console.log("App initialized");
   })
 
   it('should parse tool calls with flat parameters at root level without nested parameters object', () => {
-    const raw = '```json\n{\n  "tool": "write_file",\n  "filePath": "C:\\\\Users\\\\Utente\\\\Desktop\\\\test_app\\\\project-dashboard-task\\\\src\\\\App.tsx",\n  "content": "// Import necessary libraries\\nimport React from \'react\';\\nexport default App;"\n}\n```'
+    const raw =
+      '```json\n{\n  "tool": "write_file",\n  "filePath": "C:\\\\Users\\\\Utente\\\\Desktop\\\\test_app\\\\project-dashboard-task\\\\src\\\\App.tsx",\n  "content": "// Import necessary libraries\\nimport React from \'react\';\\nexport default App;"\n}\n```'
     const result = parseAgentToolCall(raw)
     expect(result).not.toBeNull()
     expect(result?.tool).toBe('write_file')
@@ -491,7 +494,8 @@ console.log("App initialized");
     expect(resCmd?.parameters.command).toBe('npm install tailwindcss')
     expect(resCmd?.explanation).toBe('Installing tailwind')
 
-    const rawReplace = '```json\n{\n  "tool": "replace_file_content",\n  "filePath": "package.json",\n  "targetContent": "\\"scripts\\": {}",\n  "replacementContent": "\\"scripts\\": {\\"start\\": \\"vite\\"}"\n}\n```'
+    const rawReplace =
+      '```json\n{\n  "tool": "replace_file_content",\n  "filePath": "package.json",\n  "targetContent": "\\"scripts\\": {}",\n  "replacementContent": "\\"scripts\\": {\\"start\\": \\"vite\\"}"\n}\n```'
     const resReplace = parseAgentToolCall(rawReplace)
     expect(resReplace).not.toBeNull()
     expect(resReplace?.tool).toBe('replace_file_content')
@@ -531,7 +535,7 @@ console.log("App initialized");
     expect(resArrayParams).not.toBeNull()
     expect(resArrayParams?.tool).toBe('run_command')
     expect(resArrayParams?.parameters.command).toBe(
-      'npm create vite@latest . --template react-ts --yes; yarn add @tailwindcss/forms; yarn add react-scroll-tree'
+      'npm create vite@latest . --template react-ts --yes; yarn add @tailwindcss/forms; yarn add react-scroll-tree',
     )
 
     const rawArrayCommand = `\`\`\`json
@@ -635,7 +639,12 @@ describe('parseAgentToolCall — several calls in one response', () => {
   })
 
   it('handles several calls stacked inside one json fence', () => {
-    const raw = ['```json', '{"tool": "read_file", "parameters": {"filePath": "a.ts"}}', '{"tool": "read_file", "parameters": {"filePath": "b.ts"}}', '```'].join('\n')
+    const raw = [
+      '```json',
+      '{"tool": "read_file", "parameters": {"filePath": "a.ts"}}',
+      '{"tool": "read_file", "parameters": {"filePath": "b.ts"}}',
+      '```',
+    ].join('\n')
     const result = parseAgentToolCall(raw)
     expect(result?.tool).toBe('read_file')
     expect(result?.parameters.filePath).toBe('a.ts')
@@ -654,10 +663,7 @@ describe('rejection diagnostics', () => {
 
   it('reports which tool was refused and why, instead of failing silently', () => {
     const rejections: { toolName: string; errors: string[] }[] = []
-    const parsed = parseAgentToolCall(
-      [FENCE, '{ "tool": "write_file", "parameters": { "content": "hello" } }', '```'].join('\n'),
-      (r) => rejections.push(r)
-    )
+    const parsed = parseAgentToolCall([FENCE, '{ "tool": "write_file", "parameters": { "content": "hello" } }', '```'].join('\n'), (r) => rejections.push(r))
 
     expect(parsed).toBeNull()
     expect(rejections).toHaveLength(1)
@@ -667,9 +673,8 @@ describe('rejection diagnostics', () => {
 
   it('stays silent on a valid call', () => {
     const rejections: { toolName: string; errors: string[] }[] = []
-    const parsed = parseAgentToolCall(
-      [FENCE, '{ "tool": "read_file", "parameters": { "filePath": "src/App.tsx" } }', '```'].join('\n'),
-      (r) => rejections.push(r)
+    const parsed = parseAgentToolCall([FENCE, '{ "tool": "read_file", "parameters": { "filePath": "src/App.tsx" } }', '```'].join('\n'), (r) =>
+      rejections.push(r),
     )
 
     expect(parsed?.tool).toBe('read_file')

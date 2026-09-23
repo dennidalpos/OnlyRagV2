@@ -68,9 +68,7 @@ export class EpisodicMemoryCompactor {
       this.episodes.splice(1, this.episodes.length - 100)
     }
 
-    const truncated = rawOutput.length > 2500
-      ? `${rawOutput.slice(0, 2500)}\n... [Output truncated for memory budget]`
-      : rawOutput
+    const truncated = rawOutput.length > 2500 ? `${rawOutput.slice(0, 2500)}\n... [Output truncated for memory budget]` : rawOutput
 
     const logEntry: EpisodicFullLog = {
       step: record.step,
@@ -102,9 +100,7 @@ export class EpisodicMemoryCompactor {
 
     // Deduplicate repeated failures on the same tool+target in recentFullLogs to prevent FIFO intervention crowding.
     if (logEntry.isFailure) {
-      const recentIndex = this.recentFullLogs.findIndex(
-        (l) => l.isFailure && l.tool === logEntry.tool && (l.target || '') === (logEntry.target || '')
-      )
+      const recentIndex = this.recentFullLogs.findIndex((l) => l.isFailure && l.tool === logEntry.tool && (l.target || '') === (logEntry.target || ''))
       if (recentIndex !== -1) {
         this.recentFullLogs.splice(recentIndex, 1)
       }
@@ -136,9 +132,11 @@ export class EpisodicMemoryCompactor {
     // Always include critical failure diagnostics to prevent oscillation loops (e.g. replace_file_content errors)
     let failureSection = ''
     if (this.failureLogs.length > 0) {
-      const failureOutputs = this.failureLogs.map((l) => {
-        return `#### [FAILURE at Step ${l.step} - Tool: ${l.tool}]\n\`\`\`\n${l.output}\n\`\`\``
-      }).join('\n\n')
+      const failureOutputs = this.failureLogs
+        .map((l) => {
+          return `#### [FAILURE at Step ${l.step} - Tool: ${l.tool}]\n\`\`\`\n${l.output}\n\`\`\``
+        })
+        .join('\n\n')
       failureSection = `\n\n### CRITICAL PREVIOUS TOOL FAILURES & DIAGNOSTICS (Analyze Carefully - Do Not Repeat Failed Inputs):\n${failureOutputs}`
     }
 
@@ -146,20 +144,17 @@ export class EpisodicMemoryCompactor {
     const deduplicatedLogs: EpisodicFullLog[] = []
     for (const log of this.recentFullLogs) {
       const prev = deduplicatedLogs[deduplicatedLogs.length - 1]
-      if (
-        prev &&
-        prev.tool === log.tool &&
-        ['read_file', 'list_dir', 'grep_search'].includes(log.tool) &&
-        prev.output === log.output
-      ) {
+      if (prev && prev.tool === log.tool && ['read_file', 'list_dir', 'grep_search'].includes(log.tool) && prev.output === log.output) {
         continue
       }
       deduplicatedLogs.push(log)
     }
 
-    const detailedOutputs = deduplicatedLogs.map((l) => {
-      return `#### [Step ${l.step} - Tool: ${l.tool}]\n\`\`\`\n${l.output}\n\`\`\``
-    }).join('\n\n')
+    const detailedOutputs = deduplicatedLogs
+      .map((l) => {
+        return `#### [Step ${l.step} - Tool: ${l.tool}]\n\`\`\`\n${l.output}\n\`\`\``
+      })
+      .join('\n\n')
 
     // "Last N Steps" stopped being true when repeated interventions on one target began collapsing into a single slot: the entries are the most recent DISTINCT actions, and may reach further back than N steps.
     const detailedSection = `\n\n### RECENT DETAILED TOOL OUTPUTS (${this.recentFullLogs.length} most recent distinct actions):\n${detailedOutputs}`

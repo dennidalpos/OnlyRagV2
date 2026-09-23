@@ -28,7 +28,7 @@ export class SystemAppService {
   constructor(
     private readonly settingsRepo: SettingsLoader = appSettingsRepository,
     private readonly desktop: Pick<DesktopShellPort, 'openExternal' | 'openPath' | 'showOpenDialog'> = electronDesktopShell,
-    private readonly isDirectory: (targetPath: string) => boolean = isExistingDirectory
+    private readonly isDirectory: (targetPath: string) => boolean = isExistingDirectory,
   ) {}
 
   getOllamaStoragePath(): string {

@@ -1,4 +1,3 @@
-
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -21,9 +20,9 @@ function seedExistingWorkspace(): void {
         scripts: { build: 'tsc --noEmit' },
       },
       null,
-      2
+      2,
     ),
-    'utf-8'
+    'utf-8',
   )
   fs.writeFileSync(path.join(WORKSPACE, 'src', 'App.tsx'), 'export function App() { return null }\n', 'utf-8')
 }

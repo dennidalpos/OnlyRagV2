@@ -31,12 +31,13 @@ function isBlockingDevServerSubcommand(subcmd: string): boolean {
     /^(npx\s+)?(tsc|eslint|prettier|vitest\s+run|jest\s+--runInBand)\b/.test(cmd) ||
     /^(npx\s+)?vite\s+build\b/.test(cmd) ||
     /^(npx\s+)?next\s+build\b/.test(cmd)
-  ) return false
+  )
+    return false
 
   return (
     /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|serve|preview)\b/.test(cmd) ||
-    (/^(npx\s+)?vite(\.js|\.cmd|\.exe)?(\s+(dev|serve|preview))?$/i.test(cmd)) ||
-    (/\bnext\s+(dev|start)\b/.test(cmd)) ||
+    /^(npx\s+)?vite(\.js|\.cmd|\.exe)?(\s+(dev|serve|preview))?$/i.test(cmd) ||
+    /\bnext\s+(dev|start)\b/.test(cmd) ||
     /\bng\s+serve\b/.test(cmd) ||
     /\bwebpack(-dev-server)?\s+serve\b/.test(cmd) ||
     /\bnodemon\b/.test(cmd) ||

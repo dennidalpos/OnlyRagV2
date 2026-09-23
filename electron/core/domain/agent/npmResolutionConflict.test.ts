@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildNpmResolutionDirective,
-  npmResolutionDirectiveFor,
-  parseNpmResolutionConflict,
-  installableRange,
-} from './npmResolutionConflict'
+import { buildNpmResolutionDirective, npmResolutionDirectiveFor, parseNpmResolutionConflict, installableRange } from './npmResolutionConflict'
 
 /** Verbatim from the live run of 2026-08-24 (npm 10 "npm error" prefix). */
 const REAL_ERESOLVE_OUTPUT = `npm error code ERESOLVE
@@ -29,7 +24,7 @@ npm error C:\\Users\\Utente\\AppData\\Local\\npm-cache\\_logs\\2026-08-24T10_56_
 const NPM9_ERESOLVE_OUTPUT = REAL_ERESOLVE_OUTPUT.replace(/npm error/g, 'npm ERR!')
 
 describe('parseNpmResolutionConflict', () => {
-  it('reads both sides of the conflict out of npm\'s own report', () => {
+  it("reads both sides of the conflict out of npm's own report", () => {
     const conflict = parseNpmResolutionConflict(REAL_ERESOLVE_OUTPUT)
 
     expect(conflict).not.toBeNull()
@@ -41,12 +36,10 @@ describe('parseNpmResolutionConflict', () => {
   })
 
   it('handles the npm 9 "npm ERR!" prefix identically', () => {
-    expect(parseNpmResolutionConflict(NPM9_ERESOLVE_OUTPUT)).toEqual(
-      parseNpmResolutionConflict(REAL_ERESOLVE_OUTPUT)
-    )
+    expect(parseNpmResolutionConflict(NPM9_ERESOLVE_OUTPUT)).toEqual(parseNpmResolutionConflict(REAL_ERESOLVE_OUTPUT))
   })
 
-  it('does not confuse the incoming package\'s own root declaration with the constraint', () => {
+  it("does not confuse the incoming package's own root declaration with the constraint", () => {
     // `@vitejs/plugin-react@"*" from the root project` sits in the same block and matches the
     // same line shape; only the line constraining the package named by `Found:` counts.
     const conflict = parseNpmResolutionConflict(REAL_ERESOLVE_OUTPUT)
@@ -69,7 +62,7 @@ npm error Found: vite@4.5.14`
 describe('buildNpmResolutionDirective', () => {
   const conflict = parseNpmResolutionConflict(REAL_ERESOLVE_OUTPUT)!
 
-  it('names both versions and gives a command copied from npm\'s own range', () => {
+  it("names both versions and gives a command copied from npm's own range", () => {
     const directive = buildNpmResolutionDirective(conflict)
 
     expect(directive).toContain('vite@4.5.14')

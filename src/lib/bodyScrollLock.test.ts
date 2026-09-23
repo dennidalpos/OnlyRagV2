@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import {
-  acquireBodyScrollLock,
-  releaseBodyScrollLock,
-  getBodyScrollLockCount,
-} from './bodyScrollLock'
+import { acquireBodyScrollLock, releaseBodyScrollLock, getBodyScrollLockCount } from './bodyScrollLock'
 
 describe('bodyScrollLock', () => {
   beforeEach(() => {

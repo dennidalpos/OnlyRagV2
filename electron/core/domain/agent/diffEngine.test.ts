@@ -48,16 +48,7 @@ describe('diffEngine — unified diff parsing', () => {
   })
 
   it('should assign correct old/new line numbers within a hunk', () => {
-    const raw = [
-      'diff --git a/x.txt b/x.txt',
-      '--- a/x.txt',
-      '+++ b/x.txt',
-      '@@ -5,3 +5,3 @@',
-      ' keep',
-      '-removed',
-      '+added',
-      ' tail',
-    ].join('\n')
+    const raw = ['diff --git a/x.txt b/x.txt', '--- a/x.txt', '+++ b/x.txt', '@@ -5,3 +5,3 @@', ' keep', '-removed', '+added', ' tail'].join('\n')
 
     const [file] = parseUnifiedDiff(raw)
     const lines = file.hunks[0].lines
@@ -70,29 +61,25 @@ describe('diffEngine — unified diff parsing', () => {
 
   it('should flag added, deleted, renamed and binary files', () => {
     const added = parseUnifiedDiff(
-      ['diff --git a/new.ts b/new.ts', 'new file mode 100644', '--- /dev/null', '+++ b/new.ts', '@@ -0,0 +1,1 @@', '+hello'].join('\n')
+      ['diff --git a/new.ts b/new.ts', 'new file mode 100644', '--- /dev/null', '+++ b/new.ts', '@@ -0,0 +1,1 @@', '+hello'].join('\n'),
     )
     expect(added[0].status).toBe('added')
     expect(added[0].displayPath).toBe('new.ts')
     expect(added[0].additions).toBe(1)
 
     const deleted = parseUnifiedDiff(
-      ['diff --git a/gone.ts b/gone.ts', 'deleted file mode 100644', '--- a/gone.ts', '+++ /dev/null', '@@ -1,1 +0,0 @@', '-bye'].join('\n')
+      ['diff --git a/gone.ts b/gone.ts', 'deleted file mode 100644', '--- a/gone.ts', '+++ /dev/null', '@@ -1,1 +0,0 @@', '-bye'].join('\n'),
     )
     expect(deleted[0].status).toBe('deleted')
     expect(deleted[0].displayPath).toBe('gone.ts')
     expect(deleted[0].deletions).toBe(1)
 
-    const renamed = parseUnifiedDiff(
-      ['diff --git a/old.ts b/new.ts', 'similarity index 98%', 'rename from old.ts', 'rename to new.ts'].join('\n')
-    )
+    const renamed = parseUnifiedDiff(['diff --git a/old.ts b/new.ts', 'similarity index 98%', 'rename from old.ts', 'rename to new.ts'].join('\n'))
     expect(renamed[0].status).toBe('renamed')
     expect(renamed[0].oldPath).toBe('old.ts')
     expect(renamed[0].newPath).toBe('new.ts')
 
-    const binary = parseUnifiedDiff(
-      ['diff --git a/logo.png b/logo.png', 'Binary files a/logo.png and b/logo.png differ'].join('\n')
-    )
+    const binary = parseUnifiedDiff(['diff --git a/logo.png b/logo.png', 'Binary files a/logo.png and b/logo.png differ'].join('\n'))
     expect(binary[0].isBinary).toBe(true)
   })
 
@@ -264,15 +251,7 @@ describe('diffEngine — per-hunk grouping and reconstruction', () => {
   })
 
   it('should parse git diff with Windows CRLF newlines without leaking carriage returns', () => {
-    const raw = [
-      'diff --git a/file.ts b/file.ts\r',
-      '--- a/file.ts\r',
-      '+++ b/file.ts\r',
-      '@@ -1,2 +1,2 @@\r',
-      '-old\r',
-      '+new\r',
-      ' same\r',
-    ].join('\n')
+    const raw = ['diff --git a/file.ts b/file.ts\r', '--- a/file.ts\r', '+++ b/file.ts\r', '@@ -1,2 +1,2 @@\r', '-old\r', '+new\r', ' same\r'].join('\n')
 
     const files = parseUnifiedDiff(raw)
     expect(files).toHaveLength(1)
@@ -281,4 +260,3 @@ describe('diffEngine — per-hunk grouping and reconstruction', () => {
     expect(files[0].hunks[0].lines[2].content).toBe('same')
   })
 })
-

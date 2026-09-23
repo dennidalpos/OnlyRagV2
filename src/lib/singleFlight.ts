@@ -1,4 +1,3 @@
-
 export function createSingleFlight<T>(operation: () => Promise<T>): () => Promise<T> {
   let inFlight: Promise<T> | null = null
 

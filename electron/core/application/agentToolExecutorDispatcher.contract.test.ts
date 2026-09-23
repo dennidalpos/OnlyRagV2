@@ -37,11 +37,7 @@ describe('AgentToolExecutorService dispatcher contract', () => {
   })
 
   it('returns a stable unsupported-tool result instead of throwing', async () => {
-    const result = await executor.executeTool(
-      { tool: 'unsupported_tool' as never, parameters: {} },
-      workspacePath,
-      settings,
-    )
+    const result = await executor.executeTool({ tool: 'unsupported_tool' as never, parameters: {} }, workspacePath, settings)
 
     expect(toolExecutionResultSchema.safeParse(result).success).toBe(true)
     expect(result.outcome).toBe('rejected')

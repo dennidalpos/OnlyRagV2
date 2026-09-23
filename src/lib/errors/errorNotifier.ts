@@ -22,7 +22,7 @@ export interface NotifyErrorOptions {
 export function notifyError(
   err: unknown,
   showToastFn?: (message: string, type?: ToastType, duration?: number) => void,
-  options: NotifyErrorOptions = {}
+  options: NotifyErrorOptions = {},
 ): NormalizedError {
   const normalized = normalizeError(err, options.context)
 

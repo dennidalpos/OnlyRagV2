@@ -9,7 +9,7 @@ describe('Frontend Performance & Concurrency Invariants', () => {
   describe('estimateTokenCount Cache Performance & Boundary', () => {
     it('should cache token estimates for identical input strings', () => {
       const sampleText = 'The quick brown fox jumps over the lazy dog. '.repeat(20)
-      
+
       const count1 = estimateTokenCount(sampleText)
       const count2 = estimateTokenCount(sampleText)
 

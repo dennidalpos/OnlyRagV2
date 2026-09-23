@@ -52,8 +52,7 @@ Section 3 content`
 })
 
 describe('useIngestion vision OCR engine gate', () => {
-  const withEngine = (ocrEngine: AppSettings['ocrEngine']): AppSettings =>
-    ({ ocrEngine, customPromptOverrides: {} }) as unknown as AppSettings
+  const withEngine = (ocrEngine: AppSettings['ocrEngine']): AppSettings => ({ ocrEngine, customPromptOverrides: {} }) as unknown as AppSettings
 
   it('sends no prompt while the native CUDA engine is selected', () => {
     expect(resolveVisionOcrPrompt(withEngine('native_cuda'))).toBeUndefined()
@@ -88,8 +87,12 @@ describe('document deletion state guard', () => {
 
     const deleted = await runDocumentDeletion(
       'doc-locked',
-      (message) => { failureMessage = message || '' },
-      () => { successCalls += 1 },
+      (message) => {
+        failureMessage = message || ''
+      },
+      () => {
+        successCalls += 1
+      },
       async () => ({ success: false, error: 'Documento in uso.' }),
     )
 
@@ -104,7 +107,9 @@ describe('document deletion state guard', () => {
     const deleted = await runDocumentDeletion(
       'doc-ok',
       () => {},
-      () => { successCalls += 1 },
+      () => {
+        successCalls += 1
+      },
       async () => ({ success: true }),
     )
 

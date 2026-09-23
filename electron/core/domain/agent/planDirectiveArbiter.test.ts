@@ -67,9 +67,7 @@ describe('verification_due — the directive whose absence stalled every run', (
 
   it('stays silent while any open milestone is still owed a file', () => {
     const milestones = [milestone('m-1', 'Create `src/App.tsx`'), milestone('m-2', 'Create `src/main.tsx`')]
-    const decision = resolvePlanDirective(
-      input({ milestones, deliverableStatusOf: statusMap({ 'm-2': 'unsatisfied' }) })
-    )
+    const decision = resolvePlanDirective(input({ milestones, deliverableStatusOf: statusMap({ 'm-2': 'unsatisfied' }) }))
 
     expect(decision.kind).toBe('focus')
     expect(decision.blockDirective).toBeNull()
@@ -77,9 +75,7 @@ describe('verification_due — the directive whose absence stalled every run', (
 
   it('does not count a milestone that names no artefact as work still to write', () => {
     const milestones = [milestone('m-1', 'Ensure every button has a 44x44 touch target')]
-    const decision = resolvePlanDirective(
-      input({ milestones, deliverableStatusOf: statusMap({ 'm-1': 'not_applicable' }) })
-    )
+    const decision = resolvePlanDirective(input({ milestones, deliverableStatusOf: statusMap({ 'm-1': 'not_applicable' }) }))
 
     // Nothing can be written for it, so it never means "keep writing". It still blocks session
     // closure — that judgement belongs to assessPostVerificationClosure, not here.
@@ -107,9 +103,7 @@ describe('verification_due — the directive whose absence stalled every run', (
       milestone('m-2', 'Create `src/gone.tsx`', 'failed'),
       milestone('m-3', 'Create `src/main.tsx`'),
     ]
-    const decision = resolvePlanDirective(
-      input({ milestones, deliverableStatusOf: statusMap({ 'm-2': 'unsatisfied' }) })
-    )
+    const decision = resolvePlanDirective(input({ milestones, deliverableStatusOf: statusMap({ 'm-2': 'unsatisfied' }) }))
 
     // m-2 was abandoned on purpose; letting its missing file hold the plan open forever is
     // exactly what every other consumer of the milestone list refuses to do.
@@ -145,9 +139,7 @@ describe('dependencies_missing — ordered ahead of the check it is a preconditi
   })
 
   it('stays silent once a verification has passed, so a green build is never reopened', () => {
-    const decision = resolvePlanDirective(
-      input({ missingDependencies: ['react'], hasVerifiedBuild: true, milestones: [milestone('m-1', 'Run the app')] })
-    )
+    const decision = resolvePlanDirective(input({ missingDependencies: ['react'], hasVerifiedBuild: true, milestones: [milestone('m-1', 'Run the app')] }))
 
     expect(decision.kind).not.toBe('dependencies_missing')
   })
@@ -162,7 +154,7 @@ describe('priority — exactly one directive, and the declared one', () => {
         milestones,
         deliverableStatusOf: statusMap({ 'm-1': 'not_applicable' }),
         missingDependencies: ['react'],
-      })
+      }),
     )
 
     expect(decision.kind).toBe('session_closure')
@@ -177,9 +169,7 @@ describe('priority — exactly one directive, and the declared one', () => {
 
   it('the check outranks the unprovable-milestone swap', () => {
     const milestones = [milestone('m-1', 'Create the `src/services` folder')]
-    const decision = resolvePlanDirective(
-      input({ milestones, deliverableStatusOf: statusMap({ 'm-1': 'not_applicable' }) })
-    )
+    const decision = resolvePlanDirective(input({ milestones, deliverableStatusOf: statusMap({ 'm-1': 'not_applicable' }) }))
 
     // Both apply: the active milestone names no artefact AND nothing is owed a file. Running
     // the check is the action that moves the plan; closing a milestone on judgement is not.
@@ -193,7 +183,7 @@ describe('priority — exactly one directive, and the declared one', () => {
         milestones,
         verificationCommand: null,
         deliverableStatusOf: statusMap({ 'm-1': 'not_applicable' }),
-      })
+      }),
     )
 
     expect(decision.kind).toBe('unprovable_milestone')
@@ -236,9 +226,7 @@ describe('dependencies_undeclared — the blocker the first live run exposed', (
   })
 
   it('outranks both the install of declared packages and the check', () => {
-    const decision = resolvePlanDirective(
-      input({ undeclaredDependencies: [plugin], missingDependencies: ['react'] })
-    )
+    const decision = resolvePlanDirective(input({ undeclaredDependencies: [plugin], missingDependencies: ['react'] }))
 
     // `npm install <pkg>` declares AND installs, so settling the undeclared ones first cannot
     // waste a step: the missing-package state is re-evaluated on the following turn.
@@ -254,7 +242,7 @@ describe('dependencies_undeclared — the blocker the first live run exposed', (
         hasVerifiedBuild: true,
         deliverableStatusOf: () => 'not_applicable',
         undeclaredDependencies: [plugin],
-      })
+      }),
     )
 
     expect(decision.kind).toBe('session_closure')
@@ -262,7 +250,7 @@ describe('dependencies_undeclared — the blocker the first live run exposed', (
 
   it('names the escape for a package the model invented rather than only ordering an install', () => {
     const directive = resolvePlanDirective(
-      input({ undeclaredDependencies: [{ packageName: '@tailwindcss/react', importedBy: ['src/components/Sidebar.tsx'] }] })
+      input({ undeclaredDependencies: [{ packageName: '@tailwindcss/react', importedBy: ['src/components/Sidebar.tsx'] }] }),
     ).blockDirective!
 
     // `@tailwindcss/react` does not exist on npm — it is the invented package the audit found
@@ -286,27 +274,21 @@ describe('dependencies_uninstallable — a failed install is not re-ordered', ()
   const real = { packageName: '@vitejs/plugin-react', importedBy: ['vite.config.ts'] }
 
   it('stops ordering the install once this session has already failed it', () => {
-    const decision = resolvePlanDirective(
-      input({ undeclaredDependencies: [invented], packagesWithFailedInstall: ['@tailwindcss/react'] })
-    )
+    const decision = resolvePlanDirective(input({ undeclaredDependencies: [invented], packagesWithFailedInstall: ['@tailwindcss/react'] }))
 
     expect(decision.kind).toBe('dependencies_uninstallable')
     expect(decision.blockDirective).not.toContain('npm install @tailwindcss/react')
   })
 
   it('names the file to change instead, which is the thing that can actually change', () => {
-    const directive = resolvePlanDirective(
-      input({ undeclaredDependencies: [invented], packagesWithFailedInstall: ['@tailwindcss/react'] })
-    ).blockDirective!
+    const directive = resolvePlanDirective(input({ undeclaredDependencies: [invented], packagesWithFailedInstall: ['@tailwindcss/react'] })).blockDirective!
 
     expect(directive).toContain('src/components/Sidebar.tsx')
     expect(directive).toContain('Do NOT run any install command')
   })
 
   it('still orders the install for a package this session has not tried', () => {
-    const decision = resolvePlanDirective(
-      input({ undeclaredDependencies: [invented, real], packagesWithFailedInstall: ['@tailwindcss/react'] })
-    )
+    const decision = resolvePlanDirective(input({ undeclaredDependencies: [invented, real], packagesWithFailedInstall: ['@tailwindcss/react'] }))
 
     // One message, one instruction: the installable one is a single command away, so it goes
     // first and the file rewrite waits its turn.
@@ -330,16 +312,14 @@ describe('dependencies_uninstallable — the directive has to name the tool and 
       input({
         undeclaredDependencies: deps,
         packagesWithFailedInstall: deps.map((d) => d.packageName),
-      })
+      }),
     ).blockDirective!
   }
 
   it('orders the write_file the same way the install directive orders run_command', () => {
     const directive = uninstallable([dashboard])
 
-    expect(directive).toContain(
-      'Your next tool call MUST be "write_file" on "src/pages/DashboardPage.tsx"'
-    )
+    expect(directive).toContain('Your next tool call MUST be "write_file" on "src/pages/DashboardPage.tsx"')
     expect(directive).toContain('@tailwindcss/react')
   })
 
@@ -408,9 +388,7 @@ describe('verification_failing — the check already ran and failed', () => {
   })
 
   it('still yields to session closure and to a missing install', () => {
-    const closed = resolvePlanDirective(
-      input({ verificationFailing: true, hasVerifiedBuild: true, deliverableStatusOf: () => 'not_applicable' })
-    )
+    const closed = resolvePlanDirective(input({ verificationFailing: true, hasVerifiedBuild: true, deliverableStatusOf: () => 'not_applicable' }))
     const installing = resolvePlanDirective(input({ verificationFailing: true, missingDependencies: ['react'] }))
 
     expect(closed.kind).toBe('session_closure')
@@ -429,9 +407,7 @@ describe('entrypoint_disconnected — a green check on a page that loads nothing
   })
 
   it('still yields to a missing install, which blocks everything', () => {
-    const decision = resolvePlanDirective(
-      input({ disconnectedEntrypoint: disconnected, missingDependencies: ['react'] })
-    )
+    const decision = resolvePlanDirective(input({ disconnectedEntrypoint: disconnected, missingDependencies: ['react'] }))
 
     expect(decision.kind).toBe('dependencies_missing')
   })
@@ -449,7 +425,7 @@ describe('verification_failing publishes the file it orders rewritten', () => {
         verificationFailing: true,
         verificationFailureDirective: '[THE COMPILER NAMED THE FILE AND THE LINE]',
         verificationFailureTargetFile: 'src/components/TaskCard.tsx',
-      })
+      }),
     )
 
     expect(decision.kind).toBe('verification_failing')
@@ -471,7 +447,7 @@ describe('verification_failing publishes the file it orders rewritten', () => {
         verificationFailing: true,
         verificationFailureDirective: '[INSTALL THE MISSING TYPES]',
         verificationFailureTargetFile: null,
-      })
+      }),
     )
 
     expect(decision.kind).toBe('verification_failing')

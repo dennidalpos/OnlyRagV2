@@ -1,10 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import {
-  ChevronDown,
-  Check,
-  Sparkles,
-  Loader2,
-} from 'lucide-react'
+import { ChevronDown, Check, Sparkles, Loader2 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
 import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
@@ -83,9 +78,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
           isCurrentModelUpdating
             ? 'bg-amber-950/70 border-amber-500/60 text-amber-200 ring-1 ring-amber-500/50 animate-pulse'
             : 'bg-slate-900/80 border-slate-700 text-slate-200 hover:bg-slate-800 hover:border-slate-500'
-        } ${
-          disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer active:scale-95'
-        }`}
+        } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer active:scale-95'}`}
       >
         {isCurrentModelUpdating ? (
           <Loader2 className="w-3.5 h-3.5 shrink-0 text-amber-400 animate-spin" />
@@ -97,11 +90,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
         {/* Status indicator dot */}
         <span
           className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-            isCurrentModelUpdating
-              ? 'bg-amber-400 animate-ping'
-              : isInstalled
-              ? 'bg-emerald-400 shadow-sm shadow-emerald-500/80'
-              : 'bg-amber-400'
+            isCurrentModelUpdating ? 'bg-amber-400 animate-ping' : isInstalled ? 'bg-emerald-400 shadow-sm shadow-emerald-500/80' : 'bg-amber-400'
           }`}
           title={isCurrentModelUpdating ? t('settings.updating') : isInstalled ? t('common.ready') : t('common.download')}
         />
@@ -148,8 +137,8 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
                     isOptionUpdating
                       ? 'opacity-60 cursor-not-allowed bg-amber-950/20 text-amber-300'
                       : isSelected
-                      ? 'bg-cyan-950/80 text-cyan-200 font-bold cursor-pointer'
-                      : 'text-slate-300 hover:bg-slate-900 hover:text-slate-100 cursor-pointer'
+                        ? 'bg-cyan-950/80 text-cyan-200 font-bold cursor-pointer'
+                        : 'text-slate-300 hover:bg-slate-900 hover:text-slate-100 cursor-pointer'
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -160,7 +149,9 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
                     ) : (
                       <span className="w-3.5 shrink-0" />
                     )}
-                    <span className="truncate" title={modelName}>{modelName}</span>
+                    <span className="truncate" title={modelName}>
+                      {modelName}
+                    </span>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -171,9 +162,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
                     ) : (
                       <span
                         className={`text-[10px] font-sans px-1.5 py-0.5 rounded ${
-                          installed
-                            ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/40'
-                            : 'bg-slate-900 text-slate-500 border border-slate-800'
+                          installed ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/40' : 'bg-slate-900 text-slate-500 border border-slate-800'
                         }`}
                       >
                         {installed ? '✓' : '⬇'}
@@ -184,7 +173,6 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
               )
             })}
           </div>
-
         </div>
       )}
     </div>

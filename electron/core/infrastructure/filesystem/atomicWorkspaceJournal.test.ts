@@ -134,7 +134,7 @@ describe('AtomicWorkspaceJournal Unit Tests', () => {
     expect(second).toEqual({ restoredCount: 0, errors: [] })
   })
 
-  it('rollbackLastStep should not disturb rollbackAll\'s session-wide baseline for untouched-by-that-step files', () => {
+  it("rollbackLastStep should not disturb rollbackAll's session-wide baseline for untouched-by-that-step files", () => {
     const a = path.join(tempDir, 'a.txt')
     const b = path.join(tempDir, 'b.txt')
     fs.writeFileSync(a, 'A1', 'utf-8')

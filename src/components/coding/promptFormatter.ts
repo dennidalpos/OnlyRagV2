@@ -1,5 +1,3 @@
-
-
 /** Formats a user prompt string for readable and structured display in the UI. */
 export function formatPromptForDisplay(rawPrompt: string | null | undefined): string {
   if (!rawPrompt) return ''
@@ -26,10 +24,7 @@ export function formatPromptForDisplay(rawPrompt: string | null | undefined): st
   formatted = formatted.replace(/(?<=[^\s])\s+([•\-\*]\s+)/g, '\n$1')
 
   // 3. Break before inline step/task headers (e.g. "foo Step 2: bar", "foo Passo 2: bar", "foo Fase 2:", "foo Task 2:")
-  formatted = formatted.replace(
-    /(?<=[^\s])\s+((?:Step|Passo|Phase|Fase|Task|Milestone|Punto)\s+\d+[:\-\s])/gi,
-    '\n$1'
-  )
+  formatted = formatted.replace(/(?<=[^\s])\s+((?:Step|Passo|Phase|Fase|Task|Milestone|Punto)\s+\d+[:\-\s])/gi, '\n$1')
 
   // 4. Break after semicolons if followed by bullet, number, or next instruction clause
   formatted = formatted.replace(/;\s+([•\-\*\d]|Step|Passo|Phase|Fase|Task|Punto)/gi, ';\n$1')

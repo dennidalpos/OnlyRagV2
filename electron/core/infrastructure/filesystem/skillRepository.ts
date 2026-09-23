@@ -50,11 +50,12 @@ export function parseSkillFrontmatter(rawContent: string): { metadata: SkillMeta
       description: data.description ? String(data.description).trim() : '',
       version: data.version ? String(data.version).trim() : undefined,
       author: data.author ? String(data.author).trim() : undefined,
-      originHub: (data.originHub || data.origin_hub) ? String(data.originHub || data.origin_hub).trim() : undefined,
-      originHubId: (data.originHubId || data.origin_hub_id) ? String(data.originHubId || data.origin_hub_id).trim() : undefined,
-      originChecksum: (data.originChecksum || data.origin_checksum) ? String(data.originChecksum || data.origin_checksum).trim() : undefined,
-      isModified: data.isModified !== undefined ? Boolean(data.isModified) : (data.is_modified !== undefined ? Boolean(data.is_modified) : undefined),
-      requiredModel: (data.requiredModel || data.required_model || data.model) ? String(data.requiredModel || data.required_model || data.model).trim() : undefined,
+      originHub: data.originHub || data.origin_hub ? String(data.originHub || data.origin_hub).trim() : undefined,
+      originHubId: data.originHubId || data.origin_hub_id ? String(data.originHubId || data.origin_hub_id).trim() : undefined,
+      originChecksum: data.originChecksum || data.origin_checksum ? String(data.originChecksum || data.origin_checksum).trim() : undefined,
+      isModified: data.isModified !== undefined ? Boolean(data.isModified) : data.is_modified !== undefined ? Boolean(data.is_modified) : undefined,
+      requiredModel:
+        data.requiredModel || data.required_model || data.model ? String(data.requiredModel || data.required_model || data.model).trim() : undefined,
       triggers: toStringArray(data.triggers),
       tags: toStringArray(data.tags),
     }
@@ -78,13 +79,12 @@ export function parseSkillFrontmatter(rawContent: string): { metadata: SkillMeta
 }
 
 export function serializeSkillContent(body: string, metadata: Partial<SkillMetadata>): string {
-  const cleanName = (metadata.name || 'custom-skill').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-')
-  const triggersStr = metadata.triggers && metadata.triggers.length > 0
-    ? `[${metadata.triggers.map((t) => `"${t}"`).join(', ')}]`
-    : `["${cleanName}"]`
-  const tagsStr = metadata.tags && metadata.tags.length > 0
-    ? `[${metadata.tags.map((t) => `"${t}"`).join(', ')}]`
-    : '["coding"]'
+  const cleanName = (metadata.name || 'custom-skill')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]/g, '-')
+  const triggersStr = metadata.triggers && metadata.triggers.length > 0 ? `[${metadata.triggers.map((t) => `"${t}"`).join(', ')}]` : `["${cleanName}"]`
+  const tagsStr = metadata.tags && metadata.tags.length > 0 ? `[${metadata.tags.map((t) => `"${t}"`).join(', ')}]` : '["coding"]'
 
   const lines = [
     '---',
@@ -129,9 +129,7 @@ export class SkillRepository {
 
   private getStateFilePath(): string {
     if (this.stateFilePath) return this.stateFilePath
-    const baseDir = app && typeof app.getPath === 'function'
-      ? app.getPath('userData')
-      : path.join(process.cwd(), 'userdata_dev')
+    const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(process.cwd(), 'userdata_dev')
     return path.join(baseDir, 'active_skills.json')
   }
 
@@ -182,9 +180,7 @@ export class SkillRepository {
     const scannedDirs: { dir: string; isWorkspace: boolean }[] = []
 
     // 1. Global skills directory first
-    const globalSkillsDir = app && typeof app.getPath === 'function'
-      ? path.join(app.getPath('userData'), 'skills')
-      : path.join(process.cwd(), 'skills')
+    const globalSkillsDir = app && typeof app.getPath === 'function' ? path.join(app.getPath('userData'), 'skills') : path.join(process.cwd(), 'skills')
 
     if (fs.existsSync(globalSkillsDir)) {
       scannedDirs.push({ dir: globalSkillsDir, isWorkspace: false })
@@ -274,7 +270,7 @@ export class SkillRepository {
     name: string,
     content: string,
     workspaceRoot?: string | null,
-    metadata?: Partial<SkillMetadata>
+    metadata?: Partial<SkillMetadata>,
   ): Promise<{ success: boolean; filePath?: string; error?: string }> {
     if (!name || typeof name !== 'string' || !name.trim()) {
       return { success: false, error: 'Skill name is empty' }
@@ -288,10 +284,14 @@ export class SkillRepository {
       }
     }
 
-    const cleanName = name.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-')
-    const baseDir = workspaceRoot !== undefined && workspaceRoot !== null
-      ? path.join(workspaceRoot, 'skills', cleanName)
-      : path.join((app && typeof app.getPath === 'function') ? app.getPath('userData') : process.cwd(), 'skills', cleanName)
+    const cleanName = name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]/g, '-')
+    const baseDir =
+      workspaceRoot !== undefined && workspaceRoot !== null
+        ? path.join(workspaceRoot, 'skills', cleanName)
+        : path.join(app && typeof app.getPath === 'function' ? app.getPath('userData') : process.cwd(), 'skills', cleanName)
 
     try {
       await fs.promises.mkdir(baseDir, { recursive: true })

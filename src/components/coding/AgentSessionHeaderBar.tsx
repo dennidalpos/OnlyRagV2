@@ -29,9 +29,7 @@ export const AgentSessionHeaderBar: React.FC<AgentSessionHeaderBarProps> = ({
 }) => {
   const { t } = useTranslation()
 
-  const projectName = workspacePath
-    ? workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace'
-    : t('coding.noProjectAttached')
+  const projectName = workspacePath ? workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace' : t('coding.noProjectAttached')
 
   return (
     <div className="h-11 px-3 border-b border-slate-800 bg-slate-900/60 flex items-center justify-between gap-2 shrink-0 z-10 select-text font-sans">

@@ -27,10 +27,7 @@ export class OllamaRegistryClient {
    * @param modelInput Model name string (e.g. 'qwen2.5-coder:7b') or parsed model target.
    * @param timeoutMs Maximum request timeout in ms (default 6000ms).
    */
-  fetchRemoteManifestDigest(
-    modelInput: string | ParsedModelTarget,
-    timeoutMs: number = 6000
-  ): Promise<RemoteManifestResult> {
+  fetchRemoteManifestDigest(modelInput: string | ParsedModelTarget, timeoutMs: number = 6000): Promise<RemoteManifestResult> {
     const target = typeof modelInput === 'string' ? parseModelTag(modelInput) : modelInput
 
     if (!target.model) {
@@ -38,7 +35,6 @@ export class OllamaRegistryClient {
     }
 
     const path = `/v2/${encodeURIComponent(target.namespace)}/${encodeURIComponent(target.model)}/manifests/${encodeURIComponent(target.tag)}`
-
 
     return new Promise((resolve) => {
       let url: URL
@@ -70,9 +66,10 @@ export class OllamaRegistryClient {
           res.on('end', () => {
             const statusCode = res.statusCode || 0
             if (statusCode !== 200) {
-              const msg = statusCode === 404
-                ? `Model '${target.namespace}/${target.model}:${target.tag}' not found in registry (HTTP 404)`
-                : `Registry returned HTTP ${statusCode}`
+              const msg =
+                statusCode === 404
+                  ? `Model '${target.namespace}/${target.model}:${target.tag}' not found in registry (HTTP 404)`
+                  : `Registry returned HTTP ${statusCode}`
               return resolve({
                 success: false,
                 statusCode,
@@ -85,9 +82,7 @@ export class OllamaRegistryClient {
               // Ollama's /api/tags digest is the OCI manifest digest.
               const headerDigest = res.headers?.['docker-content-digest']
               const digest = Array.isArray(headerDigest) ? headerDigest[0] : headerDigest
-              const resolvedDigest = typeof digest === 'string' && digest.trim()
-                ? digest.trim()
-                : crypto.createHash('sha256').update(bodyBuffer).digest('hex')
+              const resolvedDigest = typeof digest === 'string' && digest.trim() ? digest.trim() : crypto.createHash('sha256').update(bodyBuffer).digest('hex')
               resolve({
                 success: true,
                 statusCode: 200,
@@ -102,7 +97,7 @@ export class OllamaRegistryClient {
               })
             }
           })
-        }
+        },
       )
 
       req.on('error', (err: any) => {

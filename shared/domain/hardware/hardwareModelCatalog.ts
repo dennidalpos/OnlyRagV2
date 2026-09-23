@@ -1060,28 +1060,16 @@ export function parseCatalogSizeGB(sizeBytesApprox: string): number {
   return match[2].toUpperCase() === 'MB' ? value / 1024 : value
 }
 
-
-
 /** Every coding-capable model tag this app catalogs, as a lookup. */
 export const CODING_CATALOG_MODEL_NAMES: ReadonlySet<string> = new Set(
-  [
-    ...COMPACT_CODING_CATALOG,
-    ...WORKHORSE_CODING_CATALOG,
-    ...REASONING_CODING_CATALOG,
-    ...LARGE_CODING_CATALOG,
-  ].map((entry) => entry.modelName)
+  [...COMPACT_CODING_CATALOG, ...WORKHORSE_CODING_CATALOG, ...REASONING_CODING_CATALOG, ...LARGE_CODING_CATALOG].map((entry) => entry.modelName),
 )
 
 /** The four coding catalogs merged, deduplicated, first-seen order preserved. */
 export function buildCodingCatalogForWizard(): RawModelCatalogEntry[] {
   const seen = new Set<string>()
   const merged: RawModelCatalogEntry[] = []
-  for (const entry of [
-    ...WORKHORSE_CODING_CATALOG,
-    ...COMPACT_CODING_CATALOG,
-    ...REASONING_CODING_CATALOG,
-    ...LARGE_CODING_CATALOG,
-  ]) {
+  for (const entry of [...WORKHORSE_CODING_CATALOG, ...COMPACT_CODING_CATALOG, ...REASONING_CODING_CATALOG, ...LARGE_CODING_CATALOG]) {
     if (seen.has(entry.modelName)) continue
     seen.add(entry.modelName)
     merged.push(entry)
@@ -1099,11 +1087,7 @@ export interface HardwareWizardModelSuite {
 
 export type HardwareWizardModelOptions = Record<keyof HardwareWizardModelSuite | 'medical' | 'legal', string[]>
 
-function requiredRecommendation(
-  catalog: readonly RawModelCatalogEntry[],
-  profile: HardwareProfileTier,
-  module: keyof HardwareWizardModelSuite
-): string {
+function requiredRecommendation(catalog: readonly RawModelCatalogEntry[], profile: HardwareProfileTier, module: keyof HardwareWizardModelSuite): string {
   const model = catalog.find((entry) => entry.recommendedForProfiles.includes(profile))?.modelName
   if (!model) throw new Error(`Missing ${module} recommendation for ${profile} hardware`)
   return model

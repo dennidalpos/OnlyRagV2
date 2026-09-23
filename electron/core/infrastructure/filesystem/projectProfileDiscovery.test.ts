@@ -38,10 +38,13 @@ describe('project profile discovery', () => {
   it('discovers languages, package manager, test framework, build tool and scripts', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-toolchain-'))
     roots.push(root)
-    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
-      scripts: { test: 'vitest run', build: 'vite build' },
-      devDependencies: { typescript: '^5', vitest: '^4', vite: '^8' },
-    }))
+    fs.writeFileSync(
+      path.join(root, 'package.json'),
+      JSON.stringify({
+        scripts: { test: 'vitest run', build: 'vite build' },
+        devDependencies: { typescript: '^5', vitest: '^4', vite: '^8' },
+      }),
+    )
     fs.writeFileSync(path.join(root, 'package-lock.json'), '{}')
     const toolchain = discoverProjectProfile(root).projects[0].toolchain
     expect(toolchain).toEqual({
@@ -60,10 +63,13 @@ describe('project profile discovery', () => {
   it('records no test command for a project that has no test script or framework', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-no-test-'))
     roots.push(root)
-    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
-      scripts: { build: 'vite build' },
-      devDependencies: { vite: '^8' },
-    }))
+    fs.writeFileSync(
+      path.join(root, 'package.json'),
+      JSON.stringify({
+        scripts: { build: 'vite build' },
+        devDependencies: { vite: '^8' },
+      }),
+    )
 
     const project = discoverProjectProfile(root).projects[0]
     expect(project.toolchain.testFrameworks).toEqual([])

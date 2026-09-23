@@ -51,10 +51,7 @@ describe('BaselineSnapshotRepository', () => {
     const second = makeSnapshot(workspaceRoot)
     second.checkpoint = 1
 
-    await expect(Promise.all([
-      repository.saveSnapshot(first),
-      repository.saveSnapshot(second),
-    ])).resolves.toEqual([true, true])
+    await expect(Promise.all([repository.saveSnapshot(first), repository.saveSnapshot(second)])).resolves.toEqual([true, true])
 
     const loaded = await repository.loadSnapshot(first.snapshotId, workspaceRoot)
     expect(loaded?.checkpoint).toBe(second.checkpoint)

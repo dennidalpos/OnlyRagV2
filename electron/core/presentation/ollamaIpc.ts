@@ -30,19 +30,21 @@ export function registerOllamaIpcHandlers() {
 
   ipcMain.handle('ollama:get-generation-status', () => ollamaAppService.getGenerationStatus())
 
-  ipcMain.handle('ollama:generate-stream', async (event, model: string, prompt: string, options?: OllamaGenerationOptions, host?: string, operationId?: string) => {
-    const streamId = operationId || randomUUID()
-    return ollamaAppService.generateStream(
-      model,
-      prompt,
-      (chunk) => event.sender.send('ollama:chunk', { operationId: streamId, chunk }),
-      () => event.sender.send('ollama:done', { operationId: streamId }),
-      options,
-      host,
-      streamId
-    )
-  })
-
+  ipcMain.handle(
+    'ollama:generate-stream',
+    async (event, model: string, prompt: string, options?: OllamaGenerationOptions, host?: string, operationId?: string) => {
+      const streamId = operationId || randomUUID()
+      return ollamaAppService.generateStream(
+        model,
+        prompt,
+        (chunk) => event.sender.send('ollama:chunk', { operationId: streamId, chunk }),
+        () => event.sender.send('ollama:done', { operationId: streamId }),
+        options,
+        host,
+        streamId,
+      )
+    },
+  )
 
   /**
    * Per-model facts from /api/tags — context length, capabilities, parameter size and

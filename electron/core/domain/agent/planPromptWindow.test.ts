@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  MAX_PROMPT_MILESTONES,
-  selectPromptMilestoneWindow,
-} from '../../../../shared/domain/agent/planPromptWindow'
+import { MAX_PROMPT_MILESTONES, selectPromptMilestoneWindow } from '../../../../shared/domain/agent/planPromptWindow'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 
 function makePlan(length: number): PlanMilestone[] {

@@ -12,12 +12,7 @@ import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './age
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
-export type EmitLog = (
-  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
-  message: string,
-  detail?: string,
-  meta?: Partial<AgentLogEntry>
-) => void
+export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 /** The subset of the loop's mutable counters this step can flip. Mutated in place by design
  *  (same pattern as the AgentSession object) -- see agentOrchestratorAppService.ts's mutableFlags. */
@@ -64,6 +59,4 @@ export interface ToolResultProcessingContext {
   closeApplicationRun: (request: ApplicationClosureRequest) => Promise<ApplicationClosureOutcome>
 }
 
-export type ToolResultProcessingOutcome =
-  | { outcome: 'continue' }
-  | { outcome: 'return'; result: AgentTaskResult }
+export type ToolResultProcessingOutcome = { outcome: 'continue' } | { outcome: 'return'; result: AgentTaskResult }

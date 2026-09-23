@@ -2,11 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { sanitizeLogMessage } from '../../../logRedactor'
-import {
-  capabilityPolicyAuditEventSchema,
-  type CapabilityPolicyAuditEvent,
-  type CapabilityPolicyAuditStore,
-} from '../../domain/agent/capabilityPolicyContract'
+import { capabilityPolicyAuditEventSchema, type CapabilityPolicyAuditEvent, type CapabilityPolicyAuditStore } from '../../domain/agent/capabilityPolicyContract'
 import { safeAtomicWrite } from '../filesystem/safeAtomicFileWriter'
 
 const FILE_NAME = 'capability_policy_audit.json'

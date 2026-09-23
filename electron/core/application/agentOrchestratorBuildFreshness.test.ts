@@ -117,7 +117,7 @@ describe('build freshness — a write that changed nothing is not a mutation', (
     const flags = freshFlags()
 
     await runToolResultProcessing(
-      makeWriteContext({ outcome: 'success', outputForHistory: '[NO-OP WRITE: ...]', logMessage: 'No-op write', noOpMutation: true }, flags)
+      makeWriteContext({ outcome: 'success', outputForHistory: '[NO-OP WRITE: ...]', logMessage: 'No-op write', noOpMutation: true }, flags),
     )
 
     expect(flags.hasVerifiedBuild).toBe(true)
@@ -128,7 +128,7 @@ describe('build freshness — a write that changed nothing is not a mutation', (
     const flags = freshFlags()
 
     await runToolResultProcessing(
-      makeWriteContext({ outcome: 'success', outputForHistory: 'Successfully wrote file App.tsx', logMessage: 'Wrote App.tsx' }, flags)
+      makeWriteContext({ outcome: 'success', outputForHistory: 'Successfully wrote file App.tsx', logMessage: 'Wrote App.tsx' }, flags),
     )
 
     expect(flags.hasVerifiedBuild).toBe(false)
@@ -165,7 +165,10 @@ describe('build freshness — a verification command does not invalidate itself'
     ctx.goalPlanner = {
       getActiveMilestone: () => null,
       getMilestones: () => [{ id: 'm-1', title: 'Create `package.json`', status: 'pending', filePaths: ['package.json'] }],
-      updateMilestone: (id: string) => { updates.push(id); return true },
+      updateMilestone: (id: string) => {
+        updates.push(id)
+        return true
+      },
       getProgressSummary: () => ({ completed: 0, total: 1, percentage: 0 }),
     } as unknown as ToolResultProcessingContext['goalPlanner']
 

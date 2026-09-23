@@ -1,5 +1,3 @@
-
-
 import { logger } from '../logging/logger'
 
 export interface PackageFacts {

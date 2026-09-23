@@ -92,12 +92,8 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
           >
             <FileText className={`w-3.5 h-3.5 ${activeTab === 'plan' ? 'text-amber-400' : 'text-slate-400'}`} />
             <span>Piano</span>
-            {planIsReady && (
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-0.5 -right-0.5" />
-            )}
-            {planIsInProgress && (
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-            )}
+            {planIsReady && <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-0.5 -right-0.5" />}
+            {planIsInProgress && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />}
           </button>
 
           <button

@@ -25,7 +25,7 @@ export const VERIFIED_MODELS: VerifiedModelRecord[] = [
       date: '2026-08-25',
       probes: ['eresolveRecovery.live.ts', 'fullTaskRun.live.ts'],
       outcome:
-        'Emits well-formed tool calls, recovers from an npm ERESOLVE conflict without --force, and reaches finish on the focused probe. On the fifty-step full task it scaffolds a project that compiles, and runs the project\'s own check inside the session. It does not finish the plan: the fifty steps run out first, and a typecheck over every file still reports real errors it does not fix.',
+        "Emits well-formed tool calls, recovers from an npm ERESOLVE conflict without --force, and reaches finish on the focused probe. On the fifty-step full task it scaffolds a project that compiles, and runs the project's own check inside the session. It does not finish the plan: the fifty steps run out first, and a typecheck over every file still reports real errors it does not fix.",
     },
   },
 ]
@@ -33,13 +33,7 @@ export const VERIFIED_MODELS: VerifiedModelRecord[] = [
 const VERIFIED_BY_NAME = new Map(VERIFIED_MODELS.map((m) => [m.modelName, m]))
 
 /** Models the agent loop cannot drive, whatever their coding ability. */
-const UNSUPPORTED_FAMILY_PREFIXES = [
-  'nomic-embed',
-  'mxbai-embed',
-  'bge-',
-  'embeddinggemma',
-  'all-minilm',
-]
+const UNSUPPORTED_FAMILY_PREFIXES = ['nomic-embed', 'mxbai-embed', 'bge-', 'embeddinggemma', 'all-minilm']
 
 /** Native tool calling, as Ollama reports it in `/api/tags` -> `capabilities`. */
 export function declaresToolCalling(capabilities: readonly string[] | undefined): boolean {

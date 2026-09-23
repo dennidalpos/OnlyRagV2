@@ -21,7 +21,7 @@ describe('HeuristicContextCompactor', () => {
         attachedContext: '',
         projectMapBlock: '',
       },
-      100_000
+      100_000,
     )
     expect(result.wasCompacted).toBe(false)
     expect(result.finalChars).toBe(result.originalChars)
@@ -44,7 +44,7 @@ describe('HeuristicContextCompactor', () => {
         attachedContext: hugeAttached,
         projectMapBlock: hugeMap,
       },
-      20_000
+      20_000,
     )
 
     expect(result.wasCompacted).toBe(true)
@@ -90,7 +90,7 @@ describe('HeuristicContextCompactor', () => {
         attachedContext: extreme,
         projectMapBlock: extreme,
       },
-      8_000
+      8_000,
     )
     expect(result.wasCompacted).toBe(true)
     expect(result.prompt).toContain(FAKE_SYSTEM_PROMPT)
@@ -118,7 +118,7 @@ describe('HeuristicContextCompactor', () => {
         attachedContext: makeRepeated('RAG.\n', 200),
         projectMapBlock: makeRepeated('MAP.\n', 200),
       },
-      16_000
+      16_000,
     )
 
     expect(result.wasCompacted).toBe(true)

@@ -32,17 +32,19 @@ describe('SidecarHttpClient Unit Tests', () => {
         path: '/health',
         handler: (_req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({
-            status: 'online',
-            engine: 'FastAPI + LanceDB',
-            version: '2.3.0',
-            vector_db: 'LanceDB Embedded',
-            gpu: {},
-            ocr: {},
-            documents_count: 2,
-            chunks_count: 5,
-            python_version: '3.13',
-          }))
+          res.end(
+            JSON.stringify({
+              status: 'online',
+              engine: 'FastAPI + LanceDB',
+              version: '2.3.0',
+              vector_db: 'LanceDB Embedded',
+              gpu: {},
+              ocr: {},
+              documents_count: 2,
+              chunks_count: 5,
+              python_version: '3.13',
+            }),
+          )
         },
       },
       {
@@ -50,7 +52,20 @@ describe('SidecarHttpClient Unit Tests', () => {
         path: '/documents',
         handler: (_req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify([{ id: 'doc-1', filename: 'report.pdf', file_size: 1024, num_pages: 2, num_chunks: 5, extracted_markdown: '# Hi', status: 'indexed', ingested_at: '2026-08-01' }]))
+          res.end(
+            JSON.stringify([
+              {
+                id: 'doc-1',
+                filename: 'report.pdf',
+                file_size: 1024,
+                num_pages: 2,
+                num_chunks: 5,
+                extracted_markdown: '# Hi',
+                status: 'indexed',
+                ingested_at: '2026-08-01',
+              },
+            ]),
+          )
         },
       },
       {
@@ -66,7 +81,18 @@ describe('SidecarHttpClient Unit Tests', () => {
         path: '/documents/doc-1',
         handler: (_req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ id: 'doc-1', filename: 'report.pdf', file_size: 1024, num_pages: 2, num_chunks: 5, extracted_markdown: '# Updated', status: 'indexed', ingested_at: '2026-08-01' }))
+          res.end(
+            JSON.stringify({
+              id: 'doc-1',
+              filename: 'report.pdf',
+              file_size: 1024,
+              num_pages: 2,
+              num_chunks: 5,
+              extracted_markdown: '# Updated',
+              status: 'indexed',
+              ingested_at: '2026-08-01',
+            }),
+          )
         },
       },
       {
@@ -83,7 +109,21 @@ describe('SidecarHttpClient Unit Tests', () => {
         handler: (_req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
           res.write(JSON.stringify({ type: 'progress', percent: 50 }) + '\n')
-          res.write(JSON.stringify({ type: 'done', data: { id: 'doc-new', filename: 'doc.txt', file_size: 50, num_pages: 1, num_chunks: 1, extracted_markdown: 'Text', status: 'indexed', ingested_at: 'now' } }) + '\n')
+          res.write(
+            JSON.stringify({
+              type: 'done',
+              data: {
+                id: 'doc-new',
+                filename: 'doc.txt',
+                file_size: 50,
+                num_pages: 1,
+                num_chunks: 1,
+                extracted_markdown: 'Text',
+                status: 'indexed',
+                ingested_at: 'now',
+              },
+            }) + '\n',
+          )
           res.end()
         },
       },
@@ -92,13 +132,15 @@ describe('SidecarHttpClient Unit Tests', () => {
         path: '/agent/logs/analyze',
         handler: (_req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({
-            scanned_files: ['test.log'],
-            total_lines_scanned: 10,
-            anomalies: [],
-            has_critical: false,
-            summary: 'Clean',
-          }))
+          res.end(
+            JSON.stringify({
+              scanned_files: ['test.log'],
+              total_lines_scanned: 10,
+              anomalies: [],
+              has_critical: false,
+              summary: 'Clean',
+            }),
+          )
         },
       },
       {
@@ -150,10 +192,7 @@ describe('SidecarHttpClient Unit Tests', () => {
 
   it('handles streaming ingest via /ingest-path-stream', async () => {
     const events: any[] = []
-    const res = await client.ingestFileStream(
-      { file_path: 'doc.txt', task_id: 'ingest-test-1' },
-      (ev) => events.push(ev)
-    )
+    const res = await client.ingestFileStream({ file_path: 'doc.txt', task_id: 'ingest-test-1' }, (ev) => events.push(ev))
     expect(events.length).toBeGreaterThanOrEqual(1)
     expect(res.success).toBe(true)
     expect(res.data?.id).toBe('doc-new')
@@ -195,22 +234,26 @@ describe('SidecarHttpClient health failures', () => {
   afterAll(() => servers.forEach((server) => server.close()))
 
   it('fails closed for malformed payloads and non-success HTTP responses', async () => {
-    const malformed = await createMockServer([{
-      method: 'GET',
-      path: '/health',
-      handler: (_req, res) => {
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end('{"status":"online"}')
+    const malformed = await createMockServer([
+      {
+        method: 'GET',
+        path: '/health',
+        handler: (_req, res) => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end('{"status":"online"}')
+        },
       },
-    }])
-    const unavailable = await createMockServer([{
-      method: 'GET',
-      path: '/health',
-      handler: (_req, res) => {
-        res.writeHead(503, { 'Content-Type': 'application/json' })
-        res.end('{"status":"online"}')
+    ])
+    const unavailable = await createMockServer([
+      {
+        method: 'GET',
+        path: '/health',
+        handler: (_req, res) => {
+          res.writeHead(503, { 'Content-Type': 'application/json' })
+          res.end('{"status":"online"}')
+        },
       },
-    }])
+    ])
     servers.push(malformed.server, unavailable.server)
 
     await expect(new SidecarHttpClient(malformed.baseUrl).getStatus()).resolves.toMatchObject({ status: 'offline' })
@@ -218,11 +261,13 @@ describe('SidecarHttpClient health failures', () => {
   })
 
   it('fails closed when the health probe times out', async () => {
-    const stalled = await createMockServer([{
-      method: 'GET',
-      path: '/health',
-      handler: () => {},
-    }])
+    const stalled = await createMockServer([
+      {
+        method: 'GET',
+        path: '/health',
+        handler: () => {},
+      },
+    ])
     servers.push(stalled.server)
 
     await expect(new SidecarHttpClient(stalled.baseUrl).getStatus(25)).resolves.toEqual({
@@ -232,14 +277,16 @@ describe('SidecarHttpClient health failures', () => {
   })
 
   it('returns an actionable document deletion error from the sidecar', async () => {
-    const unavailable = await createMockServer([{
-      method: 'DELETE',
-      path: '/documents/doc-locked',
-      handler: (_req, res) => {
-        res.writeHead(409, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ detail: 'Documento in uso. Riprova al termine della traduzione.' }))
+    const unavailable = await createMockServer([
+      {
+        method: 'DELETE',
+        path: '/documents/doc-locked',
+        handler: (_req, res) => {
+          res.writeHead(409, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ detail: 'Documento in uso. Riprova al termine della traduzione.' }))
+        },
       },
-    }])
+    ])
     servers.push(unavailable.server)
 
     await expect(new SidecarHttpClient(unavailable.baseUrl).deleteDocument('doc-locked')).resolves.toEqual({
@@ -249,17 +296,23 @@ describe('SidecarHttpClient health failures', () => {
   })
 
   it('surfaces an error event from an NDJSON stream instead of a generic termination', async () => {
-    const failing = await createMockServer([{
-      method: 'POST',
-      path: '/documents/doc-1/translate-inplace-stream',
-      handler: (_req, res) => {
-        res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
-        res.end(JSON.stringify({ type: 'error', error: 'No translatable text blocks found in document' }) + '\n')
+    const failing = await createMockServer([
+      {
+        method: 'POST',
+        path: '/documents/doc-1/translate-inplace-stream',
+        handler: (_req, res) => {
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+          res.end(JSON.stringify({ type: 'error', error: 'No translatable text blocks found in document' }) + '\n')
+        },
       },
-    }])
+    ])
     servers.push(failing.server)
 
-    const res = await new SidecarHttpClient(failing.baseUrl).translateDocumentInplaceStream('doc-1', { source_lang: 'en', target_lang: 'it', task_id: 't-1' }, () => {})
+    const res = await new SidecarHttpClient(failing.baseUrl).translateDocumentInplaceStream(
+      'doc-1',
+      { source_lang: 'en', target_lang: 'it', task_id: 't-1' },
+      () => {},
+    )
     expect(res).toEqual({ success: false, error: 'No translatable text blocks found in document' })
   })
 
@@ -291,7 +344,9 @@ describe('SidecarHttpClient health failures', () => {
       'doc-1',
       { source_lang: 'en', target_lang: 'it', task_id: 'translate-42' },
       () => cancel?.(),
-      (cancelFn) => { cancel = cancelFn },
+      (cancelFn) => {
+        cancel = cancelFn
+      },
     )
 
     expect((await pending).success).toBe(false)
@@ -300,15 +355,17 @@ describe('SidecarHttpClient health failures', () => {
 
   it('sends the launch token on every request once set', async () => {
     const seen: Array<string | undefined> = []
-    const recorder = await createMockServer([{
-      method: 'GET',
-      path: '/documents',
-      handler: (req, res) => {
-        seen.push(req.headers['x-onlyrag-token'] as string | undefined)
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end('[]')
+    const recorder = await createMockServer([
+      {
+        method: 'GET',
+        path: '/documents',
+        handler: (req, res) => {
+          seen.push(req.headers['x-onlyrag-token'] as string | undefined)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end('[]')
+        },
       },
-    }])
+    ])
     servers.push(recorder.server)
 
     const tokenClient = new SidecarHttpClient(recorder.baseUrl)
@@ -320,19 +377,23 @@ describe('SidecarHttpClient health failures', () => {
 
   it('sends the configured embedding model when re-indexing a document', async () => {
     let received: any = null
-    const recorder = await createMockServer([{
-      method: 'PUT',
-      path: '/documents/doc-1',
-      handler: (req, res) => {
-        let raw = ''
-        req.on('data', (chunk) => { raw += chunk })
-        req.on('end', () => {
-          received = JSON.parse(raw)
-          res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ id: 'doc-1' }))
-        })
+    const recorder = await createMockServer([
+      {
+        method: 'PUT',
+        path: '/documents/doc-1',
+        handler: (req, res) => {
+          let raw = ''
+          req.on('data', (chunk) => {
+            raw += chunk
+          })
+          req.on('end', () => {
+            received = JSON.parse(raw)
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ id: 'doc-1' }))
+          })
+        },
       },
-    }])
+    ])
     servers.push(recorder.server)
 
     await new SidecarHttpClient(recorder.baseUrl).updateDocument('doc-1', '# Edited', 'mxbai-embed-large')

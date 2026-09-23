@@ -10,11 +10,7 @@ export interface GreenfieldScaffoldResolution {
 const matches = (text: string, pattern: RegExp) => pattern.test(text)
 
 /** Resolves only stack choices stated by the user or accepted during the interview. */
-export function resolveGreenfieldScaffold(
-  isGreenfield: boolean,
-  prompt: string,
-  decisions: readonly UserInterviewAnswer[] = []
-): GreenfieldScaffoldResolution {
+export function resolveGreenfieldScaffold(isGreenfield: boolean, prompt: string, decisions: readonly UserInterviewAnswer[] = []): GreenfieldScaffoldResolution {
   const confirmedDecisions = decisions.filter((item) => item.provenance !== 'unconfirmed_assumption')
   const text = [prompt, ...confirmedDecisions.map((item) => item.selectedOption)].join(' ').toLowerCase()
   if (!isGreenfield) return { acceptedStack: null, scaffold: { isGreenfield: false, requirements: [] }, proposedVerificationCommands: [] }
@@ -66,7 +62,7 @@ export function resolveGreenfieldScaffold(
       }
     }
 
-    const extension = react ? (typescript ? 'tsx' : 'jsx') : (typescript ? 'ts' : 'js')
+    const extension = react ? (typescript ? 'tsx' : 'jsx') : typescript ? 'ts' : 'js'
     const proposed = 'npm run build'
     const requirements = [
       { path: 'package.json', title: 'The project declares its accepted web stack and terminating build script', proposedVerificationCommand: proposed },

@@ -134,11 +134,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
           >
             <Wrench className={`w-3 h-3 ${allCoreToolsAvailable ? 'text-cyan-400' : 'text-amber-400'}`} />
             <span className="font-mono text-[10px]">OS Tools</span>
-            {allCoreToolsAvailable ? (
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-            ) : (
-              <AlertCircle className="w-3 h-3 text-amber-400 animate-pulse" />
-            )}
+            {allCoreToolsAvailable ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <AlertCircle className="w-3 h-3 text-amber-400 animate-pulse" />}
           </button>
 
           {/* Toolchain Flyout Card */}
@@ -148,11 +144,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
                 <span className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
                   <Cpu className="w-3.5 h-3.5 text-cyan-400" /> Toolchain di Sistema
                 </span>
-                <button
-                  type="button"
-                  onClick={onOpenDiagnosticsModal}
-                  className="text-[10px] text-cyan-400 hover:underline cursor-pointer"
-                >
+                <button type="button" onClick={onOpenDiagnosticsModal} className="text-[10px] text-cyan-400 hover:underline cursor-pointer">
                   Dettagli
                 </button>
               </div>
@@ -160,50 +152,36 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
               <div className="space-y-1.5 text-xs font-mono">
                 <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
                   <span className="text-slate-400">Git</span>
-                  <span className={`text-[10px] font-bold ${hasGit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {hasGit ? 'OK' : 'Mancante'}
-                  </span>
+                  <span className={`text-[10px] font-bold ${hasGit ? 'text-emerald-400' : 'text-rose-400'}`}>{hasGit ? 'OK' : 'Mancante'}</span>
                 </div>
                 <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
                   <span className="text-slate-400">Node</span>
-                  <span className={`text-[10px] font-bold ${hasNode ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {hasNode ? 'OK' : 'Mancante'}
-                  </span>
+                  <span className={`text-[10px] font-bold ${hasNode ? 'text-emerald-400' : 'text-rose-400'}`}>{hasNode ? 'OK' : 'Mancante'}</span>
                 </div>
                 <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
                   <span className="text-slate-400">Python</span>
-                  <span className={`text-[10px] font-bold ${hasPy ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {hasPy ? 'OK' : 'Mancante'}
-                  </span>
+                  <span className={`text-[10px] font-bold ${hasPy ? 'text-emerald-400' : 'text-rose-400'}`}>{hasPy ? 'OK' : 'Mancante'}</span>
                 </div>
                 <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
                   <span className="text-slate-400">Ollama</span>
-                  <span className={`text-[10px] font-bold ${hasOllama ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {hasOllama ? 'OK' : 'Mancante'}
-                  </span>
+                  <span className={`text-[10px] font-bold ${hasOllama ? 'text-emerald-400' : 'text-rose-400'}`}>{hasOllama ? 'OK' : 'Mancante'}</span>
                 </div>
                 {hasDocker !== undefined && (
                   <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded-lg border border-slate-800">
                     <span className="text-slate-400">Docker</span>
-                    <span className={`text-[10px] font-bold ${hasDocker ? 'text-emerald-400' : 'text-slate-500'}`}>
-                      {hasDocker ? 'OK' : 'N/A'}
-                    </span>
+                    <span className={`text-[10px] font-bold ${hasDocker ? 'text-emerald-400' : 'text-slate-500'}`}>{hasDocker ? 'OK' : 'N/A'}</span>
                   </div>
                 )}
                 {hasUv !== undefined && (
                   <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded-lg border border-slate-800">
                     <span className="text-slate-400">Uv</span>
-                    <span className={`text-[10px] font-bold ${hasUv ? 'text-emerald-400' : 'text-slate-500'}`}>
-                      {hasUv ? 'OK' : 'N/A'}
-                    </span>
+                    <span className={`text-[10px] font-bold ${hasUv ? 'text-emerald-400' : 'text-slate-500'}`}>{hasUv ? 'OK' : 'N/A'}</span>
                   </div>
                 )}
                 {hasBun !== undefined && (
                   <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded-lg border border-slate-800">
                     <span className="text-slate-400">Bun</span>
-                    <span className={`text-[10px] font-bold ${hasBun ? 'text-emerald-400' : 'text-slate-500'}`}>
-                      {hasBun ? 'OK' : 'N/A'}
-                    </span>
+                    <span className={`text-[10px] font-bold ${hasBun ? 'text-emerald-400' : 'text-slate-500'}`}>{hasBun ? 'OK' : 'N/A'}</span>
                   </div>
                 )}
               </div>

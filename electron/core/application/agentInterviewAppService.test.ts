@@ -26,7 +26,8 @@ describe('AgentInterviewAppService', () => {
 
   it('returns completed when the validated response has no questions', async () => {
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
-      status: 'complete', content: '{"hasQuestions":false,"questions":[]}',
+      status: 'complete',
+      content: '{"hasQuestions":false,"questions":[]}',
     })
 
     const result = await service.conductInterview('Crea una funzione somma', undefined, settings)
@@ -39,7 +40,8 @@ describe('AgentInterviewAppService', () => {
       'qwen3:4b': { capabilities: ['completion', 'thinking'], family: 'qwen3' },
     })
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
-      status: 'complete', content: '{"hasQuestions":false,"questions":[]}',
+      status: 'complete',
+      content: '{"hasQuestions":false,"questions":[]}',
     })
     await service.conductInterview('Create a sum function', 'qwen3:4b', {
       ...settings,
@@ -50,13 +52,14 @@ describe('AgentInterviewAppService', () => {
 
   it('falls back to alternatives stated explicitly when the model returns no questions', async () => {
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
-      status: 'complete', content: '{"hasQuestions":false,"questions":[]}',
+      status: 'complete',
+      content: '{"hasQuestions":false,"questions":[]}',
     })
 
     const result = await service.conductInterview(
       'Aggiungi persistenza: prima di procedere chiedimi se usare localStorage oppure file JSON.',
       undefined,
-      settings
+      settings,
     )
 
     expect(result).toMatchObject({
@@ -71,7 +74,15 @@ describe('AgentInterviewAppService', () => {
       status: 'complete',
       content: JSON.stringify({
         hasQuestions: true,
-        questions: [{ id: 'q1', question: 'Quale stile preferisci?', rationale: 'La scelta cambia compatibilità e controllo.', options: ['CSS', 'Web Animations'], recommendedIndex: 0 }],
+        questions: [
+          {
+            id: 'q1',
+            question: 'Quale stile preferisci?',
+            rationale: 'La scelta cambia compatibilità e controllo.',
+            options: ['CSS', 'Web Animations'],
+            recommendedIndex: 0,
+          },
+        ],
       }),
     })
 
@@ -88,7 +99,9 @@ describe('AgentInterviewAppService', () => {
       status: 'complete',
       content: JSON.stringify({
         hasQuestions: true,
-        questions: [{ id: 'q1', question: 'Quale package manager?', rationale: 'La scelta cambia i file di lock.', options: ['npm', 'pnpm'], recommendedIndex: 1 }],
+        questions: [
+          { id: 'q1', question: 'Quale package manager?', rationale: 'La scelta cambia i file di lock.', options: ['npm', 'pnpm'], recommendedIndex: 1 },
+        ],
       }),
     })
 
@@ -108,13 +121,15 @@ describe('AgentInterviewAppService', () => {
       status: 'complete',
       content: JSON.stringify({
         hasQuestions: true,
-        questions: [{
-          id: 'q1',
-          question: 'Which storage do you prefer?',
-          rationale: 'The choice changes the data format and portability.',
-          options: ['SQLite', 'JSON'],
-          recommendedIndex: 0,
-        }],
+        questions: [
+          {
+            id: 'q1',
+            question: 'Which storage do you prefer?',
+            rationale: 'The choice changes the data format and portability.',
+            options: ['SQLite', 'JSON'],
+            recommendedIndex: 0,
+          },
+        ],
       }),
     })
 
@@ -125,23 +140,19 @@ describe('AgentInterviewAppService', () => {
 
   it('applies context preferences and separates instructions from data', async () => {
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
-      status: 'complete', content: '{"hasQuestions":false,"questions":[]}',
+      status: 'complete',
+      content: '{"hasQuestions":false,"questions":[]}',
     })
 
-    await service.conductInterview(
-      'Crea una funzione somma',
-      'qwen2.5-coder:7b',
-      { ...settings, modelContextLengths: { 'qwen2.5-coder:7b': 8192 } }
-    )
+    await service.conductInterview('Crea una funzione somma', 'qwen2.5-coder:7b', { ...settings, modelContextLengths: { 'qwen2.5-coder:7b': 8192 } })
 
     const request = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
-    expect(request.options).toEqual(expect.objectContaining({
-      num_ctx: 8192,
-      num_predict: calculateAvailableOutputTokens(
-        `${request.systemPrompt}\n${request.userContent}`,
-        8192,
-      ),
-    }))
+    expect(request.options).toEqual(
+      expect.objectContaining({
+        num_ctx: 8192,
+        num_predict: calculateAvailableOutputTokens(`${request.systemPrompt}\n${request.userContent}`, 8192),
+      }),
+    )
     expect(request.think).toBe(false)
     expect(request.keepAlive).toBe('30m')
     expect(request.systemPrompt).not.toContain('Crea una funzione somma')
@@ -154,13 +165,15 @@ describe('AgentInterviewAppService', () => {
 
   it('rejects malformed or semantically invalid JSON', async () => {
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
-      status: 'complete', content: '{"hasQuestions":true,',
+      status: 'complete',
+      content: '{"hasQuestions":true,',
     })
     const malformed = await service.conductInterview('Crea un gioco', undefined, settings)
     expect(malformed.error).toContain('Response is not valid JSON')
 
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
-      status: 'complete', content: '{"hasQuestions":true,"questions":[]}',
+      status: 'complete',
+      content: '{"hasQuestions":true,"questions":[]}',
     })
     const inconsistent = await service.conductInterview('Crea un gioco', undefined, settings)
     expect(inconsistent.error).toContain('hasQuestions must match')
@@ -168,14 +181,18 @@ describe('AgentInterviewAppService', () => {
 
   it('does not use transport failures or incomplete responses', async () => {
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
-      status: 'transport_error', content: '', error: 'connection refused',
+      status: 'transport_error',
+      content: '',
+      error: 'connection refused',
     })
     const failed = await service.conductInterview('Crea un gioco', undefined, settings)
     expect(failed).toMatchObject({ status: 'error' })
     expect(failed.error).toContain('connection refused')
 
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
-      status: 'incomplete', content: '{"hasQuestions":false', error: 'Ollama response incomplete (length)',
+      status: 'incomplete',
+      content: '{"hasQuestions":false',
+      error: 'Ollama response incomplete (length)',
     })
     const incomplete = await service.conductInterview('Crea un gioco', undefined, settings)
     expect(incomplete).toMatchObject({ status: 'error' })
@@ -187,10 +204,14 @@ describe('AgentInterviewAppService', () => {
       { id: 'q1', question: 'Router', rationale: 'Changes navigation.', options: ['React Router', 'Custom'], recommendedIndex: 0 },
       { id: 'q2', question: 'Theme', rationale: 'Changes presentation.', options: ['Dark', 'Light'], recommendedIndex: 0 },
     ]
-    const enriched = service.enrichPromptWithAnswers('Build a dashboard', [
-      { questionId: 'q1', questionText: 'Router', selectedOption: 'React Router', provenance: 'accepted_recommendation' },
-      { questionId: 'q2', questionText: 'Theme', selectedOption: 'Dark', provenance: 'explicit' },
-    ], questions)
+    const enriched = service.enrichPromptWithAnswers(
+      'Build a dashboard',
+      [
+        { questionId: 'q1', questionText: 'Router', selectedOption: 'React Router', provenance: 'accepted_recommendation' },
+        { questionId: 'q2', questionText: 'Theme', selectedOption: 'Dark', provenance: 'explicit' },
+      ],
+      questions,
+    )
 
     expect(enriched).toContain('[ORIGINAL USER REQUEST]\nBuild a dashboard')
     expect(enriched).toContain('[ACCEPTED RECOMMENDATION] Router: React Router')
@@ -198,10 +219,27 @@ describe('AgentInterviewAppService', () => {
   })
 
   it('rejects answers for stale question IDs', () => {
-    expect(() => service.enrichPromptWithAnswers('Build', [{
-      questionId: 'old', questionText: 'Old?', selectedOption: 'A', provenance: 'explicit',
-    }], [{
-      id: 'current', question: 'Current?', rationale: 'Changes behavior.', options: ['A', 'B'], recommendedIndex: 0,
-    }])).toThrow('Unknown or stale question ID')
+    expect(() =>
+      service.enrichPromptWithAnswers(
+        'Build',
+        [
+          {
+            questionId: 'old',
+            questionText: 'Old?',
+            selectedOption: 'A',
+            provenance: 'explicit',
+          },
+        ],
+        [
+          {
+            id: 'current',
+            question: 'Current?',
+            rationale: 'Changes behavior.',
+            options: ['A', 'B'],
+            recommendedIndex: 0,
+          },
+        ],
+      ),
+    ).toThrow('Unknown or stale question ID')
   })
 })

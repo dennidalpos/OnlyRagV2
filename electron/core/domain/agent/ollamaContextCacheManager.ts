@@ -1,5 +1,3 @@
-
-
 export interface OllamaContextBaseline {
   model: string
   stableSection: string

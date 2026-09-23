@@ -9,7 +9,6 @@ import {
 } from './capabilityPolicyContract'
 import { shellCommandHasEgress } from './offlineStrictPolicy'
 
-
 function auditIdFor(request: CapabilityPolicyRequest): string {
   return `policy-${request.sessionId}-${request.toolName}-${request.operation}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 200)
 }
@@ -25,7 +24,9 @@ export function authorizeNetworkApproved(input: CapabilityPolicyRequest): Capabi
     return result(request, false, false, 'Only network-approved authorization is implemented by this gateway')
   }
 
-  const networkOperation = request.capability === 'http-download' || request.capability === 'browser' ||
+  const networkOperation =
+    request.capability === 'http-download' ||
+    request.capability === 'browser' ||
     (request.capability === 'git' && ['connect', 'download'].includes(request.operation)) ||
     (request.capability === 'shell' && request.operation === 'execute' && shellCommandHasEgress(request.target || ''))
 

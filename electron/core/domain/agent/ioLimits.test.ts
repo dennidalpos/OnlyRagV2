@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  MAX_DOWNLOAD_BYTES,
-  MAX_FILE_READ_BYTES,
-  MAX_PROJECT_MAP_DEPTH,
-  MAX_RECURSIVE_LIST_ITEMS,
-  MAX_SEARCH_FILE_BYTES,
-  MAX_SEARCH_MATCHES,
-} from './ioLimits'
+import { MAX_DOWNLOAD_BYTES, MAX_FILE_READ_BYTES, MAX_PROJECT_MAP_DEPTH, MAX_RECURSIVE_LIST_ITEMS, MAX_SEARCH_FILE_BYTES, MAX_SEARCH_MATCHES } from './ioLimits'
 
 describe('shared I/O limits', () => {
   it('keeps bounded positive ceilings for reads and downloads', () => {

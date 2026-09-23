@@ -6,48 +6,60 @@ const modelName = nonBlank.max(200)
 const contextTokens = z.number().int().min(4096).max(131072)
 const taskId = nonBlank.max(200)
 
-export const sidecarIngestFilePayloadSchema = z.object({
-  filePath: boundedPath,
-  visionModel: modelName.optional(),
-  visionPrompt: nonBlank.max(20_000).optional(),
-  normalizeWithLlm: z.boolean().optional(),
-  normalizationModel: modelName.optional(),
-  numCtx: contextTokens.optional(),
-  normalizationThink: z.boolean().optional(),
-  taskId,
-}).strict()
+export const sidecarIngestFilePayloadSchema = z
+  .object({
+    filePath: boundedPath,
+    visionModel: modelName.optional(),
+    visionPrompt: nonBlank.max(20_000).optional(),
+    normalizeWithLlm: z.boolean().optional(),
+    normalizationModel: modelName.optional(),
+    numCtx: contextTokens.optional(),
+    normalizationThink: z.boolean().optional(),
+    taskId,
+  })
+  .strict()
 
-export const sidecarUpdateDocumentPayloadSchema = z.object({
-  docId: nonBlank.max(200),
-  markdownContent: z.string().min(1).max(10_000_000),
-}).strict()
+export const sidecarUpdateDocumentPayloadSchema = z
+  .object({
+    docId: nonBlank.max(200),
+    markdownContent: z.string().min(1).max(10_000_000),
+  })
+  .strict()
 
-export const sidecarTranslatePayloadSchema = z.object({
-  docId: nonBlank.max(200),
-  sourceLang: nonBlank.max(100),
-  targetLang: nonBlank.max(100),
-  model: modelName.optional(),
-  targetDir: boundedPath.optional(),
-  numCtx: contextTokens.optional(),
-  think: z.boolean().optional(),
-}).strict()
+export const sidecarTranslatePayloadSchema = z
+  .object({
+    docId: nonBlank.max(200),
+    sourceLang: nonBlank.max(100),
+    targetLang: nonBlank.max(100),
+    model: modelName.optional(),
+    targetDir: boundedPath.optional(),
+    numCtx: contextTokens.optional(),
+    think: z.boolean().optional(),
+  })
+  .strict()
 
-export const sidecarPagePreviewPayloadSchema = z.object({
-  docId: nonBlank.max(200),
-  pageNumber: z.number().int().min(1),
-}).strict()
+export const sidecarPagePreviewPayloadSchema = z
+  .object({
+    docId: nonBlank.max(200),
+    pageNumber: z.number().int().min(1),
+  })
+  .strict()
 
-export const sidecarSearchPayloadSchema = z.object({
-  query: z.string().min(1).max(100_000),
-  topK: z.number().int().min(1).max(100).optional(),
-  docIds: z.array(nonBlank.max(200)).max(100).optional(),
-}).strict()
+export const sidecarSearchPayloadSchema = z
+  .object({
+    query: z.string().min(1).max(100_000),
+    topK: z.number().int().min(1).max(100).optional(),
+    docIds: z.array(nonBlank.max(200)).max(100).optional(),
+  })
+  .strict()
 
-export const sidecarExportPayloadSchema = z.object({
-  markdownContent: z.string().min(1).max(10_000_000),
-  format: z.enum(['pdf', 'docx', 'html', 'htm']),
-  outputFolder: boundedPath.optional(),
-}).strict()
+export const sidecarExportPayloadSchema = z
+  .object({
+    markdownContent: z.string().min(1).max(10_000_000),
+    format: z.enum(['pdf', 'docx', 'html', 'htm']),
+    outputFolder: boundedPath.optional(),
+  })
+  .strict()
 
 export type SidecarIngestFilePayload = z.infer<typeof sidecarIngestFilePayloadSchema>
 export type SidecarUpdateDocumentPayload = z.infer<typeof sidecarUpdateDocumentPayloadSchema>

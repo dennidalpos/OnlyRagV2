@@ -55,13 +55,7 @@ export function executeGitDiff(
 }
 
 /** Validates and translates the git commit operation while delegating execution to infrastructure. */
-export function performGitCommit(
-  cwd: string,
-  commitMessage: string,
-  paths: readonly string[],
-  expectedDiffHash: string,
-  commit: GitCommit,
-): GitCommitResult {
+export function performGitCommit(cwd: string, commitMessage: string, paths: readonly string[], expectedDiffHash: string, commit: GitCommit): GitCommitResult {
   const trimmedMessage = (commitMessage || '').trim()
   if (!trimmedMessage) {
     return {

@@ -99,6 +99,5 @@ describe('hardwareProfileTiers', () => {
       const legacyHost = { hasGpu: false, systemRamGB: 8 }
       expect(resolveMaxContextTokens('Auto', legacyHost)).toBe(4096)
     })
-
   })
 })

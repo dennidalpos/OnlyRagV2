@@ -108,9 +108,7 @@ export function extractExportMismatch(output: string): ExportMismatch | null {
  * Ensures the model addresses the primary blocking directive first without cognitive conflict.
  */
 export function buildDeferredDiagnosticNote(output: string): string | null {
-  const codeErrors = parseCompilerDiagnostics(output).filter(
-    (d) => !MODULE_DIAGNOSTIC.test(d.message) && !IN_DEPENDENCY.test(d.file)
-  )
+  const codeErrors = parseCompilerDiagnostics(output).filter((d) => !MODULE_DIAGNOSTIC.test(d.message) && !IN_DEPENDENCY.test(d.file))
   if (codeErrors.length === 0) return null
 
   const shown = codeErrors.slice(0, MAX_REPORTED)
@@ -250,9 +248,7 @@ export function diagnosticFixTargetFile(output: string): string | null {
 
   const mismatch = extractExportMismatch(output)
   if (mismatch) {
-    return mismatch.moduleSpecifier.startsWith('.')
-      ? resolveRelativeImportPath(mismatch.diagnostic.file, mismatch.moduleSpecifier)
-      : mismatch.diagnostic.file
+    return mismatch.moduleSpecifier.startsWith('.') ? resolveRelativeImportPath(mismatch.diagnostic.file, mismatch.moduleSpecifier) : mismatch.diagnostic.file
   }
 
   const missingRelative = extractMissingRelativeModule(output)
@@ -270,7 +266,7 @@ export function buildDiagnosticFixDirective(
   /** What a package exports, injected because this module is pure domain and the answer lives in a .d.ts under node_modules. */
   resolvePackageExports: (packageName: string) => string[] = () => [],
   /** Export names from a relative module, injected to keep filesystem access out of domain. */
-  resolveLocalModuleExports: (importingFile: string, specifier: string) => string[] = () => []
+  resolveLocalModuleExports: (importingFile: string, specifier: string) => string[] = () => [],
 ): string | null {
   const jsxInScript = extractJsxInScriptFile(output)
   if (jsxInScript) {
@@ -330,13 +326,9 @@ export function buildDiagnosticFixDirective(
     const remaining = diagnostics.filter((d) => d !== target)
     const restShown = remaining.slice(0, MAX_REPORTED - 1)
     const restOverflow = remaining.length - restShown.length
-    const rest = restShown
-      .map((d) => `- ${d.file} line ${d.line}${d.code ? ` (${d.code})` : ''}: ${d.message}`)
-      .join('\n')
+    const rest = restShown.map((d) => `- ${d.file} line ${d.line}${d.code ? ` (${d.code})` : ''}: ${d.message}`).join('\n')
 
-    const localModule = mismatch.moduleSpecifier.startsWith('.') ||
-      mismatch.moduleSpecifier.startsWith('/') ||
-      /^[A-Za-z]:[\\/]/.test(mismatch.moduleSpecifier)
+    const localModule = mismatch.moduleSpecifier.startsWith('.') || mismatch.moduleSpecifier.startsWith('/') || /^[A-Za-z]:[\\/]/.test(mismatch.moduleSpecifier)
     if (localModule) {
       const importedTarget = mismatch.moduleSpecifier.startsWith('.')
         ? resolveRelativeImportPath(target.file, mismatch.moduleSpecifier)
@@ -396,9 +388,7 @@ export function buildDiagnosticFixDirective(
     const remaining = diagnostics.filter((d) => d !== target)
     const restShown = remaining.slice(0, MAX_REPORTED - 1)
     const restOverflow = remaining.length - restShown.length
-    const rest = restShown
-      .map((d) => `- ${d.file} line ${d.line}${d.code ? ` (${d.code})` : ''}: ${d.message}`)
-      .join('\n')
+    const rest = restShown.map((d) => `- ${d.file} line ${d.line}${d.code ? ` (${d.code})` : ''}: ${d.message}`).join('\n')
 
     return [
       `[THE IMPORTED FILE DOES NOT EXIST — CREATE IT]`,

@@ -6,7 +6,7 @@ export function consumeNdjsonChunk(
   currentBuffer: string,
   chunk: string | Buffer,
   onParsed: (parsed: any) => void,
-  onWarning?: (err: Error, line: string) => void
+  onWarning?: (err: Error, line: string) => void,
 ): string {
   const combined = currentBuffer + (typeof chunk === 'string' ? chunk : chunk.toString('utf-8'))
   const lines = combined.split('\n')

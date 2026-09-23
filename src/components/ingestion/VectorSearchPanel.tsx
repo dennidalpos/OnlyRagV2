@@ -18,14 +18,10 @@ export const VectorSearchPanel: React.FC<VectorSearchPanelProps> = ({ embeddingM
           <span className="font-bold text-slate-300 flex items-center gap-1.5 text-xs">
             <Database className="w-3.5 h-3.5 text-cyan-400" /> {t('ingestion.vectorSearch')}
           </span>
-          <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-1.5 py-0.5 rounded font-semibold">
-            LanceDB
-          </span>
+          <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-1.5 py-0.5 rounded font-semibold">LanceDB</span>
         </div>
 
-        <p className="text-[11px] text-slate-400 leading-relaxed">
-          {t('ingestion.vectorSearchDescription')}
-        </p>
+        <p className="text-[11px] text-slate-400 leading-relaxed">{t('ingestion.vectorSearchDescription')}</p>
 
         <button
           type="button"
@@ -39,12 +35,7 @@ export const VectorSearchPanel: React.FC<VectorSearchPanelProps> = ({ embeddingM
         </button>
       </div>
 
-      <VectorSearchModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        embeddingModel={embeddingModel}
-      />
+      <VectorSearchModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} embeddingModel={embeddingModel} />
     </>
   )
 }
-

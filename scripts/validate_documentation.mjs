@@ -28,7 +28,11 @@ export function validateDocumentation({ docsRoot, packageJsonPath, additionalRoo
   const errors = []
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
   const scripts = new Set(Object.keys(packageJson.scripts ?? {}))
-  const files = [...markdownFiles(docsRoot), ...additionalRoots.flatMap(markdownFiles), ...additionalFiles.filter((filePath) => filePath.endsWith('.md') && fs.existsSync(filePath))]
+  const files = [
+    ...markdownFiles(docsRoot),
+    ...additionalRoots.flatMap(markdownFiles),
+    ...additionalFiles.filter((filePath) => filePath.endsWith('.md') && fs.existsSync(filePath)),
+  ]
   const linkPattern = /\[[^\]]*\]\(([^)]+)\)/g
   const npmRunPattern = /\bnpm\s+run\s+([A-Za-z0-9:_-]+)/g
 

@@ -31,7 +31,10 @@ function parseArrayField(field: any): string[] {
     return field.map((f) => String(f).trim().toLowerCase()).filter(Boolean)
   }
   if (typeof field === 'string') {
-    return field.split(',').map((f) => f.trim().toLowerCase()).filter(Boolean)
+    return field
+      .split(',')
+      .map((f) => f.trim().toLowerCase())
+      .filter(Boolean)
   }
   return []
 }
@@ -56,23 +59,29 @@ export class JsonCatalogAdapter implements ISkillHubAdapter {
         rawJson = JSON.parse(res.content)
       } catch {
         // Strip markdown code block wrappers if any
-        const cleaned = res.content.replace(/^```(json)?/i, '').replace(/```$/, '').trim()
+        const cleaned = res.content
+          .replace(/^```(json)?/i, '')
+          .replace(/```$/, '')
+          .trim()
         rawJson = JSON.parse(cleaned)
       }
 
       const list = Array.isArray(rawJson)
         ? rawJson
         : Array.isArray(rawJson.skills)
-        ? rawJson.skills
-        : Array.isArray(rawJson.items)
-        ? rawJson.items
-        : Object.values(rawJson)
+          ? rawJson.skills
+          : Array.isArray(rawJson.items)
+            ? rawJson.items
+            : Object.values(rawJson)
 
       const normalized: HubSkillItem[] = []
       for (const item of list) {
         if (!item || typeof item !== 'object') continue
         const name = (item.name || item.title || item.id || item.slug || 'untitled-skill').toString().trim()
-        const id = (item.id || item.slug || name).toString().toLowerCase().replace(/[^a-z0-9-_]/g, '-')
+        const id = (item.id || item.slug || name)
+          .toString()
+          .toLowerCase()
+          .replace(/[^a-z0-9-_]/g, '-')
         const description = (item.description || item.desc || item.summary || `Skill guideline for ${name}`).toString().trim()
         const category = normalizeCategory(item.category || item.type || item.tags?.[0])
         const tags = parseArrayField(item.tags || item.keywords || item.topics)

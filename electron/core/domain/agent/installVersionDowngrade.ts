@@ -1,5 +1,3 @@
-
-
 import { major, maxSatisfying, valid, validRange } from 'semver'
 import { extractRequestedPackages } from './installCommandParser'
 import { majorOf } from './dependencyVersionReality'
@@ -49,10 +47,7 @@ export function requestedInstallVersions(command: string): InstallVersionTarget[
 }
 
 /** Which of these install targets would take a package backwards past a major boundary. */
-export function findManifestDowngrades(
-  targets: readonly InstallVersionTarget[],
-  declaredRanges: Readonly<Record<string, string>>
-): ManifestDowngrade[] {
+export function findManifestDowngrades(targets: readonly InstallVersionTarget[], declaredRanges: Readonly<Record<string, string>>): ManifestDowngrade[] {
   const out: ManifestDowngrade[] = []
   for (const target of targets) {
     const declared = declaredRanges[target.name]
@@ -70,7 +65,7 @@ export function findManifestDowngrades(
 export function findRegistryInstallIssue(
   targets: readonly InstallVersionTarget[],
   declaredRanges: Readonly<Record<string, string>>,
-  registryFacts: readonly RegistryPackageVersions[]
+  registryFacts: readonly RegistryPackageVersions[],
 ): RegistryInstallIssue | null {
   for (const target of targets) {
     const facts = registryFacts.find((item) => item.name === target.name)

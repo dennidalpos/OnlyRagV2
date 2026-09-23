@@ -18,12 +18,7 @@ import { resolveDeclaredFilePaths, resolveMilestoneDeliverableStatus } from '../
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
-export type EmitLog = (
-  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
-  message: string,
-  detail?: string,
-  meta?: Partial<AgentLogEntry>
-) => void
+export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface SessionStateParams {
   payload: AgentTaskPayload
@@ -67,10 +62,7 @@ export interface SavedRunStateSelection {
 }
 
 /** Keeps recoverable execution state scoped to one immutable run identity. */
-export function selectSavedRunState(
-  savedState: SavedAgentSessionState | null,
-  runIdentity: Readonly<AgentRunIdentity>
-): SavedRunStateSelection {
+export function selectSavedRunState(savedState: SavedAgentSessionState | null, runIdentity: Readonly<AgentRunIdentity>): SavedRunStateSelection {
   if (!savedState) return { executionState: null, planSeed: [] }
 
   if (savedState.status === 'IN_PROGRESS' && matchesAgentRunIdentity(savedState.runIdentity, runIdentity)) {
@@ -86,22 +78,20 @@ export function selectSavedRunState(
   }
 
   // Compatibility for an untouched pre-run seed saved before run identities existed.
-  const isLegacyPlanSeed = savedState.status === 'IN_PROGRESS'
-    && !savedState.runIdentity
-    && savedState.stepCount === 0
-    && savedState.episodes.length === 0
-    && !savedState.recoveryFailures?.schema
-    && !savedState.recoveryFailures?.execution
+  const isLegacyPlanSeed =
+    savedState.status === 'IN_PROGRESS' &&
+    !savedState.runIdentity &&
+    savedState.stepCount === 0 &&
+    savedState.episodes.length === 0 &&
+    !savedState.recoveryFailures?.schema &&
+    !savedState.recoveryFailures?.execution
   return isLegacyPlanSeed
     ? { executionState: null, planSeed: savedState.planMilestones, initialUserTask: savedState.initialUserTask || savedState.userTask }
     : { executionState: null, planSeed: [] }
 }
 
 /** Rechecks persisted evidence before a resumed intervention can remain verified. */
-export function revalidateRestoredMilestones(
-  milestones: readonly PlanMilestone[],
-  workspacePath: string | null
-): PlanMilestone[] {
+export function revalidateRestoredMilestones(milestones: readonly PlanMilestone[], workspacePath: string | null): PlanMilestone[] {
   const probe = workspacePath ? createWorkspaceDeliverableProbe(workspacePath) : null
   return milestones.map((milestone) => {
     if (milestone.status !== 'verified') return milestone
@@ -112,9 +102,11 @@ export function revalidateRestoredMilestones(
     if (probe && declaredFiles.length > 0) {
       const currentEvidence = captureMilestoneFileEvidence(workspacePath!, milestone)
       const persistedEvidence = milestone.fileEvidence
-      const fingerprintMatches = currentEvidence && persistedEvidence
-        && declaredFiles.every((filePath) => currentEvidence[filePath] === persistedEvidence[filePath])
-        && Object.keys(persistedEvidence).length === declaredFiles.length
+      const fingerprintMatches =
+        currentEvidence &&
+        persistedEvidence &&
+        declaredFiles.every((filePath) => currentEvidence[filePath] === persistedEvidence[filePath]) &&
+        Object.keys(persistedEvidence).length === declaredFiles.length
       if (!fingerprintMatches) {
         return { ...milestone, status: 'pending', notes: 'Persisted file evidence changed; rerun milestone verification.' }
       }
@@ -178,7 +170,10 @@ export async function initializeSessionState(params: SessionStateParams): Promis
       const staleCount = restoredMilestones.filter((milestone, index) => milestone.status !== executionState.planMilestones[index].status).length
       if (staleCount > 0) emitLog('info', `♻️ ${staleCount} persisted milestone evidence marked for revalidation.`)
     }
-    emitLog('info', `🔄 Restored Session State [${sessionId}]: Continuing from Step ${stepCountBox.value} with ${episodicCompactor.episodeCount} prior steps in memory.`)
+    emitLog(
+      'info',
+      `🔄 Restored Session State [${sessionId}]: Continuing from Step ${stepCountBox.value} with ${episodicCompactor.episodeCount} prior steps in memory.`,
+    )
   } else if (planSeed.length > 0) {
     goalPlanner.loadMilestones(planSeed)
     emitLog('info', `Loaded ${planSeed.length} approved plan milestones for this new run.`)

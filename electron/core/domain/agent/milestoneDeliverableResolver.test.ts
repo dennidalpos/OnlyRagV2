@@ -17,9 +17,7 @@ function probeFrom(files: Record<string, string>): DeliverableProbe {
 
 describe('extractDeliverablePaths', () => {
   it('extracts a backtick-wrapped nested path', () => {
-    expect(extractDeliverablePaths('Create `src/components/Sidebar.tsx` for the sidebar component.')).toEqual([
-      'src/components/Sidebar.tsx',
-    ])
+    expect(extractDeliverablePaths('Create `src/components/Sidebar.tsx` for the sidebar component.')).toEqual(['src/components/Sidebar.tsx'])
   })
 
   it('extracts a bare config file at the workspace root', () => {
@@ -27,10 +25,7 @@ describe('extractDeliverablePaths', () => {
   })
 
   it('extracts multiple deliverables preserving first-seen order without duplicates', () => {
-    expect(extractDeliverablePaths('Wire src/App.tsx to src/pages/Tasks.tsx and re-export src/App.tsx')).toEqual([
-      'src/App.tsx',
-      'src/pages/Tasks.tsx',
-    ])
+    expect(extractDeliverablePaths('Wire src/App.tsx to src/pages/Tasks.tsx and re-export src/App.tsx')).toEqual(['src/App.tsx', 'src/pages/Tasks.tsx'])
   })
 
   it('normalises Windows separators and a leading ./ to workspace-relative form', () => {
@@ -80,9 +75,7 @@ describe('resolveMilestoneDeliverableStatus', () => {
   })
 
   it('reports not_applicable when the milestone names no file', () => {
-    expect(resolveMilestoneDeliverableStatus('Validate the interface at 320px and 1440px.', probeFrom({}))).toBe(
-      'not_applicable'
-    )
+    expect(resolveMilestoneDeliverableStatus('Validate the interface at 320px and 1440px.', probeFrom({}))).toBe('not_applicable')
   })
 
   it('never advances on a false-positive path token that does not exist on disk', () => {

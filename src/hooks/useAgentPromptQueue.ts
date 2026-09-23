@@ -25,7 +25,7 @@ export function useAgentPromptQueue(onNotice?: (message: string) => void) {
         onNotice(`Nuovo prompt aggiunto alla coda (#${promptQueueRef.current.length + 1}): "${trimmed.slice(0, 80)}..."`)
       }
     },
-    [onNotice]
+    [onNotice],
   )
 
   const removeFromPromptQueue = useCallback((id: string) => {
@@ -35,9 +35,7 @@ export function useAgentPromptQueue(onNotice?: (message: string) => void) {
   const editPromptInQueue = useCallback((id: string, newPrompt: string) => {
     const trimmed = newPrompt.trim()
     if (!trimmed) return
-    setPromptQueue((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, prompt: trimmed } : p))
-    )
+    setPromptQueue((prev) => prev.map((p) => (p.id === id ? { ...p, prompt: trimmed } : p)))
   }, [])
 
   const movePromptInQueue = useCallback((fromIndex: number, toIndex: number) => {

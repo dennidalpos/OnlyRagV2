@@ -22,22 +22,19 @@ export function explicitAlternativeInterviewFallback(prompt: string): InterviewQ
   const options = [match[1], match[2]].map((option) => option.trim().replace(/[,;:]$/, ''))
   if (options.some((option) => !option) || options[0].toLocaleLowerCase() === options[1].toLocaleLowerCase()) return []
   const italian = /\b(chiedimi|usare|tra|fra|oppure|quale)\b/i.test(prompt)
-  return [{
-    id: 'explicit-alternative-1',
-    question: italian ? 'Quale alternativa vuoi usare?' : 'Which alternative should be used?',
-    rationale: italian
-      ? 'La scelta modifica il risultato richiesto.'
-      : 'This choice changes the requested result.',
-    options,
-    recommendedIndex: 0,
-  }]
+  return [
+    {
+      id: 'explicit-alternative-1',
+      question: italian ? 'Quale alternativa vuoi usare?' : 'Which alternative should be used?',
+      rationale: italian ? 'La scelta modifica il risultato richiesto.' : 'This choice changes the requested result.',
+      options,
+      recommendedIndex: 0,
+    },
+  ]
 }
 
 /** Runs the interview only when the request exposes a decision the user must make. */
-export function shouldRunPlanInterview(
-  prompt: string,
-  previousDecisions: readonly UserInterviewAnswer[] = []
-): boolean {
+export function shouldRunPlanInterview(prompt: string, previousDecisions: readonly UserInterviewAnswer[] = []): boolean {
   const request = prompt.trim()
   if (!request) return false
   if (EXPLICIT_INTERVIEW_REQUEST.some((pattern) => pattern.test(request))) return true

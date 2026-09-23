@@ -14,9 +14,8 @@ export function resolveAgentCapabilityProfile(input?: Partial<AppSettings | Agen
   return {
     allowFileModifications: input?.allowFileModifications === true,
     allowTerminalExecution: input?.allowTerminalExecution === true,
-    capabilityPolicyMode: input?.capabilityPolicyMode === 'local-only' || input?.capabilityPolicyMode === 'network-approved'
-      ? input.capabilityPolicyMode
-      : 'offline-strict',
+    capabilityPolicyMode:
+      input?.capabilityPolicyMode === 'local-only' || input?.capabilityPolicyMode === 'network-approved' ? input.capabilityPolicyMode : 'offline-strict',
     maxToolCallSteps: normalizeAgentStepBudget(steps),
   }
 }

@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  classifyModuleDiagnostic,
-  unresolvedPackages,
-  packageOfSpecifier,
-  buildModuleResolutionDirective,
-} from './moduleResolutionDiagnostic'
+import { classifyModuleDiagnostic, unresolvedPackages, packageOfSpecifier, buildModuleResolutionDirective } from './moduleResolutionDiagnostic'
 
 /** Verbatim from run 7 of 2026-08-25, where every package named was already installed. */
 const RUN_7_OUTPUT = `

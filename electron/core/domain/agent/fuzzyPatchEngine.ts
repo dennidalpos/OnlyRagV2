@@ -41,12 +41,7 @@ function calculateSimilarity(a: string, b: string): number {
 /**
  * Applies fuzzy chunk replacement with whitespace tolerance and sliding window matching.
  */
-export function applyFuzzyReplace(
-  fileContent: string,
-  targetContent: string,
-  replacementContent: string,
-  minSimilarityThreshold = 0.82
-): FuzzyReplaceResult {
+export function applyFuzzyReplace(fileContent: string, targetContent: string, replacementContent: string, minSimilarityThreshold = 0.82): FuzzyReplaceResult {
   const normalizedFile = normalizeLineEndings(fileContent)
   const normalizedTarget = normalizeLineEndings(targetContent)
   const normalizedReplacement = normalizeLineEndings(replacementContent)
@@ -110,23 +105,14 @@ export function validateAST(filePath: string, content: string): ASTValidationRes
       }
     }
 
-    const sourceFile = ts.createSourceFile(
-      filePath,
-      content,
-      ts.ScriptTarget.Latest,
-      true,
-      scriptKindForPath(filePath)
-    )
+    const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true, scriptKindForPath(filePath))
 
     const sourceWithDiags = sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }
     const diagnostics = sourceWithDiags.parseDiagnostics || []
     if (diagnostics.length > 0) {
       const firstErr = diagnostics[0]
       const { line, character } = ts.getLineAndCharacterOfPosition(sourceFile, firstErr.start || 0)
-      const messageText =
-        typeof firstErr.messageText === 'string'
-          ? firstErr.messageText
-          : firstErr.messageText.messageText
+      const messageText = typeof firstErr.messageText === 'string' ? firstErr.messageText : firstErr.messageText.messageText
       return {
         isValid: false,
         syntaxError: `AST Syntax Error: ${messageText}`,

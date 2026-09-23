@@ -67,7 +67,7 @@ try {
   await settingsBanner.getByRole('button').click()
   await settingsBanner.waitFor({ state: 'detached', timeout: 10_000 })
   await page.waitForTimeout(400)
-  assert(await application.evaluate(() => globalThis.__diagnosticsCalls) > 0, 'Diagnostics did not start after a successful retry')
+  assert((await application.evaluate(() => globalThis.__diagnosticsCalls)) > 0, 'Diagnostics did not start after a successful retry')
   persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
   assert.equal(persisted.settings.defaultModel, explicitSettings.defaultModel)
 
@@ -184,7 +184,9 @@ try {
   assert.equal(writes.calls, 3, 'Separated changes did not produce the expected saves')
   assert.equal(writes.maxActive, 1, 'Settings saves overlapped')
   assert.equal(writes.last.language, 'it')
-  console.log('[PASS] Settings bootstrap, real file precedence, unreadable-file recovery, one-shot migration, language, wizard and serialized/coalesced writes.')
+  console.log(
+    '[PASS] Settings bootstrap, real file precedence, unreadable-file recovery, one-shot migration, language, wizard and serialized/coalesced writes.',
+  )
 } finally {
   if (application) await application.close()
   fs.rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })

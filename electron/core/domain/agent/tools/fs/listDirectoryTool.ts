@@ -25,8 +25,7 @@ export function executeListDirectoryTool(
     const entries = repository.listDirEntries(pathCheck.safePath)
     if (entries) {
       const output =
-        `Listed directory [${dirPath}] (${entries.length} items):\n` +
-        entries.map((entry) => `${entry.isDir ? '[DIR]' : '[FILE]'} ${entry.name}`).join('\n')
+        `Listed directory [${dirPath}] (${entries.length} items):\n` + entries.map((entry) => `${entry.isDir ? '[DIR]' : '[FILE]'} ${entry.name}`).join('\n')
       return {
         outcome: 'success',
         outputForHistory: output,

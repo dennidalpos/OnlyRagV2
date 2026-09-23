@@ -33,35 +33,37 @@ describe('OllamaHttpClient — /api/tags Consolidation Unit Tests', () => {
         path: '/api/tags',
         handler: (_req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({
-            models: [
-              {
-                name: 'qwen2.5-coder:7b',
-                digest: 'sha256:abcd1234',
-                modified_at: '2026-08-20T12:00:00Z',
-                size: 4700000000,
-                details: {
-                  parameter_size: '7.6B',
-                  quantization_level: 'Q4_K_M',
-                  family: 'qwen2',
-                  context_length: 32768,
+          res.end(
+            JSON.stringify({
+              models: [
+                {
+                  name: 'qwen2.5-coder:7b',
+                  digest: 'sha256:abcd1234',
+                  modified_at: '2026-08-20T12:00:00Z',
+                  size: 4700000000,
+                  details: {
+                    parameter_size: '7.6B',
+                    quantization_level: 'Q4_K_M',
+                    family: 'qwen2',
+                    context_length: 32768,
+                  },
+                  capabilities: ['completion', 'tools'],
                 },
-                capabilities: ['completion', 'tools'],
-              },
-              {
-                name: 'llama3.2:3b',
-                digest: 'sha256:efgh5678',
-                modified_at: '2026-08-21T14:00:00Z',
-                size: 2000000000,
-                details: {
-                  parameter_size: '3.2B',
-                  quantization_level: 'Q4_K_M',
-                  family: 'llama',
+                {
+                  name: 'llama3.2:3b',
+                  digest: 'sha256:efgh5678',
+                  modified_at: '2026-08-21T14:00:00Z',
+                  size: 2000000000,
+                  details: {
+                    parameter_size: '3.2B',
+                    quantization_level: 'Q4_K_M',
+                    family: 'llama',
+                  },
+                  capabilities: ['completion'],
                 },
-                capabilities: ['completion'],
-              },
-            ],
-          }))
+              ],
+            }),
+          )
         },
       },
       {
@@ -69,7 +71,9 @@ describe('OllamaHttpClient — /api/tags Consolidation Unit Tests', () => {
         path: '/api/show',
         handler: (req, res) => {
           let body = ''
-          req.on('data', (c) => { body += c })
+          req.on('data', (c) => {
+            body += c
+          })
           req.on('end', () => {
             const parsed = JSON.parse(body || '{}')
             if (parsed.model === 'llama3.2:3b') {
@@ -144,19 +148,23 @@ describe('OllamaHttpClient — structured chat responses', () => {
 
   beforeEach(async () => {
     capturedRequest = null
-    const mock = await createMockOllamaServer([{
-      method: 'POST',
-      path: '/api/chat',
-      handler: (req, res) => {
-        let raw = ''
-        req.on('data', (chunk) => { raw += chunk })
-        req.on('end', () => {
-          capturedRequest = JSON.parse(raw)
-          res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify(responseBody))
-        })
+    const mock = await createMockOllamaServer([
+      {
+        method: 'POST',
+        path: '/api/chat',
+        handler: (req, res) => {
+          let raw = ''
+          req.on('data', (chunk) => {
+            raw += chunk
+          })
+          req.on('end', () => {
+            capturedRequest = JSON.parse(raw)
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify(responseBody))
+          })
+        },
       },
-    }])
+    ])
     server = mock.server
     client = new OllamaHttpClient()
     client.setBaseHost(mock.baseUrl)
@@ -234,35 +242,36 @@ describe('OllamaHttpClient — immutable request hosts', () => {
 
   beforeEach(async () => {
     received.length = 0
-    const create = (name: string) => createMockOllamaServer([
-      {
-        method: 'POST',
-        path: '/api/pull',
-        handler: (_req, res) => {
-          received.push(`${name}:pull`)
-          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
-          res.end('{"status":"success"}\n')
+    const create = (name: string) =>
+      createMockOllamaServer([
+        {
+          method: 'POST',
+          path: '/api/pull',
+          handler: (_req, res) => {
+            received.push(`${name}:pull`)
+            res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+            res.end('{"status":"success"}\n')
+          },
         },
-      },
-      {
-        method: 'DELETE',
-        path: '/api/delete',
-        handler: (_req, res) => {
-          received.push(`${name}:delete`)
-          res.writeHead(200)
-          res.end()
+        {
+          method: 'DELETE',
+          path: '/api/delete',
+          handler: (_req, res) => {
+            received.push(`${name}:delete`)
+            res.writeHead(200)
+            res.end()
+          },
         },
-      },
-      {
-        method: 'POST',
-        path: '/api/generate',
-        handler: (_req, res) => {
-          received.push(`${name}:generate`)
-          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
-          res.end('{"response":"ok"}\n{"done":true}\n')
+        {
+          method: 'POST',
+          path: '/api/generate',
+          handler: (_req, res) => {
+            received.push(`${name}:generate`)
+            res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+            res.end('{"response":"ok"}\n{"done":true}\n')
+          },
         },
-      },
-    ])
+      ])
     const [left, right] = await Promise.all([create('first'), create('second')])
     first = left.server
     second = right.server
@@ -277,11 +286,15 @@ describe('OllamaHttpClient — immutable request hosts', () => {
 
   it('keeps concurrent pull, delete, and generation requests on their supplied hosts', async () => {
     const client = new OllamaHttpClient()
-    const [pull, deleted] = await Promise.all([
-      client.pullModel('model-a', firstHost),
-      client.deleteModel('model-b', secondHost),
-    ])
-    const generated = await client.generateStream('model-c', 'hello', () => {}, () => {}, undefined, secondHost)
+    const [pull, deleted] = await Promise.all([client.pullModel('model-a', firstHost), client.deleteModel('model-b', secondHost)])
+    const generated = await client.generateStream(
+      'model-c',
+      'hello',
+      () => {},
+      () => {},
+      undefined,
+      secondHost,
+    )
 
     expect(pull.success).toBe(true)
     expect(deleted.success).toBe(true)
@@ -306,23 +319,32 @@ describe('OllamaHttpClient — stream failures', () => {
 
   it('sends the top-level thinking choice and streams only final content', async () => {
     let capturedRequest: Record<string, unknown> | undefined
-    const mock = await createMockOllamaServer([{
-      method: 'POST',
-      path: '/api/generate',
-      handler: (req, res) => {
-        let raw = ''
-        req.on('data', (chunk) => { raw += chunk })
-        req.on('end', () => {
-          capturedRequest = JSON.parse(raw)
-          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
-          res.end('{"thinking":"private","response":"answer","done":false}\n{"done":true}\n')
-        })
+    const mock = await createMockOllamaServer([
+      {
+        method: 'POST',
+        path: '/api/generate',
+        handler: (req, res) => {
+          let raw = ''
+          req.on('data', (chunk) => {
+            raw += chunk
+          })
+          req.on('end', () => {
+            capturedRequest = JSON.parse(raw)
+            res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+            res.end('{"thinking":"private","response":"answer","done":false}\n{"done":true}\n')
+          })
+        },
       },
-    }])
+    ])
     server = mock.server
     const chunks: string[] = []
     const result = await new OllamaHttpClient().generateStream(
-      'qwen3:4b', 'hello', (chunk) => chunks.push(chunk), () => {}, { think: true }, mock.baseUrl,
+      'qwen3:4b',
+      'hello',
+      (chunk) => chunks.push(chunk),
+      () => {},
+      { think: true },
+      mock.baseUrl,
     )
     expect(result.success).toBe(true)
     expect(capturedRequest?.think).toBe(true)
@@ -330,19 +352,30 @@ describe('OllamaHttpClient — stream failures', () => {
   })
 
   it('returns HTTP failures without emitting error text or completion', async () => {
-    const mock = await createMockOllamaServer([{
-      method: 'POST',
-      path: '/api/generate',
-      handler: (_req, res) => {
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end('{"error":"failed"}')
+    const mock = await createMockOllamaServer([
+      {
+        method: 'POST',
+        path: '/api/generate',
+        handler: (_req, res) => {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end('{"error":"failed"}')
+        },
       },
-    }])
+    ])
     server = mock.server
     const chunks: string[] = []
     let done = false
 
-    const result = await new OllamaHttpClient().generateStream('model', 'prompt', (chunk) => chunks.push(chunk), () => { done = true }, undefined, mock.baseUrl)
+    const result = await new OllamaHttpClient().generateStream(
+      'model',
+      'prompt',
+      (chunk) => chunks.push(chunk),
+      () => {
+        done = true
+      },
+      undefined,
+      mock.baseUrl,
+    )
 
     expect(result).toMatchObject({ success: false })
     expect(chunks).toEqual([])
@@ -350,18 +383,27 @@ describe('OllamaHttpClient — stream failures', () => {
   })
 
   it('rejects a partial stream that lacks the terminal done event', async () => {
-    const mock = await createMockOllamaServer([{
-      method: 'POST',
-      path: '/api/generate',
-      handler: (_req, res) => {
-        res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
-        res.end('{"response":"partial"}\n')
+    const mock = await createMockOllamaServer([
+      {
+        method: 'POST',
+        path: '/api/generate',
+        handler: (_req, res) => {
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+          res.end('{"response":"partial"}\n')
+        },
       },
-    }])
+    ])
     server = mock.server
     const chunks: string[] = []
 
-    const result = await new OllamaHttpClient().generateStream('model', 'prompt', (chunk) => chunks.push(chunk), () => {}, undefined, mock.baseUrl)
+    const result = await new OllamaHttpClient().generateStream(
+      'model',
+      'prompt',
+      (chunk) => chunks.push(chunk),
+      () => {},
+      undefined,
+      mock.baseUrl,
+    )
 
     expect(result).toEqual({ success: false, error: 'Ollama stream ended before completion.' })
     expect(chunks).toEqual(['partial'])

@@ -46,10 +46,7 @@ describe('createSingleFlight', () => {
   })
 
   it('releases the slot after a rejection instead of wedging later callers', async () => {
-    const operation = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('sidecar unreachable'))
-      .mockResolvedValueOnce('recovered')
+    const operation = vi.fn().mockRejectedValueOnce(new Error('sidecar unreachable')).mockResolvedValueOnce('recovered')
     const call = createSingleFlight(operation)
 
     await expect(call()).rejects.toThrow('sidecar unreachable')

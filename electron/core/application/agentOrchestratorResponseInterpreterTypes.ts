@@ -12,12 +12,7 @@ import type { AgentSessionTerminationReason } from '../infrastructure/filesystem
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
 import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 
-export type EmitLog = (
-  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
-  message: string,
-  detail?: string,
-  meta?: Partial<AgentLogEntry>
-) => void
+export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 /** Loop-scoped counters the response interpreter and its helpers read and advance across turns. */
 export interface ResponseInterpreterState {

@@ -3,7 +3,6 @@ import { PROMPT_NODE_IDS, type PromptNodeId } from '../../../../shared/domain/ag
 import { normalizeAgentStepBudget } from '../../../../shared/domain/agent/agentStepBudget'
 import { DEFAULT_APP_SETTINGS } from '../../../../shared/domain/settings/appSettingsDefaults'
 
-
 export const MIN_MODEL_CONTEXT_LENGTH = 2048
 
 export function sanitizeModelContextLengths(raw: unknown): Record<string, number> | undefined {
@@ -51,24 +50,16 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
   // starts execution through an explicit action bound to one persisted revision.
 
   const ocrEngine =
-    typeof raw.ocrEngine === 'string' && VALID_OCR_ENGINES.has(raw.ocrEngine)
-      ? (raw.ocrEngine as 'native_cuda' | 'vision_model')
-      : defaults.ocrEngine
+    typeof raw.ocrEngine === 'string' && VALID_OCR_ENGINES.has(raw.ocrEngine) ? (raw.ocrEngine as 'native_cuda' | 'vision_model') : defaults.ocrEngine
 
   const autoInstallHubSkills =
     typeof raw.autoInstallHubSkills === 'string' && VALID_AUTO_INSTALL_POLICIES.has(raw.autoInstallHubSkills)
       ? (raw.autoInstallHubSkills as 'disabled' | 'prompt')
       : defaults.autoInstallHubSkills
 
-  const language =
-    typeof raw.language === 'string' && VALID_LANGUAGES.has(raw.language)
-      ? (raw.language as 'it' | 'en')
-      : defaults.language
+  const language = typeof raw.language === 'string' && VALID_LANGUAGES.has(raw.language) ? (raw.language as 'it' | 'en') : defaults.language
 
-  const ollamaMode =
-    typeof raw.ollamaMode === 'string' && VALID_OLLAMA_MODES.has(raw.ollamaMode)
-      ? (raw.ollamaMode as 'local' | 'remote')
-      : defaults.ollamaMode
+  const ollamaMode = typeof raw.ollamaMode === 'string' && VALID_OLLAMA_MODES.has(raw.ollamaMode) ? (raw.ollamaMode as 'local' | 'remote') : defaults.ollamaMode
 
   const capabilityPolicyMode =
     typeof raw.capabilityPolicyMode === 'string' && VALID_CAPABILITY_POLICY_MODES.has(raw.capabilityPolicyMode)
@@ -83,7 +74,8 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     capabilityPolicyMode,
     language,
     autoInstallHubSkills,
-    autoInstallMinScore: typeof raw.autoInstallMinScore === 'number' && !isNaN(raw.autoInstallMinScore) ? raw.autoInstallMinScore : defaults.autoInstallMinScore,
+    autoInstallMinScore:
+      typeof raw.autoInstallMinScore === 'number' && !isNaN(raw.autoInstallMinScore) ? raw.autoInstallMinScore : defaults.autoInstallMinScore,
     enableSkillRouter: typeof raw.enableSkillRouter === 'boolean' ? raw.enableSkillRouter : defaults.enableSkillRouter,
     maxToolCallSteps: normalizeAgentStepBudget(raw.maxToolCallSteps),
     enableCodingAgentDebugLog: typeof raw.enableCodingAgentDebugLog === 'boolean' ? raw.enableCodingAgentDebugLog : defaults.enableCodingAgentDebugLog,

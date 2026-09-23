@@ -2,12 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { extractRequestedPackages, packagesWithFailedInstall } from './installCommandParser'
 import type { InstallAttemptRecord } from './installCommandParser'
 
-function attempt(
-  target: string,
-  status: InstallAttemptRecord['status'],
-  tool = 'run_command',
-  summary?: string
-): InstallAttemptRecord {
+function attempt(target: string, status: InstallAttemptRecord['status'], tool = 'run_command', summary?: string): InstallAttemptRecord {
   return { tool, target, status, summary }
 }
 
@@ -20,9 +15,7 @@ describe('extractRequestedPackages', () => {
   })
 
   it('keeps a scope and strips only the trailing version', () => {
-    expect(extractRequestedPackages('npm install @vitejs/plugin-react@^6.1.0')).toEqual([
-      { name: '@vitejs/plugin-react', hasExplicitVersion: true },
-    ])
+    expect(extractRequestedPackages('npm install @vitejs/plugin-react@^6.1.0')).toEqual([{ name: '@vitejs/plugin-react', hasExplicitVersion: true }])
   })
 
   it('reports nothing for a bare install, which reinstalls from the lockfile', () => {
@@ -49,23 +42,13 @@ describe('packagesWithFailedInstall', () => {
 
   it('reports a package that failed twice with no success in between', () => {
     // `@tailwindcss/react` does not exist on npm: it fails every single attempt.
-    const episodes = [
-      attempt('npm install @tailwindcss/react', 'FAILURE'),
-      attempt('npm install @tailwindcss/react', 'FAILURE'),
-    ]
+    const episodes = [attempt('npm install @tailwindcss/react', 'FAILURE'), attempt('npm install @tailwindcss/react', 'FAILURE')]
 
     expect(packagesWithFailedInstall(episodes)).toEqual(['@tailwindcss/react'])
   })
 
   it('reports a package after one authoritative registry refusal', () => {
-    const episodes = [
-      attempt(
-        'npm install @tailwindcss/react',
-        'FAILURE',
-        'run_command',
-        'Install refused: @tailwindcss/react does not exist on npm'
-      ),
-    ]
+    const episodes = [attempt('npm install @tailwindcss/react', 'FAILURE', 'run_command', 'Install refused: @tailwindcss/react does not exist on npm')]
 
     expect(packagesWithFailedInstall(episodes)).toEqual(['@tailwindcss/react'])
   })
@@ -83,11 +66,7 @@ describe('packagesWithFailedInstall', () => {
   })
 
   it('resets the count on a success, even after two earlier failures', () => {
-    const episodes = [
-      attempt('npm install pkg', 'FAILURE'),
-      attempt('npm install pkg', 'FAILURE'),
-      attempt('npm install pkg', 'SUCCESS'),
-    ]
+    const episodes = [attempt('npm install pkg', 'FAILURE'), attempt('npm install pkg', 'FAILURE'), attempt('npm install pkg', 'SUCCESS')]
 
     // Installed is installed. A later unrelated failure starts counting from scratch.
     expect(packagesWithFailedInstall(episodes)).toEqual([])

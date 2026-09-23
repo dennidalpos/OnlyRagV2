@@ -47,8 +47,14 @@ describe('SystemAppService Unit Tests', () => {
     it('should reject invalid or non-http/mailto schemes', async () => {
       const openedUrls: string[] = []
       const customService = new SystemAppService(
-        { loadSettings: async () => ({ capabilityPolicyMode: 'network-approved' } as any) },
-        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '', showOpenDialog: async () => [] }
+        { loadSettings: async () => ({ capabilityPolicyMode: 'network-approved' }) as any },
+        {
+          openExternal: async (u) => {
+            openedUrls.push(u)
+          },
+          openPath: async () => '',
+          showOpenDialog: async () => [],
+        },
       )
 
       expect(await customService.openExternal('')).toBe(false)
@@ -60,8 +66,14 @@ describe('SystemAppService Unit Tests', () => {
     it('should block external URLs when policy is offline-strict', async () => {
       const openedUrls: string[] = []
       const customService = new SystemAppService(
-        { loadSettings: async () => ({ capabilityPolicyMode: 'offline-strict' } as any) },
-        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '', showOpenDialog: async () => [] }
+        { loadSettings: async () => ({ capabilityPolicyMode: 'offline-strict' }) as any },
+        {
+          openExternal: async (u) => {
+            openedUrls.push(u)
+          },
+          openPath: async () => '',
+          showOpenDialog: async () => [],
+        },
       )
 
       const result = await customService.openExternal('https://github.com')
@@ -72,8 +84,14 @@ describe('SystemAppService Unit Tests', () => {
     it('should block non-loopback URLs when policy is local-only', async () => {
       const openedUrls: string[] = []
       const customService = new SystemAppService(
-        { loadSettings: async () => ({ capabilityPolicyMode: 'local-only' } as any) },
-        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '', showOpenDialog: async () => [] }
+        { loadSettings: async () => ({ capabilityPolicyMode: 'local-only' }) as any },
+        {
+          openExternal: async (u) => {
+            openedUrls.push(u)
+          },
+          openPath: async () => '',
+          showOpenDialog: async () => [],
+        },
       )
 
       expect(await customService.openExternal('https://github.com')).toBe(false)
@@ -86,8 +104,14 @@ describe('SystemAppService Unit Tests', () => {
     it('should allow external URLs when policy is permissive or default', async () => {
       const openedUrls: string[] = []
       const customService = new SystemAppService(
-        { loadSettings: async () => ({ capabilityPolicyMode: 'network-approved' } as any) },
-        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '', showOpenDialog: async () => [] }
+        { loadSettings: async () => ({ capabilityPolicyMode: 'network-approved' }) as any },
+        {
+          openExternal: async (u) => {
+            openedUrls.push(u)
+          },
+          openPath: async () => '',
+          showOpenDialog: async () => [],
+        },
       )
 
       const result = await customService.openExternal('https://github.com/dennidalpos/OnlyRagV2')
@@ -99,8 +123,15 @@ describe('SystemAppService Unit Tests', () => {
       const openedPaths: string[] = []
       const customService = new SystemAppService(
         { loadSettings: async () => null },
-        { openExternal: async () => {}, openPath: async (p) => { openedPaths.push(p); return '' }, showOpenDialog: async () => [] },
-        (p) => p === '/my/workspace/folder'
+        {
+          openExternal: async () => {},
+          openPath: async (p) => {
+            openedPaths.push(p)
+            return ''
+          },
+          showOpenDialog: async () => [],
+        },
+        (p) => p === '/my/workspace/folder',
       )
 
       expect(await customService.openPath('')).toBe(false)

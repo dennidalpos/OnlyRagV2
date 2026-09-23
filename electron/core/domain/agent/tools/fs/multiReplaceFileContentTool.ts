@@ -40,14 +40,14 @@ export async function executeMultiReplaceFileContentTool(
   const safePath = pathCheck.safePath
 
   if (!filePath || replacements.length === 0) {
-    return { outcome: 'rejected', outputForHistory: `Missing parameters or empty chunks for multi-replace: ${filePath || 'unknown'}`, logMessage: 'Missing multi-replace parameters' }
+    return {
+      outcome: 'rejected',
+      outputForHistory: `Missing parameters or empty chunks for multi-replace: ${filePath || 'unknown'}`,
+      logMessage: 'Missing multi-replace parameters',
+    }
   }
 
-  const skillViolation = skillAdherence(
-    String(filePath),
-    replacements.map((replacement) => replacement.replacementContent).join('\n'),
-    activeSkillGuidelines,
-  )
+  const skillViolation = skillAdherence(String(filePath), replacements.map((replacement) => replacement.replacementContent).join('\n'), activeSkillGuidelines)
   if (skillViolation) {
     return {
       outcome: 'rejected',
@@ -83,29 +83,28 @@ export async function executeMultiReplaceFileContentTool(
     }
   }
 
-  const result = repository.writeFileVersioned(
-    safePath,
-    prepared.content,
-    actualHash,
-    (originalContent) => journal.recordOriginalState(safePath, originalContent),
+  const result = repository.writeFileVersioned(safePath, prepared.content, actualHash, (originalContent) =>
+    journal.recordOriginalState(safePath, originalContent),
   )
-  if (result.success) return {
-    outcome: 'success',
-    outputForHistory: `Successfully replaced ${prepared.replacedCount} chunks in ${filePath}`,
-    logMessage: `Successfully applied ${prepared.replacedCount} replacements in ${path.basename(filePath)}`,
-    changeStats: buildChangeStats(safePath, beforeContent, prepared.content),
-  }
+  if (result.success)
+    return {
+      outcome: 'success',
+      outputForHistory: `Successfully replaced ${prepared.replacedCount} chunks in ${filePath}`,
+      logMessage: `Successfully applied ${prepared.replacedCount} replacements in ${path.basename(filePath)}`,
+      changeStats: buildChangeStats(safePath, beforeContent, prepared.content),
+    }
 
-  if (result.conflict) return {
-    outcome: 'rejected',
-    outputForHistory: versionConflictFeedback(
-      String(filePath),
-      actualHash,
-      result.currentContentHash || 'missing',
-      compactMutationDiff(result.currentContent || '', prepared.content),
-    ),
-    logMessage: `Multi-replace rejected: concurrent change in ${path.basename(filePath)}`,
-  }
+  if (result.conflict)
+    return {
+      outcome: 'rejected',
+      outputForHistory: versionConflictFeedback(
+        String(filePath),
+        actualHash,
+        result.currentContentHash || 'missing',
+        compactMutationDiff(result.currentContent || '', prepared.content),
+      ),
+      logMessage: `Multi-replace rejected: concurrent change in ${path.basename(filePath)}`,
+    }
 
   const failureFeedback = `[REPLACE FILE ERROR IN ${filePath}]\n${result.error}\nNo partial replacement was written.`
   return { outcome: 'failure', outputForHistory: failureFeedback, logMessage: `Multi-replace failed in ${path.basename(filePath)}: ${result.error}` }

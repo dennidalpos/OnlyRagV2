@@ -57,15 +57,7 @@ const getFileIcon = (fileName: string, isPinned: boolean) => {
   return <FileCode2 className={`w-3.5 h-3.5 shrink-0 ${isPinned ? 'text-cyan-300' : 'text-slate-400'}`} />
 }
 
-export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
-  item,
-  level,
-  selectedFilePath,
-  pinnedPaths,
-  searchFilter = '',
-  onOpenFile,
-  onTogglePinFile,
-}) => {
+export const FileTreeNode: React.FC<FileTreeNodeProps> = ({ item, level, selectedFilePath, pinnedPaths, searchFilter = '', onOpenFile, onTogglePinFile }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [children, setChildren] = useState<WorkspaceFile[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(false)
@@ -74,9 +66,7 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
   const isSelected = selectedFilePath === item.path
 
   // Check if this item matches search filter
-  const matchesFilter = searchFilter
-    ? item.name.toLowerCase().includes(searchFilter.toLowerCase())
-    : true
+  const matchesFilter = searchFilter ? item.name.toLowerCase().includes(searchFilter.toLowerCase()) : true
 
   const handleToggle = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -136,8 +126,8 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
           isSelected
             ? 'bg-cyan-950/70 text-cyan-200 border-l-2 border-cyan-400 font-semibold shadow-inner'
             : isPinned
-            ? 'bg-cyan-950/25 text-cyan-300 hover:bg-slate-900/90'
-            : 'text-slate-300 hover:bg-slate-900/80 hover:text-slate-100'
+              ? 'bg-cyan-950/25 text-cyan-300 hover:bg-slate-900/90'
+              : 'text-slate-300 hover:bg-slate-900/80 hover:text-slate-100'
         }`}
         title={item.path}
       >
@@ -191,16 +181,9 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
 
       {/* Directory Children with vertical guide line */}
       {item.isDir && isOpen && (
-        <div
-          role="group"
-          aria-label={`Contenuto cartella ${item.name}`}
-          className="relative ml-3 pl-1 border-l border-slate-800/80 space-y-0.5 mt-0.5"
-        >
+        <div role="group" aria-label={`Contenuto cartella ${item.name}`} className="relative ml-3 pl-1 border-l border-slate-800/80 space-y-0.5 mt-0.5">
           {children.length === 0 && !isLoading ? (
-            <div
-              style={{ paddingLeft: `${Math.max(8, (level + 1) * 16 + 8)}px` }}
-              className="py-1 text-[10px] text-slate-500 italic font-mono"
-            >
+            <div style={{ paddingLeft: `${Math.max(8, (level + 1) * 16 + 8)}px` }} className="py-1 text-[10px] text-slate-500 italic font-mono">
               (cartella vuota)
             </div>
           ) : (
@@ -222,4 +205,3 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
     </div>
   )
 }
-

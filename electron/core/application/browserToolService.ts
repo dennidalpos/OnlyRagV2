@@ -19,10 +19,7 @@ interface BrowserToolDependencies {
 export class BrowserToolService {
   constructor(private readonly dependencies: BrowserToolDependencies) {}
 
-  async executeOpenInBrowser(
-    parameters: AgentToolCall['parameters'],
-    workspacePath: string | null | undefined,
-  ): Promise<ToolExecutionResult> {
+  async executeOpenInBrowser(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): Promise<ToolExecutionResult> {
     const filePath = parameters.filePath || parameters.path
     const url = parameters.url
     if (!filePath && !url) {
@@ -34,7 +31,7 @@ export class BrowserToolService {
     }
 
     try {
-      if (url && (/^https?:\/\//i).test(url)) {
+      if (url && /^https?:\/\//i.test(url)) {
         await this.dependencies.openExternal(url)
         return {
           outcome: 'success',

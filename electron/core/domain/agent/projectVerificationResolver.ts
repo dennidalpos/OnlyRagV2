@@ -1,5 +1,3 @@
-
-
 /** What the caller must be able to tell us about the workspace. */
 export interface WorkspaceManifest {
   /** Parsed package.json, or null when absent/unparseable. */
@@ -62,7 +60,10 @@ export function isTerminatingScript(scriptBody: string): boolean {
   if (WATCH_FLAG.test(script) || SERVER_WORD.test(script)) return false
 
   for (const segment of script.split(/&&|\|\||;/)) {
-    const tokens = segment.trim().split(/\s+/).filter((t) => t && !t.startsWith('-'))
+    const tokens = segment
+      .trim()
+      .split(/\s+/)
+      .filter((t) => t && !t.startsWith('-'))
     if (tokens.length === 0) continue
     const offset = tokens[0] === 'npx' || tokens[0] === 'npm' ? 1 : 0
     const cli = tokens[offset]

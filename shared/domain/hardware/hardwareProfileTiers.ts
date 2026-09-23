@@ -1,5 +1,3 @@
-
-
 export type HardwareProfileTier = 'legacy' | 'entry' | 'midrange' | 'highend' | 'extreme'
 
 /** Internal compatibility profiles used only by the recommendation/runtime calculation. */
@@ -54,10 +52,7 @@ export function classifyHardwareProfileTier(facts: HardwareFacts): HardwareProfi
  * Resolves the effective tier honouring an explicit user override. `Auto` defers to the
  * detected hardware; the coarse manual profiles map onto the nearest detailed tier.
  */
-export function resolveEffectiveTier(
-  declared: DeclaredHardwareProfile = 'Auto',
-  facts: HardwareFacts = {}
-): HardwareProfileTier {
+export function resolveEffectiveTier(declared: DeclaredHardwareProfile = 'Auto', facts: HardwareFacts = {}): HardwareProfileTier {
   if (declared === 'Low') return 'legacy'
   if (declared === 'Medium') return 'midrange'
   if (declared === 'High') return 'highend'
@@ -85,17 +80,9 @@ export function calculateUsableSystemRamGB(systemRamGB: number): number {
 }
 
 /** Resolves optimal context tokens (num_ctx) based on declared profile, hardware facts, and system RAM offloading. */
-export function resolveMaxContextTokens(
-  declared: DeclaredHardwareProfile = 'Auto',
-  facts: HardwareFacts = {}
-): number {
+export function resolveMaxContextTokens(declared: DeclaredHardwareProfile = 'Auto', facts: HardwareFacts = {}): number {
   const hardwareTier = resolveEffectiveTier(declared, facts)
-  let effectiveTier: 'Low' | 'Medium' | 'High' =
-    hardwareTier === 'legacy'
-      ? 'Low'
-      : hardwareTier === 'entry' || hardwareTier === 'midrange'
-        ? 'Medium'
-        : 'High'
+  let effectiveTier: 'Low' | 'Medium' | 'High' = hardwareTier === 'legacy' ? 'Low' : hardwareTier === 'entry' || hardwareTier === 'midrange' ? 'Medium' : 'High'
 
   const vramBaseCtx = effectiveTier === 'Low' ? 4096 : effectiveTier === 'Medium' ? 8192 : 16384
   const ramGB = facts.systemRamGB ?? 0
@@ -107,4 +94,3 @@ export function resolveMaxContextTokens(
   }
   return vramBaseCtx
 }
-

@@ -149,7 +149,7 @@ describe('AiDebugBundleService Unit Tests', () => {
       recentFullLogs: [{ step: 1, tool: 'read_file', output: 'private failure output', isFailure: true }],
       updatedAt: new Date().toISOString(),
     } as any)
-    vi.mocked(gitCliRepository.run).mockImplementation((_cwd, args) => args.includes('status') ? ' M src/private.ts' : '+private source')
+    vi.mocked(gitCliRepository.run).mockImplementation((_cwd, args) => (args.includes('status') ? ' M src/private.ts' : '+private source'))
     vi.mocked(devToolProbeRepository.probeVersion).mockReturnValue('v20.18.0')
 
     const bundle = await aiDebugBundleService.generateDebugBundle({

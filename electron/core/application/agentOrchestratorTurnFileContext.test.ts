@@ -68,7 +68,12 @@ describe('readTurnFileContext', () => {
   })
 
   it('includes one primary file, two support fragments and visible omission markers', () => {
-    for (const [name, size] of [['primary.ts', 13000], ['support-a.ts', 4000], ['support-b.ts', 20], ['ignored.ts', 20]] as const) {
+    for (const [name, size] of [
+      ['primary.ts', 13000],
+      ['support-a.ts', 4000],
+      ['support-b.ts', 20],
+      ['ignored.ts', 20],
+    ] as const) {
       fs.writeFileSync(path.join(tempDir, name), name.repeat(Math.ceil(size / name.length)).slice(0, size))
     }
 
@@ -95,12 +100,7 @@ describe('buildCurrentOperationContext', () => {
         ],
       },
     } as unknown as TurnDispatchContext
-    const block = buildCurrentOperationContext(
-      ctx,
-      focus,
-      { allowedTools: ['write_file'], rationale: 'test' },
-      ['src/app.ts'],
-    )
+    const block = buildCurrentOperationContext(ctx, focus, { allowedTools: ['write_file'], rationale: 'test' }, ['src/app.ts'])
 
     expect(block).toContain('Objective: Fix src/app.ts')
     expect(block).toContain('accepted decision=Keep the public API')

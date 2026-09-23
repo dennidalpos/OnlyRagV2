@@ -42,7 +42,11 @@ export async function executeReplaceFileContentTool(
   const safePath = pathCheck.safePath
 
   if (!filePath || !targetContent) {
-    return { outcome: 'rejected', outputForHistory: `File not found or missing parameters for replacement: ${filePath || 'unknown'}`, logMessage: 'Missing replace parameters' }
+    return {
+      outcome: 'rejected',
+      outputForHistory: `File not found or missing parameters for replacement: ${filePath || 'unknown'}`,
+      logMessage: 'Missing replace parameters',
+    }
   }
   if (!repository.exists(safePath)) {
     return { outcome: 'failure', outputForHistory: `Error: File not found for replacement: ${filePath}`, logMessage: `File not found: ${filePath}` }
@@ -81,11 +85,8 @@ export async function executeReplaceFileContentTool(
     }
   }
 
-  const writeResult = repository.writeFileVersioned(
-    safePath,
-    replacement.content,
-    actualHash,
-    (originalContent) => journal.recordOriginalState(safePath, originalContent),
+  const writeResult = repository.writeFileVersioned(safePath, replacement.content, actualHash, (originalContent) =>
+    journal.recordOriginalState(safePath, originalContent),
   )
   if (!writeResult.success) {
     if (writeResult.conflict) {
@@ -100,7 +101,11 @@ export async function executeReplaceFileContentTool(
         logMessage: `Replacement rejected: concurrent change in ${path.basename(filePath)}`,
       }
     }
-    return { outcome: 'failure', outputForHistory: `Error writing replaced content to ${filePath}: ${writeResult.error}`, logMessage: `Write error in ${path.basename(filePath)}` }
+    return {
+      outcome: 'failure',
+      outputForHistory: `Error writing replaced content to ${filePath}: ${writeResult.error}`,
+      logMessage: `Write error in ${path.basename(filePath)}`,
+    }
   }
 
   return {

@@ -19,12 +19,7 @@ describe('hardwareModelCatalog', () => {
   it('should give every catalog entry a parseable size label', () => {
     // A row whose size cannot be parsed reads as POSITIVE_INFINITY, which would make it look
     // like it exceeds every VRAM budget on every host.
-    const catalogs = [
-      COMPACT_CODING_CATALOG,
-      WORKHORSE_CODING_CATALOG,
-      REASONING_CODING_CATALOG,
-      LARGE_CODING_CATALOG,
-    ]
+    const catalogs = [COMPACT_CODING_CATALOG, WORKHORSE_CODING_CATALOG, REASONING_CODING_CATALOG, LARGE_CODING_CATALOG]
     for (const catalog of catalogs) {
       for (const entry of catalog) {
         expect(parseCatalogSizeGB(entry.sizeBytesApprox), entry.modelName).toBeLessThan(Number.POSITIVE_INFINITY)

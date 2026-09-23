@@ -27,8 +27,8 @@ describe('shouldDirectUnprovableClosure', () => {
     expect(
       shouldDirectUnprovableClosure(
         { id: 'm-5', title: 'Install Tailwind CSS', verificationCommand: 'npm install tailwindcss postcss autoprefixer' },
-        'not_applicable'
-      )
+        'not_applicable',
+      ),
     ).toBe(false)
   })
 

@@ -6,10 +6,7 @@ const WORKSPACE = 'C:\\Users\\Utente\\Desktop\\test_app'
 /** Exactly what depcheck reported for the project session o3tx shipped as "fully runnable". */
 const O3TX_MISSING = {
   '@vitejs/plugin-react': ['C:\\Users\\Utente\\Desktop\\test_app\\vite.config.ts'],
-  'react-router-dom': [
-    'C:\\Users\\Utente\\Desktop\\test_app\\src\\App.tsx',
-    'C:\\Users\\Utente\\Desktop\\test_app\\src\\pages\\Tasks.tsx',
-  ],
+  'react-router-dom': ['C:\\Users\\Utente\\Desktop\\test_app\\src\\App.tsx', 'C:\\Users\\Utente\\Desktop\\test_app\\src\\pages\\Tasks.tsx'],
   '@mui/material': [
     'C:\\Users\\Utente\\Desktop\\test_app\\src\\pages\\Dashboard.tsx',
     'C:\\Users\\Utente\\Desktop\\test_app\\src\\components\\Sidebar.tsx',
@@ -25,11 +22,7 @@ describe('evaluateDependencyIntegrity', () => {
   it('fails the real o3tx project and names every undeclared package', () => {
     const verdict = evaluateDependencyIntegrity(O3TX_MISSING, WORKSPACE)
     expect(verdict.ok).toBe(false)
-    expect(verdict.missing.map((m) => m.packageName)).toEqual([
-      '@mui/material',
-      '@vitejs/plugin-react',
-      'react-router-dom',
-    ])
+    expect(verdict.missing.map((m) => m.packageName)).toEqual(['@mui/material', '@vitejs/plugin-react', 'react-router-dom'])
   })
 
   it('reports importing files as workspace-relative forward-slash paths', () => {
@@ -39,10 +32,7 @@ describe('evaluateDependencyIntegrity', () => {
   })
 
   it('deduplicates a package imported twice from the same file', () => {
-    const verdict = evaluateDependencyIntegrity(
-      { lodash: [`${WORKSPACE}\\src\\a.ts`, `${WORKSPACE}\\src\\a.ts`] },
-      WORKSPACE
-    )
+    const verdict = evaluateDependencyIntegrity({ lodash: [`${WORKSPACE}\\src\\a.ts`, `${WORKSPACE}\\src\\a.ts`] }, WORKSPACE)
     expect(verdict.missing[0].importedBy).toEqual(['src/a.ts'])
   })
 
@@ -52,10 +42,7 @@ describe('evaluateDependencyIntegrity', () => {
   })
 
   it('still fails when a real package accompanies a type-only one', () => {
-    const verdict = evaluateDependencyIntegrity(
-      { '@types/node': [`${WORKSPACE}\\src\\a.ts`], zod: [`${WORKSPACE}\\src\\a.ts`] },
-      WORKSPACE
-    )
+    const verdict = evaluateDependencyIntegrity({ '@types/node': [`${WORKSPACE}\\src\\a.ts`], zod: [`${WORKSPACE}\\src\\a.ts`] }, WORKSPACE)
     expect(verdict.ok).toBe(false)
     expect(verdict.missing.map((m) => m.packageName)).toEqual(['zod'])
   })

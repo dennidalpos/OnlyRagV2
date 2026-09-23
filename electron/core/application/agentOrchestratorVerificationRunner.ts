@@ -1,5 +1,3 @@
-
-
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
@@ -37,9 +35,7 @@ export async function runProjectVerification(
   const profile = discoverProjectProfile(workspacePath)
   const verifications = resolvePrimaryProfileVerificationTargets(profile)
   const verificationLabel = verifications.map((target) => `${target.projectRelativePath}: ${target.command}`).join(' && ')
-  const evidenceLevel = verifications.length > 0 && verifications.every((target) => target.kind === 'test')
-    ? 'behavioral' as const
-    : 'structural' as const
+  const evidenceLevel = verifications.length > 0 && verifications.every((target) => target.kind === 'test') ? ('behavioral' as const) : ('structural' as const)
 
   // Checked first: an undeclared import is a build failure whose cause is already known, and
   // saying which package and which file beats making the model infer it from a compiler error.
@@ -76,20 +72,15 @@ export async function runProjectVerification(
     }
 
     const shell = agentToolExecutorService.getOrCreateShellSession(verification.projectRootPath)
-    const res = await shell.execute(
-      security.sanitizedCommand,
-      (chunk) => onOutput?.(chunk.trim()),
-      undefined,
-      VERIFICATION_TIMEOUT_MS,
-      signal,
-    )
+    const res = await shell.execute(security.sanitizedCommand, (chunk) => onOutput?.(chunk.trim()), undefined, VERIFICATION_TIMEOUT_MS, signal)
     if (res.code !== 0 || res.timedOut) {
       const result: VerificationRunResult = {
         hasVerificationCommand: true,
         passed: false,
         status: 'failed',
         command: verificationLabel,
-        failureDetail: `Project: ${verification.projectRelativePath}\nCommand: ${verification.command} (from ${verification.source})\n` +
+        failureDetail:
+          `Project: ${verification.projectRelativePath}\nCommand: ${verification.command} (from ${verification.source})\n` +
           `Exit code: ${res.code}${res.timedOut ? ' (timed out)' : ''}\n` +
           `${(res.stdout || res.stderr || '').trim().slice(-OUTPUT_TAIL_CHARS)}`,
         evidenceLevel,

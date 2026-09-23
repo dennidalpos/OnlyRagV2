@@ -1,5 +1,3 @@
-
-
 /** Why a proposed write is being treated as a no-op, for the message handed to the model. */
 export type RedundantWriteKind = 'identical' | 'line_endings_only'
 
@@ -17,11 +15,7 @@ function normalizeForComparison(content: string): string {
 }
 
 /** Decides whether writing `proposedContent` over `existingContent` would change anything. */
-export function detectRedundantWrite(
-  fileExists: boolean,
-  existingContent: string,
-  proposedContent: string
-): RedundantWriteVerdict {
+export function detectRedundantWrite(fileExists: boolean, existingContent: string, proposedContent: string): RedundantWriteVerdict {
   if (!fileExists) return { isRedundant: false }
   // An empty file on disk is not a deliverable, and the notice must not say it is. See below.
   const isEmpty = !String(existingContent ?? '').trim()
@@ -58,7 +52,7 @@ export function buildRedundantWriteNotice(filePath: string, kind: RedundantWrite
     'Because no file changed, any build or test you already ran is still valid — you do NOT need to re-run it.',
     'Directives:',
     `1. Do NOT write "${filePath}" again with this content.`,
-    '2. If this file was the deliverable of your active milestone, that milestone\'s work is DONE: mark it with update_plan or run its verification command.',
+    "2. If this file was the deliverable of your active milestone, that milestone's work is DONE: mark it with update_plan or run its verification command.",
     '3. Otherwise move to the next unfinished file or step.',
     '4. If every milestone is complete, invoke the "finish" tool with your final report.',
   ].join('\n')

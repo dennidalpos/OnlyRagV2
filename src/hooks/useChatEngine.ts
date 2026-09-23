@@ -64,17 +64,13 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const { metrics: modelMetrics } = useOllamaModelMetrics(settings.ollamaHost)
   const selectedModel = settings.chatModel || settings.defaultModel || 'llama3.2'
   const contextBudget = useMemo(
-    () => resolveChatContextBudget(
-      hardwareFacts,
-      'Auto',
-      resolveModelContextLength(
-        selectedModel,
-        settings.modelContextLengths,
-        hardwareDefault,
-        modelMetrics[selectedModel]?.contextLength
-      )
-    ),
-    [hardwareFacts, hardwareDefault, modelMetrics, selectedModel, settings.modelContextLengths]
+    () =>
+      resolveChatContextBudget(
+        hardwareFacts,
+        'Auto',
+        resolveModelContextLength(selectedModel, settings.modelContextLengths, hardwareDefault, modelMetrics[selectedModel]?.contextLength),
+      ),
+    [hardwareFacts, hardwareDefault, modelMetrics, selectedModel, settings.modelContextLengths],
   )
   const budgetRef = useRef(contextBudget)
   budgetRef.current = contextBudget
@@ -139,28 +135,25 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const prevActiveIdRef = useRef<string>(activeConversationId)
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const persistConversationState = useCallback(
-    (msgs: ChatMessage[], docIds: Set<string>, convId: string) => {
-      if (!convId) return
-      setConversations((prev) => {
-        const next = prev.map((conv) => {
-          if (conv.id === convId) {
-            return {
-              ...conv,
-              messages: msgs,
-              selectedDocIds: Array.from(docIds),
-              updatedAt: new Date().toISOString(),
-            }
+  const persistConversationState = useCallback((msgs: ChatMessage[], docIds: Set<string>, convId: string) => {
+    if (!convId) return
+    setConversations((prev) => {
+      const next = prev.map((conv) => {
+        if (conv.id === convId) {
+          return {
+            ...conv,
+            messages: msgs,
+            selectedDocIds: Array.from(docIds),
+            updatedAt: new Date().toISOString(),
           }
-          return conv
-        })
-        safeSetLocalStorage(STORAGE_KEY_CONVERSATIONS, JSON.stringify(next))
-        safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, convId)
-        return next
+        }
+        return conv
       })
-    },
-    []
-  )
+      safeSetLocalStorage(STORAGE_KEY_CONVERSATIONS, JSON.stringify(next))
+      safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, convId)
+      return next
+    })
+  }, [])
 
   // Persist conversation changes to localStorage debounced and safely without race conditions or streaming I/O freezes
   useEffect(() => {
@@ -217,13 +210,16 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     setIsScrolledUp(false)
   }, [])
 
-  const handleSetAutoScroll = useCallback((val: boolean) => {
-    autoScrollRef.current = val
-    setAutoScroll(val)
-    if (val) {
-      scrollToBottom(true)
-    }
-  }, [scrollToBottom])
+  const handleSetAutoScroll = useCallback(
+    (val: boolean) => {
+      autoScrollRef.current = val
+      setAutoScroll(val)
+      if (val) {
+        scrollToBottom(true)
+      }
+    },
+    [scrollToBottom],
+  )
 
   // Reactive autoscroll effect on every message state update
   useEffect(() => {
@@ -344,7 +340,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           return { ...conv, title: cleanTitle }
         }
         return conv
-      })
+      }),
     )
 
     const budget = budgetRef.current
@@ -401,9 +397,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
       // Attach citations to the bot message if available
       if (citationSources.length > 0) {
-        setMessages((prev) =>
-          prev.map((msg) => (msg.id === botMsgId ? { ...msg, sources: citationSources } : msg))
-        )
+        setMessages((prev) => prev.map((msg) => (msg.id === botMsgId ? { ...msg, sources: citationSources } : msg)))
       }
 
       const activeDocs = documents.filter((d) => selectedDocIds.has(d.id))
@@ -422,9 +416,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       const boundedVectorContext = vectorContextText.slice(0, budget.vectorContextChars)
       const directDocsBudget = Math.max(0, budget.totalContextChars - boundedVectorContext.length)
       const boundedDirectDocs = directDocsText.slice(0, directDocsBudget)
-      const boundedContext = [boundedVectorContext, boundedDirectDocs]
-        .filter(Boolean)
-        .join('\n\n=== ADDITIONAL CONTEXT ===\n\n')
+      const boundedContext = [boundedVectorContext, boundedDirectDocs].filter(Boolean).join('\n\n=== ADDITIONAL CONTEXT ===\n\n')
 
       const modelToUse = routingResult.modelName
       const effectiveSystemPrompt = getEffectivePrompt('chat', settings).prompt
@@ -449,25 +441,18 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           `No documents or attachments are currently selected. If the user asks to analyze, inspect, summarize, or read specific documents, files, logs, or attachments (such as "analizza log" or "riassumi allegato"), inform the user clearly in their language that no attachments are selected, and invite them to select a document from the left sidebar or mention '@filename'. If the question is general knowledge, answer normally.\n` +
           `[END ATTACHMENT CONTEXT STATUS]`
 
-      const promptSections = [
-        effectiveSystemPrompt,
-        temporalContext,
-        docContextBlock,
-      ].filter(Boolean)
+      const promptSections = [effectiveSystemPrompt, temporalContext, docContextBlock].filter(Boolean)
       const systemPromptWithContext = promptSections.join('\n\n')
 
       // History is compacted LAST, against whatever the window has left once the system prompt and the selected document context have been placed.
       const turnSuffix = `User: ${userText}\nAssistant:`
-      const historyBudgetChars = Math.max(
-        0,
-        resolvePromptCharBudget(budget.maxNumCtx) - systemPromptWithContext.length - turnSuffix.length
-      )
+      const historyBudgetChars = Math.max(0, resolvePromptCharBudget(budget.maxNumCtx) - systemPromptWithContext.length - turnSuffix.length)
       const compactionResult = compactChatHistory(messages, budget, hasSelectedDocs, historyBudgetChars)
       const previousTurns = compactionResult.historyBlock
       if (compactionResult.isCompacted) {
         logger.info(
           'ChatEngine',
-          `Conversation history compacted: ${compactionResult.totalOriginalChars} -> ${compactionResult.finalChars} chars (${compactionResult.summarizedTurnsCount} summarized turns, ${compactionResult.verbatimTurnsCount} verbatim turns)`
+          `Conversation history compacted: ${compactionResult.totalOriginalChars} -> ${compactionResult.finalChars} chars (${compactionResult.summarizedTurnsCount} summarized turns, ${compactionResult.verbatimTurnsCount} verbatim turns)`,
         )
       }
 
@@ -486,9 +471,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         const flushAccumulatedText = () => {
           if (!pendingChunk) return
           pendingChunk = false
-          setMessages((prev) =>
-            prev.map((msg) => (msg.id === botMsgId ? { ...msg, text: accumulated } : msg))
-          )
+          setMessages((prev) => prev.map((msg) => (msg.id === botMsgId ? { ...msg, text: accumulated } : msg)))
           if (autoScrollRef.current && !isScrolledUpRef.current) {
             scrollToBottom(false)
           }
@@ -501,10 +484,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         trackOperation(operationId)
 
         try {
-          logger.info(
-            'ChatEngine',
-            `Context budget [${budget.profileTier}${budget.isMinimal ? '/minimal' : ''}]: selected num_ctx ${budget.maxNumCtx}`
-          )
+          logger.info('ChatEngine', `Context budget [${budget.profileTier}${budget.isMinimal ? '/minimal' : ''}]: selected num_ctx ${budget.maxNumCtx}`)
 
           const result = await window.electronAPI.generateOllamaStream(
             modelToUse,
@@ -520,7 +500,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
               think: resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics).think,
             },
             settings.ollamaHost,
-            operationId
+            operationId,
           )
           if (!result.success) throw new Error(result.error || 'Ollama generation failed.')
           if (!accumulated.trim()) throw new Error('Ollama returned an empty response.')
@@ -530,17 +510,11 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           if (activeStreamIdRef.current === operationId) activeStreamIdRef.current = null
           trackOperation(null)
           // Final flush to guarantee full text is set
-          setMessages((prev) =>
-            prev.map((msg) => (msg.id === botMsgId ? { ...msg, text: accumulated } : msg))
-          )
+          setMessages((prev) => prev.map((msg) => (msg.id === botMsgId ? { ...msg, text: accumulated } : msg)))
           scrollToBottom(false)
         }
       } else {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === botMsgId ? { ...msg, text: 'Local Ollama API offline or window.electronAPI unattached.' } : msg
-          )
-        )
+        setMessages((prev) => prev.map((msg) => (msg.id === botMsgId ? { ...msg, text: 'Local Ollama API offline or window.electronAPI unattached.' } : msg)))
       }
     } catch (err: unknown) {
       const normalized = normalizeError(err, 'Chat RAG')
@@ -550,12 +524,10 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           msg.id === botMsgId
             ? {
                 ...msg,
-                text: normalized.remediation
-                  ? `${normalized.message}\n\n💡 ${normalized.remediation}`
-                  : normalized.message,
+                text: normalized.remediation ? `${normalized.message}\n\n💡 ${normalized.remediation}` : normalized.message,
               }
-            : msg
-        )
+            : msg,
+        ),
       )
     } finally {
       setIsGenerating(false)
@@ -573,33 +545,36 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     }
   }
 
-  const loadConversation = useCallback((id: string) => {
-    if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
-      window.electronAPI.cancelOllamaStream(activeStreamIdRef.current).catch(() => {})
-    }
-    setIsGenerating(false)
-    isGeneratingRef.current = false
-    const target = conversations.find((c) => c.id === id)
-    if (!target) return
+  const loadConversation = useCallback(
+    (id: string) => {
+      if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
+        window.electronAPI.cancelOllamaStream(activeStreamIdRef.current).catch(() => {})
+      }
+      setIsGenerating(false)
+      isGeneratingRef.current = false
+      const target = conversations.find((c) => c.id === id)
+      if (!target) return
 
-    prevActiveIdRef.current = id
-    setActiveConversationId(id)
-    setMessages(target.messages && target.messages.length > 0 ? target.messages : [createDefaultGreetingMessage()])
-    
-    // Filter selectedDocIds against valid current documents to prevent orphaned doc selections
-    const validDocIds = new Set(documents.map((d) => d.id))
-    const filteredSelection = new Set<string>()
-    if (documents.length > 0 && target.selectedDocIds) {
-      target.selectedDocIds.forEach((docId) => {
-        if (validDocIds.has(docId)) filteredSelection.add(docId)
-      })
-    }
-    setSelectedDocIds(filteredSelection)
+      prevActiveIdRef.current = id
+      setActiveConversationId(id)
+      setMessages(target.messages && target.messages.length > 0 ? target.messages : [createDefaultGreetingMessage()])
 
-    setInput('')
-    setShowMentions(false)
-    safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, id)
-  }, [conversations, documents, isGenerating])
+      // Filter selectedDocIds against valid current documents to prevent orphaned doc selections
+      const validDocIds = new Set(documents.map((d) => d.id))
+      const filteredSelection = new Set<string>()
+      if (documents.length > 0 && target.selectedDocIds) {
+        target.selectedDocIds.forEach((docId) => {
+          if (validDocIds.has(docId)) filteredSelection.add(docId)
+        })
+      }
+      setSelectedDocIds(filteredSelection)
+
+      setInput('')
+      setShowMentions(false)
+      safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, id)
+    },
+    [conversations, documents, isGenerating],
+  )
 
   const handleNewChat = useCallback(() => {
     if (streamThrottleTimer.current) {
@@ -635,52 +610,55 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, newConv.id)
   }, [isGenerating])
 
-  const deleteConversation = useCallback((id: string) => {
-    if (activeConversationId === id) {
-      if (streamThrottleTimer.current) {
-        clearInterval(streamThrottleTimer.current)
-        streamThrottleTimer.current = null
-      }
-      if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
-        window.electronAPI.cancelOllamaStream(activeStreamIdRef.current).catch(() => {})
-      }
-      setIsGenerating(false)
-      isGeneratingRef.current = false
-      setInput('')
-      setShowMentions(false)
-    }
-
-    setConversations((prev) => {
-      const remaining = prev.filter((c) => c.id !== id)
-      let nextList = remaining
-      if (remaining.length === 0) {
-        const fresh: ChatConversation = {
-          id: `session-${Date.now()}`,
-          title: 'Nuova Conversazione',
-          messages: [createDefaultGreetingMessage()],
-          selectedDocIds: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+  const deleteConversation = useCallback(
+    (id: string) => {
+      if (activeConversationId === id) {
+        if (streamThrottleTimer.current) {
+          clearInterval(streamThrottleTimer.current)
+          streamThrottleTimer.current = null
         }
-        prevActiveIdRef.current = fresh.id
-        setActiveConversationId(fresh.id)
-        setMessages(fresh.messages)
-        setSelectedDocIds(new Set())
-        nextList = [fresh]
-        safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, fresh.id)
-      } else if (activeConversationId === id) {
-        const nextActive = remaining[0]
-        prevActiveIdRef.current = nextActive.id
-        setActiveConversationId(nextActive.id)
-        setMessages(nextActive.messages && nextActive.messages.length > 0 ? nextActive.messages : [createDefaultGreetingMessage()])
-        setSelectedDocIds(new Set(nextActive.selectedDocIds || []))
-        safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, nextActive.id)
+        if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
+          window.electronAPI.cancelOllamaStream(activeStreamIdRef.current).catch(() => {})
+        }
+        setIsGenerating(false)
+        isGeneratingRef.current = false
+        setInput('')
+        setShowMentions(false)
       }
 
-      safeSetLocalStorage(STORAGE_KEY_CONVERSATIONS, JSON.stringify(nextList))
-      return nextList
-    })
-  }, [activeConversationId, isGenerating])
+      setConversations((prev) => {
+        const remaining = prev.filter((c) => c.id !== id)
+        let nextList = remaining
+        if (remaining.length === 0) {
+          const fresh: ChatConversation = {
+            id: `session-${Date.now()}`,
+            title: 'Nuova Conversazione',
+            messages: [createDefaultGreetingMessage()],
+            selectedDocIds: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+          prevActiveIdRef.current = fresh.id
+          setActiveConversationId(fresh.id)
+          setMessages(fresh.messages)
+          setSelectedDocIds(new Set())
+          nextList = [fresh]
+          safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, fresh.id)
+        } else if (activeConversationId === id) {
+          const nextActive = remaining[0]
+          prevActiveIdRef.current = nextActive.id
+          setActiveConversationId(nextActive.id)
+          setMessages(nextActive.messages && nextActive.messages.length > 0 ? nextActive.messages : [createDefaultGreetingMessage()])
+          setSelectedDocIds(new Set(nextActive.selectedDocIds || []))
+          safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, nextActive.id)
+        }
+
+        safeSetLocalStorage(STORAGE_KEY_CONVERSATIONS, JSON.stringify(nextList))
+        return nextList
+      })
+    },
+    [activeConversationId, isGenerating],
+  )
 
   const renameConversation = useCallback((id: string, newTitle: string) => {
     if (!newTitle.trim()) return

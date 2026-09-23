@@ -1,5 +1,3 @@
-
-
 /** The shape this module needs from a recorded step; matches EpisodicStepRecord. */
 export interface TrajectoryStep {
   tool: string
@@ -9,14 +7,17 @@ export interface TrajectoryStep {
 
 /** Tools whose success means the workspace changed, so a past failure is no longer current. */
 const MUTATING_TOOLS = new Set([
-  'write_file', 'replace_file_content', 'multi_replace_file_content', 'create_directory', 'move_file', 'copy_file', 'delete_file',
+  'write_file',
+  'replace_file_content',
+  'multi_replace_file_content',
+  'create_directory',
+  'move_file',
+  'copy_file',
+  'delete_file',
 ])
 
 /** True when the project's own check has run, failed, and nothing has been written since. */
-export function isVerificationFailing(
-  episodes: readonly TrajectoryStep[],
-  verificationCommand: string | null | undefined
-): boolean {
+export function isVerificationFailing(episodes: readonly TrajectoryStep[], verificationCommand: string | null | undefined): boolean {
   if (!verificationCommand) return false
   const needle = verificationCommand.trim().toLowerCase()
   if (!needle) return false
@@ -44,7 +45,7 @@ export function buildVerificationFailingDirective(
    * The diagnostic directive built from the failing run, to be CARRIED here rather than referred
    * to. Null when none could be built, and the text then falls back to the pointer.
    */
-  embeddedDirective: string | null = null
+  embeddedDirective: string | null = null,
 ): string {
   const head = [
     `[THE PROJECT CHECK ALREADY RAN AND FAILED — DO NOT RUN IT AGAIN YET]`,

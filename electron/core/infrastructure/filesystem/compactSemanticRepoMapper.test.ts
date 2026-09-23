@@ -21,10 +21,7 @@ describe('CompactSemanticRepoMapper Unit Tests', () => {
     fs.writeFileSync(path.join(tempDir, 'index.html'), '<!DOCTYPE html><html><body>Hello</body></html>')
     fs.writeFileSync(path.join(tempDir, 'styles.css'), 'body { margin: 0; }')
     fs.writeFileSync(path.join(tempDir, 'package.json'), '{"name": "test-app"}')
-    fs.writeFileSync(
-      path.join(tempDir, 'app.ts'),
-      'export function initApp(): void {}\nexport class MainService {}'
-    )
+    fs.writeFileSync(path.join(tempDir, 'app.ts'), 'export function initApp(): void {}\nexport class MainService {}')
 
     const map = generateCompactRepoMap(tempDir)
 

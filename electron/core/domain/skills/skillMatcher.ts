@@ -2,17 +2,106 @@ import type { SkillDefinition, HubSkillItem } from './skillTypes'
 import { assessHubSkillQuality } from './skillQuality'
 
 const STOP_WORDS = new Set([
-  'about', 'above', 'after', 'again', 'against', 'all', 'and', 'any', 'because',
-  'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', 'could',
-  'did', 'does', 'doing', 'down', 'during', 'each', 'few', 'for', 'from', 'further',
-  'had', 'has', 'have', 'having', 'her', 'here', 'hers', 'herself', 'him', 'himself',
-  'his', 'how', 'into', 'its', 'itself', 'just', 'more', 'most', 'myself', 'nor',
-  'not', 'now', 'off', 'once', 'only', 'other', 'our', 'ours', 'ourselves', 'out',
-  'over', 'own', 'same', 'should', 'some', 'such', 'than', 'that', 'the', 'their',
-  'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they', 'this', 'those',
-  'through', 'too', 'under', 'until', 'very', 'was', 'were', 'what', 'when', 'where',
-  'which', 'while', 'who', 'whom', 'why', 'with', 'would', 'guideline', 'guidelines',
-  'pattern', 'patterns', 'standard', 'standards',
+  'about',
+  'above',
+  'after',
+  'again',
+  'against',
+  'all',
+  'and',
+  'any',
+  'because',
+  'been',
+  'before',
+  'being',
+  'below',
+  'between',
+  'both',
+  'but',
+  'by',
+  'could',
+  'did',
+  'does',
+  'doing',
+  'down',
+  'during',
+  'each',
+  'few',
+  'for',
+  'from',
+  'further',
+  'had',
+  'has',
+  'have',
+  'having',
+  'her',
+  'here',
+  'hers',
+  'herself',
+  'him',
+  'himself',
+  'his',
+  'how',
+  'into',
+  'its',
+  'itself',
+  'just',
+  'more',
+  'most',
+  'myself',
+  'nor',
+  'not',
+  'now',
+  'off',
+  'once',
+  'only',
+  'other',
+  'our',
+  'ours',
+  'ourselves',
+  'out',
+  'over',
+  'own',
+  'same',
+  'should',
+  'some',
+  'such',
+  'than',
+  'that',
+  'the',
+  'their',
+  'theirs',
+  'them',
+  'themselves',
+  'then',
+  'there',
+  'these',
+  'they',
+  'this',
+  'those',
+  'through',
+  'too',
+  'under',
+  'until',
+  'very',
+  'was',
+  'were',
+  'what',
+  'when',
+  'where',
+  'which',
+  'while',
+  'who',
+  'whom',
+  'why',
+  'with',
+  'would',
+  'guideline',
+  'guidelines',
+  'pattern',
+  'patterns',
+  'standard',
+  'standards',
 ])
 
 function matchesWordOrPhrase(text: string, term: string): boolean {
@@ -41,16 +130,14 @@ export interface SkillMatchContext {
 export function matchSkillsForTask(
   userTaskOrContext: string | SkillMatchContext,
   availableSkills: SkillDefinition[],
-  maxSkillsToInject: number = 3
+  maxSkillsToInject: number = 3,
 ): SkillDefinition[] {
   if (!userTaskOrContext || availableSkills.length === 0) return []
 
   const userTask = typeof userTaskOrContext === 'string' ? userTaskOrContext : userTaskOrContext.userTask || ''
   if (!userTask && typeof userTaskOrContext === 'string') return []
 
-  const ctx: SkillMatchContext = typeof userTaskOrContext === 'string'
-    ? { userTask }
-    : userTaskOrContext
+  const ctx: SkillMatchContext = typeof userTaskOrContext === 'string' ? { userTask } : userTaskOrContext
 
   const taskText = ctx.userTask.toLowerCase()
   const projectStack = new Set((ctx.projectStack || []).map((s) => s.toLowerCase()))
@@ -73,7 +160,10 @@ export function matchSkillsForTask(
     fileContextText += ` workspace:${wsName.toLowerCase()}`
   }
   if (ctx.activeFileContent) {
-    const snippet = ctx.activeFileContent.slice(0, 300).toLowerCase().replace(/[^a-z0-9-_]/g, ' ')
+    const snippet = ctx.activeFileContent
+      .slice(0, 300)
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]/g, ' ')
     fileContextText += ` ${snippet}`
   }
 
@@ -108,8 +198,8 @@ export function matchSkillsForTask(
         skill.description
           .toLowerCase()
           .split(/[^a-z0-9-_]+/)
-          .filter((w) => w.length >= 4 && !STOP_WORDS.has(w))
-      )
+          .filter((w) => w.length >= 4 && !STOP_WORDS.has(w)),
+      ),
     )
 
     for (const word of descWords) {
@@ -193,9 +283,8 @@ export function compileSkillsContextBlock(skills: SkillDefinition[], maxTotalCha
     }
 
     const maxSkillSlice = Math.min(availableBudget, perSkillMax)
-    const trimmedContent = skill.content.length > maxSkillSlice
-      ? `${skill.content.slice(0, maxSkillSlice)}\n... [Skill content truncated for context budget]`
-      : skill.content
+    const trimmedContent =
+      skill.content.length > maxSkillSlice ? `${skill.content.slice(0, maxSkillSlice)}\n... [Skill content truncated for context budget]` : skill.content
 
     const block = `${header}${trimmedContent}${footer}`
     result += block
@@ -208,7 +297,7 @@ export function compileSkillsContextBlock(skills: SkillDefinition[], maxTotalCha
 export function matchHubSkillsForTask(
   userTaskOrContext: string | SkillMatchContext,
   hubSkills: HubSkillItem[],
-  minScore: number = 8.0
+  minScore: number = 8.0,
 ): { item: HubSkillItem; score: number }[] {
   if (!userTaskOrContext || hubSkills.length === 0) return []
 

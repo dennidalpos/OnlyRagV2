@@ -1,5 +1,18 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { AgentPlan, AgentRunIdentity, IElectronAPI, AppSettings, CodingSession, InterviewQuestion, OllamaGenerationOptions, OllamaStreamChunkEvent, OllamaStreamDoneEvent, PlanMilestone, PromptHistoryIndexPayload, UserInterviewAnswer } from '../shared/types'
+import type {
+  AgentPlan,
+  AgentRunIdentity,
+  IElectronAPI,
+  AppSettings,
+  CodingSession,
+  InterviewQuestion,
+  OllamaGenerationOptions,
+  OllamaStreamChunkEvent,
+  OllamaStreamDoneEvent,
+  PlanMilestone,
+  PromptHistoryIndexPayload,
+  UserInterviewAnswer,
+} from '../shared/types'
 
 function subscribe<T>(channel: string, callback: (data: T) => void): () => void {
   const listener = (_event: IpcRendererEvent, data: T) => callback(data)
@@ -22,17 +35,34 @@ const api: IElectronAPI = {
   restartSidecar: () => ipcRenderer.invoke('sidecar:restart'),
   openFileDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke('dialog:open-file', options),
   openDirectoryDialog: (options?: { title?: string }) => ipcRenderer.invoke('dialog:open-directory', options),
-  ingestFile: (filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string, numCtx?: number, taskId?: string, normalizationThink?: boolean) =>
-    ipcRenderer.invoke('ingest:file', filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx, taskId, normalizationThink),
+  ingestFile: (
+    filePath: string,
+    visionModel?: string,
+    visionPrompt?: string,
+    normalizeWithLlm?: boolean,
+    normalizationModel?: string,
+    numCtx?: number,
+    taskId?: string,
+    normalizationThink?: boolean,
+  ) => ipcRenderer.invoke('ingest:file', filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx, taskId, normalizationThink),
   updateIngestedDocument: (docId: string, markdownContent: string) => ipcRenderer.invoke('ingest:update', docId, markdownContent),
-  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, targetDir?: string, numCtx?: number, think?: boolean) => ipcRenderer.invoke('ingest:translate-inplace', docId, sourceLang, targetLang, model, targetDir, numCtx, think),
+  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, targetDir?: string, numCtx?: number, think?: boolean) =>
+    ipcRenderer.invoke('ingest:translate-inplace', docId, sourceLang, targetLang, model, targetDir, numCtx, think),
   getDocumentPagePreview: (docId: string, pageNumber: number) => ipcRenderer.invoke('ingest:page-preview', docId, pageNumber),
   getIngestedDocuments: () => ipcRenderer.invoke('ingest:list'),
   deleteIngestedDocument: (docId: string) => ipcRenderer.invoke('ingest:delete', docId),
-  searchVectorDb: (query: string, topK?: number, docIds?: string[]) =>
-    ipcRenderer.invoke('ingest:search', query, topK, docIds),
-  exportDocument: (markdownContent: string, format: string, outputFolder?: string) => ipcRenderer.invoke('ingest:export', markdownContent, format, outputFolder),
-  generateOllamaStream: async (model: string, prompt: string, onChunk: (chunk: string) => void, options?: OllamaGenerationOptions, host?: string, operationId?: string, onDone?: () => void) => {
+  searchVectorDb: (query: string, topK?: number, docIds?: string[]) => ipcRenderer.invoke('ingest:search', query, topK, docIds),
+  exportDocument: (markdownContent: string, format: string, outputFolder?: string) =>
+    ipcRenderer.invoke('ingest:export', markdownContent, format, outputFolder),
+  generateOllamaStream: async (
+    model: string,
+    prompt: string,
+    onChunk: (chunk: string) => void,
+    options?: OllamaGenerationOptions,
+    host?: string,
+    operationId?: string,
+    onDone?: () => void,
+  ) => {
     const streamId = operationId || crypto.randomUUID()
     const chunkListener = (_: IpcRendererEvent, event: OllamaStreamChunkEvent) => {
       if (event.operationId === streamId) onChunk(event.chunk)
@@ -135,26 +165,42 @@ const api: IElectronAPI = {
   listHubSources: () => ipcRenderer.invoke('skills:list-sources'),
   addCustomHubSource: (input) => ipcRenderer.invoke('skills:add-custom-source', input),
   removeCustomHubSource: (sourceId: string) => ipcRenderer.invoke('skills:remove-custom-source', sourceId),
-  listHubSkillsBySource: (sourceId: string, workspaceRoot?: string, forceRefresh?: boolean) => ipcRenderer.invoke('skills:list-hub-by-source', sourceId, workspaceRoot, forceRefresh),
+  listHubSkillsBySource: (sourceId: string, workspaceRoot?: string, forceRefresh?: boolean) =>
+    ipcRenderer.invoke('skills:list-hub-by-source', sourceId, workspaceRoot, forceRefresh),
   listHubSkillsAcrossSources: (workspaceRoot?: string, forceRefresh?: boolean) => ipcRenderer.invoke('skills:list-hub-all', workspaceRoot, forceRefresh),
   getHubSkillContent: (item) => ipcRenderer.invoke('skills:get-hub-skill-content', item),
   toggleSkillActive: (skillId: string, isActive: boolean) => ipcRenderer.invoke('skills:toggle-active', skillId, isActive),
-  installSkillFromHub: (hubSkillId: string, workspaceRoot?: string, hubSourceId?: string) => ipcRenderer.invoke('skills:install-from-hub', hubSkillId, workspaceRoot, hubSourceId),
-  installSkillFromUrl: (url: string, workspaceRoot?: string, customName?: string) => ipcRenderer.invoke('skills:install-from-url', url, workspaceRoot, customName),
+  installSkillFromHub: (hubSkillId: string, workspaceRoot?: string, hubSourceId?: string) =>
+    ipcRenderer.invoke('skills:install-from-hub', hubSkillId, workspaceRoot, hubSourceId),
+  installSkillFromUrl: (url: string, workspaceRoot?: string, customName?: string) =>
+    ipcRenderer.invoke('skills:install-from-url', url, workspaceRoot, customName),
   saveCustomSkill: (input, workspaceRoot) => ipcRenderer.invoke('skills:save-custom', input, workspaceRoot),
   resetSkillToOriginal: (skillId: string, workspaceRoot?: string) => ipcRenderer.invoke('skills:reset-original', skillId, workspaceRoot),
   uninstallSkill: (skillId: string, workspaceRoot?: string) => ipcRenderer.invoke('skills:uninstall', skillId, workspaceRoot),
   /** SLM Agent Studio: trigger log anomaly scan; returns structured diagnostic report. */
   agentLogsAnalyze: (extraPaths?: string[]) => ipcRenderer.invoke('agent:logs-analyze', extraPaths),
   /** Pre-flight Clarification Interview: analyze prompt for architectural decisions before drafting plan. */
-  agentPlanInterview: (prompt: string, model: string | undefined, settings: AppSettings, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[], identity?: AgentRunIdentity) =>
-    ipcRenderer.invoke('agent:plan-interview', prompt, model, settings, workspacePath, previousDecisions, identity),
+  agentPlanInterview: (
+    prompt: string,
+    model: string | undefined,
+    settings: AppSettings,
+    workspacePath?: string | null,
+    previousDecisions?: UserInterviewAnswer[],
+    identity?: AgentRunIdentity,
+  ) => ipcRenderer.invoke('agent:plan-interview', prompt, model, settings, workspacePath, previousDecisions, identity),
   /** Enriches prompt with user's confirmed interview answers. */
   agentPlanEnrichPrompt: (prompt: string, answers: UserInterviewAnswer[], questions: InterviewQuestion[]) =>
     ipcRenderer.invoke('agent:plan-enrich-prompt', prompt, answers, questions),
   /** Plan Approval: draft a canonical structured plan. */
-  agentPlanGenerate: (prompt: string, model: string | undefined, settings: AppSettings, previousPlan?: AgentPlan, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[], identity?: AgentRunIdentity) =>
-    ipcRenderer.invoke('agent:plan-generate', prompt, model, settings, previousPlan, workspacePath, previousDecisions, identity),
+  agentPlanGenerate: (
+    prompt: string,
+    model: string | undefined,
+    settings: AppSettings,
+    previousPlan?: AgentPlan,
+    workspacePath?: string | null,
+    previousDecisions?: UserInterviewAnswer[],
+    identity?: AgentRunIdentity,
+  ) => ipcRenderer.invoke('agent:plan-generate', prompt, model, settings, previousPlan, workspacePath, previousDecisions, identity),
   agentPlanCancel: (identity: AgentRunIdentity) => ipcRenderer.invoke('agent:plan-cancel', identity),
   /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */
   agentGetPlanState: (sessionId: string, workspacePath?: string | null, planRevisionId?: string) =>

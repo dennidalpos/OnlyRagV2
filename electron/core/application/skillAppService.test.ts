@@ -47,7 +47,7 @@ describe('SkillAppService Unit Tests', () => {
         triggers: ['logging', 'json'],
         tags: ['backend', 'logging'],
       },
-      tempDir
+      tempDir,
     )
 
     expect(saveRes.success).toBe(true)
@@ -65,7 +65,7 @@ describe('SkillAppService Unit Tests', () => {
         description: 'FastAPI modified guidelines',
         content: '# FastAPI Modified\nCustom endpoint rule.',
       },
-      tempDir
+      tempDir,
     )
 
     expect(editRes.success).toBe(true)
@@ -84,7 +84,7 @@ describe('SkillAppService Unit Tests', () => {
         description: 'Modified LanceDB',
         content: '# Changed LanceDB content',
       },
-      tempDir
+      tempDir,
     )
 
     let installed = await skillAppService.listInstalledSkills(tempDir)
@@ -127,18 +127,13 @@ describe('SkillAppService Unit Tests', () => {
 
   it('should install an auto-discovered hub skill in prompt mode only after the user confirms', async () => {
     const candidates: { skillName: string; hubName: string; score: number }[] = []
-    const matched = await skillAppService.getMatchedSkills(
-      'Refactor the module following typescript clean code guidelines',
-      tempDir,
-      3,
-      {
-        autoInstallHubSkills: 'prompt',
-        onConfirmInstall: async (candidate) => {
-          candidates.push({ skillName: candidate.skillName, hubName: candidate.hubName, score: candidate.score })
-          return true
-        },
-      }
-    )
+    const matched = await skillAppService.getMatchedSkills('Refactor the module following typescript clean code guidelines', tempDir, 3, {
+      autoInstallHubSkills: 'prompt',
+      onConfirmInstall: async (candidate) => {
+        candidates.push({ skillName: candidate.skillName, hubName: candidate.hubName, score: candidate.score })
+        return true
+      },
+    })
 
     expect(candidates.length).toBe(1)
     expect(candidates[0].skillName).toBe('typescript-clean-code')
@@ -151,12 +146,10 @@ describe('SkillAppService Unit Tests', () => {
   })
 
   it('should skip the install in prompt mode when the user rejects it', async () => {
-    const matched = await skillAppService.getMatchedSkills(
-      'Refactor the module following typescript clean code guidelines',
-      tempDir,
-      3,
-      { autoInstallHubSkills: 'prompt', onConfirmInstall: async () => false }
-    )
+    const matched = await skillAppService.getMatchedSkills('Refactor the module following typescript clean code guidelines', tempDir, 3, {
+      autoInstallHubSkills: 'prompt',
+      onConfirmInstall: async () => false,
+    })
 
     expect(matched.some((s) => s.name === 'typescript-clean-code')).toBe(false)
     const installed = await skillAppService.listInstalledSkills(tempDir)

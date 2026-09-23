@@ -17,9 +17,7 @@ describe('requestedInstallVersions', () => {
   })
 
   it('keeps the scope on a scoped package and strips only the trailing version', () => {
-    expect(requestedInstallVersions('npm i -D @vitejs/plugin-react@^4.0.0')).toEqual([
-      { name: '@vitejs/plugin-react', spec: '^4.0.0' },
-    ])
+    expect(requestedInstallVersions('npm i -D @vitejs/plugin-react@^4.0.0')).toEqual([{ name: '@vitejs/plugin-react', spec: '^4.0.0' }])
   })
 
   it('ignores targets with no version, and commands that name none', () => {
@@ -42,9 +40,7 @@ describe('findManifestDowngrades', () => {
     // The command the ERESOLVE directive produced from npm's own `peer react@"^16.8.0" from
     // use-optimistic@1.0.0`, and which succeeded three times unchallenged.
     const found = findManifestDowngrades(requestedInstallVersions('npm install react@^16.8.0'), RUN_1211_RANGES)
-    expect(found).toEqual([
-      { name: 'react', requested: '^16.8.0', requestedMajor: 16, declared: '^18.2.0', declaredMajor: 18 },
-    ])
+    expect(found).toEqual([{ name: 'react', requested: '^16.8.0', requestedMajor: 16, declared: '^18.2.0', declaredMajor: 18 }])
   })
 
   it('leaves an upgrade alone', () => {
@@ -76,10 +72,7 @@ describe('findManifestDowngrades', () => {
   })
 
   it('reports every downgrading target a multi-package command names', () => {
-    const found = findManifestDowngrades(
-      requestedInstallVersions('npm install react@^16.8.0 react-dom@^16.8.0'),
-      RUN_1211_RANGES
-    )
+    const found = findManifestDowngrades(requestedInstallVersions('npm install react@^16.8.0 react-dom@^16.8.0'), RUN_1211_RANGES)
     expect(found.map((d) => d.name)).toEqual(['react', 'react-dom'])
   })
 })
@@ -113,22 +106,12 @@ describe('findRegistryInstallIssue', () => {
 
   it('allows a current published range and does not guess from incomplete registry facts', () => {
     expect(findRegistryInstallIssue(requestedInstallVersions('npm install vite@^8.0.0'), {}, [viteFacts])).toBeNull()
-    expect(
-      findRegistryInstallIssue(requestedInstallVersions('npm install vite@^4.0.0'), {}, [
-        { name: 'vite', exists: true },
-      ])
-    ).toBeNull()
-    expect(
-      findRegistryInstallIssue(requestedInstallVersions('npm install vite@^4.0.0'), {}, [
-        { ...viteFacts, latest: 'not-semver' },
-      ])
-    ).toBeNull()
+    expect(findRegistryInstallIssue(requestedInstallVersions('npm install vite@^4.0.0'), {}, [{ name: 'vite', exists: true }])).toBeNull()
+    expect(findRegistryInstallIssue(requestedInstallVersions('npm install vite@^4.0.0'), {}, [{ ...viteFacts, latest: 'not-semver' }])).toBeNull()
   })
 
   it('leaves declared old majors to the manifest downgrade rule', () => {
-    expect(
-      findRegistryInstallIssue(requestedInstallVersions('npm install vite@^4.0.0'), { vite: '^4.5.0' }, [viteFacts])
-    ).toBeNull()
+    expect(findRegistryInstallIssue(requestedInstallVersions('npm install vite@^4.0.0'), { vite: '^4.5.0' }, [viteFacts])).toBeNull()
   })
 })
 

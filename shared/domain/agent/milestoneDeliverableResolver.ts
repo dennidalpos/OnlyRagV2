@@ -1,5 +1,3 @@
-
-
 /** Result of probing one candidate deliverable on disk. */
 export interface DeliverableProbeResult {
   exists: boolean
@@ -87,24 +85,20 @@ export function isPlaceholderContent(content: string): boolean {
   const trimmed = content.trim()
   if (trimmed.length < MIN_MEANINGFUL_LENGTH) return true
 
-  const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const lines = trimmed
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
   const codeLines = lines.filter((line) => !COMMENT_LINE_PATTERN.test(line))
 
   // Nothing but comments: the model described the work instead of doing it.
   if (codeLines.length === 0) return true
 
-  return (
-    codeLines.length <= MAX_MARKER_ONLY_CODE_LINES &&
-    trimmed.length <= MAX_MARKER_ONLY_LENGTH &&
-    PLACEHOLDER_MARKER_PATTERN.test(trimmed)
-  )
+  return codeLines.length <= MAX_MARKER_ONLY_CODE_LINES && trimmed.length <= MAX_MARKER_ONLY_LENGTH && PLACEHOLDER_MARKER_PATTERN.test(trimmed)
 }
 
 /** Decides whether a milestone's file deliverables are all present on disk. */
-export function resolveMilestoneDeliverableStatus(
-  milestone: string | MilestoneDeliverableDeclaration,
-  probe: DeliverableProbe
-): MilestoneDeliverableStatus {
+export function resolveMilestoneDeliverableStatus(milestone: string | MilestoneDeliverableDeclaration, probe: DeliverableProbe): MilestoneDeliverableStatus {
   const deliverables = resolveDeclaredFilePaths(milestone)
   if (deliverables.length === 0) return 'not_applicable'
 
@@ -128,9 +122,5 @@ export function isDeliverableOfMilestone(milestone: string | MilestoneDeliverabl
   const normalisedMutation = mutatedPath.replace(/\\/g, '/').replace(/^\.\//, '')
   if (!normalisedMutation) return false
 
-  return resolveDeclaredFilePaths(milestone).some(
-    (deliverable) =>
-      normalisedMutation === deliverable ||
-      normalisedMutation.endsWith(`/${deliverable}`)
-  )
+  return resolveDeclaredFilePaths(milestone).some((deliverable) => normalisedMutation === deliverable || normalisedMutation.endsWith(`/${deliverable}`))
 }

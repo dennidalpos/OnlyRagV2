@@ -43,10 +43,7 @@ export const PlanPanelChecklistView: React.FC<PlanPanelChecklistViewProps> = ({
         aria-label="Avanzamento checklist operativa"
         className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800"
       >
-        <div
-          className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-500"
-          style={{ width: `${progressPercent}%` }}
-        />
+        <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-500" style={{ width: `${progressPercent}%` }} />
       </div>
 
       {/* Checklist Items List (Read-Only driven by Agent Execution) */}
@@ -77,7 +74,9 @@ export const PlanPanelChecklistView: React.FC<PlanPanelChecklistViewProps> = ({
               </div>
 
               <div className="flex-1 min-w-0 font-sans leading-relaxed">
-                <span className={`text-[11px] ${isChecked ? 'line-through text-slate-400' : isActive ? 'font-bold text-amber-200' : 'text-slate-200 font-medium'}`}>
+                <span
+                  className={`text-[11px] ${isChecked ? 'line-through text-slate-400' : isActive ? 'font-bold text-amber-200' : 'text-slate-200 font-medium'}`}
+                >
                   {item.title}
                 </span>
               </div>

@@ -36,7 +36,9 @@ export class ArtifactRepository {
     const directory = this.getDirectory(workspacePath)
     if (!fs.existsSync(directory)) return []
     const entries = await fs.promises.readdir(directory, { withFileTypes: true })
-    const records = await Promise.all(entries.filter((entry) => entry.isFile() && entry.name.endsWith('.json')).map((entry) => this.read(path.join(directory, entry.name))))
+    const records = await Promise.all(
+      entries.filter((entry) => entry.isFile() && entry.name.endsWith('.json')).map((entry) => this.read(path.join(directory, entry.name))),
+    )
     return records.filter((record): record is ArtifactRecord => record !== null).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
@@ -59,7 +61,7 @@ export class ArtifactRepository {
       updatedAt: now,
     }
     await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
-    if (!await safeAtomicWrite(filePath, JSON.stringify(record, null, 2))) throw new Error('Could not persist artifact')
+    if (!(await safeAtomicWrite(filePath, JSON.stringify(record, null, 2)))) throw new Error('Could not persist artifact')
     return record
   }
 

@@ -1,5 +1,3 @@
-
-
 let activeLockCount = 0
 let restoreOverflow: string | null = null
 

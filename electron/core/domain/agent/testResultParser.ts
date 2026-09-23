@@ -1,5 +1,3 @@
-
-
 export type TestFramework = 'vitest' | 'jest' | 'pytest' | 'mocha' | 'unknown'
 
 export interface TestRunResult {
@@ -18,10 +16,7 @@ function buildResult(framework: TestFramework, passed: number, failed: number, t
     failed,
     total,
     framework,
-    summary:
-      failed === 0
-        ? `${passed}/${total} tests passed (${framework}).`
-        : `${failed}/${total} tests FAILED, ${passed}/${total} passed (${framework}).`,
+    summary: failed === 0 ? `${passed}/${total} tests passed (${framework}).` : `${failed}/${total} tests FAILED, ${passed}/${total} passed (${framework}).`,
   }
 }
 

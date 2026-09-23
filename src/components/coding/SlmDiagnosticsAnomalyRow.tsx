@@ -59,9 +59,7 @@ export const SlmDiagnosticsAnomalyRow: React.FC<AnomalyRowProps> = ({ anomaly, i
           <span className="text-xs font-mono font-bold text-slate-100">{anomaly.anomaly_type}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider border ${badge}`}>
-            {anomaly.severity}
-          </span>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider border ${badge}`}>{anomaly.severity}</span>
           {anomaly.count > 1 && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono font-bold border border-slate-700">
               ×{anomaly.count}
@@ -74,7 +72,9 @@ export const SlmDiagnosticsAnomalyRow: React.FC<AnomalyRowProps> = ({ anomaly, i
       <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
         <div className="flex items-center gap-1.5 min-w-0">
           <FileSearch className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-          <span className="truncate text-slate-300 font-medium" title={anomaly.log_file}>{shortFile}</span>
+          <span className="truncate text-slate-300 font-medium" title={anomaly.log_file}>
+            {shortFile}
+          </span>
           <span className="text-slate-600">:</span>
           <span className="text-cyan-400 font-bold">L{anomaly.line_number}</span>
         </div>

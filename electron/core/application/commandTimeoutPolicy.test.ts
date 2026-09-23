@@ -1,13 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { __testing } from './agentToolExecutorService'
 
-const {
-  resolveCommandTimeoutMs,
-  isLongRunningCommand,
-  isBlockingDevServerCommand,
-  extractRequestedPackages,
-  findAlreadyInstalledPackages,
-} = __testing
+const { resolveCommandTimeoutMs, isLongRunningCommand, isBlockingDevServerCommand, extractRequestedPackages, findAlreadyInstalledPackages } = __testing
 
 describe('run_command timeout policy', () => {
   it('should give installs and scaffolding a long ceiling instead of the old fixed 60s', () => {
@@ -80,12 +74,8 @@ describe('redundant install detection', () => {
 
   it('extracts package names, stripping flags and version specifiers', () => {
     const names = (cmd: string) => extractRequestedPackages(cmd).map((p) => p.name)
-    expect(names('npm install -D tailwindcss postcss autoprefixer')).toEqual([
-      'tailwindcss', 'postcss', 'autoprefixer',
-    ])
-    expect(names('npm install tailwindcss postcss autoprefixer --save-dev')).toEqual([
-      'tailwindcss', 'postcss', 'autoprefixer',
-    ])
+    expect(names('npm install -D tailwindcss postcss autoprefixer')).toEqual(['tailwindcss', 'postcss', 'autoprefixer'])
+    expect(names('npm install tailwindcss postcss autoprefixer --save-dev')).toEqual(['tailwindcss', 'postcss', 'autoprefixer'])
     expect(names('npm i react@18.2.0')).toEqual(['react'])
     expect(names('yarn add @tanstack/react-virtual@3.14.10')).toEqual(['@tanstack/react-virtual'])
     expect(names('npm install')).toEqual([])
@@ -94,9 +84,7 @@ describe('redundant install detection', () => {
   })
 
   it('must flag every-package-already-present installs as redundant (regression: the same tailwind install was re-run 19 times in one production session because nothing checked package.json first)', () => {
-    expect(findAlreadyInstalledPackages(['tailwindcss', 'postcss', 'autoprefixer'], packageJson)).toEqual([
-      'tailwindcss', 'postcss', 'autoprefixer',
-    ])
+    expect(findAlreadyInstalledPackages(['tailwindcss', 'postcss', 'autoprefixer'], packageJson)).toEqual(['tailwindcss', 'postcss', 'autoprefixer'])
     // Different flag order/position than what's in package.json.dependencies -- the check is
     // purely name-based, so this near-variant phrasing is caught too.
     expect(findAlreadyInstalledPackages(['tailwindcss', 'postcss', 'autoprefixer'], packageJson)).not.toBeNull()
@@ -110,15 +98,9 @@ describe('redundant install detection', () => {
 
   it('flags a request that pins an explicit version, so the redundant-install guard lets it through', () => {
     // `npm install vite@^8.0.0` is a request to CHANGE the version.
-    expect(extractRequestedPackages('npm install vite@^8.0.0')).toEqual([
-      { name: 'vite', hasExplicitVersion: true },
-    ])
+    expect(extractRequestedPackages('npm install vite@^8.0.0')).toEqual([{ name: 'vite', hasExplicitVersion: true }])
     expect(extractRequestedPackages('npm install vite')).toEqual([{ name: 'vite', hasExplicitVersion: false }])
-    expect(extractRequestedPackages('npm i @vitejs/plugin-react@4.7.0')).toEqual([
-      { name: '@vitejs/plugin-react', hasExplicitVersion: true },
-    ])
-    expect(extractRequestedPackages('npm i @vitejs/plugin-react')).toEqual([
-      { name: '@vitejs/plugin-react', hasExplicitVersion: false },
-    ])
+    expect(extractRequestedPackages('npm i @vitejs/plugin-react@4.7.0')).toEqual([{ name: '@vitejs/plugin-react', hasExplicitVersion: true }])
+    expect(extractRequestedPackages('npm i @vitejs/plugin-react')).toEqual([{ name: '@vitejs/plugin-react', hasExplicitVersion: false }])
   })
 })

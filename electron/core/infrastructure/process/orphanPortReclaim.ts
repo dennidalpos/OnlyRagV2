@@ -1,5 +1,3 @@
-
-
 /** Extracts the PID of the process LISTENING on `port` from `netstat -ano` output. */
 export function parseListeningPidFromNetstat(output: string, port: number): number | null {
   if (!output) return null
@@ -31,8 +29,11 @@ export interface SidecarOwnershipMarker {
 
 /** PID alone is insufficient: reject reused PIDs and unrelated Python processes. */
 export function matchesSidecarOwnership(marker: SidecarOwnershipMarker | null, current: SidecarOwnershipMarker | null): boolean {
-  return Boolean(marker && current
-    && marker.pid === current.pid
-    && marker.executablePath.toLowerCase() === current.executablePath.toLowerCase()
-    && marker.startedAt === current.startedAt)
+  return Boolean(
+    marker &&
+      current &&
+      marker.pid === current.pid &&
+      marker.executablePath.toLowerCase() === current.executablePath.toLowerCase() &&
+      marker.startedAt === current.startedAt,
+  )
 }

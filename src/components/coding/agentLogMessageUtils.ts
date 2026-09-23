@@ -1,5 +1,3 @@
-
-
 import { AgentActionLog } from '../../types'
 
 export function getStepModelName(message?: string, defaultModelName?: string): string {
@@ -16,9 +14,7 @@ export function getStepModelName(message?: string, defaultModelName?: string): s
   }
 
   const bracketMatch =
-    message.match(/Escalating to heavy tier \[([^\]]+)\]/i) ||
-    message.match(/Primary model \[([^\]]+)\]/i) ||
-    message.match(/Intermediate model \[([^\]]+)\]/i)
+    message.match(/Escalating to heavy tier \[([^\]]+)\]/i) || message.match(/Primary model \[([^\]]+)\]/i) || message.match(/Intermediate model \[([^\]]+)\]/i)
 
   if (bracketMatch && bracketMatch[1]) {
     return bracketMatch[1].trim()
@@ -85,7 +81,17 @@ export function extractBaseName(rawPath?: string): string {
 }
 
 export function resolveLogCategory(log: AgentActionLog): {
-  category: AgentActionLog['category'] | 'user_prompt' | 'agent_question' | 'final_report' | 'file_mutation' | 'command_execution' | 'test_run' | 'workspace_exploration' | 'web_research' | 'generic_assistant'
+  category:
+    | AgentActionLog['category']
+    | 'user_prompt'
+    | 'agent_question'
+    | 'final_report'
+    | 'file_mutation'
+    | 'command_execution'
+    | 'test_run'
+    | 'workspace_exploration'
+    | 'web_research'
+    | 'generic_assistant'
   target: string
   verb?: string
   modelName?: string
@@ -116,7 +122,13 @@ export function resolveLogCategory(log: AgentActionLog): {
   if (log.type === 'terminal' || msg.includes('run_command') || msg.startsWith('Ran ')) {
     return { category: 'command_execution', target: msg.replace(/^Ran\s+/, ''), verb: 'Ran' }
   }
-  if (msg.includes('write_file') || msg.includes('Successfully wrote') || msg.includes('replace_chunk') || msg.includes('multi_replace') || msg.startsWith('Edited ')) {
+  if (
+    msg.includes('write_file') ||
+    msg.includes('Successfully wrote') ||
+    msg.includes('replace_chunk') ||
+    msg.includes('multi_replace') ||
+    msg.startsWith('Edited ')
+  ) {
     return { category: 'file_mutation', target: extractBaseName(msg), verb: msg.startsWith('Created') ? 'Created' : 'Edited' }
   }
   if (msg.includes('Loop') || msg.includes('Oscillation') || msg.includes('Intervention') || msg.includes('[SECURITY BLOCK]') || msg.includes('Error:')) {

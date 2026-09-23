@@ -79,7 +79,11 @@ export class OllamaModelUpdateAppService {
               remoteDigest: remoteRes.digest,
             }
             if (hasUpdate) {
-              logger.log('INFO', 'ModelUpdateAppService', `Update available for model '${modelName}': local ${localDigest.slice(0, 12)} vs remote ${remoteRes.digest.slice(0, 12)}`)
+              logger.log(
+                'INFO',
+                'ModelUpdateAppService',
+                `Update available for model '${modelName}': local ${localDigest.slice(0, 12)} vs remote ${remoteRes.digest.slice(0, 12)}`,
+              )
             }
           } else {
             // Model not in registry (e.g. custom or 404) or timeout/offline

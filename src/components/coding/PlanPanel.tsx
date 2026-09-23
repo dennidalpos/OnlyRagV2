@@ -84,20 +84,19 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   // Determine active item based on in_progress status or the first unfinished item when executing
   const inProgressIndex = parsedChecklist.findIndex((item) => item.status === 'in_progress')
   const firstUnfinishedIndex = parsedChecklist.findIndex((item) => !item.completed)
-  const activeIndex = isExecuting
-    ? (inProgressIndex !== -1 ? inProgressIndex : firstUnfinishedIndex)
-    : -1
+  const activeIndex = isExecuting ? (inProgressIndex !== -1 ? inProgressIndex : firstUnfinishedIndex) : -1
 
   const progressPercent = totalItems > 0 ? Math.round((completedItemsCount / totalItems) * 100) : 0
-  const schedulerState = generationState === 'queued'
-    ? 'In coda nello scheduler Ollama'
-    : generationState === 'running'
-      ? 'In esecuzione nello scheduler Ollama'
-      : generationState === 'cancelling'
-        ? 'Annullamento nello scheduler Ollama'
-        : generationState === 'failed'
-          ? 'Errore nello scheduler Ollama'
-          : null
+  const schedulerState =
+    generationState === 'queued'
+      ? 'In coda nello scheduler Ollama'
+      : generationState === 'running'
+        ? 'In esecuzione nello scheduler Ollama'
+        : generationState === 'cancelling'
+          ? 'Annullamento nello scheduler Ollama'
+          : generationState === 'failed'
+            ? 'Errore nello scheduler Ollama'
+            : null
 
   return (
     <div className="flex-1 h-full flex flex-col bg-slate-950 text-slate-200 select-text font-sans overflow-hidden">
@@ -126,8 +125,14 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
             <p className="text-[11px] text-slate-400 max-w-xs">
               L'AI sta valutando se ci sono trade-off architetturali da confermare prima di generare la checklist.
             </p>
-            {schedulerState && <span className="text-[10px] text-amber-300" role="status">{schedulerState}</span>}
-            <button type="button" onClick={onCancelFlow} className="text-xs text-rose-300 hover:text-rose-200">Annulla</button>
+            {schedulerState && (
+              <span className="text-[10px] text-amber-300" role="status">
+                {schedulerState}
+              </span>
+            )}
+            <button type="button" onClick={onCancelFlow} className="text-xs text-rose-300 hover:text-rose-200">
+              Annulla
+            </button>
           </div>
         ) : isInterviewActive && interviewQuestions.length > 0 ? (
           <PlanInterviewCard
@@ -140,11 +145,15 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
             <div className="font-bold text-slate-200 text-xs">Generazione del Piano (v{planHistory.length + 1}) in corso...</div>
-            <p className="text-[11px] text-slate-400 max-w-xs">
-              L'AI Agent sta analizzando il prompt per delineare la strategia di esecuzione passo-passo.
-            </p>
-            {schedulerState && <span className="text-[10px] text-amber-300" role="status">{schedulerState}</span>}
-            <button type="button" onClick={onCancelFlow} className="text-xs text-rose-300 hover:text-rose-200">Annulla</button>
+            <p className="text-[11px] text-slate-400 max-w-xs">L'AI Agent sta analizzando il prompt per delineare la strategia di esecuzione passo-passo.</p>
+            {schedulerState && (
+              <span className="text-[10px] text-amber-300" role="status">
+                {schedulerState}
+              </span>
+            )}
+            <button type="button" onClick={onCancelFlow} className="text-xs text-rose-300 hover:text-rose-200">
+              Annulla
+            </button>
           </div>
         ) : !plan ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
@@ -161,7 +170,11 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
               {plan.errorPhase === 'interview' ? 'Intervista non completata' : 'Pianificazione non completata'}
             </div>
             <p className="text-[11px] text-slate-400 max-w-md">{plan.errorMessage}</p>
-            {generationState === 'failed' && <span className="text-[10px] text-rose-300" role="status">{schedulerState}</span>}
+            {generationState === 'failed' && (
+              <span className="text-[10px] text-rose-300" role="status">
+                {schedulerState}
+              </span>
+            )}
             <pre className="w-full max-w-2xl max-h-40 overflow-auto text-left whitespace-pre-wrap p-3 rounded-xl bg-slate-950 border border-slate-800 text-[10px] text-slate-300">
               {formattedPrompt || plan.prompt}
             </pre>
@@ -210,11 +223,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
               </div>
             </div>
 
-            <PlanReviewCard
-              plan={plan}
-              disabled={isExecuting || isApprovingPlan || isSavingPlanReview}
-              onSave={onSaveReview}
-            />
+            <PlanReviewCard plan={plan} disabled={isExecuting || isApprovingPlan || isSavingPlanReview} onSave={onSaveReview} />
 
             {plan.status === 'approved' && viewMode === 'checklist' ? (
               <PlanPanelChecklistView
@@ -255,11 +264,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
                   className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-950/50 focus-ring active:scale-95"
                 >
                   {isApprovingPlan ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 fill-current" />}
-                  {isApprovingPlan
-                    ? 'Salvataggio e preparazione...'
-                    : plan.status === 'approved'
-                      ? 'Esegui piano approvato'
-                      : 'Approva & Esegui Task'}
+                  {isApprovingPlan ? 'Salvataggio e preparazione...' : plan.status === 'approved' ? 'Esegui piano approvato' : 'Approva & Esegui Task'}
                 </button>
               </div>
             )}

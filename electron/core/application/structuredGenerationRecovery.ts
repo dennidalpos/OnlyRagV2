@@ -1,15 +1,9 @@
 import type { OllamaStructuredRequest } from '../infrastructure/http/ollamaHttpClient'
-import {
-  recordRecoveryFailure,
-  recoveryStopDiagnostic,
-  type RecoveryFailureState,
-} from '../domain/agent/recoveryBudget'
+import { recordRecoveryFailure, recoveryStopDiagnostic, type RecoveryFailureState } from '../domain/agent/recoveryBudget'
 import { ollamaAppService } from './ollamaAppService'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 
-export type StructuredContentValidation<T> =
-  | { status: 'valid'; data: T }
-  | { status: 'invalid'; error: string }
+export type StructuredContentValidation<T> = { status: 'valid'; data: T } | { status: 'invalid'; error: string }
 
 export type RecoveredStructuredResult<T> =
   | { status: 'success'; data: T; content: string; attempts: number }
@@ -42,9 +36,7 @@ function maximumStructuredOutput(request: OllamaStructuredRequest): number | und
 
 function withMaximumStructuredOutput(request: OllamaStructuredRequest): OllamaStructuredRequest {
   const numPredict = maximumStructuredOutput(request)
-  return numPredict === undefined
-    ? request
-    : { ...request, options: { ...request.options, num_predict: numPredict } }
+  return numPredict === undefined ? request : { ...request, options: { ...request.options, num_predict: numPredict } }
 }
 
 /** Shares one two-call ceiling across transport and schema recovery. */
@@ -65,9 +57,8 @@ export async function generateStructuredWithRecovery<T>(
       const decision = recordRecoveryFailure(transportFailure, normalizedSignature('transport', message))
       transportFailure = decision.state
       if (attempt === 2 || decision.action === 'stop') {
-        const diagnostic = decision.action === 'stop'
-          ? recoveryStopDiagnostic('transport', decision.state)
-          : 'Structured generation call budget exhausted after 2/2 calls.'
+        const diagnostic =
+          decision.action === 'stop' ? recoveryStopDiagnostic('transport', decision.state) : 'Structured generation call budget exhausted after 2/2 calls.'
         return { status: 'error', error: `${diagnostic} Last error: ${message}`, attempts: attempt }
       }
       continue
@@ -94,9 +85,8 @@ export async function generateStructuredWithRecovery<T>(
       const decision = recordRecoveryFailure(transportFailure, normalizedSignature('transport', message))
       transportFailure = decision.state
       if (attempt === 2 || decision.action === 'stop') {
-        const diagnostic = decision.action === 'stop'
-          ? recoveryStopDiagnostic('transport', decision.state)
-          : 'Structured generation call budget exhausted after 2/2 calls.'
+        const diagnostic =
+          decision.action === 'stop' ? recoveryStopDiagnostic('transport', decision.state) : 'Structured generation call budget exhausted after 2/2 calls.'
         return { status: 'error', error: `${diagnostic} Last error: ${message}`, attempts: attempt }
       }
       continue
@@ -106,9 +96,8 @@ export async function generateStructuredWithRecovery<T>(
       const decision = recordRecoveryFailure(transportFailure, normalizedSignature('transport', message))
       transportFailure = decision.state
       if (attempt === 2 || decision.action === 'stop') {
-        const diagnostic = decision.action === 'stop'
-          ? recoveryStopDiagnostic('transport', decision.state)
-          : 'Structured generation call budget exhausted after 2/2 calls.'
+        const diagnostic =
+          decision.action === 'stop' ? recoveryStopDiagnostic('transport', decision.state) : 'Structured generation call budget exhausted after 2/2 calls.'
         return { status: 'error', error: `${diagnostic} Last error: ${message}`, attempts: attempt }
       }
       continue
@@ -120,9 +109,8 @@ export async function generateStructuredWithRecovery<T>(
     const decision = recordRecoveryFailure(schemaFailure, normalizedSignature('schema', validated.error))
     schemaFailure = decision.state
     if (attempt === 2 || decision.action === 'stop') {
-      const diagnostic = decision.action === 'stop'
-        ? recoveryStopDiagnostic('schema', decision.state)
-        : 'Structured generation call budget exhausted after 2/2 calls.'
+      const diagnostic =
+        decision.action === 'stop' ? recoveryStopDiagnostic('schema', decision.state) : 'Structured generation call budget exhausted after 2/2 calls.'
       return { status: 'error', error: `${diagnostic} Last error: ${validated.error}`, attempts: attempt }
     }
     currentRequest = withMaximumStructuredOutput({

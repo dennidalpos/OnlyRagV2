@@ -15,13 +15,8 @@ export interface RecoveryDecision {
 export const MAX_FAILURES_PER_RECOVERY_CATEGORY = 2
 
 /** Allows one corrective attempt, then stops the category deterministically. */
-export function recordRecoveryFailure(
-  previous: RecoveryFailureState | undefined,
-  signature: string,
-): RecoveryDecision {
-  const equivalentFailures = previous?.signature === signature
-    ? previous.equivalentFailures + 1
-    : 1
+export function recordRecoveryFailure(previous: RecoveryFailureState | undefined, signature: string): RecoveryDecision {
+  const equivalentFailures = previous?.signature === signature ? previous.equivalentFailures + 1 : 1
   const totalFailures = (previous?.totalFailures || 0) + 1
   const state = { signature, equivalentFailures, totalFailures }
 
@@ -35,8 +30,7 @@ export function recordRecoveryFailure(
 }
 
 export function recoveryStopDiagnostic(category: RecoveryCategory, state: RecoveryFailureState): string {
-  const reason = state.equivalentFailures >= MAX_FAILURES_PER_RECOVERY_CATEGORY
-    ? 'the same failure recurred after one retry'
-    : 'the category recovery budget was exhausted'
+  const reason =
+    state.equivalentFailures >= MAX_FAILURES_PER_RECOVERY_CATEGORY ? 'the same failure recurred after one retry' : 'the category recovery budget was exhausted'
   return `${category} recovery stopped after ${state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY} failures: ${reason}. Last signature: ${state.signature}`
 }

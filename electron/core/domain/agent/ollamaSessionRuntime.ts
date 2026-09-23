@@ -33,18 +33,26 @@ export function validateRestoredOllamaRuntime(
   profile: OllamaSessionRuntimeProfile,
   currentHost: string | undefined,
   availableModels: readonly string[],
-  metrics: Record<string, OllamaModelMetrics>
+  metrics: Record<string, OllamaModelMetrics>,
 ): string | null {
   const options = profile?.options as Partial<OllamaRuntimeOptions> | undefined
   const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value)
   if (
-    typeof profile?.model !== 'string' || !profile.model.trim() ||
-    typeof profile?.host !== 'string' || !options ||
-    !finite(options.num_ctx) || options.num_ctx! <= 0 ||
-    !finite(options.num_predict) || options.num_predict! <= 0 ||
-    !finite(options.maxContextChars) || options.maxContextChars! <= 0 ||
-    !finite(options.temperature) || !finite(options.top_p) || !finite(options.repeat_penalty) ||
-    !Array.isArray(options.stop) || options.stop.some((value) => typeof value !== 'string')
+    typeof profile?.model !== 'string' ||
+    !profile.model.trim() ||
+    typeof profile?.host !== 'string' ||
+    !options ||
+    !finite(options.num_ctx) ||
+    options.num_ctx! <= 0 ||
+    !finite(options.num_predict) ||
+    options.num_predict! <= 0 ||
+    !finite(options.maxContextChars) ||
+    options.maxContextChars! <= 0 ||
+    !finite(options.temperature) ||
+    !finite(options.top_p) ||
+    !finite(options.repeat_penalty) ||
+    !Array.isArray(options.stop) ||
+    options.stop.some((value) => typeof value !== 'string')
   ) {
     return 'Persisted Ollama runtime profile is invalid.'
   }
@@ -60,11 +68,7 @@ export function validateRestoredOllamaRuntime(
   return null
 }
 
-export function enrichOllamaGenerationTelemetry(
-  telemetry: OllamaStreamTelemetry,
-  step: number,
-  loaded?: RunningModelInfo
-): OllamaGenerationTelemetry {
+export function enrichOllamaGenerationTelemetry(telemetry: OllamaStreamTelemetry, step: number, loaded?: RunningModelInfo): OllamaGenerationTelemetry {
   const total = loaded?.size
   const gpu = loaded?.size_vram
   return {

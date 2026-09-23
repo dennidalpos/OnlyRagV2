@@ -1,23 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef, Suspense, lazy } from 'react'
 import { AppSettings } from '../../types'
 import { DEFAULT_APP_SETTINGS } from '../../../shared/domain/settings/appSettingsDefaults'
-import {
-  Layers,
-  FileText,
-  MessageSquare,
-  Languages,
-  Code,
-  Settings,
-  Zap,
-  Cpu,
-  HardDrive,
-  Terminal,
-  Info,
-  Globe,
-  Download,
-  Check,
-  X,
-} from 'lucide-react'
+import { Layers, FileText, MessageSquare, Languages, Code, Settings, Zap, Cpu, HardDrive, Terminal, Info, Globe, Download, Check, X } from 'lucide-react'
 // The five main views are code-split: only the tabs the user actually opens are
 // downloaded, instead of shipping every view inside the initial renderer chunk.
 const SettingsView = lazy(() => import('../settings/SettingsView').then((m) => ({ default: m.SettingsView })))
@@ -102,7 +86,7 @@ export const AppLayout: React.FC = () => {
               hasCompletedInitialSetup: parsed.hasCompletedInitialSetup || localStorage.getItem('onlyrag_initial_setup_completed') === 'true',
               language: parsed.language || (localStorage.getItem('onlyrag_language') === 'en' ? 'en' : 'it'),
             }
-            if (window.electronAPI.saveAppSettings && !await window.electronAPI.saveAppSettings(backendSettings)) {
+            if (window.electronAPI.saveAppSettings && !(await window.electronAPI.saveAppSettings(backendSettings))) {
               throw new Error('Legacy settings migration failed')
             }
           }
@@ -133,24 +117,29 @@ export const AppLayout: React.FC = () => {
     if (!settingsReady || !window.electronAPI?.saveAppSettings) return
     const timer = setTimeout(() => {
       const snapshot = settings
-      saveChain.current = saveChain.current.then(async () => {
-        if (!await window.electronAPI!.saveAppSettings!(snapshot)) throw new Error('Settings save failed')
-      }).catch((err: unknown) => logger.error('AppLayout', `Failed saving settings: ${String(err)}`))
+      saveChain.current = saveChain.current
+        .then(async () => {
+          if (!(await window.electronAPI!.saveAppSettings!(snapshot))) throw new Error('Settings save failed')
+        })
+        .catch((err: unknown) => logger.error('AppLayout', `Failed saving settings: ${String(err)}`))
     }, 100)
     return () => clearTimeout(timer)
   }, [settings, settingsReady])
 
-  const handleUpdateSettings = useCallback((newSettings: Partial<AppSettings>) => {
-    // Applied before setSettings: React runs state updaters during the render phase, so updating another component's state (I18nProvider) from inside one is a render-phase update and React warns about it.
-    if (newSettings.language && newSettings.language !== language) {
-      setLanguage(newSettings.language)
-    }
+  const handleUpdateSettings = useCallback(
+    (newSettings: Partial<AppSettings>) => {
+      // Applied before setSettings: React runs state updaters during the render phase, so updating another component's state (I18nProvider) from inside one is a render-phase update and React warns about it.
+      if (newSettings.language && newSettings.language !== language) {
+        setLanguage(newSettings.language)
+      }
 
-    setSettings((prev) => ({ ...prev, ...newSettings }))
-  }, [language, setLanguage])
+      setSettings((prev) => ({ ...prev, ...newSettings }))
+    },
+    [language, setLanguage],
+  )
 
   const selectDefaultModelIfUnset = useCallback((model: string) => {
-    setSettings((current) => current.defaultModel ? current : { ...current, defaultModel: model })
+    setSettings((current) => (current.defaultModel ? current : { ...current, defaultModel: model }))
   }, [])
   const { diagnostics, refreshDiagnostics: runDiagnosticsScan } = useDiagnostics(settings, selectDefaultModelIfUnset, settingsReady)
   const {
@@ -345,10 +334,10 @@ export const AppLayout: React.FC = () => {
                 <Layers className={`w-3 h-3 ${diagnostics?.sidecar?.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`} />
                 {t('sidebar.sidecarLanceDb')}
               </span>
-              <span className={`font-semibold capitalize text-[10px] font-mono ${diagnostics?.sidecar?.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {diagnostics?.sidecar?.status === 'online'
-                  ? `${diagnostics.sidecar.documentsCount || 0} Docs`
-                  : t('common.offline')}
+              <span
+                className={`font-semibold capitalize text-[10px] font-mono ${diagnostics?.sidecar?.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`}
+              >
+                {diagnostics?.sidecar?.status === 'online' ? `${diagnostics.sidecar.documentsCount || 0} Docs` : t('common.offline')}
               </span>
             </div>
 
@@ -358,7 +347,11 @@ export const AppLayout: React.FC = () => {
                 {t('sidebar.ollamaLocal')}
               </span>
               <span className={`font-semibold capitalize ${diagnostics?.ollama.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {diagnostics?.ollama.status === 'online' ? t('common.online') : diagnostics?.ollama.status === 'checking' ? t('common.checking') : t('common.offline')}
+                {diagnostics?.ollama.status === 'online'
+                  ? t('common.online')
+                  : diagnostics?.ollama.status === 'checking'
+                    ? t('common.checking')
+                    : t('common.offline')}
               </span>
             </div>
 
@@ -368,9 +361,7 @@ export const AppLayout: React.FC = () => {
                 {t('sidebar.gpuVram')}
               </span>
               <span className="font-mono text-slate-200 text-[10px]">
-                {diagnostics?.gpu.hasNvidiaGpu
-                  ? `${diagnostics.gpu.vramUsedMB}/${diagnostics.gpu.vramTotalMB} MB`
-                  : t('sidebar.cpuOnly')}
+                {diagnostics?.gpu.hasNvidiaGpu ? `${diagnostics.gpu.vramUsedMB}/${diagnostics.gpu.vramTotalMB} MB` : t('sidebar.cpuOnly')}
               </span>
             </div>
 
@@ -472,7 +463,12 @@ export const AppLayout: React.FC = () => {
             </button>
           </div>
         )}
-        <div id="panel-ingestion" role="tabpanel" aria-labelledby="tab-ingestion" className={`h-full w-full flex flex-col ${activeTab === 'ingestion' ? '' : 'hidden'}`}>
+        <div
+          id="panel-ingestion"
+          role="tabpanel"
+          aria-labelledby="tab-ingestion"
+          className={`h-full w-full flex flex-col ${activeTab === 'ingestion' ? '' : 'hidden'}`}
+        >
           {visitedTabs.has('ingestion') && (
             <Suspense fallback={<ViewChunkFallback />}>
               <IngestionView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} isActive={activeTab === 'ingestion'} />
@@ -486,7 +482,12 @@ export const AppLayout: React.FC = () => {
             </Suspense>
           )}
         </div>
-        <div id="panel-translation" role="tabpanel" aria-labelledby="tab-translation" className={`h-full w-full flex flex-col ${activeTab === 'translation' ? '' : 'hidden'}`}>
+        <div
+          id="panel-translation"
+          role="tabpanel"
+          aria-labelledby="tab-translation"
+          className={`h-full w-full flex flex-col ${activeTab === 'translation' ? '' : 'hidden'}`}
+        >
           {visitedTabs.has('translation') && (
             <Suspense fallback={<ViewChunkFallback />}>
               <TranslationView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} isActive={activeTab === 'translation'} />
@@ -500,7 +501,12 @@ export const AppLayout: React.FC = () => {
             </Suspense>
           )}
         </div>
-        <div id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" className={`h-full w-full flex flex-col ${activeTab === 'settings' ? '' : 'hidden'}`}>
+        <div
+          id="panel-settings"
+          role="tabpanel"
+          aria-labelledby="tab-settings"
+          className={`h-full w-full flex flex-col ${activeTab === 'settings' ? '' : 'hidden'}`}
+        >
           {visitedTabs.has('settings') && (
             <Suspense fallback={<ViewChunkFallback />}>
               <SettingsView
@@ -532,10 +538,7 @@ export const AppLayout: React.FC = () => {
       {/* About & Contributions Modal */}
       {isAboutModalOpen && (
         <Suspense fallback={null}>
-          <AboutModal
-            isOpen={isAboutModalOpen}
-            onClose={handleCloseAboutModal}
-          />
+          <AboutModal isOpen={isAboutModalOpen} onClose={handleCloseAboutModal} />
         </Suspense>
       )}
 
@@ -589,7 +592,7 @@ export const AppLayout: React.FC = () => {
                 <p className="text-[11px] text-slate-400 truncate">
                   {isModelDownloading
                     ? `${downloadPercent}% • ${downloadMbCompleted} / ${downloadMbTotal} MB (${downloadStatus || 'in corso'})`
-                    : 'Modello pronto all\'uso'}
+                    : "Modello pronto all'uso"}
                 </p>
               </div>
             </div>

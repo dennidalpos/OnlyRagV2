@@ -12,9 +12,7 @@ describe('isFalsifiableMilestone', () => {
   })
 
   it('accepts a milestone carrying a verification command', () => {
-    expect(
-      isFalsifiableMilestone({ id: 'm-1', title: 'Make the build pass', status: 'pending', verificationCommand: 'npm run build' })
-    ).toBe(true)
+    expect(isFalsifiableMilestone({ id: 'm-1', title: 'Make the build pass', status: 'pending', verificationCommand: 'npm run build' })).toBe(true)
   })
 
   it('accepts the closing milestone, which the finish tool owns', () => {
@@ -41,9 +39,7 @@ describe('normalizePlanFalsifiability', () => {
   })
 
   it('folds a criterion into the deliverable it qualifies', () => {
-    const result = normalizePlanFalsifiability(
-      plan('Create src/components/Button.tsx', 'Ensure buttons have a minimum touch target of 44×44 px.')
-    )
+    const result = normalizePlanFalsifiability(plan('Create src/components/Button.tsx', 'Ensure buttons have a minimum touch target of 44×44 px.'))
 
     expect(result).toHaveLength(1)
     expect(result[0].title).toBe('Create src/components/Button.tsx; Ensure buttons have a minimum touch target of 44×44 px.')
@@ -57,16 +53,14 @@ describe('normalizePlanFalsifiability', () => {
   })
 
   it('renumbers the surviving milestones sequentially', () => {
-    const result = normalizePlanFalsifiability(
-      plan('Create src/App.tsx', 'Fix every overflow issue.', 'Create src/main.tsx', 'Add responsive spacing.')
-    )
+    const result = normalizePlanFalsifiability(plan('Create src/App.tsx', 'Fix every overflow issue.', 'Create src/main.tsx', 'Add responsive spacing.'))
 
     expect(result.map((m) => m.id)).toEqual(['m-1', 'm-2'])
   })
 
   it('never lets the closing milestone absorb implementation criteria', () => {
     const result = normalizePlanFalsifiability(
-      plan('Create src/App.tsx', 'Riepilogo finale e arresto (invoke finish)', 'Run the application to check it works.')
+      plan('Create src/App.tsx', 'Riepilogo finale e arresto (invoke finish)', 'Run the application to check it works.'),
     )
 
     const closing = result[result.length - 1]
@@ -77,7 +71,7 @@ describe('normalizePlanFalsifiability', () => {
   it('keeps the entry as its own milestone when the closing one is the only thing to fold into', () => {
     // The incremental fallback plan has exactly this shape: one implementation step that names no file (the workspace is unknown when it is written) plus the closing milestone.
     const result = normalizePlanFalsifiability(
-      plan('Le modifiche richieste dal task sono implementate nei file del progetto', 'Riepilogo finale e arresto (invoke finish)')
+      plan('Le modifiche richieste dal task sono implementate nei file del progetto', 'Riepilogo finale e arresto (invoke finish)'),
     )
 
     expect(result).toHaveLength(2)
@@ -111,7 +105,7 @@ describe('normalizePlanFalsifiability', () => {
 
   it('folds a directory milestone into the real work instead of leaving a stamp', () => {
     const result = normalizePlanFalsifiability(
-      plan('The project has a services folder — `src/services/`', 'The Tasks page lists tasks — `src/pages/TasksPage.tsx`')
+      plan('The project has a services folder — `src/services/`', 'The Tasks page lists tasks — `src/pages/TasksPage.tsx`'),
     )
 
     expect(result).toHaveLength(1)
@@ -121,9 +115,7 @@ describe('normalizePlanFalsifiability', () => {
   })
 
   it('keeps a criterion that trails the closing milestone as its own step, ahead of it', () => {
-    const result = normalizePlanFalsifiability(
-      plan('Riepilogo finale e arresto (invoke finish)', 'Ensure buttons have a 44x44 touch target.')
-    )
+    const result = normalizePlanFalsifiability(plan('Riepilogo finale e arresto (invoke finish)', 'Ensure buttons have a 44x44 touch target.'))
 
     expect(result).toHaveLength(2)
     expect(result[0].title).toBe('Ensure buttons have a 44x44 touch target.')
@@ -145,11 +137,7 @@ describe('normalizePlanFalsifiability', () => {
   })
 
   it('keeps distinct interventions targeting the same file', () => {
-    const input = plan(
-      'Create src/styles/globals.css',
-      'Add Tailwind directives to src/styles/globals.css',
-      'Create src/components/Sidebar.tsx'
-    )
+    const input = plan('Create src/styles/globals.css', 'Add Tailwind directives to src/styles/globals.css', 'Create src/components/Sidebar.tsx')
     const result = normalizePlanFalsifiability(input)
     expect(result).toHaveLength(3)
     expect(result.map((milestone) => milestone.title)).toEqual(input.map((milestone) => milestone.title))

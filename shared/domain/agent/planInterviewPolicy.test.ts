@@ -17,23 +17,24 @@ describe('shouldRunPlanInterview', () => {
   })
 
   it('does not repeat an alternative already resolved in the request', () => {
-    expect(shouldRunPlanInterview('Meglio SQLite o JSON? Usa SQLite.', [{
-      questionId: 'storage',
-      questionText: 'Quale persistenza?',
-      selectedOption: 'SQLite',
-      provenance: 'explicit',
-    }])).toBe(false)
+    expect(
+      shouldRunPlanInterview('Meglio SQLite o JSON? Usa SQLite.', [
+        {
+          questionId: 'storage',
+          questionText: 'Quale persistenza?',
+          selectedOption: 'SQLite',
+          provenance: 'explicit',
+        },
+      ]),
+    ).toBe(false)
   })
 
   it('extracts explicit Italian and English alternatives deterministically', () => {
-    expect(explicitAlternativeInterviewFallback(
-      'Prima di procedere chiedimi se usare localStorage oppure file JSON.'
-    )[0]).toMatchObject({
+    expect(explicitAlternativeInterviewFallback('Prima di procedere chiedimi se usare localStorage oppure file JSON.')[0]).toMatchObject({
       options: ['localStorage', 'file JSON'],
       recommendedIndex: 0,
     })
-    expect(explicitAlternativeInterviewFallback('Ask me whether to use SQLite or IndexedDB.')[0].options)
-      .toEqual(['SQLite', 'IndexedDB'])
+    expect(explicitAlternativeInterviewFallback('Ask me whether to use SQLite or IndexedDB.')[0].options).toEqual(['SQLite', 'IndexedDB'])
     expect(explicitAlternativeInterviewFallback('Correggi il timeout.')).toEqual([])
   })
 })

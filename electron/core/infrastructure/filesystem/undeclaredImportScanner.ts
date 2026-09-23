@@ -1,5 +1,3 @@
-
-
 import fs from 'node:fs'
 import path from 'node:path'
 import { DEFAULT_IGNORED_DIRS, isSecretFile } from '../../domain/agent/contextFilter'
@@ -21,10 +19,7 @@ export interface UndeclaredImport {
 }
 
 /** Every undeclared package the workspace imports, sorted by name. */
-export function scanUndeclaredImports(
-  workspacePath: string | null | undefined,
-  maxFiles = DEFAULT_MAX_FILES
-): UndeclaredImport[] {
+export function scanUndeclaredImports(workspacePath: string | null | undefined, maxFiles = DEFAULT_MAX_FILES): UndeclaredImport[] {
   if (!workspacePath || !fs.existsSync(workspacePath)) return []
 
   const declared = agentToolFileRepository.readDeclaredPackages(workspacePath)

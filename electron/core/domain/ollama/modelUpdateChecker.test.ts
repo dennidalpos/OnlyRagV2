@@ -1,17 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import {
-  parseModelTag,
-  normalizeDigest,
-  hasDigestDiscrepancy,
-} from './modelUpdateChecker'
+import { parseModelTag, normalizeDigest, hasDigestDiscrepancy } from './modelUpdateChecker'
 
 describe('modelUpdateChecker Domain Unit Tests', () => {
   describe('normalizeDigest', () => {
     it('should strip sha256: prefix and normalize case', () => {
-      expect(normalizeDigest('sha256:2A654D98E6FBA55D452B7043684E9B57A947E393BBFFA62485A7AAC05EE4EEFD'))
-        .toBe('2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd')
-      expect(normalizeDigest('2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd'))
-        .toBe('2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd')
+      expect(normalizeDigest('sha256:2A654D98E6FBA55D452B7043684E9B57A947E393BBFFA62485A7AAC05EE4EEFD')).toBe(
+        '2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd',
+      )
+      expect(normalizeDigest('2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd')).toBe(
+        '2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd',
+      )
     })
 
     it('should handle empty or null values safely', () => {

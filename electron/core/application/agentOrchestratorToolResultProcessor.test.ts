@@ -3,7 +3,15 @@ import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { applyVersionedReadEvidence, describeNonRollbackEffect, isToolExecutionFailure, runToolResultProcessing, shouldSpendExecutionRecoveryBudget, terminalOutcomeFor, updateVersionConflictRecovery } from './agentOrchestratorToolResultProcessor'
+import {
+  applyVersionedReadEvidence,
+  describeNonRollbackEffect,
+  isToolExecutionFailure,
+  runToolResultProcessing,
+  shouldSpendExecutionRecoveryBudget,
+  terminalOutcomeFor,
+  updateVersionConflictRecovery,
+} from './agentOrchestratorToolResultProcessor'
 import type { ToolResultProcessingContext } from './agentOrchestratorToolResultTypes'
 import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
@@ -20,58 +28,78 @@ describe('structured tool outcomes', () => {
   })
 
   it('reports confirmed commands and uncertain failures as effects outside automatic rollback', () => {
-    expect(describeNonRollbackEffect(
-      { tool: 'run_command', parameters: { command: 'npm install demo' } },
-      { outcome: 'success', outputForHistory: 'done', logMessage: 'done', effectOutcome: 'confirmed' },
-    )).toBe('run_command: npm install demo')
-    expect(describeNonRollbackEffect(
-      { tool: 'run_command', parameters: { command: 'deploy' } },
-      { outcome: 'failure', outputForHistory: 'timeout', logMessage: 'timeout', effectOutcome: 'uncertain' },
-    )).toContain('effetto esterno incerto')
+    expect(
+      describeNonRollbackEffect(
+        { tool: 'run_command', parameters: { command: 'npm install demo' } },
+        { outcome: 'success', outputForHistory: 'done', logMessage: 'done', effectOutcome: 'confirmed' },
+      ),
+    ).toBe('run_command: npm install demo')
+    expect(
+      describeNonRollbackEffect(
+        { tool: 'run_command', parameters: { command: 'deploy' } },
+        { outcome: 'failure', outputForHistory: 'timeout', logMessage: 'timeout', effectOutcome: 'uncertain' },
+      ),
+    ).toContain('effetto esterno incerto')
   })
 })
 
 describe('file version recovery', () => {
   it('uses the mandatory read instead of spending the generic execution retry', () => {
-    expect(shouldSpendExecutionRecoveryBudget({
-      outcome: 'rejected',
-      outputForHistory: '[FILE VERSION CONFLICT: src/App.tsx]\nNo content was written.',
-      logMessage: 'Conflict',
-    })).toBe(false)
+    expect(
+      shouldSpendExecutionRecoveryBudget({
+        outcome: 'rejected',
+        outputForHistory: '[FILE VERSION CONFLICT: src/App.tsx]\nNo content was written.',
+        logMessage: 'Conflict',
+      }),
+    ).toBe(false)
   })
 
   it('leaves a syntax rejection, which never reached the disk, to the edit-loop and no_mutation guards', () => {
-    expect(shouldSpendExecutionRecoveryBudget({
-      outcome: 'rejected',
-      outputForHistory: "[PRE-COMMIT AST VALIDATION ERROR IN src/TaskCard.ts]\nAST Syntax Error: '>' expected. (Line 6:15)",
-      logMessage: "Write File Rejected (AST Syntax Error): AST Syntax Error: '>' expected.",
-    })).toBe(false)
-    expect(shouldSpendExecutionRecoveryBudget({
-      outcome: 'rejected',
-      outputForHistory: 'Path escapes the workspace',
-      logMessage: 'Rejected',
-    })).toBe(true)
+    expect(
+      shouldSpendExecutionRecoveryBudget({
+        outcome: 'rejected',
+        outputForHistory: "[PRE-COMMIT AST VALIDATION ERROR IN src/TaskCard.ts]\nAST Syntax Error: '>' expected. (Line 6:15)",
+        logMessage: "Write File Rejected (AST Syntax Error): AST Syntax Error: '>' expected.",
+      }),
+    ).toBe(false)
+    expect(
+      shouldSpendExecutionRecoveryBudget({
+        outcome: 'rejected',
+        outputForHistory: 'Path escapes the workspace',
+        logMessage: 'Rejected',
+      }),
+    ).toBe(true)
   })
 
   it('requires a read after conflict and clears it only after a successful read', () => {
     const recoveryState: any = { progress: new AgentProgressPolicy() }
     recoveryState.progress.onExecutionFailure('write_file:src/App.tsx:conflict')
-    expect(updateVersionConflictRecovery({
-      toolRes: { outcome: 'rejected', outputForHistory: '[FILE VERSION CONFLICT: src/App.tsx]\nNo content was written.', logMessage: 'Conflict' },
-      parsedTool: { tool: 'write_file', parameters: { filePath: 'src/App.tsx' } },
-      recoveryState,
-    })).toEqual({ changed: true, conflictPath: 'src/App.tsx' })
+    expect(
+      updateVersionConflictRecovery({
+        toolRes: { outcome: 'rejected', outputForHistory: '[FILE VERSION CONFLICT: src/App.tsx]\nNo content was written.', logMessage: 'Conflict' },
+        parsedTool: { tool: 'write_file', parameters: { filePath: 'src/App.tsx' } },
+        recoveryState,
+      }),
+    ).toEqual({ changed: true, conflictPath: 'src/App.tsx' })
     expect(recoveryState.pendingVersionConflictReadPath).toBe('src/App.tsx')
 
     updateVersionConflictRecovery({
-      toolRes: { outcome: 'success', outputForHistory: '[FILE VERSION: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]', logMessage: 'Read' },
+      toolRes: {
+        outcome: 'success',
+        outputForHistory: '[FILE VERSION: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]',
+        logMessage: 'Read',
+      },
       parsedTool: { tool: 'read_file', parameters: { filePath: 'src/Other.tsx' } },
       recoveryState,
     })
     expect(recoveryState.pendingVersionConflictReadPath).toBe('src/App.tsx')
 
     updateVersionConflictRecovery({
-      toolRes: { outcome: 'success', outputForHistory: '[FILE VERSION: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]', logMessage: 'Read' },
+      toolRes: {
+        outcome: 'success',
+        outputForHistory: '[FILE VERSION: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]',
+        logMessage: 'Read',
+      },
       parsedTool: { tool: 'read_file', parameters: { filePath: 'src/App.tsx' } },
       recoveryState,
     })
@@ -82,15 +110,17 @@ describe('file version recovery', () => {
 
   it('does not require an impossible read before creating an absent file', () => {
     const recoveryState: any = { pendingVersionConflictReadPath: 'src/Old.tsx' }
-    expect(updateVersionConflictRecovery({
-      toolRes: {
-        outcome: 'rejected',
-        outputForHistory: '[FILE VERSION CONFLICT: tailwind.config.js]\nExpected: sha256:stale\nCurrent: missing\nNo content was written.',
-        logMessage: 'Conflict',
-      },
-      parsedTool: { tool: 'write_file', parameters: { filePath: 'tailwind.config.js' } },
-      recoveryState,
-    })).toEqual({ changed: true })
+    expect(
+      updateVersionConflictRecovery({
+        toolRes: {
+          outcome: 'rejected',
+          outputForHistory: '[FILE VERSION CONFLICT: tailwind.config.js]\nExpected: sha256:stale\nCurrent: missing\nNo content was written.',
+          logMessage: 'Conflict',
+        },
+        parsedTool: { tool: 'write_file', parameters: { filePath: 'tailwind.config.js' } },
+        recoveryState,
+      }),
+    ).toEqual({ changed: true })
     expect(recoveryState.pendingVersionConflictReadPath).toBeUndefined()
     expect(recoveryState.versionedReadEvidence).toBeUndefined()
   })
@@ -106,10 +136,13 @@ describe('file version recovery', () => {
           contentHash: contentVersion('export const value = 1\n'),
         },
       }
-      const applied = applyVersionedReadEvidence({
-        tool: 'write_file',
-        parameters: { filePath: 'App.tsx', content: 'export const value = 2\n' },
-      }, state)
+      const applied = applyVersionedReadEvidence(
+        {
+          tool: 'write_file',
+          parameters: { filePath: 'App.tsx', content: 'export const value = 2\n' },
+        },
+        state,
+      )
 
       expect(applied.toolCall.parameters.expectedContentHash).toBe(contentVersion('export const value = 1\n'))
       expect(state.versionedReadEvidence).toBeUndefined()
@@ -119,7 +152,7 @@ describe('file version recovery', () => {
         filePath,
         String(applied.toolCall.parameters.content),
         String(applied.toolCall.parameters.expectedContentHash),
-        () => undefined
+        () => undefined,
       )
       expect(result.success).toBe(false)
       expect(fs.readFileSync(filePath, 'utf-8')).toBe('export const userValue = 3\n')
@@ -220,7 +253,9 @@ describe('plan follows a successful move_file', () => {
       sessionId: 'session-move-remap',
       isSessionActive: () => false,
       rendererEvents: null,
-      persistCurrentState: async () => { persisted += 1 },
+      persistCurrentState: async () => {
+        persisted += 1
+      },
       emitLog: () => {},
       emitDone: () => {},
       finalizeSession: () => {},

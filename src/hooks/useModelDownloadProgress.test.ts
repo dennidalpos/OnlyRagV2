@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import {
-  processPullProgressEvent,
-  getGlobalDownloadState,
-  resetGlobalDownloadState,
-} from './useModelDownloadProgress'
+import { processPullProgressEvent, getGlobalDownloadState, resetGlobalDownloadState } from './useModelDownloadProgress'
 
 describe('useModelDownloadProgress state transitions', () => {
   beforeEach(() => {

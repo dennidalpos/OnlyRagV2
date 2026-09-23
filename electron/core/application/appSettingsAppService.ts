@@ -42,9 +42,9 @@ export class AppSettingsAppService {
       const launchedHost = this.sidecar.getLaunchedOllamaHost()
       if (launchedHost === null || launchedHost === normalizeOllamaHost(ollamaHost)) return
       logger.log('INFO', 'Settings', `Ollama host changed (${launchedHost} -> ${normalizeOllamaHost(ollamaHost)}); restarting the sidecar.`)
-      void this.sidecar.restartPythonSidecar().catch((err: Error) =>
-        logger.log('ERROR', 'Settings', `Sidecar restart after Ollama host change failed: ${err.message}`)
-      )
+      void this.sidecar
+        .restartPythonSidecar()
+        .catch((err: Error) => logger.log('ERROR', 'Settings', `Sidecar restart after Ollama host change failed: ${err.message}`))
     }, this.restartSettleMs)
   }
 }

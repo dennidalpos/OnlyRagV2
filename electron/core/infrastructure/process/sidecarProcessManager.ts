@@ -33,7 +33,10 @@ export interface LegacySidecarDataMigration {
 
 /** Uvicorn writes routine lifecycle and access records to stderr; classify by content instead of stream. */
 export function classifySidecarStderr(message: string): 'INFO' | 'WARN' | 'ERROR' {
-  const lines = message.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const lines = message
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
   if (lines.some((line) => /^(ERROR|CRITICAL):/i.test(line)) || /Traceback \(most recent call last\):/i.test(message)) {
     return 'ERROR'
   }
@@ -273,7 +276,9 @@ export class SidecarProcessManager {
     let marker: SidecarOwnershipMarker | null = null
     try {
       marker = JSON.parse(await fs.promises.readFile(path.join(app.getPath('userData'), OWNERSHIP_FILE_NAME), 'utf-8')) as SidecarOwnershipMarker
-    } catch { /* Missing marker is not ownership proof. */ }
+    } catch {
+      /* Missing marker is not ownership proof. */
+    }
     const current = pid === null ? null : await this.readProcessIdentity(pid)
     if (!matchesSidecarOwnership(marker, current) || pid === process.pid) {
       this.state = { status: 'offline', error: `Port ${SIDECAR_PORT} is occupied by an unowned process.` }
@@ -302,7 +307,9 @@ export class SidecarProcessManager {
       const raw = await this.readCommandOutput('powershell', ['-NoProfile', '-NonInteractive', '-Command', command])
       const identity = JSON.parse(raw) as SidecarOwnershipMarker
       return typeof identity.executablePath === 'string' && typeof identity.startedAt === 'string' ? identity : null
-    } catch { return null }
+    } catch {
+      return null
+    }
   }
 
   async startPythonSidecar(): Promise<boolean> {
@@ -404,11 +411,10 @@ export class SidecarProcessManager {
     }
 
     this.attachSidecarProcessLogs()
-    if (!await this.waitForSidecarHealth()) return false
+    if (!(await this.waitForSidecarHealth())) return false
     const childPid = sidecarProcess?.pid
-    const listenerPid = process.platform === 'win32'
-      ? parseListeningPidFromNetstat(await this.readCommandOutput('netstat', ['-ano', '-p', 'tcp']), SIDECAR_PORT)
-      : childPid
+    const listenerPid =
+      process.platform === 'win32' ? parseListeningPidFromNetstat(await this.readCommandOutput('netstat', ['-ano', '-p', 'tcp']), SIDECAR_PORT) : childPid
     if (!childPid || listenerPid !== childPid) {
       this.stopPythonSidecar()
       this.state = { status: 'offline', error: 'Sidecar port was taken by another process during startup.' }

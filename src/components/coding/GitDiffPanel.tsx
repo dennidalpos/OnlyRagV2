@@ -1,11 +1,7 @@
 import React, { useMemo } from 'react'
 import { GitBranch, RefreshCw, CheckCircle2, FileCode } from 'lucide-react'
 import stripAnsi from 'strip-ansi'
-import {
-  parseUnifiedDiff,
-  summarizeDiff,
-  type DiffFileChange,
-} from '../../../shared/domain/agent/diffEngine'
+import { parseUnifiedDiff, summarizeDiff, type DiffFileChange } from '../../../shared/domain/agent/diffEngine'
 import { DiffLinesView, ChangeCounts } from './DiffLinesView'
 
 interface GitDiffPanelProps {
@@ -38,9 +34,7 @@ const DiffFileCard: React.FC<{ file: DiffFileChange }> = ({ file }) => {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <ChangeCounts additions={file.additions} deletions={file.deletions} />
-          <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border ${badge.className}`}>
-            {badge.label}
-          </span>
+          <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border ${badge.className}`}>{badge.label}</span>
         </div>
       </div>
 
@@ -50,9 +44,7 @@ const DiffFileCard: React.FC<{ file: DiffFileChange }> = ({ file }) => {
         <div className="overflow-x-auto">
           {file.hunks.map((hunk, hunkIdx) => (
             <div key={`${hunk.header}-${hunkIdx}`}>
-              <div className="px-3 py-1 bg-slate-900/60 text-[10px] font-mono text-cyan-300/80 whitespace-pre">
-                {hunk.header}
-              </div>
+              <div className="px-3 py-1 bg-slate-900/60 text-[10px] font-mono text-cyan-300/80 whitespace-pre">{hunk.header}</div>
               <DiffLinesView lines={hunk.lines} />
             </div>
           ))}
@@ -62,14 +54,7 @@ const DiffFileCard: React.FC<{ file: DiffFileChange }> = ({ file }) => {
   )
 }
 
-export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
-  gitStatusLines,
-  gitDiffText,
-  isFetchingGit,
-  isGitRepo = true,
-  onRefreshGit,
-  onInitGit,
-}) => {
+export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({ gitStatusLines, gitDiffText, isFetchingGit, isGitRepo = true, onRefreshGit, onInitGit }) => {
   const cleanStatusLines = useMemo(() => {
     return gitStatusLines
       .map((str) => stripAnsi(str).trim())
@@ -79,7 +64,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
           !l.startsWith(']0;') &&
           !l.includes('powershell.exe') &&
           !l.toLowerCase().includes('no modified files detected') &&
-          !l.toLowerCase().includes('not a git repository')
+          !l.toLowerCase().includes('not a git repository'),
       )
   }, [gitStatusLines])
 
@@ -163,9 +148,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
               )}
             </div>
             {isWorkingTreeClean ? (
-              <div className="text-slate-400 italic text-[11px] py-1">
-                Nessuna modifica non committata rilevata nel workspace.
-              </div>
+              <div className="text-slate-400 italic text-[11px] py-1">Nessuna modifica non committata rilevata nel workspace.</div>
             ) : (
               cleanStatusLines.map((line, idx) => {
                 const isModified = line.startsWith(' M') || line.startsWith('M ')
@@ -178,10 +161,10 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
                       isModified
                         ? 'text-cyan-300 bg-cyan-950/30'
                         : isAdded
-                        ? 'text-emerald-300 bg-emerald-950/30'
-                        : isDeleted
-                        ? 'text-rose-300 bg-rose-950/30'
-                        : 'text-slate-300'
+                          ? 'text-emerald-300 bg-emerald-950/30'
+                          : isDeleted
+                            ? 'text-rose-300 bg-rose-950/30'
+                            : 'text-slate-300'
                     }`}
                   >
                     {line}

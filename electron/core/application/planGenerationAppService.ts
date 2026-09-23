@@ -8,14 +8,7 @@ import { collectProjectPlanningFacts } from './projectPlanningFacts'
 import { logger } from '../infrastructure/logging/logger'
 import { getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import type {
-  AgentPlan,
-  AppSettings,
-  PlanDecision,
-  PlanEvidence,
-  PlanGenerationResult,
-  UserInterviewAnswer,
-} from '../../../shared/types'
+import type { AgentPlan, AppSettings, PlanDecision, PlanEvidence, PlanGenerationResult, UserInterviewAnswer } from '../../../shared/types'
 import {
   planningPhaseResponseSchema,
   toOllamaJsonSchema,
@@ -54,11 +47,12 @@ function decisionsFromAnswers(answers: readonly UserInterviewAnswer[]): PlanDeci
   return answers.map((answer) => ({
     id: answer.questionId,
     statement: `${answer.questionText}: ${answer.selectedOption}`,
-    source: answer.provenance === 'accepted_recommendation'
-      ? 'accepted_recommendation'
-      : answer.provenance === 'unconfirmed_assumption'
-        ? 'assumption'
-        : 'explicit_user',
+    source:
+      answer.provenance === 'accepted_recommendation'
+        ? 'accepted_recommendation'
+        : answer.provenance === 'unconfirmed_assumption'
+          ? 'assumption'
+          : 'explicit_user',
   }))
 }
 
@@ -73,23 +67,19 @@ function retainEvidence(previousPlan?: AgentPlan): PlanEvidence[] {
   const retained = new Map(previousPlan.retainedEvidence.map((item) => [item.interventionId, item]))
   previousPlan.milestones
     .filter((item) => item.status === 'verified')
-    .forEach((item) => retained.set(item.id, {
-      interventionId: item.id,
-      summary: item.title,
-      verificationReferences: item.verificationReferences
-        || [item.verificationCommand, item.notes].filter((value): value is string => Boolean(value)),
-    }))
+    .forEach((item) =>
+      retained.set(item.id, {
+        interventionId: item.id,
+        summary: item.title,
+        verificationReferences: item.verificationReferences || [item.verificationCommand, item.notes].filter((value): value is string => Boolean(value)),
+      }),
+    )
   return [...retained.values()]
 }
 
-function reconcilePreviousWork(
-  plan: PlanningPhaseResponse,
-  previousInterventions: readonly PlanMilestone[]
-): string | undefined {
+function reconcilePreviousWork(plan: PlanningPhaseResponse, previousInterventions: readonly PlanMilestone[]): string | undefined {
   const openIds = new Set(previousInterventions.filter((item) => item.status !== 'verified').map((item) => item.id))
-  const carriedIds = plan.interventions
-    .map((item) => item.sourceInterventionId)
-    .filter((id): id is string => Boolean(id))
+  const carriedIds = plan.interventions.map((item) => item.sourceInterventionId).filter((id): id is string => Boolean(id))
   const supersededIds = plan.supersededWork.map((item) => item.interventionId)
   const accountedIds = new Set([...carriedIds, ...supersededIds])
   const unknownIds = [...accountedIds].filter((id) => !openIds.has(id))
@@ -99,10 +89,7 @@ function reconcilePreviousWork(
   return undefined
 }
 
-function normalizeFreshPlanReferences(
-  plan: PlanningPhaseResponse,
-  previousInterventions: readonly PlanMilestone[]
-): PlanningPhaseResponse {
+function normalizeFreshPlanReferences(plan: PlanningPhaseResponse, previousInterventions: readonly PlanMilestone[]): PlanningPhaseResponse {
   if (previousInterventions.length > 0) return plan
   return {
     ...plan,
@@ -128,12 +115,10 @@ function toMilestones(plan: PlanningPhaseResponse): PlanMilestone[] {
 function sanitizeVerificationCommands(
   plan: PlanningPhaseResponse,
   executableCommands: readonly string[],
-  scaffoldFilePath?: string
+  scaffoldFilePath?: string,
 ): { plan?: PlanningPhaseResponse; error?: string } {
-  const unavailableCommandOnly = plan.interventions.find((item) =>
-    item.verificationCommand
-    && !executableCommands.includes(item.verificationCommand)
-    && item.filePaths.length === 0
+  const unavailableCommandOnly = plan.interventions.find(
+    (item) => item.verificationCommand && !executableCommands.includes(item.verificationCommand) && item.filePaths.length === 0,
   )
   if (unavailableCommandOnly?.verificationCommand && !scaffoldFilePath) {
     return { error: `Plan response used an unavailable verification command: ${unavailableCommandOnly.verificationCommand}` }
@@ -149,7 +134,7 @@ function sanitizeVerificationCommands(
               filePaths: item.filePaths.length > 0 ? item.filePaths : [scaffoldFilePath!],
               verificationCommand: undefined,
             }
-          : item
+          : item,
       ),
     },
   }
@@ -168,12 +153,7 @@ export class PlanGenerationAppService {
     })
     const trainedContext = await ollamaAppService.getModelContextLength(model, req.settings.ollamaHost)
     const modelMetrics = await ollamaAppService.getModelMetrics(req.settings.ollamaHost)
-    runtimeOpts.num_ctx = resolveModelContextLength(
-      model,
-      req.settings.modelContextLengths,
-      runtimeOpts.num_ctx,
-      trainedContext,
-    )
+    runtimeOpts.num_ctx = resolveModelContextLength(model, req.settings.modelContextLengths, runtimeOpts.num_ctx, trainedContext)
     runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx)
     runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx)
 
@@ -187,45 +167,41 @@ export class PlanGenerationAppService {
       workspace: req.workspacePath ? (hasExistingProject ? 'existing' : 'empty') : 'unknown',
       projectFacts: discovery.facts,
       executableVerificationCommands,
-      previousPlan: req.previousPlan ? {
-        objective: req.previousPlan.objective,
-        interventions: previousInterventions,
-      } : null,
+      previousPlan: req.previousPlan
+        ? {
+            objective: req.previousPlan.objective,
+            interventions: previousInterventions,
+          }
+        : null,
     })
-    runtimeOpts.num_predict = calculateAvailableOutputTokens(
-      `${PLAN_SYSTEM_PROMPT}\n${userContent}`,
-      runtimeOpts.num_ctx,
-    )
+    runtimeOpts.num_predict = calculateAvailableOutputTokens(`${PLAN_SYSTEM_PROMPT}\n${userContent}`, runtimeOpts.num_ctx)
 
     let structuredPlan: PlanningPhaseResponse | null = null
     let generationError: string | undefined
     try {
-      const response = await generateStructuredWithRecovery({
-        operationId: req.operationId,
-        model,
-        systemPrompt: PLAN_SYSTEM_PROMPT,
-        userContent,
-        format: toOllamaJsonSchema(planningPhaseResponseSchema),
-        think: resolveOllamaThinkingPreference(model, req.settings, modelMetrics).think,
-        host: req.settings.ollamaHost,
-        keepAlive: CODING_MODEL_KEEP_ALIVE,
-        options: runtimeOpts,
-      }, (content) => {
-        const validated = validateStructuredContent(content, planningPhaseResponseSchema)
-        if (validated.status === 'invalid') {
-          return { status: 'invalid', error: `Invalid plan response: ${validated.error}` }
-        }
-        const freshPlan = normalizeFreshPlanReferences(validated.data, previousInterventions)
-        const sanitized = sanitizeVerificationCommands(
-          freshPlan,
-          executableVerificationCommands,
-          discovery.scaffold.requirements[0]?.path
-        )
-        const error = sanitized.error || reconcilePreviousWork(sanitized.plan || freshPlan, previousInterventions)
-        return error
-          ? { status: 'invalid', error }
-          : { status: 'valid', data: sanitized.plan! }
-      })
+      const response = await generateStructuredWithRecovery(
+        {
+          operationId: req.operationId,
+          model,
+          systemPrompt: PLAN_SYSTEM_PROMPT,
+          userContent,
+          format: toOllamaJsonSchema(planningPhaseResponseSchema),
+          think: resolveOllamaThinkingPreference(model, req.settings, modelMetrics).think,
+          host: req.settings.ollamaHost,
+          keepAlive: CODING_MODEL_KEEP_ALIVE,
+          options: runtimeOpts,
+        },
+        (content) => {
+          const validated = validateStructuredContent(content, planningPhaseResponseSchema)
+          if (validated.status === 'invalid') {
+            return { status: 'invalid', error: `Invalid plan response: ${validated.error}` }
+          }
+          const freshPlan = normalizeFreshPlanReferences(validated.data, previousInterventions)
+          const sanitized = sanitizeVerificationCommands(freshPlan, executableVerificationCommands, discovery.scaffold.requirements[0]?.path)
+          const error = sanitized.error || reconcilePreviousWork(sanitized.plan || freshPlan, previousInterventions)
+          return error ? { status: 'invalid', error } : { status: 'valid', data: sanitized.plan! }
+        },
+      )
       if (response.status === 'success') {
         structuredPlan = response.data
       } else {
@@ -237,23 +213,18 @@ export class PlanGenerationAppService {
 
     if (generationError) logger.log('WARN', 'PlanGenerationAppService', `Plan generation failed: ${generationError}`)
     const verification = profile ? resolvePrimaryProfileVerificationTargets(profile)[0]?.command : undefined
-    const milestones = structuredPlan
-      ? compilePlanMilestones(
-          toMilestones(structuredPlan),
-          verification,
-          discovery.scaffold
-        )
-      : []
+    const milestones = structuredPlan ? compilePlanMilestones(toMilestones(structuredPlan), verification, discovery.scaffold) : []
     if (!generationError && milestones.length === 0) generationError = 'Plan response contained no executable interventions'
 
     const previousDecisions = req.previousPlan?.decisions || []
     const answerDecisions = decisionsFromAnswers(req.previousDecisions || [])
-    const assumptionDecisions: PlanDecision[] = structuredPlan?.assumptions.map((assumption, index) => ({
-      id: `a-${index + 1}`,
-      statement: assumption.statement,
-      source: 'assumption',
-      rationale: assumption.rationale,
-    })) || []
+    const assumptionDecisions: PlanDecision[] =
+      structuredPlan?.assumptions.map((assumption, index) => ({
+        id: `a-${index + 1}`,
+        statement: assumption.statement,
+        source: 'assumption',
+        rationale: assumption.rationale,
+      })) || []
     const result = {
       objective: structuredPlan?.objective || '',
       decisions: mergeDecisions(previousDecisions, [...answerDecisions, ...assumptionDecisions]),
@@ -281,9 +252,7 @@ export class PlanGenerationAppService {
         auditSucceeded ? `Generated ${milestones.length} milestones.` : `Plan generation failed: ${generationError || 'no executable milestones'}`,
       )
     }
-    return generationError
-      ? { status: 'error', ...result, error: generationError }
-      : { status: 'success', ...result }
+    return generationError ? { status: 'error', ...result, error: generationError } : { status: 'success', ...result }
   }
 }
 

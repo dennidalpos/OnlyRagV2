@@ -6,13 +6,7 @@ import { matchSkillsForTask, matchHubSkillsForTask, compileSkillsContextBlock, S
 import { assessHubSkillQuality, compareHubSkillQuality } from '../domain/skills/skillQuality'
 import { assessHubSkillCompatibility, LocalModelProbe } from '../domain/skills/skillCompatibility'
 import { ollamaHttpClient } from '../infrastructure/http/ollamaHttpClient'
-import {
-  SkillDefinition,
-  HubSkillItem,
-  SkillHubSource,
-  CustomHubInput,
-  SkillSaveInput,
-} from '../domain/skills/skillTypes'
+import { SkillDefinition, HubSkillItem, SkillHubSource, CustomHubInput, SkillSaveInput } from '../domain/skills/skillTypes'
 import { logger } from '../infrastructure/logging/logger'
 import type { SkillInstallCandidate } from './skillInstallApprovalService'
 
@@ -30,25 +24,15 @@ export class SkillAppService {
 
   private async getLocalModelProbe(forceRefresh = false): Promise<LocalModelProbe[]> {
     if (forceRefresh || !this.localModelProbe) {
-      this.localModelProbe = ollamaHttpClient.getModelMetrics().then((metrics) =>
-        Object.keys(metrics).map((name) => ({ name }))
-      )
+      this.localModelProbe = ollamaHttpClient.getModelMetrics().then((metrics) => Object.keys(metrics).map((name) => ({ name })))
     }
     return this.localModelProbe
   }
 
-  private decorateHubSkill(
-    item: HubSkillItem,
-    installed: SkillDefinition[],
-    localModels: readonly LocalModelProbe[],
-  ): HubSkillItem {
+  private decorateHubSkill(item: HubSkillItem, installed: SkillDefinition[], localModels: readonly LocalModelProbe[]): HubSkillItem {
     const parsed = item.rawContent ? parseSkillFrontmatter(item.rawContent) : null
-    const enriched = parsed && parsed.metadata.requiredModel
-      ? { ...item, requiredModel: parsed.metadata.requiredModel }
-      : item
-    const installedSkill = installed.find((skill) =>
-      skill.name.toLowerCase() === item.name.toLowerCase() || skill.id.toLowerCase() === item.id.toLowerCase()
-    )
+    const enriched = parsed && parsed.metadata.requiredModel ? { ...item, requiredModel: parsed.metadata.requiredModel } : item
+    const installedSkill = installed.find((skill) => skill.name.toLowerCase() === item.name.toLowerCase() || skill.id.toLowerCase() === item.id.toLowerCase())
     const remoteChecksum = parsed ? calculateSkillChecksum(parsed.body || item.rawContent || '') : undefined
     const qualityScore = assessHubSkillQuality(enriched).totalScore
     return {
@@ -100,9 +84,7 @@ export class SkillAppService {
     const installed = await skillRepository.listInstalledSkills(workspaceRoot)
     const skills = await skillHubClient.fetchSkillsFromSource(source, forceRefresh)
     const localModels = await this.getLocalModelProbe(forceRefresh)
-    return skills
-      .map((item) => this.decorateHubSkill(item, installed, localModels))
-      .sort(compareHubSkillQuality)
+    return skills.map((item) => this.decorateHubSkill(item, installed, localModels)).sort(compareHubSkillQuality)
   }
 
   async listHubSkills(workspaceRoot?: string | null, forceRefresh = false): Promise<HubSkillItem[]> {
@@ -130,11 +112,15 @@ export class SkillAppService {
 
       for (const item of skills) {
         const key = item.name.toLowerCase()
-        const candidate = this.decorateHubSkill({
-          ...item,
-          hubId: item.hubId || source.id,
-          hubName: item.hubName || source.name,
-        }, installed, localModels)
+        const candidate = this.decorateHubSkill(
+          {
+            ...item,
+            hubId: item.hubId || source.id,
+            hubName: item.hubName || source.name,
+          },
+          installed,
+          localModels,
+        )
         const existingIndex = merged.findIndex((existing) => existing.name.toLowerCase() === key)
         if (existingIndex < 0) {
           merged.push(candidate)
@@ -144,9 +130,7 @@ export class SkillAppService {
       }
     }
 
-    return merged
-      .sort(compareHubSkillQuality)
-      .map((item, index) => ({ ...item, globalRank: index + 1 }))
+    return merged.sort(compareHubSkillQuality).map((item, index) => ({ ...item, globalRank: index + 1 }))
   }
 
   toggleSkillActive(skillId: string, isActive: boolean): boolean {
@@ -163,7 +147,7 @@ export class SkillAppService {
     hubSkillId: string,
     workspaceRoot?: string | null,
     hubSourceId?: string,
-    activateByDefault = true
+    activateByDefault = true,
   ): Promise<{ success: boolean; skill?: SkillDefinition; error?: string }> {
     const sources = await customHubRepository.listSources()
     const source = sources.find((s) => s.id === hubSourceId) || sources[0]
@@ -214,7 +198,7 @@ export class SkillAppService {
     url: string,
     workspaceRoot?: string | null,
     customName?: string,
-    activateByDefault = true
+    activateByDefault = true,
   ): Promise<{ success: boolean; skill?: SkillDefinition; error?: string }> {
     const fetchRes = await skillHubClient.fetchSkillContent(url)
     if (!fetchRes.success || !fetchRes.content) {
@@ -254,10 +238,7 @@ export class SkillAppService {
     return { success: true, skill: newSkill }
   }
 
-  async createOrUpdateSkill(
-    input: SkillSaveInput,
-    workspaceRoot?: string | null
-  ): Promise<{ success: boolean; skill?: SkillDefinition; error?: string }> {
+  async createOrUpdateSkill(input: SkillSaveInput, workspaceRoot?: string | null): Promise<{ success: boolean; skill?: SkillDefinition; error?: string }> {
     const installed = await skillRepository.listInstalledSkills(workspaceRoot)
     const existing = installed.find((s) => s.name.toLowerCase() === input.name.toLowerCase() || s.id === input.name)
 
@@ -301,10 +282,7 @@ export class SkillAppService {
     return { success: true, skill: savedSkill }
   }
 
-  async resetSkillToOriginal(
-    skillId: string,
-    workspaceRoot?: string | null
-  ): Promise<{ success: boolean; skill?: SkillDefinition; error?: string }> {
+  async resetSkillToOriginal(skillId: string, workspaceRoot?: string | null): Promise<{ success: boolean; skill?: SkillDefinition; error?: string }> {
     const installed = await skillRepository.listInstalledSkills(workspaceRoot)
     const skill = installed.find((s) => s.id === skillId || s.name === skillId)
 
@@ -331,7 +309,7 @@ export class SkillAppService {
   private async confirmHubInstall(
     hubMatch: { item: HubSkillItem; score: number },
     autoInstallMode: 'disabled' | 'prompt',
-    onConfirmInstall?: SkillMatchingOptions['onConfirmInstall']
+    onConfirmInstall?: SkillMatchingOptions['onConfirmInstall'],
   ): Promise<boolean> {
     if (autoInstallMode !== 'prompt') return true
     if (!onConfirmInstall) {
@@ -350,7 +328,7 @@ export class SkillAppService {
     userTaskOrContext: string | SkillMatchContext,
     workspaceRoot?: string | null,
     maxSkills: number = 3,
-    options?: SkillMatchingOptions
+    options?: SkillMatchingOptions,
   ): Promise<SkillDefinition[]> {
     try {
       if (options?.enableSkillRouter === false) {
@@ -359,9 +337,10 @@ export class SkillAppService {
 
       let availableSkills = await skillRepository.listInstalledSkills(workspaceRoot)
 
-      const ctx: SkillMatchContext = typeof userTaskOrContext === 'string'
-        ? { userTask: userTaskOrContext, workspacePath: workspaceRoot || undefined }
-        : { ...userTaskOrContext, workspacePath: userTaskOrContext.workspacePath || workspaceRoot || undefined }
+      const ctx: SkillMatchContext =
+        typeof userTaskOrContext === 'string'
+          ? { userTask: userTaskOrContext, workspacePath: workspaceRoot || undefined }
+          : { ...userTaskOrContext, workspacePath: userTaskOrContext.workspacePath || workspaceRoot || undefined }
 
       if (!ctx.projectStack && ctx.workspacePath) {
         ctx.projectStack = projectStackDetectionRepository.detect(ctx.workspacePath)
@@ -383,11 +362,7 @@ export class SkillAppService {
             const hubMatches = matchHubSkillsForTask(ctx, uninstalledHubItems, minScore)
             if (hubMatches.length > 0) {
               const topHubMatch = hubMatches[0]
-              logger.log(
-                'INFO',
-                'SkillAppService',
-                `Auto-discovered high confidence hub skill '${topHubMatch.item.name}' (score: ${topHubMatch.score}).`
-              )
+              logger.log('INFO', 'SkillAppService', `Auto-discovered high confidence hub skill '${topHubMatch.item.name}' (score: ${topHubMatch.score}).`)
               const isInstallAllowed = await this.confirmHubInstall(topHubMatch, autoInstallMode, options?.onConfirmInstall)
               if (isInstallAllowed) {
                 const installRes = await this.installFromHub(topHubMatch.item.id, workspaceRoot, topHubMatch.item.hubId, true)
@@ -414,7 +389,7 @@ export class SkillAppService {
     userTaskOrContext: string | SkillMatchContext,
     workspaceRoot?: string | null,
     maxSkills: number = 3,
-    options?: SkillMatchingOptions
+    options?: SkillMatchingOptions,
   ): Promise<string> {
     try {
       const matched = await this.getMatchedSkills(userTaskOrContext, workspaceRoot, maxSkills, options)

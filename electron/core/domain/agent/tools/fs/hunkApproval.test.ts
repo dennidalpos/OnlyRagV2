@@ -13,7 +13,8 @@ describe('hunk approval', () => {
       parameters: { filePath: 'src/a.ts', content: 'one\nold\nthree\n' },
     }
     expect(reconcileApprovedHunks(tool, [0], 'old\n')).toMatchObject({
-      tool: 'write_file', parameters: { content: 'one\nold' },
+      tool: 'write_file',
+      parameters: { content: 'one\nold' },
     })
   })
 

@@ -57,8 +57,7 @@ export function findVersionReality(declared: DeclaredDependency[], facts: Regist
       continue
     }
     if (!fact.latest) continue
-    if (fact.versions && validRange(dep.range) && valid(fact.latest)
-      && !maxSatisfying([...fact.versions], dep.range, { includePrerelease: true })) {
+    if (fact.versions && validRange(dep.range) && valid(fact.latest) && !maxSatisfying([...fact.versions], dep.range, { includePrerelease: true })) {
       findings.unpublished.push({ name: dep.name, declared: dep.range, latest: fact.latest })
       continue
     }

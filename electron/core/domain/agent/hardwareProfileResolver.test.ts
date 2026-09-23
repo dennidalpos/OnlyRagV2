@@ -53,7 +53,7 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
     expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
   })
 
-  it('should dynamically resolve Auto profile to Medium (not Low) for an entry-tier 6GB VRAM GPU, matching chatContextBudget.ts\'s treatment of the entry tier', () => {
+  it("should dynamically resolve Auto profile to Medium (not Low) for an entry-tier 6GB VRAM GPU, matching chatContextBudget.ts's treatment of the entry tier", () => {
     const opts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
       hasGpu: true,
       vramTotalMB: 6144,

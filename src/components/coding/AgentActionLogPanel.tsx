@@ -1,5 +1,14 @@
 import React from 'react'
-import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession, AgentChangeMetrics, AgentMode, AgentContextBudgetBreakdown } from '../../types'
+import {
+  AgentActionLog,
+  IngestedDocument,
+  WorkspaceFile,
+  AppSettings,
+  CodingSession,
+  AgentChangeMetrics,
+  AgentMode,
+  AgentContextBudgetBreakdown,
+} from '../../types'
 import type { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { useAgentTimelineScroll } from '../../hooks/useAgentTimelineScroll'
 import { AgentSessionHeaderBar } from './AgentSessionHeaderBar'

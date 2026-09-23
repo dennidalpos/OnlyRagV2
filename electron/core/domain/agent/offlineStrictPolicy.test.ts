@@ -21,7 +21,9 @@ describe('offline-strict capability policy', () => {
   })
 
   it('blocks HTTP/download and browser capabilities', () => {
-    expect(authorizeOfflineStrict(request({ capability: 'http-download', operation: 'connect', toolName: 'web_search', target: 'https://example.test' }))).toMatchObject({
+    expect(
+      authorizeOfflineStrict(request({ capability: 'http-download', operation: 'connect', toolName: 'web_search', target: 'https://example.test' })),
+    ).toMatchObject({
       allowed: false,
       reason: 'Network egress is disabled in offline-strict mode',
     })
@@ -31,7 +33,9 @@ describe('offline-strict capability policy', () => {
   it('blocks network-capable shell commands but allows local commands', () => {
     expect(shellCommandHasEgress('Invoke-WebRequest https://example.test')).toBe(true)
     expect(shellCommandHasEgress('npm run typecheck')).toBe(false)
-    expect(authorizeOfflineStrict(request({ capability: 'shell', operation: 'execute', toolName: 'run_command', target: 'git pull origin main' })).allowed).toBe(false)
+    expect(
+      authorizeOfflineStrict(request({ capability: 'shell', operation: 'execute', toolName: 'run_command', target: 'git pull origin main' })).allowed,
+    ).toBe(false)
     expect(authorizeOfflineStrict(request({ capability: 'shell', operation: 'execute', toolName: 'run_command', target: 'npm run test' })).allowed).toBe(true)
   })
 

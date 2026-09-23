@@ -1,23 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import {
-  VERIFIED_MODELS,
-  declaresToolCalling,
-  findVerificationEvidence,
-  resolveVerificationStatus,
-} from './codingModelMatrix'
+import { VERIFIED_MODELS, declaresToolCalling, findVerificationEvidence, resolveVerificationStatus } from './codingModelMatrix'
 
 describe('resolveVerificationStatus', () => {
   it('marks a model the app has actually been run against as verified', () => {
-    expect(
-      resolveVerificationStatus({ modelName: 'qwen2.5-coder:7b', isCatalogued: true, capabilities: ['completion', 'tools'] })
-    ).toBe('verified')
+    expect(resolveVerificationStatus({ modelName: 'qwen2.5-coder:7b', isCatalogued: true, capabilities: ['completion', 'tools'] })).toBe('verified')
   })
 
   // The distinction the badge exists to make: catalogued and usable is not the same as tested.
   it('marks a catalogued but untested model compatible, never verified', () => {
-    expect(
-      resolveVerificationStatus({ modelName: 'deepseek-coder:6.7b', isCatalogued: true, capabilities: ['completion', 'tools'] })
-    ).toBe('compatible')
+    expect(resolveVerificationStatus({ modelName: 'deepseek-coder:6.7b', isCatalogued: true, capabilities: ['completion', 'tools'] })).toBe('compatible')
   })
 
   it('marks a tag the catalog has never heard of as unknown', () => {
@@ -32,9 +23,7 @@ describe('resolveVerificationStatus', () => {
   })
 
   it('marks an installed model that reports no tool capability as unsupported', () => {
-    expect(
-      resolveVerificationStatus({ modelName: 'deepseek-coder:6.7b', isCatalogued: true, capabilities: ['completion'] })
-    ).toBe('unsupported')
+    expect(resolveVerificationStatus({ modelName: 'deepseek-coder:6.7b', isCatalogued: true, capabilities: ['completion'] })).toBe('unsupported')
   })
 
   // A model that is not installed yet reports no capabilities at all, and the badge still has

@@ -50,11 +50,19 @@ describe('executeMultiReplaceFileContentTool', () => {
     const repository = { readIfExists: () => 'same\nsame\ntail', writeFileVersioned: vi.fn() }
 
     const result = await executeMultiReplaceFileContentTool(
-      { filePath: 'src/file.ts', replacements: [
-        { targetContent: 'tail', replacementContent: 'TAIL' },
-        { targetContent: 'same', replacementContent: 'SAME' },
-      ] },
-      'C:/workspace', '', () => null, () => '', repository, journal,
+      {
+        filePath: 'src/file.ts',
+        replacements: [
+          { targetContent: 'tail', replacementContent: 'TAIL' },
+          { targetContent: 'same', replacementContent: 'SAME' },
+        ],
+      },
+      'C:/workspace',
+      '',
+      () => null,
+      () => '',
+      repository,
+      journal,
       () => ({ filePath: 'src/file.ts', additions: 0, deletions: 0 }),
       (content) => `hash:${content}`,
     )
@@ -71,7 +79,12 @@ describe('executeMultiReplaceFileContentTool', () => {
 
     const result = await executeMultiReplaceFileContentTool(
       { filePath: 'src/file.ts', replacements: [{ targetContent: 'const value = 1', replacementContent: 'const value =' }] },
-      'C:/workspace', '', () => null, () => '', repository, journal,
+      'C:/workspace',
+      '',
+      () => null,
+      () => '',
+      repository,
+      journal,
       () => ({ filePath: 'src/file.ts', additions: 0, deletions: 0 }),
       (content) => `hash:${content}`,
     )
@@ -94,9 +107,14 @@ describe('executeMultiReplaceFileContentTool', () => {
 
     const result = await executeMultiReplaceFileContentTool(
       { filePath: 'src/file.ts', replacements: [{ targetContent: '1', replacementContent: '2' }] },
-      'C:/workspace', '', () => null, () => '', repository, { recordOriginalState: vi.fn() },
+      'C:/workspace',
+      '',
+      () => null,
+      () => '',
+      repository,
+      { recordOriginalState: vi.fn() },
       () => ({ filePath: 'src/file.ts', additions: 0, deletions: 0 }),
-      (content) => content === 'const value = 1' ? 'old-hash' : 'other-hash',
+      (content) => (content === 'const value = 1' ? 'old-hash' : 'other-hash'),
     )
 
     expect(result.outputForHistory).toContain('Current vs proposed diff')

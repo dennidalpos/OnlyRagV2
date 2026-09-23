@@ -92,7 +92,10 @@ describe('agent IPC session-state facade', () => {
     await handlers.get('agent:cancel-task')?.(trustedEvent, identity)
     await handlers.get('agent:approval-response')?.(trustedEvent, identity, true, [0])
 
-    expect(taskQueueAppService.scheduleAgentTask).toHaveBeenCalledWith({ ...payload, activeFile: null }, expect.objectContaining({ send: expect.any(Function) }))
+    expect(taskQueueAppService.scheduleAgentTask).toHaveBeenCalledWith(
+      { ...payload, activeFile: null },
+      expect.objectContaining({ send: expect.any(Function) }),
+    )
     expect(taskQueueAppService.cancelTask).toHaveBeenCalledWith(identity)
     expect(respondToApproval).toHaveBeenCalledWith(identity, true, [0])
   })
@@ -119,7 +122,9 @@ describe('agent IPC session-state facade', () => {
     })
 
     expect(payload.activeFile).toMatchObject({ path: 'D:/repo/app.ts', versionHash: 'a'.repeat(64) })
-    expect(() => parseAgentTaskPayload({ identity: runIdentity, userTask: 'Inspect', contextFiles: [{ path: 'ignored.ts' }] })).toThrow('Invalid agent task payload')
+    expect(() => parseAgentTaskPayload({ identity: runIdentity, userTask: 'Inspect', contextFiles: [{ path: 'ignored.ts' }] })).toThrow(
+      'Invalid agent task payload',
+    )
     expect(() =>
       parseAgentTaskPayload({ identity: runIdentity, userTask: 'Inspect', agentMode: 'ask', activeFile: { path: 'app.ts', content: '', versionHash: 'bad' } }),
     ).toThrow('Invalid agent task payload: activeFile')
@@ -132,7 +137,9 @@ describe('agent IPC session-state facade', () => {
   })
 
   it('accepts the explicit backend context-compaction flag', () => {
-    expect(parseAgentTaskPayload({ identity: runIdentity, userTask: 'Inspect', agentMode: 'guided', forceContextCompaction: true }).forceContextCompaction).toBe(true)
+    expect(
+      parseAgentTaskPayload({ identity: runIdentity, userTask: 'Inspect', agentMode: 'guided', forceContextCompaction: true }).forceContextCompaction,
+    ).toBe(true)
   })
 
   it('accepts the complete renderer request and normalizes its settings snapshot', () => {
@@ -164,8 +171,14 @@ describe('agent IPC session-state facade', () => {
     ['missing identity', { identity: undefined }],
     ['malformed identity', { identity: { runId: 'run-1' } }],
     ['identity with extra keys', { identity: { ...runIdentity, admin: true } }],
-    ['unknown capability policy', { capabilityProfile: { allowFileModifications: true, allowTerminalExecution: true, capabilityPolicyMode: 'anything', maxToolCallSteps: 5 } }],
-    ['negative step budget', { capabilityProfile: { allowFileModifications: true, allowTerminalExecution: true, capabilityPolicyMode: 'local-only', maxToolCallSteps: -1 } }],
+    [
+      'unknown capability policy',
+      { capabilityProfile: { allowFileModifications: true, allowTerminalExecution: true, capabilityPolicyMode: 'anything', maxToolCallSteps: 5 } },
+    ],
+    [
+      'negative step budget',
+      { capabilityProfile: { allowFileModifications: true, allowTerminalExecution: true, capabilityPolicyMode: 'local-only', maxToolCallSteps: -1 } },
+    ],
     ['pinnedFiles not an array', { pinnedFiles: { name: 'a' } }],
     ['pinned file with extra keys', { pinnedFiles: [{ name: 'a', path: 'D:/a', content: '', mode: 'rw' }] }],
     ['attached doc without markdown', { attachedDocs: [{ id: 'doc-1', filename: 'a.pdf' }] }],
@@ -184,7 +197,13 @@ describe('agent IPC session-state facade', () => {
 
     await handler(trustedEvent, 'session-1', '/repo', [{ id: 'm-1', title: 'Build', status: 'pending', injected: 'x' }], 'Build', 'plan-1:v1')
 
-    expect(agentSessionStateAppService.seedPlanMilestones).toHaveBeenCalledWith('session-1', '/repo', [{ id: 'm-1', title: 'Build', status: 'pending' }], 'Build', 'plan-1:v1')
+    expect(agentSessionStateAppService.seedPlanMilestones).toHaveBeenCalledWith(
+      'session-1',
+      '/repo',
+      [{ id: 'm-1', title: 'Build', status: 'pending' }],
+      'Build',
+      'plan-1:v1',
+    )
     expect(() => handler(trustedEvent, 'session-1', '/repo', [{ id: 'm-1', title: 'Build', status: 'done' }])).toThrow('Invalid IPC payload')
   })
 

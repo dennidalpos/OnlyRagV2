@@ -1,5 +1,3 @@
-
-
 /** `No matching version found for <pkg>@<range>` — npm's own phrasing, both spacings. */
 const NO_MATCHING_VERSION = /no matching version found for\s+((?:@[^\s@/]+\/)?[^\s@]+)@([^\s.]+(?:\.[^\s.]+)*)\.?/i
 

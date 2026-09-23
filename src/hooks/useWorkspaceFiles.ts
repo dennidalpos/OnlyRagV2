@@ -61,7 +61,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
         logger.warn('useWorkspaceFiles', `Error loading workspace files: ${err?.message}`)
       }
     },
-    [resetWorkspaceFiles]
+    [resetWorkspaceFiles],
   )
 
   const handleOpenFile = useCallback(async (file: WorkspaceFile) => {
@@ -84,9 +84,9 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
         setSaveConflict(null)
       } else if (res.error) {
         setEditorContent(`// Errore durante la lettura del file: ${res.error}`)
-          setOriginalContent('')
-          setLoadedContentHash(undefined)
-          setSaveConflict(null)
+        setOriginalContent('')
+        setLoadedContentHash(undefined)
+        setSaveConflict(null)
       }
     } catch (err: any) {
       if (latestRequestedPathRef.current !== requestedPath) return
@@ -113,7 +113,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
         return next
       })
     },
-    [handleOpenFile, selectedFile]
+    [handleOpenFile, selectedFile],
   )
 
   const handleSaveFile = useCallback(async () => {
@@ -172,11 +172,15 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
       setSaveConflict(null)
       onFileNotice(`Overwrote ${saveConflict.fileName} after conflict confirmation`)
     } else if (res.conflict && res.currentContentHash && res.currentContent !== undefined) {
-      setSaveConflict((current) => current ? {
-        ...current,
-        diskContent: res.currentContent!,
-        diskContentHash: res.currentContentHash!,
-      } : current)
+      setSaveConflict((current) =>
+        current
+          ? {
+              ...current,
+              diskContent: res.currentContent!,
+              diskContentHash: res.currentContentHash!,
+            }
+          : current,
+      )
     }
   }, [onFileNotice, saveConflict, workspacePath])
 
@@ -195,7 +199,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
         return next
       })
     },
-    [onFileNotice]
+    [onFileNotice],
   )
 
   /** Drops every reference (tabs, editor, pins) to a path deleted from the workspace. */
@@ -238,7 +242,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
 
       if (workspacePath) loadWorkspaceFiles(workspacePath)
     },
-    [workspacePath, handleOpenFile, loadWorkspaceFiles, onPathPurged, selectedFile]
+    [workspacePath, handleOpenFile, loadWorkspaceFiles, onPathPurged, selectedFile],
   )
 
   useEffect(() => {

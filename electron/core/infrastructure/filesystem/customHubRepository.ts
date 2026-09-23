@@ -45,9 +45,7 @@ export const BUILTIN_HUB_SOURCES: SkillHubSource[] = [
 
 export class CustomHubRepository {
   private getStoragePath(): string {
-    const baseDir = app && typeof app.getPath === 'function'
-      ? app.getPath('userData')
-      : path.join(process.cwd(), 'userdata_dev')
+    const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(process.cwd(), 'userdata_dev')
     return path.join(baseDir, 'custom_hubs.json')
   }
 
@@ -86,7 +84,7 @@ export class CustomHubRepository {
       name: input.name.trim(),
       url: input.url.trim(),
       type: input.type || (input.url.includes('github') ? 'github-repo' : 'json-catalog'),
-      description: input.description?.trim() || 'Hub personalizzato configurato dall\'utente',
+      description: input.description?.trim() || "Hub personalizzato configurato dall'utente",
       isBuiltin: false,
     }
 

@@ -17,9 +17,7 @@ describe('versionedFileMutation', () => {
   })
 
   it('tells the agent to create an absent file without a fabricated version', () => {
-    expect(versionConflictFeedback('tailwind.config.js', 'sha256:stale', 'missing')).toContain(
-      'call write_file without expectedContentHash'
-    )
+    expect(versionConflictFeedback('tailwind.config.js', 'sha256:stale', 'missing')).toContain('call write_file without expectedContentHash')
     expect(versionConflictFeedback('tailwind.config.js', 'sha256:stale', 'missing')).not.toContain('Read the file again')
   })
 })

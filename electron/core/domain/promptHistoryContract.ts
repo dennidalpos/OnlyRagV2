@@ -26,10 +26,6 @@ export function parsePromptHistoryIndexPayload(payload: unknown): PromptHistoryI
   return promptHistoryIndexPayloadSchema.parse(payload)
 }
 
-export function parsePromptHistorySearchPayload(
-  query: unknown,
-  topK: unknown,
-  projectPaths: unknown
-): PromptHistorySearchPayload {
+export function parsePromptHistorySearchPayload(query: unknown, topK: unknown, projectPaths: unknown): PromptHistorySearchPayload {
   return promptHistorySearchPayloadSchema.parse({ query, topK, projectPaths })
 }

@@ -26,11 +26,7 @@ describe('Wave 6 deterministic safety fixtures', () => {
   })
 
   it('blocks a filesystem target outside the workspace deterministically', async () => {
-    const result = await executor.executeTool(
-      { tool: 'read_file', parameters: { filePath: '..\\outside.txt' } },
-      workspacePath,
-      settings,
-    )
+    const result = await executor.executeTool({ tool: 'read_file', parameters: { filePath: '..\\outside.txt' } }, workspacePath, settings)
 
     expect(result.outputForHistory).toContain('Security Violation')
     expect(toolExecutionResultSchema.safeParse(result).success).toBe(true)
@@ -48,11 +44,7 @@ describe('Wave 6 deterministic safety fixtures', () => {
       workspacePath,
       settings,
     )
-    const rollbackResult = await executor.executeTool(
-      { tool: 'rollback_workspace', parameters: {} },
-      workspacePath,
-      settings,
-    )
+    const rollbackResult = await executor.executeTool({ tool: 'rollback_workspace', parameters: {} }, workspacePath, settings)
 
     expect(writeResult.outputForHistory).toContain('Successfully wrote file')
     expect(rollbackResult.outputForHistory).toContain('Restored: 1 file(s).')
@@ -60,11 +52,7 @@ describe('Wave 6 deterministic safety fixtures', () => {
   })
 
   it('returns a stable terminal contract for an unknown tool', async () => {
-    const result = await executor.executeTool(
-      { tool: 'wave6_unknown_tool' as never, parameters: {} },
-      workspacePath,
-      settings,
-    )
+    const result = await executor.executeTool({ tool: 'wave6_unknown_tool' as never, parameters: {} }, workspacePath, settings)
 
     expect(toolExecutionResultSchema.safeParse(result).success).toBe(true)
     expect(result.terminalCode).toBe('MODEL_UNSUITABLE')
@@ -81,9 +69,7 @@ describe('Wave 6 deterministic safety fixtures', () => {
     const project = discoverProjectProfile(workspacePath).projects[0]
 
     expect(project.toolchain.testFrameworks).toEqual([])
-    expect(project.verificationCommands).toEqual([
-      expect.objectContaining({ kind: 'build', command: 'npm run build' }),
-    ])
+    expect(project.verificationCommands).toEqual([expect.objectContaining({ kind: 'build', command: 'npm run build' })])
   })
 
   it('cancels an active task and removes its partial output deterministically', () => {

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  evaluateFileImportIntegrity,
-  extractBareImportSpecifiers,
-  packageNameOfSpecifier,
-} from './importDeclarationGate'
+import { evaluateFileImportIntegrity, extractBareImportSpecifiers, packageNameOfSpecifier } from './importDeclarationGate'
 
 const declared = (names: string[], aliasPrefixes: string[] = []) => ({
   names: new Set(names),
@@ -67,11 +63,7 @@ describe('evaluateFileImportIntegrity', () => {
       import { Container } from '@tailwindcss/react'
       import { Row, Col } from 'tailwind-react-components'
     `
-    const verdict = evaluateFileImportIntegrity(
-      'src/pages/Dashboard.tsx',
-      source,
-      declared(['react', 'react-dom', 'tailwindcss'])
-    )
+    const verdict = evaluateFileImportIntegrity('src/pages/Dashboard.tsx', source, declared(['react', 'react-dom', 'tailwindcss']))
 
     expect(verdict.ok).toBe(false)
     expect(verdict.undeclared).toEqual(['@tailwindcss/react', 'tailwind-react-components'])
@@ -101,11 +93,7 @@ describe('evaluateFileImportIntegrity', () => {
   })
 
   it('flags a devDependency-only import as declared, since a typecheck resolves it', () => {
-    const verdict = evaluateFileImportIntegrity(
-      'src/App.test.tsx',
-      `import { describe } from 'vitest'`,
-      declared(['vitest'])
-    )
+    const verdict = evaluateFileImportIntegrity('src/App.test.tsx', `import { describe } from 'vitest'`, declared(['vitest']))
     expect(verdict.ok).toBe(true)
   })
 })

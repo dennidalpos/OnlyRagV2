@@ -66,11 +66,7 @@ describe('a deliverable named without a directory is a name, not a location', ()
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-probe-bare-'))
     try {
       fs.mkdirSync(path.join(dir, 'src', 'styles'), { recursive: true })
-      fs.writeFileSync(
-        path.join(dir, 'src', 'styles', 'globals.css'),
-        '@tailwind base;\n@tailwind components;\n@tailwind utilities;',
-        'utf-8'
-      )
+      fs.writeFileSync(path.join(dir, 'src', 'styles', 'globals.css'), '@tailwind base;\n@tailwind components;\n@tailwind utilities;', 'utf-8')
 
       const result = createWorkspaceDeliverableProbe(dir)('globals.css')
 

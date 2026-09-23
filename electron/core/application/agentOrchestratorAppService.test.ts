@@ -4,7 +4,12 @@ import path from 'node:path'
 import os from 'node:os'
 import { execFileSync } from 'node:child_process'
 import type { RendererEventSink } from '../domain/ports/rendererEventSink'
-import { runAgentOrchestratorLoop as runOrchestratorLoop, cancelActiveAgentTask, requestActiveAgentContextCompaction, respondToApproval } from './agentOrchestratorAppService'
+import {
+  runAgentOrchestratorLoop as runOrchestratorLoop,
+  cancelActiveAgentTask,
+  requestActiveAgentContextCompaction,
+  respondToApproval,
+} from './agentOrchestratorAppService'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
@@ -25,7 +30,7 @@ const runAgentOrchestratorLoop: typeof runOrchestratorLoop = (payload, win) =>
 
 const commandJson = (command: string) => `\`\`\`json\n{\n  "tool": "run_command",\n  "parameters": { "command": "${command}" }\n}\n\`\`\``
 
-function createMockWindow():{ window: RendererEventSink; send: ReturnType<typeof vi.fn> } {
+function createMockWindow(): { window: RendererEventSink; send: ReturnType<typeof vi.fn> } {
   const send = vi.fn()
   return {
     window: { isAvailable: vi.fn(() => true), send },
@@ -338,9 +343,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       )
 
       expect(res.summary).toContain('Effetto incerto')
-      expect(res.evidence?.nonRollbackEffects).toEqual([
-        'run_command: effetto esterno incerto dopo pytest failing_test.py',
-      ])
+      expect(res.evidence?.nonRollbackEffects).toEqual(['run_command: effetto esterno incerto dopo pytest failing_test.py'])
       expect(execute).toHaveBeenCalledOnce()
       expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(1)
     } finally {
@@ -537,15 +540,18 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     cancelActiveAgentTask(sessionId)
 
     await expect(resultPromise).resolves.toMatchObject({ success: false })
-    expect(mockWin.send).toHaveBeenCalledWith('agent:done', expect.objectContaining({
-      completionStatus: 'cancelled',
-      evidence: expect.objectContaining({
-        changedFiles: [],
-        cancellationStatus: 'rolled_back',
-        rollbackRestoredFiles: 0,
-        nonRollbackEffects: [],
+    expect(mockWin.send).toHaveBeenCalledWith(
+      'agent:done',
+      expect.objectContaining({
+        completionStatus: 'cancelled',
+        evidence: expect.objectContaining({
+          changedFiles: [],
+          cancellationStatus: 'rolled_back',
+          rollbackRestoredFiles: 0,
+          nonRollbackEffects: [],
+        }),
       }),
-    }))
+    )
     expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(false)
     expect(respondToApproval(sessionId, true)).toBe(false)
     expect(requestActiveAgentContextCompaction(sessionId)).toBe(false)

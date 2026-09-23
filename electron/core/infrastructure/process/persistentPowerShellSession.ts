@@ -34,22 +34,18 @@ export class PersistentPowerShellSession {
 
   private initProcess(): void {
     try {
-      this.proc = spawn(
-        'powershell.exe',
-        ['-NoProfile', '-NoLogo', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', '-'],
-        {
-          cwd: this.activeCwd || this.workspacePath || process.cwd(),
-          env: {
-            ...process.env,
-            CI: '1',
-            PAGER: 'cat',
-            NPM_CONFIG_YES: 'true',
-            PIP_NO_INPUT: '1',
-            DEBIAN_FRONTEND: 'noninteractive',
-            PYTHONUNBUFFERED: '1',
-          },
-        }
-      )
+      this.proc = spawn('powershell.exe', ['-NoProfile', '-NoLogo', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', '-'], {
+        cwd: this.activeCwd || this.workspacePath || process.cwd(),
+        env: {
+          ...process.env,
+          CI: '1',
+          PAGER: 'cat',
+          NPM_CONFIG_YES: 'true',
+          PIP_NO_INPUT: '1',
+          DEBIAN_FRONTEND: 'noninteractive',
+          PYTHONUNBUFFERED: '1',
+        },
+      })
 
       if (this.activeCwd && this.proc.stdin) {
         this.proc.stdin.write(`Set-Location -Path "${this.activeCwd.replace(/"/g, '""')}"\n`)
@@ -71,7 +67,7 @@ export class PersistentPowerShellSession {
     onOutputChunk?: (data: string) => void,
     onChildProcess?: (proc: ChildProcess) => void,
     timeoutMs = 60000,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<ShellExecutionOutput> {
     if (signal?.aborted) {
       return { stdout: '', stderr: '[Command cancelled before execution]', code: 130 }
@@ -245,7 +241,7 @@ export class PersistentPowerShellSession {
           '-Command',
           "[System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')",
         ],
-        { encoding: 'utf-8', timeout: 10000 }
+        { encoding: 'utf-8', timeout: 10000 },
       )
         .toString()
         .trim()

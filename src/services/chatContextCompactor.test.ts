@@ -18,9 +18,7 @@ describe('chatContextCompactor Unit Tests', () => {
   }
 
   it('should return empty result when message list only contains generic greeting', () => {
-    const messages: ChatMessage[] = [
-      { id: '1', sender: 'bot', text: 'Hello! I am your AI Assistant.', timestamp: '12:00' },
-    ]
+    const messages: ChatMessage[] = [{ id: '1', sender: 'bot', text: 'Hello! I am your AI Assistant.', timestamp: '12:00' }]
     const res = compactChatHistory(messages, sampleBudget, false)
     expect(res.historyBlock).toBe('')
     expect(res.isCompacted).toBe(false)
@@ -45,8 +43,18 @@ describe('chatContextCompactor Unit Tests', () => {
   it('should automatically compact older turns into synopsis when conversation exceeds budget without dropping historical topics', () => {
     const longTurns: ChatMessage[] = [{ id: '1', sender: 'bot', text: 'Hello!', timestamp: '12:00' }]
     for (let i = 1; i <= 20; i++) {
-      longTurns.push({ id: `u-${i}`, sender: 'user', text: `Domanda specifica numero ${i} con molti dettagli importanti su argomento ${i}`, timestamp: '12:00' })
-      longTurns.push({ id: `b-${i}`, sender: 'bot', text: `Risposta dettagliata numero ${i} con spiegazione tecnica approfondita per argomento ${i}`, timestamp: '12:00' })
+      longTurns.push({
+        id: `u-${i}`,
+        sender: 'user',
+        text: `Domanda specifica numero ${i} con molti dettagli importanti su argomento ${i}`,
+        timestamp: '12:00',
+      })
+      longTurns.push({
+        id: `b-${i}`,
+        sender: 'bot',
+        text: `Risposta dettagliata numero ${i} con spiegazione tecnica approfondita per argomento ${i}`,
+        timestamp: '12:00',
+      })
     }
 
     const tightBudget: ChatContextBudget = {
@@ -91,10 +99,7 @@ describe('chatContextCompactor Unit Tests', () => {
       const turns = buildLongConversation()
       for (const availableChars of [8000, 2000, 500, 0]) {
         const res = compactChatHistory(turns, sampleBudget, true, availableChars)
-        expect(
-          res.historyBlock.length,
-          `history block overflowed a ${availableChars}-char budget`
-        ).toBeLessThanOrEqual(availableChars + 80)
+        expect(res.historyBlock.length, `history block overflowed a ${availableChars}-char budget`).toBeLessThanOrEqual(availableChars + 80)
       }
     })
 

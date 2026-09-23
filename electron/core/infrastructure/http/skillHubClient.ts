@@ -97,9 +97,7 @@ export class SkillHubClient {
     try {
       let targetUrl = url.trim()
       if (targetUrl.includes('github.com') && targetUrl.includes('/blob/')) {
-        targetUrl = targetUrl
-          .replace('github.com', 'raw.githubusercontent.com')
-          .replace('/blob/', '/')
+        targetUrl = targetUrl.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
       }
 
       const res = await webClient.fetchWebContent(targetUrl, 50000)

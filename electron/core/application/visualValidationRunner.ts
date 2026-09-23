@@ -22,7 +22,17 @@ interface BrowserLike {
 }
 
 export type VisualValidationLaunchResult =
-  | { status: 'ready'; artifactPath: string; browser: BrowserLike; context: BrowserContextLike; page: PageLike; close: () => Promise<void>; consoleEntries: VisualValidationEvidence['console']; httpEntries: VisualValidationEvidence['http']; redactedFields: Set<string> }
+  | {
+      status: 'ready'
+      artifactPath: string
+      browser: BrowserLike
+      context: BrowserContextLike
+      page: PageLike
+      close: () => Promise<void>
+      consoleEntries: VisualValidationEvidence['console']
+      httpEntries: VisualValidationEvidence['http']
+      redactedFields: Set<string>
+    }
   | { status: 'UNAVAILABLE'; artifactPath: string; error: string }
 
 export interface VisualValidationEvidence {
@@ -38,10 +48,13 @@ const MAX_DIAGNOSTIC_MESSAGE_LENGTH = 16_000
 
 function redact(value: string): { value: string; fields: string[] } {
   const fields = new Set<string>()
-  const redacted = value.replace(/(^|[?&\s])((?:token|access_token|api[_-]?key|password|secret|authorization)=)[^&\s]+/gi, (_match, separator: string, key: string) => {
-    fields.add(key.slice(0, -1))
-    return `${separator}${key}[REDACTED]`
-  })
+  const redacted = value.replace(
+    /(^|[?&\s])((?:token|access_token|api[_-]?key|password|secret|authorization)=)[^&\s]+/gi,
+    (_match, separator: string, key: string) => {
+      fields.add(key.slice(0, -1))
+      return `${separator}${key}[REDACTED]`
+    },
+  )
   return { value: redacted.slice(0, MAX_DIAGNOSTIC_MESSAGE_LENGTH), fields: [...fields] }
 }
 
@@ -56,10 +69,7 @@ export class VisualValidationRunner {
     private readonly statFile: (filePath: string) => { isFile(): boolean } = (filePath) => ({ isFile: () => documentIoRepository.isFile(filePath) }),
   ) {}
 
-  async launchArtifact(
-    input: unknown,
-    workspacePath: string | null | undefined,
-  ): Promise<VisualValidationLaunchResult> {
+  async launchArtifact(input: unknown, workspacePath: string | null | undefined): Promise<VisualValidationLaunchResult> {
     const parsed = visualValidationRequestSchema.safeParse(input)
     const artifactPath = parsed.success ? parsed.data.artifactPath : String((input as { artifactPath?: unknown })?.artifactPath || '')
     if (!parsed.success) return { status: 'UNAVAILABLE', artifactPath, error: 'Invalid visual validation request.' }
@@ -67,7 +77,8 @@ export class VisualValidationRunner {
     const pathCheck = validatePathSafety(parsed.data.artifactPath, workspacePath)
     if (!pathCheck.safePath) return { status: 'UNAVAILABLE', artifactPath: parsed.data.artifactPath, error: `Security Violation: ${pathCheck.error}` }
     if (!this.fileExists(pathCheck.safePath)) return { status: 'UNAVAILABLE', artifactPath: parsed.data.artifactPath, error: 'Artifact does not exist.' }
-    if (!this.statFile(pathCheck.safePath).isFile()) return { status: 'UNAVAILABLE', artifactPath: parsed.data.artifactPath, error: 'Artifact path is not a regular file.' }
+    if (!this.statFile(pathCheck.safePath).isFile())
+      return { status: 'UNAVAILABLE', artifactPath: parsed.data.artifactPath, error: 'Artifact path is not a regular file.' }
 
     let browser: BrowserLike | undefined
     try {

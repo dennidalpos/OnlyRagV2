@@ -16,24 +16,15 @@ function createMockRequest(): MockClientRequest {
   return Object.assign(new EventEmitter(), { destroy: vi.fn() }) as MockClientRequest
 }
 
-function createMockResponse(
-  statusCode: number,
-  headers: IncomingHttpHeaders = {},
-  statusMessage?: string
-): IncomingMessage {
+function createMockResponse(statusCode: number, headers: IncomingHttpHeaders = {}, statusMessage?: string): IncomingMessage {
   return Object.assign(new EventEmitter(), { statusCode, headers, statusMessage, setEncoding: vi.fn() }) as unknown as IncomingMessage
 }
 
-function mockHttpsGet(
-  response: IncomingMessage,
-  request: MockClientRequest,
-  onResponse?: (response: IncomingMessage) => void,
-  deferred = false
-): void {
+function mockHttpsGet(response: IncomingMessage, request: MockClientRequest, onResponse?: (response: IncomingMessage) => void, deferred = false): void {
   vi.spyOn(https, 'get').mockImplementation(((
     _url: string | URL | RequestOptions,
     optionsOrCallback?: RequestOptions | ((response: IncomingMessage) => void),
-    callback?: (response: IncomingMessage) => void
+    callback?: (response: IncomingMessage) => void,
   ) => {
     const responseCallback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
     if (!responseCallback) throw new Error('Expected HTTP response callback')

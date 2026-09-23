@@ -1,5 +1,3 @@
-
-
 export type SoundEffectType = 'error' | 'interactive' | 'completion' | 'step'
 
 interface WindowWithWebkitAudio extends Window {
@@ -40,11 +38,11 @@ export class SoundEffectsService {
         osc.frequency.exponentialRampToValueAtTime(150, now + 0.18)
         gain.gain.setValueAtTime(0.001, now)
         gain.gain.linearRampToValueAtTime(0.05, now + 0.02)
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.20)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2)
         osc.connect(gain)
         gain.connect(ctx.destination)
         osc.start(now)
-        osc.stop(now + 0.20)
+        osc.stop(now + 0.2)
       } else if (type === 'interactive') {
         // Soft warm two-tone chime (F4 -> C5, gentle marimba/bell tone)
         const playTone = (freq: number, startTime: number, duration: number) => {
@@ -64,7 +62,7 @@ export class SoundEffectsService {
         playTone(523.25, now + 0.1, 0.32)
       } else if (type === 'completion') {
         // Soft, warm ascending triad arpeggio (E4 -> G4 -> C5)
-        const notes = [329.63, 392.00, 523.25]
+        const notes = [329.63, 392.0, 523.25]
         notes.forEach((freq, idx) => {
           const startTime = now + idx * 0.09
           const osc = ctx.createOscillator()

@@ -30,7 +30,12 @@ function pathIsAbsolute(filePath: string): boolean {
   return filePath.startsWith('/') || /^[A-Za-z]:\//.test(filePath)
 }
 
-export function preparePlanReviewRevision(plan: AgentPlan, objective: string, milestones: PlanMilestone[], capabilityProfile: AgentCapabilityProfile = resolveAgentCapabilityProfile(plan.capabilityProfile)): { revision?: AgentPlan; error?: string } {
+export function preparePlanReviewRevision(
+  plan: AgentPlan,
+  objective: string,
+  milestones: PlanMilestone[],
+  capabilityProfile: AgentCapabilityProfile = resolveAgentCapabilityProfile(plan.capabilityProfile),
+): { revision?: AgentPlan; error?: string } {
   const cleanObjective = objective.trim()
   if (!cleanObjective || milestones.some((milestone) => !milestone.title.trim())) {
     return { error: 'Risultato e interventi non possono essere vuoti.' }

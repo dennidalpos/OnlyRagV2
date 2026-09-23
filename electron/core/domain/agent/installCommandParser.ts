@@ -1,5 +1,3 @@
-
-
 /** The shape this module needs from a recorded step; matches EpisodicStepRecord. */
 export interface InstallAttemptRecord {
   tool: string
@@ -24,9 +22,7 @@ export function extractRequestedPackages(command: string): RequestedPackage[] {
     .map((tok) => {
       // Scoped package ("@scope/name@version"): keep the scope, strip only a trailing version.
       const versionSplitIndex = tok.startsWith('@') ? tok.indexOf('@', 1) : tok.indexOf('@')
-      return versionSplitIndex > 0
-        ? { name: tok.slice(0, versionSplitIndex), hasExplicitVersion: true }
-        : { name: tok, hasExplicitVersion: false }
+      return versionSplitIndex > 0 ? { name: tok.slice(0, versionSplitIndex), hasExplicitVersion: true } : { name: tok, hasExplicitVersion: false }
     })
 }
 
@@ -47,8 +43,7 @@ export function packagesWithFailedInstall(episodes: readonly InstallAttemptRecor
       if (episode.status === 'FAILURE') {
         const incremented = (failures.get(pkg.name) ?? 0) + 1
         failures.set(pkg.name, registryRefusal?.[1] === pkg.name ? FAILURES_BEFORE_UNINSTALLABLE : incremented)
-      }
-      else if (episode.status === 'SUCCESS') failures.set(pkg.name, 0)
+      } else if (episode.status === 'SUCCESS') failures.set(pkg.name, 0)
     }
   }
 

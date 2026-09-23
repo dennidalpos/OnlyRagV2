@@ -6,7 +6,10 @@ function parsePagesFromMarkdown(markdown: string) {
   if (!text) return []
 
   const pageSplitRegex = /(?:^|\n)(?=## Page \d+|## Image)/i
-  const rawParts = text.split(pageSplitRegex).map((p) => p.trim()).filter(Boolean)
+  const rawParts = text
+    .split(pageSplitRegex)
+    .map((p) => p.trim())
+    .filter(Boolean)
 
   if (rawParts.length > 0 && rawParts.some((p) => /^## (?:Page \d+|Image)/i.test(p))) {
     let docTitlePreamble = ''
@@ -18,9 +21,7 @@ function parsePagesFromMarkdown(markdown: string) {
         docTitlePreamble = part
       } else {
         const pageIndex = validPages.length + 1
-        const content = validPages.length === 0 && docTitlePreamble
-          ? `${docTitlePreamble}\n\n${part}`
-          : part
+        const content = validPages.length === 0 && docTitlePreamble ? `${docTitlePreamble}\n\n${part}` : part
         validPages.push({ pageNumber: pageIndex, content })
       }
     }
@@ -30,7 +31,10 @@ function parsePagesFromMarkdown(markdown: string) {
     }
   }
 
-  const hrParts = text.split(/\n---\n/).map((p) => p.trim()).filter(Boolean)
+  const hrParts = text
+    .split(/\n---\n/)
+    .map((p) => p.trim())
+    .filter(Boolean)
   if (hrParts.length > 1) {
     return hrParts.map((part, idx) => ({ pageNumber: idx + 1, content: part }))
   }

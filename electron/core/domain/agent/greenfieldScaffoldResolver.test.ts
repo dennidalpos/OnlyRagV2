@@ -16,9 +16,14 @@ describe('resolveGreenfieldScaffold', () => {
   })
 
   it('uses accepted interview answers and makes future checks non-executable', () => {
-    const result = resolveGreenfieldScaffold(true, 'Create the application', [{
-      questionId: 'stack', questionText: 'Stack', selectedOption: 'Python', provenance: 'accepted_recommendation',
-    }])
+    const result = resolveGreenfieldScaffold(true, 'Create the application', [
+      {
+        questionId: 'stack',
+        questionText: 'Stack',
+        selectedOption: 'Python',
+        provenance: 'accepted_recommendation',
+      },
+    ])
 
     expect(result.acceptedStack).toBe('python')
     expect(result.proposedVerificationCommands).toEqual(['python -m compileall src'])
@@ -28,8 +33,15 @@ describe('resolveGreenfieldScaffold', () => {
   it('does not invent infrastructure when the stack is unresolved or the project exists', () => {
     expect(paths('Create the application')).toEqual([])
     expect(resolveGreenfieldScaffold(false, 'Create a React app').scaffold.requirements).toEqual([])
-    expect(resolveGreenfieldScaffold(true, 'Create the application', [{
-      questionId: 'stack', questionText: 'Stack', selectedOption: 'React', provenance: 'unconfirmed_assumption',
-    }]).scaffold.requirements).toEqual([])
+    expect(
+      resolveGreenfieldScaffold(true, 'Create the application', [
+        {
+          questionId: 'stack',
+          questionText: 'Stack',
+          selectedOption: 'React',
+          provenance: 'unconfirmed_assumption',
+        },
+      ]).scaffold.requirements,
+    ).toEqual([])
   })
 })

@@ -1,5 +1,3 @@
-
-
 import { countTokens } from 'gpt-tokenizer'
 import { APPROX_CHARS_PER_TOKEN } from './charsPerToken'
 
@@ -26,30 +24,21 @@ export function countPromptTokens(prompt: string | number): number {
 }
 
 /** Maximum generation budget that still keeps the composed prompt inside the selected window. */
-export function calculateAvailableOutputTokens(
-  prompt: string,
-  contextWindowTokens: number,
-  safetyTokens?: number,
-): number {
+export function calculateAvailableOutputTokens(prompt: string, contextWindowTokens: number, safetyTokens?: number): number {
   const window = Math.max(1, Math.floor(contextWindowTokens))
-  const safety = safetyTokens ?? Math.max(
-    MIN_CONTEXT_SAFETY_TOKENS,
-    Math.ceil(window * CONTEXT_SAFETY_RATIO),
-  )
+  const safety = safetyTokens ?? Math.max(MIN_CONTEXT_SAFETY_TOKENS, Math.ceil(window * CONTEXT_SAFETY_RATIO))
   return Math.max(1, window - countPromptTokens(prompt) - safety)
 }
 
 export function calculateDynamicContextWindow(
   promptOrChars: string | number,
   hardwareMaxCtx?: number,
-  headroomTokens: number = COMPLETION_HEADROOM_TOKENS
+  headroomTokens: number = COMPLETION_HEADROOM_TOKENS,
 ): number {
   const estimatedPromptTokens = countPromptTokens(promptOrChars)
   const totalRequiredTokens = estimatedPromptTokens + headroomTokens
 
-  const maxAllowed = hardwareMaxCtx && hardwareMaxCtx >= MIN_CONTEXT_TOKENS
-    ? hardwareMaxCtx
-    : DEFAULT_MAX_CONTEXT_TOKENS
+  const maxAllowed = hardwareMaxCtx && hardwareMaxCtx >= MIN_CONTEXT_TOKENS ? hardwareMaxCtx : DEFAULT_MAX_CONTEXT_TOKENS
 
   let chosenBucket = STANDARD_CONTEXT_BUCKETS[0]
   for (const bucket of STANDARD_CONTEXT_BUCKETS) {

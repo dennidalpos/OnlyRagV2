@@ -1,17 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import {
-  AlertTriangle,
-  Info,
-  ShieldAlert,
-  FileSearch,
-  FileJson,
-  CheckCircle2,
-  ScanLine,
-  Search,
-  Copy,
-  Check,
-  Filter,
-} from 'lucide-react'
+import { AlertTriangle, Info, ShieldAlert, FileSearch, FileJson, CheckCircle2, ScanLine, Search, Copy, Check, Filter } from 'lucide-react'
 import type { SlmLogDiagnosticReport } from '../../types'
 import { SlmDiagnosticsStatCard } from './SlmDiagnosticsStatCard'
 import { SlmDiagnosticsAnomalyRow } from './SlmDiagnosticsAnomalyRow'
@@ -128,8 +116,8 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
           lastReport.has_critical
             ? 'bg-red-950/30 border-red-800'
             : lastReport.anomalies.length > 0
-            ? 'bg-amber-950/30 border-amber-800'
-            : 'bg-emerald-950/30 border-emerald-800'
+              ? 'bg-amber-950/30 border-amber-800'
+              : 'bg-emerald-950/30 border-emerald-800'
         }`}
       >
         <div className="flex items-start gap-2.5 min-w-0">
@@ -142,9 +130,7 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
           )}
           <div className="space-y-0.5 min-w-0">
             <div className="text-xs font-bold text-slate-200">Riepilogo Analisi Diagnostica</div>
-            <div className="text-[11px] font-mono text-slate-300 leading-relaxed break-words">
-              {lastReport.summary}
-            </div>
+            <div className="text-[11px] font-mono text-slate-300 leading-relaxed break-words">{lastReport.summary}</div>
           </div>
         </div>
 
@@ -250,19 +236,15 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <AlertTriangle className="w-3 h-3 text-amber-400" />
-              <span>Anomalie Visualizzate ({filteredAnomalies.length} di {lastReport.anomalies.length})</span>
+              <span>
+                Anomalie Visualizzate ({filteredAnomalies.length} di {lastReport.anomalies.length})
+              </span>
             </div>
-            {filteredAnomalies.length < lastReport.anomalies.length && (
-              <span className="text-[10px] text-cyan-400 font-mono">Filtro attivo</span>
-            )}
+            {filteredAnomalies.length < lastReport.anomalies.length && <span className="text-[10px] text-cyan-400 font-mono">Filtro attivo</span>}
           </div>
 
           {filteredAnomalies.map((anomaly, i) => (
-            <SlmDiagnosticsAnomalyRow
-              key={`${anomaly.log_file}-${anomaly.line_number}-${i}`}
-              anomaly={anomaly}
-              index={i}
-            />
+            <SlmDiagnosticsAnomalyRow key={`${anomaly.log_file}-${anomaly.line_number}-${i}`} anomaly={anomaly} index={i} />
           ))}
 
           {filteredAnomalies.length === 0 && (

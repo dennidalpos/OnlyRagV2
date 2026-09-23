@@ -71,7 +71,7 @@ export async function executeRunTestsTool(
     )
 
     const rawOutput = DiagnosticOutputReducer.composeCommandOutput(res.stdout, res.stderr, res.code)
-    const parsed = parseTestRunOutput(rawOutput, res.timedOut ? 1 : res.code ?? 1)
+    const parsed = parseTestRunOutput(rawOutput, res.timedOut ? 1 : (res.code ?? 1))
     const statusLine = parsed.framework === 'unknown' ? parsed.summary : `${parsed.success ? '✅' : '❌'} ${parsed.summary}`
 
     const outputForHistory = res.timedOut

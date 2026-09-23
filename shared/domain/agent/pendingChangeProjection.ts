@@ -1,5 +1,3 @@
-
-
 export type PendingMutationType = 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file'
 
 export interface PendingChangeProposal {

@@ -31,10 +31,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     this.setState({ errorInfo })
-    logger.error(
-      'ErrorBoundary',
-      `Uncaught React Component Exception: ${error.message}\nComponent Stack:\n${errorInfo.componentStack}`
-    )
+    logger.error('ErrorBoundary', `Uncaught React Component Exception: ${error.message}\nComponent Stack:\n${errorInfo.componentStack}`)
   }
 
   private handleReload = (): void => {
@@ -49,7 +46,9 @@ export class ErrorBoundary extends Component<Props, State> {
       `Component Stack: ${this.state.errorInfo?.componentStack || 'N/A'}`,
       `User Agent: ${typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A'}`,
       `Time: ${new Date().toISOString()}`,
-    ].filter(Boolean).join('\n\n')
+    ]
+      .filter(Boolean)
+      .join('\n\n')
 
     try {
       await navigator.clipboard.writeText(errorDetails)

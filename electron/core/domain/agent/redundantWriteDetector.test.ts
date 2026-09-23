@@ -4,7 +4,7 @@ import { detectRedundantWrite, buildRedundantWriteNotice } from './redundantWrit
 /** The churn loop this closes: a write that changed nothing was reported as "Successfully wrote file X" and counted as a file mutation, which cleared the verified-build flag and forced the model to run its already-green build again. */
 describe('detectRedundantWrite', () => {
   it('reports a byte-identical rewrite as redundant', () => {
-    const body = "export const a = 1\nexport const b = 2\n"
+    const body = 'export const a = 1\nexport const b = 2\n'
     expect(detectRedundantWrite(true, body, body)).toMatchObject({ isRedundant: true, kind: 'identical' })
   })
 

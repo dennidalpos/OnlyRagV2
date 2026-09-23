@@ -89,7 +89,10 @@ describe('Coding Agent Prompt Queue & Active Model Extraction Unit Tests', () =>
   })
 
   it('should reset queue, prompts, and context cleanly when starting a new session', () => {
-    let actionLogs: any[] = [{ id: '1', message: 'User prompt' }, { id: '2', message: 'Tool result' }]
+    let actionLogs: any[] = [
+      { id: '1', message: 'User prompt' },
+      { id: '2', message: 'Tool result' },
+    ]
     let agentPrompt = 'Write code'
     let promptQueue: QueuedPrompt[] = [{ id: 'q1', prompt: 'Next task', createdAt: '10:00' }]
     let attachedDocIds = new Set(['doc1', 'doc2'])

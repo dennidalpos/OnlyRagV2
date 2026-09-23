@@ -91,9 +91,7 @@ const FOCUS: PlanDirectiveDecision = { kind: 'focus', blockDirective: null, clos
 
 /** Open milestones: the completion one belongs to `finish`, and `failed` was abandoned on purpose. */
 function selectOpenMilestones(milestones: readonly PlanMilestone[]): PlanMilestone[] {
-  return milestones.filter(
-    (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m)
-  )
+  return milestones.filter((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m))
 }
 
 /**
@@ -240,10 +238,7 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
   if (!input.hasVerifiedBuild && input.disconnectedEntrypoint) {
     return {
       kind: 'entrypoint_disconnected',
-      blockDirective: buildEntrypointDirective(
-        input.disconnectedEntrypoint.htmlPath,
-        input.disconnectedEntrypoint.expectedEntry
-      ),
+      blockDirective: buildEntrypointDirective(input.disconnectedEntrypoint.htmlPath, input.disconnectedEntrypoint.expectedEntry),
       closureStepDirective: null,
     }
   }
@@ -253,10 +248,7 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
     if (input.verificationFailing) {
       return {
         kind: 'verification_failing',
-        blockDirective: buildVerificationFailingDirective(
-          input.verificationCommand.command,
-          input.verificationFailureDirective ?? null
-        ),
+        blockDirective: buildVerificationFailingDirective(input.verificationCommand.command, input.verificationFailureDirective ?? null),
         closureStepDirective: null,
         // The model rewrites this file next. Nine live runs show it never reads one first, so
         // showing it is the difference between an edit and a blind replacement.

@@ -28,11 +28,7 @@ function forbiddenFragments(line: string): string[] {
 }
 
 /** Checks generated source against literal, explicit prohibitions in the active skill block. */
-export function validateSkillAdherence(
-  filePath: string,
-  generatedContent: string,
-  activeSkillGuidelines: string
-): SkillAdherenceViolation | null {
+export function validateSkillAdherence(filePath: string, generatedContent: string, activeSkillGuidelines: string): SkillAdherenceViolation | null {
   if (!activeSkillGuidelines || !generatedContent || DOCUMENTATION_FILE.test(filePath || '')) return null
 
   let skillName = 'active-skill'

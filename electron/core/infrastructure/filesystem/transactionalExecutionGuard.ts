@@ -85,7 +85,7 @@ export class TransactionalExecutionGuard {
 
     // Check for exact state oscillation (current tree hash matches a snapshot from 2+ steps ago)
     const priorMatchCount = this.historySnapshots.filter(
-      (snap, idx) => idx < this.historySnapshots.length - 1 && snap.combinedTreeHash === currentSnapshot.combinedTreeHash
+      (snap, idx) => idx < this.historySnapshots.length - 1 && snap.combinedTreeHash === currentSnapshot.combinedTreeHash,
     ).length
 
     if (priorMatchCount >= 2) {

@@ -8,12 +8,20 @@ const profile: ProjectProfile = {
   classification: 'multi-project',
   projects: [
     {
-      id: 'web', relativePath: 'web', rootPath: 'D:/workspace/web', manifestFiles: ['package.json'], lockfiles: [],
+      id: 'web',
+      relativePath: 'web',
+      rootPath: 'D:/workspace/web',
+      manifestFiles: ['package.json'],
+      lockfiles: [],
       toolchain: { languages: ['typescript'], packageManagers: ['npm'], testFrameworks: [], buildTools: ['vite'], declaredScripts: ['build'] },
       verificationCommands: [{ kind: 'build', command: 'npm run build', coverage: 'entry-reachable', source: 'package.json script "build"' }],
     },
     {
-      id: 'api', relativePath: 'api', rootPath: 'D:/workspace/api', manifestFiles: ['package.json'], lockfiles: [],
+      id: 'api',
+      relativePath: 'api',
+      rootPath: 'D:/workspace/api',
+      manifestFiles: ['package.json'],
+      lockfiles: [],
       toolchain: { languages: ['typescript'], packageManagers: ['npm'], testFrameworks: ['vitest'], buildTools: [], declaredScripts: ['test'] },
       verificationCommands: [{ kind: 'test', command: 'npm run test', coverage: 'whole-project', source: 'package.json script "test"' }],
     },

@@ -7,10 +7,7 @@ export interface OllamaRuntimeMemoryAllocation {
 }
 
 /** Splits Ollama `/api/ps` runtime allocation without assuming a model-size budget. */
-export function resolveOllamaRuntimeMemory(
-  sizeBytes: number | undefined,
-  sizeVramBytes: number | undefined
-): OllamaRuntimeMemoryAllocation | null {
+export function resolveOllamaRuntimeMemory(sizeBytes: number | undefined, sizeVramBytes: number | undefined): OllamaRuntimeMemoryAllocation | null {
   if (!Number.isFinite(sizeBytes) || (sizeBytes ?? 0) <= 0) return null
   const totalBytes = Math.max(0, sizeBytes!)
   const gpuBytes = Math.min(totalBytes, Math.max(0, Number.isFinite(sizeVramBytes) ? sizeVramBytes! : 0))

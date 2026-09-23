@@ -21,11 +21,7 @@ export class TemplateSyntaxError extends Error {
 }
 
 /** Renders a template. */
-export function renderPromptTemplate(
-  template: string,
-  variables: Record<string, unknown> = {},
-  partials: Record<string, string> = {}
-): string {
+export function renderPromptTemplate(template: string, variables: Record<string, unknown> = {}, partials: Record<string, string> = {}): string {
   try {
     return Mustache.render(template, variables, partials, RENDER_CONFIG)
   } catch (err: any) {

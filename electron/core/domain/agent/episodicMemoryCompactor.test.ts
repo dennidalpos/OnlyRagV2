@@ -23,7 +23,7 @@ describe('EpisodicMemoryCompactor Domain Unit Tests', () => {
         status: 'SUCCESS',
         summary: 'Inspected file contents',
       },
-      'const a = 10\nconsole.log(a)'
+      'const a = 10\nconsole.log(a)',
     )
 
     compactor.recordStep(
@@ -34,7 +34,7 @@ describe('EpisodicMemoryCompactor Domain Unit Tests', () => {
         status: 'FAILURE',
         summary: 'Target string mismatch',
       },
-      '[REPLACE FILE ERROR IN src/index.ts]\nTarget content not found'
+      '[REPLACE FILE ERROR IN src/index.ts]\nTarget content not found',
     )
 
     expect(compactor.episodeCount).toBe(2)
@@ -58,7 +58,7 @@ describe('EpisodicMemoryCompactor Domain Unit Tests', () => {
           status: i % 2 === 0 ? 'FAILURE' : 'SUCCESS',
           summary: `Summary of step ${i}`,
         },
-        `Detailed log for step ${i}`
+        `Detailed log for step ${i}`,
       )
     }
 
@@ -89,7 +89,7 @@ describe('EpisodicMemoryCompactor Domain Unit Tests', () => {
           status: 'BLOCKED',
           summary: 'Intervention issued',
         },
-        'Identical intervention output'
+        'Identical intervention output',
       )
     }
 
@@ -109,7 +109,7 @@ describe('failure-block accumulation', () => {
       const target = step % 2 === 0 ? 'src/App.tsx' : 'src/pages/Dashboard.tsx'
       compactor.recordStep(
         { step, tool: 'read_file', target, status: 'BLOCKED', summary: 'redundant repeat' },
-        `[REDUNDANT ACTION] Attempt ${step} on ${target}`
+        `[REDUNDANT ACTION] Attempt ${step} on ${target}`,
       )
     }
 
@@ -125,10 +125,7 @@ describe('failure-block accumulation', () => {
   it('keeps distinct failures on distinct targets', () => {
     const compactor = new EpisodicMemoryCompactor()
     for (const target of ['a.ts', 'b.ts', 'c.ts']) {
-      compactor.recordStep(
-        { step: 1, tool: 'write_file', target, status: 'FAILURE', summary: 'x' },
-        `failed on ${target}`
-      )
+      compactor.recordStep({ step: 1, tool: 'write_file', target, status: 'FAILURE', summary: 'x' }, `failed on ${target}`)
     }
 
     const block = compactor.compilePromptHistoryBlock()
@@ -141,14 +138,14 @@ describe('workspace-state output expiry', () => {
     const compactor = new EpisodicMemoryCompactor(6)
     compactor.recordStep(
       { step: 1, tool: 'run_command', target: 'npm run build', status: 'FAILURE', summary: 'build failed' },
-      '[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nTS2305: Module has no exported member Card'
+      '[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nTS2305: Module has no exported member Card',
     )
 
     expect(compactor.lastFailureOutputFor('run_command', 'npm run build')).toContain('TS2305')
 
     compactor.recordStep(
       { step: 2, tool: 'write_file', target: 'src/Card.tsx', status: 'SUCCESS', summary: 'wrote Card' },
-      'Successfully wrote file src/Card.tsx'
+      'Successfully wrote file src/Card.tsx',
     )
 
     const block = compactor.compilePromptHistoryBlock(50_000)
@@ -159,17 +156,14 @@ describe('workspace-state output expiry', () => {
 
   it('keeps only the newest detailed output for a file while retaining unrelated reads', () => {
     const compactor = new EpisodicMemoryCompactor(6)
-    compactor.recordStep(
-      { step: 1, tool: 'read_file', target: 'src/Keep.tsx', status: 'SUCCESS', summary: 'read' },
-      'UNRELATED FILE CONTENT'
-    )
+    compactor.recordStep({ step: 1, tool: 'read_file', target: 'src/Keep.tsx', status: 'SUCCESS', summary: 'read' }, 'UNRELATED FILE CONTENT')
     compactor.recordStep(
       { step: 2, tool: 'write_file', target: 'src/App.tsx', status: 'SUCCESS', summary: 'first write' },
-      'Successfully wrote file src/App.tsx\n[UNDECLARED IMPORTS] stale-package'
+      'Successfully wrote file src/App.tsx\n[UNDECLARED IMPORTS] stale-package',
     )
     compactor.recordStep(
       { step: 3, tool: 'write_file', target: 'src\\App.tsx', status: 'SUCCESS', summary: 'second write' },
-      'Successfully wrote file src/App.tsx\nImports are now valid'
+      'Successfully wrote file src/App.tsx\nImports are now valid',
     )
 
     const detailed = compactor.compilePromptHistoryBlock(50_000).split('### RECENT DETAILED TOOL OUTPUTS')[1]
@@ -181,25 +175,21 @@ describe('workspace-state output expiry', () => {
 
 /** The recent-outputs window is the model's view of what just happened, and it was a plain FIFO. */
 describe('EpisodicMemoryCompactor — the recent window does not fill with one repeated intervention', () => {
-  const loopWarning = (n: number) =>
-    `[CRITICAL FILE EDIT LOOP: ${n} EDITS ON src/pages/TasksPage.tsx WITHOUT VERIFICATION]\nDo not edit it again.`
+  const loopWarning = (n: number) => `[CRITICAL FILE EDIT LOOP: ${n} EDITS ON src/pages/TasksPage.tsx WITHOUT VERIFICATION]\nDo not edit it again.`
 
   function blockedWrite(compactor: EpisodicMemoryCompactor, step: number, editCount: number) {
-    compactor.recordStep(
-      { step, tool: 'write_file', target: 'src/pages/TasksPage.tsx', status: 'BLOCKED', summary: 'loop' },
-      loopWarning(editCount)
-    )
+    compactor.recordStep({ step, tool: 'write_file', target: 'src/pages/TasksPage.tsx', status: 'BLOCKED', summary: 'loop' }, loopWarning(editCount))
   }
 
   it('keeps one slot for a repeated intervention on the same target, not one per attempt', () => {
     const compactor = new EpisodicMemoryCompactor(6)
     compactor.recordStep(
       { step: 42, tool: 'write_file', target: 'src/pages/TasksPage.tsx', status: 'SUCCESS', summary: 'wrote' },
-      'Successfully wrote file src/pages/TasksPage.tsx'
+      'Successfully wrote file src/pages/TasksPage.tsx',
     )
     compactor.recordStep(
       { step: 43, tool: 'read_file', target: 'src/App.tsx', status: 'SUCCESS', summary: 'read' },
-      'export default function App() { return null }'
+      'export default function App() { return null }',
     )
     blockedWrite(compactor, 44, 4)
     blockedWrite(compactor, 45, 5)
@@ -216,12 +206,9 @@ describe('EpisodicMemoryCompactor — the recent window does not fill with one r
     const compactor = new EpisodicMemoryCompactor(6)
     compactor.recordStep(
       { step: 42, tool: 'write_file', target: 'src/pages/TasksPage.tsx', status: 'SUCCESS', summary: 'wrote' },
-      'Successfully wrote file src/pages/TasksPage.tsx'
+      'Successfully wrote file src/pages/TasksPage.tsx',
     )
-    compactor.recordStep(
-      { step: 43, tool: 'read_file', target: 'src/App.tsx', status: 'SUCCESS', summary: 'read' },
-      'THE REAL CONTENT THE MODEL NEEDS'
-    )
+    compactor.recordStep({ step: 43, tool: 'read_file', target: 'src/App.tsx', status: 'SUCCESS', summary: 'read' }, 'THE REAL CONTENT THE MODEL NEEDS')
     for (let step = 44; step <= 49; step++) blockedWrite(compactor, step, step - 40)
 
     const detailed = compactor.compilePromptHistoryBlock(50_000).split('### RECENT DETAILED TOOL OUTPUTS')[1]
@@ -243,18 +230,14 @@ describe('EpisodicMemoryCompactor — the recent window does not fill with one r
   it('collapses an alternating A,B,A,B block pattern, not just consecutive repeats', () => {
     const compactor = new EpisodicMemoryCompactor(6)
     for (const step of [40, 42, 44]) {
-      compactor.recordStep(
-        { step, tool: 'read_file', target: 'src/App.tsx', status: 'BLOCKED', summary: 'loop' },
-        `[READ LOOP] attempt ${step}`
-      )
+      compactor.recordStep({ step, tool: 'read_file', target: 'src/App.tsx', status: 'BLOCKED', summary: 'loop' }, `[READ LOOP] attempt ${step}`)
       compactor.recordStep(
         { step: step + 1, tool: 'read_file', target: 'src/pages/Dashboard.tsx', status: 'BLOCKED', summary: 'loop' },
-        `[READ LOOP] attempt ${step + 1}`
+        `[READ LOOP] attempt ${step + 1}`,
       )
     }
 
     const detailed = compactor.compilePromptHistoryBlock(50_000).split('### RECENT DETAILED TOOL OUTPUTS')[1]
     expect(detailed.split('READ LOOP').length - 1).toBe(2)
   })
-
 })

@@ -126,21 +126,13 @@ export async function executeWriteFileTool(
   if (exists && parameters.expectedContentHash !== actualHash) {
     return {
       outcome: 'rejected',
-      outputForHistory: versionConflictFeedback(
-        String(filePath),
-        parameters.expectedContentHash,
-        actualHash,
-        compactMutationDiff(beforeContent, content),
-      ),
+      outputForHistory: versionConflictFeedback(String(filePath), parameters.expectedContentHash, actualHash, compactMutationDiff(beforeContent, content)),
       logMessage: `Write File Rejected: stale or missing version for ${path.basename(safePath)}`,
     }
   }
 
-  const result = dependencies.repository.writeFileVersioned(
-    safePath,
-    content,
-    parameters.expectedContentHash,
-    (originalContent) => dependencies.journal.recordOriginalState(safePath, originalContent),
+  const result = dependencies.repository.writeFileVersioned(safePath, content, parameters.expectedContentHash, (originalContent) =>
+    dependencies.journal.recordOriginalState(safePath, originalContent),
   )
   if (!result.success) {
     if (result.conflict) {

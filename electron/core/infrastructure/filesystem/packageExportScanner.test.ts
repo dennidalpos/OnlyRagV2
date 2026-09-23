@@ -37,7 +37,7 @@ describe('extractExportedNames', () => {
         'export interface MenuProps {}',
         'export type Align = "start" | "end";',
         'export { Switch, Tab as Tabs };',
-      ].join('\n')
+      ].join('\n'),
     )
     expect(names).toEqual(expect.arrayContaining(['Dialog', 'useMenu', 'Listbox', 'MenuProps', 'Align', 'Switch']))
     // Renamed exports are known by the name the importer must use.
@@ -95,10 +95,7 @@ describe('readLocalModuleExports', () => {
     fs.mkdirSync(path.dirname(modulePath), { recursive: true })
     fs.writeFileSync(modulePath, 'export function PrimaryButton() {}\nexport interface ButtonProps {}\n', 'utf-8')
 
-    expect(readLocalModuleExports(tempDir, 'src/App.tsx', './components/Button')).toEqual([
-      'PrimaryButton',
-      'ButtonProps',
-    ])
+    expect(readLocalModuleExports(tempDir, 'src/App.tsx', './components/Button')).toEqual(['PrimaryButton', 'ButtonProps'])
   })
 
   it('reports a local default export for import mismatch recovery', () => {

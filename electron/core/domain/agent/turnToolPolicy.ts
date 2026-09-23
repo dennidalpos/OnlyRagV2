@@ -29,7 +29,10 @@ const EXPLORATION_TOOLS: readonly SupportedToolName[] = [
 function requestedAdvancedTools(task: string): SupportedToolName[] {
   const normalized = task.toLowerCase()
   const tools: SupportedToolName[] = []
-  const add = (...names: SupportedToolName[]) => names.forEach((name) => { if (!tools.includes(name)) tools.push(name) })
+  const add = (...names: SupportedToolName[]) =>
+    names.forEach((name) => {
+      if (!tools.includes(name)) tools.push(name)
+    })
 
   if (/\b(web|online|internet|documentazione ufficiale|official docs?|latest|ultima versione|current api)\b/.test(normalized)) {
     add('web_search', 'fetch_web_content')
@@ -42,7 +45,8 @@ function requestedAdvancedTools(task: string): SupportedToolName[] {
   if (/\b(browser|preview|anteprima|render|screenshot|visuale)\b/.test(normalized)) {
     add('open_in_browser', 'validate_visual_artifact')
   }
-  if (/\b(run|esegui|lancia)\b.{0,30}\b(command|comando|test|build|typecheck|lint)\b|\b(test|build|typecheck|lint)(?: suite)?\b/.test(normalized)) add('run_command')
+  if (/\b(run|esegui|lancia)\b.{0,30}\b(command|comando|test|build|typecheck|lint)\b|\b(test|build|typecheck|lint)(?: suite)?\b/.test(normalized))
+    add('run_command')
   if (/\bcrea(?:re)? (?:la |una )?cartella\b|\bcreate (?:a )?director/.test(normalized)) add('create_directory')
   if (/\bcopia(?:re)?\b|\bcopy\b/.test(normalized)) add('copy_file')
   if (/\bsposta(?:re)?\b|\brinomina(?:re)?\b|\bmove\b|\brename\b/.test(normalized)) add('move_file')
@@ -57,8 +61,10 @@ function editToolFor(state: EditTargetState): SupportedToolName | null {
 }
 
 function requestsFileMutation(task: string): boolean {
-  const directMutation = /\b(create|add|update|change|edit|fix|refactor|implement|crea|aggiungi|aggiorna|modifica|cambia|correggi|rifattorizza|implementa|costruisci|sviluppa|realizza|prepara|genera)\b/i
-  const italianColloquialBuild = /\b(fammi|fai)\b(?!\s+(vedere|capire|spiegare|analizzare|controllare|ispezionare)\b)(?:\s+\S+){0,4}\s+\b(sito|pagina|app|applicazione|progetto|componente|file|codice|interfaccia|dashboard|gioco|script)\b/i
+  const directMutation =
+    /\b(create|add|update|change|edit|fix|refactor|implement|crea|aggiungi|aggiorna|modifica|cambia|correggi|rifattorizza|implementa|costruisci|sviluppa|realizza|prepara|genera)\b/i
+  const italianColloquialBuild =
+    /\b(fammi|fai)\b(?!\s+(vedere|capire|spiegare|analizzare|controllare|ispezionare)\b)(?:\s+\S+){0,4}\s+\b(sito|pagina|app|applicazione|progetto|componente|file|codice|interfaccia|dashboard|gioco|script)\b/i
   return directMutation.test(task) || italianColloquialBuild.test(task)
 }
 

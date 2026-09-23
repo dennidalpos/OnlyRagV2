@@ -1,5 +1,3 @@
-
-
 export interface ModelTagComponents {
   raw: string
   normalized: string
@@ -55,12 +53,7 @@ export function isTagCompatible(targetTag: string, installedTag: string): boolea
     }
   }
 
-  return (
-    installedTag.startsWith(targetTag) ||
-    targetTag.startsWith(installedTag) ||
-    installedTag.includes(targetTag) ||
-    targetTag.includes(installedTag)
-  )
+  return installedTag.startsWith(targetTag) || targetTag.startsWith(installedTag) || installedTag.includes(targetTag) || targetTag.includes(installedTag)
 }
 
 /** Finds the exact or best-matching installed model from the list of available Ollama models. */
@@ -148,12 +141,14 @@ export function findExactInstalledModelAlias(target: string, available: string[]
   if (exact) return exact
 
   const targetTag = parsedTarget.tag || 'latest'
-  return available.find((model) => {
-    const parsedModel = parseModelTagComponents(model)
-    if (!parsedModel.normalized || parsedModel.baseName !== parsedTarget.baseName) return false
-    if (parsedTarget.namespace !== parsedModel.namespace) return false
-    return (parsedModel.tag || 'latest') === targetTag
-  }) || null
+  return (
+    available.find((model) => {
+      const parsedModel = parseModelTagComponents(model)
+      if (!parsedModel.normalized || parsedModel.baseName !== parsedTarget.baseName) return false
+      if (parsedTarget.namespace !== parsedModel.namespace) return false
+      return (parsedModel.tag || 'latest') === targetTag
+    }) || null
+  )
 }
 
 /**

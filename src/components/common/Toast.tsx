@@ -53,7 +53,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }, duration)
       }
     },
-    [removeToast]
+    [removeToast],
   )
 
   const success = useCallback((msg: string, dur?: number) => showToast(msg, 'success', dur), [showToast])
@@ -84,10 +84,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 isSuccess
                   ? 'bg-slate-900/95 border-emerald-500/50 text-emerald-200 shadow-emerald-950/40'
                   : isError
-                  ? 'bg-slate-900/95 border-rose-500/50 text-rose-200 shadow-rose-950/40'
-                  : isWarning
-                  ? 'bg-slate-900/95 border-amber-500/50 text-amber-200 shadow-amber-950/40'
-                  : 'bg-slate-900/95 border-cyan-500/50 text-cyan-200 shadow-cyan-950/40'
+                    ? 'bg-slate-900/95 border-rose-500/50 text-rose-200 shadow-rose-950/40'
+                    : isWarning
+                      ? 'bg-slate-900/95 border-amber-500/50 text-amber-200 shadow-amber-950/40'
+                      : 'bg-slate-900/95 border-cyan-500/50 text-cyan-200 shadow-cyan-950/40'
               }`}
             >
               <div className="shrink-0 mt-0.5">
@@ -97,9 +97,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 {!isSuccess && !isError && !isWarning && <Info className="w-4 h-4 text-cyan-400" />}
               </div>
 
-              <div className="flex-1 text-xs leading-relaxed font-medium select-text break-words">
-                {toast.message}
-              </div>
+              <div className="flex-1 text-xs leading-relaxed font-medium select-text break-words">{toast.message}</div>
 
               <button
                 type="button"

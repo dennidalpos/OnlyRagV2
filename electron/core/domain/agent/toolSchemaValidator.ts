@@ -1,5 +1,3 @@
-
-
 import type { AgentToolCall, SupportedToolName, AgentToolReplacementChunk } from './agentTypes'
 import { findToolSchema } from './ollamaToolSchemaCatalog'
 
@@ -165,7 +163,9 @@ const ROOT_CONFIG_FILE = /^(?:index\.html|package\.json|tsconfig(?:\.[^.]+)?\.js
 
 /** Returns the path a project-root configuration file should use when it was aimed below src/. */
 export function rootConfigPathForMisplacedSourceFile(filePath: string | undefined): string | null {
-  const normalized = String(filePath || '').trim().replace(/\\/g, '/')
+  const normalized = String(filePath || '')
+    .trim()
+    .replace(/\\/g, '/')
   const parts = normalized.split('/').filter(Boolean)
   const sourceIndex = parts.map((part) => part.toLowerCase()).lastIndexOf('src')
   const fileName = parts.at(-1) || ''
@@ -208,10 +208,34 @@ export function normalizeToolParams(raw: Record<string, any>): Record<string, an
 
   // 2. Content & Edit aliases
   if (!p.targetContent) {
-    p.targetContent = p.target || p.target_content || p.old_content || p.old_str || p.old_text || p.oldContent || p.search_text || p.searchText || p.search || p.find || p.TargetContent
+    p.targetContent =
+      p.target ||
+      p.target_content ||
+      p.old_content ||
+      p.old_str ||
+      p.old_text ||
+      p.oldContent ||
+      p.search_text ||
+      p.searchText ||
+      p.search ||
+      p.find ||
+      p.TargetContent
   }
   if (!p.replacementContent) {
-    p.replacementContent = p.replacement || p.replacement_content || p.new_content || p.new_str || p.new_text || p.newContent || p.replace_text || p.replaceText || p.replace || p.to || p.content || p.code || p.ReplacementContent
+    p.replacementContent =
+      p.replacement ||
+      p.replacement_content ||
+      p.new_content ||
+      p.new_str ||
+      p.new_text ||
+      p.newContent ||
+      p.replace_text ||
+      p.replaceText ||
+      p.replace ||
+      p.to ||
+      p.content ||
+      p.code ||
+      p.ReplacementContent
   }
   if (p.content === undefined) {
     const rawContent = p.code || p.text || p.file_content || p.data || p.CodeContent
@@ -249,7 +273,9 @@ export function normalizeToolParams(raw: Record<string, any>): Record<string, an
     p.replacements = rawChunks
       .map((chunk: any) => ({
         targetContent: String(chunk.targetContent || chunk.target || chunk.target_content || chunk.old_content || chunk.TargetContent || ''),
-        replacementContent: String(chunk.replacementContent || chunk.replacement || chunk.replacement_content || chunk.new_content || chunk.ReplacementContent || ''),
+        replacementContent: String(
+          chunk.replacementContent || chunk.replacement || chunk.replacement_content || chunk.new_content || chunk.ReplacementContent || '',
+        ),
       }))
       .filter((chunk: AgentToolReplacementChunk) => chunk.targetContent)
     p.chunks = p.replacements
@@ -506,7 +532,10 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       }
 
       const VALID_STATUSES = ['pending', 'in_progress', 'verified', 'failed']
-      const rawStatus = String(rawParams.status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+      const rawStatus = String(rawParams.status ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_')
       if (!rawStatus) {
         errors.push("Missing required parameter 'status' for update_plan")
       } else if (!VALID_STATUSES.includes(rawStatus)) {
@@ -538,7 +567,7 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       // A name that is neither a supported tool nor one of the aliases above is an invention, and used to fall through this branch as valid: the orchestrator then dispatched it, the executor had no handler, and the turn was spent on a tool that does not exist.
       if (!findToolSchema(tool)) {
         errors.push(
-          `Unknown tool "${toolCall.tool}". It is not one of the tools this agent provides. To run a shell command, use "run_command" with a "command" parameter.`
+          `Unknown tool "${toolCall.tool}". It is not one of the tools this agent provides. To run a shell command, use "run_command" with a "command" parameter.`,
         )
         break
       }

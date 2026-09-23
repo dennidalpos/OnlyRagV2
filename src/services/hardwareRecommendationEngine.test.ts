@@ -29,12 +29,7 @@ import {
 import { DiagnosticsData, RunningModelDetails } from '../types'
 
 describe('hardwareRecommendationEngine Unit Tests', () => {
-  const createMockDiagnostics = (
-    hasGpu: boolean,
-    vramMB: number,
-    ramGB: number,
-    gpuName = 'NVIDIA GeForce RTX 4070'
-  ): DiagnosticsData => ({
+  const createMockDiagnostics = (hasGpu: boolean, vramMB: number, ramGB: number, gpuName = 'NVIDIA GeForce RTX 4070'): DiagnosticsData => ({
     gpu: {
       hasNvidiaGpu: hasGpu,
       gpuName: hasGpu ? gpuName : 'CPU',
@@ -374,12 +369,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
   })
 
   it('should accurately detect installed models with exact tag matching and latest tag equivalence', () => {
-    const installed = [
-      'qwen2.5-coder:7b',
-      'deepseek-r1:8b',
-      'nomic-embed-text:latest',
-      'adrienbrault/biomistral-7b:q4_k_m',
-    ]
+    const installed = ['qwen2.5-coder:7b', 'deepseek-r1:8b', 'nomic-embed-text:latest', 'adrienbrault/biomistral-7b:q4_k_m']
 
     // Exact matches
     expect(isOllamaModelInstalled('qwen2.5-coder:7b', installed)).toBe(true)
@@ -469,7 +459,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
           for (const rec of group.filter((m) => m.isRecommended)) {
             expect(
               rec.compatibilityStatus,
-              `${host.tier}: recommended ${rec.modelName} is ${rec.compatibilityStatus} (${rec.footprintGB}GB vs budget ${recs.safeVramBudgetGB}GB)`
+              `${host.tier}: recommended ${rec.modelName} is ${rec.compatibilityStatus} (${rec.footprintGB}GB vs budget ${recs.safeVramBudgetGB}GB)`,
             ).not.toBe('exceeds_vram')
             expect(rec.isHardwareCompatible).toBe(true)
           }
@@ -482,10 +472,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
       // so every supported host must have one.
       for (const host of REPRESENTATIVE_HOSTS) {
         const recs = analyzeHardwareAndRecommend(host.diagnostics)
-        expect(
-          recs.codingModels.filter((m) => m.isRecommended).length,
-          `${host.tier}: no recommended coding model`
-        ).toBeGreaterThanOrEqual(1)
+        expect(recs.codingModels.filter((m) => m.isRecommended).length, `${host.tier}: no recommended coding model`).toBeGreaterThanOrEqual(1)
       }
     })
   })
@@ -542,10 +529,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
         const advertised = parseAdvertisedGB(entry.sizeBytesApprox)
         const priced = estimateModelWeightGB(entry.modelName)
         const drift = Math.abs(priced - advertised) / advertised
-        expect(
-          drift,
-          `${entry.modelName}: catalog says ${entry.sizeBytesApprox} but the weight table says ${priced} GB`
-        ).toBeLessThan(0.2)
+        expect(drift, `${entry.modelName}: catalog says ${entry.sizeBytesApprox} but the weight table says ${priced} GB`).toBeLessThan(0.2)
       }
     })
   })

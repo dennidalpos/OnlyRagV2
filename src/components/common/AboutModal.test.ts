@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  UPSTREAM_MODULES,
-  CATEGORY_TABS,
-  type DependencyCategory,
-} from './AboutModal'
+import { UPSTREAM_MODULES, CATEGORY_TABS, type DependencyCategory } from './AboutModal'
 
 describe('AboutModal & Credits Data Integrity Unit Tests', () => {
   it('should define a comprehensive list of upstream open-source modules', () => {
@@ -39,12 +35,7 @@ describe('AboutModal & Credits Data Integrity Unit Tests', () => {
   })
 
   it('should categorize modules into valid category buckets', () => {
-    const validCategories: DependencyCategory[] = [
-      'core',
-      'aiAndVector',
-      'uiAndEditor',
-      'skillsAndEcosystem',
-    ]
+    const validCategories: DependencyCategory[] = ['core', 'aiAndVector', 'uiAndEditor', 'skillsAndEcosystem']
 
     const tabCategoryIds = CATEGORY_TABS.map((t) => t.id)
     expect(tabCategoryIds).toContain('all')

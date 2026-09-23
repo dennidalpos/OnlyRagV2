@@ -33,7 +33,6 @@ export type OllamaStructuredResponse =
   | { status: 'incomplete'; content: string; error: string; doneReason?: string; promptEvalCount?: number; evalCount?: number; thinkingChars?: number }
   | { status: 'transport_error'; content: string; error: string }
 
-
 export interface RawOllamaTagModel {
   name?: string
   model?: string
@@ -62,9 +61,9 @@ export class OllamaHttpClient {
   getRunningModels(customHost?: string): Promise<{ success: boolean; models: RunningModelInfo[]; error?: string }> {
     const urlOpts = this.resolveUrl('/api/ps', customHost)
 
-
     return new Promise((resolve) => {
-      const req = this.request(urlOpts,
+      const req = this.request(
+        urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -73,7 +72,9 @@ export class OllamaHttpClient {
         },
         (res) => {
           let data = ''
-          res.on('data', (chunk) => { data += chunk })
+          res.on('data', (chunk) => {
+            data += chunk
+          })
           res.on('end', () => {
             if (res.statusCode !== 200) {
               resolve({ success: false, models: [], error: `Ollama HTTP ${res.statusCode}` })
@@ -92,7 +93,7 @@ export class OllamaHttpClient {
               resolve({ success: false, models: [], error: err.message })
             }
           })
-        }
+        },
       )
 
       req.on('error', (err: any) => {
@@ -114,7 +115,8 @@ export class OllamaHttpClient {
     const urlOpts = this.resolveUrl('/api/tags', customHost)
 
     return new Promise((resolve) => {
-      const req = this.request(urlOpts,
+      const req = this.request(
+        urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -123,7 +125,9 @@ export class OllamaHttpClient {
         },
         (res) => {
           let data = ''
-          res.on('data', (chunk) => { data += chunk })
+          res.on('data', (chunk) => {
+            data += chunk
+          })
           res.on('end', () => {
             if (res.statusCode !== 200) {
               resolve([])
@@ -141,7 +145,7 @@ export class OllamaHttpClient {
               resolve([])
             }
           })
-        }
+        },
       )
 
       req.on('error', () => {
@@ -180,7 +184,7 @@ export class OllamaHttpClient {
       Object.keys(map).map(async (name) => {
         const contextLength = await this.getModelContextLength(name, customHost)
         if (contextLength !== undefined) map[name].contextLength = contextLength
-      })
+      }),
     )
 
     return map
@@ -190,35 +194,44 @@ export class OllamaHttpClient {
     const urlOpts = this.resolveUrl('/api/show', customHost)
     const postData = JSON.stringify({ model: modelName })
     return new Promise((resolve) => {
-      const req = this.request(urlOpts, {
-        hostname: urlOpts.hostname,
-        port: urlOpts.port,
-        path: urlOpts.path,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
-      }, (res) => {
-        let data = ''
-        res.on('data', (chunk) => { data += chunk })
-        res.on('end', () => {
-          try {
-            if (res.statusCode !== 200) return resolve(undefined)
-            const parsed = JSON.parse(data)
-            const candidates = [
-              parsed?.details?.context_length,
-              parsed?.model_info?.context_length,
-              ...Object.entries(parsed?.model_info || {})
-                .filter(([key]) => key.endsWith('.context_length'))
-                .map(([, value]) => value),
-            ]
-            const value = candidates.find((candidate) => typeof candidate === 'number' && candidate > 0)
-            resolve(typeof value === 'number' ? value : undefined)
-          } catch {
-            resolve(undefined)
-          }
-        })
-      })
+      const req = this.request(
+        urlOpts,
+        {
+          hostname: urlOpts.hostname,
+          port: urlOpts.port,
+          path: urlOpts.path,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+        },
+        (res) => {
+          let data = ''
+          res.on('data', (chunk) => {
+            data += chunk
+          })
+          res.on('end', () => {
+            try {
+              if (res.statusCode !== 200) return resolve(undefined)
+              const parsed = JSON.parse(data)
+              const candidates = [
+                parsed?.details?.context_length,
+                parsed?.model_info?.context_length,
+                ...Object.entries(parsed?.model_info || {})
+                  .filter(([key]) => key.endsWith('.context_length'))
+                  .map(([, value]) => value),
+              ]
+              const value = candidates.find((candidate) => typeof candidate === 'number' && candidate > 0)
+              resolve(typeof value === 'number' ? value : undefined)
+            } catch {
+              resolve(undefined)
+            }
+          })
+        },
+      )
       req.on('error', () => resolve(undefined))
-      req.setTimeout(5000, () => { req.destroy(); resolve(undefined) })
+      req.setTimeout(5000, () => {
+        req.destroy()
+        resolve(undefined)
+      })
       req.write(postData)
       req.end()
     })
@@ -263,9 +276,7 @@ export class OllamaHttpClient {
     const urlOpts = this.resolveUrl('/api/generate', customHost)
     logger.log('INFO', 'OllamaClient', `Requesting immediate model eviction (keep_alive: 0) for: ${cleanModel}`)
 
-    return ollamaGenerationScheduler.schedule('unload', (setActiveCancel) =>
-      this.unloadModelNow(cleanModel, urlOpts, setActiveCancel)
-    ).promise
+    return ollamaGenerationScheduler.schedule('unload', (setActiveCancel) => this.unloadModelNow(cleanModel, urlOpts, setActiveCancel)).promise
   }
 
   private unloadModelNow(cleanModel: string, urlOpts: OllamaUrl, setActiveCancel: (cancel: () => void) => void): Promise<{ success: boolean; error?: string }> {
@@ -276,7 +287,8 @@ export class OllamaHttpClient {
         keep_alive: 0,
       })
 
-      const req = this.request(urlOpts,
+      const req = this.request(
+        urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -293,7 +305,7 @@ export class OllamaHttpClient {
             logger.log('INFO', 'OllamaClient', `Model ${cleanModel} evicted. Status: HTTP ${res.statusCode}`)
             resolve({ success: res.statusCode === 200 })
           })
-        }
+        },
       )
 
       req.on('error', (err: any) => {
@@ -320,12 +332,15 @@ export class OllamaHttpClient {
     const cleanModel = modelName.trim()
     const urlOpts = this.resolveUrl('/api/generate', customHost)
 
-    return ollamaGenerationScheduler.schedule('preload', (setActiveCancel) =>
-      this.preloadModelNow(cleanModel, keepAlive, urlOpts, setActiveCancel)
-    ).promise
+    return ollamaGenerationScheduler.schedule('preload', (setActiveCancel) => this.preloadModelNow(cleanModel, keepAlive, urlOpts, setActiveCancel)).promise
   }
 
-  private preloadModelNow(cleanModel: string, keepAlive: string, urlOpts: OllamaUrl, setActiveCancel: (cancel: () => void) => void): Promise<{ success: boolean; error?: string }> {
+  private preloadModelNow(
+    cleanModel: string,
+    keepAlive: string,
+    urlOpts: OllamaUrl,
+    setActiveCancel: (cancel: () => void) => void,
+  ): Promise<{ success: boolean; error?: string }> {
     return new Promise((resolve) => {
       const postData = JSON.stringify({
         model: cleanModel,
@@ -333,7 +348,8 @@ export class OllamaHttpClient {
         keep_alive: keepAlive,
       })
 
-      const req = this.request(urlOpts,
+      const req = this.request(
+        urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -350,7 +366,7 @@ export class OllamaHttpClient {
             logger.log('INFO', 'OllamaClient', `Model ${cleanModel} warm-up completed. Status: HTTP ${res.statusCode}`)
             resolve({ success: res.statusCode === 200 })
           })
-        }
+        },
       )
 
       req.on('error', (err: any) => {
@@ -400,7 +416,7 @@ export class OllamaHttpClient {
   pullModel(
     modelName: string,
     customHost?: string,
-    onProgress?: (progress: { status: string; completed?: number; total?: number }) => void
+    onProgress?: (progress: { status: string; completed?: number; total?: number }) => void,
   ): Promise<{ success: boolean; data?: string; error?: string }> {
     if (!modelName || typeof modelName !== 'string' || !modelName.trim()) {
       return Promise.resolve({ success: false, error: 'Invalid or empty model name' })
@@ -415,7 +431,8 @@ export class OllamaHttpClient {
         name: cleanModelName,
         stream: true,
       })
-      const req = this.request(urlOpts,
+      const req = this.request(
+        urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -481,16 +498,14 @@ export class OllamaHttpClient {
 
             resolve({ success: isSuccess, data: lastStatus, error: finalErr })
           })
-        }
+        },
       )
 
       this.activePullReq = req
 
       req.on('error', (err: any) => {
         this.activePullReq = null
-        const errMsg = err.code === 'ECONNREFUSED'
-          ? 'Ollama service is not running locally (http://127.0.0.1:11434).'
-          : err.message
+        const errMsg = err.code === 'ECONNREFUSED' ? 'Ollama service is not running locally (http://127.0.0.1:11434).' : err.message
         logger.log('ERROR', 'OllamaClient', `Error pulling model ${cleanModelName}: ${errMsg}`)
         resolve({ success: false, error: errMsg })
       })
@@ -515,7 +530,8 @@ export class OllamaHttpClient {
     const urlOpts = this.resolveUrl('/api/delete', customHost)
     return new Promise((resolve) => {
       const postData = JSON.stringify({ name: modelName.trim() })
-      const req = this.request(urlOpts,
+      const req = this.request(
+        urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -529,7 +545,7 @@ export class OllamaHttpClient {
         (res) => {
           logger.log('INFO', 'OllamaClient', `Model delete finished for ${modelName}: HTTP ${res.statusCode}`)
           resolve({ success: res.statusCode === 200 })
-        }
+        },
       )
       req.on('error', (err) => {
         logger.log('ERROR', 'OllamaClient', `Error deleting model ${modelName}: ${err.message}`)
@@ -547,7 +563,7 @@ export class OllamaHttpClient {
     onDone: () => void,
     customOptions?: OllamaGenerationOptions,
     customHost?: string,
-    operationId?: string
+    operationId?: string,
   ): Promise<{ success: boolean; error?: string }> {
     if (typeof prompt !== 'string') return Promise.resolve({ success: false, error: 'Invalid prompt' })
     const urlOpts = this.resolveUrl('/api/generate', customHost)
@@ -555,7 +571,7 @@ export class OllamaHttpClient {
     return ollamaGenerationScheduler.schedule(
       'stream',
       (setActiveCancel) => this.generateStreamNow(model, prompt, onChunk, onDone, customOptions, urlOpts, setActiveCancel),
-      operationId
+      operationId,
     ).promise
   }
 
@@ -566,7 +582,7 @@ export class OllamaHttpClient {
     onDone: () => void,
     customOptions: OllamaGenerationOptions | undefined,
     urlOpts: OllamaUrl,
-    setActiveCancel: (cancel: () => void) => void
+    setActiveCancel: (cancel: () => void) => void,
   ): Promise<{ success: boolean; error?: string }> {
     return new Promise((resolve) => {
       const postData = JSON.stringify({
@@ -583,7 +599,8 @@ export class OllamaHttpClient {
           ...(customOptions?.num_thread ? { num_thread: customOptions.num_thread } : {}),
         },
       })
-      const req = this.request(urlOpts,
+      const req = this.request(
+        urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -597,7 +614,9 @@ export class OllamaHttpClient {
         (res) => {
           if (res.statusCode && res.statusCode !== 200) {
             let errBody = ''
-            res.on('data', (chunk) => { errBody += chunk.toString() })
+            res.on('data', (chunk) => {
+              errBody += chunk.toString()
+            })
             res.on('end', () => {
               const msg = res.statusCode === 404 ? `Model '${model}' not pulled in Ollama.` : `Ollama HTTP Error ${res.statusCode}: ${errBody.slice(0, 200)}`
               resolve({ success: false, error: msg })
@@ -619,7 +638,7 @@ export class OllamaHttpClient {
               },
               (jsonErr) => {
                 logger.log('WARN', 'OllamaClient', `Partial JSON stream chunk skipped: ${jsonErr.message}`)
-              }
+              },
             )
           })
           res.on('end', () => {
@@ -630,7 +649,7 @@ export class OllamaHttpClient {
             onDone()
             resolve({ success: true })
           })
-        }
+        },
       )
 
       setActiveCancel(() => req.destroy())
@@ -656,8 +675,10 @@ export class OllamaHttpClient {
     }
     const urlOpts = this.resolveUrl('/api/chat', request.host)
 
-    return ollamaGenerationScheduler.schedule('structured', (setActiveCancel) =>
-      this.generateStructuredNow(request, urlOpts, setActiveCancel), request.operationId
+    return ollamaGenerationScheduler.schedule(
+      'structured',
+      (setActiveCancel) => this.generateStructuredNow(request, urlOpts, setActiveCancel),
+      request.operationId,
     ).promise
   }
 
@@ -668,7 +689,7 @@ export class OllamaHttpClient {
   private generateStructuredNow(
     request: OllamaStructuredRequest,
     urlOpts: OllamaUrl,
-    setActiveCancel: (cancel: () => void) => void
+    setActiveCancel: (cancel: () => void) => void,
   ): Promise<OllamaStructuredResponse> {
     const postData = JSON.stringify({
       model: request.model,
@@ -697,58 +718,64 @@ export class OllamaHttpClient {
         settled = true
         resolve(result)
       }
-      const req = this.request(urlOpts, {
-        hostname: urlOpts.hostname,
-        port: urlOpts.port,
-        path: urlOpts.path,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(postData),
+      const req = this.request(
+        urlOpts,
+        {
+          hostname: urlOpts.hostname,
+          port: urlOpts.port,
+          path: urlOpts.path,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+          },
         },
-      }, (res) => {
-        let raw = ''
-        res.on('data', (chunk) => { raw += chunk.toString() })
-        res.on('end', () => {
-          if (res.statusCode !== 200) {
-            finish({ status: 'transport_error', content: '', error: `Ollama HTTP ${res.statusCode}: ${raw.slice(0, 200)}` })
-            return
-          }
-          try {
-            const parsed = JSON.parse(raw)
-            const content = typeof parsed?.message?.content === 'string' ? parsed.message.content : ''
-            const telemetry = {
-              ...(typeof parsed?.done_reason === 'string' ? { doneReason: parsed.done_reason } : {}),
-              ...(typeof parsed?.prompt_eval_count === 'number' ? { promptEvalCount: parsed.prompt_eval_count } : {}),
-              ...(typeof parsed?.eval_count === 'number' ? { evalCount: parsed.eval_count } : {}),
-              ...(typeof parsed?.message?.thinking === 'string' ? { thinkingChars: parsed.message.thinking.length } : {}),
-            }
-            if (parsed?.done !== true || parsed?.done_reason === 'length') {
-              const metrics = [
-                telemetry.promptEvalCount !== undefined ? `prompt_tokens=${telemetry.promptEvalCount}` : '',
-                telemetry.evalCount !== undefined ? `output_tokens=${telemetry.evalCount}` : '',
-                telemetry.thinkingChars !== undefined ? `thinking_chars=${telemetry.thinkingChars}` : '',
-              ].filter(Boolean).join(', ')
-              finish({
-                status: 'incomplete',
-                content,
-                error: `Ollama response incomplete${telemetry.doneReason ? ` (${telemetry.doneReason}${metrics ? `; ${metrics}` : ''})` : ''}`,
-                ...telemetry,
-              })
+        (res) => {
+          let raw = ''
+          res.on('data', (chunk) => {
+            raw += chunk.toString()
+          })
+          res.on('end', () => {
+            if (res.statusCode !== 200) {
+              finish({ status: 'transport_error', content: '', error: `Ollama HTTP ${res.statusCode}: ${raw.slice(0, 200)}` })
               return
             }
-            finish({ status: 'complete', content, ...telemetry })
-          } catch (err: any) {
-            finish({ status: 'transport_error', content: '', error: `Invalid Ollama response: ${err.message}` })
-          }
-        })
-      })
+            try {
+              const parsed = JSON.parse(raw)
+              const content = typeof parsed?.message?.content === 'string' ? parsed.message.content : ''
+              const telemetry = {
+                ...(typeof parsed?.done_reason === 'string' ? { doneReason: parsed.done_reason } : {}),
+                ...(typeof parsed?.prompt_eval_count === 'number' ? { promptEvalCount: parsed.prompt_eval_count } : {}),
+                ...(typeof parsed?.eval_count === 'number' ? { evalCount: parsed.eval_count } : {}),
+                ...(typeof parsed?.message?.thinking === 'string' ? { thinkingChars: parsed.message.thinking.length } : {}),
+              }
+              if (parsed?.done !== true || parsed?.done_reason === 'length') {
+                const metrics = [
+                  telemetry.promptEvalCount !== undefined ? `prompt_tokens=${telemetry.promptEvalCount}` : '',
+                  telemetry.evalCount !== undefined ? `output_tokens=${telemetry.evalCount}` : '',
+                  telemetry.thinkingChars !== undefined ? `thinking_chars=${telemetry.thinkingChars}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(', ')
+                finish({
+                  status: 'incomplete',
+                  content,
+                  error: `Ollama response incomplete${telemetry.doneReason ? ` (${telemetry.doneReason}${metrics ? `; ${metrics}` : ''})` : ''}`,
+                  ...telemetry,
+                })
+                return
+              }
+              finish({ status: 'complete', content, ...telemetry })
+            } catch (err: any) {
+              finish({ status: 'transport_error', content: '', error: `Invalid Ollama response: ${err.message}` })
+            }
+          })
+        },
+      )
 
       setActiveCancel(() => req.destroy())
       req.on('error', (err: any) => {
-        const message = err.code === 'ECONNREFUSED'
-          ? 'Ollama service is not running locally (http://127.0.0.1:11434).'
-          : err.message
+        const message = err.code === 'ECONNREFUSED' ? 'Ollama service is not running locally (http://127.0.0.1:11434).' : err.message
         finish({ status: 'transport_error', content: '', error: message })
       })
       req.setTimeout(600000, () => {

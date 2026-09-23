@@ -19,7 +19,11 @@ function runtime() {
 describe('VisualValidationRunner', () => {
   it('rejects an artifact outside the workspace before launching Playwright', async () => {
     const mocks = runtime()
-    const runner = new VisualValidationRunner(mocks.runtime, () => true, () => ({ isFile: () => true }))
+    const runner = new VisualValidationRunner(
+      mocks.runtime,
+      () => true,
+      () => ({ isFile: () => true }),
+    )
 
     const result = await runner.launchArtifact({ artifactPath: '..\\outside.html' }, 'C:\\workspace')
 
@@ -30,7 +34,11 @@ describe('VisualValidationRunner', () => {
 
   it('launches a contained file headlessly with the requested viewport and closes it idempotently', async () => {
     const mocks = runtime()
-    const runner = new VisualValidationRunner(mocks.runtime, () => true, () => ({ isFile: () => true }))
+    const runner = new VisualValidationRunner(
+      mocks.runtime,
+      () => true,
+      () => ({ isFile: () => true }),
+    )
 
     const result = await runner.launchArtifact({ artifactPath: 'dist/index.html', viewport: { width: 800, height: 600 } }, 'C:\\workspace')
 
@@ -48,7 +56,11 @@ describe('VisualValidationRunner', () => {
   it('returns UNAVAILABLE and cleans up when the runtime cannot load the artifact', async () => {
     const mocks = runtime()
     mocks.page.goto.mockRejectedValueOnce(new Error('Executable does not exist'))
-    const runner = new VisualValidationRunner(mocks.runtime, () => true, () => ({ isFile: () => true }))
+    const runner = new VisualValidationRunner(
+      mocks.runtime,
+      () => true,
+      () => ({ isFile: () => true }),
+    )
 
     const result = await runner.launchArtifact({ artifactPath: 'dist/index.html' }, 'C:\\workspace')
 
@@ -60,7 +72,11 @@ describe('VisualValidationRunner', () => {
   it('returns UNAVAILABLE when navigation exceeds the requested timeout', async () => {
     const mocks = runtime()
     mocks.page.goto.mockRejectedValueOnce(new Error('Timeout 100ms exceeded'))
-    const runner = new VisualValidationRunner(mocks.runtime, () => true, () => ({ isFile: () => true }))
+    const runner = new VisualValidationRunner(
+      mocks.runtime,
+      () => true,
+      () => ({ isFile: () => true }),
+    )
 
     const result = await runner.launchArtifact({ artifactPath: 'dist/index.html', timeoutMs: 100 }, 'C:\\workspace')
 
@@ -72,7 +88,11 @@ describe('VisualValidationRunner', () => {
 
   it('captures screenshot and DOM evidence, then closes the browser', async () => {
     const mocks = runtime()
-    const runner = new VisualValidationRunner(mocks.runtime, () => true, () => ({ isFile: () => true }))
+    const runner = new VisualValidationRunner(
+      mocks.runtime,
+      () => true,
+      () => ({ isFile: () => true }),
+    )
 
     const result = await runner.captureEvidence({ artifactPath: 'dist/index.html' }, 'C:\\workspace', 'C:\\workspace\\artifacts')
 
@@ -96,7 +116,11 @@ describe('VisualValidationRunner', () => {
         listener({ url: () => 'https://example.test/missing.js', status: () => 404, request: () => ({ method: () => 'GET' }) })
       }
     })
-    const runner = new VisualValidationRunner(mocks.runtime, () => true, () => ({ isFile: () => true }))
+    const runner = new VisualValidationRunner(
+      mocks.runtime,
+      () => true,
+      () => ({ isFile: () => true }),
+    )
 
     const result = await runner.captureEvidence({ artifactPath: 'dist/index.html' }, 'C:\\workspace', 'C:\\workspace\\artifacts')
 
@@ -117,7 +141,11 @@ describe('VisualValidationRunner', () => {
     mocks.page.screenshot.mockImplementationOnce(async () => {
       controller.abort()
     })
-    const runner = new VisualValidationRunner(mocks.runtime, () => true, () => ({ isFile: () => true }))
+    const runner = new VisualValidationRunner(
+      mocks.runtime,
+      () => true,
+      () => ({ isFile: () => true }),
+    )
 
     const result = await runner.captureEvidence({ artifactPath: 'dist/index.html' }, 'C:\\workspace', 'C:\\workspace\\artifacts', controller.signal)
 

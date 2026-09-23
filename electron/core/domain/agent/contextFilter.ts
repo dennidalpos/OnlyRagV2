@@ -191,7 +191,10 @@ export function validatePathSafety(filePath?: string | null, workspaceRoot?: str
     }
 
     if (isProtectedSystemDirectory(resolvedPath)) {
-      return { safePath: null, error: `Access forbidden: Path '${resolvedPath}' is inside a protected system directory (Program Files / Windows). Please select a user workspace directory.` }
+      return {
+        safePath: null,
+        error: `Access forbidden: Path '${resolvedPath}' is inside a protected system directory (Program Files / Windows). Please select a user workspace directory.`,
+      }
     }
 
     if (resolvedRoot) {

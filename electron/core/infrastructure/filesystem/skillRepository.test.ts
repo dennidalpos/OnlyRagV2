@@ -2,11 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import {
-  parseSkillFrontmatter,
-  calculateSkillChecksum,
-  SkillRepository,
-} from './skillRepository'
+import { parseSkillFrontmatter, calculateSkillChecksum, SkillRepository } from './skillRepository'
 
 describe('SkillRepository Unit Tests', () => {
   let tempDir: string
@@ -102,16 +98,11 @@ Use asyncio.to_thread for blocking operations.`
   })
 
   it('should save a new skill and list it from workspace with local_custom origin', async () => {
-    const saveRes = await repo.saveSkill(
-      'tailwind-v4',
-      '# Tailwind v4 Rules\nUse @theme directives instead of tailwind.config.js',
-      tempDir,
-      {
-        description: 'Tailwind CSS v4 guidelines',
-        triggers: ['tailwind', 'css'],
-        tags: ['css', 'styling'],
-      }
-    )
+    const saveRes = await repo.saveSkill('tailwind-v4', '# Tailwind v4 Rules\nUse @theme directives instead of tailwind.config.js', tempDir, {
+      description: 'Tailwind CSS v4 guidelines',
+      triggers: ['tailwind', 'css'],
+      tags: ['css', 'styling'],
+    })
 
     expect(saveRes.success).toBe(true)
     expect(fs.existsSync(saveRes.filePath!)).toBe(true)

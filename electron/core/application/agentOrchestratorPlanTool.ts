@@ -13,12 +13,7 @@ import type { AgentToolCall, AgentLogEntry } from '../domain/agent/agentTypes'
 import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { AppSettings } from '../../../shared/types'
 
-type EmitLog = (
-  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
-  message: string,
-  detail?: string,
-  meta?: Partial<AgentLogEntry>
-) => void
+type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface UpdatePlanToolContext {
   parsedTool: AgentToolCall
@@ -37,7 +32,19 @@ export interface UpdatePlanToolContext {
 
 /** Handles the orchestrator-level `update_plan` pseudo-tool: the model's explicit handle on plan progression. */
 export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<void> {
-  const { parsedTool, goalPlanner, workspacePath, emitLog, emitStepUpdate, episodicCompactor, persistCurrentState, settings, sessionId, stepCount, maxStepsLabel } = ctx
+  const {
+    parsedTool,
+    goalPlanner,
+    workspacePath,
+    emitLog,
+    emitStepUpdate,
+    episodicCompactor,
+    persistCurrentState,
+    settings,
+    sessionId,
+    stepCount,
+    maxStepsLabel,
+  } = ctx
 
   const milestoneRef = String(parsedTool.parameters?.milestoneId || '')
   const nextStatus = String(parsedTool.parameters?.status || '') as PlanMilestone['status']
@@ -76,23 +83,13 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
         verificationRanLog = `🔒 Verification command blocked: ${verifyCmd}`
       } else if (secCheck) {
         const shell = agentToolExecutorService.getOrCreateShellSession(workspacePath)
-        const verifyRes = await shell.execute(
-          secCheck.sanitizedCommand,
-          (chunk) => emitLog('terminal', chunk.trim()),
-          undefined,
-          60000,
-          ctx.signal,
-        )
+        const verifyRes = await shell.execute(secCheck.sanitizedCommand, (chunk) => emitLog('terminal', chunk.trim()), undefined, 60000, ctx.signal)
         const passed = verifyRes.code === 0 && !verifyRes.timedOut
         effectiveStatus = passed ? 'verified' : 'failed'
         // Both streams, not whichever is non-empty: a failed verification writes its banner to stdout and its reason to stderr, and selecting one hands the model a note that says the milestone failed without saying why.
         const outputTail = DiagnosticOutputReducer.composeCommandOutput(verifyRes.stdout, verifyRes.stderr, verifyRes.code).slice(-1500)
-        effectiveNotes = passed
-          ? promotionNote(verifyCmd)
-          : `Verification command failed (exit ${verifyRes.code}): ${verifyCmd}\n${outputTail}`
-        verificationRanLog = passed
-          ? `✅ Verification command passed: ${verifyCmd}`
-          : `❌ Verification command failed (exit ${verifyRes.code}): ${verifyCmd}`
+        effectiveNotes = passed ? promotionNote(verifyCmd) : `Verification command failed (exit ${verifyRes.code}): ${verifyCmd}\n${outputTail}`
+        verificationRanLog = passed ? `✅ Verification command passed: ${verifyCmd}` : `❌ Verification command failed (exit ${verifyRes.code}): ${verifyCmd}`
       }
     }
 
@@ -112,9 +109,7 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
             current: targetMilestone,
             requestedStatus: effectiveStatus,
             requestedNotes: effectiveNotes,
-            deliverableStatus: probe
-              ? resolveMilestoneDeliverableStatus(targetMilestone, probe)
-              : 'not_applicable',
+            deliverableStatus: probe ? resolveMilestoneDeliverableStatus(targetMilestone, probe) : 'not_applicable',
             unsatisfiedDeliverables: probe ? findUnsatisfiedDeliverables(targetMilestone, probe) : undefined,
           })
         : null
@@ -123,7 +118,9 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
         updateFailed = true
         planFeedback = authorityVerdict.directive
         planLog = `update_plan rejected: ${authorityVerdict.reason}`
-      } else if (goalPlanner.updateMilestone(milestoneRef, effectiveStatus, effectiveNotes ?? `Set to '${effectiveStatus}' by the model at step ${stepCount}.`)) {
+      } else if (
+        goalPlanner.updateMilestone(milestoneRef, effectiveStatus, effectiveNotes ?? `Set to '${effectiveStatus}' by the model at step ${stepCount}.`)
+      ) {
         if (effectiveStatus === 'verified' && workspacePath && targetMilestone) {
           const fileEvidence = captureMilestoneFileEvidence(workspacePath, targetMilestone)
           if (fileEvidence) targetMilestone.fileEvidence = fileEvidence
@@ -137,7 +134,10 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
         planLog = verificationRanLog || `📋 Plan updated: ${milestoneRef} → ${effectiveStatus} (${progress.completed}/${progress.total} verified)`
       } else {
         updateFailed = true
-        const known = goalPlanner.getMilestones().map((m) => `${m.id}: ${m.title}`).join(' | ')
+        const known = goalPlanner
+          .getMilestones()
+          .map((m) => `${m.id}: ${m.title}`)
+          .join(' | ')
         planFeedback = `[UPDATE_PLAN REJECTED] No milestone matches '${milestoneRef}'. Known milestones: ${known}. Use the exact milestone id.`
         planLog = `update_plan rejected: unknown milestone '${milestoneRef}'`
       }
@@ -152,7 +152,7 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
       status: updateFailed ? 'FAILURE' : 'SUCCESS',
       summary: planLog,
     },
-    planFeedback
+    planFeedback,
   )
   emitLog('info', planLog)
   emitStepUpdate(`Step ${stepCount}/${maxStepsLabel}`)

@@ -1,5 +1,3 @@
-
-
 import fs from 'node:fs'
 import path from 'node:path'
 import { isIgnoredPath } from '../../domain/agent/contextFilter'
@@ -38,11 +36,7 @@ function findCreatedTopLevelDirs(root: string, thresholdMs: number): string[] {
 }
 
 /** Returns the files under `workspacePath` modified at or after `startedAtMs`. */
-export function scanCommandTouchedFiles(
-  workspacePath: string,
-  startedAtMs: number,
-  maxEntries: number = MAX_SCANNED_ENTRIES
-): CommandTouchedFilesScan {
+export function scanCommandTouchedFiles(workspacePath: string, startedAtMs: number, maxEntries: number = MAX_SCANNED_ENTRIES): CommandTouchedFilesScan {
   const root = path.resolve(workspacePath)
   const threshold = startedAtMs - 1000
   const files: string[] = []

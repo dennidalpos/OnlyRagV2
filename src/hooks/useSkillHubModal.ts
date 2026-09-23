@@ -27,19 +27,17 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   const loadSourcesAndSkills = async (sourceIdToUse?: string) => {
     setIsLoading(true)
     try {
-      const [installed, sourcesList] = await Promise.all([
-        apiService.listInstalledSkills(workspacePath || undefined),
-        apiService.listHubSources(),
-      ])
+      const [installed, sourcesList] = await Promise.all([apiService.listInstalledSkills(workspacePath || undefined), apiService.listHubSources()])
       setInstalledSkills(installed)
       setSources(sourcesList)
 
       const activeSourceId = sourceIdToUse || selectedSourceId || ALL_SKILL_SOURCES
       setSelectedSourceId(activeSourceId)
 
-      const hub = activeSourceId === ALL_SKILL_SOURCES
-        ? await apiService.listHubSkillsAcrossSources(workspacePath || undefined)
-        : await apiService.listHubSkillsBySource(activeSourceId, workspacePath || undefined)
+      const hub =
+        activeSourceId === ALL_SKILL_SOURCES
+          ? await apiService.listHubSkillsAcrossSources(workspacePath || undefined)
+          : await apiService.listHubSkillsBySource(activeSourceId, workspacePath || undefined)
       setHubSkills(hub)
     } catch (err: any) {
       logger.error('SkillHubModal', `Error loading skills/sources: ${err.message}`)
@@ -74,9 +72,10 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
     setIsLoading(true)
     if (forceRefresh) setHubSkills([]) // Clear previous items when explicitly refreshing
     try {
-      const hub = newSourceId === ALL_SKILL_SOURCES
-        ? await apiService.listHubSkillsAcrossSources(workspacePath || undefined, forceRefresh)
-        : await apiService.listHubSkillsBySource(newSourceId, workspacePath || undefined, forceRefresh)
+      const hub =
+        newSourceId === ALL_SKILL_SOURCES
+          ? await apiService.listHubSkillsAcrossSources(workspacePath || undefined, forceRefresh)
+          : await apiService.listHubSkillsBySource(newSourceId, workspacePath || undefined, forceRefresh)
       setHubSkills(hub)
     } catch (err: any) {
       logger.error('SkillHubModal', `Error changing source: ${err.message}`)
@@ -91,9 +90,10 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
     if (tab === 'hub') {
       setIsLoading(true)
       try {
-        const hub = selectedSourceId === ALL_SKILL_SOURCES
-          ? await apiService.listHubSkillsAcrossSources(workspacePath || undefined)
-          : await apiService.listHubSkillsBySource(selectedSourceId, workspacePath || undefined)
+        const hub =
+          selectedSourceId === ALL_SKILL_SOURCES
+            ? await apiService.listHubSkillsAcrossSources(workspacePath || undefined)
+            : await apiService.listHubSkillsBySource(selectedSourceId, workspacePath || undefined)
         setHubSkills(hub)
       } catch (err: any) {
         logger.error('SkillHubModal', `Error fetching hub skills on tab switch: ${err.message}`)
@@ -108,9 +108,7 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
 
   const handleToggleActive = async (skillId: string, currentActive: boolean) => {
     await apiService.toggleSkillActive(skillId, !currentActive)
-    setInstalledSkills((prev) =>
-      prev.map((s) => (s.id === skillId || s.name === skillId ? { ...s, isActive: !currentActive } : s))
-    )
+    setInstalledSkills((prev) => prev.map((s) => (s.id === skillId || s.name === skillId ? { ...s, isActive: !currentActive } : s)))
   }
 
   const handleInstallFromHub = async (hubSkillId: string) => {
@@ -121,9 +119,7 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
       if (res.success) {
         setActionMessage({ type: 'success', text: t('skills.msgInstalled', { name: hubSkillId }) })
         // Mark as installed in local hubSkills state immediately
-        setHubSkills((prev) =>
-          prev.map((s) => (s.id === hubSkillId ? { ...s, isInstalled: true } : s))
-        )
+        setHubSkills((prev) => prev.map((s) => (s.id === hubSkillId ? { ...s, isInstalled: true } : s)))
         // Refresh installed skills in background without triggering full-page loading or scroll reset
         const installed = await apiService.listInstalledSkills(workspacePath || undefined)
         setInstalledSkills(installed)

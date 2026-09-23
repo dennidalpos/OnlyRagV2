@@ -12,17 +12,16 @@ const LANGUAGE_MARKERS: Record<SupportedLanguage, ReadonlySet<string>> = {
 
 function detectLanguage(text: string): SupportedLanguage | null {
   const words = text.toLocaleLowerCase().match(/[\p{L}]+/gu) || []
-  const scores = Object.entries(LANGUAGE_MARKERS).map(([language, markers]) => ({
-    language: language as SupportedLanguage,
-    score: words.reduce((total, word) => total + Number(markers.has(word)), 0),
-  })).sort((left, right) => right.score - left.score)
+  const scores = Object.entries(LANGUAGE_MARKERS)
+    .map(([language, markers]) => ({
+      language: language as SupportedLanguage,
+      score: words.reduce((total, word) => total + Number(markers.has(word)), 0),
+    }))
+    .sort((left, right) => right.score - left.score)
   return scores[0].score >= 2 && scores[0].score > scores[1].score ? scores[0].language : null
 }
 
-export function validateInterviewQuestionLanguage(
-  prompt: string,
-  questions: readonly InterviewQuestion[]
-): string | null {
+export function validateInterviewQuestionLanguage(prompt: string, questions: readonly InterviewQuestion[]): string | null {
   const requestLanguage = detectLanguage(prompt)
   if (!requestLanguage) return null
   const mismatch = questions.find((question) => {
@@ -32,14 +31,9 @@ export function validateInterviewQuestionLanguage(
   return mismatch ? `Question ${mismatch.id} does not match the request language` : null
 }
 
-export type InterviewAnswerValidation =
-  | { valid: true; answers: UserInterviewAnswer[] }
-  | { valid: false; error: string }
+export type InterviewAnswerValidation = { valid: true; answers: UserInterviewAnswer[] } | { valid: false; error: string }
 
-export function validateInterviewAnswers(
-  questions: readonly InterviewQuestion[],
-  answers: readonly UserInterviewAnswer[]
-): InterviewAnswerValidation {
+export function validateInterviewAnswers(questions: readonly InterviewQuestion[], answers: readonly UserInterviewAnswer[]): InterviewAnswerValidation {
   if (questions.length === 0 && answers.length > 0) return { valid: false, error: 'Expected questions are required' }
   if (answers.length !== questions.length) return { valid: false, error: 'Every current question needs one explicit answer' }
 

@@ -30,7 +30,6 @@ export function registerWorkspaceIpcHandlers() {
     return workspaceAppService.listFiles(payload.targetPath)
   })
 
-
   ipcMain.handle('workspace:read-file', async (_event: unknown, filePath: string, startLine?: number, endLine?: number) => {
     const payload = workspaceReadFilePayloadSchema.parse({ filePath, startLine, endLine })
     return workspaceAppService.readFile(payload.filePath, payload.startLine, payload.endLine)
@@ -45,7 +44,6 @@ export function registerWorkspaceIpcHandlers() {
     const payload = workspaceReplaceChunkPayloadSchema.parse({ filePath, targetContent, replacementContent })
     return workspaceAppService.replaceChunk(payload.filePath, payload.targetContent, payload.replacementContent)
   })
-
 
   ipcMain.handle('workspace:grep-search', async (_event: unknown, dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean) => {
     const payload = workspaceGrepSearchPayloadSchema.parse({ dirPath, query, isRegex, caseInsensitive })
@@ -70,7 +68,6 @@ export function registerWorkspaceIpcHandlers() {
     const payload = workspaceDownloadFilePayloadSchema.parse({ url, targetFilePath, workspaceRoot })
     return workspaceAppService.downloadFile(payload.url, payload.targetFilePath, payload.workspaceRoot)
   })
-
 
   ipcMain.handle('workspace:get-git-status-and-diff', async (_event: unknown, workspaceRoot?: string) => {
     return workspaceAppService.getGitStatusAndDiff(workspaceRoot)

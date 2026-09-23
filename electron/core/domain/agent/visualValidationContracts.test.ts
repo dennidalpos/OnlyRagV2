@@ -25,21 +25,25 @@ describe('visual validation contracts', () => {
   })
 
   it('requires evidence explanations for unavailable or incomplete output', () => {
-    expect(visualValidationResultSchema.safeParse({
-      status: 'UNAVAILABLE',
-      screenshot: { status: 'unavailable' },
-      dom: { status: 'unavailable' },
-      console: [],
-      http: [],
-      redaction: { applied: false, fields: [] },
-    }).success).toBe(false)
-    expect(visualValidationResultSchema.safeParse({
-      status: 'verified',
-      screenshot: { status: 'available' },
-      dom: { status: 'available', content: '<main />' },
-      console: [],
-      http: [],
-      redaction: { applied: false, fields: [] },
-    }).success).toBe(false)
+    expect(
+      visualValidationResultSchema.safeParse({
+        status: 'UNAVAILABLE',
+        screenshot: { status: 'unavailable' },
+        dom: { status: 'unavailable' },
+        console: [],
+        http: [],
+        redaction: { applied: false, fields: [] },
+      }).success,
+    ).toBe(false)
+    expect(
+      visualValidationResultSchema.safeParse({
+        status: 'verified',
+        screenshot: { status: 'available' },
+        dom: { status: 'available', content: '<main />' },
+        console: [],
+        http: [],
+        redaction: { applied: false, fields: [] },
+      }).success,
+    ).toBe(false)
   })
 })

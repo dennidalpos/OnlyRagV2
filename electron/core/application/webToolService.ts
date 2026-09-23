@@ -51,15 +51,16 @@ export class WebToolService {
     }
 
     this.dependencies.recordBeforeModification(pathCheck.safePath)
-    const downloadFile = this.dependencies.downloadFile || ((targetUrl, targetPath, workspaceRoot, abortSignal) =>
-      webClient.downloadFile(targetUrl, targetPath, workspaceRoot, abortSignal))
+    const downloadFile =
+      this.dependencies.downloadFile ||
+      ((targetUrl, targetPath, workspaceRoot, abortSignal) => webClient.downloadFile(targetUrl, targetPath, workspaceRoot, abortSignal))
     const result = await downloadFile(url, pathCheck.safePath, workspacePath, signal)
     if (!result.success) {
       return { outcome: 'failure', outputForHistory: `Download failed from ${url}: ${result.error}`, logMessage: `Download File Failed: ${result.error}` }
     }
 
-    const hashFile = this.dependencies.hashFile || ((targetPath: string) =>
-      crypto.createHash('sha256').update(documentIoRepository.readBytes(targetPath)).digest('hex'))
+    const hashFile =
+      this.dependencies.hashFile || ((targetPath: string) => crypto.createHash('sha256').update(documentIoRepository.readBytes(targetPath)).digest('hex'))
     const provenance = hashFile(pathCheck.safePath)
     return {
       outcome: 'success',

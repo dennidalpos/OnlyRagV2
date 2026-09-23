@@ -4,11 +4,7 @@ import { projectPendingChange } from '../../../../../../shared/domain/agent/pend
 import { FILE_MUTATION_TOOL_TO_PROPOSAL_TYPE } from '../toolExecutionContracts'
 
 /** Rewrites a mutation to the subset of hunks explicitly approved by the user. */
-export function reconcileApprovedHunks(
-  parsedTool: AgentToolCall,
-  approvedHunkIndices: number[] | undefined,
-  beforeContent: string,
-): AgentToolCall {
+export function reconcileApprovedHunks(parsedTool: AgentToolCall, approvedHunkIndices: number[] | undefined, beforeContent: string): AgentToolCall {
   if (!approvedHunkIndices) return parsedTool
   const proposalType = FILE_MUTATION_TOOL_TO_PROPOSAL_TYPE[parsedTool.tool]
   if (!proposalType) return parsedTool

@@ -30,7 +30,9 @@ export class SessionHistoryRepository {
   private async runExclusive<T>(operation: () => Promise<T>): Promise<T> {
     const previous = this.mutationTail
     let release: (() => void) | undefined
-    this.mutationTail = new Promise<void>((resolve) => { release = resolve })
+    this.mutationTail = new Promise<void>((resolve) => {
+      release = resolve
+    })
     await previous.catch(() => undefined)
     try {
       return await operation()
@@ -96,9 +98,7 @@ export class SessionHistoryRepository {
       const raw = await fs.promises.readFile(filePath, 'utf-8')
       const parsed = JSON.parse(raw) as SessionHistoryStore
       if (!parsed || !Array.isArray(parsed.sessions)) return []
-      return parsed.sessions
-        .map((session) => normalizeSession(session))
-        .filter((session): session is CodingSession => session !== null)
+      return parsed.sessions.map((session) => normalizeSession(session)).filter((session): session is CodingSession => session !== null)
     } catch (err: any) {
       logger.log('WARN', 'SessionHistoryRepo', `Failed reading session history at ${filePath}: ${err.message}`)
       return []
@@ -138,9 +138,7 @@ export class SessionHistoryRepository {
       const targetDir = this.getStorageDir(workspacePath)
       const targetSessions = await this.readStoreAtDir(targetDir)
       const targetIds = new Set(targetSessions.map((session) => session.id))
-      const migrated = standaloneSessions
-        .filter((session) => !targetIds.has(session.id))
-        .map((session) => ({ ...session, workspacePath }))
+      const migrated = standaloneSessions.filter((session) => !targetIds.has(session.id)).map((session) => ({ ...session, workspacePath }))
       const targetSaved = await this.writeStoreAtDir(targetDir, sortSessionsByRecency([...targetSessions, ...migrated]))
       if (!targetSaved) return 0
 

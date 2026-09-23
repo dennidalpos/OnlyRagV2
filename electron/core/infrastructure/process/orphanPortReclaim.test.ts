@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  matchesSidecarOwnership,
-  parseListeningPidFromNetstat,
-} from './orphanPortReclaim'
+import { matchesSidecarOwnership, parseListeningPidFromNetstat } from './orphanPortReclaim'
 
 const NETSTAT_OUTPUT = [
   '',

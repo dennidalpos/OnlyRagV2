@@ -110,7 +110,7 @@ describe('SkillMatcher Domain Tests', () => {
         activeFileContent: 'from fastapi import APIRouter, Depends\nfrom pydantic import BaseModel',
         workspacePath: 'D:/Projects/fastapi-backend',
       },
-      mockSkills
+      mockSkills,
     )
 
     expect(matched.some((s) => s.id === 'fastapi')).toBe(true)
@@ -122,7 +122,7 @@ describe('SkillMatcher Domain Tests', () => {
         userTask: 'Fix button responsive layout',
         projectStack: ['react', 'tailwindcss', 'vite'],
       },
-      mockSkills
+      mockSkills,
     )
 
     expect(matched.some((s) => s.id === 'react19')).toBe(true)
@@ -136,7 +136,7 @@ describe('SkillMatcher Domain Tests', () => {
         projectStack: ['react', 'typescript'],
       },
       mockSkills,
-      1
+      1,
     )
 
     expect(matched.length).toBe(1)
@@ -175,7 +175,7 @@ describe('SkillMatcher Domain Tests', () => {
         projectStack: ['python', 'bigquery'],
       },
       hubSkills,
-      8.0
+      8.0,
     )
 
     expect(matches.length).toBe(1)

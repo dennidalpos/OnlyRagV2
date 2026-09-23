@@ -14,13 +14,7 @@ import type { OllamaContextReuseDecision } from '../domain/agent/ollamaContextCa
 import type { TurnToolPolicy } from '../domain/agent/turnToolPolicy'
 import type { ResponseInterpreterState } from './agentOrchestratorResponseInterpreterTypes'
 
-
-export type EmitLog = (
-  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
-  message: string,
-  detail?: string,
-  meta?: Partial<AgentLogEntry>
-) => void
+export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface TurnDispatchContext {
   userTask: string
@@ -85,9 +79,7 @@ export interface PreparedAgentTurn {
   toolPolicy: TurnToolPolicy
 }
 
-export type TurnDispatchOutcome =
-  | { outcome: 'return'; result: AgentTaskResult }
-  | { outcome: 'proceed'; data: TurnDispatchData }
+export type TurnDispatchOutcome = { outcome: 'return'; result: AgentTaskResult } | { outcome: 'proceed'; data: TurnDispatchData }
 
 export interface ModelSelection {
   targetModel: string

@@ -117,10 +117,7 @@ export async function collectTurnContext(ctx: TurnDispatchContext): Promise<Prep
   const selection = selectModelForTurn(ctx)
   freezeContextWindow(ctx, selection.runtimeOpts)
   const { assembled, compactionResult, turnPrompt, toolPolicy } = await assembleTurnPrompt(ctx, selection, compiledHistoryBlock)
-  selection.runtimeOpts.num_predict = calculateAvailableOutputTokens(
-    turnPrompt,
-    selection.runtimeOpts.num_ctx,
-  )
+  selection.runtimeOpts.num_predict = calculateAvailableOutputTokens(turnPrompt, selection.runtimeOpts.num_ctx)
   if (ctx.session.ollamaRuntimeProfile?.model === selection.targetModel) {
     ctx.session.ollamaRuntimeProfile.options.num_predict = selection.runtimeOpts.num_predict
   }

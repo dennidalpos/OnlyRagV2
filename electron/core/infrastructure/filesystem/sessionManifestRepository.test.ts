@@ -53,10 +53,7 @@ describe('SessionManifestRepository', () => {
     const second = makeManifest(workspaceRoot)
     second.configHash = 'c'.repeat(64)
 
-    await expect(Promise.all([
-      repository.saveManifest(first),
-      repository.saveManifest(second),
-    ])).resolves.toEqual([true, true])
+    await expect(Promise.all([repository.saveManifest(first), repository.saveManifest(second)])).resolves.toEqual([true, true])
 
     const loaded = await repository.loadManifest(first.sessionId, workspaceRoot)
     expect(loaded?.configHash).toBe(second.configHash)

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  MAX_FAILURES_PER_RECOVERY_CATEGORY,
-  recordRecoveryFailure,
-  recoveryStopDiagnostic,
-} from './recoveryBudget'
+import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recordRecoveryFailure, recoveryStopDiagnostic } from './recoveryBudget'
 
 describe('recoveryBudget', () => {
   it('allows one correction and stops on the second equivalent failure', () => {

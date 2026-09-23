@@ -46,7 +46,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
         parameters: { filePath, content: 'Hello AI Agent' },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(writeRes.outputForHistory).toContain('Successfully wrote file')
@@ -58,7 +58,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
         parameters: { filePath },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(readRes.outputForHistory).toContain(`[FILE VERSION: ${contentVersion('Hello AI Agent')}]`)
@@ -69,23 +69,32 @@ describe('AgentToolExecutorService Unit Tests', () => {
     const filePath = path.join(tempDir, 'concurrent.ts')
     fs.writeFileSync(filePath, 'export const value = 2\n', 'utf-8')
 
-    const rejected = await agentToolExecutorService.executeTool({
-      tool: 'write_file',
-      parameters: {
-        filePath,
-        content: 'export const value = 3\n',
-        expectedContentHash: contentVersion('export const value = 1\n'),
+    const rejected = await agentToolExecutorService.executeTool(
+      {
+        tool: 'write_file',
+        parameters: {
+          filePath,
+          content: 'export const value = 3\n',
+          expectedContentHash: contentVersion('export const value = 1\n'),
+        },
       },
-    }, tempDir, settings)
+      tempDir,
+      settings,
+    )
 
     expect(rejected.outputForHistory).toContain('[FILE VERSION CONFLICT')
     expect(rejected.outputForHistory).toContain('- export const value = 2')
     expect(rejected.outputForHistory).toContain('+ export const value = 3')
     expect(fs.readFileSync(filePath, 'utf-8')).toBe('export const value = 2\n')
 
-    const missingVersion = await agentToolExecutorService.executeTool({
-      tool: 'write_file', parameters: { filePath, content: 'export const value = 4\n' },
-    }, tempDir, settings)
+    const missingVersion = await agentToolExecutorService.executeTool(
+      {
+        tool: 'write_file',
+        parameters: { filePath, content: 'export const value = 4\n' },
+      },
+      tempDir,
+      settings,
+    )
     expect(missingVersion.outputForHistory).toContain('Expected: a version from read_file')
     expect(fs.readFileSync(filePath, 'utf-8')).toBe('export const value = 2\n')
   })
@@ -124,11 +133,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
     }
     const executor = new AgentToolExecutorService(undefined, runner as never)
 
-    const result = await executor.executeTool(
-      { tool: 'validate_visual_artifact', parameters: { artifactPath: 'dist/index.html' } },
-      tempDir,
-      settings,
-    )
+    const result = await executor.executeTool({ tool: 'validate_visual_artifact', parameters: { artifactPath: 'dist/index.html' } }, tempDir, settings)
 
     expect(runner.captureEvidence).toHaveBeenCalledWith(
       { artifactPath: 'dist/index.html' },
@@ -145,11 +150,10 @@ describe('AgentToolExecutorService Unit Tests', () => {
   describe('web research directives', () => {
     it('blocks network tools before the web client in offline-strict mode', async () => {
       const search = vi.spyOn(webClient, 'searchWeb')
-      const result = await agentToolExecutorService.executeTool(
-        { tool: 'web_search', parameters: { query: 'should never leave process' } },
-        tempDir,
-        { ...settings, capabilityPolicyMode: 'offline-strict' },
-      )
+      const result = await agentToolExecutorService.executeTool({ tool: 'web_search', parameters: { query: 'should never leave process' } }, tempDir, {
+        ...settings,
+        capabilityPolicyMode: 'offline-strict',
+      })
 
       expect(result).toMatchObject({ isTerminal: true })
       expect(result.outputForHistory).toContain('[POLICY BLOCK]')
@@ -174,11 +178,10 @@ describe('AgentToolExecutorService Unit Tests', () => {
         tempDir,
         { ...settings, capabilityPolicyMode: 'offline-strict' },
       )
-      const installResult = await agentToolExecutorService.executeTool(
-        { tool: 'ensure_tool', parameters: { toolName: 'node' } },
-        tempDir,
-        { ...settings, capabilityPolicyMode: 'offline-strict' },
-      )
+      const installResult = await agentToolExecutorService.executeTool({ tool: 'ensure_tool', parameters: { toolName: 'node' } }, tempDir, {
+        ...settings,
+        capabilityPolicyMode: 'offline-strict',
+      })
 
       expect(downloadResult.outputForHistory).toContain('[POLICY BLOCK]')
       expect(installResult.outputForHistory).toContain('[POLICY BLOCK]')
@@ -186,11 +189,10 @@ describe('AgentToolExecutorService Unit Tests', () => {
     })
 
     it('blocks opening an external URL in the browser before Electron shell access', async () => {
-      const result = await agentToolExecutorService.executeTool(
-        { tool: 'open_in_browser', parameters: { url: 'https://example.test' } },
-        tempDir,
-        { ...settings, capabilityPolicyMode: 'offline-strict' },
-      )
+      const result = await agentToolExecutorService.executeTool({ tool: 'open_in_browser', parameters: { url: 'https://example.test' } }, tempDir, {
+        ...settings,
+        capabilityPolicyMode: 'offline-strict',
+      })
 
       expect(result.outputForHistory).toContain('[POLICY BLOCK]')
     })
@@ -200,17 +202,14 @@ describe('AgentToolExecutorService Unit Tests', () => {
       const executor = new AgentToolExecutorService(auditRepository)
       const search = vi.spyOn(webClient, 'searchWeb')
 
-      const result = await executor.executeTool(
-        { tool: 'web_search', parameters: { query: 'must not leave the process' } },
-        tempDir,
-        { ...settings, capabilityPolicyMode: 'network-approved' },
-      )
+      const result = await executor.executeTool({ tool: 'web_search', parameters: { query: 'must not leave the process' } }, tempDir, {
+        ...settings,
+        capabilityPolicyMode: 'network-approved',
+      })
 
       expect(result.outputForHistory).toContain('Explicit consent is required')
       expect(search).not.toHaveBeenCalled()
-      await expect(auditRepository.load()).resolves.toMatchObject([
-        { mode: 'network-approved', allowed: false, toolName: 'web_search' },
-      ])
+      await expect(auditRepository.load()).resolves.toMatchObject([{ mode: 'network-approved', allowed: false, toolName: 'web_search' }])
     })
 
     it('allows network-approved access only when the approval gate supplies a consent id and persists it', async () => {
@@ -241,11 +240,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
         results: [{ title: 'Library API docs', url: 'https://example.com/docs', snippet: 'Current API reference' }],
       })
 
-      const result = await agentToolExecutorService.executeTool(
-        { tool: 'web_search', parameters: { query: 'library current API' } },
-        tempDir,
-        settings
-      )
+      const result = await agentToolExecutorService.executeTool({ tool: 'web_search', parameters: { query: 'library current API' } }, tempDir, settings)
 
       expect(result.outputForHistory).toContain('[WEB RESEARCH DIRECTIVE]')
       expect(result.outputForHistory).toContain('IMMEDIATE NEXT tool call MUST be fetch_web_content')
@@ -262,7 +257,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
       const result = await agentToolExecutorService.executeTool(
         { tool: 'fetch_web_content', parameters: { url: 'https://example.com/docs' } },
         tempDir,
-        settings
+        settings,
       )
 
       expect(result.outputForHistory).toContain('UNTRUSTED REFERENCE')
@@ -311,7 +306,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
       expect(reconciled.parameters.expectedContentHash).toBe(contentVersion('line1\nline2\nline3\nline4\nline5'))
     })
 
-    it('should end-to-end write only the approved hunk\'s content to disk when the reconciled call is executed', async () => {
+    it("should end-to-end write only the approved hunk's content to disk when the reconciled call is executed", async () => {
       const filePath = path.join(tempDir, 'partial-exec.txt')
       fs.writeFileSync(filePath, 'line1\nline2\nline3\nline4\nline5', 'utf-8')
       const tool = {
@@ -354,7 +349,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
         parameters: { filePath, content: '{\n  " browserslist": []\n' },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).toContain('PRE-COMMIT AST VALIDATION ERROR')
@@ -371,7 +366,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
         parameters: { filePath, content: '{"name": "onlyrag"}' },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).toContain('Successfully wrote file')
@@ -380,11 +375,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
 
   it('should report a semantic TypeScript error immediately after write_file persists valid syntax', async () => {
     fs.mkdirSync(path.join(tempDir, 'src'))
-    fs.writeFileSync(
-      path.join(tempDir, 'tsconfig.json'),
-      JSON.stringify({ compilerOptions: { strict: true, noEmit: true }, include: ['src'] }),
-      'utf-8'
-    )
+    fs.writeFileSync(path.join(tempDir, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true, noEmit: true }, include: ['src'] }), 'utf-8')
     const filePath = path.join(tempDir, 'src', 'value.ts')
 
     const res = await agentToolExecutorService.executeTool(
@@ -393,7 +384,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
         parameters: { filePath, content: 'const value: number = "wrong"\nexport { value }\n' },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(fs.existsSync(filePath)).toBe(true)
@@ -435,7 +426,7 @@ export const processUserData = async (data: UserDTO) => {
         parameters: { filePath },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).toContain('[CODE SYMBOLS:')
@@ -468,7 +459,7 @@ async def async_handler():
         parameters: { filePath: pyPath, symbolType: 'class' },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).toContain('[class] BaseModel')
@@ -486,7 +477,7 @@ async def async_handler():
         parameters: { filePath, targetContent: 'const a = 1;', replacementContent: 'const a = 100;' },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(successRes.outputForHistory).toContain('Successfully replaced content')
@@ -497,7 +488,7 @@ async def async_handler():
         parameters: { filePath, targetContent: 'non_existent_code_chunk', replacementContent: 'const x = 0;' },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(failRes.outputForHistory).toContain('[REPLACE FILE ERROR')
@@ -510,7 +501,7 @@ async def async_handler():
         parameters: { command: 'git reset --hard HEAD' },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).toContain('[SECURITY GUARDRAIL BLOCK]')
@@ -519,16 +510,12 @@ async def async_handler():
 
   it('gives the model the failure reason even when the command also printed to stdout', async () => {
     // The end-to-end shape of every failing `npm run build` in session-1787562597025-q8a5: a banner on stdout, the actual cause on stderr.
-    fs.writeFileSync(
-      path.join(tempDir, 'fail.js'),
-      "console.log('BANNER_LINE'); console.error('CAUSE_LINE'); process.exit(1);",
-      'utf-8'
-    )
+    fs.writeFileSync(path.join(tempDir, 'fail.js'), "console.log('BANNER_LINE'); console.error('CAUSE_LINE'); process.exit(1);", 'utf-8')
 
     const res = await agentToolExecutorService.executeTool(
       { tool: 'run_command', parameters: { command: 'node fail.js', timeoutSeconds: 30 } },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).toContain('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]')
@@ -552,7 +539,7 @@ async def async_handler():
       const res = await agentToolExecutorService.executeTool(
         { tool: 'write_file', parameters: { filePath: 'src/services/', content: 'export const api = 1' } },
         tempDir,
-        settings
+        settings,
       )
 
       expect(res.outputForHistory).toContain('[WRITE_FILE REJECTED: PATH IS A DIRECTORY]')
@@ -563,7 +550,7 @@ async def async_handler():
       const res = await agentToolExecutorService.executeTool(
         { tool: 'write_file', parameters: { filePath: 'src/services/api.ts', content: 'export const api = 1' } },
         tempDir,
-        settings
+        settings,
       )
 
       expect(res.outputForHistory).toContain('Successfully wrote file')
@@ -580,7 +567,7 @@ async def async_handler():
           parameters: { filePath: misplaced, content: '<div id="root"></div>' },
         },
         tempDir,
-        settings
+        settings,
       )
 
       expect(res.outputForHistory).toContain('[ROOT CONFIG PATH REJECTED]')
@@ -596,7 +583,7 @@ async def async_handler():
           parameters: { filePath: rootEntry, content: '<div id="root"></div>' },
         },
         tempDir,
-        settings
+        settings,
       )
 
       expect(res.outputForHistory).toContain('Successfully wrote file')
@@ -606,11 +593,7 @@ async def async_handler():
 
   describe('undeclared import gate', () => {
     it('tells the model immediately when a written file imports a package the project never declared', async () => {
-      fs.writeFileSync(
-        path.join(tempDir, 'package.json'),
-        JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0', tailwindcss: '^3.0.0' } }),
-        'utf-8'
-      )
+      fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0', tailwindcss: '^3.0.0' } }), 'utf-8')
 
       const res = await agentToolExecutorService.executeTool(
         {
@@ -621,7 +604,7 @@ async def async_handler():
           },
         },
         tempDir,
-        settings
+        settings,
       )
 
       // The write still lands: the code is mostly right and discarding it costs the turn.
@@ -632,16 +615,12 @@ async def async_handler():
     })
 
     it('says nothing about a file whose imports are all declared', async () => {
-      fs.writeFileSync(
-        path.join(tempDir, 'package.json'),
-        JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }),
-        'utf-8'
-      )
+      fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }), 'utf-8')
 
       const res = await agentToolExecutorService.executeTool(
         { tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: "import React from 'react'\nexport default function A() { return null }" } },
         tempDir,
-        settings
+        settings,
       )
 
       expect(res.outputForHistory).toBe('Successfully wrote file src/App.tsx (created new file)')
@@ -653,25 +632,25 @@ async def async_handler():
     fs.writeFileSync(
       path.join(tempDir, 'eresolve.js'),
       [
-        "const lines = [",
+        'const lines = [',
         "  'npm error code ERESOLVE',",
         "  'npm error ERESOLVE unable to resolve dependency tree',",
         "  'npm error While resolving: project-dashboard-task@1.0.0',",
         "  'npm error Found: vite@4.5.14',",
-        "  'npm error   dev vite@\"^4.2.3\" from the root project',",
+        '  \'npm error   dev vite@"^4.2.3" from the root project\',',
         "  'npm error Could not resolve dependency:',",
-        "  'npm error peer vite@\"^8.0.0\" from @vitejs/plugin-react@6.1.0',",
-        "];",
+        '  \'npm error peer vite@"^8.0.0" from @vitejs/plugin-react@6.1.0\',',
+        '];',
         "console.error(lines.join('\\n'));",
-        "process.exit(1);",
+        'process.exit(1);',
       ].join('\n'),
-      'utf-8'
+      'utf-8',
     )
 
     const res = await agentToolExecutorService.executeTool(
       { tool: 'run_command', parameters: { command: 'node eresolve.js', timeoutSeconds: 30 } },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).toContain('[DEPENDENCY VERSION CONFLICT — ERESOLVE]')
@@ -683,11 +662,7 @@ async def async_handler():
   /** Measured 2026-08-25T19:16, session live-full-task, step 34. */
   describe('missing dependency diagnostic', () => {
     function failingBuild(lines: string[]): string {
-      return [
-        'const lines = ' + JSON.stringify(lines) + ';',
-        'for (const line of lines) console.error(line);',
-        'process.exit(2);',
-      ].join('\n')
+      return ['const lines = ' + JSON.stringify(lines) + ';', 'for (const line of lines) console.error(line);', 'process.exit(2);'].join('\n')
     }
 
     it('does not call an unwritten project file a missing dependency', async () => {
@@ -697,13 +672,13 @@ async def async_handler():
           "src/services/index.ts(2,15): error TS2307: Cannot find module './api' or its corresponding type declarations.",
           "src/services/index.ts(3,15): error TS2307: Cannot find module './auth' or its corresponding type declarations.",
         ]),
-        'utf-8'
+        'utf-8',
       )
 
       const res = await agentToolExecutorService.executeTool(
         { tool: 'run_command', parameters: { command: 'node build.js', timeoutSeconds: 30 } },
         tempDir,
-        settings
+        settings,
       )
 
       // `packageOfSpecifier` already knows relative imports belong to no package; this gate now asks it.
@@ -720,13 +695,13 @@ async def async_handler():
           `src/components/TaskCard.tsx(3,10): error TS2614: Module '"../components/Button"' has no exported member 'Button'. Did you mean to use 'import Button from "../components/Button"' instead?`,
           "src/services/index.ts(2,15): error TS2307: Cannot find module './api' or its corresponding type declarations.",
         ]),
-        'utf-8'
+        'utf-8',
       )
 
       const res = await agentToolExecutorService.executeTool(
         { tool: 'run_command', parameters: { command: 'node build.js', timeoutSeconds: 30 } },
         tempDir,
-        settings
+        settings,
       )
 
       expect(res.outputForHistory).not.toContain('[MISSING DEPENDENCY DIAGNOSTIC]')
@@ -738,16 +713,14 @@ async def async_handler():
     it('names the package instead of shipping the literal placeholder', async () => {
       fs.writeFileSync(
         path.join(tempDir, 'build.js'),
-        failingBuild([
-          "src/main.tsx(2,25): error TS2307: Cannot find module 'react-router-dom' or its corresponding type declarations.",
-        ]),
-        'utf-8'
+        failingBuild(["src/main.tsx(2,25): error TS2307: Cannot find module 'react-router-dom' or its corresponding type declarations."]),
+        'utf-8',
       )
 
       const res = await agentToolExecutorService.executeTool(
         { tool: 'run_command', parameters: { command: 'node build.js', timeoutSeconds: 30 } },
         tempDir,
-        settings
+        settings,
       )
 
       expect(res.outputForHistory).toContain('[MISSING DEPENDENCY DIAGNOSTIC]')
@@ -759,18 +732,10 @@ async def async_handler():
 
   describe('redundant install guard', () => {
     it('skips an install whose packages are both declared and present in node_modules', async () => {
-      fs.writeFileSync(
-        path.join(tempDir, 'package.json'),
-        JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }),
-        'utf-8'
-      )
+      fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }), 'utf-8')
       fs.mkdirSync(path.join(tempDir, 'node_modules', 'react'), { recursive: true })
 
-      const res = await agentToolExecutorService.executeTool(
-        { tool: 'run_command', parameters: { command: 'npm install react' } },
-        tempDir,
-        settings
-      )
+      const res = await agentToolExecutorService.executeTool({ tool: 'run_command', parameters: { command: 'npm install react' } }, tempDir, settings)
 
       expect(res.outputForHistory).toContain('[REDUNDANT_INSTALL_SKIP]')
       expect(res.isTerminal).toBe(true)
@@ -778,17 +743,13 @@ async def async_handler():
 
     it('lets the install run when the package is declared but node_modules is empty', async () => {
       // The regression that cost session-1787562597025-q8a5 its build: the agent had authored package.json itself, so every dependency read as "already installed" while nothing was on disk, and the guard cancelled the only npm install of the run.
-      fs.writeFileSync(
-        path.join(tempDir, 'package.json'),
-        JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }),
-        'utf-8'
-      )
+      fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }), 'utf-8')
 
       const res = await agentToolExecutorService.executeTool(
         // --dry-run --offline keeps the assertion about the guard, not about npm's network.
         { tool: 'run_command', parameters: { command: 'npm install react --dry-run --offline --no-audit --no-fund', timeoutSeconds: 30 } },
         tempDir,
-        settings
+        settings,
       )
 
       expect(res.outputForHistory).not.toContain('[REDUNDANT_INSTALL_SKIP]')
@@ -798,17 +759,9 @@ async def async_handler():
   describe('install downgrade guard', () => {
     it('refuses the install that pinned the tree to react@16 in the run of 2026-08-25T12:11', async () => {
       // versionRealityDirective only ever saw `write_file` on package.json, so this command -- which rewrites the same file -- succeeded three times unchallenged (steps 21, 30, 31) and left `react@"^16.14.0" from the root project`.
-      fs.writeFileSync(
-        path.join(tempDir, 'package.json'),
-        JSON.stringify({ name: 'x', dependencies: { react: '^18.2.0' } }),
-        'utf-8'
-      )
+      fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18.2.0' } }), 'utf-8')
 
-      const res = await agentToolExecutorService.executeTool(
-        { tool: 'run_command', parameters: { command: 'npm install react@^16.8.0' } },
-        tempDir,
-        settings
-      )
+      const res = await agentToolExecutorService.executeTool({ tool: 'run_command', parameters: { command: 'npm install react@^16.8.0' } }, tempDir, settings)
 
       expect(res.outputForHistory).toContain('[VERSION DOWNGRADE REFUSED — INSTALL NOT RUN]')
       expect(res.outputForHistory).toContain('"react": "^18.2.0"')
@@ -819,17 +772,13 @@ async def async_handler():
     }, 20000)
 
     it('lets an upgrade through', async () => {
-      fs.writeFileSync(
-        path.join(tempDir, 'package.json'),
-        JSON.stringify({ name: 'x', dependencies: { react: '^18.2.0' } }),
-        'utf-8'
-      )
+      fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18.2.0' } }), 'utf-8')
 
       const res = await agentToolExecutorService.executeTool(
         // --dry-run --offline keeps the assertion about the guard, not about npm's network.
         { tool: 'run_command', parameters: { command: 'npm install react@^19.0.0 --dry-run --offline --no-audit --no-fund', timeoutSeconds: 30 } },
         tempDir,
-        settings
+        settings,
       )
 
       expect(res.outputForHistory).not.toContain('[VERSION DOWNGRADE REFUSED')
@@ -853,7 +802,7 @@ async def async_handler():
         settings,
         undefined,
         undefined,
-        tailwindV4Skill
+        tailwindV4Skill,
       )
 
       expect(res.outputForHistory).toContain('[ACTIVE SKILL CONSTRAINT — MUTATION NOT APPLIED]')
@@ -869,7 +818,7 @@ async def async_handler():
         settings,
         undefined,
         undefined,
-        tailwindV4Skill
+        tailwindV4Skill,
       )
 
       expect(res.outputForHistory).toContain('Successfully wrote file')
@@ -890,7 +839,7 @@ async def async_handler():
         settings,
         undefined,
         undefined,
-        tailwindV4Skill
+        tailwindV4Skill,
       )
       const multi = await agentToolExecutorService.executeTool(
         {
@@ -904,7 +853,7 @@ async def async_handler():
         settings,
         undefined,
         undefined,
-        tailwindV4Skill
+        tailwindV4Skill,
       )
 
       expect(replace.outputForHistory).toContain('[ACTIVE SKILL CONSTRAINT')
@@ -921,17 +870,13 @@ async def async_handler():
 
     beforeEach(() => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(JSON.stringify(registryPackument), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        new Response(JSON.stringify(registryPackument), { status: 200, headers: { 'Content-Type': 'application/json' } }),
       )
       fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x' }), 'utf-8')
     })
 
     it('refuses an old major on the first install of an undeclared package', async () => {
-      const res = await agentToolExecutorService.executeTool(
-        { tool: 'run_command', parameters: { command: 'npm install vite@^4.0.0' } },
-        tempDir,
-        settings
-      )
+      const res = await agentToolExecutorService.executeTool({ tool: 'run_command', parameters: { command: 'npm install vite@^4.0.0' } }, tempDir, settings)
 
       expect(res.outputForHistory).toContain('[STALE INSTALL VERSION — INSTALL NOT RUN]')
       expect(res.outputForHistory).toContain('npm install vite@8.0.0')
@@ -939,11 +884,7 @@ async def async_handler():
     })
 
     it('refuses a range that matches no published version before npm can return ETARGET', async () => {
-      const res = await agentToolExecutorService.executeTool(
-        { tool: 'run_command', parameters: { command: 'npm install vite@^9.3.5' } },
-        tempDir,
-        settings
-      )
+      const res = await agentToolExecutorService.executeTool({ tool: 'run_command', parameters: { command: 'npm install vite@^9.3.5' } }, tempDir, settings)
 
       expect(res.outputForHistory).toContain('[THAT VERSION DOES NOT EXIST — INSTALL NOT RUN]')
       expect(res.outputForHistory).toContain('npm install vite@8.0.0')
@@ -958,7 +899,7 @@ async def async_handler():
         parameters: { command: 'write_file "src/App.tsx" "content"' },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).toContain('[TOOL_AS_SHELL_BLOCK]')
@@ -976,7 +917,7 @@ async def async_handler():
         parameters: { command: 'git reset --hard HEAD' },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).not.toContain('[TOOL_AS_SHELL_BLOCK]')
@@ -993,7 +934,7 @@ async def async_handler():
         parameters: { filePath },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).toContain('[FILE INFO:')
@@ -1013,7 +954,7 @@ async def async_handler():
         parameters: { filePath, content: 'Modified State', expectedContentHash: contentVersion('Original State') },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(fs.readFileSync(filePath, 'utf-8')).toBe('Modified State')
@@ -1025,7 +966,7 @@ async def async_handler():
         parameters: {},
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(rollbackRes.outputForHistory).toContain('[ATOMIC WORKSPACE ROLLBACK EXECUTED]')
@@ -1037,11 +978,19 @@ async def async_handler():
     fs.writeFileSync(filePath, 'V1', 'utf-8')
 
     // Step 1 (as the orchestrator loop would drive it: tool call, then endJournalStep()): V1 -> V2
-    await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: 'V2', expectedContentHash: contentVersion('V1') } }, tempDir, settings)
+    await agentToolExecutorService.executeTool(
+      { tool: 'write_file', parameters: { filePath, content: 'V2', expectedContentHash: contentVersion('V1') } },
+      tempDir,
+      settings,
+    )
     agentToolExecutorService.endJournalStep()
 
     // Step 2: V2 -> V3
-    await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: 'V3', expectedContentHash: contentVersion('V2') } }, tempDir, settings)
+    await agentToolExecutorService.executeTool(
+      { tool: 'write_file', parameters: { filePath, content: 'V3', expectedContentHash: contentVersion('V2') } },
+      tempDir,
+      settings,
+    )
     agentToolExecutorService.endJournalStep()
 
     expect(fs.readFileSync(filePath, 'utf-8')).toBe('V3')
@@ -1071,7 +1020,7 @@ async def async_handler():
         parameters: { command: 'node -e "console.log(\'Tests  5 passed (5)\')"' },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).toContain('[TEST RUN RESULT]')
@@ -1082,14 +1031,10 @@ async def async_handler():
   it('should auto-detect the test command from package.json scripts.test when no explicit command is given', async () => {
     fs.writeFileSync(
       path.join(tempDir, 'package.json'),
-      JSON.stringify({ name: 'fixture', scripts: { test: 'node -e "console.log(\'Tests  2 passed (2)\')"' } })
+      JSON.stringify({ name: 'fixture', scripts: { test: 'node -e "console.log(\'Tests  2 passed (2)\')"' } }),
     )
 
-    const res = await agentToolExecutorService.executeTool(
-      { tool: 'run_tests', parameters: {} },
-      tempDir,
-      settings
-    )
+    const res = await agentToolExecutorService.executeTool({ tool: 'run_tests', parameters: {} }, tempDir, settings)
 
     expect(res.outputForHistory).toContain('auto-detected: package.json scripts.test')
     expect(res.outputForHistory).toContain('2/2 tests passed (vitest)')
@@ -1104,36 +1049,24 @@ async def async_handler():
           test: 'node -e "process.exit(1)"',
           'test:fast': 'node -e "console.log(\'Tests  1 passed (1)\')"',
         },
-      })
+      }),
     )
 
-    const res = await agentToolExecutorService.executeTool(
-      { tool: 'run_tests', parameters: {} },
-      tempDir,
-      settings
-    )
+    const res = await agentToolExecutorService.executeTool({ tool: 'run_tests', parameters: {} }, tempDir, settings)
 
     expect(res.outputForHistory).toContain('auto-detected: package.json scripts["test:fast"]')
     expect(res.outputForHistory).toContain('1/1 tests passed (vitest)')
   }, 15000)
 
   it('should return a graceful message when run_tests has no explicit command and no recognized test runner is found', async () => {
-    const res = await agentToolExecutorService.executeTool(
-      { tool: 'run_tests', parameters: {} },
-      tempDir,
-      settings
-    )
+    const res = await agentToolExecutorService.executeTool({ tool: 'run_tests', parameters: {} }, tempDir, settings)
 
     expect(res.outputForHistory).toContain('No test command specified and no recognized test runner')
     expect(res.logMessage).toBe('run_tests: no test runner detected')
   })
 
   it('should block a destructive run_tests command override via the security guardrail', async () => {
-    const res = await agentToolExecutorService.executeTool(
-      { tool: 'run_tests', parameters: { command: 'git reset --hard HEAD' } },
-      tempDir,
-      settings
-    )
+    const res = await agentToolExecutorService.executeTool({ tool: 'run_tests', parameters: { command: 'git reset --hard HEAD' } }, tempDir, settings)
 
     expect(res.outputForHistory).toContain('[SECURITY GUARDRAIL BLOCK]')
     expect(res.logMessage).toContain('[SECURITY BLOCK]')
@@ -1166,7 +1099,7 @@ async def async_handler():
         parameters: {},
       },
       process.cwd(),
-      settings
+      settings,
     )
     expect(statusRes.outputForHistory).toContain('[GIT STATUS:')
 
@@ -1176,7 +1109,7 @@ async def async_handler():
         parameters: {},
       },
       process.cwd(),
-      settings
+      settings,
     )
     expect(diffRes.outputForHistory).toContain('[GIT DIFF')
   })
@@ -1195,7 +1128,7 @@ async def async_handler():
         parameters: { commitMessage: 'Add file.txt', commitPaths: preview.paths, commitDiffHash: preview.diffHash },
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).toContain('[GIT COMMIT:')
@@ -1212,7 +1145,7 @@ async def async_handler():
         parameters: {},
       },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.outputForHistory).toContain('commitMessage')
@@ -1244,17 +1177,13 @@ async def async_handler():
   it('should report line-level change stats for write_file, distinguishing a new file from an edit', async () => {
     const filePath = path.join(tempDir, 'metrics.txt')
 
-    const created = await agentToolExecutorService.executeTool(
-      { tool: 'write_file', parameters: { filePath, content: 'a\nb\nc' } },
-      tempDir,
-      settings
-    )
+    const created = await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: 'a\nb\nc' } }, tempDir, settings)
     expect(created.changeStats).toEqual({ filePath, additions: 3, deletions: 0 })
 
     const edited = await agentToolExecutorService.executeTool(
       { tool: 'write_file', parameters: { filePath, content: 'a\nB\nc', expectedContentHash: contentVersion('a\nb\nc') } },
       tempDir,
-      settings
+      settings,
     )
     expect(edited.changeStats).toEqual({ filePath, additions: 1, deletions: 1 })
   })
@@ -1267,11 +1196,7 @@ async def async_handler():
       await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: body } }, tempDir, settings)
       const mtimeBefore = fs.statSync(filePath).mtimeMs
 
-      const repeat = await agentToolExecutorService.executeTool(
-        { tool: 'write_file', parameters: { filePath, content: body } },
-        tempDir,
-        settings
-      )
+      const repeat = await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: body } }, tempDir, settings)
 
       expect(repeat.noOpMutation).toBe(true)
       expect(repeat.outputForHistory).toContain('NO-OP WRITE')
@@ -1283,16 +1208,12 @@ async def async_handler():
 
     it('still writes and reports a real edit as a real edit', async () => {
       const filePath = path.join(tempDir, 'changing.ts')
-      await agentToolExecutorService.executeTool(
-        { tool: 'write_file', parameters: { filePath, content: 'export const a = 1\n' } },
-        tempDir,
-        settings
-      )
+      await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: 'export const a = 1\n' } }, tempDir, settings)
 
       const edited = await agentToolExecutorService.executeTool(
         { tool: 'write_file', parameters: { filePath, content: 'export const a = 2\n', expectedContentHash: contentVersion('export const a = 1\n') } },
         tempDir,
-        settings
+        settings,
       )
 
       expect(edited.noOpMutation).toBeUndefined()
@@ -1303,11 +1224,7 @@ async def async_handler():
     it('creates a file that does not exist yet, even with empty content', async () => {
       const filePath = path.join(tempDir, 'brand-new.txt')
 
-      const created = await agentToolExecutorService.executeTool(
-        { tool: 'write_file', parameters: { filePath, content: '' } },
-        tempDir,
-        settings
-      )
+      const created = await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: '' } }, tempDir, settings)
 
       expect(created.noOpMutation).toBeUndefined()
       expect(fs.existsSync(filePath)).toBe(true)
@@ -1321,24 +1238,16 @@ async def async_handler():
     const replaced = await agentToolExecutorService.executeTool(
       { tool: 'replace_file_content', parameters: { filePath, targetContent: 'two', replacementContent: 'TWO' } },
       tempDir,
-      settings
+      settings,
     )
     expect(replaced.changeStats).toEqual({ filePath, additions: 1, deletions: 1 })
 
-    const deleted = await agentToolExecutorService.executeTool(
-      { tool: 'delete_file', parameters: { filePath } },
-      tempDir,
-      settings
-    )
+    const deleted = await agentToolExecutorService.executeTool({ tool: 'delete_file', parameters: { filePath } }, tempDir, settings)
     expect(deleted.changeStats).toEqual({ filePath, additions: 0, deletions: 3 })
   })
 
   it('should refuse to install anything outside the toolchain allow-list', async () => {
-    const res = await agentToolExecutorService.executeTool(
-      { tool: 'ensure_tool', parameters: { toolName: 'docker' } } as any,
-      tempDir,
-      settings
-    )
+    const res = await agentToolExecutorService.executeTool({ tool: 'ensure_tool', parameters: { toolName: 'docker' } } as any, tempDir, settings)
 
     expect(res.outputForHistory).toContain('ENSURE_TOOL REJECTED')
     expect(res.outputForHistory).toContain('not an installable development tool')
@@ -1347,22 +1256,14 @@ async def async_handler():
 
   it('should report an already-installed tool without attempting any installation', async () => {
     // node is running this very test suite, so it is guaranteed present.
-    const res = await agentToolExecutorService.executeTool(
-      { tool: 'ensure_tool', parameters: { toolName: 'node' } } as any,
-      tempDir,
-      settings
-    )
+    const res = await agentToolExecutorService.executeTool({ tool: 'ensure_tool', parameters: { toolName: 'node' } } as any, tempDir, settings)
 
     expect(res.outputForHistory).toContain('already installed')
     expect(res.outputForHistory).not.toContain('winget install')
   })
 
   it('should include the development toolchain inventory in inspect_os_env', async () => {
-    const res = await agentToolExecutorService.executeTool(
-      { tool: 'inspect_os_env', parameters: {} },
-      tempDir,
-      settings
-    )
+    const res = await agentToolExecutorService.executeTool({ tool: 'inspect_os_env', parameters: {} }, tempDir, settings)
 
     expect(res.outputForHistory).toContain('Guest OS Environment')
     expect(res.outputForHistory).toContain('DEVELOPMENT TOOLCHAIN')
@@ -1374,25 +1275,17 @@ async def async_handler():
     const res = await agentToolExecutorService.executeTool(
       { tool: 'replace_file_content', parameters: { filePath, targetContent: 'x', replacementContent: 'y' } },
       tempDir,
-      settings
+      settings,
     )
 
     expect(res.changeStats).toBeUndefined()
   })
 
   it('should handle open_in_browser parameter validation and missing target', async () => {
-    const missingParams = await agentToolExecutorService.executeTool(
-      { tool: 'open_in_browser', parameters: {} },
-      tempDir,
-      settings
-    )
+    const missingParams = await agentToolExecutorService.executeTool({ tool: 'open_in_browser', parameters: {} }, tempDir, settings)
     expect(missingParams.outputForHistory).toContain('missing "filePath" or "url"')
 
-    const missingFile = await agentToolExecutorService.executeTool(
-      { tool: 'open_in_browser', parameters: { filePath: 'nonexistent.html' } },
-      tempDir,
-      settings
-    )
+    const missingFile = await agentToolExecutorService.executeTool({ tool: 'open_in_browser', parameters: { filePath: 'nonexistent.html' } }, tempDir, settings)
     expect(missingFile.outputForHistory).toContain('File not found to open')
   })
 
@@ -1407,27 +1300,19 @@ async def async_handler():
     const listRes = await agentToolExecutorService.executeTool(
       { tool: 'list_files_recursive', parameters: { dirPath: tempDir, maxDepth: 2 } },
       tempDir,
-      settings
+      settings,
     )
     expect(listRes.outputForHistory).toContain('root.txt')
     expect(listRes.outputForHistory).toContain('nested.pdf')
 
-    const infoRes = await agentToolExecutorService.executeTool(
-      { tool: 'get_file_info', parameters: { filePath: file2 } },
-      tempDir,
-      settings
-    )
+    const infoRes = await agentToolExecutorService.executeTool({ tool: 'get_file_info', parameters: { filePath: file2 } }, tempDir, settings)
     expect(infoRes.outputForHistory).toContain('[FILE INFO:')
     expect(infoRes.outputForHistory).toContain('nested.pdf')
   })
 
   it('should execute create_directory, copy_file, and move_file correctly', async () => {
     const newDir = path.join(tempDir, 'new_dir')
-    const createDirRes = await agentToolExecutorService.executeTool(
-      { tool: 'create_directory', parameters: { dirPath: newDir } },
-      tempDir,
-      settings
-    )
+    const createDirRes = await agentToolExecutorService.executeTool({ tool: 'create_directory', parameters: { dirPath: newDir } }, tempDir, settings)
     expect(createDirRes.outputForHistory).toContain('Successfully created directory')
     expect(fs.existsSync(newDir)).toBe(true)
 
@@ -1438,7 +1323,7 @@ async def async_handler():
     const copyRes = await agentToolExecutorService.executeTool(
       { tool: 'copy_file', parameters: { sourcePath: srcFile, targetPath: copyDst } },
       tempDir,
-      settings
+      settings,
     )
     expect(copyRes.outputForHistory).toContain('Successfully copied')
     expect(fs.existsSync(copyDst)).toBe(true)
@@ -1447,11 +1332,10 @@ async def async_handler():
     const moveRes = await agentToolExecutorService.executeTool(
       { tool: 'move_file', parameters: { sourcePath: copyDst, targetPath: moveDst } },
       tempDir,
-      settings
+      settings,
     )
     expect(moveRes.outputForHistory).toContain('Successfully moved')
     expect(fs.existsSync(moveDst)).toBe(true)
     expect(fs.existsSync(copyDst)).toBe(false)
   })
 })
-

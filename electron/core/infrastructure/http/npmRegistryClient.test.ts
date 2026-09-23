@@ -14,8 +14,8 @@ describe('NpmRegistryClient', () => {
           'dist-tags': { latest: '8.0.0' },
           versions: { '4.5.14': {}, '8.0.0': {} },
         }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
     )
 
     await expect(client.lookup('@vitejs/plugin-react')).resolves.toEqual({
@@ -26,7 +26,7 @@ describe('NpmRegistryClient', () => {
     })
     expect(fetchMock).toHaveBeenCalledWith(
       'https://registry.npmjs.org/%40vitejs%2Fplugin-react',
-      expect.objectContaining({ headers: { Accept: 'application/vnd.npm.install-v1+json' } })
+      expect.objectContaining({ headers: { Accept: 'application/vnd.npm.install-v1+json' } }),
     )
   })
 

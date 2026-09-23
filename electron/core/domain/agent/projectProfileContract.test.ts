@@ -20,29 +20,35 @@ describe('ProjectProfile contract', () => {
   })
 
   it('accepts valid profiles and enforces project-count invariants', () => {
-    expect(projectProfileSchema.parse({
-      schemaVersion: 1,
-      workspaceRoot: 'D:/workspace',
-      classification: 'monorepo',
-      projects: [project('root'), project('web')],
-    }).classification).toBe('monorepo')
+    expect(
+      projectProfileSchema.parse({
+        schemaVersion: 1,
+        workspaceRoot: 'D:/workspace',
+        classification: 'monorepo',
+        projects: [project('root'), project('web')],
+      }).classification,
+    ).toBe('monorepo')
 
-    expect(() => projectProfileSchema.parse({
-      schemaVersion: 1,
-      workspaceRoot: 'D:/workspace',
-      classification: 'empty',
-      projects: [project('root')],
-    })).toThrow()
+    expect(() =>
+      projectProfileSchema.parse({
+        schemaVersion: 1,
+        workspaceRoot: 'D:/workspace',
+        classification: 'empty',
+        projects: [project('root')],
+      }),
+    ).toThrow()
   })
 
   it('rejects malformed profiles and invalid classification input', () => {
     expect(() => classifyProjectProfile({ projectCount: -1, isMonorepo: false })).toThrow()
-    expect(() => projectProfileSchema.parse({
-      schemaVersion: 1,
-      workspaceRoot: 'D:/workspace',
-      classification: 'existing',
-      projects: [],
-      unexpected: true,
-    })).toThrow()
+    expect(() =>
+      projectProfileSchema.parse({
+        schemaVersion: 1,
+        workspaceRoot: 'D:/workspace',
+        classification: 'existing',
+        projects: [],
+        unexpected: true,
+      }),
+    ).toThrow()
   })
 })

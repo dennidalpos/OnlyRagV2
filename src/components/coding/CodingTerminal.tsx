@@ -142,17 +142,11 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <span>PowerShell UTF-8</span>
           </span>
-          {workspacePath && (
-            <span className="text-[10px] font-mono text-slate-400 truncate max-w-xs hidden md:inline-block">
-              {workspacePath}
-            </span>
-          )}
+          {workspacePath && <span className="text-[10px] font-mono text-slate-400 truncate max-w-xs hidden md:inline-block">{workspacePath}</span>}
         </div>
 
         <div className="flex items-center gap-2 font-sans">
-          <span className="text-[10px] font-mono text-slate-400 px-2 py-0.5 rounded bg-slate-900/80 border border-slate-800">
-            {terminalLogs.length} righe
-          </span>
+          <span className="text-[10px] font-mono text-slate-400 px-2 py-0.5 rounded bg-slate-900/80 border border-slate-800">{terminalLogs.length} righe</span>
 
           <button
             type="button"
@@ -197,10 +191,10 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
                 isCommand
                   ? 'text-cyan-300 font-semibold bg-cyan-950/20 px-2 py-0.5 rounded border-l-2 border-cyan-400 my-0.5'
                   : isError
-                  ? 'text-rose-300 bg-rose-950/20 px-2 py-0.5 rounded border-l-2 border-rose-500 my-0.5'
-                  : isSuccess
-                  ? 'text-emerald-300'
-                  : 'text-slate-300'
+                    ? 'text-rose-300 bg-rose-950/20 px-2 py-0.5 rounded border-l-2 border-rose-500 my-0.5'
+                    : isSuccess
+                      ? 'text-emerald-300'
+                      : 'text-slate-300'
               }`}
             >
               {log}

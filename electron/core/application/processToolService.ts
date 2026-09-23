@@ -9,7 +9,11 @@ import { formatToolchainInventory, type DevToolStatus } from '../domain/agent/de
 import os from 'node:os'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { DEV_TOOL_ALLOWLIST, buildInstallCommand, findToolDefinition, resolveInstallTarget } from '../domain/agent/devToolchain'
-import { firstDowngradingInstallTarget, firstInvalidRegistryInstallTarget, firstNonexistentInstallTarget } from '../domain/agent/tools/execution/installCommandGuards'
+import {
+  firstDowngradingInstallTarget,
+  firstInvalidRegistryInstallTarget,
+  firstNonexistentInstallTarget,
+} from '../domain/agent/tools/execution/installCommandGuards'
 import type { PackageFacts } from '../infrastructure/http/npmRegistryClient'
 import { probeDevTool } from '../domain/agent/tools/execution/devToolchainTools'
 import { devToolProbeRepository } from '../infrastructure/process/devToolProbeRepository'
@@ -32,11 +36,24 @@ export interface RunCommandExecution {
 }
 
 const TOOL_NAME_PREFIXES = [
-  'write_file', 'read_file', 'replace_file_content', 'multi_replace_file_content',
-  'delete_file', 'list_dir', 'list_files_recursive', 'grep_search',
-  'extract_code_symbols', 'create_directory', 'copy_file', 'move_file',
-  'web_search', 'fetch_web_content', 'download_file', 'inspect_os_env',
-  'ask', 'finish',
+  'write_file',
+  'read_file',
+  'replace_file_content',
+  'multi_replace_file_content',
+  'delete_file',
+  'list_dir',
+  'list_files_recursive',
+  'grep_search',
+  'extract_code_symbols',
+  'create_directory',
+  'copy_file',
+  'move_file',
+  'web_search',
+  'fetch_web_content',
+  'download_file',
+  'inspect_os_env',
+  'ask',
+  'finish',
 ]
 
 interface ProcessToolDependencies {
@@ -69,7 +86,12 @@ export class ProcessToolService {
         `Do NOT pass tool names to run_command. Use the tool directly.`,
       ].join('\n')
       logger.log('WARN', 'ProcessToolService', `[TOOL_AS_SHELL_BLOCK] Model tried to run tool "${confusedToolName}" as shell command`)
-      return { outcome: 'rejected', outputForHistory: output, logMessage: `[TOOL_AS_SHELL_BLOCK] Blocked shell execution of tool "${confusedToolName}"`, isTerminal: true }
+      return {
+        outcome: 'rejected',
+        outputForHistory: output,
+        logMessage: `[TOOL_AS_SHELL_BLOCK] Blocked shell execution of tool "${confusedToolName}"`,
+        isTerminal: true,
+      }
     }
 
     if (isBlockingDevServerCommand(command)) {
@@ -84,7 +106,12 @@ export class ProcessToolService {
         `3. If you need the running app visually verified, tell the user it is ready to start manually -- do not attempt to launch it yourself.`,
       ].join('\n')
       logger.log('WARN', 'ProcessToolService', `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${command}"`)
-      return { outcome: 'rejected', outputForHistory: output, logMessage: `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${command}"`, isTerminal: true }
+      return {
+        outcome: 'rejected',
+        outputForHistory: output,
+        logMessage: `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${command}"`,
+        isTerminal: true,
+      }
     }
 
     return null
@@ -108,14 +135,24 @@ export class ProcessToolService {
     const invalidTarget = await firstInvalidRegistryInstallTarget(command, packageJson, this.dependencies.lookupPackages)
     if (invalidTarget) {
       logger.log('WARN', 'ProcessToolService', `[INSTALL_VERSION_REFUSED] ${command}`)
-      return { outcome: 'rejected', outputForHistory: invalidTarget.refusal, logMessage: `Install refused: ${invalidTarget.name} has a ${invalidTarget.kind} requested version`, isTerminal: true }
+      return {
+        outcome: 'rejected',
+        outputForHistory: invalidTarget.refusal,
+        logMessage: `Install refused: ${invalidTarget.name} has a ${invalidTarget.kind} requested version`,
+        isTerminal: true,
+      }
     }
 
     if (!this.dependencies.lookupPackage) return null
     const downgrade = await firstDowngradingInstallTarget(command, packageJson, this.dependencies.lookupPackage)
     if (downgrade) {
       logger.log('WARN', 'ProcessToolService', `[VERSION_DOWNGRADE_REFUSED] ${command}`)
-      return { outcome: 'rejected', outputForHistory: downgrade.refusal, logMessage: `Install refused: would downgrade ${downgrade.name} below the declared major`, isTerminal: true }
+      return {
+        outcome: 'rejected',
+        outputForHistory: downgrade.refusal,
+        logMessage: `Install refused: would downgrade ${downgrade.name} below the declared major`,
+        isTerminal: true,
+      }
     }
     return null
   }
@@ -142,7 +179,12 @@ export class ProcessToolService {
       `Directive: proceed with the next step of your plan -- this dependency is already installed.`,
     ].join('\n')
     logger.log('WARN', 'ProcessToolService', `[REDUNDANT_INSTALL_SKIP] Skipped already-installed packages: ${declared.join(', ')}`)
-    return { outcome: 'success', outputForHistory: output, logMessage: `[REDUNDANT_INSTALL_SKIP] Skipped already-installed: ${declared.join(', ')}`, isTerminal: true }
+    return {
+      outcome: 'success',
+      outputForHistory: output,
+      logMessage: `[REDUNDANT_INSTALL_SKIP] Skipped already-installed: ${declared.join(', ')}`,
+      isTerminal: true,
+    }
   }
 
   buildCommonFailureDirectives(
@@ -157,16 +199,23 @@ export class ProcessToolService {
     const permissions = ['eperm', 'eacces', 'operation not permitted', 'permission denied'].some((marker) => lowerOutput.includes(marker))
       ? `\n\n[PERMISSIONS WARNING: EPERM DETECTED]\nCommand failed due to Windows file permission restrictions (EPERM / Access Denied). DO NOT attempt to write files or run npm install inside system-protected folders (Program Files). Move the project or work inside a user workspace directory (e.g. Desktop or Documents).`
       : ''
-    const viteMissing = (lowerOutput.includes('0 modules transformed') || (lowerOutput.includes('vite') && result.code !== 0)) && workspacePath && !workspaceFileExists(workspacePath, 'index.html')
-      ? `\n\n[VITE ENTRY POINT MISSING DIAGNOSTIC]\nVite build failed or transformed 0 modules because 'index.html' is missing in project root ('${workspacePath}'). Create 'index.html' (referencing '<script type="module" src="/src/main.tsx"></script>') and 'src/main.tsx' before re-running build.`
-      : ''
-    const createViteCancelled = (command.includes('create-vite') || command.includes('create vite') || command.includes('create-app')) && isCancelled
-      ? `\n\n[VITE CLI NON-INTERACTIVE DIRECTIVE]\n'npm create vite' was cancelled because the target directory is not empty or requires interactive prompt selections. DO NOT re-run 'npm create vite' interactively.\nInstead, construct 'package.json', 'index.html', and 'src/main.tsx' directly using write_file, or run 'npx -y create-vite@latest . -- --template react-ts' after clearing conflicting files.`
-      : ''
+    const viteMissing =
+      (lowerOutput.includes('0 modules transformed') || (lowerOutput.includes('vite') && result.code !== 0)) &&
+      workspacePath &&
+      !workspaceFileExists(workspacePath, 'index.html')
+        ? `\n\n[VITE ENTRY POINT MISSING DIAGNOSTIC]\nVite build failed or transformed 0 modules because 'index.html' is missing in project root ('${workspacePath}'). Create 'index.html' (referencing '<script type="module" src="/src/main.tsx"></script>') and 'src/main.tsx' before re-running build.`
+        : ''
+    const createViteCancelled =
+      (command.includes('create-vite') || command.includes('create vite') || command.includes('create-app')) && isCancelled
+        ? `\n\n[VITE CLI NON-INTERACTIVE DIRECTIVE]\n'npm create vite' was cancelled because the target directory is not empty or requires interactive prompt selections. DO NOT re-run 'npm create vite' interactively.\nInstead, construct 'package.json', 'index.html', and 'src/main.tsx' directly using write_file, or run 'npx -y create-vite@latest . -- --template react-ts' after clearing conflicting files.`
+        : ''
     return `${permissions}${viteMissing}${createViteCancelled}`
   }
 
-  async classifyFailureDiagnostics(rawOutput: string, workspacePath: string | null | undefined): Promise<{
+  async classifyFailureDiagnostics(
+    rawOutput: string,
+    workspacePath: string | null | undefined,
+  ): Promise<{
     resolutionConflictDirective: string
     versionNotFoundDirective: string
     unresolved: string[]
@@ -175,33 +224,47 @@ export class ProcessToolService {
   }> {
     const resolutionConflictDirective = npmResolutionDirectiveFor(rawOutput)
     const versionNotFound = resolutionConflictDirective ? null : parseVersionNotFound(rawOutput)
-    const versionNotFoundDirective = versionNotFound && this.dependencies.lookupPackage
-      ? buildVersionNotFoundDirective(versionNotFound, (await this.dependencies.lookupPackage(versionNotFound.packageName)).latest)
-      : ''
+    const versionNotFoundDirective =
+      versionNotFound && this.dependencies.lookupPackage
+        ? buildVersionNotFoundDirective(versionNotFound, (await this.dependencies.lookupPackage(versionNotFound.packageName)).latest)
+        : ''
     const unresolved = resolutionConflictDirective ? [] : unresolvedPackages(rawOutput)
-    const moduleCause = workspacePath && unresolved.length > 0 && this.dependencies.missingFromNodeModules
-      ? classifyModuleDiagnostic(rawOutput, (pkg) => this.dependencies.missingFromNodeModules!(workspacePath, [pkg]).length === 0)
-      : 'none'
-    const moduleResolutionDirective = moduleCause === 'compiler_resolution'
-      ? buildModuleResolutionDirective(rawOutput, unresolved)
-      : ''
+    const moduleCause =
+      workspacePath && unresolved.length > 0 && this.dependencies.missingFromNodeModules
+        ? classifyModuleDiagnostic(rawOutput, (pkg) => this.dependencies.missingFromNodeModules!(workspacePath, [pkg]).length === 0)
+        : 'none'
+    const moduleResolutionDirective = moduleCause === 'compiler_resolution' ? buildModuleResolutionDirective(rawOutput, unresolved) : ''
     const lowerOutput = rawOutput.toLowerCase()
-    const isMissingDependency = !resolutionConflictDirective && moduleCause !== 'compiler_resolution' &&
-      ((lowerOutput.includes('cannot find module') && unresolved.length > 0) || lowerOutput.includes('module_not_found') || lowerOutput.includes('failed to resolve import'))
-    const missingDepList = unresolved.slice(0, 5).map((pkg) => `"${pkg}"`).join(', ')
+    const isMissingDependency =
+      !resolutionConflictDirective &&
+      moduleCause !== 'compiler_resolution' &&
+      ((lowerOutput.includes('cannot find module') && unresolved.length > 0) ||
+        lowerOutput.includes('module_not_found') ||
+        lowerOutput.includes('failed to resolve import'))
+    const missingDepList = unresolved
+      .slice(0, 5)
+      .map((pkg) => `"${pkg}"`)
+      .join(', ')
     const missingDepDirective = isMissingDependency
       ? `\n\n[MISSING DEPENDENCY DIAGNOSTIC]\nCompilation failed because ${missingDepList ? `${missingDepList} ${unresolved.length === 1 ? 'is' : 'are'} imported but not installed` : 'an imported module/package is missing'}.\nDirectives:\n1. Your next tool call MUST be "run_command" with: npm install ${missingDepList ? unresolved.slice(0, 5).join(' ') : '<the package named in the error above>'}\n2. Do NOT re-run the project check until that install has completed.`
       : ''
     return { resolutionConflictDirective, versionNotFoundDirective, unresolved, moduleResolutionDirective, missingDepDirective }
   }
 
-  buildInteractionFailureDirectives(rawOutput: string, interruptedByPrompt?: boolean): {
+  buildInteractionFailureDirectives(
+    rawOutput: string,
+    interruptedByPrompt?: boolean,
+  ): {
     npmNamingDirective: string
     interactivePromptDirective: string
   } {
     const lowerOutput = rawOutput.toLowerCase()
-    const npmNamingDirective = ['npm naming restrictions', 'can no longer contain capital letters', 'name can only contain url-friendly', 'name is invalid']
-      .some((marker) => lowerOutput.includes(marker))
+    const npmNamingDirective = [
+      'npm naming restrictions',
+      'can no longer contain capital letters',
+      'name can only contain url-friendly',
+      'name is invalid',
+    ].some((marker) => lowerOutput.includes(marker))
       ? `\n\n[NPM NAMING RESTRICTION DIRECTIVE]\nProject/package name is invalid because npm packages cannot contain uppercase letters or spaces. DO NOT repeat the command with capital letters. Either run with an all-lowercase name (e.g. 'project-dashboard-task') or construct the files directly using write_file (e.g. 'package.json', 'vite.config.ts', 'index.html', 'src/App.tsx').`
       : ''
     const interactivePromptDirective = interruptedByPrompt
@@ -220,9 +283,10 @@ export class ProcessToolService {
     const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nCommand: "${command}" (Exit Code: ${result.code}${result.timedOut ? ' - TIMED OUT' : ''}${result.interruptedByPrompt ? ' - INTERACTIVE PROMPT DETECTED' : ''})\nCaptured Error Stack Trace & Failure Output:\n\`\`\`\n${rawOutput.slice(0, 4000)}\n\`\`\`${directives}\n\n${healingTail}`
     return {
       outcome: 'failure',
-      outputForHistory: result.timedOut || result.interruptedByPrompt
-        ? `${output}\n\n[UNCERTAIN EFFECT - DO NOT RETRY]\nThe process was stopped after it began; inspect state before any further mutation.`
-        : output,
+      outputForHistory:
+        result.timedOut || result.interruptedByPrompt
+          ? `${output}\n\n[UNCERTAIN EFFECT - DO NOT RETRY]\nThe process was stopped after it began; inspect state before any further mutation.`
+          : output,
       logMessage: 'Terminal Command Failed (Auto-Healing Diagnostic Captured)',
       logDetail: rawOutput.slice(0, 1000),
       isTerminal: true,
@@ -236,9 +300,7 @@ export class ProcessToolService {
     readPackageExports: (packageName: string) => string[],
     readLocalModuleExports: (importingFile: string, specifier: string) => string[],
   ): { deferredDiagnosticNote: string; healingTail: string } {
-    const diagnosticDirective = specificDirectiveFired
-      ? null
-      : buildDiagnosticFixDirective(rawOutput, readPackageExports, readLocalModuleExports)
+    const diagnosticDirective = specificDirectiveFired ? null : buildDiagnosticFixDirective(rawOutput, readPackageExports, readLocalModuleExports)
     const deferredDiagnosticNote = specificDirectiveFired ? buildDeferredDiagnosticNote(rawOutput) || '' : ''
     const healingTail = specificDirectiveFired
       ? 'DO NOT ask the user vague clarification questions: carry out the directive above.'
@@ -267,7 +329,12 @@ export class ProcessToolService {
     signal?: AbortSignal,
   ): Promise<ToolExecutionResult> {
     if (allowTerminalExecution === false) {
-      return Promise.resolve({ outcome: 'blocked', outputForHistory: 'Terminal command execution disabled in Settings.', logMessage: 'Terminal command execution disabled in Settings.', isTerminal: true })
+      return Promise.resolve({
+        outcome: 'blocked',
+        outputForHistory: 'Terminal command execution disabled in Settings.',
+        logMessage: 'Terminal command execution disabled in Settings.',
+        isTerminal: true,
+      })
     }
     return executeRunTestsTool(command, workspacePath, (path) => this.dependencies.getShellSession(path), onTerminalOutput, onProcessSpawned, signal)
   }
@@ -335,13 +402,7 @@ export class ProcessToolService {
     logger.log('INFO', 'ProcessToolService', `[ENSURE_TOOL] Installing ${installTarget.displayName} via winget (${installTarget.wingetId})`)
     try {
       const shell = this.dependencies.getShellSession(workspacePath)
-      const result = await shell.execute(
-        installCmd,
-        (chunk) => onTerminalOutput?.(chunk.trim()),
-        onProcessSpawned,
-        INSTALL_COMMAND_TIMEOUT_MS,
-        signal,
-      )
+      const result = await shell.execute(installCmd, (chunk) => onTerminalOutput?.(chunk.trim()), onProcessSpawned, INSTALL_COMMAND_TIMEOUT_MS, signal)
 
       shell.refreshEnvironmentPath?.()
       const verified = probeDevTool(definition.id, probeVersion)
@@ -403,17 +464,14 @@ export class ProcessToolService {
     const timeoutMs = resolveCommandTimeoutMs(command, timeoutSeconds)
 
     try {
-      const result = await this.dependencies.getShellSession(workspacePath).execute(
-        executableCommand,
-        (chunk) => onTerminalOutput?.(chunk.trim()),
-        onProcessSpawned,
-        timeoutMs,
-        signal,
-      )
+      const result = await this.dependencies
+        .getShellSession(workspacePath)
+        .execute(executableCommand, (chunk) => onTerminalOutput?.(chunk.trim()), onProcessSpawned, timeoutMs, signal)
       const rawOutput = DiagnosticOutputReducer.composeCommandOutput(result.stdout, result.stderr, result.code)
       const lowerOutput = rawOutput.toLowerCase()
-      const isCancelled = ['operation cancelled', 'operation canceled', 'user cancelled', 'user canceled', 'aborted']
-        .some((marker) => lowerOutput.includes(marker))
+      const isCancelled = ['operation cancelled', 'operation canceled', 'user cancelled', 'user canceled', 'aborted'].some((marker) =>
+        lowerOutput.includes(marker),
+      )
 
       return {
         command,

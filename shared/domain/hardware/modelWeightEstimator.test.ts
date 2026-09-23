@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  estimateModelWeightGB,
-  estimateWeightFromMetadata,
-  KNOWN_WEIGHT_ALIASES_GB,
-  QUANT_BYTES_PER_PARAM,
-} from './modelWeightEstimator'
+import { estimateModelWeightGB, estimateWeightFromMetadata, KNOWN_WEIGHT_ALIASES_GB, QUANT_BYTES_PER_PARAM } from './modelWeightEstimator'
 import type { RunningModelDetails } from '../../types'
 
 describe('modelWeightEstimator Unit Tests', () => {
@@ -48,7 +43,7 @@ describe('modelWeightEstimator Unit Tests', () => {
         quantization_level: 'Q4_K_M',
       }
       // (0.35 * 10^9 * 0.60) / 1024^3 = ~0.20 GB
-      expect(estimateWeightFromMetadata(detailsM)).toBeCloseTo(0.20, 2)
+      expect(estimateWeightFromMetadata(detailsM)).toBeCloseTo(0.2, 2)
 
       const detailsK: RunningModelDetails = {
         parameter_size: '500K',

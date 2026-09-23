@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  MAX_VERIFICATION_FIX_CYCLES,
-  decideVerificationGate,
-  type VerificationGateInput,
-} from './verificationGatePolicy'
+import { MAX_VERIFICATION_FIX_CYCLES, decideVerificationGate, type VerificationGateInput } from './verificationGatePolicy'
 
 function input(overrides: Partial<VerificationGateInput> = {}): VerificationGateInput {
   return { hasVerificationCommand: true, passed: false, cyclesSpent: 0, ...overrides }

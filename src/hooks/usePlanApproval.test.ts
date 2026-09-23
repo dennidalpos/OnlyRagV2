@@ -1,18 +1,9 @@
 import React, { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
-import {
-  resolveInterviewPrompt,
-  usePlanApproval,
-} from './usePlanApproval'
+import { resolveInterviewPrompt, usePlanApproval } from './usePlanApproval'
 import { createAcceptedRecommendationAnswers } from '../../shared/domain/agent/interviewDecisionContext'
-import type {
-  AgentPlan,
-  AppSettings,
-  IElectronAPI,
-  InterviewAnalysisResult,
-  UserInterviewAnswer,
-} from '../types'
+import type { AgentPlan, AppSettings, IElectronAPI, InterviewAnalysisResult, UserInterviewAnswer } from '../types'
 
 describe('usePlanApproval & Plan Refactoring Unit Tests', () => {
   it('turns "skip and use recommended" into accepted decisions instead of discarding them', () => {
@@ -38,19 +29,16 @@ describe('usePlanApproval & Plan Refactoring Unit Tests', () => {
   it('falls back to a lossless local prompt when IPC enrichment fails', async () => {
     const reportFailure = vi.fn()
     const originalPrompt = 'Crea una dashboard con filtri'
-    const answers = [{
-      questionId: 'storage',
-      questionText: 'Persistenza',
-      selectedOption: 'localStorage',
-      provenance: 'explicit' as const,
-    }]
+    const answers = [
+      {
+        questionId: 'storage',
+        questionText: 'Persistenza',
+        selectedOption: 'localStorage',
+        provenance: 'explicit' as const,
+      },
+    ]
 
-    const effectivePrompt = await resolveInterviewPrompt(
-      originalPrompt,
-      answers,
-      vi.fn().mockRejectedValue(new Error('IPC unavailable')),
-      reportFailure
-    )
+    const effectivePrompt = await resolveInterviewPrompt(originalPrompt, answers, vi.fn().mockRejectedValue(new Error('IPC unavailable')), reportFailure)
 
     expect(reportFailure).toHaveBeenCalledOnce()
     expect(effectivePrompt).toContain(`[ORIGINAL USER REQUEST]\n${originalPrompt}`)
@@ -59,19 +47,16 @@ describe('usePlanApproval & Plan Refactoring Unit Tests', () => {
 
   it('rejects a lossy enrichment result that omits a confirmed decision', async () => {
     const reportFailure = vi.fn()
-    const answers = [{
-      questionId: 'router',
-      questionText: 'Router',
-      selectedOption: 'React Router',
-      provenance: 'accepted_recommendation' as const,
-    }]
+    const answers = [
+      {
+        questionId: 'router',
+        questionText: 'Router',
+        selectedOption: 'React Router',
+        provenance: 'accepted_recommendation' as const,
+      },
+    ]
 
-    const effectivePrompt = await resolveInterviewPrompt(
-      'Build a dashboard',
-      answers,
-      vi.fn().mockResolvedValue('Build a dashboard'),
-      reportFailure
-    )
+    const effectivePrompt = await resolveInterviewPrompt('Build a dashboard', answers, vi.fn().mockResolvedValue('Build a dashboard'), reportFailure)
 
     expect(reportFailure).toHaveBeenCalledOnce()
     expect(effectivePrompt).toContain('[ACCEPTED RECOMMENDATION] Router: React Router')
@@ -145,18 +130,23 @@ describe('usePlanApproval interview and error flow', () => {
   })
 
   it('uses recommended answers for planning, seeding and approval without reading the composer again', async () => {
-    const agentPlanGenerate = vi.fn().mockResolvedValue(planResult([
-      { id: 'm-1', title: 'Implementa il router', filePaths: ['src/router.ts'], acceptanceCriteria: ['Il router funziona'], status: 'pending' },
-    ]))
+    const agentPlanGenerate = vi
+      .fn()
+      .mockResolvedValue(
+        planResult([{ id: 'm-1', title: 'Implementa il router', filePaths: ['src/router.ts'], acceptanceCriteria: ['Il router funziona'], status: 'pending' }]),
+      )
     const agentPlanSeed = vi.fn().mockResolvedValue(true)
     installElectronApi({
       agentPlanInterview: vi.fn().mockResolvedValue({
         status: 'clarification_required',
         hasQuestions: true,
-        questions: [{ id: 'router', question: 'Quale router?', rationale: 'La scelta cambia la navigazione.', options: ['React Router', 'Custom'], recommendedIndex: 0 }],
+        questions: [
+          { id: 'router', question: 'Quale router?', rationale: 'La scelta cambia la navigazione.', options: ['React Router', 'Custom'], recommendedIndex: 0 },
+        ],
       }),
-      agentPlanEnrichPrompt: vi.fn(async (prompt: string, answers: UserInterviewAnswer[]) =>
-        `[ORIGINAL USER REQUEST]\n${prompt}\n\n[INTERVIEW DECISIONS]\n- [ACCEPTED RECOMMENDATION] Router: ${answers[0].selectedOption}`
+      agentPlanEnrichPrompt: vi.fn(
+        async (prompt: string, answers: UserInterviewAnswer[]) =>
+          `[ORIGINAL USER REQUEST]\n${prompt}\n\n[INTERVIEW DECISIONS]\n- [ACCEPTED RECOMMENDATION] Router: ${answers[0].selectedOption}`,
       ),
       agentPlanGenerate,
       agentPlanSeed,
@@ -197,22 +187,23 @@ describe('usePlanApproval interview and error flow', () => {
   })
 
   it('keeps a planning error non-executable and retries with the same decisions', async () => {
-    const agentPlanGenerate = vi.fn()
-      .mockResolvedValueOnce(planResult(
-        [{ id: 'm-1', title: 'Bozza parziale', filePaths: ['src/theme.ts'], status: 'pending' }],
-        { status: 'error', error: 'stream interrupted' }
-      ))
-      .mockResolvedValueOnce(planResult([
-        { id: 'm-1', title: 'Applica il tema', filePaths: ['src/theme.ts'], status: 'pending' },
-      ]))
+    const agentPlanGenerate = vi
+      .fn()
+      .mockResolvedValueOnce(
+        planResult([{ id: 'm-1', title: 'Bozza parziale', filePaths: ['src/theme.ts'], status: 'pending' }], { status: 'error', error: 'stream interrupted' }),
+      )
+      .mockResolvedValueOnce(planResult([{ id: 'm-1', title: 'Applica il tema', filePaths: ['src/theme.ts'], status: 'pending' }]))
     installElectronApi({
       agentPlanInterview: vi.fn().mockResolvedValue({
         status: 'clarification_required',
         hasQuestions: true,
-        questions: [{ id: 'theme', question: 'Quale tema?', rationale: 'La scelta cambia la presentazione.', options: ['Scuro', 'Chiaro'], recommendedIndex: 0 }],
+        questions: [
+          { id: 'theme', question: 'Quale tema?', rationale: 'La scelta cambia la presentazione.', options: ['Scuro', 'Chiaro'], recommendedIndex: 0 },
+        ],
       }),
-      agentPlanEnrichPrompt: vi.fn(async (prompt: string, answers: UserInterviewAnswer[]) =>
-        `[ORIGINAL USER REQUEST]\n${prompt}\n\n[INTERVIEW DECISIONS]\n- [EXPLICIT USER ANSWER] Tema: ${answers[0].selectedOption}`
+      agentPlanEnrichPrompt: vi.fn(
+        async (prompt: string, answers: UserInterviewAnswer[]) =>
+          `[ORIGINAL USER REQUEST]\n${prompt}\n\n[INTERVIEW DECISIONS]\n- [EXPLICIT USER ANSWER] Tema: ${answers[0].selectedOption}`,
       ),
       agentPlanGenerate,
       agentPlanSeed: vi.fn().mockResolvedValue(true),
@@ -220,12 +211,14 @@ describe('usePlanApproval interview and error flow', () => {
 
     await act(async () => {
       await currentHook.startPlanFlow('Quale tema scegliere: Scuro o Chiaro?')
-      await currentHook.confirmInterviewAnswers([{
-        questionId: 'theme',
-        questionText: 'Quale tema?',
-        selectedOption: 'Chiaro',
-        provenance: 'explicit',
-      }])
+      await currentHook.confirmInterviewAnswers([
+        {
+          questionId: 'theme',
+          questionText: 'Quale tema?',
+          selectedOption: 'Chiaro',
+          provenance: 'explicit',
+        },
+      ])
     })
 
     expect(currentHook.currentPlan).toMatchObject({
@@ -280,9 +273,9 @@ describe('usePlanApproval interview and error flow', () => {
 
   it('sends a clear request directly to the planner', async () => {
     const agentPlanInterview = vi.fn()
-    const agentPlanGenerate = vi.fn().mockResolvedValue(planResult([
-      { id: 'm-1', title: 'Correggi il bootstrap', filePaths: ['src/main.tsx'], status: 'pending' },
-    ]))
+    const agentPlanGenerate = vi
+      .fn()
+      .mockResolvedValue(planResult([{ id: 'm-1', title: 'Correggi il bootstrap', filePaths: ['src/main.tsx'], status: 'pending' }]))
     installElectronApi({ agentPlanInterview, agentPlanGenerate })
 
     await act(async () => {
@@ -301,10 +294,12 @@ describe('usePlanApproval interview and error flow', () => {
     ]
     installElectronApi({
       agentPlanInterview: vi.fn().mockResolvedValue({ status: 'ready', hasQuestions: false, questions: [] }),
-      agentPlanGenerate: vi.fn().mockResolvedValue(planResult(compiledMilestones, {
-        objective: 'Correggere il bootstrap',
-        decisions: [{ id: 'a-1', statement: 'Conserva lo stack', source: 'assumption' }],
-      })),
+      agentPlanGenerate: vi.fn().mockResolvedValue(
+        planResult(compiledMilestones, {
+          objective: 'Correggere il bootstrap',
+          decisions: [{ id: 'a-1', statement: 'Conserva lo stack', source: 'assumption' }],
+        }),
+      ),
       agentPlanSeed: vi.fn().mockResolvedValue(true),
     })
 
@@ -328,9 +323,7 @@ describe('usePlanApproval interview and error flow', () => {
 
   it('persists a validated review before replacing the visible plan revision', async () => {
     installElectronApi({
-      agentPlanGenerate: vi.fn().mockResolvedValue(planResult([
-        { id: 'm-1', title: 'Crea pagina', filePaths: ['src/Page.tsx'], status: 'pending' },
-      ])),
+      agentPlanGenerate: vi.fn().mockResolvedValue(planResult([{ id: 'm-1', title: 'Crea pagina', filePaths: ['src/Page.tsx'], status: 'pending' }])),
     })
     await act(async () => {
       await currentHook.startPlanFlow('Crea pagina')
@@ -352,9 +345,7 @@ describe('usePlanApproval interview and error flow', () => {
     const agentPlanSeed = vi.fn().mockResolvedValue(false)
     installElectronApi({
       agentPlanInterview: vi.fn().mockResolvedValue({ status: 'ready', hasQuestions: false, questions: [] }),
-      agentPlanGenerate: vi.fn().mockResolvedValue(planResult([
-        { id: 'm-1', title: 'Task', filePaths: ['src/task.ts'], status: 'pending' },
-      ])),
+      agentPlanGenerate: vi.fn().mockResolvedValue(planResult([{ id: 'm-1', title: 'Task', filePaths: ['src/task.ts'], status: 'pending' }])),
       agentPlanSeed,
     })
 
@@ -374,14 +365,17 @@ describe('usePlanApproval interview and error flow', () => {
 
   it('deduplicates approval callbacks while persistence is in flight', async () => {
     let releaseSave!: (value: boolean) => void
-    onPersistPlan = vi.fn(() => new Promise<boolean>((resolve) => { releaseSave = resolve }))
+    onPersistPlan = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseSave = resolve
+        }),
+    )
     await act(async () => root.render(React.createElement(Harness)))
     const agentPlanSeed = vi.fn().mockResolvedValue(true)
     installElectronApi({
       agentPlanInterview: vi.fn().mockResolvedValue({ status: 'ready', hasQuestions: false, questions: [] }),
-      agentPlanGenerate: vi.fn().mockResolvedValue(planResult([
-        { id: 'm-1', title: 'Task', filePaths: ['src/task.ts'], status: 'pending' },
-      ])),
+      agentPlanGenerate: vi.fn().mockResolvedValue(planResult([{ id: 'm-1', title: 'Task', filePaths: ['src/task.ts'], status: 'pending' }])),
       agentPlanSeed,
     })
 
@@ -406,19 +400,21 @@ describe('usePlanApproval interview and error flow', () => {
   })
 
   it('can resume an approved persisted revision after reopening between seed and launch', async () => {
-    initialPlans = [{
-      formatVersion: 2,
-      id: 'plan-reopen',
-      version: 1,
-      prompt: 'Riprendi il task',
-      objective: 'Riprendi il task',
-      decisions: [],
-      retainedEvidence: [],
-      supersededWork: [],
-      status: 'approved',
-      createdAt: '2026-09-07T00:00:00.000Z',
-      milestones: [{ id: 'm-1', title: 'Riprendi', filePaths: ['src/task.ts'], status: 'pending' }],
-    }]
+    initialPlans = [
+      {
+        formatVersion: 2,
+        id: 'plan-reopen',
+        version: 1,
+        prompt: 'Riprendi il task',
+        objective: 'Riprendi il task',
+        decisions: [],
+        retainedEvidence: [],
+        supersededWork: [],
+        status: 'approved',
+        createdAt: '2026-09-07T00:00:00.000Z',
+        milestones: [{ id: 'm-1', title: 'Riprendi', filePaths: ['src/task.ts'], status: 'pending' }],
+      },
+    ]
     await act(async () => root.unmount())
     root = createRoot(container)
     await act(async () => root.render(React.createElement(Harness)))
@@ -436,11 +432,15 @@ describe('usePlanApproval interview and error flow', () => {
 
   it('ignores a late plan response after a newer request starts', async () => {
     let resolveFirst!: (value: any) => void
-    const agentPlanGenerate = vi.fn()
-      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
-      .mockResolvedValueOnce(planResult([
-        { id: 'm-1', title: 'Nuovo', filePaths: ['src/new.ts'], status: 'pending' },
-      ]))
+    const agentPlanGenerate = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          }),
+      )
+      .mockResolvedValueOnce(planResult([{ id: 'm-1', title: 'Nuovo', filePaths: ['src/new.ts'], status: 'pending' }]))
     installElectronApi({
       agentPlanInterview: vi.fn().mockResolvedValue({ status: 'ready', hasQuestions: false, questions: [] }),
       agentPlanGenerate,
@@ -455,9 +455,7 @@ describe('usePlanApproval interview and error flow', () => {
     await act(async () => {
       await currentHook.startPlanFlow('Nuovo')
     })
-    resolveFirst(planResult([
-      { id: 'm-1', title: 'Vecchio', filePaths: ['src/old.ts'], status: 'pending' },
-    ]))
+    resolveFirst(planResult([{ id: 'm-1', title: 'Vecchio', filePaths: ['src/old.ts'], status: 'pending' }]))
     await act(async () => {
       await first
     })
@@ -467,9 +465,7 @@ describe('usePlanApproval interview and error flow', () => {
   })
 
   it('generates a plan after development strict-mode effect replay', async () => {
-    const agentPlanGenerate = vi.fn().mockResolvedValue(planResult([
-      { id: 'm-1', title: 'Correggi il piano', filePaths: ['src/plan.ts'], status: 'pending' },
-    ]))
+    const agentPlanGenerate = vi.fn().mockResolvedValue(planResult([{ id: 'm-1', title: 'Correggi il piano', filePaths: ['src/plan.ts'], status: 'pending' }]))
     installElectronApi({ agentPlanGenerate })
 
     await act(async () => root.render(React.createElement(React.StrictMode, null, React.createElement(Harness))))
@@ -485,7 +481,12 @@ describe('usePlanApproval interview and error flow', () => {
     let resolveInterview!: (value: InterviewAnalysisResult) => void
     const agentPlanGenerate = vi.fn()
     installElectronApi({
-      agentPlanInterview: vi.fn(() => new Promise<InterviewAnalysisResult>((resolve) => { resolveInterview = resolve })),
+      agentPlanInterview: vi.fn(
+        () =>
+          new Promise<InterviewAnalysisResult>((resolve) => {
+            resolveInterview = resolve
+          }),
+      ),
       agentPlanGenerate,
     })
 

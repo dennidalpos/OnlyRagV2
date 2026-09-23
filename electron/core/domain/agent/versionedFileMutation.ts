@@ -5,9 +5,7 @@ export interface ExactReplacement {
   replacementContent: string
 }
 
-export type ExactReplacementResult =
-  | { success: true; content: string; replacedCount: number }
-  | { success: false; error: string }
+export type ExactReplacementResult = { success: true; content: string; replacedCount: number } | { success: false; error: string }
 
 function occurrences(content: string, target: string): number {
   let count = 0
@@ -39,7 +37,9 @@ export function applyUniqueReplacements(content: string, replacements: readonly 
 }
 
 export function compactMutationDiff(current: string, proposed: string, limit = 16): string {
-  const changed = computeLineDiff(current, proposed).filter((line) => line.type !== 'context').slice(0, limit)
+  const changed = computeLineDiff(current, proposed)
+    .filter((line) => line.type !== 'context')
+    .slice(0, limit)
   if (changed.length === 0) return '(no line changes)'
   return changed.map((line) => `${line.type === 'add' ? '+' : '-'} ${line.content.slice(0, 180)}`).join('\n')
 }

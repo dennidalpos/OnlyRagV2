@@ -1,10 +1,7 @@
 import React from 'react'
 import { BadgeCheck, CircleDashed, HelpCircle, Ban, Wrench, Gauge, Layers, Boxes } from 'lucide-react'
 import type { OllamaModelMetrics } from '../../types'
-import {
-  findVerificationEvidence,
-  type ModelVerificationStatus,
-} from '../../services/codingModelMatrix'
+import { findVerificationEvidence, type ModelVerificationStatus } from '../../services/codingModelMatrix'
 
 /** The badges for one model. */
 
@@ -41,10 +38,9 @@ const STATUS_STYLE: Record<ModelVerificationStatus, { label: string; className: 
 
 const STATUS_TOOLTIP: Record<ModelVerificationStatus, string> = {
   verified: '',
-  compatible:
-    'Dichiara le capacità che l\'agente richiede ed è nel catalogo, ma non è mai stato eseguito contro le sonde live. Utilizzabile, non dimostrato.',
+  compatible: "Dichiara le capacità che l'agente richiede ed è nel catalogo, ma non è mai stato eseguito contro le sonde live. Utilizzabile, non dimostrato.",
   unsupported:
-    'Manca qualcosa che l\'agente richiede — tipicamente il tool calling nativo, o è un modello di embedding senza superficie di chat. Selezionabile a tuo rischio.',
+    "Manca qualcosa che l'agente richiede — tipicamente il tool calling nativo, o è un modello di embedding senza superficie di chat. Selezionabile a tuo rischio.",
   unknown: 'Tag non presente nel catalogo di questa app. Nessuna garanzia di funzionamento.',
 }
 
@@ -52,15 +48,8 @@ function formatContext(tokens: number): string {
   return tokens >= 1024 ? `${Math.round(tokens / 1024)}k ctx` : `${tokens} ctx`
 }
 
-const Badge: React.FC<{ title?: string; className: string; children: React.ReactNode }> = ({
-  title,
-  className,
-  children,
-}) => (
-  <span
-    title={title}
-    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold leading-none ${className}`}
-  >
+const Badge: React.FC<{ title?: string; className: string; children: React.ReactNode }> = ({ title, className, children }) => (
+  <span title={title} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold leading-none ${className}`}>
     {children}
   </span>
 )
@@ -71,9 +60,7 @@ export const ModelBadgeStrip: React.FC<ModelBadgeStripProps> = ({ modelName, sta
 
   // The verified tooltip IS the evidence. Anything less would make the badge a claim the user
   // has no way to check, which is the whole thing this badge was built not to be.
-  const statusTooltip = evidence
-    ? `Testato il ${evidence.date} con: ${evidence.probes.join(', ')}.\n\n${evidence.outcome}`
-    : STATUS_TOOLTIP[status]
+  const statusTooltip = evidence ? `Testato il ${evidence.date} con: ${evidence.probes.join(', ')}.\n\n${evidence.outcome}` : STATUS_TOOLTIP[status]
 
   const supportsTools = metrics?.capabilities?.includes('tools')
 
@@ -114,14 +101,10 @@ export const ModelBadgeStrip: React.FC<ModelBadgeStripProps> = ({ modelName, sta
         <Badge
           title={
             supportsTools
-              ? 'Tool calling nativo: l\'agente usa il percorso strutturato di Ollama.'
-              : 'Nessun tool calling nativo: l\'agente ripiega sul JSON in blocco recintato, misurabilmente più fragile sui modelli piccoli.'
+              ? "Tool calling nativo: l'agente usa il percorso strutturato di Ollama."
+              : "Nessun tool calling nativo: l'agente ripiega sul JSON in blocco recintato, misurabilmente più fragile sui modelli piccoli."
           }
-          className={
-            supportsTools
-              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-              : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-          }
+          className={supportsTools ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}
         >
           <Wrench className="w-3 h-3" />
           {supportsTools ? 'tool calling' : 'no tool calling'}

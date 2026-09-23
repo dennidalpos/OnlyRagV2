@@ -11,10 +11,7 @@ export interface WorkspaceQuickAction {
  * Dynamically resolves compatible quick action commands based on the detected project stack
  * in the active workspace. Returns empty if no project is attached or no manifest is found.
  */
-export function resolveWorkspaceQuickActions(
-  workspacePath?: string | null,
-  files: WorkspaceFile[] = []
-): WorkspaceQuickAction[] {
+export function resolveWorkspaceQuickActions(workspacePath?: string | null, files: WorkspaceFile[] = []): WorkspaceQuickAction[] {
   if (!workspacePath || files.length === 0) {
     return []
   }

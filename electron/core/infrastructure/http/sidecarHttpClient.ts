@@ -117,9 +117,8 @@ export class SidecarHttpClient {
   private send(options: SendOptions): Promise<SendResult> {
     const url = new URL(options.path, this.baseHost)
     const payload = options.body === undefined ? undefined : JSON.stringify(options.body)
-    const headers: http.OutgoingHttpHeaders = payload === undefined
-      ? { 'Content-Length': 0 }
-      : { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+    const headers: http.OutgoingHttpHeaders =
+      payload === undefined ? { 'Content-Length': 0 } : { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
     if (this.authToken) headers['X-OnlyRag-Token'] = this.authToken
 
     return new Promise((resolve, reject) => {
@@ -145,7 +144,7 @@ export class SidecarHttpClient {
           })
           res.on('end', () => resolve({ status: res.statusCode || 0, body: buffer }))
           res.on('error', reject)
-        }
+        },
       )
       req.on('error', reject)
       req.setTimeout(options.timeoutMs, () => {
@@ -164,7 +163,7 @@ export class SidecarHttpClient {
     body: unknown,
     label: string,
     onProgress: (event: any) => void,
-    onRequest?: (req: http.ClientRequest) => void
+    onRequest?: (req: http.ClientRequest) => void,
   ): Promise<{ success: boolean; data?: any; error?: string }> {
     let finalResult: any = null
     let streamError: string | null = null
@@ -207,8 +206,9 @@ export class SidecarHttpClient {
   }
 
   private notifyTaskCancellation(taskId: string): void {
-    this.send({ method: 'POST', path: `/tasks/cancel?task_id=${encodeURIComponent(taskId)}`, timeoutMs: 5000 })
-      .catch((err) => logger.log('WARN', 'SidecarClient', `Cancellation relay failed: ${err.message}`))
+    this.send({ method: 'POST', path: `/tasks/cancel?task_id=${encodeURIComponent(taskId)}`, timeoutMs: 5000 }).catch((err) =>
+      logger.log('WARN', 'SidecarClient', `Cancellation relay failed: ${err.message}`),
+    )
   }
 
   /** Health / status probe of the sidecar process. */
@@ -244,7 +244,7 @@ export class SidecarHttpClient {
   ingestFileStream(
     payload: SidecarIngestStreamPayload,
     onProgress: (event: any) => void,
-    onCancelRegister?: (cancelFn: () => void) => void
+    onCancelRegister?: (cancelFn: () => void) => void,
   ): Promise<{ success: boolean; data?: any; error?: string }> {
     return this.streamNdjson('/ingest-path-stream', payload, 'Ingestion', onProgress, this.cancellableBy(payload.task_id, onCancelRegister))
   }
@@ -254,14 +254,14 @@ export class SidecarHttpClient {
     docId: string,
     payload: SidecarTranslateStreamPayload,
     onProgress: (event: any) => void,
-    onCancelRegister?: (cancelFn: () => void) => void
+    onCancelRegister?: (cancelFn: () => void) => void,
   ): Promise<{ success: boolean; data?: any; error?: string }> {
     return this.streamNdjson(
       `/documents/${encodeURIComponent(docId)}/translate-inplace-stream`,
       payload,
       'Translation',
       onProgress,
-      this.cancellableBy(payload.task_id, onCancelRegister)
+      this.cancellableBy(payload.task_id, onCancelRegister),
     )
   }
 
@@ -276,16 +276,12 @@ export class SidecarHttpClient {
   }
 
   /** Replaces a document's markdown and re-indexes it. */
-  async updateDocument(
-    docId: string,
-    markdownContent: string,
-    embeddingModel?: string
-  ): Promise<{ success: boolean; data?: any; error?: string }> {
+  async updateDocument(docId: string, markdownContent: string, embeddingModel?: string): Promise<{ success: boolean; data?: any; error?: string }> {
     const result = await this.requestJson<any>(
       'PUT',
       `/documents/${encodeURIComponent(docId)}`,
       { markdown_content: markdownContent, embedding_model: embeddingModel || undefined },
-      60_000
+      60_000,
     )
     return result.success ? result : { success: false, error: result.error }
   }

@@ -15,7 +15,7 @@ import {
 
 /** The exact output `npx tsc --noEmit` produced at step 21 of the live run of 2026-08-24. */
 const TSC_OUTPUT = [
-  "src/main.tsx(4,8): error TS1192: Module '\"C:/Users/x/src/App\"' has no default export.",
+  'src/main.tsx(4,8): error TS1192: Module \'"C:/Users/x/src/App"\' has no default export.',
   "src/routes/index.tsx(8,15): error TS2304: Cannot find name 'DashboardPage'.",
   "src/routes/index.tsx(12,15): error TS2304: Cannot find name 'TasksPage'.",
 ].join('\n')
@@ -108,7 +108,7 @@ describe('extractSuggestedCommand', () => {
   it('ignores quoted text that is not an install command', () => {
     // This exists to catch "install the missing declarations", not to run arbitrary text the
     // compiler happened to put in backticks.
-    expect(extractSuggestedCommand('  Try `declare module \'react\';` instead')).toBeNull()
+    expect(extractSuggestedCommand("  Try `declare module 'react';` instead")).toBeNull()
     expect(extractSuggestedCommand('  Try `rm -rf node_modules`')).toBeNull()
   })
 
@@ -142,7 +142,7 @@ describe('buildDiagnosticFixDirective — when the compiler named the remedy', (
 const TS2613_OUTPUT =
   'src/main.tsx(2,8): error TS2613: Module \'"C:/w/src/App"\' has no default export. Did you mean to use \'import { App } from "C:/w/src/App"\' instead?'
 const TS2614_OUTPUT =
-  'src/routes/index.tsx(3,10): error TS2614: Module \'"../pages/Dashboard"\' has no exported member \'Dashboard\'. Did you mean to use \'import Dashboard from "../pages/Dashboard"\' instead?'
+  "src/routes/index.tsx(3,10): error TS2614: Module '\"../pages/Dashboard\"' has no exported member 'Dashboard'. Did you mean to use 'import Dashboard from \"../pages/Dashboard\"' instead?"
 
 describe('extractExportMismatch', () => {
   it('takes the replacement import the compiler printed, verbatim', () => {
@@ -228,10 +228,7 @@ describe('buildDiagnosticFixDirective — export/import mismatch', () => {
   })
 
   it('prioritizes the mismatch while still listing an unrelated first error', () => {
-    const mixed = [
-      "src/routes/index.tsx(8,15): error TS2304: Cannot find name 'TasksPage'.",
-      TS2613_OUTPUT,
-    ].join('\n')
+    const mixed = ["src/routes/index.tsx(8,15): error TS2304: Cannot find name 'TasksPage'.", TS2613_OUTPUT].join('\n')
     const directive = buildDiagnosticFixDirective(mixed)!
 
     expect(directive).toContain('Change exactly one side now with "write_file"')
@@ -289,7 +286,7 @@ describe('diagnostics inside node_modules', () => {
   // Run 10 of 2026-08-25 pinned typescript@^4.7.3, which then could not parse the @types/node npm had installed.
   const IN_DEPS = [
     'node_modules/@types/node/ffi.d.ts(277,43): error TS1109: Expression expected.',
-    'node_modules/@types/node/ffi.d.ts(285,30): error TS1005: \',\' expected.',
+    "node_modules/@types/node/ffi.d.ts(285,30): error TS1005: ',' expected.",
   ].join('\n')
 
   it('never orders an edit to a dependency, and names the version mismatch instead', () => {
@@ -372,11 +369,15 @@ describe('missing export member', () => {
 
   it('offers the names exported by a relative local module', () => {
     const local = `src/App.tsx(2,10): error TS2305: Module '"./Button"' has no exported member 'Button'.`
-    const directive = buildDiagnosticFixDirective(local, () => [], (importingFile, specifier) => {
-      expect(importingFile).toBe('src/App.tsx')
-      expect(specifier).toBe('./Button')
-      return ['PrimaryButton', 'ButtonProps']
-    })
+    const directive = buildDiagnosticFixDirective(
+      local,
+      () => [],
+      (importingFile, specifier) => {
+        expect(importingFile).toBe('src/App.tsx')
+        expect(specifier).toBe('./Button')
+        return ['PrimaryButton', 'ButtonProps']
+      },
+    )
 
     expect(directive).toContain('[LOCAL MODULE DOES NOT EXPORT THAT NAME]')
     expect(directive).toContain('actually exports: PrimaryButton, ButtonProps')
@@ -426,7 +427,7 @@ describe('diagnosticFixTargetFile', () => {
   it('names nothing when the fix is an install, which changes no file', () => {
     const out = [
       "src/App.tsx(1,19): error TS7016: Could not find a declaration file for module 'react'.",
-      "  Try `npm i --save-dev @types/react` if it exists.",
+      '  Try `npm i --save-dev @types/react` if it exists.',
     ].join('\n')
     expect(diagnosticFixTargetFile(out)).toBeNull()
   })

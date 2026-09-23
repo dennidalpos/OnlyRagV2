@@ -134,10 +134,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     })
   }, [])
 
-  const {
-    documents,
-    refetchDocuments: fetchDocuments,
-  } = useIngestedDocuments({
+  const { documents, refetchDocuments: fetchDocuments } = useIngestedDocuments({
     onDocsUpdated: handleDocUpdateCallback,
   })
 
@@ -197,26 +194,29 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   const isSyncingScrollRef = useRef<boolean>(false)
   const scrollRafRef = useRef<number | null>(null)
 
-  const scrollToPage = useCallback((targetPage: number) => {
-    setCurrentPage(targetPage)
+  const scrollToPage = useCallback(
+    (targetPage: number) => {
+      setCurrentPage(targetPage)
 
-    if (editorRef.current && markdownContent) {
-      const targetLine = getPageLineNumber(markdownContent, targetPage)
-      editorRef.current.revealLineNearTop(targetLine)
-      editorRef.current.setPosition({ lineNumber: targetLine, column: 1 })
-    }
-
-    if (viewMode === 'page' && leftPaneRef.current) {
-      leftPaneRef.current.scrollTop = 0
-    } else if (viewMode === 'all' && leftPaneRef.current) {
-      // Match by data-page-number (set by every page card, image-backed or text-fallback alike) rather than a fixed id -- SourcePagePreview only renders a `rendered-page-N` id for the no-scanned-image fallback case, so an id lookup silently no-ops for image-backed pag
-      const targetElem = leftPaneRef.current.querySelector<HTMLElement>(`[data-page-number="${targetPage}"]`)
-      if (targetElem) {
-        const offset = targetElem.offsetTop - leftPaneRef.current.offsetTop
-        leftPaneRef.current.scrollTo({ top: Math.max(0, offset - 10), behavior: 'smooth' })
+      if (editorRef.current && markdownContent) {
+        const targetLine = getPageLineNumber(markdownContent, targetPage)
+        editorRef.current.revealLineNearTop(targetLine)
+        editorRef.current.setPosition({ lineNumber: targetLine, column: 1 })
       }
-    }
-  }, [markdownContent, viewMode])
+
+      if (viewMode === 'page' && leftPaneRef.current) {
+        leftPaneRef.current.scrollTop = 0
+      } else if (viewMode === 'all' && leftPaneRef.current) {
+        // Match by data-page-number (set by every page card, image-backed or text-fallback alike) rather than a fixed id -- SourcePagePreview only renders a `rendered-page-N` id for the no-scanned-image fallback case, so an id lookup silently no-ops for image-backed pag
+        const targetElem = leftPaneRef.current.querySelector<HTMLElement>(`[data-page-number="${targetPage}"]`)
+        if (targetElem) {
+          const offset = targetElem.offsetTop - leftPaneRef.current.offsetTop
+          leftPaneRef.current.scrollTo({ top: Math.max(0, offset - 10), behavior: 'smooth' })
+        }
+      }
+    },
+    [markdownContent, viewMode],
+  )
 
   const handleLeftPaneScroll = () => {
     if (!syncScroll || isSyncingScrollRef.current || !leftPaneRef.current || !editorRef.current) return
@@ -361,9 +361,10 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
 
     const busyModule = peekGlobalTaskLock()
     if (busyModule && busyModule !== 'ingestion') {
-      const message = busyModule === 'coding'
-        ? t('common.crossModuleTaskBlocked', { module: t('common.moduleNameCoding') })
-        : t('common.crossModuleTaskBlocked', { module: t('common.moduleNameTranslation') })
+      const message =
+        busyModule === 'coding'
+          ? t('common.crossModuleTaskBlocked', { module: t('common.moduleNameCoding') })
+          : t('common.crossModuleTaskBlocked', { module: t('common.moduleNameTranslation') })
       setUploadError(message)
       return
     }
@@ -387,15 +388,11 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     if (ext === 'pdf') {
       detectedCategory = 'PDF (Ibrido / Scansione / Testo)'
       initialPipeline = 'Pipeline: PDF Fast-Router & Layout Extraction'
-      ocrTech = useVisionOcr
-        ? `PyMuPDF / Vision LLM OCR (${visionModelName}) + RapidOCR fallback`
-        : 'PyMuPDF / RapidOCR (CUDA nativo)'
+      ocrTech = useVisionOcr ? `PyMuPDF / Vision LLM OCR (${visionModelName}) + RapidOCR fallback` : 'PyMuPDF / RapidOCR (CUDA nativo)'
     } else if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) {
       detectedCategory = 'Immagine Raster'
       initialPipeline = useVisionOcr ? 'Pipeline: Multimodal Vision & OCR' : 'Pipeline: RapidOCR Layout'
-      ocrTech = useVisionOcr
-        ? `Vision LLM OCR (${visionModelName}) + RapidOCR fallback`
-        : 'RapidOCR (CUDA nativo)'
+      ocrTech = useVisionOcr ? `Vision LLM OCR (${visionModelName}) + RapidOCR fallback` : 'RapidOCR (CUDA nativo)'
     } else if (ext === 'docx') {
       detectedCategory = 'Microsoft Word'
       initialPipeline = 'Pipeline: DOCX Structured XML Parser'
@@ -436,14 +433,9 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         visionPrompt,
         false,
         undefined,
-        resolveModelContextLength(
-          visionModelName,
-          settings?.modelContextLengths,
-          hardwareDefault,
-          modelMetrics[visionModelName]?.contextLength
-        ),
+        resolveModelContextLength(visionModelName, settings?.modelContextLengths, hardwareDefault, modelMetrics[visionModelName]?.contextLength),
         taskId,
-        false
+        false,
       )
 
       if (activeTaskIdRef.current !== taskId) return

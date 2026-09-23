@@ -21,9 +21,9 @@ interface CreateDirectoryRepository {
   copyFileRaw(sourcePath: string, targetPath: string): void
   renameRaw(sourcePath: string, targetPath: string): void
   listDirEntries(absolutePath: string): { name: string; isDir: boolean }[] | null
-  getFileInfo(absolutePath: string): Parameters<typeof executeFileInfoTool>[2] extends infer R
-    ? R extends { getFileInfo: (...args: never[]) => infer T } ? T : never
-    : never
+  getFileInfo(
+    absolutePath: string,
+  ): Parameters<typeof executeFileInfoTool>[2] extends infer R ? (R extends { getFileInfo: (...args: never[]) => infer T } ? T : never) : never
 }
 
 interface DeleteFileJournal {
@@ -288,10 +288,7 @@ export class FsToolService {
     }
   }
 
-  async executeGrepSearch(
-    parameters: AgentToolCall['parameters'],
-    workspacePath: string | null | undefined,
-  ): Promise<ToolExecutionResult> {
+  async executeGrepSearch(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): Promise<ToolExecutionResult> {
     const query = parameters.query || ''
     const targetDir = parameters.dirPath || workspacePath || '.'
     const isRegex = Boolean(parameters.isRegex)
@@ -316,9 +313,7 @@ export class FsToolService {
         }
       }
       const displayedMatches = matches.slice(0, 50)
-      const formattedMatches = displayedMatches
-        .map((match) => `${match.relativePath}:${match.lineNumber}: ${match.lineContent}`)
-        .join('\n')
+      const formattedMatches = displayedMatches.map((match) => `${match.relativePath}:${match.lineNumber}: ${match.lineContent}`).join('\n')
       return {
         outcome: 'success',
         outputForHistory: `Grep search for "${query}" in [${targetDir}] returned ${matches.length} matches (showing first ${displayedMatches.length}):\n${formattedMatches}`,

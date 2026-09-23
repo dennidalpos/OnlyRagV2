@@ -1,10 +1,12 @@
-
 export function isAllowedExternalUrl(targetUrl: string): boolean {
   try {
     const target = new URL(targetUrl)
-    return ['https:', 'http:', 'mailto:'].includes(target.protocol)
-      && !target.username && !target.password
-      && (target.protocol !== 'mailto:' || Boolean(target.pathname))
+    return (
+      ['https:', 'http:', 'mailto:'].includes(target.protocol) &&
+      !target.username &&
+      !target.password &&
+      (target.protocol !== 'mailto:' || Boolean(target.pathname))
+    )
   } catch {
     return false
   }

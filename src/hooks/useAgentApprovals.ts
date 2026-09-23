@@ -26,7 +26,7 @@ export function useAgentApprovals() {
         logger.error('useAgentApprovals', `Failed responding to agent approval: ${err?.message}`)
       }
     },
-    [pendingApproval]
+    [pendingApproval],
   )
 
   const handleReject = useCallback(() => {

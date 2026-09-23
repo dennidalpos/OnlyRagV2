@@ -91,8 +91,7 @@ describe('chatContextBudget', () => {
 
     for (const host of hosts) {
       const budget = resolveChatContextBudget(host)
-      const worstCaseChars =
-        SYSTEM_PROMPT_ALLOWANCE_CHARS + budget.totalContextChars + budget.historyChars
+      const worstCaseChars = SYSTEM_PROMPT_ALLOWANCE_CHARS + budget.totalContextChars + budget.historyChars
       const promptTokens = Math.ceil(worstCaseChars / CHARS_PER_TOKEN)
       // A fully saturated turn must still leave room for the completion inside the cap.
       expect(promptTokens).toBeLessThan(budget.maxNumCtx)
@@ -130,10 +129,7 @@ describe('chatContextBudget', () => {
         // The system prompt and the selected document context must both fit, with room left over
         // for at least some conversation history.
         const systemAndDocs = 2500 + budget.totalContextChars
-        expect(
-          promptChars,
-          `${budget.profileTier}: no room left for history after system prompt + documents`
-        ).toBeGreaterThan(systemAndDocs)
+        expect(promptChars, `${budget.profileTier}: no room left for history after system prompt + documents`).toBeGreaterThan(systemAndDocs)
 
         // And the whole budget must fit the window once the answer's reserve is held back.
         expect(Math.ceil(promptChars / 3.5)).toBeLessThan(budget.maxNumCtx)

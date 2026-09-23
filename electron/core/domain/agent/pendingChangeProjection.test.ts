@@ -18,10 +18,7 @@ describe('pendingChangeProjection', () => {
 
   it('should substitute only the first occurrence for replace_chunk, matching the executor', () => {
     const before = 'value = 1\nvalue = 1\n'
-    const after = projectPendingChange(
-      { type: 'replace_chunk', targetContent: 'value = 1', replacementContent: 'value = 2' },
-      before
-    )
+    const after = projectPendingChange({ type: 'replace_chunk', targetContent: 'value = 1', replacementContent: 'value = 2' }, before)
 
     expect(after).toBe('value = 2\nvalue = 1\n')
     expect(countDiffLines(computeLineDiff(before, after))).toEqual({ additions: 1, deletions: 1 })
@@ -38,7 +35,7 @@ describe('pendingChangeProjection', () => {
           { targetContent: 'gamma', replacementContent: 'GAMMA' },
         ],
       },
-      before
+      before,
     )
 
     expect(after).toBe('ALPHA\nbeta\nGAMMA')

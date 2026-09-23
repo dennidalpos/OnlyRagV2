@@ -9,12 +9,7 @@ interface PlanInterviewCardProps {
   isGenerating?: boolean
 }
 
-export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
-  questions,
-  onConfirm,
-  onSkipWithRecommended,
-  isGenerating = false,
-}) => {
+export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({ questions, onConfirm, onSkipWithRecommended, isGenerating = false }) => {
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({})
   const [activeCustomIds, setActiveCustomIds] = useState<Record<string, boolean>>({})
@@ -48,9 +43,8 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
     onConfirm(answers)
   }
 
-  const canConfirm = questions.every((question) =>
-    explicitSelectionIds[question.id]
-    || Boolean(activeCustomIds[question.id] && customInputs[question.id]?.trim())
+  const canConfirm = questions.every(
+    (question) => explicitSelectionIds[question.id] || Boolean(activeCustomIds[question.id] && customInputs[question.id]?.trim()),
   )
 
   return (
@@ -124,9 +118,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
 
                 <div
                   className={`mt-1 p-2 rounded-lg border transition-all ${
-                    isCustomActive
-                      ? 'bg-cyan-950/40 border-cyan-500/60'
-                      : 'bg-slate-900/40 border-slate-800/80'
+                    isCustomActive ? 'bg-cyan-950/40 border-cyan-500/60' : 'bg-slate-900/40 border-slate-800/80'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1.5">

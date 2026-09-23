@@ -1,19 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import {
-  partialDeliveryDirective,
-  promotionNote,
-  redeliveredMilestoneDirective,
-  selectMilestonesProvenByVerification,
-} from './milestoneVerificationPromotion'
+import { partialDeliveryDirective, promotionNote, redeliveredMilestoneDirective, selectMilestonesProvenByVerification } from './milestoneVerificationPromotion'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 
-function milestone(
-  id: string,
-  title: string,
-  status: PlanMilestone['status'] = 'pending',
-  verificationCommand = 'npm run build'
-): PlanMilestone {
+function milestone(id: string, title: string, status: PlanMilestone['status'] = 'pending', verificationCommand = 'npm run build'): PlanMilestone {
   return { id, title, status, verificationCommand }
 }
 

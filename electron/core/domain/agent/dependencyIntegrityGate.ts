@@ -1,5 +1,3 @@
-
-
 /** Package name -> the files that import it. The shape depcheck reports. */
 export type MissingDependencyMap = Record<string, string[]>
 
@@ -27,15 +25,10 @@ function isTypesOnlyPackage(packageName: string): boolean {
 function toWorkspaceRelative(filePath: string, workspacePath: string): string {
   const normalisedFile = filePath.replace(/\\/g, '/')
   const normalisedRoot = workspacePath.replace(/\\/g, '/').replace(/\/$/, '')
-  return normalisedFile.startsWith(`${normalisedRoot}/`)
-    ? normalisedFile.slice(normalisedRoot.length + 1)
-    : normalisedFile
+  return normalisedFile.startsWith(`${normalisedRoot}/`) ? normalisedFile.slice(normalisedRoot.length + 1) : normalisedFile
 }
 
-export function evaluateDependencyIntegrity(
-  missingMap: MissingDependencyMap,
-  workspacePath: string
-): DependencyIntegrityVerdict {
+export function evaluateDependencyIntegrity(missingMap: MissingDependencyMap, workspacePath: string): DependencyIntegrityVerdict {
   const missing: MissingDependency[] = Object.entries(missingMap || {})
     .filter(([packageName]) => packageName && !isTypesOnlyPackage(packageName))
     .map(([packageName, files]) => ({
@@ -46,9 +39,7 @@ export function evaluateDependencyIntegrity(
 
   if (missing.length === 0) return { ok: true, missing: [] }
 
-  const lines = missing.map(
-    (m, index) => `${index + 1}. "${m.packageName}" — imported by ${m.importedBy.join(', ')}`
-  )
+  const lines = missing.map((m, index) => `${index + 1}. "${m.packageName}" — imported by ${m.importedBy.join(', ')}`)
 
   return {
     ok: false,

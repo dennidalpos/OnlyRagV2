@@ -5,9 +5,7 @@ import { en } from './locales/en'
 import { logger } from '../lib/logger'
 
 type NestedKeyOf<ObjectType extends object> = {
-  [Key in keyof ObjectType & (string | number)]: ObjectType[Key] extends object
-    ? `${Key}.${NestedKeyOf<ObjectType[Key]>}`
-    : `${Key}`
+  [Key in keyof ObjectType & (string | number)]: ObjectType[Key] extends object ? `${Key}.${NestedKeyOf<ObjectType[Key]>}` : `${Key}`
 }[keyof ObjectType & (string | number)]
 
 export type TranslationKey = NestedKeyOf<TranslationSchema>
@@ -32,11 +30,7 @@ interface I18nProviderProps {
   onLanguageChange?: (lang: Language) => void
 }
 
-export const I18nProvider: React.FC<I18nProviderProps> = ({
-  children,
-  initialLanguage,
-  onLanguageChange,
-}) => {
+export const I18nProvider: React.FC<I18nProviderProps> = ({ children, initialLanguage, onLanguageChange }) => {
   const [language, setLanguageState] = useState<Language>(() => {
     if (initialLanguage && (initialLanguage === 'it' || initialLanguage === 'en')) {
       return initialLanguage
@@ -53,53 +47,56 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({
     return 'it'
   })
 
-  const setLanguage = useCallback((newLang: Language) => {
-    setLanguageState(newLang)
-    onLanguageChange?.(newLang)
-  }, [onLanguageChange])
+  const setLanguage = useCallback(
+    (newLang: Language) => {
+      setLanguageState(newLang)
+      onLanguageChange?.(newLang)
+    },
+    [onLanguageChange],
+  )
 
   const dict = useMemo(() => dictionaries[language] || dictionaries.it, [language])
 
-  const t = useCallback((key: TranslationKey, params?: Record<string, string | number>): string => {
-    const keys = key.split('.')
-    let current: any = dict
-    let fallback: any = dictionaries.it
+  const t = useCallback(
+    (key: TranslationKey, params?: Record<string, string | number>): string => {
+      const keys = key.split('.')
+      let current: any = dict
+      let fallback: any = dictionaries.it
 
-    for (const k of keys) {
-      if (current && typeof current === 'object' && k in current) {
-        current = current[k]
-      } else {
-        current = undefined
-        break
-      }
-    }
-
-    // Fallback if key missing in selected language
-    if (current === undefined || typeof current !== 'string') {
       for (const k of keys) {
-        if (fallback && typeof fallback === 'object' && k in fallback) {
-          fallback = fallback[k]
+        if (current && typeof current === 'object' && k in current) {
+          current = current[k]
         } else {
-          fallback = undefined
+          current = undefined
           break
         }
       }
-      current = fallback || key
-    }
 
-    if (typeof current !== 'string') {
-      return key
-    }
+      // Fallback if key missing in selected language
+      if (current === undefined || typeof current !== 'string') {
+        for (const k of keys) {
+          if (fallback && typeof fallback === 'object' && k in fallback) {
+            fallback = fallback[k]
+          } else {
+            fallback = undefined
+            break
+          }
+        }
+        current = fallback || key
+      }
 
-    if (params) {
-      return Object.entries(params).reduce(
-        (acc, [paramKey, paramValue]) => acc.replaceAll(`{${paramKey}}`, String(paramValue)),
-        current
-      )
-    }
+      if (typeof current !== 'string') {
+        return key
+      }
 
-    return current
-  }, [dict])
+      if (params) {
+        return Object.entries(params).reduce((acc, [paramKey, paramValue]) => acc.replaceAll(`{${paramKey}}`, String(paramValue)), current)
+      }
+
+      return current
+    },
+    [dict],
+  )
 
   const contextValue = useMemo<I18nContextType>(
     () => ({
@@ -108,7 +105,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({
       t,
       dict,
     }),
-    [language, setLanguage, t, dict]
+    [language, setLanguage, t, dict],
   )
 
   return <I18nContext.Provider value={contextValue}>{children}</I18nContext.Provider>

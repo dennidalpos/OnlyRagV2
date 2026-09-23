@@ -64,10 +64,7 @@ export const InlineDestructiveConfirm: React.FC<InlineDestructiveConfirmProps> =
   }
 
   return (
-    <div
-      className={`flex items-center gap-1.5 shrink-0 ${className}`}
-      onClick={(event) => event.stopPropagation()}
-    >
+    <div className={`flex items-center gap-1.5 shrink-0 ${className}`} onClick={(event) => event.stopPropagation()}>
       {hint && <span className="text-[9px] text-slate-400 leading-tight max-w-[11rem] text-right">{hint}</span>}
       <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
         <button

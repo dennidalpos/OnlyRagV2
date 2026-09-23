@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  getBadgeLang,
-  getStepModelName,
-  extractBaseName,
-  resolveLogCategory,
-} from './agentLogMessageUtils'
+import { getBadgeLang, getStepModelName, extractBaseName, resolveLogCategory } from './agentLogMessageUtils'
 import { AgentActionLog } from '../../types'
 
 describe('agentLogMessageUtils Unit Tests', () => {

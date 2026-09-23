@@ -1,16 +1,5 @@
 import React, { useState } from 'react'
-import {
-  CheckCircle,
-  Edit3,
-  RotateCcw,
-  Plus,
-  Layers,
-  AlertTriangle,
-  Globe,
-  User,
-  Search,
-  PowerOff,
-} from 'lucide-react'
+import { CheckCircle, Edit3, RotateCcw, Plus, Layers, AlertTriangle, Globe, User, Search, PowerOff } from 'lucide-react'
 import { InlineDestructiveConfirm } from '../../common/InlineDestructiveConfirm'
 import { SkillDefinition } from '../../../types'
 import { useTranslation } from '../../../i18n'
@@ -97,20 +86,20 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-            {([
-              { id: 'all', label: t('common.all') },
-              { id: 'hub_original', label: 'Hub' },
-              { id: 'hub_modified', label: 'Mod' },
-              { id: 'local_custom', label: 'Local' },
-            ] as const).map((f) => (
+            {(
+              [
+                { id: 'all', label: t('common.all') },
+                { id: 'hub_original', label: 'Hub' },
+                { id: 'hub_modified', label: 'Mod' },
+                { id: 'local_custom', label: 'Local' },
+              ] as const
+            ).map((f) => (
               <button
                 type="button"
                 key={f.id}
                 onClick={() => setOriginFilter(f.id)}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
-                  originFilter === f.id
-                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                    : 'text-slate-400 hover:text-slate-200'
+                  originFilter === f.id ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 {f.label}
@@ -130,120 +119,104 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
 
       <div className="space-y-3">
         {filteredSkills.length === 0 ? (
-          <div className="text-center py-8 text-slate-400 text-xs">
-            {t('common.none')}
-          </div>
+          <div className="text-center py-8 text-slate-400 text-xs">{t('common.none')}</div>
         ) : (
           filteredSkills.map((skill) => (
-          <div
-            key={skill.id}
-            className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 hover:border-slate-700 transition-all space-y-3"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-bold text-slate-200">{skill.name}</h3>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                    v{skill.version || '1.0.0'}
-                  </span>
+            <div key={skill.id} className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 hover:border-slate-700 transition-all space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-200">{skill.name}</h3>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">v{skill.version || '1.0.0'}</span>
 
-                  {/* Provenance Badges */}
-                  {skill.originType === 'hub_original' && (
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-medium flex items-center gap-1">
-                      <Globe className="w-3 h-3" /> {t('skills.originalHubBadge')} ({skill.originHub || 'Hub'})
-                    </span>
-                  )}
-                  {skill.originType === 'hub_modified' && (
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 font-medium flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" /> {t('skills.modifiedBadge')}
-                    </span>
-                  )}
-                  {skill.originType === 'local_custom' && (
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-medium flex items-center gap-1">
-                      <User className="w-3 h-3" /> {t('skills.customBadge')}
-                    </span>
-                  )}
+                    {/* Provenance Badges */}
+                    {skill.originType === 'hub_original' && (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-medium flex items-center gap-1">
+                        <Globe className="w-3 h-3" /> {t('skills.originalHubBadge')} ({skill.originHub || 'Hub'})
+                      </span>
+                    )}
+                    {skill.originType === 'hub_modified' && (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 font-medium flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> {t('skills.modifiedBadge')}
+                      </span>
+                    )}
+                    {skill.originType === 'local_custom' && (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-medium flex items-center gap-1">
+                        <User className="w-3 h-3" /> {t('skills.customBadge')}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400">{skill.description}</p>
                 </div>
-                <p className="text-xs text-slate-400">{skill.description}</p>
-              </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-1.5 self-end sm:self-start shrink-0">
-                <button
-                  type="button"
-                  onClick={() => onToggleActive(skill.id, skill.isActive)}
-                  aria-label={skill.isActive ? `${t('common.active')}: ${skill.name}` : `${t('common.inactive')}: ${skill.name}`}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 focus-ring ${
-                    skill.isActive
-                      ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
-                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                  }`}
-                  title={skill.isActive ? t('common.active') : t('common.inactive')}
-                >
-                  {skill.isActive ? (
-                    <CheckCircle className="w-3 h-3 text-emerald-400" />
-                  ) : (
-                    <PowerOff className="w-3 h-3 text-slate-500" />
+                {/* Action Buttons */}
+                <div className="flex items-center gap-1.5 self-end sm:self-start shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onToggleActive(skill.id, skill.isActive)}
+                    aria-label={skill.isActive ? `${t('common.active')}: ${skill.name}` : `${t('common.inactive')}: ${skill.name}`}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 focus-ring ${
+                      skill.isActive ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                    }`}
+                    title={skill.isActive ? t('common.active') : t('common.inactive')}
+                  >
+                    {skill.isActive ? <CheckCircle className="w-3 h-3 text-emerald-400" /> : <PowerOff className="w-3 h-3 text-slate-500" />}
+                    {skill.isActive ? t('common.active') : t('common.inactive')}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onEditSkill(skill)}
+                    aria-label={`${t('common.edit')} ${skill.name}`}
+                    className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-cyan-300 hover:bg-slate-700 transition-all focus-ring"
+                    title={t('common.edit')}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+
+                  {skill.originType === 'hub_modified' && (
+                    <InlineDestructiveConfirm
+                      itemLabel={skill.name}
+                      icon={RotateCcw}
+                      actionLabel={t('skills.resetOriginal')}
+                      hint={t('skills.confirmReset')}
+                      onConfirm={() => onResetSkill(skill.id)}
+                    />
                   )}
-                  {skill.isActive ? t('common.active') : t('common.inactive')}
-                </button>
 
+                  <InlineDestructiveConfirm itemLabel={skill.name} hint={t('skills.confirmDelete')} onConfirm={() => onDeleteSkill(skill.id)} />
+                </div>
+              </div>
+
+              {/* Triggers and Tags */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {skill.triggers.map((tr) => (
+                  <span key={tr} className="text-[10px] px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                    trigger: {tr}
+                  </span>
+                ))}
+              </div>
+
+              {/* Expandable Preview */}
+              <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={() => onEditSkill(skill)}
-                  aria-label={`${t('common.edit')} ${skill.name}`}
-                  className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-cyan-300 hover:bg-slate-700 transition-all focus-ring"
-                  title={t('common.edit')}
+                  onClick={() => setExpandedSkillId(expandedSkillId === skill.id ? null : skill.id)}
+                  className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1"
                 >
-                  <Edit3 className="w-3.5 h-3.5" />
+                  {expandedSkillId === skill.id ? t('common.close') : t('common.viewDetails')}
                 </button>
-
-                {skill.originType === 'hub_modified' && (
-                  <InlineDestructiveConfirm
-                    itemLabel={skill.name}
-                    icon={RotateCcw}
-                    actionLabel={t('skills.resetOriginal')}
-                    hint={t('skills.confirmReset')}
-                    onConfirm={() => onResetSkill(skill.id)}
-                  />
-                )}
-
-                <InlineDestructiveConfirm
-                  itemLabel={skill.name}
-                  hint={t('skills.confirmDelete')}
-                  onConfirm={() => onDeleteSkill(skill.id)}
-                />
+                <span className="text-[10px] text-slate-400 font-mono truncate max-w-xs">{skill.filePath}</span>
               </div>
-            </div>
 
-            {/* Triggers and Tags */}
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {skill.triggers.map((tr) => (
-                <span key={tr} className="text-[10px] px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
-                  trigger: {tr}
-                </span>
-              ))}
+              {expandedSkillId === skill.id && (
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 font-mono overflow-x-auto max-h-48 whitespace-pre-wrap">
+                  {skill.content}
+                </div>
+              )}
             </div>
-
-            {/* Expandable Preview */}
-            <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setExpandedSkillId(expandedSkillId === skill.id ? null : skill.id)}
-                className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1"
-              >
-                {expandedSkillId === skill.id ? t('common.close') : t('common.viewDetails')}
-              </button>
-              <span className="text-[10px] text-slate-400 font-mono truncate max-w-xs">{skill.filePath}</span>
-            </div>
-
-            {expandedSkillId === skill.id && (
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 font-mono overflow-x-auto max-h-48 whitespace-pre-wrap">
-                {skill.content}
-              </div>
-            )}
-          </div>
-        )))}
+          ))
+        )}
       </div>
     </div>
   )

@@ -43,7 +43,12 @@ export function authorizeLocalOnly(input: CapabilityPolicyRequest): CapabilityPo
     return result(request, false, 'Git remote access is not allowed in local-only mode')
   }
 
-  if (request.capability === 'shell' && request.operation === 'execute' && shellCommandHasEgress(request.target || '') && !isLoopbackTarget(request.target || '')) {
+  if (
+    request.capability === 'shell' &&
+    request.operation === 'execute' &&
+    shellCommandHasEgress(request.target || '') &&
+    !isLoopbackTarget(request.target || '')
+  ) {
     return result(request, false, 'Shell command targets external network in local-only mode')
   }
 

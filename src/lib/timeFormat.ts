@@ -1,5 +1,3 @@
-
-
 function parseIso(isoTimestamp: string | undefined | null): Date | null {
   if (!isoTimestamp) return null
   const parsed = Date.parse(isoTimestamp)
@@ -24,17 +22,9 @@ export function formatDateTime(isoTimestamp: string | undefined | null): string 
  * Formats a timestamp into a human-readable relative time string
  * (e.g. "5 minutes ago", "yesterday", "in 2 hours") using standard Intl.RelativeTimeFormat.
  */
-export function formatRelativeTime(
-  timestamp: string | Date | number | undefined | null,
-  locale: string = 'en'
-): string {
+export function formatRelativeTime(timestamp: string | Date | number | undefined | null, locale: string = 'en'): string {
   if (!timestamp) return '—'
-  const date =
-    timestamp instanceof Date
-      ? timestamp
-      : typeof timestamp === 'number'
-      ? new Date(timestamp)
-      : parseIso(timestamp)
+  const date = timestamp instanceof Date ? timestamp : typeof timestamp === 'number' ? new Date(timestamp) : parseIso(timestamp)
 
   if (!date) return typeof timestamp === 'string' ? timestamp : '—'
 

@@ -41,8 +41,6 @@ describe('AgentRunMetrics', () => {
 
     const invalidRun = new AgentRunMetrics('invalid-run')
     invalidRun.recordFalseVerified()
-    expect(() => assertZeroFalseVerified([cleanRun.snapshot(), invalidRun.snapshot()])).toThrow(
-      'False verification threshold exceeded in 1 run(s).',
-    )
+    expect(() => assertZeroFalseVerified([cleanRun.snapshot(), invalidRun.snapshot()])).toThrow('False verification threshold exceeded in 1 run(s).')
   })
 })

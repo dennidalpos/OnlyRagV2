@@ -2,10 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { AgentPlan, AppSettings, AgentRunIdentity, InterviewQuestion, PlanGenerationResult, UserInterviewAnswer } from '../types'
 import { soundEffectsService } from '../services/soundEffectsService'
 import { logger } from '../lib/logger'
-import {
-  composeInterviewDecisionPrompt,
-  createAcceptedRecommendationAnswers,
-} from '../../shared/domain/agent/interviewDecisionContext'
+import { composeInterviewDecisionPrompt, createAcceptedRecommendationAnswers } from '../../shared/domain/agent/interviewDecisionContext'
 import { shouldRunPlanInterview } from '../../shared/domain/agent/planInterviewPolicy'
 import { validateInterviewAnswers } from '../../shared/domain/agent/interviewValidation'
 import { createAgentRunIdentity } from '../../shared/domain/agent/agentRunIdentity'
@@ -19,16 +16,15 @@ export async function resolveInterviewPrompt(
   answers: UserInterviewAnswer[],
   enrichPrompt: ((prompt: string, interviewAnswers: UserInterviewAnswer[], questions: InterviewQuestion[]) => Promise<string>) | undefined,
   onEnrichmentFailure: (reason: unknown) => void,
-  questions: InterviewQuestion[] = []
+  questions: InterviewQuestion[] = [],
 ): Promise<string> {
   const losslessPrompt = composeInterviewDecisionPrompt(originalPrompt, answers)
   if (!enrichPrompt || answers.length === 0) return losslessPrompt
 
   try {
     const enriched = await enrichPrompt(originalPrompt, answers, questions)
-    const preservesInputs = typeof enriched === 'string'
-      && enriched.includes(originalPrompt)
-      && answers.every((answer) => enriched.includes(answer.selectedOption))
+    const preservesInputs =
+      typeof enriched === 'string' && enriched.includes(originalPrompt) && answers.every((answer) => enriched.includes(answer.selectedOption))
     if (preservesInputs) return enriched
     onEnrichmentFailure(new Error('Enrichment result omitted the original request or an interview decision'))
   } catch (error) {
@@ -127,10 +123,9 @@ export function usePlanApproval({
 
   const isFlowCurrent = useCallback((scope: PlanFlowScope): boolean => {
     const context = activeContextRef.current
-    return mountedRef.current
-      && flowTokenRef.current === scope.token
-      && context.activeSessionId === scope.sessionId
-      && context.workspacePath === scope.workspacePath
+    return (
+      mountedRef.current && flowTokenRef.current === scope.token && context.activeSessionId === scope.sessionId && context.workspacePath === scope.workspacePath
+    )
   }, [])
 
   useEffect(() => {
@@ -162,7 +157,7 @@ export function usePlanApproval({
       targetModel?: string,
       currentStep: number = 0,
       interviewContext?: { originalPrompt: string; answers: UserInterviewAnswer[] },
-      inheritedScope?: PlanFlowScope
+      inheritedScope?: PlanFlowScope,
     ): Promise<AgentPlan | null> => {
       const scope = inheritedScope || beginFlowScope()
       if (!isFlowCurrent(scope)) {
@@ -218,8 +213,8 @@ export function usePlanApproval({
               settings,
               lastApprovedPlan,
               scope.workspacePath,
-              previousDecisions
-              , scope.identity
+              previousDecisions,
+              scope.identity,
             )
             if (!isFlowCurrent(scope)) return null
             generatedPlan = genRes
@@ -320,18 +315,21 @@ export function usePlanApproval({
         return failedPlan
       }
     },
-    [beginFlowScope, isFlowCurrent, settings, trackOperation, updateCurrentSessionPlans]
+    [beginFlowScope, isFlowCurrent, settings, trackOperation, updateCurrentSessionPlans],
   )
 
-  const replacePlanRevision = useCallback((revision: AgentPlan) => {
-    updateCurrentSessionPlans((prev) => {
-      const idx = prev.findIndex((plan) => plan.id === revision.id)
-      if (idx < 0) return prev
-      const copy = [...prev]
-      copy[idx] = revision
-      return copy
-    })
-  }, [updateCurrentSessionPlans])
+  const replacePlanRevision = useCallback(
+    (revision: AgentPlan) => {
+      updateCurrentSessionPlans((prev) => {
+        const idx = prev.findIndex((plan) => plan.id === revision.id)
+        if (idx < 0) return prev
+        const copy = [...prev]
+        copy[idx] = revision
+        return copy
+      })
+    },
+    [updateCurrentSessionPlans],
+  )
 
   const handleApprovePlan = useCallback(async () => {
     const target = currentPlan
@@ -379,13 +377,13 @@ export function usePlanApproval({
         )
       } catch (err: any) {
         logger.warn('usePlanApproval', `agentPlanSeed IPC failed: ${err?.message}`)
-        await recover(err?.message || 'Preparazione del piano per l\'agente non riuscita. Riprova.')
+        await recover(err?.message || "Preparazione del piano per l'agente non riuscita. Riprova.")
         return
       }
 
       if (!isFlowCurrent(scope)) return
       if (!seeded) {
-        await recover('Preparazione del piano per l\'agente non riuscita. Riprova.')
+        await recover("Preparazione del piano per l'agente non riuscita. Riprova.")
         return
       }
 
@@ -409,34 +407,40 @@ export function usePlanApproval({
     })
   }, [currentPlan, updateCurrentSessionPlans])
 
-  const savePlanReview = useCallback(async (revision: AgentPlan): Promise<boolean> => {
-    const target = currentPlan
-    if (!target || target.status !== 'ready' || revision.id !== target.id) return false
-    const context = { ...activeContextRef.current }
-    setIsSavingPlanReview(true)
-    try {
-      const persisted = await onPersistPlan(revision)
-      if (!persisted) return false
-      const active = activeContextRef.current
-      if (active.activeSessionId !== context.activeSessionId || active.workspacePath !== context.workspacePath) return false
-      replacePlanRevision(revision)
-      return true
-    } catch (err: any) {
-      logger.warn('usePlanApproval', `Could not persist plan review ${revision.id}: ${err?.message}`)
-      return false
-    } finally {
-      const active = activeContextRef.current
-      if (active.activeSessionId === context.activeSessionId && active.workspacePath === context.workspacePath) {
-        setIsSavingPlanReview(false)
+  const savePlanReview = useCallback(
+    async (revision: AgentPlan): Promise<boolean> => {
+      const target = currentPlan
+      if (!target || target.status !== 'ready' || revision.id !== target.id) return false
+      const context = { ...activeContextRef.current }
+      setIsSavingPlanReview(true)
+      try {
+        const persisted = await onPersistPlan(revision)
+        if (!persisted) return false
+        const active = activeContextRef.current
+        if (active.activeSessionId !== context.activeSessionId || active.workspacePath !== context.workspacePath) return false
+        replacePlanRevision(revision)
+        return true
+      } catch (err: any) {
+        logger.warn('usePlanApproval', `Could not persist plan review ${revision.id}: ${err?.message}`)
+        return false
+      } finally {
+        const active = activeContextRef.current
+        if (active.activeSessionId === context.activeSessionId && active.workspacePath === context.workspacePath) {
+          setIsSavingPlanReview(false)
+        }
       }
-    }
-  }, [currentPlan, onPersistPlan, replacePlanRevision])
+    },
+    [currentPlan, onPersistPlan, replacePlanRevision],
+  )
 
-  const selectPlanVersion = useCallback((idx: number) => {
-    if (idx >= 0 && idx < planHistory.length) {
-      setActivePlanIndex(idx)
-    }
-  }, [planHistory.length])
+  const selectPlanVersion = useCallback(
+    (idx: number) => {
+      if (idx >= 0 && idx < planHistory.length) {
+        setActivePlanIndex(idx)
+      }
+    },
+    [planHistory.length],
+  )
 
   const resetPlanHistory = useCallback(() => {
     flowTokenRef.current += 1
@@ -449,9 +453,7 @@ export function usePlanApproval({
       if (activeOperationRef.current) return null
       const scope = beginFlowScope()
       logger.info('usePlanApproval', `Plan flow started (prompt length: ${prompt.length}).`)
-      updateCurrentSessionPlans((prev) => prev.map((plan) =>
-        plan.status === 'generating' ? { ...plan, status: 'cancelled' } : plan
-      ))
+      updateCurrentSessionPlans((prev) => prev.map((plan) => (plan.status === 'generating' ? { ...plan, status: 'cancelled' } : plan)))
       setIsGeneratingPlan(false)
       setIsCancellingPlanFlow(false)
       setIsAnalyzingInterview(false)
@@ -459,9 +461,7 @@ export function usePlanApproval({
       setInterviewQuestions([])
       pendingFlowRef.current = { prompt, targetModel, currentStep, questions: [], scope }
 
-      const previousDecisions = [...planHistoryRef.current]
-        .reverse()
-        .find((plan) => plan.interviewAnswers?.length)?.interviewAnswers || []
+      const previousDecisions = [...planHistoryRef.current].reverse().find((plan) => plan.interviewAnswers?.length)?.interviewAnswers || []
       const needsInterview = shouldRunPlanInterview(prompt, previousDecisions)
 
       if (needsInterview && window.electronAPI?.agentPlanInterview && settings && settings.enablePrePlanInterview !== false) {
@@ -470,14 +470,7 @@ export function usePlanApproval({
         try {
           const modelToUse = targetModel || settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
           trackOperation(scope.identity.runId)
-          const interviewRes = await window.electronAPI.agentPlanInterview(
-            prompt,
-            modelToUse,
-            settings,
-            scope.workspacePath,
-            previousDecisions,
-            scope.identity,
-          )
+          const interviewRes = await window.electronAPI.agentPlanInterview(prompt, modelToUse, settings, scope.workspacePath, previousDecisions, scope.identity)
           if (!isFlowCurrent(scope)) return null
           if (activeOperationRef.current?.token === scope.token) activeOperationRef.current = null
           setIsAnalyzingInterview(false)
@@ -568,7 +561,7 @@ export function usePlanApproval({
       setInterviewQuestions([])
       return generatePlan(prompt, targetModel, currentStep, { originalPrompt: prompt, answers: [] }, scope)
     },
-    [beginFlowScope, generatePlan, isFlowCurrent, settings, trackOperation, updateCurrentSessionPlans]
+    [beginFlowScope, generatePlan, isFlowCurrent, settings, trackOperation, updateCurrentSessionPlans],
   )
 
   const confirmInterviewAnswers = useCallback(
@@ -590,17 +583,23 @@ export function usePlanApproval({
         validation.answers,
         window.electronAPI?.agentPlanEnrichPrompt,
         (err: any) => logger.warn('usePlanApproval', `agentPlanEnrichPrompt failed: ${err?.message || String(err)}`),
-        pending.questions
+        pending.questions,
       )
       if (!isFlowCurrent(pending.scope)) return null
       setIsAnalyzingInterview(false)
 
-      return generatePlan(effectivePrompt, pending.targetModel, pending.currentStep, {
-        originalPrompt: pending.prompt,
-        answers: validation.answers,
-      }, pending.scope)
+      return generatePlan(
+        effectivePrompt,
+        pending.targetModel,
+        pending.currentStep,
+        {
+          originalPrompt: pending.prompt,
+          answers: validation.answers,
+        },
+        pending.scope,
+      )
     },
-    [generatePlan, isFlowCurrent]
+    [generatePlan, isFlowCurrent],
   )
 
   const skipInterviewWithRecommended = useCallback(() => {
@@ -629,7 +628,7 @@ export function usePlanApproval({
     flowTokenRef.current += 1
     setIsInterviewActive(false)
     setInterviewQuestions([])
-    updateCurrentSessionPlans((plans) => plans.map((plan) => plan.status === 'generating' ? { ...plan, status: 'cancelled' } : plan))
+    updateCurrentSessionPlans((plans) => plans.map((plan) => (plan.status === 'generating' ? { ...plan, status: 'cancelled' } : plan)))
     const cancelled = Boolean(await window.electronAPI?.agentPlanCancel?.(scope.identity).then((result) => result.success))
     activeOperationRef.current = null
     setIsCancellingPlanFlow(false)

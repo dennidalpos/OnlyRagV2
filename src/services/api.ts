@@ -77,12 +77,24 @@ export const apiService = {
     normalizationModel?: string,
     numCtx?: number,
     taskId?: string,
-    normalizationThink?: boolean
+    normalizationThink?: boolean,
   ): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
-      logger.info('ApiService:Ingestion', `Initiating ingestion for file: ${filePath} (normalizeWithLlm=${normalizeWithLlm}, normalizationModel=${normalizationModel})`)
-      const res = await window.electronAPI.ingestFile(filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx, taskId, normalizationThink)
+      logger.info(
+        'ApiService:Ingestion',
+        `Initiating ingestion for file: ${filePath} (normalizeWithLlm=${normalizeWithLlm}, normalizationModel=${normalizationModel})`,
+      )
+      const res = await window.electronAPI.ingestFile(
+        filePath,
+        visionModel,
+        visionPrompt,
+        normalizeWithLlm,
+        normalizationModel,
+        numCtx,
+        taskId,
+        normalizationThink,
+      )
       if (!res.success) {
         logger.warn('ApiService:Ingestion', `Ingestion warning/error: ${res.error}`)
       } else {
@@ -112,7 +124,15 @@ export const apiService = {
     }
   },
 
-  async translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string, targetDir?: string, numCtx?: number, think?: boolean): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
+  async translateDocumentInplace(
+    docId: string,
+    sourceLang: string,
+    targetLang: string,
+    model?: string,
+    targetDir?: string,
+    numCtx?: number,
+    think?: boolean,
+  ): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       logger.info('ApiService:Ingestion', `Translating document in place ${docId} (${sourceLang} -> ${targetLang})`)
@@ -190,7 +210,12 @@ export const apiService = {
     }
   },
 
-  async writeWorkspaceFile(filePath: string, content: string, expectedContentHash?: string, workspaceRoot?: string): Promise<{ success: boolean; contentHash?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean; error?: string }> {
+  async writeWorkspaceFile(
+    filePath: string,
+    content: string,
+    expectedContentHash?: string,
+    workspaceRoot?: string,
+  ): Promise<{ success: boolean; contentHash?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       logger.info('ApiService:Workspace', `Writing file content to ${filePath}`)
@@ -386,7 +411,11 @@ export const apiService = {
     }
   },
 
-  async installSkillFromHub(hubSkillId: string, workspaceRoot?: string, hubSourceId?: string): Promise<{ success: boolean; skill?: SkillDefinition; error?: string }> {
+  async installSkillFromHub(
+    hubSkillId: string,
+    workspaceRoot?: string,
+    hubSourceId?: string,
+  ): Promise<{ success: boolean; skill?: SkillDefinition; error?: string }> {
     if (!window.electronAPI?.installSkillFromHub) return { success: false, error: 'Electron API unavailable' }
     try {
       return await window.electronAPI.installSkillFromHub(hubSkillId, workspaceRoot, hubSourceId)

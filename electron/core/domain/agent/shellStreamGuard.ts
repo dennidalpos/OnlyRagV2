@@ -34,7 +34,10 @@ export function sanitizePowerShellCommand(cmd: string): string {
 
   // 1. Expand mkdir -p with brace syntax e.g. mkdir -p src/{package.json, index.html} or mkdir -p dir1 dir2
   clean = clean.replace(/mkdir\s+(?:-p\s+)?([^{\s;]+)\{([^}]+)\}/gi, (_m, prefix, inner) => {
-    const items = inner.split(',').map((s: string) => s.trim()).filter(Boolean)
+    const items = inner
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter(Boolean)
     const paths = items.map((item: string) => `"${prefix}${item}"`).join(', ')
     return `New-Item -ItemType Directory -Force -Path ${paths}`
   })

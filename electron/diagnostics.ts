@@ -65,7 +65,6 @@ export interface DiagnosticsData {
   timestamp: string
 }
 
-
 export function generateDiagnosticsReport(diagnostics: DiagnosticsData, recentLogs: LogEntry[] = []): string {
   return `# OnlyRag V2 - System Diagnostics & Health Report
 Generated at: ${diagnostics.timestamp}

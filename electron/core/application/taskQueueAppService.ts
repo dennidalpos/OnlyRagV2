@@ -43,10 +43,7 @@ export class TaskQueueAppService {
     }
   }
 
-  public async scheduleAgentTask(
-    payload: AgentTaskPayload,
-    rendererEvents: RendererEventSink
-  ): Promise<AgentTaskResult> {
+  public async scheduleAgentTask(payload: AgentTaskPayload, rendererEvents: RendererEventSink): Promise<AgentTaskResult> {
     if (payload.identity?.conversationId && payload.sessionId && payload.identity.conversationId !== payload.sessionId) {
       return { success: false, summary: 'Agent run identity mismatch', error: 'conversationId does not match sessionId' }
     }
@@ -106,7 +103,11 @@ export class TaskQueueAppService {
     const queuePosition = runningCount >= this.queue.getMaxConcurrency() ? queuedCount : 0
 
     if (runningCount >= this.queue.getMaxConcurrency()) {
-      logger.log('INFO', 'TaskQueueAppService', `Task ${taskId} queued (Active: ${runningCount}/${this.queue.getMaxConcurrency()} | Queue depth: ${queuedCount})`)
+      logger.log(
+        'INFO',
+        'TaskQueueAppService',
+        `Task ${taskId} queued (Active: ${runningCount}/${this.queue.getMaxConcurrency()} | Queue depth: ${queuedCount})`,
+      )
       rendererEvents.send('agent:log', {
         ...identity,
         id: `${Date.now()}-queued`,
@@ -118,14 +119,16 @@ export class TaskQueueAppService {
     }
 
     // Schedule into serial PQueue
-    this.pQueue.add(async () => {
-      const nextItem = this.queue.popNext()
-      if (nextItem) {
-        await this.executeTaskItem(nextItem)
-      }
-    }).catch((err) => {
-      logger.log('ERROR', 'TaskQueueAppService', `Process queue error: ${err.message}`)
-    })
+    this.pQueue
+      .add(async () => {
+        const nextItem = this.queue.popNext()
+        if (nextItem) {
+          await this.executeTaskItem(nextItem)
+        }
+      })
+      .catch((err) => {
+        logger.log('ERROR', 'TaskQueueAppService', `Process queue error: ${err.message}`)
+      })
 
     return {
       success: true,
@@ -154,12 +157,14 @@ export class TaskQueueAppService {
     const { payload: taskPayload, rendererEvents, resolve } = payload
     let transaction: DisposableAgentWorkspace | undefined
 
-    logger.log('INFO', 'TaskQueueAppService', `Starting task execution [${id}] with model '${taskPayload.activeModel || taskPayload.settings?.codingModel || 'default'}'`)
+    logger.log(
+      'INFO',
+      'TaskQueueAppService',
+      `Starting task execution [${id}] with model '${taskPayload.activeModel || taskPayload.settings?.codingModel || 'default'}'`,
+    )
 
     try {
-      transaction = taskPayload.workspacePath && !taskPayload.isStandaloneMode
-        ? DisposableAgentWorkspace.create(taskPayload.workspacePath, id)
-        : undefined
+      transaction = taskPayload.workspacePath && !taskPayload.isStandaloneMode ? DisposableAgentWorkspace.create(taskPayload.workspacePath, id) : undefined
       const executionPayload = transaction
         ? { ...taskPayload, sourceWorkspacePath: taskPayload.workspacePath, workspacePath: transaction.workspacePath }
         : taskPayload

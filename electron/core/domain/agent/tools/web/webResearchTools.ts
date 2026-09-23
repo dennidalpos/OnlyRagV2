@@ -53,10 +53,7 @@ export async function executeWebSearch(
   }
 }
 
-export async function executeWebContentFetch(
-  targetUrl: string,
-  fetchContent: (url: string) => Promise<WebContentResponse>,
-): Promise<ToolExecutionResult> {
+export async function executeWebContentFetch(targetUrl: string, fetchContent: (url: string) => Promise<WebContentResponse>): Promise<ToolExecutionResult> {
   try {
     const fetchResult = await fetchContent(targetUrl)
     if (fetchResult.success && fetchResult.content) {

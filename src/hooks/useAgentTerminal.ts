@@ -33,35 +33,38 @@ export function useAgentTerminal({ workspacePath, onCommandNotice }: UseAgentTer
     setTerminalLogs((prev) => [...prev, ...entries].slice(-MAX_TERMINAL_LINES))
   }, [])
 
-  const navigateHistory = useCallback((direction: 'up' | 'down') => {
-    if (commandHistory.length === 0) return
+  const navigateHistory = useCallback(
+    (direction: 'up' | 'down') => {
+      if (commandHistory.length === 0) return
 
-    const currentIndex = historyIndexRef.current
-    let nextIndex = currentIndex
+      const currentIndex = historyIndexRef.current
+      let nextIndex = currentIndex
 
-    if (direction === 'up') {
-      if (currentIndex === -1) {
-        nextIndex = commandHistory.length - 1
-      } else if (currentIndex > 0) {
-        nextIndex = currentIndex - 1
-      }
-    } else if (direction === 'down') {
-      if (currentIndex !== -1) {
-        if (currentIndex < commandHistory.length - 1) {
-          nextIndex = currentIndex + 1
-        } else {
-          nextIndex = -1
+      if (direction === 'up') {
+        if (currentIndex === -1) {
+          nextIndex = commandHistory.length - 1
+        } else if (currentIndex > 0) {
+          nextIndex = currentIndex - 1
+        }
+      } else if (direction === 'down') {
+        if (currentIndex !== -1) {
+          if (currentIndex < commandHistory.length - 1) {
+            nextIndex = currentIndex + 1
+          } else {
+            nextIndex = -1
+          }
         }
       }
-    }
 
-    historyIndexRef.current = nextIndex
-    if (nextIndex !== -1 && commandHistory[nextIndex] !== undefined) {
-      setTerminalInput(commandHistory[nextIndex])
-    } else if (nextIndex === -1) {
-      setTerminalInput('')
-    }
-  }, [commandHistory])
+      historyIndexRef.current = nextIndex
+      if (nextIndex !== -1 && commandHistory[nextIndex] !== undefined) {
+        setTerminalInput(commandHistory[nextIndex])
+      } else if (nextIndex === -1) {
+        setTerminalInput('')
+      }
+    },
+    [commandHistory],
+  )
 
   const handleRunTerminalCommand = useCallback(
     async (cmdToRun?: string, timeoutMs: number = DEFAULT_COMMAND_TIMEOUT_MS) => {
@@ -87,7 +90,7 @@ export function useAgentTerminal({ workspacePath, onCommandNotice }: UseAgentTer
 
       return res
     },
-    [terminalInput, workspacePath, appendTerminalLogs, onCommandNotice]
+    [terminalInput, workspacePath, appendTerminalLogs, onCommandNotice],
   )
 
   const handleClearTerminal = useCallback(() => {

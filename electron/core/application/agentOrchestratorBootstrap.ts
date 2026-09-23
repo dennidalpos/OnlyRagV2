@@ -20,12 +20,7 @@ import { buildSessionPersistence } from './agentOrchestratorSessionPersistence'
 import { armSessionWatchdog } from './agentOrchestratorSessionWatchdog'
 import { redactSecrets } from '../../logRedactor'
 
-export type EmitLog = (
-  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
-  message: string,
-  detail?: string,
-  meta?: Partial<AgentLogEntry>
-) => void
+export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface BootstrapParams {
   payload: AgentTaskPayload
@@ -99,9 +94,7 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
         message: redactSecrets(message),
         detail: detail ? redactSecrets(detail) : undefined,
         target: meta?.target ? redactSecrets(meta.target) : meta?.target,
-        testRun: meta?.testRun
-          ? { ...meta.testRun, summary: redactSecrets(meta.testRun.summary) }
-          : undefined,
+        testRun: meta?.testRun ? { ...meta.testRun, summary: redactSecrets(meta.testRun.summary) } : undefined,
       })
     }
   }

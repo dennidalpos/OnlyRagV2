@@ -51,9 +51,7 @@ afterEach(() => {
 })
 
 describe('partial delivery — the model is told which file it still owes', () => {
-  const tailwindMilestone = [
-    { id: 'm-6', title: 'Configure Tailwind CSS in `postcss.config.js` and `tailwind.config.js`', status: 'in_progress' as const },
-  ]
+  const tailwindMilestone = [{ id: 'm-6', title: 'Configure Tailwind CSS in `postcss.config.js` and `tailwind.config.js`', status: 'in_progress' as const }]
 
   it('names the missing deliverable after the first half lands', async () => {
     fs.writeFileSync(path.join(tempDir, 'postcss.config.js'), 'module.exports = { plugins: { tailwindcss: {} } }\n')

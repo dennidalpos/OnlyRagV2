@@ -75,10 +75,7 @@ function cleanupSession(session: AgentSession) {
     logger.log('WARN', 'AgentOrchestrator', `Failed discarding isolated workspace during cleanup: ${err?.message}`)
   }
   if (session.rendererEvents?.isAvailable()) {
-    const nonRollbackEffects = [
-      ...(session.nonRollbackEffects || []),
-      ...rollbackErrors.map((error) => `rollback_workspace: ${error}`),
-    ]
+    const nonRollbackEffects = [...(session.nonRollbackEffects || []), ...rollbackErrors.map((error) => `rollback_workspace: ${error}`)]
     session.rendererEvents.send('agent:log', {
       ...session.identity,
       id: `${Date.now()}-cancelled`,

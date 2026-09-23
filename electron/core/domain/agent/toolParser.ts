@@ -27,7 +27,10 @@ function sanitizeAndParseJson(raw: string): any {
     let clean = raw.trim()
 
     // Remove reasoning blocks before extraction.
-    clean = clean.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').replace(/<thought>[\s\S]*?(?:<\/thought>|$)/gi, '').trim()
+    clean = clean
+      .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '')
+      .replace(/<thought>[\s\S]*?(?:<\/thought>|$)/gi, '')
+      .trim()
 
     // 2. Normalize Windows file paths with single backslashes (e.g. "filePath": "C:\Users\test" -> "C:\\Users\\test")
     clean = clean.replace(/("(?:filePath|path|dirPath|target_file|file_path|filename|destination)"\s*:\s*)"([^"]*)"/gi, (_m, keyPart, pathVal) => {
@@ -82,9 +85,7 @@ function extractToolCallFromText(cleanText: string, onRejection?: ToolCallReject
 
   // Prefer fenced and tagged tool-call blocks.
   const toolCallMatch =
-    cleanText.match(/<tool_call>([\s\S]*?)<\/tool_call>/i) ||
-    cleanText.match(/```json\s*([\s\S]*?)\s*```/i) ||
-    cleanText.match(/```\s*([\s\S]*?)\s*```/i)
+    cleanText.match(/<tool_call>([\s\S]*?)<\/tool_call>/i) || cleanText.match(/```json\s*([\s\S]*?)\s*```/i) || cleanText.match(/```\s*([\s\S]*?)\s*```/i)
 
   // Try the first candidate that validates.
   const candidates: string[] = []
@@ -103,9 +104,8 @@ function extractToolCallFromText(cleanText: string, onRejection?: ToolCallReject
     // Try finding raw JSON object containing "tool"/'tool' (prompt-engineered format) or "name"+"arguments" together (native tool-calling / OpenAI function-call format, e.g.
     const lowerText = cleanText.toLowerCase()
     const hasNativeCallShape = /"name"|'name'/.test(lowerText) && /"arguments"|'arguments'/.test(lowerText)
-    const toolIdx = ['"tool"', "'tool'", ...(hasNativeCallShape ? ['"name"', "'name'"] : [])]
-      .map((key) => lowerText.indexOf(key))
-      .find((idx) => idx !== -1) ?? -1
+    const toolIdx =
+      ['"tool"', "'tool'", ...(hasNativeCallShape ? ['"name"', "'name'"] : [])].map((key) => lowerText.indexOf(key)).find((idx) => idx !== -1) ?? -1
     if (toolIdx !== -1) {
       const firstBrace = cleanText.lastIndexOf('{', toolIdx)
       if (firstBrace !== -1) {
@@ -219,7 +219,10 @@ function parseDiffCodeBlockFallback(rawText: string): AgentToolCall | null {
   if (diffMatch) {
     const precedingText = (diffMatch[1] || '').trim()
     let filePath = ''
-    const lines = precedingText.split('\n').map((l) => l.trim()).filter(Boolean)
+    const lines = precedingText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
     if (lines.length > 0) {
       for (let i = lines.length - 1; i >= 0; i--) {
         const line = lines[i]

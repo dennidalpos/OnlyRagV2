@@ -1,5 +1,3 @@
-
-
 /** Rounds of correct-and-re-verify allowed before the session is given up as failed. */
 export const MAX_VERIFICATION_FIX_CYCLES = 3
 

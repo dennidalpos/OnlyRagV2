@@ -1,22 +1,10 @@
 import React from 'react'
-import {
-  Code,
-  MessageSquare,
-  Languages,
-  FileText,
-  Database,
-  Eye,
-  Activity,
-  Scale,
-} from 'lucide-react'
+import { Code, MessageSquare, Languages, FileText, Database, Eye, Activity, Scale } from 'lucide-react'
 import { DiagnosticsData, AppSettings } from '../../types'
 import { useTranslation } from '../../i18n'
 import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
 import { resolveVerificationStatus } from '../../services/codingModelMatrix'
-import {
-  buildHardwareWizardModelOptions,
-  CODING_CATALOG_MODEL_NAMES,
-} from '../../../shared/domain/hardware/hardwareModelCatalog'
+import { buildHardwareWizardModelOptions, CODING_CATALOG_MODEL_NAMES } from '../../../shared/domain/hardware/hardwareModelCatalog'
 import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
 import { extractHardwareFacts } from '../../services/hardwareRecommendationEngine'
 import { buildOllamaModelOptions } from '../../services/ollamaModelOptions'
@@ -33,11 +21,7 @@ interface ModelAssignmentGridProps {
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void
 }
 
-export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
-  diagnostics,
-  settings,
-  onUpdateSettings,
-}) => {
+export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagnostics, settings, onUpdateSettings }) => {
   const { t } = useTranslation()
   const models = diagnostics?.ollama.models || []
   const { metrics } = useOllamaModelMetrics(settings.ollamaHost)
@@ -90,12 +74,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               <Code className="w-4.5 h-4.5 text-cyan-400" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                1. AI Coding Agent Studio
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                Configurazione del modello di sviluppo principale.
-              </p>
+              <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">1. AI Coding Agent Studio</h2>
+              <p className="text-[11px] text-slate-400">Configurazione del modello di sviluppo principale.</p>
             </div>
           </div>
         </div>
@@ -131,11 +111,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
                 onUpdateSettings={onUpdateSettings}
               />
             )}
-            <p className="text-[10px] text-slate-400 leading-tight">
-              Esegue i tool, scrive codice e mantiene la KV-cache fissa in GPU a zero latenza.
-            </p>
+            <p className="text-[10px] text-slate-400 leading-tight">Esegue i tool, scrive codice e mantiene la KV-cache fissa in GPU a zero latenza.</p>
           </div>
-
         </div>
       </div>
 
@@ -155,11 +132,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-purple-300 block">{t('settings.chatModel')}:</label>
-            <ModelSelect
-              ariaLabel="Select RAG & Chat model"
-              value={chatModel}
-              onChange={(e) => onUpdateSettings({ chatModel: e.target.value })}
-            >
+            <ModelSelect ariaLabel="Select RAG & Chat model" value={chatModel} onChange={(e) => onUpdateSettings({ chatModel: e.target.value })}>
               {renderEmptyOption()}
               {buildModelOptions(chatModel).map((m) => renderOption(m, m))}
             </ModelSelect>
@@ -173,7 +146,6 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               />
             )}
           </div>
-
         </div>
 
         {/* Doc Translation */}
@@ -208,7 +180,6 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               />
             )}
           </div>
-
         </div>
       </div>
 
@@ -233,11 +204,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               </span>
               <span className="text-[10px] text-slate-400 font-mono">Vision OCR</span>
             </div>
-            <ModelSelect
-              ariaLabel="Select Vision & OCR model"
-              value={visionModel}
-              onChange={(e) => onUpdateSettings({ visionModel: e.target.value })}
-            >
+            <ModelSelect ariaLabel="Select Vision & OCR model" value={visionModel} onChange={(e) => onUpdateSettings({ visionModel: e.target.value })}>
               {renderEmptyOption()}
               {buildModelOptions(visionModel).map((m) => renderOption(m, m))}
             </ModelSelect>

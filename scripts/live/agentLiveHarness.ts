@@ -1,4 +1,3 @@
-
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -14,17 +13,10 @@ import { codingAgentLogger } from '../../electron/core/infrastructure/logging/co
 const LIVE_RUN_SNAPSHOT_ROOT = path.join(os.homedir(), 'Desktop', 'onlyrag_live_snapshots')
 
 /** Copies both audit-log generations before a later run or workspace cleanup can remove them. */
-export function snapshotLiveAuditLogs(args: {
-  sessionId: string
-  label: string
-  sourceLogPath?: string
-  destinationRoot?: string
-}): string {
+export function snapshotLiveAuditLogs(args: { sessionId: string; label: string; sourceLogPath?: string; destinationRoot?: string }): string {
   const sourceLogPath = args.sourceLogPath || codingAgentLogger.getLogFilePath()
   const sourceDir = path.dirname(sourceLogPath)
-  const sourceFiles = [sourceLogPath, path.join(sourceDir, 'coding_agent_audit.1.log')].filter((filePath) =>
-    fs.existsSync(filePath)
-  )
+  const sourceFiles = [sourceLogPath, path.join(sourceDir, 'coding_agent_audit.1.log')].filter((filePath) => fs.existsSync(filePath))
   if (sourceFiles.length === 0) {
     throw new Error(`No coding agent audit log found for live run ${args.sessionId} at ${sourceDir}`)
   }
@@ -37,7 +29,7 @@ export function snapshotLiveAuditLogs(args: {
   fs.writeFileSync(
     path.join(runDir, 'manifest.json'),
     JSON.stringify({ sessionId: args.sessionId, label: args.label, capturedAt: new Date().toISOString() }, null, 2),
-    'utf-8'
+    'utf-8',
   )
   return runDir
 }
@@ -47,9 +39,7 @@ export function loadRealSettings(overrides: Partial<AppSettings> = {}): AppSetti
   const appData = process.env.APPDATA || path.join(process.env.USERPROFILE || '', 'AppData', 'Roaming')
   const settingsPath = path.join(appData, 'onlyrag-v2', 'settings.json')
   if (!fs.existsSync(settingsPath)) {
-    throw new Error(
-      `No settings at ${settingsPath}. Run the app once, or pass an explicit settings object to the scenario.`
-    )
+    throw new Error(`No settings at ${settingsPath}. Run the app once, or pass an explicit settings object to the scenario.`)
   }
   return { ...JSON.parse(fs.readFileSync(settingsPath, 'utf-8')), ...overrides } as AppSettings
 }
@@ -115,12 +105,7 @@ export async function seedGeneratedPlan(args: {
   }
 
   // The ENRICHED prompt is seeded as the session's task, not the original: the orchestrator replays it every turn, and a plan drafted against decisions the agent never sees would have it re-deciding them mid-run.
-  await agentSessionStateRepository.seedPlanMilestones(
-    args.sessionId,
-    args.workspacePath,
-    plan.milestones,
-    effectivePrompt
-  )
+  await agentSessionStateRepository.seedPlanMilestones(args.sessionId, args.workspacePath, plan.milestones, effectivePrompt)
 
   return { milestones: plan.milestones, effectivePrompt, questions, answers }
 }
@@ -186,12 +171,7 @@ export interface LiveRunMetrics {
 }
 
 /** Reads milestone delivery and the application-owned terminal status plus their context. */
-export function readRunMetrics(args: {
-  workspacePath: string
-  sessionId: string
-  success: boolean
-  summary?: string
-}): LiveRunMetrics {
+export function readRunMetrics(args: { workspacePath: string; sessionId: string; success: boolean; summary?: string }): LiveRunMetrics {
   const state = readSessionState(args.workspacePath, args.sessionId)
   const milestones = state.planMilestones || []
   // Capped at 100 entries by EpisodicMemoryCompactor.recordStep; the step ceiling these
@@ -212,9 +192,7 @@ export function readRunMetrics(args: {
     pending: milestones.length - verified - failed,
     verifiedRatio: milestones.length > 0 ? verified / milestones.length : 0,
     completionStatus: state.completionStatus,
-    commands: episodes
-      .filter((e) => e.tool === 'run_command')
-      .map((e) => `[step ${e.step}] ${e.status} ${e.target || '(no command recorded)'}`),
+    commands: episodes.filter((e) => e.tool === 'run_command').map((e) => `[step ${e.step}] ${e.status} ${e.target || '(no command recorded)'}`),
     toolCalls: episodes.length,
     failedToolCalls: episodes.filter((e) => e.status === 'FAILURE' || e.status === 'BLOCKED').length,
     runtimeProfile: state.ollamaRuntimeProfile,
@@ -226,13 +204,7 @@ export function readRunMetrics(args: {
 }
 
 /** One-line-per-fact dump, so a scenario's console output is diffable between runs. */
-export function reportRun(args: {
-  label: string
-  workspacePath: string
-  sessionId: string
-  success: boolean
-  summary?: string
-}): LiveRunMetrics {
+export function reportRun(args: { label: string; workspacePath: string; sessionId: string; success: boolean; summary?: string }): LiveRunMetrics {
   const metrics = readRunMetrics(args)
   console.log(`\n===== ${args.label} =====`)
   console.log(`success: ${args.success}`)
@@ -244,14 +216,14 @@ export function reportRun(args: {
   for (const f of listWorkspaceFiles(args.workspacePath)) console.log(`  ${f}`)
 
   console.log(`\n----- ${args.label}: run metrics -----`)
-  console.log(
-    `steps: ${metrics.stepsUsed}/${metrics.maxSteps}${metrics.hitStepCeiling ? ' (CEILING REACHED)' : ''}`
-  )
+  console.log(`steps: ${metrics.stepsUsed}/${metrics.maxSteps}${metrics.hitStepCeiling ? ' (CEILING REACHED)' : ''}`)
   console.log(
     `milestones: ${metrics.verified} verified / ${metrics.failed} failed / ${metrics.pending} pending ` +
-      `of ${metrics.milestones.length} (${Math.round(metrics.verifiedRatio * 100)}%)`
+      `of ${metrics.milestones.length} (${Math.round(metrics.verifiedRatio * 100)}%)`,
   )
-  console.log(`application closure: ${metrics.completionStatus || 'not persisted'} (${metrics.terminationReason || 'no reason'}${metrics.terminationGuard ? `, guard ${metrics.terminationGuard}` : ''})`)
+  console.log(
+    `application closure: ${metrics.completionStatus || 'not persisted'} (${metrics.terminationReason || 'no reason'}${metrics.terminationGuard ? `, guard ${metrics.terminationGuard}` : ''})`,
+  )
   console.log(`guards: ${metrics.guardEvents.map((event) => `${event.guard}:${event.action}@${event.step}`).join(' ') || 'none'}`)
   console.log(`tool calls: ${metrics.toolCalls} (${metrics.failedToolCalls} failed or blocked)`)
   console.log(`runtime: ${JSON.stringify(metrics.runtimeProfile || null)}`)
@@ -263,12 +235,10 @@ export function reportRun(args: {
   fs.writeFileSync(
     path.join(snapshotDir, 'metrics.json'),
     JSON.stringify({ label: args.label, capturedAt: new Date().toISOString(), ...metrics }, null, 2),
-    'utf-8'
+    'utf-8',
   )
   console.log(`audit snapshot: ${snapshotDir}`)
 
-  console.log(
-    '\nThe audit log for this run is logs/coding_agent_audit.log; the guards line above lists every safeguard that fired.'
-  )
+  console.log('\nThe audit log for this run is logs/coding_agent_audit.log; the guards line above lists every safeguard that fired.')
   return metrics
 }

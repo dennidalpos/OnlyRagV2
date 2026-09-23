@@ -11,8 +11,10 @@ export function buildActiveInterventionActions(intervention: PlanMilestone): str
     actions.push(`Apply one scoped edit at a time to ${files.join(', ')}.`)
   }
   actions.push('Keep linked files coherent only where the edited contract requires it.')
-  actions.push(intervention.verificationCommand
-    ? `After the coherent edit group, run \`${intervention.verificationCommand}\`; intermediate edit states are not final failures.`
-    : 'After the coherent edit group, check the acceptance criteria; intermediate edit states are not final failures.')
+  actions.push(
+    intervention.verificationCommand
+      ? `After the coherent edit group, run \`${intervention.verificationCommand}\`; intermediate edit states are not final failures.`
+      : 'After the coherent edit group, check the acceptance criteria; intermediate edit states are not final failures.',
+  )
   return actions.slice(0, MAX_ACTIVE_ACTIONS)
 }

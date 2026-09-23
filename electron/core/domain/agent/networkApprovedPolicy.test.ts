@@ -33,8 +33,20 @@ describe('network-approved capability policy', () => {
   })
 
   it('allows local filesystem operations without consent and blocks remote shell egress', () => {
-    expect(authorizeNetworkApproved({ ...base, capability: 'filesystem', operation: 'read', toolName: 'read_file', consent: { requested: false, granted: false } }).allowed).toBe(true)
-    expect(authorizeNetworkApproved({ ...base, capability: 'shell', operation: 'execute', toolName: 'run_command', target: 'git push origin main', consent: { requested: false, granted: false } }).allowed).toBe(false)
+    expect(
+      authorizeNetworkApproved({ ...base, capability: 'filesystem', operation: 'read', toolName: 'read_file', consent: { requested: false, granted: false } })
+        .allowed,
+    ).toBe(true)
+    expect(
+      authorizeNetworkApproved({
+        ...base,
+        capability: 'shell',
+        operation: 'execute',
+        toolName: 'run_command',
+        target: 'git push origin main',
+        consent: { requested: false, granted: false },
+      }).allowed,
+    ).toBe(false)
   })
 
   it('persists the decision before returning it to an external caller', async () => {

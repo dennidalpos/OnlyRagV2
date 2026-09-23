@@ -11,11 +11,7 @@ export class OllamaInstallerRepository {
     logger.log('INFO', 'OllamaInstallerRepo', 'User requested Ollama launch or installation...')
 
     const localAppData = process.env.LOCALAPPDATA || ''
-    const possibleOllamaExes = [
-      path.join(localAppData, 'Programs/Ollama/ollama app.exe'),
-      path.join(localAppData, 'Programs/Ollama/ollama.exe'),
-      'ollama.exe',
-    ]
+    const possibleOllamaExes = [path.join(localAppData, 'Programs/Ollama/ollama app.exe'), path.join(localAppData, 'Programs/Ollama/ollama.exe'), 'ollama.exe']
 
     for (const exePath of possibleOllamaExes) {
       if (exePath === 'ollama.exe' || fs.existsSync(exePath)) {

@@ -131,11 +131,9 @@ export function resolveChatThreadCount(cpuCount?: number): number | undefined {
 export function resolveChatContextBudget(
   facts: HardwareFacts = {},
   declaredProfile: DeclaredHardwareProfile = 'Auto',
-  maxNumCtxOverride?: number
+  maxNumCtxOverride?: number,
 ): ChatContextBudget {
-  const profileTier = declaredProfile !== 'Auto'
-    ? resolveEffectiveTier(declaredProfile, facts)
-    : classifyHardwareProfileTier(facts)
+  const profileTier = declaredProfile !== 'Auto' ? resolveEffectiveTier(declaredProfile, facts) : classifyHardwareProfileTier(facts)
 
   // A manually pinned profile is a deliberate user override, so the minimal-host floor only
   // applies when the tier was detected automatically.

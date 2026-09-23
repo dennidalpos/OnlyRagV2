@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  capabilityPolicyAuditEventSchema,
-  capabilityPolicyDecisionSchema,
-  capabilityPolicyRequestSchema,
-} from './capabilityPolicyContract'
+import { capabilityPolicyAuditEventSchema, capabilityPolicyDecisionSchema, capabilityPolicyRequestSchema } from './capabilityPolicyContract'
 
 const REQUEST = {
   sessionId: 'session-42',
@@ -23,25 +19,29 @@ describe('capability policy contract', () => {
   })
 
   it('accepts a denied decision and a structured audit event', () => {
-    expect(capabilityPolicyDecisionSchema.safeParse({
-      allowed: false,
-      reason: 'Network access is disabled in offline-strict mode',
-      requiresConsent: false,
-      auditId: 'audit-1',
-    }).success).toBe(true)
+    expect(
+      capabilityPolicyDecisionSchema.safeParse({
+        allowed: false,
+        reason: 'Network access is disabled in offline-strict mode',
+        requiresConsent: false,
+        auditId: 'audit-1',
+      }).success,
+    ).toBe(true)
 
-    expect(capabilityPolicyAuditEventSchema.safeParse({
-      auditId: 'audit-1',
-      sessionId: 'session-42',
-      timestamp: '2026-08-27T15:00:00.000Z',
-      capability: 'http-download',
-      operation: 'download',
-      toolName: 'download_file',
-      target: 'https://example.test/archive.zip',
-      mode: 'offline-strict',
-      allowed: false,
-      reason: 'Network access is disabled in offline-strict mode',
-    }).success).toBe(true)
+    expect(
+      capabilityPolicyAuditEventSchema.safeParse({
+        auditId: 'audit-1',
+        sessionId: 'session-42',
+        timestamp: '2026-08-27T15:00:00.000Z',
+        capability: 'http-download',
+        operation: 'download',
+        toolName: 'download_file',
+        target: 'https://example.test/archive.zip',
+        mode: 'offline-strict',
+        allowed: false,
+        reason: 'Network access is disabled in offline-strict mode',
+      }).success,
+    ).toBe(true)
   })
 
   it('rejects consent grants without a request or consent id', () => {

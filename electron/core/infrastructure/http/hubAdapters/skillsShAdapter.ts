@@ -2,15 +2,18 @@ import { HubSkillItem, SkillHubSource, SkillCategory } from '../../../domain/ski
 import { ISkillHubAdapter } from './hubAdapterInterface'
 import { logger } from '../../logging/logger'
 
-export const SKILLS_SH_FEATURED_SKILLS: Record<string, {
-  name: string
-  description: string
-  category: SkillCategory
-  triggers: string[]
-  tags: string[]
-  author: string
-  subpath: string
-}> = {
+export const SKILLS_SH_FEATURED_SKILLS: Record<
+  string,
+  {
+    name: string
+    description: string
+    category: SkillCategory
+    triggers: string[]
+    tags: string[]
+    author: string
+    subpath: string
+  }
+> = {
   'grill-me': {
     name: 'grill-me',
     description: 'A relentless interview that sharpens plans, ideas, and architecture by questioning assumptions before coding.',
@@ -74,7 +77,7 @@ export const SKILLS_SH_FEATURED_SKILLS: Record<string, {
     author: 'mattpocock',
     subpath: 'skills/engineering/improve-codebase-architecture/SKILL.md',
   },
-  'tdd': {
+  tdd: {
     name: 'tdd',
     description: 'Strict Test-Driven Development (Red-Green-Refactor) loops ensuring comprehensive test coverage.',
     category: 'devops',
@@ -110,7 +113,7 @@ export const SKILLS_SH_FEATURED_SKILLS: Record<string, {
     author: 'mattpocock',
     subpath: 'skills/productivity/writing-for-agents/SKILL.md',
   },
-  'handoff': {
+  handoff: {
     name: 'handoff',
     description: 'Summarizes work state, outstanding questions, and remaining tasks for smooth agent-to-agent or human handoff.',
     category: 'architecture',
@@ -154,11 +157,7 @@ ${item.description}
 
 export class SkillsShAdapter implements ISkillHubAdapter {
   canHandle(source: SkillHubSource): boolean {
-    return (
-      source.id === 'skills-sh' ||
-      source.url.includes('skills.sh') ||
-      source.url.includes('mattpocock/skills')
-    )
+    return source.id === 'skills-sh' || source.url.includes('skills.sh') || source.url.includes('mattpocock/skills')
   }
 
   async fetchSkills(source: SkillHubSource): Promise<HubSkillItem[]> {

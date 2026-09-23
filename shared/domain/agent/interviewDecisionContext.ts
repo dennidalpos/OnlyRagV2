@@ -7,9 +7,7 @@ const DECISION_LABELS: Record<NonNullable<UserInterviewAnswer['provenance']>, st
 }
 
 /** Builds the choices represented by the interview's "use recommended" action. */
-export function createAcceptedRecommendationAnswers(
-  questions: InterviewQuestion[]
-): UserInterviewAnswer[] {
+export function createAcceptedRecommendationAnswers(questions: InterviewQuestion[]): UserInterviewAnswer[] {
   return questions.map((question) => ({
     questionId: question.id,
     questionText: question.question,
@@ -23,10 +21,7 @@ export function createAcceptedRecommendationAnswers(
  * Produces the exact task text shared by planning, persistence and execution.
  * The original request remains verbatim and decisions carry machine-visible provenance.
  */
-export function composeInterviewDecisionPrompt(
-  originalPrompt: string,
-  answers: UserInterviewAnswer[]
-): string {
+export function composeInterviewDecisionPrompt(originalPrompt: string, answers: UserInterviewAnswer[]): string {
   if (answers.length === 0) return originalPrompt
 
   const formattedDecisions = answers
@@ -37,9 +32,5 @@ export function composeInterviewDecisionPrompt(
     })
     .join('\n')
 
-  return (
-    `[ORIGINAL USER REQUEST]\n${originalPrompt}\n\n` +
-    `[INTERVIEW DECISIONS]\n${formattedDecisions}`
-  )
+  return `[ORIGINAL USER REQUEST]\n${originalPrompt}\n\n` + `[INTERVIEW DECISIONS]\n${formattedDecisions}`
 }
-

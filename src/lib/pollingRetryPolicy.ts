@@ -1,5 +1,3 @@
-
-
 export interface RetryPolicy {
   /** Delay before the first retry, in milliseconds. */
   baseDelayMs: number
@@ -19,10 +17,7 @@ export const DEFAULT_RETRY_POLICY: RetryPolicy = {
  * Delay to wait before the attempt that follows `consecutiveFailures` failures.
  * Grows exponentially from `baseDelayMs` and saturates at `maxDelayMs`.
  */
-export function nextRetryDelayMs(
-  consecutiveFailures: number,
-  policy: RetryPolicy = DEFAULT_RETRY_POLICY
-): number {
+export function nextRetryDelayMs(consecutiveFailures: number, policy: RetryPolicy = DEFAULT_RETRY_POLICY): number {
   const failures = Math.max(1, Math.floor(consecutiveFailures))
   const growth = Math.pow(policy.factor, failures - 1)
   const delay = policy.baseDelayMs * growth

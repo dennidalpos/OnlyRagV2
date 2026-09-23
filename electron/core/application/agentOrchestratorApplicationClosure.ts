@@ -10,11 +10,7 @@ import { promoteMilestonesProvenBy } from './agentOrchestratorCircuitBreakerAndV
 import { runProjectVerification, type VerificationRunResult } from './agentOrchestratorVerificationRunner'
 import type { EmitLog, ResponseInterpreterState } from './agentOrchestratorResponseInterpreterTypes'
 import type { ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
-import type {
-  ApplicationClosureOutcome,
-  ApplicationClosureRequest,
-  ApplicationClosureTrigger,
-} from './agentOrchestratorApplicationClosureTypes'
+import type { ApplicationClosureOutcome, ApplicationClosureRequest, ApplicationClosureTrigger } from './agentOrchestratorApplicationClosureTypes'
 import type { AgentExecutionPhase } from '../domain/agent/agentExecutionPhase'
 import { MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
@@ -37,10 +33,7 @@ export interface ApplicationClosureContext {
   isSessionActive: () => boolean
   emitLog: EmitLog
   emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus, evidence?: AgentCompletionEvidence) => void
-  persistCurrentState: (
-    terminationReason?: AgentSessionTerminationReason,
-    completionStatus?: AgentCompletionStatus
-  ) => Promise<void>
+  persistCurrentState: (terminationReason?: AgentSessionTerminationReason, completionStatus?: AgentCompletionStatus) => Promise<void>
   buildSessionTracker: (summaryText?: string) => SessionDebtTracker
   finalizeSession: () => void
   setExecutionPhase: (phase: AgentExecutionPhase) => void
@@ -79,10 +72,9 @@ function renderDiagnosticDetail(
   ctx: ApplicationClosureContext,
   request: ApplicationClosureRequest,
   status: AgentCompletionStatus,
-  verification?: AgentVerificationEvidence
+  verification?: AgentVerificationEvidence,
 ): string {
-  const recovery = (label: string, used = 0, limit = MAX_FAILURES_PER_RECOVERY_CATEGORY) =>
-    `${label}: ${used}/${limit}`
+  const recovery = (label: string, used = 0, limit = MAX_FAILURES_PER_RECOVERY_CATEGORY) => `${label}: ${used}/${limit}`
   const runtime = ctx.runtimeProfile
   const latest = ctx.generationTelemetry?.at(-1)
   const lines = [
@@ -97,17 +89,17 @@ function renderDiagnosticDetail(
   lines.push(
     recovery('Recupero schema', ctx.state.progress.schemaFailuresSpent),
     recovery('Recupero esecuzione', ctx.state.progress.executionFailuresSpent),
-    recovery('Correzioni verifica', ctx.state.verificationFixCycles, MAX_VERIFICATION_FIX_CYCLES)
+    recovery('Correzioni verifica', ctx.state.verificationFixCycles, MAX_VERIFICATION_FIX_CYCLES),
   )
   if (ctx.state.guardEvents.length > 0) lines.push(`Guard: ${summarizeGuardEvents(ctx.state.guardEvents)}`)
   if (runtime) {
     lines.push(
-      `Runtime: modello=${runtime.model}; digest=${runtime.digest || 'non disponibile'}; num_ctx=${runtime.options.num_ctx}; num_predict=${runtime.options.num_predict}`
+      `Runtime: modello=${runtime.model}; digest=${runtime.digest || 'non disponibile'}; num_ctx=${runtime.options.num_ctx}; num_predict=${runtime.options.num_predict}`,
     )
   }
   if (latest) {
     lines.push(
-      `Ultima generazione: step=${latest.step}; durata=${latest.wallDurationMs}ms; prompt=${latest.promptTokens ?? 'n/d'} token; output=${latest.completionTokens ?? 'n/d'} token`
+      `Ultima generazione: step=${latest.step}; durata=${latest.wallDurationMs}ms; prompt=${latest.promptTokens ?? 'n/d'} token; output=${latest.completionTokens ?? 'n/d'} token`,
     )
   }
   return redactSecrets(lines.join('\n'))
@@ -115,9 +107,7 @@ function renderDiagnosticDetail(
 
 function evidenceLevelFromCommand(command: string | undefined): 'structural' | 'behavioral' | undefined {
   if (!command) return undefined
-  return /(^|[\s:&|])(test(?::\S+)?|pytest|vitest|jest|mocha)([\s:&|]|$)/i.test(command)
-    ? 'behavioral'
-    : 'structural'
+  return /(^|[\s:&|])(test(?::\S+)?|pytest|vitest|jest|mocha)([\s:&|]|$)/i.test(command) ? 'behavioral' : 'structural'
 }
 
 function priorEvidenceLevel(ctx: ApplicationClosureContext): 'structural' | 'behavioral' | undefined {
@@ -134,10 +124,7 @@ function evidenceLevelOf(run: VerificationRunResult): 'structural' | 'behavioral
   return run.evidenceLevel ?? evidenceLevelFromCommand(run.command)
 }
 
-function terminationReasonFor(
-  trigger: ApplicationClosureTrigger,
-  status: AgentCompletionStatus
-): AgentSessionTerminationReason {
+function terminationReasonFor(trigger: ApplicationClosureTrigger, status: AgentCompletionStatus): AgentSessionTerminationReason {
   if (status === 'cancelled') return 'cancelled'
   if (trigger === 'finish') return 'finish'
   if (trigger === 'step_budget') return 'step_budget'
@@ -147,12 +134,7 @@ function terminationReasonFor(
   return 'model_silence'
 }
 
-function renderClosureSummary(
-  status: AgentCompletionStatus,
-  request: ApplicationClosureRequest,
-  tracker: SessionDebtTracker,
-  evidence: string
-): string {
+function renderClosureSummary(status: AgentCompletionStatus, request: ApplicationClosureRequest, tracker: SessionDebtTracker, evidence: string): string {
   const data = tracker.getData()
   const labels: Record<AgentCompletionStatus, string> = {
     verified: 'VERIFICATO',
@@ -160,11 +142,7 @@ function renderClosureSummary(
     blocked: 'BLOCCATO',
     cancelled: 'ANNULLATO',
   }
-  const lines = [
-    `Esito applicativo: ${labels[status]}.`,
-    `Motivo di chiusura: ${request.reason}`,
-    `Evidenza: ${evidence}`,
-  ]
+  const lines = [`Esito applicativo: ${labels[status]}.`, `Motivo di chiusura: ${request.reason}`, `Evidenza: ${evidence}`]
   if (request.modelSummary?.trim()) {
     lines.push('', `Ultima consegna del modello: ${request.modelSummary.trim()}`)
   }
@@ -213,10 +191,7 @@ async function offerPublishedWorkspaceCommit(
 }
 
 /** Single application-owned terminal gate for agent runs. */
-export async function closeAgentRunFromEvidence(
-  ctx: ApplicationClosureContext,
-  request: ApplicationClosureRequest
-): Promise<ApplicationClosureOutcome> {
+export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, request: ApplicationClosureRequest): Promise<ApplicationClosureOutcome> {
   // Cancellation owns its own rollback and checkpoint. Most importantly, no new verification
   // command may start once the session has been cancelled or replaced.
   if (!ctx.isSessionActive()) {
@@ -230,10 +205,7 @@ export async function closeAgentRunFromEvidence(
 
   let run: VerificationRunResult | undefined
   let evidenceLevel = priorEvidenceLevel(ctx)
-  const shouldRunVerification =
-    ctx.settings.verifyBeforeFinish !== false &&
-    ctx.flags.hasFileMutations &&
-    evidenceLevel !== 'behavioral'
+  const shouldRunVerification = ctx.settings.verifyBeforeFinish !== false && ctx.flags.hasFileMutations && evidenceLevel !== 'behavioral'
 
   if (shouldRunVerification) {
     ctx.emitLog('info', '🔎 Verifica finale governata dall’applicazione...')
@@ -264,7 +236,7 @@ export async function closeAgentRunFromEvidence(
         recordGuardEvent(ctx.state.guardEvents, 'verification_fix_cycles', 'advise', ctx.stepCount)
         ctx.episodicCompactor.recordStep(
           { step: ctx.stepCount, tool: 'application_verification', status: 'BLOCKED', summary: `Verification failed (round ${decision.cyclesSpent})` },
-          decision.directive
+          decision.directive,
         )
         ctx.emitLog('info', `🔒 Verifica fallita (giro ${decision.cyclesSpent}): correzione richiesta.`, decision.directive, {
           category: 'system_alert',

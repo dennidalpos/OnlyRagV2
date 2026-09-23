@@ -11,14 +11,7 @@ import {
   LEGAL_TIER_CATALOG,
 } from '../../shared/domain/hardware/hardwareModelCatalog'
 
-export type ModelIntent =
-  | 'vision'
-  | 'embedding'
-  | 'coding'
-  | 'translation'
-  | 'chat'
-  | 'medical'
-  | 'legal'
+export type ModelIntent = 'vision' | 'embedding' | 'coding' | 'translation' | 'chat' | 'medical' | 'legal'
 
 /**
  * Normalizes a model tag or name for intent detection (lowercase, stripped whitespace, stripped namespace).
@@ -50,12 +43,11 @@ export function normalizeModelNameForIntent(name: string): { normalized: string;
 // Sets of catalog model names for O(1) canonical matching
 const VISION_CATALOG_FULL_NAMES = new Set(VISION_TIER_CATALOG.map((m) => m.modelName.toLowerCase()))
 const EMBEDDING_CATALOG_NAMES = new Set(EMBEDDING_TIER_CATALOG.map((m) => m.modelName.toLowerCase().split(':')[0]))
-const CODING_CATALOG_NAMES = new Set([
-  ...COMPACT_CODING_CATALOG,
-  ...WORKHORSE_CODING_CATALOG,
-  ...REASONING_CODING_CATALOG,
-  ...LARGE_CODING_CATALOG,
-].map((m) => m.modelName.toLowerCase().split(':')[0]))
+const CODING_CATALOG_NAMES = new Set(
+  [...COMPACT_CODING_CATALOG, ...WORKHORSE_CODING_CATALOG, ...REASONING_CODING_CATALOG, ...LARGE_CODING_CATALOG].map(
+    (m) => m.modelName.toLowerCase().split(':')[0],
+  ),
+)
 const CHAT_CATALOG_NAMES = new Set(CHAT_TIER_CATALOG.map((m) => m.modelName.toLowerCase().split(':')[0]))
 const TRANSLATION_CATALOG_NAMES = new Set(TRANSLATION_TIER_CATALOG.map((m) => m.modelName.toLowerCase().split(':')[0]))
 const MEDICAL_CATALOG_NAMES = new Set(MEDICAL_TIER_CATALOG.map((m) => m.modelName.toLowerCase().split(':')[0]))
@@ -240,15 +232,7 @@ export function isTranslationModel(name: string): boolean {
 
   if (TRANSLATION_CATALOG_NAMES.has(baseName)) return true
 
-  const translationPatterns = [
-    /aya/i,
-    /tower-instruct/i,
-    /nllb/i,
-    /seamless/i,
-    /translate/i,
-    /translation/i,
-    /almaz/i,
-  ]
+  const translationPatterns = [/aya/i, /tower-instruct/i, /nllb/i, /seamless/i, /translate/i, /translation/i, /almaz/i]
 
   for (const pattern of translationPatterns) {
     if (pattern.test(normalized) || pattern.test(baseName)) {
@@ -257,17 +241,7 @@ export function isTranslationModel(name: string): boolean {
   }
 
   // Strong multilingual general models
-  const multilingualGeneralPatterns = [
-    /^qwen2\.5/i,
-    /^qwen3/i,
-    /^llama3/i,
-    /^gemma2/i,
-    /^gemma3/i,
-    /^mistral/i,
-    /^command-r/i,
-    /^phi3\.5/i,
-    /^phi4/i,
-  ]
+  const multilingualGeneralPatterns = [/^qwen2\.5/i, /^qwen3/i, /^llama3/i, /^gemma2/i, /^gemma3/i, /^mistral/i, /^command-r/i, /^phi3\.5/i, /^phi4/i]
 
   for (const pattern of multilingualGeneralPatterns) {
     if (pattern.test(baseName) || pattern.test(normalized)) {
@@ -339,16 +313,7 @@ export function isMedicalModel(name: string): boolean {
 
   if (MEDICAL_CATALOG_NAMES.has(baseName)) return true
 
-  const medicalPatterns = [
-    /biomistral/i,
-    /meditron/i,
-    /medllama/i,
-    /clinical/i,
-    /pubmed/i,
-    /\bmed-/i,
-    /\bmedical\b/i,
-    /\bbio-/i,
-  ]
+  const medicalPatterns = [/biomistral/i, /meditron/i, /medllama/i, /clinical/i, /pubmed/i, /\bmed-/i, /\bmedical\b/i, /\bbio-/i]
 
   for (const pattern of medicalPatterns) {
     if (pattern.test(normalized) || pattern.test(baseName)) {
@@ -379,15 +344,7 @@ export function isLegalModel(name: string): boolean {
 
   if (LEGAL_CATALOG_NAMES.has(baseName)) return true
 
-  const legalPatterns = [
-    /legal/i,
-    /\blaw\b/i,
-    /juris/i,
-    /saul/i,
-    /lex/i,
-    /statute/i,
-    /compliance/i,
-  ]
+  const legalPatterns = [/legal/i, /\blaw\b/i, /juris/i, /saul/i, /lex/i, /statute/i, /compliance/i]
 
   for (const pattern of legalPatterns) {
     if (pattern.test(normalized) || pattern.test(baseName)) {

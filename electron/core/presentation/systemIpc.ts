@@ -3,12 +3,9 @@ import { systemAppService } from '../application/systemAppService'
 import { taskAppService } from '../application/taskAppService'
 
 export function registerSystemIpcHandlers() {
-  ipcMain.handle(
-    'dialog:open-file',
-    async (_event: unknown, options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => {
-      return systemAppService.openFileDialog(options)
-    }
-  )
+  ipcMain.handle('dialog:open-file', async (_event: unknown, options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => {
+    return systemAppService.openFileDialog(options)
+  })
 
   ipcMain.handle('dialog:open-directory', async (_event: unknown, options?: { title?: string }) => {
     return systemAppService.openDirectoryDialog(options)
@@ -33,5 +30,4 @@ export function registerSystemIpcHandlers() {
       return taskAppService.cancelAllTasks()
     }
   })
-
 }

@@ -1,5 +1,3 @@
-
-
 export interface ParsedModelTarget {
   namespace: string
   model: string

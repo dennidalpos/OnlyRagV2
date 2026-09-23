@@ -32,7 +32,7 @@ describe('AgentToolFileRepository Unit Tests', () => {
       expect.arrayContaining([
         { name: 'sub', isDir: true },
         { name: 'file.txt', isDir: false },
-      ])
+      ]),
     )
   })
 
@@ -136,7 +136,7 @@ describe('AgentToolFileRepository Unit Tests', () => {
           peerDependencies: { 'react-dom': '^18' },
           optionalDependencies: { fsevents: '^2' },
         }),
-        'utf-8'
+        'utf-8',
       )
 
       const declared = repo.readDeclaredPackages(tempDir)
@@ -148,7 +148,7 @@ describe('AgentToolFileRepository Unit Tests', () => {
       fs.writeFileSync(
         path.join(tempDir, 'tsconfig.json'),
         `{\n  // project aliases\n  "compilerOptions": { "paths": { "@/*": ["./src/*"], "~/*": ["./src/*"] } }\n}`,
-        'utf-8'
+        'utf-8',
       )
 
       expect(repo.readDeclaredPackages(tempDir)?.aliasPrefixes.sort()).toEqual(['@/', '~/'])
@@ -166,11 +166,7 @@ describe('AgentToolFileRepository Unit Tests', () => {
     it('reports every package as missing when node_modules does not exist at all', () => {
       // The workspace an agent creates: package.json authored with write_file, nothing
       // installed. Reading the declaration alone made the install guard call these "installed".
-      expect(repo.missingFromNodeModules(tempDir, ['react', 'vite', '@types/react'])).toEqual([
-        'react',
-        'vite',
-        '@types/react',
-      ])
+      expect(repo.missingFromNodeModules(tempDir, ['react', 'vite', '@types/react'])).toEqual(['react', 'vite', '@types/react'])
     })
 
     it('reports only the packages with no directory under node_modules', () => {

@@ -35,11 +35,7 @@ export class HeuristicContextCompactor {
    * Assembles the final prompt string, applying heuristic compaction
    * if total size exceeds the 75% watermark of the hardware context limit.
    */
-  public static compile(
-    segments: PromptSegment,
-    hardwareMaxContextChars: number,
-    options: { force?: boolean } = {}
-  ): CompactionResult {
+  public static compile(segments: PromptSegment, hardwareMaxContextChars: number, options: { force?: boolean } = {}): CompactionResult {
     const parts = this.buildParts(segments)
     const fullPrompt = parts.filter(Boolean).join('\n\n')
     const originalChars = fullPrompt.length
@@ -54,32 +50,27 @@ export class HeuristicContextCompactor {
     // Tier 1 (immutable): system prompt + active plan
     const immutableSize = (segments.systemPrompt || '').length + (segments.activePlanBlock || '').length
     const regularBudget = Math.floor(hardwareMaxContextChars * 0.72)
-    const budget = options.force
-      ? Math.max(immutableSize, Math.min(regularBudget, Math.floor(originalChars * 0.65)))
-      : regularBudget
+    const budget = options.force ? Math.max(immutableSize, Math.min(regularBudget, Math.floor(originalChars * 0.65))) : regularBudget
 
     // Tool history is what makes the agent stateful: without it the prompt is byte-identical every turn and the model deterministically repeats its last action.
-    const historyFloor = Math.min(
-      segments.historyBlock.length,
-      Math.max(0, Math.floor(hardwareMaxContextChars * 0.20))
-    )
+    const historyFloor = Math.min(segments.historyBlock.length, Math.max(0, Math.floor(hardwareMaxContextChars * 0.2)))
     let remaining = Math.max(0, budget - immutableSize)
 
     // Tier 2 caps: pinned files and active file — bid only for space above the history floor
     const tier2Pool = Math.max(0, remaining - historyFloor)
-    const pinnedAlloc = Math.min(segments.pinnedFilesBlock.length, Math.floor(tier2Pool * 0.30))
+    const pinnedAlloc = Math.min(segments.pinnedFilesBlock.length, Math.floor(tier2Pool * 0.3))
     const activeFileAlloc = Math.min(segments.activeFileBlock.length, Math.floor(tier2Pool * 0.15))
-    const skillsAlloc = Math.min(segments.skillsBlock.length, Math.floor(tier2Pool * 0.10))
+    const skillsAlloc = Math.min(segments.skillsBlock.length, Math.floor(tier2Pool * 0.1))
     remaining = Math.max(0, remaining - (pinnedAlloc + activeFileAlloc + skillsAlloc))
 
     // Tier 3: history — distill terminal outputs, keep top-level summary table
-    const historyAlloc = Math.max(historyFloor, Math.floor(remaining * 0.70))
+    const historyAlloc = Math.max(historyFloor, Math.floor(remaining * 0.7))
     const distilledHistory = this.compactHistoryBlock(segments.historyBlock, historyAlloc)
 
     // Tier 4: auxiliary context — what's left
     const auxRemaining = Math.max(0, remaining - historyAlloc)
-    const attachedAlloc = Math.min(segments.attachedContext.length, Math.floor(auxRemaining * 0.60))
-    const mapAlloc = Math.min(segments.projectMapBlock.length, Math.floor(auxRemaining * 0.40))
+    const attachedAlloc = Math.min(segments.attachedContext.length, Math.floor(auxRemaining * 0.6))
+    const mapAlloc = Math.min(segments.projectMapBlock.length, Math.floor(auxRemaining * 0.4))
 
     const compactedParts = [
       segments.systemPrompt,
@@ -137,10 +128,7 @@ export class HeuristicContextCompactor {
     // Cap retained [TERMINAL AUTO-HEALING DIAGNOSTICS LOG] blocks to the 2 most recent occurrences before distillation, so repeated build/test failure diagnostics don't crowd out newer turn context once the watermark is hit.
     const { text: cappedRawOutput } = AutoHealingLogCapper.capBlocks(rawOutputBuffer.join('\n'), 2)
 
-    const distilledRaw = DiagnosticOutputReducer.distillTerminalOutput(
-      cappedRawOutput,
-      Math.max(400, maxChars - tableStr.length - 100)
-    )
+    const distilledRaw = DiagnosticOutputReducer.distillTerminalOutput(cappedRawOutput, Math.max(400, maxChars - tableStr.length - 100))
 
     const combined = distilledRaw ? `${tableStr}\n${distilledRaw}` : tableStr
     return combined.length > maxChars ? combined.slice(0, maxChars) + '\n...[compacted]' : combined

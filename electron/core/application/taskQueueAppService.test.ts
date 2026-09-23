@@ -47,20 +47,25 @@ describe('TaskQueueAppService serial execution invariant', () => {
     const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-queue-workspace-'))
     workspaces.push(workspacePath)
 
-    await expect(service.scheduleAgentTask({
-      identity,
-      sessionId: identity.conversationId,
-      userTask: 'Inspect the project',
-      agentMode: 'ask',
-      workspacePath,
-    }, noRenderer)).resolves.toMatchObject({ success: true, runId: identity.runId, queuePosition: 0 })
+    await expect(
+      service.scheduleAgentTask(
+        {
+          identity,
+          sessionId: identity.conversationId,
+          userTask: 'Inspect the project',
+          agentMode: 'ask',
+          workspacePath,
+        },
+        noRenderer,
+      ),
+    ).resolves.toMatchObject({ success: true, runId: identity.runId, queuePosition: 0 })
 
     await vi.waitFor(() => {
       expect(runAgentOrchestratorLoop).toHaveBeenCalledWith(
         expect.objectContaining({ identity, sessionId: identity.conversationId }),
         noRenderer,
         identity.runId,
-        expect.objectContaining({ sourcePath: workspacePath })
+        expect.objectContaining({ sourcePath: workspacePath }),
       )
     })
   })
@@ -68,9 +73,12 @@ describe('TaskQueueAppService serial execution invariant', () => {
   it('returns a queued run ID and cancels only that queued run', async () => {
     const service = new TaskQueueAppService()
     let releaseFirst: (() => void) | undefined
-    vi.mocked(runAgentOrchestratorLoop).mockImplementationOnce(() => new Promise((resolve) => {
-      releaseFirst = () => resolve({ success: true, summary: 'first complete' })
-    }))
+    vi.mocked(runAgentOrchestratorLoop).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseFirst = () => resolve({ success: true, summary: 'first complete' })
+        }),
+    )
     const firstWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-queue-first-'))
     const secondWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-queue-second-'))
     workspaces.push(firstWorkspace, secondWorkspace)
@@ -82,9 +90,15 @@ describe('TaskQueueAppService serial execution invariant', () => {
     }
     const second = { ...first, runId: 'run-second', workspaceId: 'workspace:second' }
 
-    await service.scheduleAgentTask({ identity: first, sessionId: first.conversationId, userTask: 'First', agentMode: 'ask', workspacePath: firstWorkspace }, noRenderer)
+    await service.scheduleAgentTask(
+      { identity: first, sessionId: first.conversationId, userTask: 'First', agentMode: 'ask', workspacePath: firstWorkspace },
+      noRenderer,
+    )
     await vi.waitFor(() => expect(runAgentOrchestratorLoop).toHaveBeenCalledOnce())
-    const accepted = await service.scheduleAgentTask({ identity: second, sessionId: second.conversationId, userTask: 'Second', agentMode: 'ask', workspacePath: secondWorkspace }, noRenderer)
+    const accepted = await service.scheduleAgentTask(
+      { identity: second, sessionId: second.conversationId, userTask: 'Second', agentMode: 'ask', workspacePath: secondWorkspace },
+      noRenderer,
+    )
 
     expect(accepted).toMatchObject({ success: true, runId: 'run-second', queuePosition: 1 })
     expect(service.cancelTask(second)).toEqual({ success: true, message: 'Task run-second cancelled.' })
@@ -103,14 +117,19 @@ describe('TaskQueueAppService serial execution invariant', () => {
       workspaceId: 'standalone:conversation-standalone',
     }
 
-    await expect(service.scheduleAgentTask({
-      identity,
-      sessionId: identity.conversationId,
-      userTask: 'Create index.html',
-      agentMode: 'guided',
-      workspacePath: 'C:\\Program Files\\OnlyRag V2',
-      isStandaloneMode: true,
-    }, noRenderer)).resolves.toMatchObject({ success: true, runId: identity.runId })
+    await expect(
+      service.scheduleAgentTask(
+        {
+          identity,
+          sessionId: identity.conversationId,
+          userTask: 'Create index.html',
+          agentMode: 'guided',
+          workspacePath: 'C:\\Program Files\\OnlyRag V2',
+          isStandaloneMode: true,
+        },
+        noRenderer,
+      ),
+    ).resolves.toMatchObject({ success: true, runId: identity.runId })
 
     await vi.waitFor(() => {
       expect(runAgentOrchestratorLoop).toHaveBeenCalledWith(
@@ -125,13 +144,18 @@ describe('TaskQueueAppService serial execution invariant', () => {
   it('rejects a project run without an explicit workspace instead of falling back to process.cwd()', async () => {
     const service = new TaskQueueAppService()
 
-    await expect(service.scheduleAgentTask({
-      sessionId: 'conversation-missing-workspace',
-      userTask: 'Create src/App.tsx',
-      agentMode: 'guided',
-      workspacePath: null,
-      isStandaloneMode: false,
-    }, noRenderer)).resolves.toMatchObject({
+    await expect(
+      service.scheduleAgentTask(
+        {
+          sessionId: 'conversation-missing-workspace',
+          userTask: 'Create src/App.tsx',
+          agentMode: 'guided',
+          workspacePath: null,
+          isStandaloneMode: false,
+        },
+        noRenderer,
+      ),
+    ).resolves.toMatchObject({
       success: false,
       summary: 'Project workspace is required',
     })

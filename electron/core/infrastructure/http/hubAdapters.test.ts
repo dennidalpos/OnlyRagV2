@@ -65,7 +65,11 @@ describe('Skill Hub Adapters Unit Tests', () => {
     expect(adapter.canHandle(source)).toBe(true)
     const skills = await adapter.fetchSkills(source)
     expect(skills.length).toBeGreaterThan(0)
-    expect(skills.some((s) => s.name.includes('weather') || s.name.includes('caption') || s.name.includes('stock') || s.name.includes('seo') || s.name.includes('crawler'))).toBe(true)
+    expect(
+      skills.some(
+        (s) => s.name.includes('weather') || s.name.includes('caption') || s.name.includes('stock') || s.name.includes('seo') || s.name.includes('crawler'),
+      ),
+    ).toBe(true)
     expect(skills[0].rawContent).toContain('---')
   })
 

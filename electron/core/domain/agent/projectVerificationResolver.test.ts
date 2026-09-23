@@ -7,10 +7,7 @@ import {
   type WorkspaceManifest,
 } from './projectVerificationResolver'
 
-function manifest(
-  scripts: Record<string, string> | null,
-  files: string[] = []
-): WorkspaceManifest {
+function manifest(scripts: Record<string, string> | null, files: string[] = []): WorkspaceManifest {
   return {
     packageJson: scripts === null ? null : { scripts },
     hasFile: (p) => files.includes(p),
@@ -24,9 +21,7 @@ describe('resolveVerificationCommands', () => {
   })
 
   it('puts build first: it is the only check that exercises the whole import graph', () => {
-    const commands = resolveVerificationCommands(
-      manifest({ lint: 'eslint .', test: 'vitest run', build: 'tsc && vite build' })
-    )
+    const commands = resolveVerificationCommands(manifest({ lint: 'eslint .', test: 'vitest run', build: 'tsc && vite build' }))
     expect(commands.map((c) => c.kind)).toEqual(['build', 'test', 'lint'])
     expect(resolvePrimaryVerificationCommand(manifest({ build: 'vite build' }))?.command).toBe('npm run build')
   })
@@ -34,9 +29,7 @@ describe('resolveVerificationCommands', () => {
   it('accepts the alternative spellings a generated project actually uses for typecheck', () => {
     for (const name of ['typecheck', 'type-check', 'tsc', 'check-types']) {
       const commands = resolveVerificationCommands(manifest({ [name]: 'tsc --noEmit' }))
-      expect(commands).toEqual([
-        { kind: 'typecheck', command: `npm run ${name}`, coverage: 'whole-project', source: `package.json script "${name}"` },
-      ])
+      expect(commands).toEqual([{ kind: 'typecheck', command: `npm run ${name}`, coverage: 'whole-project', source: `package.json script "${name}"` }])
     }
   })
 
@@ -57,9 +50,7 @@ describe('resolveVerificationCommands', () => {
   it('never proposes a script that does not terminate', () => {
     // A blocked verification is indistinguishable from a passing one until the timeout fires,
     // so a dev server must never be picked as proof that the project builds.
-    const commands = resolveVerificationCommands(
-      manifest({ build: 'vite dev', test: 'vitest --watch', lint: 'eslint .' })
-    )
+    const commands = resolveVerificationCommands(manifest({ build: 'vite dev', test: 'vitest --watch', lint: 'eslint .' }))
     expect(commands.map((c) => c.kind)).toEqual(['lint'])
   })
 })
@@ -115,18 +106,14 @@ describe('resolvePrimaryVerificationCommand — coverage decides before kind', (
   })
 
   it('prefers the typecheck over a build that only follows the entrypoint', () => {
-    const primary = resolvePrimaryVerificationCommand(
-      manifestOf({ build: 'vite build', typecheck: 'tsc --noEmit' })
-    )
+    const primary = resolvePrimaryVerificationCommand(manifestOf({ build: 'vite build', typecheck: 'tsc --noEmit' }))
 
     expect(primary?.command).toBe('npm run typecheck')
     expect(primary?.coverage).toBe('whole-project')
   })
 
   it('keeps the build first when the build itself typechecks the project', () => {
-    const primary = resolvePrimaryVerificationCommand(
-      manifestOf({ build: 'tsc && vite build', typecheck: 'tsc --noEmit' })
-    )
+    const primary = resolvePrimaryVerificationCommand(manifestOf({ build: 'tsc && vite build', typecheck: 'tsc --noEmit' }))
 
     expect(primary?.command).toBe('npm run build')
   })
@@ -140,9 +127,7 @@ describe('resolvePrimaryVerificationCommand — coverage decides before kind', (
   })
 
   it('reaches the compiler through tsconfig when no script declares a typecheck', () => {
-    const primary = resolvePrimaryVerificationCommand(
-      manifestOf({ build: 'vite build' }, ['tsconfig.json'])
-    )
+    const primary = resolvePrimaryVerificationCommand(manifestOf({ build: 'vite build' }, ['tsconfig.json']))
 
     expect(primary?.command).toBe('npx tsc --noEmit')
     expect(primary?.coverage).toBe('whole-project')

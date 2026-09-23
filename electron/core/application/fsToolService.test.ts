@@ -43,9 +43,7 @@ describe('FsToolService copy_file', () => {
     fs.writeFileSync(outsideSource, 'secret', 'utf8')
 
     try {
-      const result = createService(new AtomicWorkspaceJournal()).executeCopyFile(
-        { sourcePath: outsideSource, targetPath: target }, workspace, true,
-      )
+      const result = createService(new AtomicWorkspaceJournal()).executeCopyFile({ sourcePath: outsideSource, targetPath: target }, workspace, true)
 
       expect(result.outputForHistory).toContain('Security Violation')
       expect(fs.existsSync(target)).toBe(false)
@@ -61,9 +59,7 @@ describe('FsToolService copy_file', () => {
     const journal = new AtomicWorkspaceJournal()
     fs.writeFileSync(source, 'source text', 'utf8')
 
-    const result = createService(journal).executeCopyFile(
-      { sourcePath: source, targetPath: target }, workspace, true,
-    )
+    const result = createService(journal).executeCopyFile({ sourcePath: source, targetPath: target }, workspace, true)
     journal.endStep()
 
     expect(result.outputForHistory).toContain('Successfully copied')
@@ -81,9 +77,7 @@ describe('FsToolService move_file', () => {
     const outsideTarget = path.join(os.tmpdir(), `onlyrag-outside-target-${Date.now()}.txt`)
     fs.writeFileSync(source, 'source text', 'utf8')
 
-    const result = createService(new AtomicWorkspaceJournal()).executeMoveFile(
-      { sourcePath: source, targetPath: outsideTarget }, workspace, true,
-    )
+    const result = createService(new AtomicWorkspaceJournal()).executeMoveFile({ sourcePath: source, targetPath: outsideTarget }, workspace, true)
 
     expect(result.outputForHistory).toContain('Security Violation')
     expect(fs.existsSync(source)).toBe(true)
@@ -97,9 +91,7 @@ describe('FsToolService move_file', () => {
     const journal = new AtomicWorkspaceJournal()
     fs.writeFileSync(source, 'source text', 'utf8')
 
-    const result = createService(journal).executeMoveFile(
-      { sourcePath: source, targetPath: target }, workspace, true,
-    )
+    const result = createService(journal).executeMoveFile({ sourcePath: source, targetPath: target }, workspace, true)
     journal.endStep()
 
     expect(result.outputForHistory).toContain('Successfully moved')
@@ -133,7 +125,9 @@ describe('FsToolService grep_search', () => {
   it('limits displayed matches to the first 50 while preserving the total count', async () => {
     const workspace = makeWorkspace()
     const matches = Array.from({ length: 60 }, (_, index) => ({
-      relativePath: `file-${index}.txt`, lineNumber: 1, lineContent: 'match',
+      relativePath: `file-${index}.txt`,
+      lineNumber: 1,
+      lineContent: 'match',
     }))
     const searchRepository = { grepSearch: async () => matches }
     const service = new FsToolService({

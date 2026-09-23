@@ -5,12 +5,7 @@ import { logger } from '../logging/logger'
 import { contentVersion } from './fileContentVersion'
 import { scriptKindForPath } from '../../domain/agent/sourceScriptKind'
 import { isIgnoredPath, validatePathSafety as domainValidatePathSafety } from '../../domain/agent/contextFilter'
-import {
-  MAX_FILE_READ_BYTES,
-  MAX_PROJECT_MAP_DEPTH,
-  MAX_SEARCH_FILE_BYTES,
-  MAX_SEARCH_MATCHES,
-} from '../../domain/agent/ioLimits'
+import { MAX_FILE_READ_BYTES, MAX_PROJECT_MAP_DEPTH, MAX_SEARCH_FILE_BYTES, MAX_SEARCH_MATCHES } from '../../domain/agent/ioLimits'
 
 export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null): string | null {
   const result = domainValidatePathSafety(filePath, workspaceRoot)
@@ -67,7 +62,7 @@ export class FileSystemRepository {
   async readFile(
     filePath: string,
     startLine?: number,
-    endLine?: number
+    endLine?: number,
   ): Promise<{ success: boolean; content?: string; contentHash?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }> {
     const resolved = validatePathSafety(filePath)
     if (!resolved) return { success: false, error: 'Invalid file path' }
@@ -94,9 +89,7 @@ export class FileSystemRepository {
         const s = Math.max(1, startLine || 1)
         const e = Math.min(totalLines, endLine || totalLines)
         const slicedLines = lines.slice(s - 1, e)
-        const formattedSlice = slicedLines
-          .map((line, idx) => `${s + idx}: ${line}`)
-          .join('\n')
+        const formattedSlice = slicedLines.map((line, idx) => `${s + idx}: ${line}`).join('\n')
         return { success: true, content: formattedSlice, contentHash, totalLines, startLine: s, endLine: e }
       }
 
@@ -202,17 +195,13 @@ export class FileSystemRepository {
     }
   }
 
-  async replaceChunk(
-    filePath: string,
-    targetContent: string,
-    replacementContent: string
-  ): Promise<{ success: boolean; error?: string }> {
+  async replaceChunk(filePath: string, targetContent: string, replacementContent: string): Promise<{ success: boolean; error?: string }> {
     return this.multiReplaceChunks(filePath, [{ targetContent, replacementContent }])
   }
 
   async multiReplaceChunks(
     filePath: string,
-    replacements: { targetContent: string; replacementContent: string }[]
+    replacements: { targetContent: string; replacementContent: string }[],
   ): Promise<{ success: boolean; replacedCount?: number; error?: string }> {
     const resolved = validatePathSafety(filePath)
     if (!resolved) return { success: false, error: 'Invalid file path' }
@@ -269,7 +258,7 @@ export class FileSystemRepository {
     dirPath: string,
     query: string,
     isRegex?: boolean,
-    caseInsensitive?: boolean
+    caseInsensitive?: boolean,
   ): Promise<{ filePath: string; relativePath: string; lineNumber: number; lineContent: string }[]> {
     const rootDir = validatePathSafety(dirPath)
     if (!rootDir || !fs.existsSync(rootDir)) return []
@@ -277,9 +266,32 @@ export class FileSystemRepository {
 
     const IGNORED_NAMES = new Set(['.git', 'node_modules', 'dist', 'dist-electron', '.venv', 'build', 'sidecar_dist', '__pycache__'])
     const BINARY_EXTENSIONS = new Set([
-      '.png', '.jpg', '.jpeg', '.gif', '.ico', '.pdf', '.zip', '.tar', '.gz',
-      '.exe', '.dll', '.so', '.dylib', '.pyc', '.db', '.sqlite', '.bin', '.dat',
-      '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.mp4', '.mov', '.avi'
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.gif',
+      '.ico',
+      '.pdf',
+      '.zip',
+      '.tar',
+      '.gz',
+      '.exe',
+      '.dll',
+      '.so',
+      '.dylib',
+      '.pyc',
+      '.db',
+      '.sqlite',
+      '.bin',
+      '.dat',
+      '.woff',
+      '.woff2',
+      '.ttf',
+      '.eot',
+      '.mp3',
+      '.mp4',
+      '.mov',
+      '.avi',
     ])
     const results: { filePath: string; relativePath: string; lineNumber: number; lineContent: string }[] = []
     let matcher: (line: string) => boolean
@@ -347,7 +359,7 @@ export class FileSystemRepository {
 
   async extractCodeSymbols(
     filePath: string,
-    filterKind?: string
+    filterKind?: string,
   ): Promise<{ success: boolean; symbols?: CodeSymbolItem[]; totalCount?: number; error?: string }> {
     const resolved = validatePathSafety(filePath)
     if (!resolved) return { success: false, error: 'Invalid file path' }
@@ -363,13 +375,7 @@ export class FileSystemRepository {
       const normFilter = filterKind ? filterKind.toLowerCase().trim() : null
 
       if (['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'].includes(ext)) {
-        const sourceFile = ts.createSourceFile(
-          resolved,
-          rawContent,
-          ts.ScriptTarget.Latest,
-          true,
-          scriptKindForPath(resolved)
-        )
+        const sourceFile = ts.createSourceFile(resolved, rawContent, ts.ScriptTarget.Latest, true, scriptKindForPath(resolved))
 
         const visit = (node: ts.Node) => {
           const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
@@ -392,11 +398,7 @@ export class FileSystemRepository {
             symbols.push({ name: node.name.text, kind: 'enum', startLine: lineNum, signature: firstLine.slice(0, 160) })
           } else if (ts.isVariableStatement(node)) {
             for (const decl of node.declarationList.declarations) {
-              if (
-                ts.isIdentifier(decl.name) &&
-                decl.initializer &&
-                (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))
-              ) {
+              if (ts.isIdentifier(decl.name) && decl.initializer && (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))) {
                 const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
                 symbols.push({ name: decl.name.text, kind: 'function', startLine: lineNum, signature: firstLine.slice(0, 160) })
               }
@@ -447,9 +449,7 @@ export class FileSystemRepository {
         }
       }
 
-      const filtered = normFilter && normFilter !== 'all'
-        ? symbols.filter((s) => s.kind === normFilter)
-        : symbols
+      const filtered = normFilter && normFilter !== 'all' ? symbols.filter((s) => s.kind === normFilter) : symbols
 
       return {
         success: true,

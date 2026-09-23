@@ -1,11 +1,6 @@
 import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { artifactAppService } from '../application/artifactAppService'
-import {
-  artifactsDeletePayloadSchema,
-  artifactsGetPayloadSchema,
-  artifactsListPayloadSchema,
-  artifactsSavePayloadSchema,
-} from '../domain/artifactContract'
+import { artifactsDeletePayloadSchema, artifactsGetPayloadSchema, artifactsListPayloadSchema, artifactsSavePayloadSchema } from '../domain/artifactContract'
 
 export function registerArtifactIpcHandlers() {
   ipcMain.handle('artifacts:list', async (_event, workspacePath: string) => {

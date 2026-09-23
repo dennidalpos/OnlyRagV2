@@ -6,7 +6,15 @@ import { parseAgentToolCall } from '../../domain/agent/toolParser'
 import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../../domain/agent/ollamaToolSchemaCatalog'
 import { AGENT_STOP_SEQUENCES, type OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
 
-const runtimeOpts: OllamaRuntimeOptions = { num_ctx: 8192, temperature: 0.1, top_p: 0.9, repeat_penalty: 1.1, num_predict: 6144, stop: AGENT_STOP_SEQUENCES, maxContextChars: 28000 }
+const runtimeOpts: OllamaRuntimeOptions = {
+  num_ctx: 8192,
+  temperature: 0.1,
+  top_p: 0.9,
+  repeat_penalty: 1.1,
+  num_predict: 6144,
+  stop: AGENT_STOP_SEQUENCES,
+  maxContextChars: 28000,
+}
 
 function startMockOllama(handler: (req: http.IncomingMessage, res: http.ServerResponse) => void): Promise<{ server: http.Server; baseUrl: string }> {
   return new Promise((resolve) => {
@@ -32,13 +40,15 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
     const controller = new AbortController()
     controller.abort()
 
-    await expect(AgentStreamTransport.streamCompletion({
-      targetModel: 'qwen2.5-coder:7b',
-      prompt: 'Do not send this request',
-      runtimeOpts,
-      isCancelled: () => false,
-      signal: controller.signal,
-    })).rejects.toThrow('Agent run cancelled')
+    await expect(
+      AgentStreamTransport.streamCompletion({
+        targetModel: 'qwen2.5-coder:7b',
+        prompt: 'Do not send this request',
+        runtimeOpts,
+        isCancelled: () => false,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow('Agent run cancelled')
   })
 
   it('should route to /api/chat streamed (stream:true) with a tools array when toolCallingCapable + toolCatalog are set, and serialize a populated tool_calls response into the {"name","arguments"} shape toolParser.ts understands (AGT7: incremental streaming, tool_calls arrives on the final NDJSON line)', async () => {
@@ -60,7 +70,7 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
               tool_calls: [{ function: { name: 'read_file', arguments: { filePath: 'app.py' } } }],
             },
             done: true,
-          }) + '\n'
+          }) + '\n',
         )
         res.end()
       })
@@ -227,29 +237,33 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
         isCancelled: () => false,
         toolCallingCapable: true,
         toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
-      })
+      }),
     ).rejects.toThrow(/not pulled/)
   })
 
   it('rejects a native tool call when the stream never reaches done', async () => {
     const mock = await startMockOllama((_req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({
-        message: { tool_calls: [{ function: { name: 'read_file', arguments: { filePath: 'partial.ts' } } }] },
-        done: false,
-      }) + '\n')
+      res.end(
+        JSON.stringify({
+          message: { tool_calls: [{ function: { name: 'read_file', arguments: { filePath: 'partial.ts' } } }] },
+          done: false,
+        }) + '\n',
+      )
     })
     activeServer = mock.server
 
-    await expect(AgentStreamTransport.streamCompletion({
-      targetModel: 'qwen2.5-coder:7b',
-      prompt: 'Read partial.ts',
-      runtimeOpts,
-      ollamaEndpoint: mock.baseUrl,
-      isCancelled: () => false,
-      toolCallingCapable: true,
-      toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
-    })).rejects.toThrow(/incomplete/)
+    await expect(
+      AgentStreamTransport.streamCompletion({
+        targetModel: 'qwen2.5-coder:7b',
+        prompt: 'Read partial.ts',
+        runtimeOpts,
+        ollamaEndpoint: mock.baseUrl,
+        isCancelled: () => false,
+        toolCallingCapable: true,
+        toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
+      }),
+    ).rejects.toThrow(/incomplete/)
   })
 })
 
@@ -397,13 +411,15 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
     })
     activeServer = mock.server
 
-    await expect(AgentStreamTransport.streamCompletion({
-      targetModel: 'qwen2.5-coder:7b',
-      prompt: 'Write a file',
-      runtimeOpts,
-      ollamaEndpoint: mock.baseUrl,
-      isCancelled: () => false,
-    })).rejects.toThrow(/incomplete \(length\)/)
+    await expect(
+      AgentStreamTransport.streamCompletion({
+        targetModel: 'qwen2.5-coder:7b',
+        prompt: 'Write a file',
+        runtimeOpts,
+        ollamaEndpoint: mock.baseUrl,
+        isCancelled: () => false,
+      }),
+    ).rejects.toThrow(/incomplete \(length\)/)
   })
 
   it('should forward num_predict and the stop sequences on the native tool-calling /api/chat path too', async () => {
@@ -438,8 +454,12 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
     let capturedBody: Record<string, unknown> | undefined
     const mock = await startMockOllama((req, res) => {
       let raw = ''
-      req.on('data', (chunk) => { raw += chunk })
-      req.on('end', () => { capturedBody = JSON.parse(raw) })
+      req.on('data', (chunk) => {
+        raw += chunk
+      })
+      req.on('end', () => {
+        capturedBody = JSON.parse(raw)
+      })
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.write(JSON.stringify({ thinking: 'Analyzing ', response: '', done: false }) + '\n')
       res.write(JSON.stringify({ thinking: 'the request...', response: '', done: false }) + '\n')
@@ -472,8 +492,12 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
     let capturedBody: Record<string, unknown> | undefined
     const mock = await startMockOllama((req, res) => {
       let raw = ''
-      req.on('data', (chunk) => { raw += chunk })
-      req.on('end', () => { capturedBody = JSON.parse(raw) })
+      req.on('data', (chunk) => {
+        raw += chunk
+      })
+      req.on('end', () => {
+        capturedBody = JSON.parse(raw)
+      })
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.write(JSON.stringify({ message: { role: 'assistant', thinking: 'Evaluating tool... ' }, done: false }) + '\n')
       res.write(
@@ -484,7 +508,7 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
             tool_calls: [{ function: { name: 'read_file', arguments: { filePath: 'index.ts' } } }],
           },
           done: true,
-        }) + '\n'
+        }) + '\n',
       )
       res.end()
     })

@@ -1,4 +1,3 @@
-
 import { countPromptTokens } from '../../shared/domain/agent/contextWindowCalculator'
 
 const MAX_CACHE_ENTRIES = 1000

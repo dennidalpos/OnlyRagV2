@@ -91,11 +91,13 @@ describe('GoalDecompositionPlanner', () => {
 
   it('bounds the prompt without changing canonical milestones', () => {
     const planner = new GoalDecompositionPlanner()
-    planner.initializePlan(Array.from({ length: 20 }, (_, index) => ({
-      id: `m-${index + 1}`,
-      title: `Implement capability ${index + 1} in src/file-${index + 1}.ts`,
-      status: 'pending' as const,
-    })))
+    planner.initializePlan(
+      Array.from({ length: 20 }, (_, index) => ({
+        id: `m-${index + 1}`,
+        title: `Implement capability ${index + 1} in src/file-${index + 1}.ts`,
+        status: 'pending' as const,
+      })),
+    )
 
     const prompt = planner.compileProgressPrompt()
     expect(planner.getMilestones()).toHaveLength(20)
@@ -141,9 +143,7 @@ describe('GoalDecompositionPlanner.remapFilePath', () => {
 
   it('remaps files under a moved directory and ignores no-op moves', () => {
     const planner = new GoalDecompositionPlanner()
-    planner.initializePlan([
-      { id: 'm-1', title: 'Create components', status: 'pending', filePaths: ['src/components/List.tsx', 'src/main.tsx'] },
-    ])
+    planner.initializePlan([{ id: 'm-1', title: 'Create components', status: 'pending', filePaths: ['src/components/List.tsx', 'src/main.tsx'] }])
 
     expect(planner.remapFilePath('src/main.tsx', './src/main.tsx')).toEqual([])
     expect(planner.remapFilePath('src/components/', 'src/ui')).toEqual(['m-1'])

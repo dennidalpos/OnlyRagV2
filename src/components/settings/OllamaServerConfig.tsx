@@ -11,13 +11,11 @@ interface OllamaServerConfigProps {
   onRefreshDiagnostics?: () => void
 }
 
-export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
-  settings,
-  onUpdateSettings,
-  onRefreshDiagnostics,
-}) => {
+export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings, onUpdateSettings, onRefreshDiagnostics }) => {
   const currentMode = isRemoteOllamaMode(settings) ? 'remote' : 'local'
-  const [remoteUrl, setRemoteUrl] = useState(settings.ollamaHost && settings.ollamaHost !== DEFAULT_OLLAMA_HOST ? settings.ollamaHost : 'http://192.168.1.100:11434')
+  const [remoteUrl, setRemoteUrl] = useState(
+    settings.ollamaHost && settings.ollamaHost !== DEFAULT_OLLAMA_HOST ? settings.ollamaHost : 'http://192.168.1.100:11434',
+  )
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; modelsCount?: number } | null>(null)
 
@@ -47,7 +45,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
   }
 
   const handleTestConnection = async () => {
-    const targetHost = currentMode === 'local' ? DEFAULT_OLLAMA_HOST : (settings.ollamaHost || remoteUrl)
+    const targetHost = currentMode === 'local' ? DEFAULT_OLLAMA_HOST : settings.ollamaHost || remoteUrl
     setIsTesting(true)
     setTestResult(null)
 
@@ -84,12 +82,8 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
             <Server className="w-4.5 h-4.5 text-cyan-400" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-              Server Ollama (Locale o Rete)
-            </h2>
-            <p className="text-[11px] text-slate-400">
-              Scegli se eseguire i modelli AI su questo computer o collegarti a un server in rete locale/remoto.
-            </p>
+            <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">Server Ollama (Locale o Rete)</h2>
+            <p className="text-[11px] text-slate-400">Scegli se eseguire i modelli AI su questo computer o collegarti a un server in rete locale/remoto.</p>
           </div>
         </div>
       </div>
@@ -109,18 +103,19 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
             <span className="text-xs font-bold text-slate-100 flex items-center gap-2">
               <HardDrive className="w-4 h-4 text-cyan-400" /> Sullo stesso PC (Locale)
             </span>
-            <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-              currentMode === 'local' ? 'border-cyan-400 bg-cyan-500' : 'border-slate-600'
-            }`}>
+            <span
+              className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                currentMode === 'local' ? 'border-cyan-400 bg-cyan-500' : 'border-slate-600'
+              }`}
+            >
               {currentMode === 'local' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 leading-relaxed">
-            Utilizza l'installazione locale di Ollama (<code className="font-mono text-cyan-300">http://127.0.0.1:11434</code>). Ideale per lavorare completamente offline con la GPU/CPU del computer.
+            Utilizza l'installazione locale di Ollama (<code className="font-mono text-cyan-300">http://127.0.0.1:11434</code>). Ideale per lavorare
+            completamente offline con la GPU/CPU del computer.
           </p>
-          <div className="text-[10px] font-mono text-cyan-400/80 pt-1">
-            Endpoint: http://127.0.0.1:11434
-          </div>
+          <div className="text-[10px] font-mono text-cyan-400/80 pt-1">Endpoint: http://127.0.0.1:11434</div>
         </button>
 
         {/* Mode 2: Remote Network Server */}
@@ -137,9 +132,11 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
             <span className="text-xs font-bold text-slate-100 flex items-center gap-2">
               <Wifi className="w-4 h-4 text-sky-400" /> Server in Rete Remoto
             </span>
-            <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-              currentMode === 'remote' ? 'border-cyan-400 bg-cyan-500' : 'border-slate-600'
-            }`}>
+            <span
+              className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                currentMode === 'remote' ? 'border-cyan-400 bg-cyan-500' : 'border-slate-600'
+              }`}
+            >
               {currentMode === 'remote' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
             </span>
           </div>
@@ -155,9 +152,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
       {/* Remote Host URL Input (visible when remote is active) */}
       {currentMode === 'remote' && (
         <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2 animate-in fade-in">
-          <label className="text-xs font-semibold text-slate-300 block">
-            Indirizzo IP o Nome Host del Server Ollama:
-          </label>
+          <label className="text-xs font-semibold text-slate-300 block">Indirizzo IP o Nome Host del Server Ollama:</label>
           <div className="flex items-center gap-2">
             <input
               type="text"
@@ -168,7 +163,8 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
             />
           </div>
           <p className="text-[10px] text-slate-400">
-            Assicurati che sul server remoto Ollama sia avviato con <code className="text-cyan-300 font-mono">OLLAMA_HOST=0.0.0.0</code> e che la porta sia accessibile.
+            Assicurati che sul server remoto Ollama sia avviato con <code className="text-cyan-300 font-mono">OLLAMA_HOST=0.0.0.0</code> e che la porta sia
+            accessibile.
           </p>
         </div>
       )}
@@ -186,16 +182,12 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
         </button>
 
         {testResult && (
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border ${
-            testResult.success
-              ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60'
-              : 'bg-rose-950/40 text-rose-300 border-rose-800/60'
-          }`}>
-            {testResult.success ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            ) : (
-              <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
-            )}
+          <div
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border ${
+              testResult.success ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60' : 'bg-rose-950/40 text-rose-300 border-rose-800/60'
+            }`}
+          >
+            {testResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> : <XCircle className="w-4 h-4 text-rose-400 shrink-0" />}
             <span>{testResult.message}</span>
           </div>
         )}

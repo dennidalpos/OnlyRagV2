@@ -13,12 +13,7 @@ function makeAutoHealingBlock(step: number): string {
 }
 
 function makeNormalBlock(step: number): string {
-  return [
-    `#### [Step ${step} - Tool: read_file]`,
-    '```',
-    `Successfully read src/foo.ts`,
-    '```',
-  ].join('\n')
+  return [`#### [Step ${step} - Tool: read_file]`, '```', `Successfully read src/foo.ts`, '```'].join('\n')
 }
 
 describe('AutoHealingLogCapper', () => {
@@ -33,13 +28,7 @@ describe('AutoHealingLogCapper', () => {
   })
 
   it('caps auto-healing blocks to the most recent N and preserves other blocks', () => {
-    const history = [
-      makeAutoHealingBlock(1),
-      makeNormalBlock(2),
-      makeAutoHealingBlock(3),
-      makeAutoHealingBlock(4),
-      makeAutoHealingBlock(5),
-    ].join('\n\n')
+    const history = [makeAutoHealingBlock(1), makeNormalBlock(2), makeAutoHealingBlock(3), makeAutoHealingBlock(4), makeAutoHealingBlock(5)].join('\n\n')
 
     const result = AutoHealingLogCapper.capBlocks(history, 2)
 

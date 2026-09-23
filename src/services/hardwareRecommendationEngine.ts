@@ -28,7 +28,6 @@ export type { HardwareFacts } from '../../shared/domain/hardware/hardwareProfile
 export { estimateModelWeightGB }
 import { estimateModelWeightGB } from '../../shared/domain/hardware/modelWeightEstimator'
 
-
 export interface ModelRecommendation {
   modelName: string
   displayName: string
@@ -104,7 +103,6 @@ export function getModelFamily(modelName: string): string {
   return lower.split(':')[0].split('/')[0].split('-')[0] || 'generic'
 }
 
-
 /**
  * Returns an approximate memory/disk footprint string based on known model tags and parameter counts.
  */
@@ -137,7 +135,7 @@ export function calculateTotalModelFootprintGB(
   modelName: string,
   contextTargetTokens: number = 4096,
   isQuantizedQ8: boolean = true,
-  details?: RunningModelDetails
+  details?: RunningModelDetails,
 ): number {
   const weightGB = estimateModelWeightGB(modelName, details)
   const kvCacheGB = estimateKvCacheMemoryGB(contextTargetTokens, isQuantizedQ8)
@@ -154,7 +152,7 @@ export function assessModelHardwareCompatibility(
   vramTotalMB: number,
   totalRamGB: number,
   contextTargetTokens: number = 4096,
-  details?: RunningModelDetails
+  details?: RunningModelDetails,
 ): {
   isCompatible: boolean
   footprintGB: number
@@ -219,9 +217,7 @@ export interface ModelFitVerdict {
 }
 
 /** Builds a memoized per-model VRAM verdict lookup for the detected host. */
-export function buildModelFitLookup(
-  diagnostics: DiagnosticsData | null
-): (modelName: string) => ModelFitVerdict {
+export function buildModelFitLookup(diagnostics: DiagnosticsData | null): (modelName: string) => ModelFitVerdict {
   const facts = extractHardwareFacts(diagnostics)
   const vramTotalMB = facts.vramTotalMB || 0
   const systemRamGB = facts.systemRamGB || 8
@@ -231,13 +227,7 @@ export function buildModelFitLookup(
     const cached = cache.get(modelName)
     if (cached) return cached
 
-    const assessment = assessModelHardwareCompatibility(
-      modelName,
-      vramTotalMB,
-      systemRamGB,
-      4096,
-      diagnostics?.ollama.modelDetails?.[modelName]
-    )
+    const assessment = assessModelHardwareCompatibility(modelName, vramTotalMB, systemRamGB, 4096, diagnostics?.ollama.modelDetails?.[modelName])
     const verdict: ModelFitVerdict = {
       compatibilityStatus: assessment.compatibilityStatus,
       footprintGB: assessment.footprintGB,
@@ -253,11 +243,8 @@ export { isOllamaModelInstalled } from '../../shared/domain/agent/modelTagMatche
  * Analyzes detected host hardware and calculates calibrated, non-saturated model assignments
  * strictly bound by net usable VRAM budget: VRAM_Disponibile_Reale = (VRAM_Totale * 0.75) - 1.5 GB.
  */
-export function analyzeHardwareAndRecommend(
-  diagnostics: DiagnosticsData | null
-): HardwareRecommendations {
-  const { profileTier, profileName, vramTotalMB, systemRamGB, safeVramBudgetGB, gpuSummary, ramSummary } =
-    resolveHardwareProfile(diagnostics)
+export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null): HardwareRecommendations {
+  const { profileTier, profileName, vramTotalMB, systemRamGB, safeVramBudgetGB, gpuSummary, ramSummary } = resolveHardwareProfile(diagnostics)
 
   const enrich = buildModelEnricher(diagnostics, vramTotalMB, systemRamGB, profileTier)
 
@@ -336,20 +323,9 @@ function formatProfileName(tier: HardwareProfileTier, vramGB: number, systemRamG
 }
 
 /** Builds the enrichment function that turns a static RawModelCatalogEntry into a fully assessed ModelRecommendation for the current hardware (AGT6: extracted from analyzeHardwareAndRecommend's inline `enrich` closure). */
-function buildModelEnricher(
-  diagnostics: DiagnosticsData | null,
-  vramTotalMB: number,
-  systemRamGB: number,
-  profileTier: HardwareProfileTier
-) {
+function buildModelEnricher(diagnostics: DiagnosticsData | null, vramTotalMB: number, systemRamGB: number, profileTier: HardwareProfileTier) {
   return (item: RawModelCatalogEntry): ModelRecommendation => {
-    const assessment = assessModelHardwareCompatibility(
-      item.modelName,
-      vramTotalMB,
-      systemRamGB,
-      4096,
-      diagnostics?.ollama.modelDetails?.[item.modelName]
-    )
+    const assessment = assessModelHardwareCompatibility(item.modelName, vramTotalMB, systemRamGB, 4096, diagnostics?.ollama.modelDetails?.[item.modelName])
     const isRecommendedByProfile = item.recommendedForProfiles.includes(profileTier)
     const isRecommended = isRecommendedByProfile
 
@@ -411,11 +387,12 @@ function buildAttentionVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEnvV
     ]
   }
 
-  const kv = ctx.profileTier === 'highend' || ctx.profileTier === 'extreme'
-    ? { value: 'f16', descKey: 'ollamaEnvParams.envKvHighDesc', ratKey: 'ollamaEnvParams.envKvHighRationale' }
-    : ctx.profileTier === 'midrange'
-      ? { value: 'q8_0', descKey: 'ollamaEnvParams.envKvMidDesc', ratKey: 'ollamaEnvParams.envKvMidRationale' }
-      : { value: 'q8_0', descKey: 'ollamaEnvParams.envKvLowDesc', ratKey: 'ollamaEnvParams.envKvLowRationale' }
+  const kv =
+    ctx.profileTier === 'highend' || ctx.profileTier === 'extreme'
+      ? { value: 'f16', descKey: 'ollamaEnvParams.envKvHighDesc', ratKey: 'ollamaEnvParams.envKvHighRationale' }
+      : ctx.profileTier === 'midrange'
+        ? { value: 'q8_0', descKey: 'ollamaEnvParams.envKvMidDesc', ratKey: 'ollamaEnvParams.envKvMidRationale' }
+        : { value: 'q8_0', descKey: 'ollamaEnvParams.envKvLowDesc', ratKey: 'ollamaEnvParams.envKvLowRationale' }
 
   return [
     {
@@ -443,32 +420,26 @@ function buildAttentionVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEnvV
 
 /** Concurrency is bounded by BOTH the memory tier and the physical core count: on a CPU-only host every parallel slot competes for the same cores, so extra parallelism is pure latency. */
 function buildConcurrencyVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEnvVarRecommendation[] {
-  const tierParallel = !ctx.hasGpu || ctx.profileTier === 'legacy' || ctx.profileTier === 'entry'
-    ? 1
-    : ctx.profileTier === 'midrange'
-      ? 2
-      : 4
+  const tierParallel = !ctx.hasGpu || ctx.profileTier === 'legacy' || ctx.profileTier === 'entry' ? 1 : ctx.profileTier === 'midrange' ? 2 : 4
   const coreCap = ctx.cpuCount > 0 ? Math.max(1, Math.floor(ctx.cpuCount / 4)) : 1
   const parallel = Math.min(tierParallel, coreCap)
 
-  const parallelKeys = parallel <= 1
-    ? { descKey: 'ollamaEnvParams.envParallelLowDesc', ratKey: 'ollamaEnvParams.envParallelLowRationale' }
-    : parallel === 2
-      ? { descKey: 'ollamaEnvParams.envParallelMidDesc', ratKey: 'ollamaEnvParams.envParallelMidRationale' }
-      : { descKey: 'ollamaEnvParams.envParallelHighDesc', ratKey: 'ollamaEnvParams.envParallelHighRationale' }
+  const parallelKeys =
+    parallel <= 1
+      ? { descKey: 'ollamaEnvParams.envParallelLowDesc', ratKey: 'ollamaEnvParams.envParallelLowRationale' }
+      : parallel === 2
+        ? { descKey: 'ollamaEnvParams.envParallelMidDesc', ratKey: 'ollamaEnvParams.envParallelMidRationale' }
+        : { descKey: 'ollamaEnvParams.envParallelHighDesc', ratKey: 'ollamaEnvParams.envParallelHighRationale' }
 
   // A second resident model only pays off when there is memory to keep it hot; low-RAM hosts
   // must evict aggressively or the OS starts swapping the KV cache to disk.
-  const maxLoaded = ctx.profileTier === 'extreme' && ctx.systemRamGB >= 32
-    ? 3
-    : ctx.profileTier === 'highend' || ctx.profileTier === 'extreme'
-      ? 2
-      : 1
-  const loadedKeys = maxLoaded >= 3
-    ? { descKey: 'ollamaEnvParams.envMaxLoadedExtremeDesc', ratKey: 'ollamaEnvParams.envMaxLoadedExtremeRationale' }
-    : maxLoaded === 2
-      ? { descKey: 'ollamaEnvParams.envMaxLoadedHighDesc', ratKey: 'ollamaEnvParams.envMaxLoadedHighRationale' }
-      : { descKey: 'ollamaEnvParams.envMaxLoadedLowDesc', ratKey: 'ollamaEnvParams.envMaxLoadedLowRationale' }
+  const maxLoaded = ctx.profileTier === 'extreme' && ctx.systemRamGB >= 32 ? 3 : ctx.profileTier === 'highend' || ctx.profileTier === 'extreme' ? 2 : 1
+  const loadedKeys =
+    maxLoaded >= 3
+      ? { descKey: 'ollamaEnvParams.envMaxLoadedExtremeDesc', ratKey: 'ollamaEnvParams.envMaxLoadedExtremeRationale' }
+      : maxLoaded === 2
+        ? { descKey: 'ollamaEnvParams.envMaxLoadedHighDesc', ratKey: 'ollamaEnvParams.envMaxLoadedHighRationale' }
+        : { descKey: 'ollamaEnvParams.envMaxLoadedLowDesc', ratKey: 'ollamaEnvParams.envMaxLoadedLowRationale' }
 
   return [
     {
@@ -488,11 +459,12 @@ function buildConcurrencyVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEn
 
 /** Residency and default context length. */
 function buildMemoryResidencyVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEnvVarRecommendation[] {
-  const keepAlive = ctx.isMinimal || ctx.profileTier === 'legacy'
-    ? { value: '5m', descKey: 'ollamaEnvParams.envKeepAliveLowDesc', ratKey: 'ollamaEnvParams.envKeepAliveLowRationale' }
-    : ctx.profileTier === 'entry' || ctx.profileTier === 'midrange'
-      ? { value: '30m', descKey: 'ollamaEnvParams.envKeepAliveMidDesc', ratKey: 'ollamaEnvParams.envKeepAliveMidRationale' }
-      : { value: '2h', descKey: 'ollamaEnvParams.envKeepAliveHighDesc', ratKey: 'ollamaEnvParams.envKeepAliveHighRationale' }
+  const keepAlive =
+    ctx.isMinimal || ctx.profileTier === 'legacy'
+      ? { value: '5m', descKey: 'ollamaEnvParams.envKeepAliveLowDesc', ratKey: 'ollamaEnvParams.envKeepAliveLowRationale' }
+      : ctx.profileTier === 'entry' || ctx.profileTier === 'midrange'
+        ? { value: '30m', descKey: 'ollamaEnvParams.envKeepAliveMidDesc', ratKey: 'ollamaEnvParams.envKeepAliveMidRationale' }
+        : { value: '2h', descKey: 'ollamaEnvParams.envKeepAliveHighDesc', ratKey: 'ollamaEnvParams.envKeepAliveHighRationale' }
 
   const contextLength = ctx.isMinimal
     ? 4096
@@ -501,11 +473,12 @@ function buildMemoryResidencyVars(ctx: EnvTuningContext, t: EnvTranslator): Olla
       : ctx.profileTier === 'highend'
         ? 16384
         : 32768
-  const contextKeys = contextLength <= 4096
-    ? { descKey: 'ollamaEnvParams.envContextLenLowDesc', ratKey: 'ollamaEnvParams.envContextLenLowRationale' }
-    : contextLength <= 8192
-      ? { descKey: 'ollamaEnvParams.envContextLenMidDesc', ratKey: 'ollamaEnvParams.envContextLenMidRationale' }
-      : { descKey: 'ollamaEnvParams.envContextLenHighDesc', ratKey: 'ollamaEnvParams.envContextLenHighRationale' }
+  const contextKeys =
+    contextLength <= 4096
+      ? { descKey: 'ollamaEnvParams.envContextLenLowDesc', ratKey: 'ollamaEnvParams.envContextLenLowRationale' }
+      : contextLength <= 8192
+        ? { descKey: 'ollamaEnvParams.envContextLenMidDesc', ratKey: 'ollamaEnvParams.envContextLenMidRationale' }
+        : { descKey: 'ollamaEnvParams.envContextLenHighDesc', ratKey: 'ollamaEnvParams.envContextLenHighRationale' }
 
   return [
     {
@@ -524,10 +497,7 @@ function buildMemoryResidencyVars(ctx: EnvTuningContext, t: EnvTranslator): Olla
 }
 
 /** Renders the copy-paste setup scripts for the resolved variable set. */
-function buildEnvScripts(
-  profileTier: HardwareProfileTier,
-  variables: OllamaEnvVarRecommendation[]
-): { powershellScript: string; bashScript: string } {
+function buildEnvScripts(profileTier: HardwareProfileTier, variables: OllamaEnvVarRecommendation[]): { powershellScript: string; bashScript: string } {
   const psLines = [
     `# === Configurazione Variabili OS per Ollama (${profileTier.toUpperCase()}) ===`,
     `# Esegui in PowerShell come Utente o Amministratore:`,
@@ -548,10 +518,7 @@ function buildEnvScripts(
 }
 
 /** Calculates optimal client OS environment variables and setup scripts for Ollama based on the FULL detected hardware picture - GPU VRAM, physical core count and system RAM - not VRAM alone: a 4-core / 8GB CPU-only laptop and a 32-core / 64GB CPU-only workstatio */
-export function getRecommendedOllamaEnvVars(
-  diagnostics: DiagnosticsData | null,
-  t: EnvTranslator = (key) => key
-): OllamaEnvConfig {
+export function getRecommendedOllamaEnvVars(diagnostics: DiagnosticsData | null, t: EnvTranslator = (key) => key): OllamaEnvConfig {
   const facts = extractHardwareFacts(diagnostics)
   const profileTier = classifyHardwareProfileTier(facts)
 

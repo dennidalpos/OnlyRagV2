@@ -81,7 +81,11 @@ export class DocumentIoRepository {
       fs.renameSync(tmpPath, targetPath)
       return { success: true }
     } catch (err: any) {
-      try { fs.unlinkSync(tmpPath) } catch { /* best-effort cleanup, tmpPath may not exist */ }
+      try {
+        fs.unlinkSync(tmpPath)
+      } catch {
+        /* best-effort cleanup, tmpPath may not exist */
+      }
       logger.log('ERROR', 'DocumentIoRepo', `Failed writing text file '${targetPath}': ${err.message}`)
       return { success: false, error: err.message }
     }
@@ -95,7 +99,11 @@ export class DocumentIoRepository {
       fs.renameSync(tmpPath, targetPath)
       return { success: true }
     } catch (err: any) {
-      try { fs.unlinkSync(tmpPath) } catch { /* best-effort cleanup, tmpPath may not exist */ }
+      try {
+        fs.unlinkSync(tmpPath)
+      } catch {
+        /* best-effort cleanup, tmpPath may not exist */
+      }
       logger.log('ERROR', 'DocumentIoRepo', `Failed writing binary file '${targetPath}': ${err.message}`)
       return { success: false, error: err.message }
     }

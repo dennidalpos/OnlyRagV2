@@ -98,7 +98,20 @@ function targetsStayInWorkspace(args: readonly string[], workspacePath?: string 
 
 function inspectCommand(command: ParsedCommand, workspacePath?: string | null): StructuredCommandSafetyResult {
   const { name, args } = command
-  const isFileMutation = ['remove-item', 'rm', 'rmdir', 'del', 'erase', 'set-content', 'add-content', 'out-file', 'new-item', 'move-item', 'rename-item', 'copy-item'].includes(name)
+  const isFileMutation = [
+    'remove-item',
+    'rm',
+    'rmdir',
+    'del',
+    'erase',
+    'set-content',
+    'add-content',
+    'out-file',
+    'new-item',
+    'move-item',
+    'rename-item',
+    'copy-item',
+  ].includes(name)
   if (isFileMutation) {
     if (!targetsStayInWorkspace(args, workspacePath)) {
       return { allowed: false, requiresApproval: false, reason: `Workspace confinement rejected ${name}.` }

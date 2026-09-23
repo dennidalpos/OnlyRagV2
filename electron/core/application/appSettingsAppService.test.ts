@@ -61,8 +61,10 @@ describe('AppSettingsAppService Unit Tests', () => {
 
   it('does not start a sidecar this session never launched', async () => {
     const sidecar = { getLaunchedOllamaHost: () => null, restartPythonSidecar: vi.fn(async () => true) }
-    await new AppSettingsAppService(new AppSettingsRepository(tmpDir), sidecar, 0)
-      .saveSettings({ ...getDefaultAppSettings(), ollamaHost: 'http://192.168.1.20:11434' })
+    await new AppSettingsAppService(new AppSettingsRepository(tmpDir), sidecar, 0).saveSettings({
+      ...getDefaultAppSettings(),
+      ollamaHost: 'http://192.168.1.20:11434',
+    })
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(sidecar.restartPythonSidecar).not.toHaveBeenCalled()
   })

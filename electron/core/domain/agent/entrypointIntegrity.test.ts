@@ -8,10 +8,7 @@ const EMPTY_PAGE = `<!DOCTYPE html>
     <!-- Application will be rendered here -->
 </body></html>`
 
-const WIRED_PAGE = EMPTY_PAGE.replace(
-  '<!-- Application will be rendered here -->',
-  '<div id="root"></div><script type="module" src="/src/main.tsx"></script>'
-)
+const WIRED_PAGE = EMPTY_PAGE.replace('<!-- Application will be rendered here -->', '<div id="root"></div><script type="module" src="/src/main.tsx"></script>')
 
 describe('extractLocalScriptSources', () => {
   it('finds a local module script whatever the attribute order', () => {

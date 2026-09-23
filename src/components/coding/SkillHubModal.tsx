@@ -69,9 +69,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
               <h2 id="skill-hub-modal-title" className="text-base font-bold text-slate-100 flex items-center gap-2">
                 {t('skills.hubTitle')}
               </h2>
-              <p className="text-xs text-slate-400">
-                {t('skills.hubSubtitle')}
-              </p>
+              <p className="text-xs text-slate-400">{t('skills.hubSubtitle')}</p>
             </div>
           </div>
           <button
@@ -95,9 +93,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
               aria-controls="skill-panel-installed"
               onClick={() => handleTabChange('installed')}
               className={`py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 focus-ring ${
-                activeTab === 'installed'
-                  ? 'border-cyan-500 text-cyan-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-300'
+                activeTab === 'installed' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-slate-300'
               }`}
             >
               <CheckCircle className="w-3.5 h-3.5" /> {t('skills.installedTab')} ({installedSkills.length})
@@ -110,9 +106,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
               aria-controls="skill-panel-hub"
               onClick={() => handleTabChange('hub')}
               className={`py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 focus-ring ${
-                activeTab === 'hub'
-                  ? 'border-cyan-500 text-cyan-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-300'
+                activeTab === 'hub' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-slate-300'
               }`}
             >
               <Download className="w-3.5 h-3.5" /> {t('skills.marketplaceTab')}
@@ -126,9 +120,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
             role={actionMessage.type === 'error' ? 'alert' : 'status'}
             aria-live="polite"
             className={`px-6 py-2 text-xs font-medium border-b ${
-              actionMessage.type === 'success'
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+              actionMessage.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
             }`}
           >
             {actionMessage.text}
@@ -193,17 +185,9 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
         isLoading={isLoading}
       />
 
-      <CustomHubGuideModal
-        isOpen={isGuideOpen}
-        onClose={() => setIsGuideOpen(false)}
-      />
+      <CustomHubGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
 
-      <AddCustomHubModal
-        isOpen={isAddHubOpen}
-        onClose={() => setIsAddHubOpen(false)}
-        onAdd={handleAddCustomHub}
-        isLoading={isLoading}
-      />
+      <AddCustomHubModal isOpen={isAddHubOpen} onClose={() => setIsAddHubOpen(false)} onAdd={handleAddCustomHub} isLoading={isLoading} />
     </>
   )
 }

@@ -13,7 +13,7 @@
   body {
     background-color: var(--color-bg);
     color: #f8fafc;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
     user-select: text;
     -webkit-user-select: text;
   }
@@ -64,7 +64,10 @@
 /* Accessibility Focus Ring Utility with WCAG AA compliance */
 .focus-ring {
   outline: none;
-  transition: outline 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    outline 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .focus-ring:focus-visible {
   outline: 2px solid #22d3ee !important;
@@ -137,5 +140,3 @@
   white-space: nowrap;
   border-width: 0;
 }
-
-

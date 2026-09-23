@@ -198,18 +198,16 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
               className="p-2.5 flex items-center justify-between gap-2 cursor-pointer focus-ring rounded-xl"
             >
               <div className="flex items-center gap-2 truncate min-w-0">
-                <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-                  isStandalone ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/40' : 'bg-slate-800 text-slate-400'
-                }`}>
+                <div
+                  className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                    isStandalone ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/40' : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
                   <MessageSquare className="w-3.5 h-3.5" />
                 </div>
                 <div className="truncate min-w-0">
-                  <div className={`font-bold text-[11px] truncate ${isStandalone ? 'text-indigo-200' : 'text-slate-300'}`}>
-                    Workspace Scratch
-                  </div>
-                  <div className="text-[9px] text-slate-400 truncate">
-                    Persistente, senza cartella progetto
-                  </div>
+                  <div className={`font-bold text-[11px] truncate ${isStandalone ? 'text-indigo-200' : 'text-slate-300'}`}>Workspace Scratch</div>
+                  <div className="text-[9px] text-slate-400 truncate">Persistente, senza cartella progetto</div>
                 </div>
               </div>
               {isStandalone && (
@@ -379,9 +377,11 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                   className="p-2.5 flex items-center justify-between gap-2 cursor-pointer focus-ring rounded-xl group"
                 >
                   <div className="flex items-center gap-2 truncate min-w-0 flex-1">
-                    <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-                      isProjActive ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'bg-slate-800 text-slate-400'
-                    }`}>
+                    <div
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                        isProjActive ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
                       <Folder className="w-3.5 h-3.5" />
                     </div>
 
@@ -409,14 +409,10 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                         </div>
                       ) : (
                         <>
-                          <div className={`font-bold text-[11px] truncate flex items-center gap-1.5 ${
-                            isProjActive ? 'text-cyan-200' : 'text-slate-200'
-                          }`}>
+                          <div className={`font-bold text-[11px] truncate flex items-center gap-1.5 ${isProjActive ? 'text-cyan-200' : 'text-slate-200'}`}>
                             <span>{proj.name}</span>
                             {isProjActive && (
-                              <span className="px-1 py-0.2 rounded text-[8px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                                In Uso
-                              </span>
+                              <span className="px-1 py-0.2 rounded text-[8px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">In Uso</span>
                             )}
                           </div>
                           <div className="text-[9px] font-mono text-slate-400 truncate" title={proj.path}>
@@ -590,11 +586,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                     className="w-full bg-transparent text-[11px] text-slate-200 placeholder:text-slate-500 outline-none font-mono"
                   />
                   {searchFilter && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchFilter('')}
-                      className="text-slate-500 hover:text-slate-300 p-0.5 cursor-pointer"
-                    >
+                    <button type="button" onClick={() => setSearchFilter('')} className="text-slate-500 hover:text-slate-300 p-0.5 cursor-pointer">
                       <X className="w-2.5 h-2.5" />
                     </button>
                   )}

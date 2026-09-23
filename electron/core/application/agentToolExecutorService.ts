@@ -131,7 +131,9 @@ export class AgentToolExecutorService {
       run: (directory, command, timeoutMs) => gitCliRepository.run(directory, command, timeoutMs),
       previewCommit: (directory, paths) => gitCliRepository.previewCommit(directory, paths),
       commit: (directory, message, paths, expectedDiffHash) => gitCliRepository.commit(directory, message, paths, expectedDiffHash),
-      markCommitBoundary: () => { this.journal.commit() },
+      markCommitBoundary: () => {
+        this.journal.commit()
+      },
     })
   }
 
@@ -144,15 +146,17 @@ export class AgentToolExecutorService {
   ): Promise<ToolExecutionResult | null> {
     if (!settings.capabilityPolicyMode) return null
 
-    const networkTool = ({
-      web_search: ['http-download', 'connect', parsedTool.parameters.query],
-      fetch_web_content: ['http-download', 'connect', parsedTool.parameters.url],
-      download_file: ['http-download', 'download', parsedTool.parameters.url],
-      open_in_browser: ['browser', 'open', parsedTool.parameters.url || parsedTool.parameters.filePath || parsedTool.parameters.path],
-      validate_visual_artifact: ['browser', 'open', parsedTool.parameters.artifactPath],
-      run_command: ['shell', 'execute', parsedTool.parameters.command],
-      ensure_tool: ['http-download', 'download', parsedTool.parameters.toolName || parsedTool.parameters.tool || parsedTool.parameters.name],
-    } as Record<string, [Capability, CapabilityOperation, unknown]>)[parsedTool.tool]
+    const networkTool = (
+      {
+        web_search: ['http-download', 'connect', parsedTool.parameters.query],
+        fetch_web_content: ['http-download', 'connect', parsedTool.parameters.url],
+        download_file: ['http-download', 'download', parsedTool.parameters.url],
+        open_in_browser: ['browser', 'open', parsedTool.parameters.url || parsedTool.parameters.filePath || parsedTool.parameters.path],
+        validate_visual_artifact: ['browser', 'open', parsedTool.parameters.artifactPath],
+        run_command: ['shell', 'execute', parsedTool.parameters.command],
+        ensure_tool: ['http-download', 'download', parsedTool.parameters.toolName || parsedTool.parameters.tool || parsedTool.parameters.name],
+      } as Record<string, [Capability, CapabilityOperation, unknown]>
+    )[parsedTool.tool]
 
     if (!networkTool) return null
     const [capability, operation, target] = networkTool
@@ -166,11 +170,12 @@ export class AgentToolExecutorService {
       target: target ? String(target) : undefined,
       consent,
     } as const
-    const policy = settings.capabilityPolicyMode === 'network-approved'
-      ? await authorizeAndPersistNetworkApproved(request, this.policyAuditRepository)
-      : settings.capabilityPolicyMode === 'local-only'
-        ? authorizeLocalOnly(request)
-        : authorizeOfflineStrict(request)
+    const policy =
+      settings.capabilityPolicyMode === 'network-approved'
+        ? await authorizeAndPersistNetworkApproved(request, this.policyAuditRepository)
+        : settings.capabilityPolicyMode === 'local-only'
+          ? authorizeLocalOnly(request)
+          : authorizeOfflineStrict(request)
     if (policy.allowed) return null
 
     return {
@@ -204,16 +209,18 @@ export class AgentToolExecutorService {
   }
 
   private mutationPathBlock(parsedTool: AgentToolCall, workspacePath: string | null | undefined): ToolExecutionResult | null {
-    const fields = ({
-      write_file: ['filePath'],
-      replace_file_content: ['filePath'],
-      multi_replace_file_content: ['filePath'],
-      delete_file: ['filePath'],
-      create_directory: ['dirPath', 'filePath'],
-      copy_file: ['sourcePath', 'filePath', 'targetPath', 'destination'],
-      move_file: ['sourcePath', 'filePath', 'targetPath', 'destination'],
-      download_file: ['filePath'],
-    } as Record<string, string[]>)[parsedTool.tool]
+    const fields = (
+      {
+        write_file: ['filePath'],
+        replace_file_content: ['filePath'],
+        multi_replace_file_content: ['filePath'],
+        delete_file: ['filePath'],
+        create_directory: ['dirPath', 'filePath'],
+        copy_file: ['sourcePath', 'filePath', 'targetPath', 'destination'],
+        move_file: ['sourcePath', 'filePath', 'targetPath', 'destination'],
+        download_file: ['filePath'],
+      } as Record<string, string[]>
+    )[parsedTool.tool]
     if (!fields) return null
 
     const root = workspacePath || process.cwd()
@@ -233,7 +240,12 @@ export class AgentToolExecutorService {
     return null
   }
 
-  public performGitCommit(cwd: string, commitMessage: string, paths: readonly string[], expectedDiffHash: string): { success: boolean; output: string; logMessage: string } {
+  public performGitCommit(
+    cwd: string,
+    commitMessage: string,
+    paths: readonly string[],
+    expectedDiffHash: string,
+  ): { success: boolean; output: string; logMessage: string } {
     return this.gitToolService.commit(cwd, commitMessage, paths, expectedDiffHash)
   }
 
@@ -296,11 +308,7 @@ export class AgentToolExecutorService {
 
     const directive = buildVersionRealityDirective(findings)
     if (!directive) return ''
-    for (const name of [
-      ...findings.nonexistent,
-      ...findings.unpublished.map((item) => item.name),
-      ...findings.outdated.map((o) => o.name),
-    ]) {
+    for (const name of [...findings.nonexistent, ...findings.unpublished.map((item) => item.name), ...findings.outdated.map((o) => o.name)]) {
       this.reportedVersionFacts.add(name)
     }
     logger.log('WARN', 'AgentToolExecutor', `[VERSION_REALITY] package.json declares versions the registry contradicts`)
@@ -308,11 +316,7 @@ export class AgentToolExecutorService {
   }
 
   /** When the user approved only a subset of hunks in the PendingApprovalModal (instead of the whole proposal), rewrites the tool call into an equivalent write_file carrying just the approved hunks' effect, computed against the file's current on-disk content — the */
-  public reconcileHunkApproval(
-    parsedTool: AgentToolCall,
-    approvedHunkIndices: number[] | undefined,
-    workspacePath: string | null | undefined
-  ): AgentToolCall {
+  public reconcileHunkApproval(parsedTool: AgentToolCall, approvedHunkIndices: number[] | undefined, workspacePath: string | null | undefined): AgentToolCall {
     if (!approvedHunkIndices) return parsedTool
     const filePath = parsedTool.parameters?.filePath
     const pathCheck = validatePathSafety(filePath, workspacePath)
@@ -421,14 +425,7 @@ export class AgentToolExecutorService {
       }
 
       case 'ensure_tool': {
-        return this.processToolService.executeEnsureTool(
-          parameters,
-          workspacePath,
-          settings.allowTerminalExecution,
-          signal,
-          onTerminalOutput,
-          onProcessSpawned,
-        )
+        return this.processToolService.executeEnsureTool(parameters, workspacePath, settings.allowTerminalExecution, signal, onTerminalOutput, onProcessSpawned)
       }
 
       case 'grep_search': {
@@ -481,7 +478,12 @@ export class AgentToolExecutorService {
 
       case 'run_command': {
         if (settings.allowTerminalExecution === false) {
-          return { outcome: 'blocked', outputForHistory: 'Terminal command execution disabled in Settings.', logMessage: 'Terminal command execution disabled in Settings.', isTerminal: true }
+          return {
+            outcome: 'blocked',
+            outputForHistory: 'Terminal command execution disabled in Settings.',
+            logMessage: 'Terminal command execution disabled in Settings.',
+            isTerminal: true,
+          }
         }
         const cmd = parameters.command
         if (!cmd) {
@@ -510,91 +512,106 @@ export class AgentToolExecutorService {
 
         const { result: res, rawOutput, isCancelled, isFailure } = execution
 
-          // Failure is decided by the process's own exit status, not by scanning its output for words like "Error:" or "FAIL" — those matched grep hits, verbose build logs and passing test suites, sending successful commands into the auto-healing loop.
-          if (isFailure) {
-            const commonFailureDirectives = this.processToolService.buildCommonFailureDirectives(
-              cmd,
-              res,
-              rawOutput,
-              workspacePath,
-              isCancelled,
-              (workspace, fileName) => documentIoRepository.exists(path.join(workspace, fileName)),
-            )
-            // A peer-version conflict, parsed from npm's own report.
-            const failureDiagnostics = await this.processToolService.classifyFailureDiagnostics(rawOutput, workspacePath)
-            const { resolutionConflictDirective, versionNotFoundDirective, moduleResolutionDirective, missingDepDirective } = failureDiagnostics
-            // ETARGET: a version that was never published. Its sibling ERESOLVE has been handled
-            // since §5.3 and this case never was, so run 17 of 2026-08-25 repeated the same
-            // refused install until the circuit breaker stopped the session. Placed after
-            // ERESOLVE because that output can also mention versions, and a peer conflict is a
-            // different fix.
-            // "Cannot find module X" is two different failures wearing one message, and telling
-            // them apart needs the disk, not the text: a package that is already in node_modules
-            // cannot be installed into existence again. See moduleResolutionDiagnostic.ts for the
-            // runs that spent their steps reinstalling packages that were already there.
-            // `Cannot find module './api'` is not a missing dependency. `packageOfSpecifier` in
-            // moduleResolutionDiagnostic.ts already knows this — "Relative imports belong to no
-            // package" — but this gate matched the raw text instead of asking it, so a project
-            // file that had not been written yet was diagnosed as an uninstalled package.
-            //
-            // Measured 2026-08-25T19:16, session live-full-task, step 34. `npm run build` reported
-            // four errors: a TS2614 export/import mismatch carrying the compiler's own verbatim
-            // fix, a TS2322, and two `Cannot find module` on './api' and './auth' — files the plan
-            // had not created yet. This gate fired on the relative ones, which set
-            // `specificDirectiveFired` and therefore suppressed buildDiagnosticFixDirective, so
-            // the one directive that could name a file and a fix never reached the model. What
-            // reached it was an order to install a package the text never names. The model
-            // guessed `@mui/material`, the loop guard blocked it, and steps 35-50 were sixteen
-            // consecutive blocked repeats of that guess until the step ceiling ended the run.
-            //
-            // The two non-tsc phrasings stay on the raw match: the `Cannot find module 'x'` regex
-            // does not parse them, so requiring a resolved package name would silence genuine
-            // bundler failures.
-            // Naming them is the whole difference between an instruction and a riddle: the old
-            // text shipped the literal placeholder `<package-name>` and left the model to invent
-            // one. `unresolved` already holds the answer (§6.2.1).
-            const { npmNamingDirective, interactivePromptDirective } = this.processToolService.buildInteractionFailureDirectives(rawOutput, res.interruptedByPrompt)
-            // What the model is told to do about the failure, decided ONCE instead of stated
-            // twice. The old tail said "apply the fix ... and re-run the command autonomously",
-            // two imperatives in one sentence, and in the live run of 2026-08-24 the model did
-            // the second: tsc named three files and lines at step 21 and the identical command
-            // was re-run at steps 22-31 with nothing edited in between.
-            //
-            // When the compiler localised the error, the directive names that file and forbids
-            // the re-run until something changes. When a more specific directive above already
-            // fired (ERESOLVE, missing dependency, npm naming, interactive prompt), the tail
-            // stops issuing an instruction of its own and defers to it.
-            const specificDirectiveFired = Boolean(
-              commonFailureDirectives || resolutionConflictDirective || versionNotFoundDirective ||
-              missingDepDirective || moduleResolutionDirective || npmNamingDirective || interactivePromptDirective
-            )
-            const { deferredDiagnosticNote, healingTail } = this.processToolService.chooseAutoHealingDirective(
-              rawOutput,
-              specificDirectiveFired,
-              (packageName) => workspacePath ? readPackageExports(workspacePath, packageName) : [],
-              (importingFile, specifier) => workspacePath ? readLocalModuleExports(workspacePath, importingFile, specifier) : [],
-            )
-            return this.processToolService.buildAutoHealingFailureResult(
-              cmd,
-              res,
-              rawOutput,
-              `${commonFailureDirectives}${resolutionConflictDirective}${versionNotFoundDirective}${missingDepDirective}${moduleResolutionDirective}${npmNamingDirective}${interactivePromptDirective}${deferredDiagnosticNote}`,
-              healingTail,
-            )
-          }
+        // Failure is decided by the process's own exit status, not by scanning its output for words like "Error:" or "FAIL" — those matched grep hits, verbose build logs and passing test suites, sending successful commands into the auto-healing loop.
+        if (isFailure) {
+          const commonFailureDirectives = this.processToolService.buildCommonFailureDirectives(
+            cmd,
+            res,
+            rawOutput,
+            workspacePath,
+            isCancelled,
+            (workspace, fileName) => documentIoRepository.exists(path.join(workspace, fileName)),
+          )
+          // A peer-version conflict, parsed from npm's own report.
+          const failureDiagnostics = await this.processToolService.classifyFailureDiagnostics(rawOutput, workspacePath)
+          const { resolutionConflictDirective, versionNotFoundDirective, moduleResolutionDirective, missingDepDirective } = failureDiagnostics
+          // ETARGET: a version that was never published. Its sibling ERESOLVE has been handled
+          // since §5.3 and this case never was, so run 17 of 2026-08-25 repeated the same
+          // refused install until the circuit breaker stopped the session. Placed after
+          // ERESOLVE because that output can also mention versions, and a peer conflict is a
+          // different fix.
+          // "Cannot find module X" is two different failures wearing one message, and telling
+          // them apart needs the disk, not the text: a package that is already in node_modules
+          // cannot be installed into existence again. See moduleResolutionDiagnostic.ts for the
+          // runs that spent their steps reinstalling packages that were already there.
+          // `Cannot find module './api'` is not a missing dependency. `packageOfSpecifier` in
+          // moduleResolutionDiagnostic.ts already knows this — "Relative imports belong to no
+          // package" — but this gate matched the raw text instead of asking it, so a project
+          // file that had not been written yet was diagnosed as an uninstalled package.
+          //
+          // Measured 2026-08-25T19:16, session live-full-task, step 34. `npm run build` reported
+          // four errors: a TS2614 export/import mismatch carrying the compiler's own verbatim
+          // fix, a TS2322, and two `Cannot find module` on './api' and './auth' — files the plan
+          // had not created yet. This gate fired on the relative ones, which set
+          // `specificDirectiveFired` and therefore suppressed buildDiagnosticFixDirective, so
+          // the one directive that could name a file and a fix never reached the model. What
+          // reached it was an order to install a package the text never names. The model
+          // guessed `@mui/material`, the loop guard blocked it, and steps 35-50 were sixteen
+          // consecutive blocked repeats of that guess until the step ceiling ended the run.
+          //
+          // The two non-tsc phrasings stay on the raw match: the `Cannot find module 'x'` regex
+          // does not parse them, so requiring a resolved package name would silence genuine
+          // bundler failures.
+          // Naming them is the whole difference between an instruction and a riddle: the old
+          // text shipped the literal placeholder `<package-name>` and left the model to invent
+          // one. `unresolved` already holds the answer (§6.2.1).
+          const { npmNamingDirective, interactivePromptDirective } = this.processToolService.buildInteractionFailureDirectives(
+            rawOutput,
+            res.interruptedByPrompt,
+          )
+          // What the model is told to do about the failure, decided ONCE instead of stated
+          // twice. The old tail said "apply the fix ... and re-run the command autonomously",
+          // two imperatives in one sentence, and in the live run of 2026-08-24 the model did
+          // the second: tsc named three files and lines at step 21 and the identical command
+          // was re-run at steps 22-31 with nothing edited in between.
+          //
+          // When the compiler localised the error, the directive names that file and forbids
+          // the re-run until something changes. When a more specific directive above already
+          // fired (ERESOLVE, missing dependency, npm naming, interactive prompt), the tail
+          // stops issuing an instruction of its own and defers to it.
+          const specificDirectiveFired = Boolean(
+            commonFailureDirectives ||
+              resolutionConflictDirective ||
+              versionNotFoundDirective ||
+              missingDepDirective ||
+              moduleResolutionDirective ||
+              npmNamingDirective ||
+              interactivePromptDirective,
+          )
+          const { deferredDiagnosticNote, healingTail } = this.processToolService.chooseAutoHealingDirective(
+            rawOutput,
+            specificDirectiveFired,
+            (packageName) => (workspacePath ? readPackageExports(workspacePath, packageName) : []),
+            (importingFile, specifier) => (workspacePath ? readLocalModuleExports(workspacePath, importingFile, specifier) : []),
+          )
+          return this.processToolService.buildAutoHealingFailureResult(
+            cmd,
+            res,
+            rawOutput,
+            `${commonFailureDirectives}${resolutionConflictDirective}${versionNotFoundDirective}${missingDepDirective}${moduleResolutionDirective}${npmNamingDirective}${interactivePromptDirective}${deferredDiagnosticNote}`,
+            healingTail,
+          )
+        }
 
-          return {
-            outcome: 'success',
-            outputForHistory: `Ran command: "${cmd}"\nOutput:\n${rawOutput}`,
-            logMessage: `Terminal Command Finished: ${cmd}`,
-            logDetail: rawOutput.slice(0, 1000),
-            isTerminal: true,
-            effectOutcome: 'confirmed',
-          }
+        return {
+          outcome: 'success',
+          outputForHistory: `Ran command: "${cmd}"\nOutput:\n${rawOutput}`,
+          logMessage: `Terminal Command Finished: ${cmd}`,
+          logDetail: rawOutput.slice(0, 1000),
+          isTerminal: true,
+          effectOutcome: 'confirmed',
+        }
       }
 
       case 'run_tests': {
-        return this.processToolService.executeRunTests(parameters.command, workspacePath, settings.allowTerminalExecution, onTerminalOutput, onProcessSpawned, signal)
+        return this.processToolService.executeRunTests(
+          parameters.command,
+          workspacePath,
+          settings.allowTerminalExecution,
+          onTerminalOutput,
+          onProcessSpawned,
+          signal,
+        )
       }
 
       case 'git_status': {
@@ -641,17 +658,18 @@ export class AgentToolExecutorService {
         const outputDirectory = path.join(workspacePath, '.onlyrag', 'visual-validation')
         documentIoRepository.ensureDirectory(outputDirectory)
         const evidence = await this.visualValidationRunner.captureEvidence(parameters, workspacePath, outputDirectory, signal)
-        const result = 'status' in evidence && evidence.status === 'UNAVAILABLE'
-          ? visualValidationResultSchema.parse({
-              status: 'UNAVAILABLE',
-              screenshot: { status: 'unavailable' },
-              dom: { status: 'unavailable' },
-              console: [],
-              http: [],
-              redaction: { applied: false, fields: [] },
-              error: evidence.error,
-            })
-          : visualValidationResultSchema.parse({ status: 'verified', ...evidence })
+        const result =
+          'status' in evidence && evidence.status === 'UNAVAILABLE'
+            ? visualValidationResultSchema.parse({
+                status: 'UNAVAILABLE',
+                screenshot: { status: 'unavailable' },
+                dom: { status: 'unavailable' },
+                console: [],
+                http: [],
+                redaction: { applied: false, fields: [] },
+                error: evidence.error,
+              })
+            : visualValidationResultSchema.parse({ status: 'verified', ...evidence })
         return {
           outcome: result.status === 'verified' ? 'success' : 'blocked',
           outputForHistory: JSON.stringify(result),

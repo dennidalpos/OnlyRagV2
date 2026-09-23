@@ -18,7 +18,7 @@ interface DiffLinesViewProps {
 export const DiffLinesView: React.FC<DiffLinesViewProps> = ({ lines, collapse = false, contextRadius = 3 }) => {
   const entries = useMemo(
     () => (collapse ? collapseContext(lines, contextRadius) : lines.map((line) => ({ kind: 'line' as const, line }))),
-    [lines, collapse, contextRadius]
+    [lines, collapse, contextRadius],
   )
 
   return (
@@ -38,12 +38,8 @@ export const DiffLinesView: React.FC<DiffLinesViewProps> = ({ lines, collapse = 
           const style = LINE_STYLE[entry.line.type]
           return (
             <tr key={idx} className={style.row}>
-              <td className="px-2 text-right text-slate-600 select-none w-12 align-top">
-                {entry.line.oldLineNumber ?? ''}
-              </td>
-              <td className="px-2 text-right text-slate-600 select-none w-12 align-top border-r border-slate-800/80">
-                {entry.line.newLineNumber ?? ''}
-              </td>
+              <td className="px-2 text-right text-slate-600 select-none w-12 align-top">{entry.line.oldLineNumber ?? ''}</td>
+              <td className="px-2 text-right text-slate-600 select-none w-12 align-top border-r border-slate-800/80">{entry.line.newLineNumber ?? ''}</td>
               <td className={`pl-2 pr-1 select-none w-4 align-top ${style.marker}`}>{style.sign}</td>
               <td className="pr-3 whitespace-pre select-text">{entry.line.content}</td>
             </tr>

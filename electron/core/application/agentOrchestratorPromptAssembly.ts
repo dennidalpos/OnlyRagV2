@@ -38,11 +38,7 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   const targetModel = findMatchingInstalledModel(candidateCoding, ctx.availableModels) || candidateCoding
 
   // Native tool-calling routing: when the primary model is detected as tool-calling capable (see ollamaToolCallingCapability.ts), route via POST /api/chat with the structured tool catalog instead of relying solely on the prompt-engineered JSON convention.
-  const route = resolveToolCallingRoute(
-    targetModel,
-    ctx.modelCapabilities,
-    ctx.session.toolCallingProtocolByModel?.[targetModel]
-  )
+  const route = resolveToolCallingRoute(targetModel, ctx.modelCapabilities, ctx.session.toolCallingProtocolByModel?.[targetModel])
   const targetModelToolCallingCapable = route.capable
   if (targetModelToolCallingCapable) {
     ctx.session.ollamaContextModel = undefined
@@ -76,15 +72,13 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   // ordinary, visible compaction of the tail.
   const hardwareContext = runtimeOpts.num_ctx
   const trainedContext = ctx.modelMetrics?.[targetModel]?.contextLength
-  const preferredContext = resolveModelContextLength(
-    targetModel,
-    ctx.settings.modelContextLengths,
-    hardwareContext,
-    trainedContext
-  )
+  const preferredContext = resolveModelContextLength(targetModel, ctx.settings.modelContextLengths, hardwareContext, trainedContext)
   const contextCeiling = trainedContext ?? null
   if (contextCeiling !== null && contextCeiling < hardwareContext) {
-    ctx.emitLog('info', `📏 Context clamped to model limit: ${hardwareContext} → ${contextCeiling} tokens (${targetModel} was trained at ${contextCeiling}; Ollama would have truncated the prompt head).`)
+    ctx.emitLog(
+      'info',
+      `📏 Context clamped to model limit: ${hardwareContext} → ${contextCeiling} tokens (${targetModel} was trained at ${contextCeiling}; Ollama would have truncated the prompt head).`,
+    )
   }
   if (preferredContext !== runtimeOpts.num_ctx) {
     ctx.emitLog('info', `📏 Context preference applied: ${runtimeOpts.num_ctx} → ${preferredContext} tokens (${targetModel}).`)
@@ -116,16 +110,12 @@ const MAX_SUPPORT_FILES = 2
 function boundedFileContent(content: string, cap: number): string {
   if (content.length <= cap) return content
   const half = Math.floor(cap / 2)
-  const omitted = content.length - (half * 2)
+  const omitted = content.length - half * 2
   return `${content.slice(0, half)}\n[CONTENT OMITTED: ${omitted} chars; use read_file for the required range]\n${content.slice(-half)}`
 }
 
 /** Injects one primary file and at most two bounded support fragments. */
-export function readTurnFileContext(
-  ctx: TurnDispatchContext,
-  targets: readonly string[] | undefined,
-  reason: string
-): string {
+export function readTurnFileContext(ctx: TurnDispatchContext, targets: readonly string[] | undefined, reason: string): string {
   if (!targets?.length || !ctx.workspacePath) return ''
 
   const root = path.resolve(ctx.workspacePath)
@@ -149,10 +139,7 @@ export function readTurnFileContext(
 }
 
 /** The files this turn is about: the ones the active directive orders rewritten, or — on an ordinary progress turn — the deliverables the active milestone names, which are the files the model is about to write. */
-export function resolveTurnFileTargets(
-  ctx: TurnDispatchContext,
-  directive: PlanDirectiveDecision
-): { targets: readonly string[]; reason: string } {
+export function resolveTurnFileTargets(ctx: TurnDispatchContext, directive: PlanDirectiveDecision): { targets: readonly string[]; reason: string } {
   if (directive.rewriteTargets?.length) {
     return { targets: directive.rewriteTargets, reason: 'the file the directive above orders you to rewrite' }
   }
@@ -178,7 +165,7 @@ export function buildCurrentOperationContext(
   ctx: TurnDispatchContext,
   directive: PlanDirectiveDecision,
   toolPolicy: TurnToolPolicy,
-  targets: readonly string[]
+  targets: readonly string[],
 ): string {
   const milestone = ctx.goalPlanner.getActiveMilestone()
   const latestFailure = [...ctx.episodicCompactor.getRecentFullLogs()].reverse().find((entry) => entry.isFailure)
@@ -210,12 +197,9 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     ctx.goalPlanner,
     ctx.hasVerifiedBuild,
     ctx.episodicCompactor.getEpisodes(),
-    ctx.episodicCompactor.lastFailureOutputFor('run_command', 'npm run build')
+    ctx.episodicCompactor.lastFailureOutputFor('run_command', 'npm run build'),
   )
-  const progressPlanBlock = [
-    buildExplicitFirstCommandDirective(ctx.userTask, ctx.stepCount === 1),
-    ctx.goalPlanner.compileProgressPrompt({ directive }),
-  ]
+  const progressPlanBlock = [buildExplicitFirstCommandDirective(ctx.userTask, ctx.stepCount === 1), ctx.goalPlanner.compileProgressPrompt({ directive })]
     .filter(Boolean)
     .join('\n\n')
 
@@ -242,11 +226,11 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   ctx.emitLog('info', `🧰 Tool policy [${directive.kind}]: ${toolPolicy.rationale} — ${toolPolicy.allowedTools.join(', ')}.`)
   const planBlock = [
     buildCurrentOperationContext(ctx, directive, toolPolicy, turnFiles.targets),
-    requiredReadPath
-      ? `[FILE VERSION RECOVERY]\nCall read_file on "${requiredReadPath}" now. No edit is available until that read succeeds.`
-      : '',
+    requiredReadPath ? `[FILE VERSION RECOVERY]\nCall read_file on "${requiredReadPath}" now. No edit is available until that read succeeds.` : '',
     progressPlanBlock,
-  ].filter(Boolean).join('\n\n')
+  ]
+    .filter(Boolean)
+    .join('\n\n')
   const rewriteTargetBlock = policy.includePinnedFiles ? readTurnFileContext(ctx, turnFiles.targets, turnFiles.reason) : ''
 
   const skillsBlock = !policy.includeSkills
@@ -267,9 +251,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
       logger.log('WARN', 'AgentOrchestratorAppService', `Failed reading SESSION_TRACKER.md: ${err.message}`)
     }
   }
-  const effectiveAttachedContext = policy.includeAttachedRag
-    ? [debtTrackerBlock, ctx.attachedContext].filter(Boolean).join('\n\n')
-    : ''
+  const effectiveAttachedContext = policy.includeAttachedRag ? [debtTrackerBlock, ctx.attachedContext].filter(Boolean).join('\n\n') : ''
 
   // Skipped outright rather than assembled and discarded: generateCompactRepoMap walks the
   // workspace tree on every turn, so this is latency as well as context.
@@ -295,9 +277,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     workspacePath: ctx.workspacePath,
     isStandaloneMode: ctx.isStandaloneMode,
     activeFile: policy.includeActiveFile ? ctx.payload.activeFile : null,
-    pinnedFilesContextStr: policy.includePinnedFiles
-      ? [ctx.pinnedFilesContextStr, rewriteTargetBlock].filter(Boolean).join('\n')
-      : '',
+    pinnedFilesContextStr: policy.includePinnedFiles ? [ctx.pinnedFilesContextStr, rewriteTargetBlock].filter(Boolean).join('\n') : '',
     skillsBlock,
     planBlock,
     toolOutputHistory: compiledHistoryBlock,
@@ -324,7 +304,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
       projectMapBlock: seg.mapBlock,
     },
     selection.runtimeOpts.maxContextChars,
-    { force: Boolean(ctx.session.forceContextCompaction) }
+    { force: Boolean(ctx.session.forceContextCompaction) },
   )
   const turnPrompt = compactionResult.wasCompacted ? compactionResult.prompt : basePrompt
   if (compactionResult.wasCompacted) {
@@ -335,10 +315,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
 }
 
 /** Keeps the selected per-model context stable; prompt size is handled by compaction, not ctx resizing. */
-export function freezeContextWindow(
-  ctx: TurnDispatchContext,
-  runtimeOpts: OllamaRuntimeOptions
-) {
+export function freezeContextWindow(ctx: TurnDispatchContext, runtimeOpts: OllamaRuntimeOptions) {
   if (ctx.sessionNumCtxBox.value === null) {
     ctx.sessionNumCtxBox.value = runtimeOpts.num_ctx
   } else {
@@ -354,7 +331,7 @@ export function decideContextReuse(
   selection: ModelSelection,
   assembled: { stableSection: string; historyBlock: string; turnSuffix: string },
   turnPrompt: string,
-  wasCompacted: boolean
+  wasCompacted: boolean,
 ): OllamaContextReuseDecision {
   if (selection.targetModelToolCallingCapable) {
     return { reusedContext: false, promptToSend: turnPrompt }
@@ -379,7 +356,7 @@ export function decideContextReuse(
   if (decision.reusedContext) {
     ctx.emitLog(
       'info',
-      `⚡ Ollama Context Reuse: sending ${decision.promptToSend.length} chars instead of the full ${turnPrompt.length}-char prompt (KV-cache continuation).`
+      `⚡ Ollama Context Reuse: sending ${decision.promptToSend.length} chars instead of the full ${turnPrompt.length}-char prompt (KV-cache continuation).`,
     )
   }
   return decision

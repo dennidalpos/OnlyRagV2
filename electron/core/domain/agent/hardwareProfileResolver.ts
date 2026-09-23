@@ -33,7 +33,6 @@ export interface HardwareEnvironment {
 export const CODING_MODEL_KEEP_ALIVE = '30m'
 
 export class HardwareProfileResolver {
-
   /** Generation reserve, as a share of the context window. */
   private static readonly GENERATION_RESERVE_RATIO = 0.35
 
@@ -47,10 +46,7 @@ export class HardwareProfileResolver {
     return Math.floor(promptTokens * APPROX_CHARS_PER_TOKEN)
   }
   /** Resolves optimal Ollama runtime options from user settings and hardware diagnostics. */
-  static resolveOllamaOptions(
-    profile: DeclaredHardwareProfile = 'Auto',
-    env?: HardwareEnvironment
-  ): OllamaRuntimeOptions {
+  static resolveOllamaOptions(profile: DeclaredHardwareProfile = 'Auto', env?: HardwareEnvironment): OllamaRuntimeOptions {
     const cpuCores = env?.cpuCount || os.cpus()?.length || 4
     const safeCpuThreads = Math.max(1, cpuCores - 1)
 

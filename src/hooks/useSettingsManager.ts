@@ -6,7 +6,7 @@ export function useSettingsManager(
   diagnostics: DiagnosticsData | null,
   settings: AppSettings,
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void,
-  onRefreshDiagnostics: () => void
+  onRefreshDiagnostics: () => void,
 ) {
   const [pullModelInput, setPullModelInput] = useState('')
   const [isPulling, setIsPulling] = useState(false)

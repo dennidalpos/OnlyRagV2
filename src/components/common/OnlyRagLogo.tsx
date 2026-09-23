@@ -6,21 +6,11 @@ interface OnlyRagLogoProps {
   glow?: boolean
 }
 
-export const OnlyRagLogo: React.FC<OnlyRagLogoProps> = ({
-  className = 'w-full h-full',
-  size,
-  glow = true,
-}) => {
+export const OnlyRagLogo: React.FC<OnlyRagLogoProps> = ({ className = 'w-full h-full', size, glow = true }) => {
   const style = size ? { width: size, height: size } : undefined
 
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 512 512"
-      className={className}
-      style={style}
-      aria-label="OnlyRag V2 Logo"
-    >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" className={className} style={style} aria-label="OnlyRag V2 Logo">
       <defs>
         {/* Background Gradient */}
         <radialGradient id="onlyragBgGrad" cx="50%" cy="50%" r="50%" fx="30%" fy="30%">
@@ -65,9 +55,7 @@ export const OnlyRagLogo: React.FC<OnlyRagLogoProps> = ({
       <circle cx="256" cy="256" r="236" fill="url(#onlyragBgGrad)" stroke="url(#onlyragBadgeBorder)" strokeWidth="8" />
 
       {/* Ambient Glow Behind Atomic Structure */}
-      {glow && (
-        <circle cx="256" cy="256" r="140" fill="#0891b2" opacity="0.18" filter="url(#onlyragNeonGlow)" />
-      )}
+      {glow && <circle cx="256" cy="256" r="140" fill="#0891b2" opacity="0.18" filter="url(#onlyragNeonGlow)" />}
 
       {/* Atomic Orbital Rings Group */}
       <g filter={glow ? 'url(#onlyragNeonGlow)' : undefined}>
@@ -75,10 +63,30 @@ export const OnlyRagLogo: React.FC<OnlyRagLogoProps> = ({
         <ellipse cx="256" cy="256" rx="66" ry="160" fill="none" stroke="url(#onlyragNeonCyan)" strokeWidth="12" strokeLinecap="round" />
 
         {/* Tilted Orbit (60 deg) */}
-        <ellipse cx="256" cy="256" rx="66" ry="160" fill="none" stroke="url(#onlyragNeonCyan)" strokeWidth="12" strokeLinecap="round" transform="rotate(60 256 256)" />
+        <ellipse
+          cx="256"
+          cy="256"
+          rx="66"
+          ry="160"
+          fill="none"
+          stroke="url(#onlyragNeonCyan)"
+          strokeWidth="12"
+          strokeLinecap="round"
+          transform="rotate(60 256 256)"
+        />
 
         {/* Tilted Orbit (120 deg) */}
-        <ellipse cx="256" cy="256" rx="66" ry="160" fill="none" stroke="url(#onlyragNeonCyan)" strokeWidth="12" strokeLinecap="round" transform="rotate(120 256 256)" />
+        <ellipse
+          cx="256"
+          cy="256"
+          rx="66"
+          ry="160"
+          fill="none"
+          stroke="url(#onlyragNeonCyan)"
+          strokeWidth="12"
+          strokeLinecap="round"
+          transform="rotate(120 256 256)"
+        />
 
         {/* Electron Node Spheres */}
         <circle cx="348" cy="172" r="14" fill="url(#onlyragNucleusGrad)" stroke="#0f172a" strokeWidth="3" />

@@ -1,5 +1,3 @@
-
-
 import fs from 'node:fs'
 import path from 'node:path'
 import { DEFAULT_IGNORED_DIRS } from '../../domain/agent/contextFilter'
@@ -121,10 +119,7 @@ export function createWorkspaceDeliverableProbe(workspacePath: string): Delivera
   return buildWorkspaceDeliverableProbe(workspacePath, false)
 }
 
-export function captureMilestoneFileEvidence(
-  workspacePath: string,
-  milestone: Pick<PlanMilestone, 'title' | 'filePaths'>,
-): Record<string, string> | undefined {
+export function captureMilestoneFileEvidence(workspacePath: string, milestone: Pick<PlanMilestone, 'title' | 'filePaths'>): Record<string, string> | undefined {
   const deliverables = resolveDeclaredFilePaths(milestone)
   if (deliverables.length === 0) return undefined
 

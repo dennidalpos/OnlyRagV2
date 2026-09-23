@@ -1,5 +1,3 @@
-
-
 import React, { useCallback, useEffect } from 'react'
 import { AlertCircle, RefreshCw, ScanLine, Loader2 } from 'lucide-react'
 import { useSlmOrchestration } from '../../hooks/useSlmOrchestration'
@@ -13,12 +11,8 @@ export interface SlmDiagnosticsPanelProps {
   onScanComplete?: (report: SlmLogDiagnosticReport | null) => void
 }
 
-export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({
-  extraLogPaths,
-  onScanComplete,
-}) => {
-  const { isAnalyzingLogs, lastReport, analyzeLogsError, analyzeLogs } =
-    useSlmOrchestration()
+export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({ extraLogPaths, onScanComplete }) => {
+  const { isAnalyzingLogs, lastReport, analyzeLogsError, analyzeLogs } = useSlmOrchestration()
 
   const handleScan = useCallback(async () => {
     const report = await analyzeLogs(extraLogPaths)
@@ -34,7 +28,6 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({
 
   return (
     <div className="flex-1 h-full flex flex-col bg-slate-950 select-text font-sans text-slate-200 overflow-y-auto">
-
       {/* ── Panel Header ── */}
       <div className="h-11 px-3 bg-slate-900/60 border-b border-slate-800 flex items-center justify-between shrink-0 sticky top-0 z-10">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
@@ -70,7 +63,6 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({
 
       {/* ── Body ── */}
       <div className="p-4 space-y-4 max-w-4xl w-full mx-auto">
-
         {/* Loading state */}
         {isAnalyzingLogs && (
           <div className="flex items-center justify-center gap-3 py-12 text-sm text-slate-400 font-mono animate-in fade-in">

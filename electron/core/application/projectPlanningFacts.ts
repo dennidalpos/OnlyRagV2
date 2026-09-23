@@ -31,11 +31,14 @@ export interface ProjectPlanningDiscovery {
 }
 
 function relevantRepoFiles(repoMap: string, prompt: string, limit = 8): string[] {
-  const tokens = Array.from(new Set((prompt.toLowerCase().match(/[a-z0-9_.-]{3,}/g) || [])))
+  const tokens = Array.from(new Set(prompt.toLowerCase().match(/[a-z0-9_.-]{3,}/g) || []))
   return repoMap
     .split(/\r?\n/)
     .map((line, index) => ({
-      path: line.replace(/^📄\s*/, '').split(/\s+➔\s+/)[0].trim(),
+      path: line
+        .replace(/^📄\s*/, '')
+        .split(/\s+➔\s+/)[0]
+        .trim(),
       index,
       score: tokens.reduce((total, token) => total + (line.toLowerCase().includes(token) ? 1 : 0), 0),
     }))
@@ -49,7 +52,7 @@ function relevantRepoFiles(repoMap: string, prompt: string, limit = 8): string[]
 export function collectProjectPlanningFacts(
   workspacePath: string | null | undefined,
   prompt: string,
-  previousDecisions: readonly UserInterviewAnswer[] = []
+  previousDecisions: readonly UserInterviewAnswer[] = [],
 ): ProjectPlanningDiscovery {
   const profile = workspacePath ? discoverProjectProfile(workspacePath) : null
   const projects = profile?.projects || []

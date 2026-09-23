@@ -88,12 +88,7 @@ export class WorkspaceAppService {
     return webClient.downloadFile(url, targetFilePath, workspaceRoot)
   }
 
-  private async networkPolicyError(
-    toolName: string,
-    operation: 'connect' | 'download',
-    target: string,
-    workspaceRoot?: string,
-  ): Promise<string | null> {
+  private async networkPolicyError(toolName: string, operation: 'connect' | 'download', target: string, workspaceRoot?: string): Promise<string | null> {
     const settings = await appSettingsRepository.loadSettings()
     const mode = settings?.capabilityPolicyMode
     if (!mode || !['offline-strict', 'local-only'].includes(mode)) return null

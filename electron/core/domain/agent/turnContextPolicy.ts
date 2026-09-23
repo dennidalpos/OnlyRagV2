@@ -1,5 +1,3 @@
-
-
 import type { PlanDirectiveKind } from './planDirectiveArbiter'
 
 /** The optional blocks, and whether this turn carries them. */

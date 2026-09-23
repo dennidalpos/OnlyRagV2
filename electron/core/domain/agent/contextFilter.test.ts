@@ -34,7 +34,7 @@ describe('contextFilter domain logic & AppSec protection', () => {
 
   it('should prevent Directory Traversal outside workspace root', () => {
     const root = process.cwd()
-    
+
     // Inside workspace -> allowed
     const valid = validatePathSafety('src/App.tsx', root)
     expect(valid.safePath).not.toBeNull()

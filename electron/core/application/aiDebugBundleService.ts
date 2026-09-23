@@ -105,12 +105,14 @@ export class AiDebugBundleService {
       persistedAuditLog ||
       (rawLogs.length > 0
         ? rawLogs
-            .map((entry: any) => [
-              `### Step ${entry.step} — Tool: \`${entry.tool}\``,
-              '```text',
-              includePayloads ? stripAnsi(String(entry.output || '')) : `[payload omitted; ${String(entry.output || '').length} chars]`,
-              '```',
-            ].join('\n'))
+            .map((entry: any) =>
+              [
+                `### Step ${entry.step} — Tool: \`${entry.tool}\``,
+                '```text',
+                includePayloads ? stripAnsi(String(entry.output || '')) : `[payload omitted; ${String(entry.output || '').length} chars]`,
+                '```',
+              ].join('\n'),
+            )
             .join('\n\n')
         : 'Nessun dettaglio cronologico persistito per questa sessione.')
 

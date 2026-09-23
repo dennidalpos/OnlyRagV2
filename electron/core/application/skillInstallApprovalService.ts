@@ -18,10 +18,13 @@ const APPROVAL_TIMEOUT_MS = 120_000
 
 /** Request/response bridge for the hub skill auto-install confirmation. */
 export class SkillInstallApprovalService {
-  private readonly pendingRequests = new Map<string, {
-    identity: Readonly<AgentRunIdentity>
-    resolve: (approved: boolean) => void
-  }>()
+  private readonly pendingRequests = new Map<
+    string,
+    {
+      identity: Readonly<AgentRunIdentity>
+      resolve: (approved: boolean) => void
+    }
+  >()
   /** Settles a pending request; the renderer's answer arrives via the presentation layer (agentIpc). */
   public handleResponse(payload: Partial<AgentRunIdentity> & { requestId?: string; approved?: boolean }): void {
     const pending = payload?.requestId ? this.pendingRequests.get(payload.requestId) : undefined
@@ -33,7 +36,7 @@ export class SkillInstallApprovalService {
   public async requestApproval(
     rendererEvents: RendererEventSink | null,
     candidate: SkillInstallCandidate,
-    identity: Readonly<AgentRunIdentity>
+    identity: Readonly<AgentRunIdentity>,
   ): Promise<boolean> {
     if (!rendererEvents?.isAvailable()) return false
     const events = rendererEvents

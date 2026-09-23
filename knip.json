@@ -9,18 +9,8 @@
     "src/components/ingestion/IngestionView.tsx",
     "src/components/settings/SettingsView.tsx"
   ],
-  "project": [
-    "src/**/*.{ts,tsx,css}",
-    "electron/**/*.{ts,tsx}",
-    "shared/**/*.{ts,tsx}"
-  ],
+  "project": ["src/**/*.{ts,tsx,css}", "electron/**/*.{ts,tsx}", "shared/**/*.{ts,tsx}"],
   "ignoreExportsUsedInFile": true,
-  "ignoreBinaries": [
-    "nvidia-smi"
-  ],
-  "ignoreDependencies": [
-    "@types/diff",
-    "@biomejs/biome",
-    "electron-builder"
-  ]
+  "ignoreBinaries": ["nvidia-smi"],
+  "ignoreDependencies": ["@types/diff", "@biomejs/biome", "electron-builder"]
 }

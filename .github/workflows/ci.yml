@@ -40,8 +40,6 @@ jobs:
 
       - name: Run Static Quality Gate (Fail-Fast)
         shell: pwsh
-        env:
-          STATIC_QUALITY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           $ErrorActionPreference = 'Stop'
           npm run quality:static

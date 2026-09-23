@@ -8,6 +8,8 @@ import {
   extractMissingRelativeModule,
   extractMissingExportMember,
   diagnosticFixTargetFile,
+  diagnosticFixRequiredTools,
+  extractJsxInScriptFile,
   resolveRelativeImportPath,
 } from './compilerDiagnosticDirective'
 
@@ -432,5 +434,41 @@ describe('diagnosticFixTargetFile', () => {
   it('falls back to the first diagnostic outside node_modules', () => {
     const out = 'src/App.tsx(7,3): error TS2322: Type mismatch.'
     expect(diagnosticFixTargetFile(out)).toBe('src/App.tsx')
+  })
+})
+
+/** Vite 8/rolldown output of the live full task run of 2026-09-23 (step 15). */
+const ROLLDOWN_JSX_IN_JS = `> project-dashboard-task@1.0.0 build
+> vite build
+
+vite v8.2.2 building client environment for production...
+[PARSE_ERROR] Unexpected JSX expression
+   ╭─[ src/App.js:8:5 ]
+   │
+ 8 │     <div className="flex h-screen">
+   │ Help: JSX syntax is disabled and should be enabled via the parser options
+───╯
+    at aggregateBindingErrorsIntoJsError (file:///D:/x/node_modules/rolldown/dist/shared/error.mjs:48:18)`
+
+describe('JSX in a .js file', () => {
+  it('finds the project file and the .jsx name it needs, skipping node_modules frames', () => {
+    expect(extractJsxInScriptFile(ROLLDOWN_JSX_IN_JS)).toEqual({ file: 'src/App.js', line: 8, renamedFile: 'src/App.jsx' })
+    expect(extractJsxInScriptFile('src/App.js:3:1: ERROR: The JSX syntax extension is not currently enabled')).toMatchObject({
+      file: 'src/App.js',
+    })
+  })
+
+  it('orders a rename instead of a rewrite, and publishes move_file as the tool it needs', () => {
+    const directive = buildDiagnosticFixDirective(ROLLDOWN_JSX_IN_JS)!
+
+    expect(directive).toContain('MUST be "move_file" with sourcePath "src/App.js" and targetPath "src/App.jsx"')
+    expect(directive).not.toContain('MUST be "write_file"')
+    expect(diagnosticFixRequiredTools(ROLLDOWN_JSX_IN_JS)).toEqual(['move_file'])
+    expect(diagnosticFixTargetFile(ROLLDOWN_JSX_IN_JS)).toBeNull()
+  })
+
+  it('stays out of every other failure', () => {
+    expect(extractJsxInScriptFile(TSC_OUTPUT)).toBeNull()
+    expect(diagnosticFixRequiredTools(TSC_OUTPUT)).toEqual([])
   })
 })

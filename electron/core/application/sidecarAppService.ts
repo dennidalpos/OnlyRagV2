@@ -2,6 +2,7 @@
 
 import path from 'node:path'
 import os from 'node:os'
+import { randomUUID } from 'node:crypto'
 import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import type { DesktopShellPort } from '../domain/ports/desktopShellPort'
 import { allWindowsEventSink } from '../infrastructure/electron/rendererEventSinks'
@@ -190,19 +191,27 @@ export class SidecarAppService {
     if (!docId || typeof docId !== 'string') {
       return { success: false, error: 'Invalid document ID' }
     }
+    const taskId = `translate-${randomUUID()}`
     logger.log('INFO', 'SidecarApp', `Translating document in place (streaming): ${docId} (${sourceLang} -> ${targetLang})`)
-    const result = await sidecarHttpClient.translateDocumentInplaceStream(
-      docId,
-      {
-        source_lang: sourceLang,
-        target_lang: targetLang,
-        model: model || undefined,
-        target_dir: targetDir || undefined,
-        num_ctx: numCtx || undefined,
-        think: think === true,
-      },
-      (event) => this.rendererEvents.send('ingest:translate-progress', event)
-    )
+    let result: Awaited<ReturnType<typeof sidecarHttpClient.translateDocumentInplaceStream>>
+    try {
+      result = await sidecarHttpClient.translateDocumentInplaceStream(
+        docId,
+        {
+          source_lang: sourceLang,
+          target_lang: targetLang,
+          model: model || undefined,
+          target_dir: targetDir || undefined,
+          num_ctx: numCtx || undefined,
+          think: think === true,
+          task_id: taskId,
+        },
+        (event) => this.rendererEvents.send('ingest:translate-progress', { ...event, taskId }),
+        (cancel) => taskRunner.registerActiveTask(taskId, 'translation', cancel)
+      )
+    } finally {
+      taskRunner.unregisterActiveTask(taskId)
+    }
 
     if (result.success && result.data) {
       const finalResult = result.data

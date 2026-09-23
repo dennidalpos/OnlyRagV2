@@ -28,6 +28,7 @@ export type AgentCancellationStatus = 'not_cancelled' | 'rolled_back' | 'residua
 /** Every orchestration safeguard that can nudge, re-plan or stop an agent run. */
 export type AgentGuardId =
   | 'loop_exact_repeat'
+  | 'loop_unchanged_failure'
   | 'loop_cycle'
   | 'loop_same_file_edits'
   | 'loop_same_target_reads'

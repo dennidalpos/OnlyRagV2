@@ -23,7 +23,9 @@ const TOOL_ENABLED_SETTINGS: AppSettings = {
 const runAgentOrchestratorLoop: typeof runOrchestratorLoop = (payload, win) =>
   runOrchestratorLoop({ ...payload, settings: { ...TOOL_ENABLED_SETTINGS, ...payload.settings } }, win)
 
-function createMockWindow(): { window: RendererEventSink; send: ReturnType<typeof vi.fn> } {
+const commandJson = (command: string) => `\`\`\`json\n{\n  "tool": "run_command",\n  "parameters": { "command": "${command}" }\n}\n\`\`\``
+
+function createMockWindow():{ window: RendererEventSink; send: ReturnType<typeof vi.fn> } {
   const send = vi.fn()
   return {
     window: { isAvailable: vi.fn(() => true), send },
@@ -203,9 +205,10 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     )
   })
 
-  it('stops after the corrective attempt repeats the same execution failure', async () => {
-    const duplicateToolJson = '```json\n{\n  "tool": "run_command",\n  "parameters": { "command": "pytest failing_test.py" }\n}\n```'
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(duplicateToolJson).mockResolvedValueOnce(duplicateToolJson)
+  it('stops after the corrective attempt fails too', async () => {
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce(commandJson('pytest failing_test.py'))
+      .mockResolvedValueOnce(commandJson('pytest failing_test.py -x'))
 
     const res = await runAgentOrchestratorLoop(
       {
@@ -222,13 +225,24 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
   })
 
+  it('refuses an unchanged rerun of a failed command instead of spending the execution budget on it', async () => {
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce(commandJson('pytest failing_test.py'))
+      .mockResolvedValueOnce(commandJson('pytest failing_test.py'))
+
+    const res = await runAgentOrchestratorLoop({ userTask: 'Debug test failures', agentMode: 'auto', workspacePath: tempDir }, null)
+
+    // The run goes on past the refused rerun instead of closing on the second call.
+    expect(res.summary).not.toContain('execution recovery stopped')
+    expect(vi.mocked(AgentStreamTransport.streamCompletion).mock.calls.length).toBeGreaterThan(2)
+  })
+
   it('does not reach a later ask after the execution recovery budget is exhausted', async () => {
-    const duplicateToolJson = '```json\n{\n  "tool": "run_command",\n  "parameters": { "command": "pytest still_failing.py" }\n}\n```'
     const askJson = '```json\n{\n  "tool": "ask",\n  "parameters": { "question": "What should we do next?" }\n}\n```'
 
     vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce(duplicateToolJson)
-      .mockResolvedValueOnce(duplicateToolJson)
+      .mockResolvedValueOnce(commandJson('pytest still_failing.py'))
+      .mockResolvedValueOnce(commandJson('pytest still_failing.py -x'))
       .mockResolvedValueOnce(askJson)
 
     const res = await runAgentOrchestratorLoop(

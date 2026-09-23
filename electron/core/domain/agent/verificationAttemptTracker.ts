@@ -8,7 +8,9 @@ export interface TrajectoryStep {
 }
 
 /** Tools whose success means the workspace changed, so a past failure is no longer current. */
-const MUTATING_TOOLS = new Set(['write_file', 'replace_file_content', 'multi_replace_file_content', 'create_directory'])
+const MUTATING_TOOLS = new Set([
+  'write_file', 'replace_file_content', 'multi_replace_file_content', 'create_directory', 'move_file', 'copy_file', 'delete_file',
+])
 
 /** True when the project's own check has run, failed, and nothing has been written since. */
 export function isVerificationFailing(
@@ -25,6 +27,10 @@ export function isVerificationFailing(
     if (step.tool !== 'run_command') continue
     const command = (step.target || '').trim().toLowerCase()
     if (!command.includes(needle)) continue
+    // A blocked call never ran: the last real run still decides. Returning false here flipped the
+    // arbiter back to verification_due (run_command only) right after the loop guard refused an
+    // unchanged rerun, so the ordered fix could not be written (live TS2305 run, 2026-09-23).
+    if (step.status === 'BLOCKED') continue
     return step.status === 'FAILURE'
   }
 

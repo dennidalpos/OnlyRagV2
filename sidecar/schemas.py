@@ -96,6 +96,7 @@ class TranslateInplaceRequest(StrictRequest):
     target_dir: Optional[str] = PATH_VALUE
     num_ctx: Optional[int] = Field(default=None, ge=4096, le=131072)
     think: Optional[bool] = False
+    task_id: Optional[str] = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
 
 class PagePreviewResponse(BaseModel):
     doc_id: str

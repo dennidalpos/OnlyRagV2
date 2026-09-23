@@ -7,6 +7,7 @@ import { assessPostVerificationClosure, buildClosureDirective } from './postVeri
 import { shouldDirectUnprovableClosure, buildUnprovableMilestoneDirective } from './unprovableMilestoneDirective'
 import { buildVerificationFailingDirective } from './verificationAttemptTracker'
 import { buildEntrypointDirective } from './entrypointIntegrity'
+import type { SupportedToolName } from './agentTypes'
 
 export type PlanDirectiveKind =
   /** The build is green and the plan is accounted for: close the session. */
@@ -36,6 +37,8 @@ export interface PlanDirectiveDecision {
   closureStepDirective: string | null
   /** Workspace files this directive orders the model to REWRITE, when it names any. */
   rewriteTargets?: readonly string[]
+  /** Tools beyond the file edit that this directive orders (e.g. move_file to rename a file). */
+  requiredTools?: readonly SupportedToolName[]
 }
 
 /** A package the code imports and package.json does not declare. */
@@ -75,6 +78,8 @@ export interface PlanDirectiveInput {
   verificationFailureDirective?: string | null
   /** The file that directive orders written, so the prompt can carry its current content. */
   verificationFailureTargetFile?: string | null
+  /** Tools beyond the file edit that the failure directive orders. */
+  verificationFailureTools?: readonly SupportedToolName[]
   /**
    * The project's HTML entry page loads none of its own code. Null when the project has no
    * such page or the question does not apply. See entrypointIntegrity.ts.
@@ -256,6 +261,7 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
         // The model rewrites this file next. Nine live runs show it never reads one first, so
         // showing it is the difference between an edit and a blind replacement.
         rewriteTargets: input.verificationFailureTargetFile ? [input.verificationFailureTargetFile] : undefined,
+        requiredTools: input.verificationFailureTools?.length ? input.verificationFailureTools : undefined,
       }
     }
 

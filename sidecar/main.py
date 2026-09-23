@@ -138,27 +138,22 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
     resolved_path = os.path.abspath(req.file_path)
     if not os.path.exists(resolved_path) or not os.path.isfile(resolved_path):
         raise HTTPException(status_code=400, detail="Invalid or non-existent file path")
-    try:
-        filename = os.path.basename(resolved_path)
-        return StreamingResponse(
-            process_and_index_document_generator(
-                filename, b"", resolved_path,
-                task_id=req.task_id,
-                vision_model=req.vision_model, vision_prompt=req.vision_prompt,
-                normalize_with_llm=bool(req.normalize_with_llm),
-                normalization_model=req.normalization_model,
-                normalization_think=bool(req.normalization_think),
-                num_ctx=req.num_ctx,
-                max_tabular_rows=req.max_tabular_rows,
-                max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
-                max_sheets=req.max_excel_sheets,
-                embedding_model=req.embedding_model or DEFAULT_EMBEDDING_MODEL,
-            ),
-            media_type="application/x-ndjson"
-        )
-    except Exception as e:
-        logger.error(f"Error initiating streaming ingestion for {req.file_path}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return StreamingResponse(
+        process_and_index_document_generator(
+            resolved_path,
+            task_id=req.task_id,
+            vision_model=req.vision_model, vision_prompt=req.vision_prompt,
+            normalize_with_llm=bool(req.normalize_with_llm),
+            normalization_model=req.normalization_model,
+            normalization_think=bool(req.normalization_think),
+            num_ctx=req.num_ctx,
+            max_tabular_rows=req.max_tabular_rows,
+            max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
+            max_excel_sheets=req.max_excel_sheets,
+            embedding_model=req.embedding_model or DEFAULT_EMBEDDING_MODEL,
+        ),
+        media_type="application/x-ndjson"
+    )
 
 @app.put("/documents/{doc_id}", response_model=IngestResponse)
 async def update_document(doc_id: str, req: UpdateDocumentRequest):
@@ -174,7 +169,7 @@ async def update_document(doc_id: str, req: UpdateDocumentRequest):
         raise HTTPException(status_code=404, detail=str(val_err))
     except Exception as e:
         logger.error(f"Error updating document {doc_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 @app.post("/documents/{doc_id}/translate-inplace-stream")
 async def translate_document_inplace_stream_endpoint(doc_id: str, req: TranslateInplaceRequest):
@@ -194,6 +189,7 @@ async def translate_document_inplace_stream_endpoint(doc_id: str, req: Translate
             target_dir=req.target_dir,
             num_ctx=req.num_ctx,
             think=bool(req.think),
+            task_id=req.task_id,
         ),
         media_type="application/x-ndjson",
     )
@@ -207,7 +203,7 @@ async def get_page_preview(doc_id: str, page_num: int):
         raise HTTPException(status_code=404, detail=str(val_err))
     except Exception as e:
         logger.error(f"Error rendering page preview: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 @app.get("/documents", response_model=List[DocumentRecord])
 async def list_documents():
@@ -221,7 +217,7 @@ async def delete_document(doc_id: str):
         raise HTTPException(status_code=400, detail=str(val_err))
     except Exception as e:
         logger.error(f"Error deleting document {doc_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 @app.post("/vector/search", response_model=List[SearchResult])
 async def search_vector_db(req: SearchRequest):
@@ -237,7 +233,7 @@ async def index_history(req: IndexPromptHistoryRequest):
         raise HTTPException(status_code=400, detail=str(val_err))
     except Exception as e:
         logger.error(f"Error indexing prompt history entry {req.id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 @app.post("/history/search", response_model=List[PromptHistorySearchResult])
 async def search_history(req: PromptHistorySearchRequest):
@@ -256,7 +252,7 @@ async def export_document(req: ExportRequest):
         return await asyncio.to_thread(export_markdown_to_file, req.markdown_content, req.export_format)
     except Exception as e:
         logger.error(f"Export failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
 @app.post("/tasks/cancel", response_model=TaskCancelResponse)
 async def cancel_sidecar_task(task_id: Optional[str] = Query(None)):
@@ -299,7 +295,7 @@ async def agent_logs_analyze(req: LogDiagnosticQuery):
         )
     except Exception as exc:
         logger.error("Log analysis error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise
 
 
 if __name__ == "__main__":

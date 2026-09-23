@@ -4,7 +4,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
 import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
-import { loadRealSettings, readRunMetrics, resetWorkspace } from './agentLiveHarness'
+import { loadRealSettings, reportRun, resetWorkspace } from './agentLiveHarness'
 
 const WORKSPACE = path.join(os.homedir(), 'Desktop', 'onlyrag_live_uninstallable_dependency')
 const SESSION = 'live-uninstallable-dependency'
@@ -58,11 +58,19 @@ describe('live: uninstallable dependency recovery', () => {
       liveWindow,
     )
 
-    const metrics = readRunMetrics({ workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })
+    const metrics = reportRun({
+      label: 'uninstallable dependency recovery',
+      workspacePath: WORKSPACE,
+      sessionId: SESSION,
+      success: result.success,
+      summary: result.summary,
+    })
     const source = fs.readFileSync(path.join(WORKSPACE, 'src', 'Dashboard.ts'), 'utf-8')
     expect(metrics.commands.some((command) => command.includes(`npm install ${PACKAGE_NAME}`))).toBe(true)
     expect(metrics.commands.filter((command) => command.includes(`npm install ${PACKAGE_NAME}`))).toHaveLength(1)
-    expect(result.success).toBe(true)
+    // A passing build is structural evidence only, so an honest finish closes as unverifiable, not success.
+    expect(metrics).toMatchObject({ verified: 1, failed: 0, pending: 0, completionStatus: 'unverifiable' })
+    expect(result).toMatchObject({ success: false, completionStatus: 'unverifiable' })
     expect(source).not.toMatch(new RegExp(`from\\s+['"]${PACKAGE_NAME.replace('/', '\\/')}['"]`))
     expect(source).not.toContain('missingWidget')
     expect(fs.readFileSync(path.join(WORKSPACE, 'package.json'), 'utf-8')).toBe(fixture.packageJson)

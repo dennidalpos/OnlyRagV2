@@ -1,6 +1,7 @@
 import * as ts from 'typescript'
 import * as path from 'node:path'
 import levenshtein from 'fast-levenshtein'
+import { scriptKindForPath } from './sourceScriptKind'
 
 export interface ASTValidationResult {
   isValid: boolean
@@ -109,13 +110,12 @@ export function validateAST(filePath: string, content: string): ASTValidationRes
       }
     }
 
-    const scriptKind = ext === '.tsx' || ext === '.jsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS
     const sourceFile = ts.createSourceFile(
       filePath,
       content,
       ts.ScriptTarget.Latest,
       true,
-      scriptKind
+      scriptKindForPath(filePath)
     )
 
     const sourceWithDiags = sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }

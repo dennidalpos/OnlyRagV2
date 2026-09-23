@@ -211,9 +211,14 @@ describe('AgentActionLoopDetector Unit Tests', () => {
       return res
     }
 
+    // Distinct paths keep the alternation below from reading as an edit/command oscillation.
+    const fixCall = (content: string, filePath = `src/${content}.ts`): AgentToolCall => ({ tool: 'write_file', parameters: { filePath, content } })
+
     it('classifies a repeat as failing when the earlier executions failed', () => {
       runStep(installCall, false)
+      runStep(fixCall('a'), true)
       runStep(installCall, false)
+      runStep(fixCall('b'), true)
       const blocked = runStep(installCall, false)
 
       expect(blocked.isLooping).toBe(true)
@@ -236,10 +241,55 @@ describe('AgentActionLoopDetector Unit Tests', () => {
     it('treats a command that succeeded and then broke as a failing repeat', () => {
       runStep(installCall, true)
       runStep(installCall, false)
+      runStep(fixCall('a'), true)
       const blocked = runStep(installCall, false)
 
       expect(blocked.repeatOutcome).toBe('failing')
       expect(blocked.suggestedIntervention).toContain('[CRITICAL LOOP INTERVENTION')
+    })
+
+    it('refuses a failed check re-issued with nothing changed since, before it runs', () => {
+      const buildCall: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm run build' } }
+      runStep(buildCall, false)
+      const blocked = runStep(buildCall, false)
+
+      expect(blocked).toMatchObject({ isLooping: true, pattern: 'unchanged_failing_repeat', repeatOutcome: 'failing' })
+      expect(blocked.suggestedIntervention).toContain('[UNCHANGED RETRY BLOCKED: "npm run build"')
+      expect(blocked.suggestedIntervention).toContain('It was NOT executed.')
+    })
+
+    it('allows the failed check again once a file edit or another command ran', () => {
+      const buildCall: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm run build' } }
+      runStep(buildCall, false)
+      runStep(fixCall('a'), true)
+      expect(runStep(buildCall, false).isLooping).toBe(false)
+    })
+
+    it('lets a failed command lift the block too, since it may still have changed the workspace', () => {
+      const buildCall: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm run build' } }
+      runStep(buildCall, false)
+      runStep(installCall, false)
+      expect(runStep(buildCall, false).isLooping).toBe(false)
+    })
+
+    it('keeps the block when only reads or rejected edits happened in between', () => {
+      const buildCall: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm run build' } }
+      runStep(buildCall, false)
+      runStep({ tool: 'read_file', parameters: { filePath: 'src/a.ts' } }, true)
+      runStep(fixCall('rejected'), false)
+
+      expect(runStep(buildCall, false).pattern).toBe('unchanged_failing_repeat')
+    })
+
+    it('never blocks a check whose last run succeeded, nor non-check tools', () => {
+      const buildCall: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm run build' } }
+      runStep(buildCall, false)
+      runStep(fixCall('a'), true)
+      runStep(buildCall, true)
+      expect(runStep(buildCall, true).pattern).not.toBe('unchanged_failing_repeat')
+
+      runStep(fixCall('rejected'), false)
+      expect(runStep(fixCall('rejected'), false).isLooping).toBe(false)
     })
 
     it('falls back to the failing-loop advice while no outcome has been reported yet', () => {

@@ -5,7 +5,13 @@ import type { AgentToolCall } from './agentTypes'
 export type RepeatOutcomeKind = 'succeeding' | 'failing' | 'unknown'
 
 /** Which repetition pattern tripped the detector. */
-export type LoopPattern = 'shell_tool_confusion' | 'exact_repeat' | 'cycle' | 'same_file_edits' | 'same_target_reads'
+export type LoopPattern =
+  | 'shell_tool_confusion'
+  | 'exact_repeat'
+  | 'unchanged_failing_repeat'
+  | 'cycle'
+  | 'same_file_edits'
+  | 'same_target_reads'
 
 export interface LoopCheckResult {
   isLooping: boolean
@@ -36,6 +42,14 @@ interface SignatureOutcomeRecord {
   lastSucceeded: boolean
 }
 
+/** Tools that re-run a check: rerunning one that failed, with nothing changed since, reproduces the failure. */
+const CHECK_TOOLS = new Set(['run_command', 'run_tests'])
+/** Tools whose execution can change what a check sees (a failed command may still write or install). */
+const STATE_CHANGING_TOOLS = new Set([
+  'write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'copy_file',
+  'move_file', 'create_directory', 'download_file', 'ensure_tool', 'git_commit', 'run_command', 'run_tests',
+])
+
 function accumulate(previous: SignatureOutcomeRecord | undefined, succeeded: boolean): SignatureOutcomeRecord {
   return {
     successes: (previous?.successes || 0) + (succeeded ? 1 : 0),
@@ -56,6 +70,10 @@ export class AgentActionLoopDetector {
   private outcomeBySignature = new Map<string, SignatureOutcomeRecord>()
   /** Tracks execution outcomes keyed by target path to support redundant-success exemptions across varied edits. */
   private outcomeByTarget = new Map<string, SignatureOutcomeRecord>()
+  /** Bumped by every execution that may have changed the workspace. */
+  private workspaceEpoch = 0
+  /** Workspace epoch at the last failure of each check, keyed by fingerprint. */
+  private failedCheckEpoch = new Map<string, number>()
   private readonly maxRepeatsAllowed: number
   private readonly maxHistoryLength = 20
 
@@ -92,6 +110,17 @@ export class AgentActionLoopDetector {
     if (target) {
       this.outcomeByTarget.set(target, accumulate(this.outcomeByTarget.get(target), succeeded))
     }
+
+    const isCheck = CHECK_TOOLS.has(toolCall.tool)
+    if (STATE_CHANGING_TOOLS.has(toolCall.tool) && (succeeded || isCheck)) this.workspaceEpoch++
+    if (!isCheck) return
+    if (succeeded) this.failedCheckEpoch.delete(signature)
+    else this.failedCheckEpoch.set(signature, this.workspaceEpoch)
+  }
+
+  /** True when this exact check failed last time and nothing that could change its result ran since. */
+  private isUnchangedFailingCheck(toolCall: AgentToolCall, signature: string): boolean {
+    return CHECK_TOOLS.has(toolCall.tool) && this.failedCheckEpoch.get(signature) === this.workspaceEpoch
   }
 
   /** Classifies a repeat by how its previous executions ended. */
@@ -158,6 +187,26 @@ export class AgentActionLoopDetector {
     // 1. Exact parameter repeat check (last 5 steps)
     const recentSignatures = this.signatureHistory.slice(-5)
     const duplicateCount = recentSignatures.filter((sig) => sig === signature).length
+
+    // 1a. A failed check re-issued with nothing changed since reproduces the same failure. Refusing it
+    // before it runs costs a loop block; running it would spend the execution budget on a known result
+    // (live TS2305 run of 2026-09-23: build, fix attempt, build, build again -> execution_budget stop).
+    if (this.isUnchangedFailingCheck(toolCall, signature)) {
+      return {
+        isLooping: true,
+        consecutiveDuplicateCount: duplicateCount,
+        pattern: 'unchanged_failing_repeat',
+        repeatOutcome: 'failing',
+        suggestedIntervention: [
+          `[UNCHANGED RETRY BLOCKED: "${target || toolCall.tool}" FAILED AND NOTHING HAS CHANGED SINCE]`,
+          'This exact call failed on its last run, and no file edit or command has run after it, so it would fail again the same way. It was NOT executed.',
+          'Directives:',
+          '1. Read the error in your RECENT DETAILED TOOL OUTPUTS and follow any directive attached to it.',
+          '2. Apply the fix it names with write_file or replace_file_content (read the file first if you need its current content).',
+          '3. Then run this call again: after a real change it is allowed.',
+        ].join('\n'),
+      }
+    }
 
     if (duplicateCount > this.maxRepeatsAllowed) {
       const repeatOutcome = this.classifyRepeatOutcome(toolCall)
@@ -286,6 +335,8 @@ export class AgentActionLoopDetector {
     this.actionSequence = []
     this.outcomeBySignature.clear()
     this.outcomeByTarget.clear()
+    this.failedCheckEpoch.clear()
+    this.workspaceEpoch = 0
   }
 
   /**

@@ -259,8 +259,43 @@ describe('SidecarHttpClient health failures', () => {
     }])
     servers.push(failing.server)
 
-    const res = await new SidecarHttpClient(failing.baseUrl).translateDocumentInplaceStream('doc-1', { source_lang: 'en', target_lang: 'it' }, () => {})
+    const res = await new SidecarHttpClient(failing.baseUrl).translateDocumentInplaceStream('doc-1', { source_lang: 'en', target_lang: 'it', task_id: 't-1' }, () => {})
     expect(res).toEqual({ success: false, error: 'No translatable text blocks found in document' })
+  })
+
+  it('relays a translation cancel to the Sidecar task before dropping the stream', async () => {
+    const cancelled: string[] = []
+    const slow = await createMockServer([
+      {
+        method: 'POST',
+        path: '/documents/doc-1/translate-inplace-stream',
+        handler: (_req, res) => {
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+          res.write(`${JSON.stringify({ type: 'start', total_pages: 3 })}\n`)
+        },
+      },
+      {
+        method: 'POST',
+        path: '/tasks/cancel',
+        handler: (req, res) => {
+          cancelled.push(new URL(req.url || '', 'http://x').searchParams.get('task_id') || '')
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end('{}')
+        },
+      },
+    ])
+    servers.push(slow.server)
+
+    let cancel: (() => void) | undefined
+    const pending = new SidecarHttpClient(slow.baseUrl).translateDocumentInplaceStream(
+      'doc-1',
+      { source_lang: 'en', target_lang: 'it', task_id: 'translate-42' },
+      () => cancel?.(),
+      (cancelFn) => { cancel = cancelFn },
+    )
+
+    expect((await pending).success).toBe(false)
+    await expect.poll(() => cancelled).toEqual(['translate-42'])
   })
 
   it('sends the launch token on every request once set', async () => {

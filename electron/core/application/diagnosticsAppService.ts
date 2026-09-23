@@ -2,14 +2,9 @@ import path from 'node:path'
 import type { DesktopShellPort } from '../domain/ports/desktopShellPort'
 import { electronDesktopShell } from '../infrastructure/electron/electronDesktopShell'
 import { logger, type LogEntry, type LogLevel } from '../infrastructure/logging/logger'
-import { httpMetrics, type HttpMetricSnapshot } from '../infrastructure/http/httpMetrics'
 
 export class DiagnosticsAppService {
   constructor(private readonly desktop: Pick<DesktopShellPort, 'openPath'> = electronDesktopShell) {}
-
-  public getHttpMetrics(): HttpMetricSnapshot[] {
-    return httpMetrics.snapshot()
-  }
 
   public getLogs(): LogEntry[] {
     return logger.getLogs()

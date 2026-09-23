@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.9 · 2026-09-23` — Repository facts and verified commands.
+`v1.10 · 2026-09-23` — Repository facts and verified commands.
 
 ## Scope
 
@@ -9,12 +9,12 @@
 
 ## Verified commands
 
-Run from repository root in PowerShell. The E2E commands, static checks and `npm run test:live` (8/11 scenarios passed, see tracker) were run on 2026-09-23.
+Run from repository root in PowerShell. The E2E commands, static checks and `npm run test:live` (10/11 agent scenarios passed; the full task run is tracked as MILESTONE-RENAME-REMAP-01; `gptOssThinking.live.ts` 3/3 with `gpt-oss:20b`) were run on 2026-09-23.
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (262 files, 2054 tests; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
-| Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (142 tests) |
+| Fast suite | `npm run test:fast` (262 files, 2069 tests; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (143 tests) |
 | Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 4 guard scenarios) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |
 | Cold-start network E2E | `npm run test:e2e:cold-start` (Main and Renderer first launch) |
@@ -24,7 +24,7 @@ Run from repository root in PowerShell. The E2E commands, static checks and `npm
 | Installer | `npm run package:win` (output in `release/`; Vite owns and empties `dist/`) |
 | Full audit | `powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast` |
 | Targeted Vitest | `npx vitest run <path>` |
-| Format / types | `npm run format:check`; `npm run typecheck` |
+| Format / types | `npm run format:check`; `npm run typecheck` (includes `scripts/live` and `scripts/e2e`) |
 | Dead code / cycles | `npm run audit:deadcode`; `npm run audit:cycles` |
 
 ## Architecture

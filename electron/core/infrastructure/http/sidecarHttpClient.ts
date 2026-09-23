@@ -22,6 +22,7 @@ export interface SidecarTranslateStreamPayload {
   target_dir?: string
   num_ctx?: number
   think?: boolean
+  task_id: string
 }
 
 export interface SidecarDocumentRecord {
@@ -245,21 +246,33 @@ export class SidecarHttpClient {
     onProgress: (event: any) => void,
     onCancelRegister?: (cancelFn: () => void) => void
   ): Promise<{ success: boolean; data?: any; error?: string }> {
-    return this.streamNdjson('/ingest-path-stream', payload, 'Ingestion', onProgress, (req) => {
-      onCancelRegister?.(() => {
-        this.notifyTaskCancellation(payload.task_id)
-        req.destroy()
-      })
-    })
+    return this.streamNdjson('/ingest-path-stream', payload, 'Ingestion', onProgress, this.cancellableBy(payload.task_id, onCancelRegister))
   }
 
-  /** Streaming in-place document translation with NDJSON progress events. */
+  /** Streaming in-place document translation with NDJSON progress events; cancellable like ingestion. */
   translateDocumentInplaceStream(
     docId: string,
     payload: SidecarTranslateStreamPayload,
-    onProgress: (event: any) => void
+    onProgress: (event: any) => void,
+    onCancelRegister?: (cancelFn: () => void) => void
   ): Promise<{ success: boolean; data?: any; error?: string }> {
-    return this.streamNdjson(`/documents/${encodeURIComponent(docId)}/translate-inplace-stream`, payload, 'Translation', onProgress)
+    return this.streamNdjson(
+      `/documents/${encodeURIComponent(docId)}/translate-inplace-stream`,
+      payload,
+      'Translation',
+      onProgress,
+      this.cancellableBy(payload.task_id, onCancelRegister)
+    )
+  }
+
+  /** Cancelling asks the Sidecar to stop the task cooperatively, then drops the stream. */
+  private cancellableBy(taskId: string, onCancelRegister?: (cancelFn: () => void) => void) {
+    return (req: http.ClientRequest) => {
+      onCancelRegister?.(() => {
+        this.notifyTaskCancellation(taskId)
+        req.destroy()
+      })
+    }
   }
 
   /** Replaces a document's markdown and re-indexes it. */

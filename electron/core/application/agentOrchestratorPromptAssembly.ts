@@ -237,6 +237,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
         directiveKind: directive.kind,
         editTargetState: resolveEditTargetState(ctx, turnFiles.targets),
         userTask: ctx.userTask,
+        requiredTools: directive.requiredTools,
       })
   ctx.emitLog('info', `🧰 Tool policy [${directive.kind}]: ${toolPolicy.rationale} — ${toolPolicy.allowedTools.join(', ')}.`)
   const planBlock = [

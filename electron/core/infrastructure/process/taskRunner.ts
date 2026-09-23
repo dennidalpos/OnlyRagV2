@@ -6,9 +6,11 @@ import { spawn } from 'node:child_process'
 import stripAnsi from 'strip-ansi'
 import { logger } from '../logging/logger'
 
+export type ActiveTaskType = 'ingestion' | 'translation' | 'ollama_stream' | 'export' | 'terminal_command'
+
 export interface ActiveTask {
   id: string
-  type: 'ingestion' | 'ollama_stream' | 'export' | 'terminal_command'
+  type: ActiveTaskType
   sourcePath?: string
   temporaryResiduePath?: string
   destroy: () => void
@@ -54,7 +56,7 @@ export class TaskRunner {
 
   registerActiveTask(
     id: string,
-    type: 'ingestion' | 'ollama_stream' | 'export' | 'terminal_command',
+    type: ActiveTaskType,
     destroyFn: () => void,
     paths: ActiveTaskPaths = {}
   ): string {

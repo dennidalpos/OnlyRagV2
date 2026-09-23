@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from sidecar.main import app
 from sidecar.domain import translator as translator_module
-from _stream import done_payload, ingest_path
+from _stream import done_payload, ingest_path, read_events
 
 client = TestClient(app)
 
@@ -834,3 +834,32 @@ def test_translate_texts_skips_segments_already_in_target_language(monkeypatch):
     assert "This paragraph is already written" not in called_prompts[0]
     assert res_batch[0] == "Traduzione di un testo in italiano"
     assert res_batch[1] == "This paragraph is already written in English and should be preserved."
+
+
+def test_translate_stream_stops_cooperatively_when_its_task_is_cancelled(tmp_path, monkeypatch):
+    from sidecar.services.task_cancellation import cancel_task
+
+    path = str(tmp_path / "cancel_sample.pdf")
+    _make_pdf(path, "Text that will never be written translated")
+
+    def cancelling_call(text, *args, **kwargs):
+        cancel_task("translate-cancel-test")
+        return f"TR-{text}"
+
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", cancelling_call)
+
+    doc_id = None
+    try:
+        doc_id = ingest_path(client, path)["id"]
+        res = client.post(
+            f"/documents/{doc_id}/translate-inplace-stream",
+            json={"source_lang": "English", "target_lang": "Italian", "task_id": "translate-cancel-test"},
+        )
+        events = read_events(res)
+
+        assert events[-1] == {"type": "cancelled", "task_id": "translate-cancel-test"}
+        assert not any(event["type"] == "done" for event in events)
+        assert os.listdir(tmp_path) == ["cancel_sample.pdf"]
+    finally:
+        if doc_id:
+            client.delete(f"/documents/{doc_id}")

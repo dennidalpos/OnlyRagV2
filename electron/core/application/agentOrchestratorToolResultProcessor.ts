@@ -21,8 +21,17 @@ export function isToolExecutionFailure(toolRes: ClassifiedToolExecutionResult): 
   return toolRes.outcome !== 'success'
 }
 
+/**
+ * Refusals that never reached the disk and carry their own recovery do not spend the one
+ * execution correction: a version conflict is recovered by the mandatory read, and a syntax
+ * rejection is the model's content failing validation, bounded by the same-file edit loop and
+ * no_mutation guards. Counting the latter stopped runs whose correction for a failed build was
+ * merely malformed (live full task and TS2614 runs of 2026-09-23: build 1/2, rejected write 2/2).
+ */
 export function shouldSpendExecutionRecoveryBudget(toolRes: ClassifiedToolExecutionResult): boolean {
-  return isToolExecutionFailure(toolRes) && !toolRes.outputForHistory.includes('[FILE VERSION CONFLICT:')
+  return isToolExecutionFailure(toolRes) &&
+    !toolRes.outputForHistory.includes('[FILE VERSION CONFLICT:') &&
+    !toolRes.outputForHistory.startsWith('[PRE-COMMIT AST VALIDATION ERROR')
 }
 
 export function terminalOutcomeFor(
@@ -240,7 +249,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
       toolName: parsedTool.tool,
       target: targetParam,
     })
-  } else if (!isToolFailure && (isMutating || ['run_command', 'run_tests', 'ensure_tool'].includes(parsedTool.tool))) {
+  } else if (!isToolFailure && (isMutating || ['run_command', 'run_tests', 'ensure_tool', 'move_file', 'copy_file'].includes(parsedTool.tool))) {
     ctx.recoveryState.progress.clearExecutionFailures()
   }
 

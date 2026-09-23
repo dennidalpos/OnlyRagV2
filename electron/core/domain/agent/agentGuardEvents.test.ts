@@ -17,6 +17,7 @@ describe('agent guard events', () => {
     expect(guardForLoopPattern('cycle')).toBe('loop_cycle')
     expect(guardForLoopPattern('same_file_edits')).toBe('loop_same_file_edits')
     expect(guardForLoopPattern('same_target_reads')).toBe('loop_same_target_reads')
+    expect(guardForLoopPattern('unchanged_failing_repeat')).toBe('loop_unchanged_failure')
     expect(guardForLoopPattern('shell_tool_confusion')).toBe('shell_tool_confusion')
   })
 })

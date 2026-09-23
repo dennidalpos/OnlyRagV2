@@ -458,6 +458,13 @@ describe('verification_failing publishes the file it orders rewritten', () => {
     expect(decision.blockDirective).toContain('THE COMPILER NAMED THE FILE AND THE LINE')
   })
 
+  it('carries the extra tools the diagnostic orders', () => {
+    const decision = resolvePlanDirective(input({ verificationFailing: true, verificationFailureTools: ['move_file'] }))
+
+    expect(decision.requiredTools).toEqual(['move_file'])
+    expect(resolvePlanDirective(input({ verificationFailing: true })).requiredTools).toBeUndefined()
+  })
+
   it('carries none when the fix is a command rather than an edit', () => {
     const decision = resolvePlanDirective(
       input({

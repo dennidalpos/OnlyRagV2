@@ -8,6 +8,7 @@ import httpx
 import pymupdf
 from sidecar.config import DOCS_TABLE_NAME, OLLAMA_BASE_URL, logger, httpx_client
 from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id
+from sidecar.services.task_cancellation import TaskCancelled, raise_if_cancelled, register_task, unregister_task
 
 # Preserved/removed during cleanup of legacy batch responses.
 _RUN_SEPARATOR = "<<<RUN_SEP>>>"
@@ -794,7 +795,7 @@ def _event(payload: Dict[str, Any]) -> str:
 
 def _translate_docx_events(
     doc_id: str, file_path: str, filename: str, out_file_path: str,
-    source_lang: str, target_lang: str, model: str, num_ctx: Optional[int], think: bool,
+    source_lang: str, target_lang: str, model: str, num_ctx: Optional[int], think: bool, task_id: Optional[str],
 ) -> Generator[str, None, int]:
     docx_doc = docx.Document(file_path)
     runs = _collect_docx_runs(docx_doc)
@@ -804,15 +805,17 @@ def _translate_docx_events(
     logger.info(f"Translating DOCX {doc_id}: {len(runs)} runs in {len(batches)} batches ({source_lang} -> {target_lang}, model={model})")
     yield _event({"type": "start", "doc_id": doc_id, "filename": filename, "total_pages": 1, "total_blocks": len(runs)})
     for i, batch in enumerate(batches):
+        raise_if_cancelled(task_id)
         yield _event({"type": "progress", "page": 1, "total_pages": 1, "phase": "translating_runs", "percent": int((i / len(batches)) * 90)})
         _translate_batch(batch, source_lang, target_lang, model, num_ctx, think)
+    raise_if_cancelled(task_id)
     docx_doc.save(out_file_path)
     return 1
 
 
 def _translate_pdf_events(
     doc_id: str, file_path: str, filename: str, out_file_path: str,
-    source_lang: str, target_lang: str, model: str, num_ctx: Optional[int], think: bool,
+    source_lang: str, target_lang: str, model: str, num_ctx: Optional[int], think: bool, task_id: Optional[str],
 ) -> Generator[str, None, int]:
     """Fine-mode PDF translation: each original text block is permanently redacted and the
     translation reinserted in the same bbox with an auto-fitted font size."""
@@ -827,6 +830,7 @@ def _translate_pdf_events(
 
         translated_blocks = 0
         for page_idx, page in enumerate(pdf_doc):
+            raise_if_cancelled(task_id)
             page_num = page_idx + 1
             progress = {"type": "progress", "page": page_num, "total_pages": total_pages}
             yield _event({**progress, "phase": "extracting_blocks", "percent": int(((page_idx + 0.1) / total_pages) * 100)})
@@ -835,12 +839,14 @@ def _translate_pdf_events(
                 continue
             yield _event({**progress, "phase": "translating_blocks", "percent": int(((page_idx + 0.5) / total_pages) * 100)})
             _translate_pdf_blocks(blocks, source_lang, target_lang, model, num_ctx, think)
+            raise_if_cancelled(task_id)
             yield _event({**progress, "phase": "reconstructing_layout", "percent": int(((page_idx + 0.9) / total_pages) * 100)})
             _redact_and_reinsert_pdf_blocks(page, blocks, font_file)
             translated_blocks += len(blocks)
 
         if translated_blocks == 0:
             raise ValueError("No translatable text blocks found in document")
+        raise_if_cancelled(task_id)
         pdf_doc.save(out_file_path, deflate=True, garbage=4, clean=True, deflate_images=True, deflate_fonts=True)
         return total_pages
     finally:
@@ -855,10 +861,12 @@ def translate_document_stream(
     target_dir: Optional[str] = None,
     num_ctx: Optional[int] = None,
     think: bool = False,
+    task_id: Optional[str] = None,
 ) -> Iterator[str]:
     """Translates a document validated by prepare_translation into a new file (next to the source
     or in target_dir) and yields NDJSON events ending in `done` or `error`. The source file is
-    never modified.
+    never modified. With a task_id, POST /tasks/cancel stops it between DOCX batches or PDF pages
+    (ending in `cancelled`, with no output file written).
 
     A plain generator on purpose: Starlette iterates sync generators in a worker thread, so the
     blocking PyMuPDF / python-docx / Ollama work never runs on the event loop.
@@ -870,14 +878,22 @@ def translate_document_stream(
     out_file_path = _resolve_output_filepath(file_path, filename, target_lang, target_dir)
     translate_events = _translate_docx_events if file_type == "docx" else _translate_pdf_events
 
+    if task_id:
+        register_task(task_id)
     try:
         num_pages = yield from translate_events(
-            doc_id, file_path, filename, out_file_path, source_lang, target_lang, model, num_ctx, think
+            doc_id, file_path, filename, out_file_path, source_lang, target_lang, model, num_ctx, think, task_id
         )
+    except TaskCancelled:
+        logger.info(f"Translation of document {doc_id} cancelled (task {task_id})")
+        yield _event({"type": "cancelled", "task_id": task_id})
+        return
     except Exception as err:
         logger.error(f"Translation of document {doc_id} failed: {err}")
         yield _event({"type": "error", "error": str(err)})
         return
+    finally:
+        unregister_task(task_id)
 
     yield _event({
         "type": "done",

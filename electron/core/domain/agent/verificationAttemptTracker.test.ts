@@ -31,6 +31,18 @@ describe('isVerificationFailing', () => {
     expect(isVerificationFailing(episodes, BUILD)).toBe(true)
   })
 
+  it('is false once a file was renamed, which changes what the check sees', () => {
+    const episodes = [step('run_command', BUILD, 'FAILURE'), step('move_file', 'src/App.js', 'SUCCESS')]
+
+    expect(isVerificationFailing(episodes, BUILD)).toBe(false)
+  })
+
+  it('stays true when the rerun of the check was blocked, because it never ran', () => {
+    const episodes = [step('run_command', BUILD, 'FAILURE'), step('run_command', BUILD, 'BLOCKED')]
+
+    expect(isVerificationFailing(episodes, BUILD)).toBe(true)
+  })
+
   it('is false after the check passed', () => {
     const episodes = [step('run_command', BUILD, 'FAILURE'), step('run_command', BUILD, 'SUCCESS')]
 

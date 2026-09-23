@@ -7,7 +7,6 @@ import path from 'node:path'
 import EventEmitter from 'node:events'
 import type { ClientRequest, IncomingHttpHeaders, IncomingMessage, RequestOptions } from 'node:http'
 import { htmlToCleanMarkdown, parseDuckDuckGoHtmlResults, WebClient } from './webClient'
-import { httpMetrics } from './httpMetrics'
 
 type MockClientRequest = ClientRequest & {
   destroy: ReturnType<typeof vi.fn>
@@ -53,7 +52,6 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-    httpMetrics.reset()
   })
 
   it('should clean HTML tags and preserve markdown structure', () => {
@@ -147,7 +145,7 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
     expect(resPrivateC.safeUrl).toBeNull()
   })
 
-  it('records fetch HTTP metrics without retaining the URL', async () => {
+  it('fetches a page and converts it to markdown', async () => {
     const response = createMockResponse(200)
     const request = createMockRequest()
     mockHttpsGet(response, request, () => {
@@ -160,13 +158,10 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
     const result = await client.fetchWebContent('https://example.com/private?token=secret')
 
     expect(result.success).toBe(true)
-    expect(httpMetrics.snapshot()).toEqual([
-      expect.objectContaining({ endpoint: '/web/fetch', status: 200, errorType: 'none', count: 1 }),
-    ])
-    expect(JSON.stringify(httpMetrics.snapshot())).not.toContain('token')
+    expect(result.content).toContain('# Fetched')
   })
 
-  it('records download HTTP metrics after writing the file', async () => {
+  it('writes a completed download to disk', async () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-'))
     try {
       const response = createMockResponse(200)
@@ -183,9 +178,6 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       const result = await client.downloadFile('https://example.com/archive.zip?token=secret', path.join(tempRoot, 'archive.zip'), tempRoot)
 
       expect(result).toEqual({ success: true, downloadedBytes: 10 })
-      expect(httpMetrics.snapshot()).toEqual([
-        expect.objectContaining({ endpoint: '/web/download', status: 200, errorType: 'none', count: 1 }),
-      ])
       expect(fs.readFileSync(path.join(tempRoot, 'archive.zip'), 'utf8')).toBe('downloaded')
     } finally {
       fs.rmSync(tempRoot, { recursive: true, force: true })

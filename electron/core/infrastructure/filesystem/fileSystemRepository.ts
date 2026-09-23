@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import * as ts from 'typescript'
 import { logger } from '../logging/logger'
 import { contentVersion } from './fileContentVersion'
+import { scriptKindForPath } from '../../domain/agent/sourceScriptKind'
 import { isIgnoredPath, validatePathSafety as domainValidatePathSafety } from '../../domain/agent/contextFilter'
 import {
   MAX_FILE_READ_BYTES,
@@ -367,7 +368,7 @@ export class FileSystemRepository {
           rawContent,
           ts.ScriptTarget.Latest,
           true,
-          ext === '.tsx' || ext === '.jsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+          scriptKindForPath(resolved)
         )
 
         const visit = (node: ts.Node) => {

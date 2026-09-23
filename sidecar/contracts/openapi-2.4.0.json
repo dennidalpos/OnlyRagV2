@@ -1029,6 +1029,20 @@
             "title": "Target Lang",
             "type": "string"
           },
+          "task_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "pattern": ".*\\S.*",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
           "think": {
             "anyOf": [
               {

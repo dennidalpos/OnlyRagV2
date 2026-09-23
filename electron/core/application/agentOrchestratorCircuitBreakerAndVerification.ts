@@ -22,7 +22,7 @@ import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolF
 import { scanUndeclaredImports } from '../infrastructure/filesystem/undeclaredImportScanner'
 import { extractRequestedPackages, packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { isVerificationFailing } from '../domain/agent/verificationAttemptTracker'
-import { buildDiagnosticFixDirective, diagnosticFixTargetFile } from '../domain/agent/compilerDiagnosticDirective'
+import { buildDiagnosticFixDirective, diagnosticFixRequiredTools, diagnosticFixTargetFile } from '../domain/agent/compilerDiagnosticDirective'
 import { readLocalModuleExports, readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
 import { checkHtmlEntrypoint, CONVENTIONAL_ENTRY_PATHS } from '../domain/agent/entrypointIntegrity'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
@@ -366,6 +366,7 @@ export function resolvePlanDirectiveForTurn(
     verificationFailureTargetFile: lastVerificationFailureOutput
       ? diagnosticFixTargetFile(lastVerificationFailureOutput)
       : null,
+    verificationFailureTools: lastVerificationFailureOutput ? diagnosticFixRequiredTools(lastVerificationFailureOutput) : [],
     disconnectedEntrypoint: resolveDisconnectedEntrypoint(workspacePath, probe),
   })
 }

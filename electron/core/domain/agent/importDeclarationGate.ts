@@ -2,6 +2,7 @@
 
 import ts from 'typescript'
 import { builtinModules } from 'node:module'
+import { scriptKindForPath } from './sourceScriptKind'
 
 /** What the caller must be able to tell us about the project's declarations. */
 export interface DeclaredPackages {
@@ -63,14 +64,7 @@ export function extractBareImportSpecifiers(filePath: string, content: string): 
   if (!SCANNABLE_EXTENSIONS.has(extensionOf(filePath))) return []
   if (!content || !content.trim()) return []
 
-  const ext = extensionOf(filePath)
-  const sourceFile = ts.createSourceFile(
-    filePath,
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    ext === '.tsx' || ext === '.jsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS
-  )
+  const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true, scriptKindForPath(filePath))
 
   const found: string[] = []
   const seen = new Set<string>()

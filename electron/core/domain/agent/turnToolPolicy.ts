@@ -7,6 +7,8 @@ export interface TurnToolPolicyInput {
   directiveKind: PlanDirectiveKind
   editTargetState: EditTargetState
   userTask: string
+  /** Tools the directive itself orders beyond the file edit (PlanDirectiveDecision.requiredTools). */
+  requiredTools?: readonly SupportedToolName[]
 }
 
 export interface TurnToolPolicy {
@@ -81,7 +83,8 @@ export function resolveTurnToolPolicy(input: TurnToolPolicyInput): TurnToolPolic
     case 'verification_failing':
     case 'entrypoint_disconnected': {
       const editTool = editToolFor(input.editTargetState) ?? 'write_file'
-      return policy([editTool], `the current correction needs only ${editTool}`)
+      const tools = [...(input.requiredTools ?? []), editTool]
+      return policy(tools, `the current correction needs only ${tools.join(' and ')}`)
     }
     case 'unprovable_milestone':
       return policy([], 'only plan state can advance this milestone')

@@ -7,7 +7,7 @@ import datetime
 from typing import Optional, List, Dict, Any, Generator, Tuple
 from concurrent.futures import ThreadPoolExecutor
 import pymupdf
-from sidecar.config import DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, EXPORT_DIR, logger
+from sidecar.config import DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
 from sidecar.schemas import IngestResponse, PagePreviewResponse
 from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, append_records
 from sidecar.infrastructure.embeddings import (
@@ -71,9 +71,7 @@ def _build_chunk_records(
     return records, used_fallback
 
 def process_and_index_document_generator(
-    filename: str,
-    content: bytes,
-    file_path: Optional[str] = None,
+    file_path: str,
     vision_model: Optional[str] = None,
     vision_prompt: Optional[str] = None,
     normalize_with_llm: bool = False,
@@ -83,17 +81,15 @@ def process_and_index_document_generator(
     max_tabular_rows: Optional[int] = None,
     max_excel_rows_per_sheet: Optional[int] = None,
     max_excel_sheets: Optional[int] = None,
-    max_sheets: Optional[int] = None,
     task_id: Optional[str] = None,
     embedding_model: str = DEFAULT_EMBEDDING_MODEL,
-    **kwargs: Any
 ) -> Generator[str, None, None]:
     """
-    Streaming NDJSON generator for real-time progress reporting during document extraction and LanceDB vectorization.
+    Streaming NDJSON generator for real-time progress reporting during extraction and LanceDB vectorization
+    of a file already on disk (Main passes a validated local path; the source file is never copied).
     """
-    effective_max_sheets = max_excel_sheets if max_excel_sheets is not None else max_sheets
+    filename = os.path.basename(file_path)
     doc_id = str(uuid.uuid4())
-    persisted_path = file_path or ""
     # Progress labels must name the engine the pages actually went through, not a fixed one.
     ocr_engine_label = "Vision LLM OCR" if is_vision_ocr_requested(vision_prompt) else "OCR Layout"
 
@@ -101,17 +97,6 @@ def process_and_index_document_generator(
         register_task(task_id)
     try:
         raise_if_cancelled(task_id)
-        if not persisted_path or not os.path.exists(persisted_path):
-            if content:
-                os.makedirs(EXPORT_DIR, exist_ok=True)
-                cached_file = os.path.join(EXPORT_DIR, f"source_{doc_id}_{filename}")
-                try:
-                    with open(cached_file, "wb") as f:
-                        f.write(content)
-                    persisted_path = cached_file
-                except Exception as save_err:
-                    logger.warning(f"Could not cache source file to disk: {save_err}")
-
         yield json.dumps({
             "type": "progress",
             "percent": 5,
@@ -126,10 +111,7 @@ def process_and_index_document_generator(
 
         if category == DocumentCategory.PDF:
             try:
-                if persisted_path and os.path.exists(persisted_path):
-                    pdf_doc = pymupdf.open(persisted_path)
-                else:
-                    pdf_doc = pymupdf.open(stream=content, filetype="pdf")
+                pdf_doc = pymupdf.open(file_path)
 
                 if pdf_doc.needs_pass != 0 or (pdf_doc.is_encrypted and pdf_doc.needs_pass):
                     pdf_doc.close()
@@ -227,7 +209,7 @@ def process_and_index_document_generator(
                 "fileName": filename
             }) + "\n"
             full_markdown, num_pages = extract_document_markdown(
-                filename, content, persisted_path or file_path,
+                filename, b"", file_path,
                 vision_model=vision_model, vision_prompt=vision_prompt,
                 normalize_with_llm=normalize_with_llm,
                 normalization_model=normalization_model,
@@ -235,7 +217,7 @@ def process_and_index_document_generator(
                 num_ctx=num_ctx,
                 max_tabular_rows=max_tabular_rows,
                 max_excel_rows=max_excel_rows_per_sheet,
-                max_sheets=effective_max_sheets
+                max_sheets=max_excel_sheets
             )
 
         raise_if_cancelled(task_id)
@@ -253,7 +235,7 @@ def process_and_index_document_generator(
         raw_chunks = create_semantic_chunks(filename, full_markdown)
         total_chunks = len(raw_chunks)
         ingested_at = datetime.datetime.now().isoformat()
-        file_size = os.path.getsize(persisted_path) if persisted_path and os.path.exists(persisted_path) else len(content)
+        file_size = os.path.getsize(file_path)
         ext = os.path.splitext(filename)[1].lower().replace(".", "") or "text"
 
         yield json.dumps({
@@ -283,7 +265,7 @@ def process_and_index_document_generator(
         doc_record = [{
             "id": doc_id,
             "filename": filename,
-            "file_path": persisted_path,
+            "file_path": file_path,
             "file_size": file_size,
             "num_pages": num_pages,
             "num_chunks": len(chunk_records),
@@ -307,7 +289,7 @@ def process_and_index_document_generator(
         final_payload = {
             "id": doc_id,
             "filename": filename,
-            "filePath": persisted_path,
+            "filePath": file_path,
             "file_size": file_size,
             "num_pages": num_pages,
             "num_chunks": len(chunk_records),

@@ -8,7 +8,6 @@ import * as cheerio from 'cheerio'
 import { logger } from '../logging/logger'
 import { validatePathSafety } from '../../domain/agent/contextFilter'
 import { MAX_DOWNLOAD_BYTES } from '../../domain/agent/ioLimits'
-import { httpMetrics } from './httpMetrics'
 import { isPrivateNetworkAddress, publicOnlyLookup } from './networkAddressPolicy'
 
 const MAX_DOWNLOAD_REDIRECTS = 3
@@ -273,13 +272,6 @@ export class WebClient {
     const targetUrl = urlCheck.safeUrl
     const isHttps = targetUrl.protocol === 'https:'
     const client = isHttps ? https : http
-    const startedAt = Date.now()
-    let recorded = false
-    const record = (status: number, errorType: Parameters<typeof httpMetrics.record>[2]) => {
-      if (recorded) return
-      recorded = true
-      httpMetrics.record('/web/fetch', status, errorType, Date.now() - startedAt)
-    }
 
     return new Promise((resolve) => {
       const req = client.get(
@@ -296,7 +288,6 @@ export class WebClient {
         (res) => {
           // Each hop is re-validated by the recursive call; the hop count is bounded.
           if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-            record(res.statusCode, 'none')
             res.resume()
             if (redirectCount >= MAX_FETCH_REDIRECTS) {
               return resolve({ success: false, error: `Fetch exceeded ${MAX_FETCH_REDIRECTS} redirect hops.` })
@@ -306,7 +297,6 @@ export class WebClient {
           }
 
           if (res.statusCode && res.statusCode >= 400) {
-            record(res.statusCode, 'http')
             resolve({ success: false, error: `HTTP ${res.statusCode} ${res.statusMessage || ''}` })
             return
           }
@@ -325,7 +315,6 @@ export class WebClient {
             const title = titleMatch ? htmlToCleanMarkdown(titleMatch[1]) : undefined
             const truncated = cleanText.length > maxChars ? `${cleanText.slice(0, maxChars)}\n... [Content truncated for context budget]` : cleanText
 
-            record(res.statusCode || 0, 'none')
             resolve({
               success: true,
               content: truncated,
@@ -337,20 +326,17 @@ export class WebClient {
       )
 
       req.on('error', (err: any) => {
-        record(0, 'network')
         logger.log('WARN', 'WebClient', `Network error fetching ${urlStr}: ${err.message}`)
         resolve({ success: false, error: err.message })
       })
 
       req.on('timeout', () => {
         req.destroy()
-        record(0, 'timeout')
         resolve({ success: false, error: `Request timed out (15s limit) for URL ${urlStr}` })
       })
 
       signal?.addEventListener('abort', () => {
         req.destroy()
-        record(0, 'timeout')
         resolve({ success: false, error: 'Request cancelled by AbortSignal' })
       }, { once: true })
     })
@@ -378,13 +364,6 @@ export class WebClient {
     const targetUrl = urlCheck.safeUrl
     const isHttps = targetUrl.protocol === 'https:'
     const client = isHttps ? https : http
-    const startedAt = Date.now()
-    let recorded = false
-    const record = (status: number, errorType: Parameters<typeof httpMetrics.record>[2]) => {
-      if (recorded) return
-      recorded = true
-      httpMetrics.record('/web/download', status, errorType, Date.now() - startedAt)
-    }
 
     return new Promise((resolve) => {
       try {
@@ -406,19 +385,13 @@ export class WebClient {
         }
       }
 
-      const cleanupAndFail = (
-        statusCode: number,
-        errorType: Parameters<typeof httpMetrics.record>[2],
-        errorMessage: string,
-        destroyRequest = false
-      ) => {
+      const cleanupAndFail = (errorMessage: string, destroyRequest = false) => {
         if (destroyRequest) {
           req.destroy()
         }
         fileStream.close(() => {
           removePartialFile()
         })
-        record(statusCode, errorType)
         resolve({ success: false, error: errorMessage })
       }
 
@@ -433,7 +406,6 @@ export class WebClient {
         },
         (res) => {
           if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-            record(res.statusCode, 'none')
             fileStream.close(() => {
               removePartialFile()
             })
@@ -445,21 +417,21 @@ export class WebClient {
           }
 
           if (res.statusCode && res.statusCode >= 400) {
-            return cleanupAndFail(res.statusCode, 'http', `HTTP ${res.statusCode} ${res.statusMessage || ''}`, false)
+            return cleanupAndFail(`HTTP ${res.statusCode} ${res.statusMessage || ''}`, false)
           }
 
           if (!downloadMimeAllowed(res.headers['content-type'])) {
-            return cleanupAndFail(res.statusCode || 0, 'unknown', `Download MIME type is not allowed: ${res.headers['content-type']}`, true)
+            return cleanupAndFail(`Download MIME type is not allowed: ${res.headers['content-type']}`, true)
           }
 
           res.on('data', (chunk) => {
             downloadedBytes += chunk.length
             if (downloadedBytes === chunk.length && !downloadMimeAllowed(res.headers['content-type'], Buffer.from(chunk))) {
-              cleanupAndFail(res.statusCode || 0, 'unknown', 'Download content does not match declared MIME type.', true)
+              cleanupAndFail('Download content does not match declared MIME type.', true)
               return
             }
             if (downloadedBytes > MAX_DOWNLOAD_BYTES) {
-              cleanupAndFail(res.statusCode || 0, 'unknown', 'Download exceeded 100MB safety limit.', true)
+              cleanupAndFail('Download exceeded 100MB safety limit.', true)
             }
           })
 
@@ -468,7 +440,6 @@ export class WebClient {
           fileStream.on('finish', () => {
             fileStream.close(() => {
               logger.log('INFO', 'WebClient', `Successfully downloaded ${downloadedBytes} bytes to ${safeDestPath}`)
-              record(res.statusCode || 0, 'none')
               resolve({ success: true, downloadedBytes })
             })
           })
@@ -476,15 +447,15 @@ export class WebClient {
       )
 
       req.on('error', (err) => {
-        cleanupAndFail(0, 'network', err.message, false)
+        cleanupAndFail(err.message, false)
       })
 
       req.on('timeout', () => {
-        cleanupAndFail(0, 'timeout', 'Download request timed out (60s limit)', true)
+        cleanupAndFail('Download request timed out (60s limit)', true)
       })
 
       signal?.addEventListener('abort', () => {
-        cleanupAndFail(0, 'timeout', 'Download cancelled by AbortSignal', true)
+        cleanupAndFail('Download cancelled by AbortSignal', true)
       }, { once: true })
     })
   }

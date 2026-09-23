@@ -45,6 +45,26 @@ def test_global_error_contract_is_safe_and_correlatable(monkeypatch):
     }
     assert "secret path" not in logged[0]
 
+def test_route_failures_answer_with_the_generic_error_contract(monkeypatch):
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("secret path C:/private/token")
+
+    monkeypatch.setattr("sidecar.main.update_and_reindex_document", fail)
+    monkeypatch.setattr("sidecar.main.export_markdown_to_file", fail)
+    lenient_client = TestClient(app, raise_server_exceptions=False)
+
+    responses = [
+        lenient_client.put("/documents/doc-1", json={"markdown_content": "# x"}),
+        lenient_client.post("/export", json={"markdown_content": "# x", "export_format": "pdf"}),
+    ]
+
+    for response in responses:
+        payload = response.json()
+        assert response.status_code == 500
+        assert payload["detail"] == "Internal Server Error"
+        assert len(payload["error_id"]) == 12
+        assert "secret path" not in response.text
+
 def test_health_endpoint():
     response = client.get("/health")
     assert response.status_code == 200
@@ -691,15 +711,11 @@ def test_vocab_sync_service_offline_and_caching(tmp_path):
     )
     custom_vocab = {"personalizzato": 6.8, "ultratecnico": 7.2}
     (bundled_dir / "it.json").write_text(json.dumps(custom_vocab), encoding="utf-8")
-    svc = VocabSyncService(
-        manifest_url="http://127.0.0.1:9999/nonexistent/manifest.json",
-        cache_dir=cache_dir,
-        bundled_vocab_dir=str(bundled_dir),
-    )
+    svc = VocabSyncService(cache_dir=cache_dir, bundled_vocab_dir=str(bundled_dir))
 
-    # An unavailable remote source must seed the cache from packaged assets.
-    import asyncio
-    res = asyncio.run(svc.sync_vocabularies(timeout_sec=0.5))
+    # The cache is seeded from packaged assets only; a second pass finds nothing newer.
+    res = svc.sync_vocabularies()
+    assert svc.sync_vocabularies()["updated_languages"] == []
     assert res["status"] == "bundled"
     assert res["source"] == "bundled"
     assert res["updated_languages"] == ["it"]
@@ -708,38 +724,6 @@ def test_vocab_sync_service_offline_and_caching(tmp_path):
     mgr = MultiLangVocabManager(cache_dir=cache_dir)
     assert mgr.get_word_zipf("personalizzato", "it") == pytest.approx(6.8)
     assert mgr.get_word_zipf("ultratecnico", "it") == pytest.approx(7.2)
-
-
-def test_vocab_sync_service_resolves_remote_pack_relative_to_master_manifest(tmp_path, monkeypatch):
-    import asyncio
-    from sidecar.services import vocab_service
-
-    requested_urls = []
-
-    class FakeResponse:
-        def __init__(self, status_code, payload):
-            self.status_code = status_code
-            self._payload = payload
-
-        def json(self):
-            return self._payload
-
-    def fake_get(url, timeout):
-        requested_urls.append((url, timeout))
-        if url.endswith("manifest.json"):
-            return FakeResponse(200, {"packs": {"it": {"version": "2.0.0", "url": "it.json"}}})
-        return FakeResponse(200, {"onlyrag": 5.0})
-
-    monkeypatch.setattr(vocab_service.httpx_client, "get", fake_get)
-    manifest_url = "https://raw.githubusercontent.com/dennidalpos/OnlyRagV2/master/sidecar/assets/vocab/manifest.json"
-    svc = vocab_service.VocabSyncService(manifest_url=manifest_url, cache_dir=str(tmp_path / "cache"))
-    result = asyncio.run(svc.sync_vocabularies(timeout_sec=1.0))
-
-    assert result["status"] == "success"
-    assert result["source"] == "remote"
-    assert requested_urls == [(manifest_url, 1.0), (manifest_url.removesuffix("manifest.json") + "it.json", 1.0)]
-    cached = json.loads((tmp_path / "cache" / "it.json").read_text(encoding="utf-8"))
-    assert cached == {"onlyrag": 5.0, "__version__": "2.0.0"}
 
 
 def test_opencv_deskew():

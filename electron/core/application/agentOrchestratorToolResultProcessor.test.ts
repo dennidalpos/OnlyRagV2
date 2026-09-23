@@ -36,6 +36,19 @@ describe('file version recovery', () => {
     })).toBe(false)
   })
 
+  it('leaves a syntax rejection, which never reached the disk, to the edit-loop and no_mutation guards', () => {
+    expect(shouldSpendExecutionRecoveryBudget({
+      outcome: 'rejected',
+      outputForHistory: "[PRE-COMMIT AST VALIDATION ERROR IN src/TaskCard.ts]\nAST Syntax Error: '>' expected. (Line 6:15)",
+      logMessage: "Write File Rejected (AST Syntax Error): AST Syntax Error: '>' expected.",
+    })).toBe(false)
+    expect(shouldSpendExecutionRecoveryBudget({
+      outcome: 'rejected',
+      outputForHistory: 'Path escapes the workspace',
+      logMessage: 'Rejected',
+    })).toBe(true)
+  })
+
   it('requires a read after conflict and clears it only after a successful read', () => {
     const recoveryState: any = { progress: new AgentProgressPolicy() }
     recoveryState.progress.onExecutionFailure('write_file:src/App.tsx:conflict')

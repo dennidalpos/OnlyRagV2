@@ -3,7 +3,6 @@ import https from 'node:https'
 import EventEmitter from 'node:events'
 import type { ClientRequest, IncomingMessage, RequestOptions } from 'node:http'
 import { OllamaRegistryClient } from './ollamaRegistryClient'
-import { httpMetrics } from './httpMetrics'
 
 type MockClientRequest = ClientRequest & {
   setTimeout: ReturnType<typeof vi.fn>
@@ -49,7 +48,6 @@ describe('OllamaRegistryClient Unit Tests', () => {
 
   beforeEach(() => {
     client = new OllamaRegistryClient('https://mock-registry.ollama.ai')
-    httpMetrics.reset()
   })
 
   afterEach(() => {
@@ -78,9 +76,6 @@ describe('OllamaRegistryClient Unit Tests', () => {
     expect(res.success).toBe(true)
     expect(res.statusCode).toBe(200)
     expect(res.digest).toBe(expectedDigest)
-    expect(httpMetrics.snapshot()).toMatchObject([
-      { endpoint: '/v2/manifest', status: 200, errorType: 'none', count: 1 },
-    ])
   })
 
   it('should return success false on HTTP 404', async () => {
@@ -95,9 +90,6 @@ describe('OllamaRegistryClient Unit Tests', () => {
     expect(res.success).toBe(false)
     expect(res.statusCode).toBe(404)
     expect(res.error).toContain('HTTP 404')
-    expect(httpMetrics.snapshot()).toMatchObject([
-      { endpoint: '/v2/manifest', status: 404, errorType: 'http', count: 1 },
-    ])
   })
 
   it('should handle request network errors gracefully', async () => {

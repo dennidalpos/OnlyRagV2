@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { resolveTurnToolPolicy, resolveVersionConflictTurnPolicy } from './turnToolPolicy'
 
 describe('resolveTurnToolPolicy', () => {
+  it('adds the tools a correction directive orders to the edit tool', () => {
+    const rename = resolveTurnToolPolicy({
+      directiveKind: 'verification_failing',
+      editTargetState: 'existing',
+      userTask: 'Fix the app',
+      requiredTools: ['move_file'],
+    })
+    expect(rename.allowedTools).toEqual(expect.arrayContaining(['move_file', 'write_file']))
+
+    const plain = resolveTurnToolPolicy({ directiveKind: 'verification_failing', editTargetState: 'existing', userTask: 'Fix the app' })
+    expect(plain.allowedTools).not.toContain('move_file')
+  })
+
   it('exposes reads for exploration and one edit shape for known targets', () => {
     const exploration = resolveTurnToolPolicy({ directiveKind: 'focus', editTargetState: 'unknown', userTask: 'Understand this module' })
     expect(exploration.allowedTools).toContain('read_file')

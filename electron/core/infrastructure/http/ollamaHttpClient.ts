@@ -2,7 +2,6 @@ import http from 'node:http'
 import { logger } from '../logging/logger'
 import type { RunningModelInfo, OllamaGenerationOptions, OllamaModelMetrics } from '../../../../shared/types'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
-import { httpMetrics } from './httpMetrics'
 import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
 import { resolveOllamaUrl, requestOllama, type OllamaUrl } from './ollamaTransport'
 import { DEFAULT_OLLAMA_HOST, normalizeOllamaHost } from '../../../../shared/domain/ollamaHost'
@@ -63,13 +62,6 @@ export class OllamaHttpClient {
   getRunningModels(customHost?: string): Promise<{ success: boolean; models: RunningModelInfo[]; error?: string }> {
     const urlOpts = this.resolveUrl('/api/ps', customHost)
 
-    const startedAt = Date.now()
-    let recorded = false
-    const record = (status: number, errorType: Parameters<typeof httpMetrics.record>[2]) => {
-      if (recorded) return
-      recorded = true
-      httpMetrics.record('/api/ps', status, errorType, Date.now() - startedAt)
-    }
 
     return new Promise((resolve) => {
       const req = this.request(urlOpts,
@@ -84,7 +76,6 @@ export class OllamaHttpClient {
           res.on('data', (chunk) => { data += chunk })
           res.on('end', () => {
             if (res.statusCode !== 200) {
-              record(res.statusCode || 0, 'http')
               resolve({ success: false, models: [], error: `Ollama HTTP ${res.statusCode}` })
               return
             }
@@ -96,10 +87,8 @@ export class OllamaHttpClient {
                     context_length: typeof model?.context_length === 'number' ? model.context_length : undefined,
                   }))
                 : []
-              record(200, 'none')
               resolve({ success: true, models })
             } catch (err: any) {
-              record(200, 'parse')
               resolve({ success: false, models: [], error: err.message })
             }
           })
@@ -107,13 +96,11 @@ export class OllamaHttpClient {
       )
 
       req.on('error', (err: any) => {
-        record(0, 'network')
         resolve({ success: false, models: [], error: err.message })
       })
 
       req.setTimeout(5000, () => {
         req.destroy()
-        record(0, 'timeout')
         resolve({ success: false, models: [], error: 'Ollama ps query timed out' })
       })
 
@@ -125,13 +112,6 @@ export class OllamaHttpClient {
   /** Internal shared HTTP data path for /api/tags. */
   private fetchRawModelTags(customHost?: string): Promise<RawOllamaTagModel[]> {
     const urlOpts = this.resolveUrl('/api/tags', customHost)
-    const startedAt = Date.now()
-    let recorded = false
-    const record = (status: number, errorType: Parameters<typeof httpMetrics.record>[2]) => {
-      if (recorded) return
-      recorded = true
-      httpMetrics.record('/api/tags', status, errorType, Date.now() - startedAt)
-    }
 
     return new Promise((resolve) => {
       const req = this.request(urlOpts,
@@ -146,20 +126,17 @@ export class OllamaHttpClient {
           res.on('data', (chunk) => { data += chunk })
           res.on('end', () => {
             if (res.statusCode !== 200) {
-              record(res.statusCode || 0, 'http')
               resolve([])
               return
             }
             try {
               const parsed = JSON.parse(data)
-              record(200, 'none')
               if (Array.isArray(parsed?.models)) {
                 resolve(parsed.models)
               } else {
                 resolve([])
               }
             } catch (err: any) {
-              record(200, 'parse')
               logger.log('WARN', 'OllamaClient', `Failed parsing /api/tags JSON: ${err.message}`)
               resolve([])
             }
@@ -168,12 +145,10 @@ export class OllamaHttpClient {
       )
 
       req.on('error', () => {
-        record(0, 'network')
         resolve([])
       })
       req.setTimeout(5000, () => {
         req.destroy()
-        record(0, 'timeout')
         resolve([])
       })
       req.end()
@@ -716,17 +691,10 @@ export class OllamaHttpClient {
     })
 
     return new Promise((resolve) => {
-      const startedAt = Date.now()
       let settled = false
       const finish = (result: OllamaStructuredResponse) => {
         if (settled) return
         settled = true
-        httpMetrics.record(
-          '/api/chat',
-          result.status === 'transport_error' ? 0 : 200,
-          result.status === 'complete' ? 'none' : result.status === 'incomplete' ? 'parse' : 'network',
-          Date.now() - startedAt
-        )
         resolve(result)
       }
       const req = this.request(urlOpts, {

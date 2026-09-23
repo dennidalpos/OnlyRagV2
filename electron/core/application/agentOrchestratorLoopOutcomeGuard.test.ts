@@ -80,7 +80,7 @@ describe('handleLoopDetection — successful vs failed repeats', () => {
   })
 
   it('still abandons the milestone when the repeated command kept failing', async () => {
-    await runStep(installCall, false)
+    // The first run executes; every unchanged rerun of a failed command is blocked before it runs.
     await runStep(installCall, false)
     await runStep(installCall, false)
     await runStep(installCall, false)
@@ -124,9 +124,9 @@ describe('handleLoopDetection — successful vs failed repeats', () => {
     await runStep(installCall, false)
 
     expect(ctx.state.guardEvents).toEqual([
-      { guard: 'loop_exact_repeat', action: 'advise', step: 12 },
-      { guard: 'loop_exact_repeat', action: 'advise', step: 12 },
-      { guard: 'loop_exact_repeat', action: 'force_advance', step: 12 },
+      { guard: 'loop_unchanged_failure', action: 'advise', step: 12 },
+      { guard: 'loop_unchanged_failure', action: 'advise', step: 12 },
+      { guard: 'loop_unchanged_failure', action: 'force_advance', step: 12 },
     ])
   })
 })

@@ -1,40 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { logger } from '../infrastructure/logging/logger'
-import { httpMetrics } from '../infrastructure/http/httpMetrics'
 import { DiagnosticsAppService } from './diagnosticsAppService'
 
 describe('DiagnosticsAppService', () => {
   const service = new DiagnosticsAppService()
 
   beforeEach(() => {
-    httpMetrics.reset()
     logger.clearLogs()
-  })
-
-  it('returns an isolated HTTP metrics snapshot', () => {
-    httpMetrics.record('/health', 200, 'none', 12)
-
-    const firstSnapshot = service.getHttpMetrics()
-    firstSnapshot[0].count = 99
-    firstSnapshot.push({
-      endpoint: '/injected',
-      status: 200,
-      errorType: 'none',
-      count: 1,
-      totalDurationMs: 1,
-      maxDurationMs: 1,
-    })
-
-    expect(service.getHttpMetrics()).toEqual([
-      {
-        endpoint: '/health',
-        status: 200,
-        errorType: 'none',
-        count: 1,
-        totalDurationMs: 12,
-        maxDurationMs: 12,
-      },
-    ])
   })
 
   it('delegates log access and telemetry without changing the IPC-facing contract', () => {

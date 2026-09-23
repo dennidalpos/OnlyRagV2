@@ -26,7 +26,7 @@ Il server FastAPI ascolta su `127.0.0.1:8000`. Route e schemi sono definiti in [
 - Ingestion e re-indicizzazione usano embedding Ollama; in caso di errore possono registrare `status: indexed_fallback`.
 - La ricerca combina retrieval denso per modello, conteggio lessicale sui candidati e RRF, poi un cross-score lessicale locale. Non esiste un indice FTS/BM25 separato.
 - Il Sidecar gestisce LanceDB, OCR RapidOCR/Vision, traduzione PDF/DOCX, export e storico semantico.
-- Il vocabolario si sincronizza all'avvio (sorgente `remote`, `bundled` o `cache`); il fallback `bundled` inizializza atomicamente la cache anche durante un avvio offline.
-- Gli errori non gestiti rispondono `500` con `error_id`; la validazione dei body è Pydantic.
+- Il vocabolario si inizializza all'avvio solo dagli asset inclusi (`bundled`), senza rete; se il manifest non è leggibile resta la cache esistente (`cache`).
+- Ogni errore interno, anche quello intercettato da una route, risponde `500` con `{"detail": "Internal Server Error", "error_id"}`: il dettaglio (che può contenere path locali) resta solo nel log del Sidecar. Solo `400`/`404` di dominio riportano il messaggio. La validazione dei body è Pydantic.
 
 Verifica: `npm run test:sidecar`. Rigenerazione OpenAPI: `npm run generate:openapi`.

@@ -26,7 +26,7 @@ Implementazione: [`sidecar/domain/ingestion.py`](../sidecar/domain/ingestion.py)
 
 ## Traduzione in-place
 
-[`translator.py`](../sidecar/domain/translator.py) traduce batch di run DOCX e blocchi PDF, preservando coordinate e formattazione dove possibile. Per PDF applica redazione del testo originale, scelta font Noto e adattamento della dimensione; lo stream usa NDJSON.
+[`translator.py`](../sidecar/domain/translator.py) traduce batch di run DOCX e blocchi PDF, preservando coordinate e formattazione dove possibile. Per PDF applica redazione del testo originale, scelta font Noto e adattamento della dimensione; lo stream usa NDJSON. Con `task_id` (generato dal Main e registrato nel `taskRunner` come task `translation`) `POST /tasks/cancel` la interrompe tra un batch DOCX o una pagina PDF: lo stream termina con `cancelled` e nessun file di output viene scritto.
 
 ## Dati e lifecycle
 
@@ -36,6 +36,5 @@ Implementazione: [`sidecar/domain/ingestion.py`](../sidecar/domain/ingestion.py)
 - Durante l'avvio il Renderer ripete la diagnostica ogni secondo finché il Sidecar non risponde, poi torna all'intervallo ordinario di 10 secondi. Il primo controllo `offline` non viene quindi mantenuto mentre LanceDB sta ancora inizializzando.
 - Lo stderr del processo viene classificato dal contenuto: le righe `INFO:` di Uvicorn restano informative, mentre `WARNING:`, `ERROR:`, `CRITICAL:` e traceback mantengono una severità operativa.
 - I residui su `:8000` sono reclamati solo se il processo appartiene ai binari autorizzati.
-- Il vocabolario aggiuntivo usa il manifest `sidecar/assets/vocab/manifest.json`: prova prima il repository `master`, risolve i pack relativi allo stesso percorso e aggiorna la cache con sostituzione atomica.
-- Il pacchetto Sidecar include lo stesso manifest e un pack di base. Se rete o manifest remoto non sono disponibili, avvia quindi una cache funzionante dagli asset inclusi invece di dipendere da una cache preesistente.
-- Manifest e pack pubblicati su `origin/master` sono disponibili anche da `raw.githubusercontent.com`; la copia inclusa resta il fallback offline.
+- Il vocabolario aggiuntivo viene solo dagli asset inclusi nel Sidecar (`sidecar/assets/vocab/manifest.json` e i pack che elenca): all'avvio `VocabSyncService` copia nella cache, con sostituzione atomica, i pack la cui versione è cambiata. Nessun accesso di rete; un manifest illeggibile conserva la cache esistente.
+- L'ingestione legge solo file già su disco: `/ingest-path-stream` riceve dal Main un path validato e il Sidecar non copia né riceve i byte del sorgente.

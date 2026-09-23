@@ -2,7 +2,6 @@ import https from 'node:https'
 import crypto from 'node:crypto'
 import { logger } from '../logging/logger'
 import { parseModelTag, type ParsedModelTarget } from '../../domain/ollama/modelUpdateChecker'
-import { httpMetrics } from './httpMetrics'
 
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 5 })
 
@@ -40,20 +39,12 @@ export class OllamaRegistryClient {
 
     const path = `/v2/${encodeURIComponent(target.namespace)}/${encodeURIComponent(target.model)}/manifests/${encodeURIComponent(target.tag)}`
 
-    const startedAt = Date.now()
-    let recorded = false
-    const record = (status: number, errorType: Parameters<typeof httpMetrics.record>[2]) => {
-      if (recorded) return
-      recorded = true
-      httpMetrics.record('/v2/manifest', status, errorType, Date.now() - startedAt)
-    }
 
     return new Promise((resolve) => {
       let url: URL
       try {
         url = new URL(path, this.registryBaseUrl)
       } catch (err: any) {
-        record(0, 'unknown')
         return resolve({ success: false, error: `Invalid registry URL: ${err.message}` })
       }
 
@@ -79,7 +70,6 @@ export class OllamaRegistryClient {
           res.on('end', () => {
             const statusCode = res.statusCode || 0
             if (statusCode !== 200) {
-              record(statusCode, 'http')
               const msg = statusCode === 404
                 ? `Model '${target.namespace}/${target.model}:${target.tag}' not found in registry (HTTP 404)`
                 : `Registry returned HTTP ${statusCode}`
@@ -103,9 +93,7 @@ export class OllamaRegistryClient {
                 statusCode: 200,
                 digest: resolvedDigest,
               })
-              record(200, 'none')
             } catch (err: any) {
-              record(200, 'unknown')
               logger.log('WARN', 'OllamaRegistryClient', `Failed computing manifest digest for ${target.model}: ${err.message}`)
               resolve({
                 success: false,
@@ -118,7 +106,6 @@ export class OllamaRegistryClient {
       )
 
       req.on('error', (err: any) => {
-        record(0, 'network')
         logger.log('WARN', 'OllamaRegistryClient', `Network error querying registry for ${target.model}: ${err.message}`)
         resolve({
           success: false,
@@ -128,7 +115,6 @@ export class OllamaRegistryClient {
 
       req.setTimeout(timeoutMs, () => {
         req.destroy()
-        record(0, 'timeout')
         logger.log('DEBUG', 'OllamaRegistryClient', `Registry manifest request timed out for ${target.model}`)
         resolve({
           success: false,

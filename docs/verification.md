@@ -33,6 +33,7 @@ npm run test:e2e:electron
 - `npm run test:e2e:sidecar-ownership` usa processi Windows reali sulla porta 8000: un listener sconosciuto resta intatto, un marker con PID riutilizzato viene respinto e un processo con identità esatta viene recuperato. Ripete il recupero con `sidecar_dist/sidecar/sidecar.exe` e dati temporanei. Richiede la porta libera e il binario già compilato.
 - `npm run test:live` usa Ollama reale e workspace isolati; richiede il runtime locale e non fa parte del test rapido. Il report di ogni scenario riporta i guard scattati e quello che ha chiuso la run.
 - I test live qualificano uno scenario e un modello specifici: non implicano autonomia generale del coding agent.
+- `gptOssThinking.live.ts` si salta da solo se nessun modello `gpt-oss*` è installato; altrimenti verifica classificazione `level-only`, assenza dell'interruttore Thinking in Settings e separazione del ragionamento con `think: false`.
 
 ## Limiti da non nascondere
 

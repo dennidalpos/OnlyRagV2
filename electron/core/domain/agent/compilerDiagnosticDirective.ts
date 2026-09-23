@@ -1,4 +1,4 @@
-
+import type { SupportedToolName } from './agentTypes'
 
 export interface CompilerDiagnostic {
   file: string
@@ -213,9 +213,40 @@ function extractMissingLocalExportMember(output: string): MissingLocalExportMemb
   return null
 }
 
+/** The bundler refused JSX because the file's extension says plain JavaScript. */
+const JSX_DISABLED = /JSX syntax is disabled|JSX syntax extension is not currently enabled|Unexpected JSX expression/i
+const SCRIPT_FILE_REFERENCE = /([^\s\[\]()'"`]+\.(?:js|mjs|cjs))(?::(\d+))?/g
+
+export interface JsxInScriptFile {
+  file: string
+  line?: number
+  renamedFile: string
+}
+
+/**
+ * JSX written into a `.js` file. tsc and Create React App parse it, but Vite 8/rolldown and
+ * esbuild only enable JSX for `.jsx`/`.tsx`, so no rewrite of the content can fix the build:
+ * the file has to be renamed (live full task run of 2026-09-23, src/App.js).
+ */
+export function extractJsxInScriptFile(output: string): JsxInScriptFile | null {
+  if (!output || !JSX_DISABLED.test(output)) return null
+  for (const match of output.matchAll(SCRIPT_FILE_REFERENCE)) {
+    const file = match[1].replace(/\\/g, '/')
+    if (IN_DEPENDENCY.test(file) || /^(?:file|https?):/i.test(file)) continue
+    return { file, line: match[2] ? Number(match[2]) : undefined, renamedFile: file.replace(/\.[mc]?js$/i, '.jsx') }
+  }
+  return null
+}
+
+/** Tools beyond the file edit that the directive built from this output orders. */
+export function diagnosticFixRequiredTools(output: string): SupportedToolName[] {
+  return extractJsxInScriptFile(output) ? ['move_file'] : []
+}
+
 /** The file the directive built from this output will order written, or null when it orders a command instead. */
 export function diagnosticFixTargetFile(output: string): string | null {
   if (extractSuggestedCommand(output)) return null
+  if (extractJsxInScriptFile(output)) return null
 
   const mismatch = extractExportMismatch(output)
   if (mismatch) {
@@ -241,6 +272,18 @@ export function buildDiagnosticFixDirective(
   /** Export names from a relative module, injected to keep filesystem access out of domain. */
   resolveLocalModuleExports: (importingFile: string, specifier: string) => string[] = () => []
 ): string | null {
+  const jsxInScript = extractJsxInScriptFile(output)
+  if (jsxInScript) {
+    return [
+      `[JSX IN A .js FILE — THIS BUNDLER ONLY PARSES JSX IN .jsx OR .tsx]`,
+      `${jsxInScript.file}${jsxInScript.line ? ` line ${jsxInScript.line}` : ''}: the build refused its JSX because the file extension declares plain JavaScript. The content is not the problem, so rewriting it cannot fix this.`,
+      `Directives:`,
+      `1. Your next tool call MUST be "move_file" with sourcePath "${jsxInScript.file}" and targetPath "${jsxInScript.renamedFile}". Keep the content unchanged.`,
+      `2. Imports without an extension (e.g. "./App") resolve to the renamed file. Only if a file imports "${jsxInScript.file.split('/').pop()}" with its extension, rewrite that import line.`,
+      `3. Then run the build again.`,
+    ].join('\n')
+  }
+
   const all = parseCompilerDiagnostics(output)
   if (all.length === 0) return null
 

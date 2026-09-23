@@ -3,7 +3,11 @@ import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { applyVersionedReadEvidence, describeNonRollbackEffect, isToolExecutionFailure, shouldSpendExecutionRecoveryBudget, terminalOutcomeFor, updateVersionConflictRecovery } from './agentOrchestratorToolResultProcessor'
+import { applyVersionedReadEvidence, describeNonRollbackEffect, isToolExecutionFailure, runToolResultProcessing, shouldSpendExecutionRecoveryBudget, terminalOutcomeFor, updateVersionConflictRecovery } from './agentOrchestratorToolResultProcessor'
+import type { ToolResultProcessingContext } from './agentOrchestratorToolResultTypes'
+import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
+import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
+import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import { packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { resolvePlanDirective } from '../domain/agent/planDirectiveArbiter'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
@@ -194,5 +198,53 @@ describe('refused installs reach the plan directive arbiter', () => {
     const escalated = resolvePlanDirective({ ...base, packagesWithFailedInstall: ['@tailwindcss/react'] })
     expect(escalated.kind).toBe('dependencies_uninstallable')
     expect(escalated.blockDirective).toContain('@tailwindcss/react')
+  })
+})
+
+describe('plan follows a successful move_file', () => {
+  async function processMove(workspace: string, planner: GoalDecompositionPlanner, outcome: 'success' | 'failure') {
+    let persisted = 0
+    await runToolResultProcessing({
+      parsedTool: { tool: 'move_file', parameters: { sourcePath: path.join(workspace, 'src', 'App.js'), targetPath: 'src/App.jsx' } },
+      toolRes: { outcome, outputForHistory: outcome === 'success' ? 'Moved src/App.js to src/App.jsx' : 'ENOENT', logMessage: 'move' },
+      toolStartedAtMs: Date.now(),
+      stepCount: 8,
+      workspacePath: workspace,
+      flags: { hasFileMutations: false, hasVerifiedBuild: false },
+      sessionChangedFiles: new Map(),
+      goalPlanner: planner,
+      episodicCompactor: { recordStep: () => {} },
+      executionGuard: new TransactionalExecutionGuard(workspace),
+      loopDetector: new AgentActionLoopDetector(2),
+      recoveryState: { guardEvents: [], progress: new AgentProgressPolicy() },
+      sessionId: 'session-move-remap',
+      isSessionActive: () => false,
+      rendererEvents: null,
+      persistCurrentState: async () => { persisted += 1 },
+      emitLog: () => {},
+      emitDone: () => {},
+      finalizeSession: () => {},
+      closeApplicationRun: async () => ({ outcome: 'continue' }),
+      settings: { enableCodingAgentDebugLog: false },
+    } as unknown as ToolResultProcessingContext)
+    return persisted
+  }
+
+  it('remaps milestones to the renamed file and persists the plan', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-move-remap-'))
+    try {
+      fs.mkdirSync(path.join(workspace, 'src'))
+      fs.writeFileSync(path.join(workspace, 'src', 'App.jsx'), 'export default () => <div/>')
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan([{ id: 'm-6', title: 'Render the list', status: 'pending', filePaths: ['src/App.js'] }])
+
+      expect(await processMove(workspace, planner, 'failure')).toBe(0)
+      expect(planner.getMilestones()[0].filePaths).toEqual(['src/App.js'])
+
+      expect(await processMove(workspace, planner, 'success')).toBeGreaterThan(0)
+      expect(planner.getMilestones()[0].filePaths).toEqual(['src/App.jsx'])
+    } finally {
+      fs.rmSync(workspace, { recursive: true, force: true })
+    }
   })
 })

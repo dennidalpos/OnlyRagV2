@@ -9,11 +9,11 @@
 
 ## Verified commands
 
-Run from repository root in PowerShell. The E2E commands, static checks and `npm run test:live` (10/11 agent scenarios passed; the full task run is tracked as MILESTONE-RENAME-REMAP-01; `gptOssThinking.live.ts` 3/3 with `gpt-oss:20b`) were run on 2026-09-23.
+Run from repository root in PowerShell. The E2E commands, static checks and `npm run test:live` (10/11 agent scenarios passed; the full task run verifies 7/7 milestones but closes `unverifiable`, tracked as FULLTASK-CLOSURE-EVIDENCE-01; `gptOssThinking.live.ts` 3/3 with `gpt-oss:20b`) were run on 2026-09-23.
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (262 files, 2069 tests; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Fast suite | `npm run test:fast` (262 files, 2073 tests; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
 | Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (143 tests) |
 | Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 4 guard scenarios) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |

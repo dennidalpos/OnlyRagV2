@@ -220,7 +220,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     )
 
     expect(res.success).toBe(false)
-    expect(res.completionStatus).toBe('unverifiable')
+    expect(res.completionStatus).toBe('blocked')
     expect(res.summary).toContain('execution recovery stopped after 2/2 failures')
     expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
   })
@@ -312,7 +312,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
     expect(res.success).toBe(false)
-    expect(res.completionStatus).toBe('unverifiable')
+    expect(res.completionStatus).toBe('blocked')
   })
 
   it('does not request another model turn after a command returns an uncertain effect', async () => {
@@ -807,8 +807,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       const res = await runAgentOrchestratorLoop({ userTask: 'Create app.js', agentMode: 'auto', workspacePath: tempDir }, null)
 
       expect(res.success).toBe(false)
-      expect(res.completionStatus).toBe('unverifiable')
-      expect(res.summary).toContain('NON VERIFICABILE')
+      expect(res.completionStatus).toBe('blocked')
+      expect(res.summary).toContain('BLOCCATO')
     })
 
     it('runs application verification even when finish was never reached', async () => {

@@ -490,6 +490,7 @@ try {
   ])
   assert.equal(silence.done.success, false)
   assert.deepEqual(silence.stop, ['model_silence'], describe(silence))
+  assert.equal(silence.done.completionStatus, 'blocked')
   assert.equal(silence.guardEvents.filter((event) => event.guard === 'model_silence' && event.action === 'advise').length, 2)
 
   console.log('[guard 2/4] the same rejected tool call')
@@ -497,6 +498,7 @@ try {
   const rejected = await runGuardScenario('rejected-tool', [escapingWrite, escapingWrite, escapingWrite])
   assert.equal(rejected.done.success, false)
   assert.deepEqual(rejected.stop, ['execution_budget'], describe(rejected))
+  assert.equal(rejected.done.completionStatus, 'blocked')
   assert(!fs.existsSync(path.join(path.dirname(scratchPath), 'outside-scratch.txt')))
 
   console.log('[guard 3/4] the same successful write repeated')
@@ -507,6 +509,7 @@ try {
   assert.equal(repeated.done.success, false)
   assert(repeated.guardEvents.some((event) => event.guard === 'redundant_success'), describe(repeated))
   assert.deepEqual(repeated.stop, ['step_budget'], describe(repeated))
+  assert.equal(repeated.done.completionStatus, 'blocked')
 
   console.log('[guard 4/4] writes that change nothing')
   const unchangedWrites = Array.from({ length: 14 }, (_, index) => writeCall(`guard-fixtures/note-${index + 1}.txt`, `note ${index + 1}\n`))
@@ -515,6 +518,7 @@ try {
   })
   assert.equal(unchanged.done.success, false)
   assert.deepEqual(unchanged.stop, ['no_mutation'], describe(unchanged))
+  assert.equal(unchanged.done.completionStatus, 'blocked')
 
   console.log('[PASS] 8 Electron Agent Coding reliability scenarios and 4 guard scenarios passed.')
 } finally {

@@ -1,4 +1,4 @@
-import { extractDeliverablePaths, AWAITING_VERIFICATION_MARKER } from './milestoneDeliverableResolver'
+import { extractDeliverablePaths, resolveDeclaredFilePaths, AWAITING_VERIFICATION_MARKER } from './milestoneDeliverableResolver'
 import { selectPromptMilestoneWindow } from './planPromptWindow'
 import { buildActiveInterventionActions } from './activeInterventionActions'
 import type { PlanMilestone } from './planMilestone'
@@ -24,6 +24,30 @@ export function isCompletionMilestoneTitle(input: string | Pick<PlanMilestone, '
   if (typeof input !== 'string' && input.filePaths?.length) return false
   if (!/finish|completamento|arresto|riepilogo|final report/i.test(title || '')) return false
   return extractDeliverablePaths(title || '').length === 0
+}
+
+function normalizePlanPath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Maps `filePath` through a move of `source` (a file, or a directory prefix) to `target`. */
+function remapPlanPath(filePath: string, source: string, target: string): string | undefined {
+  const normalized = normalizePlanPath(filePath)
+  const lower = normalized.toLowerCase()
+  const sourceLower = source.toLowerCase()
+  if (lower === sourceLower) return target
+  if (lower.startsWith(`${sourceLower}/`)) return `${target}${normalized.slice(source.length)}`
+  return undefined
+}
+
+/** Rewrites whole path tokens only: `src/App.js` never matches inside `src/App.jsx` or `lib/src/App.js`. */
+function remapPathTokens(text: string, source: string, target: string): string {
+  const pattern = new RegExp(`(^|[\\s'"\`(]|\\./)${escapeRegExp(source)}(?=$|[\\s'"\`),;:/]|\\.(?:\\s|$))`, 'gi')
+  return text.replace(pattern, (_match, prefix: string) => `${prefix}${target}`)
 }
 
 export interface MilestoneTransition {
@@ -107,6 +131,49 @@ export class GoalDecompositionPlanner {
       })
     }
     return true
+  }
+
+  /**
+   * Follows a successful move_file: milestones that name the moved file (or a file under a moved
+   * directory) now name its new path, so a rename ordered by a directive (e.g. JSX in src/App.js)
+   * does not leave milestones pointing at a path that can never be delivered. File evidence keeps
+   * its hash because a move preserves content. Returns the ids of the milestones it rewrote.
+   */
+  public remapFilePath(sourcePath: string, targetPath: string): string[] {
+    const source = normalizePlanPath(sourcePath)
+    const target = normalizePlanPath(targetPath)
+    if (!source || !target || source.toLowerCase() === target.toLowerCase()) return []
+
+    const remapped: string[] = []
+    for (const milestone of this.milestones) {
+      const declared = resolveDeclaredFilePaths(milestone)
+      const nextPaths = declared.map((filePath) => remapPlanPath(filePath, source, target) ?? filePath)
+      const pathsChanged = nextPaths.some((filePath, index) => filePath !== declared[index])
+
+      let evidenceChanged = false
+      let nextEvidence: Record<string, string> | undefined
+      if (milestone.fileEvidence) {
+        nextEvidence = {}
+        for (const [filePath, hash] of Object.entries(milestone.fileEvidence)) {
+          const mapped = remapPlanPath(filePath, source, target)
+          if (mapped) evidenceChanged = true
+          nextEvidence[mapped ?? filePath] = hash
+        }
+      }
+      if (!pathsChanged && !evidenceChanged) continue
+
+      if (pathsChanged) milestone.filePaths = [...new Set(nextPaths)]
+      if (evidenceChanged) milestone.fileEvidence = nextEvidence
+      milestone.title = remapPathTokens(milestone.title, source, target)
+      if (milestone.verificationCommand) {
+        milestone.verificationCommand = remapPathTokens(milestone.verificationCommand, source, target)
+      }
+      if (milestone.acceptanceCriteria) {
+        milestone.acceptanceCriteria = milestone.acceptanceCriteria.map((criterion) => remapPathTokens(criterion, source, target))
+      }
+      remapped.push(milestone.id)
+    }
+    return remapped
   }
 
   public isAllVerified(): boolean {

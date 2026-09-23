@@ -285,6 +285,23 @@ describe('application-owned agent closure', () => {
     expect(emitLog).toHaveBeenCalledWith('info', 'Diagnostica sessione: blocked', expect.stringContaining('Guard: loop_exact_repeat, no_mutation(stop)'), expect.anything())
   })
 
+  it('closes a guard-stopped run as blocked even without an operational plan or failing check', async () => {
+    vi.mocked(runProjectVerification).mockResolvedValue({
+      hasVerificationCommand: true,
+      status: 'verified',
+      passed: true,
+      command: 'npm run build',
+      evidenceLevel: 'structural',
+    })
+    const { ctx, emitDone } = makeContext({ milestoneStatus: 'verified' })
+
+    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'guard_stop', guard: 'execution_budget', reason: 'Execution budget exhausted.' })
+
+    expect(outcome).toMatchObject({ outcome: 'closed', result: { success: false, completionStatus: 'blocked' } })
+    if (outcome.outcome === 'closed') expect(outcome.result.summary).toContain('Run fermato dal guard "execution_budget"')
+    expect(emitDone).toHaveBeenCalledWith(false, expect.any(String), 'blocked', expect.anything())
+  })
+
   it('allows only bounded correction rounds when finish exposes a failing check', async () => {
     vi.mocked(runProjectVerification).mockResolvedValue({
       hasVerificationCommand: true,

@@ -301,6 +301,13 @@ export async function closeAgentRunFromEvidence(
     evidence = 'Il progetto non espone un controllo comportamentale eseguibile; il risultato non è stato dichiarato funzionante.'
   }
 
+  // A safeguard ended the run before the model did: whatever the evidence, the work was cut off,
+  // so it is never reported (or published) like an honest finish.
+  if (request.guard && status !== 'blocked') {
+    status = 'blocked'
+    evidence = `Run fermato dal guard "${request.guard}". ${evidence}`
+  }
+
   // Legacy plans may still contain a synthetic “invoke finish” milestone. It is control flow,
   // not user work: close it here so it cannot survive as artificial debt in the next session.
   for (const milestone of ctx.goalPlanner.getMilestones()) {

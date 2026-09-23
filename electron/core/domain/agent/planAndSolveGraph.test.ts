@@ -104,3 +104,49 @@ describe('GoalDecompositionPlanner', () => {
     expect(prompt).toContain('19 later milestones omitted from this turn; retained in canonical state')
   })
 })
+
+describe('GoalDecompositionPlanner.remapFilePath', () => {
+  // Full task run 2026-09-23: a JSX directive renamed src/App.js -> src/App.jsx, but m-6/m-7 kept
+  // naming src/App.js, so they could never be delivered and the run ended 0/7.
+  it('moves declared paths, file evidence and path tokens to the renamed file', () => {
+    const planner = new GoalDecompositionPlanner()
+    planner.initializePlan([
+      {
+        id: 'm-6',
+        title: 'Render the list in src/App.js.',
+        status: 'verified',
+        filePaths: ['src/App.js', 'src/index.js'],
+        fileEvidence: { 'src/App.js': 'sha256:aaa', 'src/index.js': 'sha256:bbb' },
+        acceptanceCriteria: ['src/App.js renders <TodoList/>'],
+        verificationCommand: 'node --check ./src/App.js',
+      },
+      { id: 'm-7', title: 'Style the header in src/App.js', status: 'pending' },
+      { id: 'm-8', title: 'Keep src/App.jsx.bak and lib/src/App.js untouched', status: 'pending', filePaths: ['src/App.jsx.bak'] },
+    ])
+
+    expect(planner.remapFilePath('src\\App.js', './src/App.jsx')).toEqual(['m-6', 'm-7'])
+
+    const [m6, m7, m8] = planner.getMilestones()
+    expect(m6.filePaths).toEqual(['src/App.jsx', 'src/index.js'])
+    expect(m6.fileEvidence).toEqual({ 'src/App.jsx': 'sha256:aaa', 'src/index.js': 'sha256:bbb' })
+    expect(m6.title).toBe('Render the list in src/App.jsx.')
+    expect(m6.acceptanceCriteria).toEqual(['src/App.jsx renders <TodoList/>'])
+    expect(m6.verificationCommand).toBe('node --check ./src/App.jsx')
+    expect(m6.status).toBe('verified')
+    expect(m7.filePaths).toEqual(['src/App.jsx'])
+    expect(m7.title).toBe('Style the header in src/App.jsx')
+    expect(m8.title).toBe('Keep src/App.jsx.bak and lib/src/App.js untouched')
+    expect(m8.filePaths).toEqual(['src/App.jsx.bak'])
+  })
+
+  it('remaps files under a moved directory and ignores no-op moves', () => {
+    const planner = new GoalDecompositionPlanner()
+    planner.initializePlan([
+      { id: 'm-1', title: 'Create components', status: 'pending', filePaths: ['src/components/List.tsx', 'src/main.tsx'] },
+    ])
+
+    expect(planner.remapFilePath('src/main.tsx', './src/main.tsx')).toEqual([])
+    expect(planner.remapFilePath('src/components/', 'src/ui')).toEqual(['m-1'])
+    expect(planner.getMilestones()[0].filePaths).toEqual(['src/ui/List.tsx', 'src/main.tsx'])
+  })
+})

@@ -195,6 +195,22 @@ function resolvedMutationPaths(ctx: ToolResultProcessingContext, isToolFailure: 
   return []
 }
 
+/** Keeps milestone deliverables on the file a successful move_file produced (a rename ordered by a
+ *  compiler directive must not leave milestones naming a path that no longer exists). */
+function remapPlanAfterMove(ctx: ToolResultProcessingContext, isToolFailure: boolean): string[] {
+  if (isToolFailure || ctx.parsedTool.tool !== 'move_file' || !ctx.workspacePath) return []
+  const parameters = ctx.parsedTool.parameters
+  const toWorkspaceRelative = (value: unknown) => {
+    if (typeof value !== 'string' || !value) return undefined
+    const relative = path.relative(ctx.workspacePath!, path.resolve(ctx.workspacePath!, value))
+    return relative && !relative.startsWith('..') && !path.isAbsolute(relative) ? relative : undefined
+  }
+  const source = toWorkspaceRelative(parameters.sourcePath || parameters.filePath)
+  const target = toWorkspaceRelative(parameters.targetPath || parameters.destination)
+  if (!source || !target) return []
+  return ctx.goalPlanner.remapFilePath(source, target)
+}
+
 /** Post-processes a tool execution result: change-metrics IPC, stagnation circuit breaker (which may end the session), episodic recording, mutation/verification bookkeeping (see agentOrchestratorCircuitBreakerAndVerification.ts), and the final tool-result log lin */
 export async function runToolResultProcessing(ctx: ToolResultProcessingContext): Promise<ToolResultProcessingOutcome> {
   const { toolRes, parsedTool } = ctx
@@ -283,6 +299,16 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     ...resolvedMutationPaths(ctx, isToolFailure),
   ])
   trackVerification(ctx, isToolFailure)
+
+  const remappedMilestones = remapPlanAfterMove(ctx, isToolFailure)
+  if (remappedMilestones.length > 0) {
+    ctx.emitLog('info', `Piano aggiornato dopo lo spostamento: ${remappedMilestones.join(', ')} ora puntano a ${String(parsedTool.parameters.targetPath || parsedTool.parameters.destination)}.`, undefined, {
+      category: 'system_alert',
+      toolName: parsedTool.tool,
+      target: targetParam,
+    })
+    await ctx.persistCurrentState()
+  }
 
   const toolName = parsedTool.tool
   let category: AgentLogEntry['category'] = 'tool_execution'

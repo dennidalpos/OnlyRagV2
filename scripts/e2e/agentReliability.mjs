@@ -372,7 +372,8 @@ try {
     [
       'verify',
       'Verifica',
-      { type: 'tool', name: 'write_file', arguments: { filePath: 'verify-phase.txt', content: 'temporary' } },
+      // The next model call is held so the run is still active when the cancellation arrives.
+      [{ type: 'tool', name: 'write_file', arguments: { filePath: 'verify-phase.txt', content: 'temporary' } }, { type: 'hold' }],
       {
         userTask: 'Create verify-phase.txt with the provided content.',
         initialUserTask: 'Create verify-phase.txt with the provided content.',
@@ -383,7 +384,7 @@ try {
   for (const [label, phase, behavior, overrides] of phaseCases) {
     console.log(`  - ${label}`)
     serverState.chatBehaviors.length = 0
-    serverState.chatBehaviors.push(behavior)
+    serverState.chatBehaviors.push(...[behavior].flat())
     const runIdentity = identity(`cancel-${label}`, scratchPath)
     await startTask(page, runIdentity, { ...standaloneRun, ...overrides })
     await waitForStep(page, runIdentity.runId, phase)
@@ -448,7 +449,74 @@ try {
   )
   assert(restoredLog)
 
-  console.log('[PASS] 8 Electron Agent Coding reliability scenarios passed.')
+  // The reliability scenarios above must finish without any safeguard stopping them.
+  const reliabilityDone = await page.evaluate(() => window.__onlyragE2E.done)
+  const reliabilityGuards = reliabilityDone.flatMap((event) => event.evidence?.guardEvents || [])
+  console.log(`  reliability guards: ${reliabilityGuards.map((event) => `${event.guard}:${event.action}`).join(' ') || 'none'}`)
+  const unexpectedStops = reliabilityDone.flatMap((event) => (event.evidence?.guardEvents || []).filter((guardEvent) => guardEvent.action === 'stop'))
+  assert.deepEqual(unexpectedStops, [], `Reliability scenarios were stopped by a guard: ${JSON.stringify(unexpectedStops)}`)
+
+  const runGuardScenario = async (label, behaviors, overrides = {}) => {
+    serverState.chatBehaviors.length = 0
+    serverState.chatBehaviors.push(...behaviors)
+    const runIdentity = identity(`guard-${label}`, scratchPath)
+    await startTask(page, runIdentity, {
+      workspacePath: scratchPath,
+      isStandaloneMode: true,
+      agentMode: 'auto',
+      userTask: 'Update the guard fixture files.',
+      initialUserTask: 'Update the guard fixture files.',
+      ...overrides,
+    })
+    const done = await waitForDone(page, runIdentity.runId)
+    await waitForQueueIdle(page)
+    serverState.chatBehaviors.length = 0
+    const guardEvents = done.evidence?.guardEvents || []
+    const logs = await page.evaluate((runId) => window.__onlyragE2E.logs.filter((event) => event.runId === runId).map((event) => event.message), runIdentity.runId)
+    console.log(`  guards: ${guardEvents.map((event) => `${event.guard}:${event.action}@${event.step}`).join(' ') || 'none'} -> ${done.completionStatus}`)
+    return { done, guardEvents, logs, stop: guardEvents.filter((event) => event.action === 'stop').map((event) => event.guard) }
+  }
+  const writeCall = (filePath, content) => ({ type: 'tool', name: 'write_file', arguments: { filePath, content } })
+  const fixtureDir = path.join(scratchPath, 'guard-fixtures')
+  fs.mkdirSync(fixtureDir, { recursive: true })
+  for (let index = 1; index <= 14; index++) fs.writeFileSync(path.join(fixtureDir, `note-${index}.txt`), `note ${index}\n`, 'utf8')
+  const describe = (scenario) => JSON.stringify({ events: scenario.guardEvents, logs: scenario.logs })
+
+  console.log('[guard 1/4] prose-only replies while work is open')
+  const silence = await runGuardScenario('silence', [
+    { type: 'prose', content: 'I will think about it.' },
+    { type: 'prose', content: 'Still thinking.' },
+    { type: 'prose', content: 'Nothing to do.' },
+  ])
+  assert.equal(silence.done.success, false)
+  assert.deepEqual(silence.stop, ['model_silence'], describe(silence))
+  assert.equal(silence.guardEvents.filter((event) => event.guard === 'model_silence' && event.action === 'advise').length, 2)
+
+  console.log('[guard 2/4] the same rejected tool call')
+  const escapingWrite = writeCall('../outside-scratch.txt', 'escape')
+  const rejected = await runGuardScenario('rejected-tool', [escapingWrite, escapingWrite, escapingWrite])
+  assert.equal(rejected.done.success, false)
+  assert.deepEqual(rejected.stop, ['execution_budget'], describe(rejected))
+  assert(!fs.existsSync(path.join(path.dirname(scratchPath), 'outside-scratch.txt')))
+
+  console.log('[guard 3/4] the same successful write repeated')
+  const sameWrite = writeCall('guard-fixtures/repeated.txt', 'same content\n')
+  const repeated = await runGuardScenario('repeated-write', Array.from({ length: 12 }, () => sameWrite), {
+    capabilityProfile: { allowTerminalExecution: true, allowFileModifications: true, capabilityPolicyMode: 'network-approved', maxToolCallSteps: 10 },
+  })
+  assert.equal(repeated.done.success, false)
+  assert(repeated.guardEvents.some((event) => event.guard === 'redundant_success'), describe(repeated))
+  assert.deepEqual(repeated.stop, ['step_budget'], describe(repeated))
+
+  console.log('[guard 4/4] writes that change nothing')
+  const unchangedWrites = Array.from({ length: 14 }, (_, index) => writeCall(`guard-fixtures/note-${index + 1}.txt`, `note ${index + 1}\n`))
+  const unchanged = await runGuardScenario('no-mutation', unchangedWrites, {
+    capabilityProfile: { allowTerminalExecution: true, allowFileModifications: true, capabilityPolicyMode: 'network-approved', maxToolCallSteps: 30 },
+  })
+  assert.equal(unchanged.done.success, false)
+  assert.deepEqual(unchanged.stop, ['no_mutation'], describe(unchanged))
+
+  console.log('[PASS] 8 Electron Agent Coding reliability scenarios and 4 guard scenarios passed.')
 } finally {
   releasePendingResponses()
   if (application) await application.close().catch(() => {})

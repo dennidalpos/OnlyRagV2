@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
 import stripAnsi from 'strip-ansi'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 
 export interface ActiveTask {
   id: string

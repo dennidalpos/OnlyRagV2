@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserWindow } from 'electron'
+import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import { SkillInstallApprovalService } from './skillInstallApprovalService'
 
 const identity = { runId: 'run:1', conversationId: 'c-1', planRevisionId: 'p-1', workspaceId: 'workspace:C:/w' }
 const candidate = { skillName: 'lint', skillDescription: 'Lint helper', hubName: 'curated', score: 9 }
 
-function fakeWindow(sent: Array<{ requestId: string }>): BrowserWindow {
+function fakeWindow(sent: Array<{ requestId: string }>): RendererEventSink {
   return {
-    isDestroyed: () => false,
-    webContents: { send: (_channel: string, payload: { requestId: string }) => sent.push(payload) },
-  } as unknown as BrowserWindow
+    isAvailable: () => true,
+    send: (_channel, payload) => sent.push(payload as { requestId: string }),
+  }
 }
 
 describe('SkillInstallApprovalService', () => {

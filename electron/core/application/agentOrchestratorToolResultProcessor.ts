@@ -1,4 +1,5 @@
-import fs from 'node:fs'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
+import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import path from 'node:path'
 import type { AgentToolCall, AgentLogEntry } from '../domain/agent/agentTypes'
 import type { ClassifiedToolExecutionResult } from './agentToolExecutorService'
@@ -10,7 +11,7 @@ import {
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { runCircuitBreaker, recordMutationSideEffects, recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
-import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recordRecoveryFailure, recoveryStopDiagnostic } from '../domain/agent/recoveryBudget'
+import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recoveryStopDiagnostic } from '../domain/agent/recoveryBudget'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { redactSecrets } from '../../logRedactor'
 
@@ -59,7 +60,7 @@ export function updateVersionConflictRecovery(ctx: Pick<ToolResultProcessingCont
     ctx.recoveryState.versionedReadEvidence = { filePath, contentHash: version }
     if (ctx.recoveryState.pendingVersionConflictReadPath && sameFilePath(filePath, ctx.recoveryState.pendingVersionConflictReadPath)) {
       ctx.recoveryState.pendingVersionConflictReadPath = undefined
-      ctx.recoveryState.executionRecoveryFailure = undefined
+      ctx.recoveryState.progress.clearExecutionFailures()
     }
     return { changed: true }
   }
@@ -139,8 +140,8 @@ function emitChangeMetrics(ctx: ToolResultProcessingContext) {
     totalAdditions += entry.additions
     totalDeletions += entry.deletions
   }
-  if (ctx.isSessionActive() && ctx.targetWindow && !ctx.targetWindow.isDestroyed()) {
-    ctx.targetWindow.webContents.send('agent:change-metrics', {
+  if (ctx.isSessionActive() && ctx.rendererEvents?.isAvailable()) {
+    ctx.rendererEvents.send('agent:change-metrics', {
       ...ctx.runIdentity,
       filesTouched: ctx.sessionChangedFiles.size,
       additions: totalAdditions,
@@ -150,14 +151,14 @@ function emitChangeMetrics(ctx: ToolResultProcessingContext) {
 }
 
 function emitWorkspaceFileVersions(ctx: ToolResultProcessingContext, filePaths: Array<string | undefined>): void {
-  if (!ctx.isSessionActive() || !ctx.targetWindow || ctx.targetWindow.isDestroyed()) return
+  if (!ctx.isSessionActive() || !ctx.rendererEvents?.isAvailable()) return
 
   for (const filePath of new Set(filePaths.filter((value): value is string => Boolean(value)))) {
     try {
-      const exists = fs.existsSync(filePath)
-      if (exists && !fs.statSync(filePath).isFile()) continue
-      const contentHash = exists ? contentVersion(fs.readFileSync(filePath, 'utf-8')) : undefined
-      ctx.targetWindow.webContents.send('workspace:file-version', {
+      const exists = documentIoRepository.exists(filePath)
+      if (exists && !documentIoRepository.isFile(filePath)) continue
+      const contentHash = exists ? contentVersion(documentIoRepository.readText(filePath)) : undefined
+      ctx.rendererEvents.send('workspace:file-version', {
         ...ctx.runIdentity,
         filePath,
         contentHash,
@@ -207,8 +208,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
 
   if (isToolFailure && shouldSpendExecutionRecoveryBudget(toolRes)) {
     const signature = `${parsedTool.tool}:${targetParam || ''}:${toolRes.logMessage.toLowerCase()}`
-    const decision = recordRecoveryFailure(ctx.recoveryState.executionRecoveryFailure, signature)
-    ctx.recoveryState.executionRecoveryFailure = decision.state
+    const decision = ctx.recoveryState.progress.onExecutionFailure(signature)
     if (toolRes.effectOutcome === 'uncertain' || decision.action === 'stop') {
       const reason = toolRes.effectOutcome === 'uncertain'
         ? `Effetto incerto dopo "${parsedTool.tool}": l'operazione non viene ripetuta automaticamente.`
@@ -228,21 +228,23 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
       })
       const closure = await ctx.closeApplicationRun({
         trigger: 'guard_stop',
+        guard: 'execution_budget',
         reason,
         modelSummary: toolRes.outputForHistory,
       })
       return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
     }
+    recordGuardEvent(ctx.recoveryState.guardEvents, 'execution_budget', 'advise', ctx.stepCount)
     ctx.emitLog('info', `Recupero esecuzione ${decision.state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}: correzione richiesta.`, toolRes.logDetail, {
       category: 'system_alert',
       toolName: parsedTool.tool,
       target: targetParam,
     })
   } else if (!isToolFailure && (isMutating || ['run_command', 'run_tests', 'ensure_tool'].includes(parsedTool.tool))) {
-    ctx.recoveryState.executionRecoveryFailure = undefined
+    ctx.recoveryState.progress.clearExecutionFailures()
   }
 
-  const breakerOutcome = await runCircuitBreaker(ctx, isMutating, isToolFailure)
+  const breakerOutcome = await runCircuitBreaker(ctx, isMutating)
   if (breakerOutcome) return breakerOutcome
 
   ctx.episodicCompactor.recordStep(

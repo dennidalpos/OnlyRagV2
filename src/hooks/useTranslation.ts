@@ -89,19 +89,20 @@ export function extractPageMarkdown(fullMarkdown: string, pageNumber: number): s
   return fullMarkdown
 }
 
-export function useDocumentTranslation(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
+const isLayoutTranslatable = (doc: IngestedDocument) => doc.fileType === 'pdf' || doc.fileType === 'docx'
+
+/**
+ * State shared by the Markdown and the layout-preserving translators: document selection, language pair,
+ * the cross-module task lock, and the model/context/thinking options resolved from settings.
+ */
+function useTranslationBase(settings: AppSettings | undefined, diagnostics: DiagnosticsData | null | undefined, acceptsDocument?: (doc: IngestedDocument) => boolean) {
   const { t } = useI18n()
   const { metrics: modelMetrics } = useOllamaModelMetrics(settings?.ollamaHost)
   const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics || null))
-  const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
   const [sourceLang, setSourceLang] = useState('Italian')
   const [targetLang, setTargetLang] = useState('English')
-  const [translatedMarkdown, setTranslatedMarkdown] = useState('')
   const [isTranslating, setIsTranslating] = useState(false)
-  const [isTranslationComplete, setIsTranslationComplete] = useState(false)
-  const { generationState, trackOperation } = useOllamaGenerationState()
-  const activeStreamIdRef = useRef<string | null>(null)
 
   // Mirrors isTranslating into the cross-module task lock so the coding agent/ingestion module can block starting their own task while a translation is mid-flight (see globalTaskLock.ts).
   useEffect(() => {
@@ -109,6 +110,65 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     acquireGlobalTaskLock('translation')
     return () => releaseGlobalTaskLock('translation')
   }, [isTranslating])
+
+  const acceptsDocumentRef = useRef(acceptsDocument)
+  const handleDocsUpdated = useCallback((docs: IngestedDocument[]) => {
+    const accepted = acceptsDocumentRef.current ? docs.filter(acceptsDocumentRef.current) : docs
+    setSelectedDoc((prev) => (prev && accepted.find((d) => d.id === prev.id)) || accepted[0] || null)
+  }, [])
+
+  const { documents: allDocuments, refetchDocuments: fetchDocuments } = useIngestedDocuments({ onDocsUpdated: handleDocsUpdated })
+  const documents = acceptsDocument ? allDocuments.filter(acceptsDocument) : allDocuments
+
+  const handleSwapLanguages = () => {
+    setSourceLang(targetLang)
+    setTargetLang(sourceLang)
+  }
+
+  /** Message explaining why another module's running task blocks translation, or null when translation may start. */
+  const crossModuleBlockMessage = (): string | null => {
+    const busyModule = peekGlobalTaskLock()
+    if (!busyModule || busyModule === 'translation') return null
+    return t('common.crossModuleTaskBlocked', { module: t(busyModule === 'coding' ? 'common.moduleNameCoding' : 'common.moduleNameIngestion') })
+  }
+
+  /** Model, context window and thinking flag for the configured translation model; null when no model is configured. */
+  const resolveGenerationOptions = (): { model: string; numCtx: number; think: boolean } | null => {
+    const model = settings?.translationModel || settings?.defaultModel
+    if (!model) return null
+    return {
+      model,
+      numCtx: resolveModelContextLength(model, settings?.modelContextLengths, hardwareDefault, modelMetrics[model]?.contextLength),
+      think: resolveOllamaThinkingPreference(model, settings || {}, modelMetrics).think,
+    }
+  }
+
+  return {
+    t,
+    documents,
+    fetchDocuments,
+    selectedDoc,
+    setSelectedDoc,
+    sourceLang,
+    setSourceLang,
+    targetLang,
+    setTargetLang,
+    handleSwapLanguages,
+    isTranslating,
+    setIsTranslating,
+    crossModuleBlockMessage,
+    resolveGenerationOptions,
+  }
+}
+
+export function useDocumentTranslation(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
+  const base = useTranslationBase(settings, diagnostics)
+  const { t, selectedDoc, sourceLang, targetLang, isTranslating, setIsTranslating, setSelectedDoc } = base
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
+  const [translatedMarkdown, setTranslatedMarkdown] = useState('')
+  const [isTranslationComplete, setIsTranslationComplete] = useState(false)
+  const { generationState, trackOperation } = useOllamaGenerationState()
+  const activeStreamIdRef = useRef<string | null>(null)
 
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0)
   const [totalChunks, setTotalChunks] = useState(0)
@@ -166,23 +226,6 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     })
   }
 
-  const handleDocsUpdated = useCallback((docs: IngestedDocument[]) => {
-    setSelectedDoc((prev) => {
-      if (!prev) return docs.length > 0 ? docs[0] : null
-      return docs.find((d) => d.id === prev.id) || (docs.length > 0 ? docs[0] : null)
-    })
-  }, [])
-
-  const { documents, refetchDocuments: fetchDocuments } = useIngestedDocuments({
-    onDocsUpdated: handleDocsUpdated,
-  })
-
-  const handleSwapLanguages = () => {
-    const prevSource = sourceLang
-    setSourceLang(targetLang)
-    setTargetLang(prevSource)
-  }
-
   const handleStopTranslation = useCallback(async () => {
     abortTranslationRef.current = true
     const operationId = activeStreamIdRef.current
@@ -198,16 +241,22 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     setIsTranslating(false)
   }, [trackOperation])
 
+  const showTranslationError = (message: string) => {
+    setTranslationError(message)
+    setTimeout(() => setTranslationError(null), 5000)
+  }
+
   const handleStartTranslation = async () => {
     if (!selectedDoc) return
 
-    const busyModule = peekGlobalTaskLock()
-    if (busyModule && busyModule !== 'translation') {
-      const message = busyModule === 'coding'
-        ? t('common.crossModuleTaskBlocked', { module: t('common.moduleNameCoding') })
-        : t('common.crossModuleTaskBlocked', { module: t('common.moduleNameIngestion') })
-      setTranslationError(message)
-      setTimeout(() => setTranslationError(null), 5000)
+    const blockedMessage = base.crossModuleBlockMessage()
+    if (blockedMessage) {
+      showTranslationError(blockedMessage)
+      return
+    }
+    const generation = base.resolveGenerationOptions()
+    if (!generation) {
+      showTranslationError(t('translation.noModelConfigured'))
       return
     }
 
@@ -226,14 +275,6 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
       setTotalChunks(chunks.length)
 
       let accumulatedResults = ''
-
-      const modelToUse = settings?.translationModel || settings?.defaultModel || 'llama3.2'
-      const modelContext = resolveModelContextLength(
-        modelToUse,
-        settings?.modelContextLengths,
-        hardwareDefault,
-        modelMetrics[modelToUse]?.contextLength
-      )
 
       // The language pair goes in as template variables.
       const systemInstruction = getEffectivePrompt('translation', settings, {
@@ -258,15 +299,12 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
           activeStreamIdRef.current = operationId
           trackOperation(operationId)
           try {
-            const result = await window.electronAPI.generateOllamaStream(modelToUse, prompt, (c) => {
+            const result = await window.electronAPI.generateOllamaStream(generation.model, prompt, (c) => {
               if (abortTranslationRef.current) return
               currentChunkTranslation += c
               const livePreview = accumulatedResults + (accumulatedResults ? '\n\n' : '') + currentChunkTranslation
               setTranslatedMarkdown(livePreview)
-            }, {
-              num_ctx: modelContext,
-              think: resolveOllamaThinkingPreference(modelToUse, settings || {}, modelMetrics).think,
-            }, settings?.ollamaHost, operationId)
+            }, { num_ctx: generation.numCtx, think: generation.think }, settings?.ollamaHost, operationId)
             if (!result.success) throw new Error(result.error || 'Ollama translation failed.')
             if (!currentChunkTranslation.trim()) throw new Error('Ollama returned an empty translation.')
           } finally {
@@ -329,13 +367,13 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
   return {
     isPromptModalOpen,
     setIsPromptModalOpen,
-    documents,
+    documents: base.documents,
     selectedDoc,
     setSelectedDoc,
     sourceLang,
-    setSourceLang,
+    setSourceLang: base.setSourceLang,
     targetLang,
-    setTargetLang,
+    setTargetLang: base.setTargetLang,
     translatedMarkdown,
     setTranslatedMarkdown,
     isTranslating,
@@ -354,11 +392,10 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     setCurrentPage,
     pageViewMode,
     setPageViewMode,
-    editorRef,
     handleLeftEditorDidMount,
     handleEditorDidMount,
-    fetchDocuments,
-    handleSwapLanguages,
+    fetchDocuments: base.fetchDocuments,
+    handleSwapLanguages: base.handleSwapLanguages,
     handleStopTranslation,
     handleStartTranslation,
     handleExportTranslation,
@@ -367,14 +404,9 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
 }
 
 export function useInplaceTranslation(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
-  const { t } = useI18n()
-  const { metrics: modelMetrics } = useOllamaModelMetrics(settings?.ollamaHost)
-  const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics || null))
-  const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
-  const [sourceLang, setSourceLang] = useState('Italian')
-  const [targetLang, setTargetLang] = useState('English')
+  const base = useTranslationBase(settings, diagnostics, isLayoutTranslatable)
+  const { t, selectedDoc, sourceLang, targetLang, isTranslating, setIsTranslating } = base
   const [targetDir, setTargetDir] = useState<string>(settings?.translationOutputFolder || '')
-  const [isTranslating, setIsTranslating] = useState(false)
   const [translateProgress, setTranslateProgress] = useState<TranslateProgressPayload | null>(null)
   const [status, setStatus] = useState<{ success: boolean; message: string; filename?: string } | null>(null)
 
@@ -395,33 +427,6 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
     }
   }, [settings?.translationOutputFolder, targetDir])
 
-  // Mirrors isTranslating into the cross-module task lock
-  useEffect(() => {
-    if (!isTranslating) return
-    acquireGlobalTaskLock('translation')
-    return () => releaseGlobalTaskLock('translation')
-  }, [isTranslating])
-
-  const handleDocsUpdated = useCallback((docs: IngestedDocument[]) => {
-    setSelectedDoc((prev) => {
-      const compatibleDocs = docs.filter((d) => d.fileType === 'pdf' || d.fileType === 'docx')
-      if (!prev) return compatibleDocs.length > 0 ? compatibleDocs[0] : null
-      return compatibleDocs.find((d) => d.id === prev.id) || (compatibleDocs.length > 0 ? compatibleDocs[0] : null)
-    })
-  }, [])
-
-  const { documents, refetchDocuments: fetchDocuments } = useIngestedDocuments({
-    onDocsUpdated: handleDocsUpdated,
-  })
-
-  const compatibleDocs = documents.filter((d) => d.fileType === 'pdf' || d.fileType === 'docx')
-
-  const handleSwapLanguages = () => {
-    const prevSource = sourceLang
-    setSourceLang(targetLang)
-    setTargetLang(prevSource)
-  }
-
   const handleSelectTargetDir = async () => {
     if (!window.electronAPI?.openDirectoryDialog) return
     const dir = await window.electronAPI.openDirectoryDialog({
@@ -436,12 +441,9 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
     const docToTranslate = overrideDoc || selectedDoc
     if (!docToTranslate || isTranslating) return
 
-    const busyModule = peekGlobalTaskLock()
-    if (busyModule && busyModule !== 'translation') {
-      const message = busyModule === 'coding'
-        ? t('common.crossModuleTaskBlocked', { module: t('common.moduleNameCoding') })
-        : t('common.crossModuleTaskBlocked', { module: t('common.moduleNameIngestion') })
-      setStatus({ success: false, message })
+    const blockedMessage = base.crossModuleBlockMessage()
+    if (blockedMessage) {
+      setStatus({ success: false, message: blockedMessage })
       return
     }
 
@@ -455,22 +457,15 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
     setTranslateProgress(null)
 
     try {
-      const modelToUse = settings?.translationModel || settings?.defaultModel
+      const generation = base.resolveGenerationOptions()
       const res = await apiService.translateDocumentInplace(
         docToTranslate.id,
         sourceLang,
         targetLang,
-        modelToUse,
+        generation?.model,
         targetDir,
-        modelToUse ? resolveModelContextLength(
-          modelToUse,
-          settings?.modelContextLengths,
-          hardwareDefault,
-          modelMetrics[modelToUse]?.contextLength
-        ) : undefined,
-        modelToUse
-          ? resolveOllamaThinkingPreference(modelToUse, settings || {}, modelMetrics).think
-          : false
+        generation?.numCtx,
+        generation?.think ?? false,
       )
 
       if (res.success && res.data) {
@@ -479,7 +474,7 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
           message: t('translation.inplaceSuccess', { filename: res.data.filename }),
           filename: res.data.filename,
         })
-        await fetchDocuments()
+        await base.fetchDocuments()
       } else {
         setStatus({
           success: false,
@@ -498,23 +493,21 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
   }
 
   return {
-    documents: compatibleDocs,
-    allDocuments: documents,
+    documents: base.documents,
     selectedDoc,
-    setSelectedDoc,
+    setSelectedDoc: base.setSelectedDoc,
     sourceLang,
-    setSourceLang,
+    setSourceLang: base.setSourceLang,
     targetLang,
-    setTargetLang,
+    setTargetLang: base.setTargetLang,
     targetDir,
     setTargetDir,
     isTranslating,
     translateProgress,
     status,
     setStatus,
-    handleSwapLanguages,
+    handleSwapLanguages: base.handleSwapLanguages,
     handleSelectTargetDir,
     handleStartInplaceTranslation,
-    fetchDocuments,
   }
 }

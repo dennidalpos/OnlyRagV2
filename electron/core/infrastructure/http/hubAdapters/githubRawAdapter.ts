@@ -2,7 +2,7 @@ import { HubSkillItem, SkillHubSource } from '../../../domain/skills/skillTypes'
 import { ISkillHubAdapter } from './hubAdapterInterface'
 import { webClient } from '../webClient'
 import { parseSkillFrontmatter } from '../../filesystem/skillRepository'
-import { logger } from '../../../../diagnostics'
+import { logger } from '../../logging/logger'
 
 export class GitHubRawAdapter implements ISkillHubAdapter {
   canHandle(source: SkillHubSource): boolean {

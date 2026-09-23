@@ -3,6 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import './check_ipc_registration.mjs'
+import './check_layering.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const git = process.platform === 'win32' ? 'git.exe' : 'git'

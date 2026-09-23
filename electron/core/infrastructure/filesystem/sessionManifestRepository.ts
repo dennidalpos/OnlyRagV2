@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 import { sessionManifestSchema, type SessionManifest } from '../../domain/sessions/sessionBaselineContract'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 

@@ -1,4 +1,4 @@
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 import type { OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
 import type { OllamaToolSchema } from '../../domain/agent/ollamaToolSchemaCatalog'
 import type { ObservedToolCallingProtocol } from '../../../../shared/domain/agent/ollamaToolCallingCapability'

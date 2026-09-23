@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 
 /** Sniffs a workspace's manifest files to build a lowercase tag set of its declared dependencies/tooling. */
 export class ProjectStackDetectionRepository {

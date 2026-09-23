@@ -1,7 +1,7 @@
-import fs from 'node:fs'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import path from 'node:path'
 import type { WorkspaceProject } from '../../../shared/types'
-import { logger } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
 import { projectRegistryRepository } from '../infrastructure/filesystem/projectRegistryRepository'
 import { sessionHistoryAppService } from './sessionHistoryAppService'
 import { sidecarAppService } from './sidecarAppService'
@@ -57,9 +57,9 @@ export class ProjectRegistryAppService {
         if (
           path.basename(onlyragDir) === '.onlyrag' &&
           onlyragDir !== projectPath &&
-          fs.existsSync(onlyragDir)
+          documentIoRepository.exists(onlyragDir)
         ) {
-          await fs.promises.rm(onlyragDir, { recursive: true, force: true })
+          await documentIoRepository.removeDirectory(onlyragDir)
           logger.log('INFO', 'ProjectRegistryAppService', `Purged internal .onlyrag metadata at ${onlyragDir}`)
         }
       } catch (err: any) {

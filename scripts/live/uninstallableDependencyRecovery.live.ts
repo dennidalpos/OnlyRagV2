@@ -33,9 +33,9 @@ describe('live: uninstallable dependency recovery', () => {
   it('rewrites the importer after the failed install instead of repeating it', async () => {
     const emittedLogs: string[] = []
     const liveWindow = {
-      isDestroyed: () => false,
-      webContents: { send: (_channel: string, payload: { message?: string }) => emittedLogs.push(payload.message || '') },
-    } as never
+      isAvailable: () => true,
+      send: (_channel: string, payload: unknown) => emittedLogs.push((payload as { message?: string }).message || ''),
+    }
     const fixture = seedWorkspace()
     await agentSessionStateRepository.seedPlanMilestones(
       SESSION,

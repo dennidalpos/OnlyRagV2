@@ -3,8 +3,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
+vi.mock('../infrastructure/logging/logger', () => ({ logger: { log: vi.fn() } }))
 vi.mock('../../diagnostics', () => ({
-  logger: { log: vi.fn() },
   getCachedGpuInfo: () => ({ hasNvidiaGpu: false }),
   getMemoryInfo: () => ({ totalRAMGB: 16 }),
 }))

@@ -1,6 +1,7 @@
-import fs from 'node:fs'
-import { dialog, BrowserWindow, shell } from 'electron'
-import { logger } from '../../diagnostics'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
+import type { DesktopShellPort } from '../domain/ports/desktopShellPort'
+import { electronDesktopShell } from '../infrastructure/electron/electronDesktopShell'
+import { logger } from '../infrastructure/logging/logger'
 import { systemStorageRepository } from '../infrastructure/filesystem/systemStorageRepository'
 import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
 import { isLoopbackTarget } from '../domain/agent/localOnlyPolicy'
@@ -16,28 +17,17 @@ export interface DiskSpaceCheckResult {
   error?: string
 }
 
-export interface ShellAdapter {
-  openExternal: (url: string) => Promise<void>
-  openPath: (path: string) => Promise<string>
-}
-
 export interface SettingsLoader {
   loadSettings: () => Promise<AppSettings | null> | AppSettings | null
 }
 
 /** shell.openPath launches files with their default handler, so only folders may be opened. */
-const isExistingDirectory = (targetPath: string): boolean => {
-  try {
-    return fs.statSync(targetPath).isDirectory()
-  } catch {
-    return false
-  }
-}
+const isExistingDirectory = (targetPath: string): boolean => documentIoRepository.isDirectory(targetPath)
 
 export class SystemAppService {
   constructor(
     private readonly settingsRepo: SettingsLoader = appSettingsRepository,
-    private readonly shellAdapter: ShellAdapter = shell,
+    private readonly desktop: Pick<DesktopShellPort, 'openExternal' | 'openPath' | 'showOpenDialog'> = electronDesktopShell,
     private readonly isDirectory: (targetPath: string) => boolean = isExistingDirectory
   ) {}
 
@@ -100,9 +90,8 @@ export class SystemAppService {
     }
   }
 
-  async openFileDialog(win: BrowserWindow | null, options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) {
-    if (!win) return []
-    const res = await dialog.showOpenDialog(win, {
+  async openFileDialog(options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) {
+    return this.desktop.showOpenDialog({
       title: options?.title || 'Select Documents to Import',
       properties: ['openFile', 'multiSelections'],
       filters: options?.filters || [
@@ -113,16 +102,14 @@ export class SystemAppService {
         { name: 'All Files', extensions: ['*'] },
       ],
     })
-    return res.canceled ? [] : res.filePaths
   }
 
-  async openDirectoryDialog(win: BrowserWindow | null, options?: { title?: string }) {
-    if (!win) return null
-    const res = await dialog.showOpenDialog(win, {
+  async openDirectoryDialog(options?: { title?: string }) {
+    const [directory] = await this.desktop.showOpenDialog({
       title: options?.title || 'Select Workspace Directory',
       properties: ['openDirectory'],
     })
-    return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
+    return directory ?? null
   }
 
   async openExternal(url: string): Promise<boolean> {
@@ -130,7 +117,7 @@ export class SystemAppService {
       const settings = await this.settingsRepo.loadSettings()
       if (settings?.capabilityPolicyMode === 'offline-strict') return false
       if (settings?.capabilityPolicyMode === 'local-only' && !isLoopbackTarget(url)) return false
-      await this.shellAdapter.openExternal(url)
+      await this.desktop.openExternal(url)
       return true
     }
     return false
@@ -139,7 +126,7 @@ export class SystemAppService {
   async openPath(targetPath: string): Promise<boolean> {
     const trimmed = typeof targetPath === 'string' ? targetPath.trim() : ''
     if (!trimmed || !this.isDirectory(trimmed)) return false
-    await this.shellAdapter.openPath(trimmed)
+    await this.desktop.openPath(trimmed)
     return true
   }
 }

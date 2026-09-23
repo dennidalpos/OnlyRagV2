@@ -25,12 +25,42 @@ export interface AgentVerificationEvidence {
 export type AgentCancellationStatus = 'not_cancelled' | 'rolled_back' | 'residual_effects'
 
 /** Structured facts rendered by the final Agent Coding evidence card. */
+/** Every orchestration safeguard that can nudge, re-plan or stop an agent run. */
+export type AgentGuardId =
+  | 'loop_exact_repeat'
+  | 'loop_cycle'
+  | 'loop_same_file_edits'
+  | 'loop_same_target_reads'
+  | 'shell_tool_confusion'
+  | 'redundant_success'
+  | 'stagnation_abort'
+  | 'no_mutation'
+  | 'schema_budget'
+  | 'execution_budget'
+  | 'transport_budget'
+  | 'model_silence'
+  | 'ask_redirect'
+  | 'fs_oscillation'
+  | 'verification_fix_cycles'
+  | 'step_budget'
+
+/** `advise` nudges the model, `force_advance` abandons the active milestone, `stop` ends the run. */
+export type AgentGuardAction = 'advise' | 'force_advance' | 'stop'
+
+export interface AgentGuardEvent {
+  guard: AgentGuardId
+  action: AgentGuardAction
+  step: number
+}
+
 export interface AgentCompletionEvidence {
   changedFiles: string[]
   verification?: AgentVerificationEvidence
   cancellationStatus: AgentCancellationStatus
   rollbackRestoredFiles?: number
   nonRollbackEffects: string[]
+  /** Guards that fired during the run, oldest first (bounded). */
+  guardEvents?: AgentGuardEvent[]
 }
 
 /**

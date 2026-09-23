@@ -2,12 +2,15 @@ import os
 import base64
 import subprocess
 import sys
+import threading
 from typing import Dict, Any, Optional, List
 from sidecar.config import OLLAMA_BASE_URL, httpx_client, logger
 from sidecar.domain.word_segmenter import normalize_ocr_token_spacing
 
 _GPU_INFO_CACHE: Optional[Dict[str, Any]] = None
 _RAPIDOCR_ENGINE: Any = None
+# PDF pages are rendered on a thread pool; the first pages must not each build their own engine.
+_RAPIDOCR_ENGINE_LOCK = threading.Lock()
 _INSTALLED_OLLAMA_MODELS_CACHE: Optional[set] = None
 _CUDA_DLL_PATH_CONFIGURED = False
 
@@ -308,11 +311,18 @@ def _reconstruct_layout_from_ocr_boxes(raw_results: Any) -> str:
     return "\n\n".join(formatted_paragraphs).strip()
 
 def _get_rapidocr_engine():
-    """Initializes or returns cached RapidOCR engine with high-resolution detection parameters."""
+    """Initializes once (thread-safe) or returns the cached RapidOCR engine with high-resolution detection parameters."""
     global _RAPIDOCR_ENGINE
-    from rapidocr_onnxruntime import RapidOCR
+    engine = _RAPIDOCR_ENGINE
+    if engine is not None:
+        return engine
 
-    if _RAPIDOCR_ENGINE is None:
+    with _RAPIDOCR_ENGINE_LOCK:
+        if _RAPIDOCR_ENGINE is not None:
+            return _RAPIDOCR_ENGINE
+
+        from rapidocr_onnxruntime import RapidOCR
+
         use_cuda = _rapidocr_cuda_available()
         cfg_path = _find_rapidocr_config()
         ocr_kwargs: Dict[str, Any] = {
@@ -338,7 +348,7 @@ def _get_rapidocr_engine():
             else:
                 raise init_err
 
-    return _RAPIDOCR_ENGINE
+        return _RAPIDOCR_ENGINE
 
 def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
     """Runs RapidOCR with image enhancement and returns spatially clustered line blocks with bounding boxes

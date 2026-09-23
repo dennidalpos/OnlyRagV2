@@ -1,21 +1,21 @@
-import { BrowserWindow } from 'electron'
+import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import PQueue from 'p-queue'
 import { TaskQueueDomain, TaskQueueItem } from '../domain/tasks/taskQueueDomain'
 import { runAgentOrchestratorLoop, cancelActiveAgentTask } from './agentOrchestratorAppService'
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
-import { logger } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import type { AgentRunIdentity } from '../../../shared/types'
 import { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
 import { standaloneScratchWorkspace } from '../infrastructure/filesystem/standaloneScratchWorkspace'
-import fs from 'node:fs'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import path from 'node:path'
 
 export interface QueuedAgentTask {
   id: string
   payload: AgentTaskPayload
-  winGetter: () => BrowserWindow | null
+  rendererEvents: RendererEventSink
   resolve: (result: AgentTaskResult) => void
   reject: (err: any) => void
 }
@@ -45,7 +45,7 @@ export class TaskQueueAppService {
 
   public async scheduleAgentTask(
     payload: AgentTaskPayload,
-    winGetter: () => BrowserWindow | null
+    rendererEvents: RendererEventSink
   ): Promise<AgentTaskResult> {
     if (payload.identity?.conversationId && payload.sessionId && payload.identity.conversationId !== payload.sessionId) {
       return { success: false, summary: 'Agent run identity mismatch', error: 'conversationId does not match sessionId' }
@@ -66,7 +66,7 @@ export class TaskQueueAppService {
         }
         boundWorkspacePath = path.resolve(requestedWorkspace)
       }
-      if (!fs.existsSync(boundWorkspacePath) || !fs.statSync(boundWorkspacePath).isDirectory()) {
+      if (!documentIoRepository.isDirectory(boundWorkspacePath)) {
         return {
           success: false,
           summary: 'Agent workspace is unavailable',
@@ -94,30 +94,27 @@ export class TaskQueueAppService {
     const taskData: QueuedAgentTask = {
       id: taskId,
       payload: taskPayload,
-      winGetter,
+      rendererEvents,
       resolve: () => {},
       reject: () => {},
     }
 
     this.queue.enqueue(taskId, 'agent_task', taskData)
 
-    const win = winGetter()
     const runningCount = this.queue.getRunningCount()
     const queuedCount = this.queue.getQueuedCount()
     const queuePosition = runningCount >= this.queue.getMaxConcurrency() ? queuedCount : 0
 
     if (runningCount >= this.queue.getMaxConcurrency()) {
       logger.log('INFO', 'TaskQueueAppService', `Task ${taskId} queued (Active: ${runningCount}/${this.queue.getMaxConcurrency()} | Queue depth: ${queuedCount})`)
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('agent:log', {
-          ...identity,
-          id: `${Date.now()}-queued`,
-          timestamp: new Date().toISOString(),
-          type: 'info',
-          message: `Task aggiunto alla coda (#${queuedCount}) - Slot attivi: ${runningCount}/${this.queue.getMaxConcurrency()}`,
-          detail: `Il task verrà avviato automaticamente non appena si libererà uno slot di esecuzione.`,
-        })
-      }
+      rendererEvents.send('agent:log', {
+        ...identity,
+        id: `${Date.now()}-queued`,
+        timestamp: new Date().toISOString(),
+        type: 'info',
+        message: `Task aggiunto alla coda (#${queuedCount}) - Slot attivi: ${runningCount}/${this.queue.getMaxConcurrency()}`,
+        detail: `Il task verrà avviato automaticamente non appena si libererà uno slot di esecuzione.`,
+      })
     }
 
     // Schedule into serial PQueue
@@ -154,20 +151,19 @@ export class TaskQueueAppService {
 
   private async executeTaskItem(item: TaskQueueItem<QueuedAgentTask>): Promise<void> {
     const { id, payload } = item
-    const { payload: taskPayload, winGetter, resolve } = payload
+    const { payload: taskPayload, rendererEvents, resolve } = payload
     let transaction: DisposableAgentWorkspace | undefined
 
     logger.log('INFO', 'TaskQueueAppService', `Starting task execution [${id}] with model '${taskPayload.activeModel || taskPayload.settings?.codingModel || 'default'}'`)
 
     try {
-      const win = winGetter()
       transaction = taskPayload.workspacePath && !taskPayload.isStandaloneMode
         ? DisposableAgentWorkspace.create(taskPayload.workspacePath, id)
         : undefined
       const executionPayload = transaction
         ? { ...taskPayload, sourceWorkspacePath: taskPayload.workspacePath, workspacePath: transaction.workspacePath }
         : taskPayload
-      const result = await runAgentOrchestratorLoop(executionPayload, win, id, transaction)
+      const result = await runAgentOrchestratorLoop(executionPayload, rendererEvents, id, transaction)
       this.queue.markCompleted(id)
       resolve(result)
     } catch (err: any) {

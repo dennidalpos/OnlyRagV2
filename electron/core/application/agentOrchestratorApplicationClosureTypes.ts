@@ -1,4 +1,5 @@
 import type { AgentTaskResult } from '../domain/agent/agentTypes'
+import type { AgentGuardId } from '../../../shared/types'
 
 export type ApplicationClosureTrigger =
   | 'finish'
@@ -10,6 +11,8 @@ export type ApplicationClosureTrigger =
 
 export interface ApplicationClosureRequest {
   trigger: ApplicationClosureTrigger
+  /** Safeguard that ended the run, recorded as a `stop` guard event. */
+  guard?: AgentGuardId
   reason: string
   modelSummary?: string
   /** Explicit finish may hand a failed check back for a bounded correction round. */

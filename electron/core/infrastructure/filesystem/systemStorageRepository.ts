@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 
 export class SystemStorageRepository {
   getOllamaStoragePath(): string {

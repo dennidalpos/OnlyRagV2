@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+vi.mock('../infrastructure/logging/logger', () => ({ logger: { log: vi.fn() } }))
 vi.mock('../../diagnostics', () => ({
-  logger: { log: vi.fn() },
   getCachedGpuInfo: () => ({ hasNvidiaGpu: true, vramTotalMB: 24576 }),
   getMemoryInfo: () => ({ totalRAMGB: 32 }),
 }))

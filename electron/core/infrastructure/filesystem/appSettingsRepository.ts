@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 import type { AppSettings } from '../../../../shared/types'
 import { sanitizeAppSettings } from '../../domain/settings/appSettingsDomain'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
@@ -43,7 +43,20 @@ export class AppSettingsRepository {
     return path.join(baseDir, SETTINGS_FILE_NAME)
   }
 
+  /** Main-internal readers fall back to defaults when settings.json is missing or unreadable. */
   public async loadSettings(): Promise<AppSettings | null> {
+    try {
+      return await this.loadSettingsOrThrow()
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Returns null only when no settings file exists. An unreadable or unsupported file throws,
+   * so the renderer cannot mistake it for a first launch and overwrite it with defaults.
+   */
+  public async loadSettingsOrThrow(): Promise<AppSettings | null> {
     const filePath = this.getStateFilePath()
     let targetPath = filePath
 
@@ -77,9 +90,10 @@ export class AppSettingsRepository {
         await this.saveSettings(settings)
       }
       return settings
-    } catch (err: any) {
-      logger.log('WARN', 'AppSettingsRepo', `Failed reading settings from ${targetPath}: ${err.message}`)
-      return null
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      logger.log('WARN', 'AppSettingsRepo', `Failed reading settings from ${targetPath}: ${message}`)
+      throw new Error(`Settings file is unreadable: ${message}`)
     }
   }
 

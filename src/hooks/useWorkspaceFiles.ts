@@ -258,6 +258,8 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
     }
   }, [workspacePath, loadWorkspaceFiles])
 
+  useEffect(() => window.electronAPI?.onWorkspaceFileDeleted?.((data) => purgeFileReferences(data.filePath)), [purgeFileReferences])
+
   useEffect(() => {
     const api = window.electronAPI
     if (!api?.onWorkspaceFileVersionChanged) return

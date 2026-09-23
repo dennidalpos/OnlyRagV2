@@ -1,4 +1,6 @@
-import fs from 'node:fs'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
+import type { RendererEventSink } from '../domain/ports/rendererEventSink'
+import { allWindowsEventSink } from '../infrastructure/electron/rendererEventSinks'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { webClient } from '../infrastructure/http/webClient'
@@ -14,6 +16,8 @@ import { sessionHistoryRepository } from '../infrastructure/filesystem/sessionHi
 
 export class WorkspaceAppService {
   private repo = new FileSystemRepository()
+
+  constructor(private readonly rendererEvents: RendererEventSink = allWindowsEventSink) {}
 
   listFiles(targetPath?: string) {
     if (!targetPath) return Promise.resolve([])
@@ -45,20 +49,10 @@ export class WorkspaceAppService {
     return result.success ? { ...result, contentHash: contentVersion(content) } : result
   }
 
+  /** Used by the agent's delete_file tool; open editors purge references to the deleted path. */
   async deleteFile(filePath: string) {
     const res = await this.repo.deleteFile(filePath)
-    if (res.success) {
-      try {
-        const { BrowserWindow } = await import('electron')
-        BrowserWindow.getAllWindows().forEach((win) => {
-          if (!win.isDestroyed()) {
-            win.webContents.send('workspace:file-deleted', { filePath })
-          }
-        })
-      } catch (broadcastErr: any) {
-        // Ignore window broadcast failure during headless testing
-      }
-    }
+    if (res.success) this.rendererEvents.send('workspace:file-deleted', { filePath })
     return res
   }
 
@@ -167,12 +161,12 @@ export class WorkspaceAppService {
   }
 
   getGitStatusAndDiff(workspacePath?: string | null) {
-    const cwd = workspacePath && fs.existsSync(workspacePath) ? workspacePath : process.cwd()
+    const cwd = workspacePath && documentIoRepository.exists(workspacePath) ? workspacePath : process.cwd()
     return gitCliRepository.getStatusAndDiff(cwd)
   }
 
   initGitRepository(workspacePath?: string | null) {
-    if (!workspacePath || !fs.existsSync(workspacePath)) {
+    if (!workspacePath || !documentIoRepository.exists(workspacePath)) {
       return { success: false, message: 'Invalid or missing workspace path' }
     }
     return gitCliRepository.init(workspacePath)

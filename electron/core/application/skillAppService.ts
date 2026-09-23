@@ -13,7 +13,7 @@ import {
   CustomHubInput,
   SkillSaveInput,
 } from '../domain/skills/skillTypes'
-import { logger } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
 import type { SkillInstallCandidate } from './skillInstallApprovalService'
 
 /** Options driving the contextual skill router and the hub auto-install policy. */

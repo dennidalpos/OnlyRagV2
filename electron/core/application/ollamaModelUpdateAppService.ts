@@ -1,4 +1,4 @@
-import { logger } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
 import { hasDigestDiscrepancy } from '../domain/ollama/modelUpdateChecker'
 import { ollamaHttpClient } from '../infrastructure/http/ollamaHttpClient'
 import { ollamaRegistryClient, type OllamaRegistryClient } from '../infrastructure/http/ollamaRegistryClient'

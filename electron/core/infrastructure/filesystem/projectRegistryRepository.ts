@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 import type { WorkspaceProject } from '../../../../shared/types'
 import { upsertProject, touchProject, sortProjectsByRecency, mergeProjects, renameProjectInList } from '../../domain/workspace/projectRegistryDomain'
 import { safeAtomicWrite } from './safeAtomicFileWriter'

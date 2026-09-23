@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { taskQueueAppService } from '../application/taskQueueAppService'
 import { requestActiveAgentContextCompaction, respondToApproval } from '../application/agentOrchestratorAppService'
@@ -10,39 +10,26 @@ import { agentInterviewAppService } from '../application/agentInterviewAppServic
 import { ollamaAppService } from '../application/ollamaAppService'
 import { aiDebugBundleService } from '../application/aiDebugBundleService'
 import { skillInstallApprovalService } from '../application/skillInstallApprovalService'
-import { logger } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
+import { agentTaskRequestSchema, planMilestoneSchema } from '../domain/agent/agentTaskContract'
+import { sanitizeAppSettings } from '../domain/settings/appSettingsDomain'
 import type { AgentPlan, AgentRunIdentity, AppSettings, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
-import { z } from 'zod'
 
-const activeFileContextSchema = z
-  .object({
-    name: z.string().trim().min(1).max(260),
-    path: z.string().trim().min(1).max(4096),
-    content: z.string().max(120_000),
-    versionHash: z.string().regex(/^[a-f0-9]{64}$/i, 'Expected a SHA-256 content hash'),
-  })
-  .strict()
-
-/** Validates the only editor context accepted by an agent run. */
+/** Validates the complete agent run request and normalizes its settings snapshot. */
 export function parseAgentTaskPayload(input: unknown): AgentTaskPayload {
-  if (!input || typeof input !== 'object') throw new Error('Invalid agent task payload')
-  const { contextFiles: _discardedContextFiles, ...payload } = input as Record<string, unknown>
-  const result = z
-    .object({
-      activeFile: activeFileContextSchema.nullable().optional(),
-      agentMode: z.enum(['ask', 'guided', 'auto']).default('guided'),
-      forceContextCompaction: z.boolean().optional(),
-    })
-    .passthrough()
-    .safeParse(payload)
-  if (!result.success) throw new Error(`Invalid activeFile contract: ${result.error.issues[0]?.message || 'unknown validation error'}`)
-  return { ...result.data, activeFile: result.data.activeFile ?? null } as AgentTaskPayload
+  const result = agentTaskRequestSchema.safeParse(input)
+  if (!result.success) {
+    const issue = result.error.issues[0]
+    throw new Error(`Invalid agent task payload: ${issue ? `${issue.path.join('.') || '(root)'} ${issue.message}` : 'unknown validation error'}`)
+  }
+  const { settings, activeFile, ...rest } = result.data
+  return { ...rest, activeFile: activeFile ?? null, ...(settings ? { settings: sanitizeAppSettings(settings) } : {}) }
 }
 
-export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) {
+export function registerAgentIpcHandlers(rendererEvents: RendererEventSink) {
   ipcMain.handle('agent:start-task', async (_, payload: unknown) => {
-    return taskQueueAppService.scheduleAgentTask(parseAgentTaskPayload(payload), winGetter)
+    return taskQueueAppService.scheduleAgentTask(parseAgentTaskPayload(payload), rendererEvents)
   })
 
   ipcMain.handle('agent:cancel-task', async (_, identity: AgentRunIdentity) => {
@@ -91,8 +78,8 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
     ) => {
       logger.log('INFO', 'AgentPlanIpc', `Interview requested (prompt length: ${prompt.length}, model: ${model || 'default'}).`)
       return identity?.runId
-        ? agentInterviewAppService.conductInterview(prompt, model, settings, workspacePath, previousDecisions, identity.runId)
-        : agentInterviewAppService.conductInterview(prompt, model, settings, workspacePath, previousDecisions)
+        ? agentInterviewAppService.conductInterview(prompt, model, sanitizeAppSettings(settings), workspacePath, previousDecisions, identity.runId)
+        : agentInterviewAppService.conductInterview(prompt, model, sanitizeAppSettings(settings), workspacePath, previousDecisions)
     },
   )
 
@@ -120,7 +107,7 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
       return planGenerationAppService.generatePlanText({
         prompt,
         model,
-        settings,
+        settings: sanitizeAppSettings(settings),
         previousPlan,
         workspacePath,
         previousDecisions,
@@ -149,8 +136,9 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
   /** Seeds the approved plan's milestones into persisted session state before task execution starts, so runAgentOrchestratorLoop's restore-from-savedState path loads them into GoalDecompositionPlanner as its starting state. */
   ipcMain.handle(
     'agent:plan-seed',
-    async (_, sessionId: string, workspacePath: string | null, planMilestones: any[], userTask?: string, planRevisionId?: string) => {
-      return agentSessionStateAppService.seedPlanMilestones(sessionId, workspacePath, planMilestones, userTask, planRevisionId)
+    async (_, sessionId: string, workspacePath: string | null, planMilestones: unknown, userTask?: string, planRevisionId?: string) => {
+      const milestones = planMilestoneSchema.array().parse(planMilestones)
+      return agentSessionStateAppService.seedPlanMilestones(sessionId, workspacePath, milestones, userTask, planRevisionId)
     },
   )
 
@@ -170,7 +158,7 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
         activeSkills?: string[]
       },
     ) => {
-      return aiDebugBundleService.generateDebugBundle(options)
+      return aiDebugBundleService.generateDebugBundle({ ...options, settings: options.settings ? sanitizeAppSettings(options.settings) : undefined })
     },
   )
 }

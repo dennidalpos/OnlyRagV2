@@ -1,5 +1,6 @@
 import { secureIpcMain as ipcMain } from './secureIpcMain'
-import { runFullDiagnostics, type LogLevel } from '../../diagnostics'
+import { type LogLevel } from '../infrastructure/logging/logger'
+import { runFullDiagnostics } from '../../diagnostics'
 import { diagnosticsAppService } from '../application/diagnosticsAppService'
 import { sidecarAppService } from '../application/sidecarAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'

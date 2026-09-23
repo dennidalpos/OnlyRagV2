@@ -86,6 +86,9 @@ export const it: TranslationSchema = {
     switchLanguage: 'Cambia Lingua (IT/EN)',
     contributionsAndInfo: 'Info & Riconoscimenti',
     quickStatus: 'Stato Risorse',
+    settingsLoadFailed:
+      'Impossibile leggere le impostazioni salvate: {error}. Il file non viene modificato e la diagnostica automatica resta sospesa finché il caricamento non riesce.',
+    settingsLoadRetry: 'Riprova',
   },
   chat: {
     title: 'Multi-Document RAG & Chat',
@@ -371,6 +374,7 @@ export const it: TranslationSchema = {
     inplaceTargetDirLabel: 'Cartella di Destinazione (Obbligatoria)',
     inplaceTargetDirPlaceholder: 'Seleziona cartella di destinazione per il file tradotto...',
     inplaceTargetDirRequired: 'Seleziona una cartella di destinazione prima di avviare la traduzione.',
+    noModelConfigured: 'Nessun modello di traduzione configurato. Scegli un modello di traduzione o predefinito nelle Impostazioni.',
     inplaceBrowse: 'Sfoglia Cartella...',
     inplaceBrowseTitle: 'Seleziona cartella di salvataggio del documento tradotto',
     inplaceStartBtn: 'Avvia Traduzione con Layout Preservato',

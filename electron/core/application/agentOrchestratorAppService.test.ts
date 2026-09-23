@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { execFileSync } from 'node:child_process'
-import type { BrowserWindow } from 'electron'
+import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import { runAgentOrchestratorLoop as runOrchestratorLoop, cancelActiveAgentTask, requestActiveAgentContextCompaction, respondToApproval } from './agentOrchestratorAppService'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
@@ -23,10 +23,10 @@ const TOOL_ENABLED_SETTINGS: AppSettings = {
 const runAgentOrchestratorLoop: typeof runOrchestratorLoop = (payload, win) =>
   runOrchestratorLoop({ ...payload, settings: { ...TOOL_ENABLED_SETTINGS, ...payload.settings } }, win)
 
-function createMockWindow(): { window: BrowserWindow; send: ReturnType<typeof vi.fn> } {
+function createMockWindow(): { window: RendererEventSink; send: ReturnType<typeof vi.fn> } {
   const send = vi.fn()
   return {
-    window: { isDestroyed: vi.fn(() => false), webContents: { send } } as unknown as BrowserWindow,
+    window: { isAvailable: vi.fn(() => true), send },
     send,
   }
 }
@@ -604,9 +604,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     vi.useFakeTimers()
     try {
       const sent: Array<{ channel: string; payload: any }> = []
-      const fakeWin: any = {
-        isDestroyed: () => false,
-        webContents: { send: (channel: string, payload: any) => sent.push({ channel, payload }) },
+      const fakeWin: RendererEventSink = {
+        isAvailable: () => true,
+        send: (channel: string, payload: any) => sent.push({ channel, payload }),
       }
 
       vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(

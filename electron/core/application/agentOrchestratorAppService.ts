@@ -1,5 +1,5 @@
-import { BrowserWindow } from 'electron'
-import { logger } from '../../diagnostics'
+import type { RendererEventSink } from '../domain/ports/rendererEventSink'
+import { logger } from '../infrastructure/logging/logger'
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
 import { handleUpdatePlanTool } from './agentOrchestratorPlanTool'
 import { runToolGates } from './agentOrchestratorToolGates'
@@ -74,19 +74,19 @@ function cleanupSession(session: AgentSession) {
   } catch (err: any) {
     logger.log('WARN', 'AgentOrchestrator', `Failed discarding isolated workspace during cleanup: ${err?.message}`)
   }
-  if (session.targetWindow && !session.targetWindow.isDestroyed()) {
+  if (session.rendererEvents?.isAvailable()) {
     const nonRollbackEffects = [
       ...(session.nonRollbackEffects || []),
       ...rollbackErrors.map((error) => `rollback_workspace: ${error}`),
     ]
-    session.targetWindow.webContents.send('agent:log', {
+    session.rendererEvents.send('agent:log', {
       ...session.identity,
       id: `${Date.now()}-cancelled`,
       timestamp: new Date().toISOString(),
       type: 'info',
       message: "Task interrotto dall'utente.",
     })
-    session.targetWindow.webContents.send('agent:done', {
+    session.rendererEvents.send('agent:done', {
       ...session.identity,
       success: false,
       summary: "Task interrotto dall'utente.",
@@ -146,7 +146,7 @@ export function respondToApproval(target: AgentRunIdentity | string, approved: b
 
 export async function runAgentOrchestratorLoop(
   payload: AgentTaskPayload,
-  win: BrowserWindow | null,
+  rendererEvents: RendererEventSink | null,
   customSessionId?: string,
   workspaceTransaction?: DisposableAgentWorkspace,
 ): Promise<AgentTaskResult> {
@@ -169,7 +169,7 @@ export async function runAgentOrchestratorLoop(
     identity,
     isCancelled: false,
     abortController: new AbortController(),
-    targetWindow: win,
+    rendererEvents,
     activeCancelHandle: null,
     activeChildProcess: null,
     workspaceTransaction,
@@ -212,7 +212,6 @@ export async function runAgentOrchestratorLoop(
     goalPlanner,
     fsmMode,
     executionGuard,
-    circuitBreaker,
     loopDetector,
     surfacedDodReasons,
     mutableFlags,
@@ -528,11 +527,10 @@ export async function runAgentOrchestratorLoop(
       episodicCompactor,
       goalPlanner,
       executionGuard,
-      circuitBreaker,
       loopDetector,
       recoveryState: responseInterpreterState,
       isSessionActive,
-      targetWindow: session.targetWindow,
+      rendererEvents: session.rendererEvents,
       runIdentity: identity,
       emitLog,
       emitDone,
@@ -566,6 +564,7 @@ export async function runAgentOrchestratorLoop(
   const budgetExhausted = stepCountBox.value >= MAX_STEPS && MAX_STEPS !== Infinity
   const closure = await closeApplicationRun({
     trigger: budgetExhausted ? 'step_budget' : 'model_silence',
+    ...(budgetExhausted ? { guard: 'step_budget' as const } : {}),
     reason: budgetExhausted
       ? `Raggiunto il limite massimo di passaggi configurato (${MAX_STEPS} step).`
       : `Il ciclo dell'agente si è concluso dopo ${stepCountBox.value} passaggi.`,

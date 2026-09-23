@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import type { AppSettings } from '../../../shared/types'
 import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
@@ -62,11 +63,9 @@ describe('application-owned agent closure', () => {
         hasVerifiedBuild: false,
       },
       state: {
-        noToolStreak: 0,
-        schemaRejectionStreak: 0,
-        stagnationStreak: 0,
-        redundantSuccessStreak: 0,
+        progress: new AgentProgressPolicy(),
         verificationFixCycles: 0,
+        guardEvents: [],
       },
       goalPlanner,
       episodicCompactor,
@@ -267,6 +266,23 @@ describe('application-owned agent closure', () => {
       expect(outcome.result.summary).toContain('m-1: Create `src/app.ts`')
     }
     expect(persistCurrentState).toHaveBeenCalledWith('step_budget', 'blocked')
+  })
+
+  it('records the stopping guard and reports every guard firing in the completion evidence', async () => {
+    vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
+    const { ctx, emitDone, emitLog } = makeContext({ milestoneStatus: 'in_progress' })
+    ctx.state.guardEvents.push({ guard: 'loop_exact_repeat', action: 'advise', step: 5 })
+
+    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'guard_stop', guard: 'no_mutation', reason: 'No-mutation streak.' })
+
+    const expected = [
+      { guard: 'loop_exact_repeat', action: 'advise', step: 5 },
+      { guard: 'no_mutation', action: 'stop', step: 7 },
+    ]
+    expect(ctx.state.guardEvents).toEqual(expected)
+    expect(outcome).toMatchObject({ outcome: 'closed', result: { evidence: { guardEvents: expected } } })
+    expect(emitDone).toHaveBeenCalledWith(false, expect.any(String), 'blocked', expect.objectContaining({ guardEvents: expected }))
+    expect(emitLog).toHaveBeenCalledWith('info', 'Diagnostica sessione: blocked', expect.stringContaining('Guard: loop_exact_repeat, no_mutation(stop)'), expect.anything())
   })
 
   it('allows only bounded correction rounds when finish exposes a failing check', async () => {

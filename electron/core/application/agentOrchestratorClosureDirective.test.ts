@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -165,7 +166,7 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
       compiledHistoryBlock: '',
       flags: { hasFileMutations: true, hasVerifiedBuild },
       surfacedDodReasons: new Set<string>(),
-      state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
+      state: { progress: new AgentProgressPolicy(), verificationFixCycles: 0, guardEvents: [] },
       episodicCompactor: {
         recordStep: (_step: unknown, directive?: string) => {
           if (directive) recordedDirectives.push(directive)
@@ -283,7 +284,7 @@ describe('a repeated command must not abandon a milestone that is already delive
       compiledHistoryBlock: '',
       flags: { hasFileMutations: true, hasVerifiedBuild: false },
       surfacedDodReasons: new Set<string>(),
-      state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
+      state: { progress: new AgentProgressPolicy(), verificationFixCycles: 0, guardEvents: [] },
       episodicCompactor: {
         recordStep: () => {},
         getEpisodes: () => [],
@@ -377,7 +378,7 @@ describe('the loop guard yields when the arbitrated directive orders the blocked
       compiledHistoryBlock: '',
       flags: { hasFileMutations: true, hasVerifiedBuild: false },
       surfacedDodReasons: new Set<string>(),
-      state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
+      state: { progress: new AgentProgressPolicy(), verificationFixCycles: 0, guardEvents: [] },
       episodicCompactor: {
         recordStep: () => {},
         getEpisodes: () => [],

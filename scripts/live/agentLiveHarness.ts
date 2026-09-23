@@ -179,6 +179,10 @@ export interface LiveRunMetrics {
   failedToolCalls: number
   runtimeProfile?: SavedAgentSessionState['ollamaRuntimeProfile']
   generations: NonNullable<SavedAgentSessionState['ollamaGenerationTelemetry']>
+  /** Every guard that fired, oldest first; the stopping guard, if any, is `terminationGuard`. */
+  guardEvents: NonNullable<SavedAgentSessionState['guardEvents']>
+  terminationReason?: SavedAgentSessionState['terminationReason']
+  terminationGuard?: SavedAgentSessionState['terminationGuard']
 }
 
 /** Reads milestone delivery and the application-owned terminal status plus their context. */
@@ -215,6 +219,9 @@ export function readRunMetrics(args: {
     failedToolCalls: episodes.filter((e) => e.status === 'FAILURE' || e.status === 'BLOCKED').length,
     runtimeProfile: state.ollamaRuntimeProfile,
     generations: state.ollamaGenerationTelemetry || [],
+    guardEvents: state.guardEvents || [],
+    terminationReason: state.terminationReason,
+    terminationGuard: state.terminationGuard,
   }
 }
 
@@ -244,7 +251,8 @@ export function reportRun(args: {
     `milestones: ${metrics.verified} verified / ${metrics.failed} failed / ${metrics.pending} pending ` +
       `of ${metrics.milestones.length} (${Math.round(metrics.verifiedRatio * 100)}%)`
   )
-  console.log(`application closure: ${metrics.completionStatus || 'not persisted'}`)
+  console.log(`application closure: ${metrics.completionStatus || 'not persisted'} (${metrics.terminationReason || 'no reason'}${metrics.terminationGuard ? `, guard ${metrics.terminationGuard}` : ''})`)
+  console.log(`guards: ${metrics.guardEvents.map((event) => `${event.guard}:${event.action}@${event.step}`).join(' ') || 'none'}`)
   console.log(`tool calls: ${metrics.toolCalls} (${metrics.failedToolCalls} failed or blocked)`)
   console.log(`runtime: ${JSON.stringify(metrics.runtimeProfile || null)}`)
   console.log(`generations: ${metrics.generations.length}`)
@@ -260,7 +268,7 @@ export function reportRun(args: {
   console.log(`audit snapshot: ${snapshotDir}`)
 
   console.log(
-    '\nThe audit log for this run is logs/coding_agent_audit.log — grep it for the guard you are checking.'
+    '\nThe audit log for this run is logs/coding_agent_audit.log; the guards line above lists every safeguard that fired.'
   )
   return metrics
 }

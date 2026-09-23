@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { logger } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
 import { httpMetrics } from '../infrastructure/http/httpMetrics'
 import { DiagnosticsAppService } from './diagnosticsAppService'
 

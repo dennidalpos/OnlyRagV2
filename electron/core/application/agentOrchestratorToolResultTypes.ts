@@ -1,15 +1,14 @@
-import type { BrowserWindow } from 'electron'
-import type { AgentCompletionEvidence, AgentCompletionStatus, AgentRunIdentity, AppSettings } from '../../../shared/types'
+import type { RendererEventSink } from '../domain/ports/rendererEventSink'
+import type { AgentCompletionEvidence, AgentCompletionStatus, AgentGuardEvent, AgentRunIdentity, AppSettings } from '../../../shared/types'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import type { ClassifiedToolExecutionResult } from './agentToolExecutorService'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
-import type { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
+import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import type { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { AgentTaskResult } from '../domain/agent/agentTypes'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
-import type { RecoveryFailureState } from '../domain/agent/recoveryBudget'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -44,17 +43,17 @@ export interface ToolResultProcessingContext {
   episodicCompactor: EpisodicMemoryCompactor
   goalPlanner: GoalDecompositionPlanner
   executionGuard: TransactionalExecutionGuard
-  circuitBreaker: StagnationCircuitBreaker
   /** Same instance the response interpreter checks against: this step feeds the real
    *  execution outcome back into it. */
   loopDetector: AgentActionLoopDetector
   recoveryState: {
-    executionRecoveryFailure?: RecoveryFailureState
+    guardEvents: AgentGuardEvent[]
+    progress: AgentProgressPolicy
     pendingVersionConflictReadPath?: string
     versionedReadEvidence?: { filePath: string; contentHash: string }
   }
   isSessionActive: () => boolean
-  targetWindow: BrowserWindow | null
+  rendererEvents: RendererEventSink | null
   runIdentity: Readonly<AgentRunIdentity>
   emitLog: EmitLog
   emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus, evidence?: AgentCompletionEvidence) => void

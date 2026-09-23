@@ -24,6 +24,52 @@ try {
   })
   const page = await application.firstWindow()
   await page.waitForFunction(() => Boolean(window.electronAPI), undefined, { timeout: 20_000 })
+  const settingsBanner = page.getByTestId('settings-bootstrap-error')
+
+  // Real settings:get handler: settings.json wins over conflicting legacy localStorage values.
+  await page.evaluate(() => {
+    localStorage.setItem('onlyrag_app_settings', JSON.stringify({ defaultModel: 'legacy:latest', language: 'it', hasCompletedInitialSetup: false }))
+    localStorage.setItem('onlyrag_language', 'it')
+  })
+  await page.reload({ waitUntil: 'load' })
+  await page.locator('#tab-ingestion').getByText('Doc Ingestion').waitFor({ timeout: 10_000 })
+  await page.waitForTimeout(350)
+  let persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
+  assert.equal(persisted.settings.defaultModel, explicitSettings.defaultModel, 'Legacy localStorage overrode settings.json')
+  assert.equal(persisted.settings.language, 'en')
+  assert.equal(await page.getByRole('dialog').count(), 0, 'Wizard opened despite completed setup in settings.json')
+  assert.equal(await page.evaluate(() => localStorage.getItem('onlyrag_app_settings')), null)
+
+  // Real settings:get handler with an unreadable file: recoverable error, no overwrite, no diagnostics, then retry.
+  const validSettingsFile = fs.readFileSync(settingsPath)
+  const corruptSettingsFile = '{ "version": 2, "settings": '
+  fs.writeFileSync(settingsPath, corruptSettingsFile)
+  await application.evaluate(({ ipcMain }) => {
+    globalThis.__diagnosticsCalls = 0
+    ipcMain.removeHandler('diagnostics:run')
+    ipcMain.handle('diagnostics:run', async () => {
+      globalThis.__diagnosticsCalls++
+      return {
+        sidecar: { status: 'offline', documentsCount: 0 },
+        ollama: { status: 'online', url: 'http://127.0.0.1:11434', modelsCount: 1, models: ['bge-m3:latest'] },
+        gpu: { hasNvidiaGpu: false },
+        memory: { totalRAMGB: 8, freeRAMGB: 4, usedRAMGB: 4, ramUsagePercent: 50 },
+      }
+    })
+  })
+  await page.reload({ waitUntil: 'load' })
+  await settingsBanner.waitFor({ timeout: 10_000 })
+  await page.waitForTimeout(1_200)
+  assert.equal(fs.readFileSync(settingsPath, 'utf8'), corruptSettingsFile, 'Unreadable settings.json was overwritten')
+  assert.equal(await application.evaluate(() => globalThis.__diagnosticsCalls), 0, 'Diagnostics ran without loaded settings')
+  assert.equal(await page.getByRole('dialog').count(), 0, 'Wizard opened after a failed settings read')
+  fs.writeFileSync(settingsPath, validSettingsFile)
+  await settingsBanner.getByRole('button').click()
+  await settingsBanner.waitFor({ state: 'detached', timeout: 10_000 })
+  await page.waitForTimeout(400)
+  assert(await application.evaluate(() => globalThis.__diagnosticsCalls) > 0, 'Diagnostics did not start after a successful retry')
+  persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
+  assert.equal(persisted.settings.defaultModel, explicitSettings.defaultModel)
 
   await application.evaluate(({ ipcMain }) => {
     globalThis.__settingsBootstrapTiming = { settingsGetStarted: 0, settingsLoaded: 0, firstDiagnosticsCall: 0 }
@@ -60,7 +106,7 @@ try {
   const timing = await application.evaluate(() => globalThis.__settingsBootstrapTiming)
   assert(timing.settingsGetStarted && timing.firstDiagnosticsCall, 'Bootstrap or diagnostics did not run')
   assert(timing.firstDiagnosticsCall >= timing.settingsLoaded, 'Diagnostics started before settings bootstrap completed')
-  const persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
+  persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
   assert.equal(persisted.settings.defaultModel, explicitSettings.defaultModel)
   assert.equal(persisted.settings.language, explicitSettings.language)
   assert.equal(persisted.settings.hasCompletedInitialSetup, true)
@@ -138,7 +184,7 @@ try {
   assert.equal(writes.calls, 3, 'Separated changes did not produce the expected saves')
   assert.equal(writes.maxActive, 1, 'Settings saves overlapped')
   assert.equal(writes.last.language, 'it')
-  console.log('[PASS] Settings bootstrap, precedence, one-shot migration, language, wizard and serialized/coalesced writes.')
+  console.log('[PASS] Settings bootstrap, real file precedence, unreadable-file recovery, one-shot migration, language, wizard and serialized/coalesced writes.')
 } finally {
   if (application) await application.close()
   fs.rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })

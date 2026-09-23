@@ -1,5 +1,5 @@
 import type { CodingSession } from '../../../shared/types'
-import { logger } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
 import { normalizeSession } from '../domain/sessions/sessionHistoryDomain'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { sessionHistoryRepository } from '../infrastructure/filesystem/sessionHistoryRepository'

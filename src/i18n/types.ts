@@ -86,6 +86,8 @@ export interface TranslationSchema {
     switchLanguage: string
     contributionsAndInfo: string
     quickStatus: string
+    settingsLoadFailed: string
+    settingsLoadRetry: string
   }
   chat: {
     title: string
@@ -368,6 +370,7 @@ export interface TranslationSchema {
     inplaceTargetDirLabel: string
     inplaceTargetDirPlaceholder: string
     inplaceTargetDirRequired: string
+    noModelConfigured: string
     inplaceBrowse: string
     inplaceBrowseTitle: string
     inplaceStartBtn: string

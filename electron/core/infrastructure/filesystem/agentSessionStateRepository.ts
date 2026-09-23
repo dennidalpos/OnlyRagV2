@@ -1,11 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 import type { AgentMode } from '../../domain/agent/agentTypes'
 import type { EpisodicStepRecord } from '../../domain/agent/episodicMemoryCompactor'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
-import type { AgentCompletionStatus, AgentRunIdentity, AgentVerificationEvidence } from '../../../../shared/types'
+import type { AgentCompletionStatus, AgentGuardEvent, AgentGuardId, AgentRunIdentity, AgentVerificationEvidence } from '../../../../shared/types'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 import type { AgentExecutionPhase } from '../../domain/agent/agentExecutionPhase'
@@ -58,6 +58,10 @@ export interface SavedAgentSessionState {
     verificationFixCycles?: number
   }
   versionedReadEvidence?: { filePath: string; contentHash: string }
+  /** Guard firings of the run, oldest first (bounded by MAX_GUARD_EVENTS). */
+  guardEvents?: AgentGuardEvent[]
+  /** Guard whose `stop` ended the run; distinguishes the causes folded into terminationReason 'circuit_breaker'. */
+  terminationGuard?: AgentGuardId
   ollamaRuntimeProfile?: OllamaSessionRuntimeProfile
   ollamaGenerationTelemetry?: OllamaGenerationTelemetry[]
   lastVerification?: AgentVerificationEvidence

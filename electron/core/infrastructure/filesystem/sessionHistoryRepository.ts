@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 import type { CodingSession } from '../../../../shared/types'
 import { normalizeSession, sortSessionsByRecency, upsertSession } from '../../domain/sessions/sessionHistoryDomain'
 import { safeAtomicWrite } from './safeAtomicFileWriter'

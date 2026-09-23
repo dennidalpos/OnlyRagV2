@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -36,7 +37,8 @@ describe('file version recovery', () => {
   })
 
   it('requires a read after conflict and clears it only after a successful read', () => {
-    const recoveryState: any = {}
+    const recoveryState: any = { progress: new AgentProgressPolicy() }
+    recoveryState.progress.onExecutionFailure('write_file:src/App.tsx:conflict')
     expect(updateVersionConflictRecovery({
       toolRes: { outcome: 'rejected', outputForHistory: '[FILE VERSION CONFLICT: src/App.tsx]\nNo content was written.', logMessage: 'Conflict' },
       parsedTool: { tool: 'write_file', parameters: { filePath: 'src/App.tsx' } },
@@ -58,6 +60,7 @@ describe('file version recovery', () => {
     })
     expect(recoveryState.pendingVersionConflictReadPath).toBeUndefined()
     expect(recoveryState.versionedReadEvidence.filePath).toBe('src/App.tsx')
+    expect(recoveryState.progress.executionFailuresSpent).toBe(0)
   })
 
   it('does not require an impossible read before creating an absent file', () => {

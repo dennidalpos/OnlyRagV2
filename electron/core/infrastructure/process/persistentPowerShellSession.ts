@@ -1,6 +1,6 @@
 import { spawn, execFileSync, ChildProcess } from 'node:child_process'
 import crypto from 'node:crypto'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 import { normalizePowerShellCommand } from './taskRunner'
 import { detectInteractivePrompt } from '../../domain/agent/shellStreamGuard'
 

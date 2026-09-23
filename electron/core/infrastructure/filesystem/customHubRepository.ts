@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { CustomHubInput, SkillHubSource } from '../../domain/skills/skillTypes'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 
 export const BUILTIN_HUB_SOURCES: SkillHubSource[] = [
   {

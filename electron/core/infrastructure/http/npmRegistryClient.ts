@@ -1,6 +1,6 @@
 
 
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 
 export interface PackageFacts {
   name: string

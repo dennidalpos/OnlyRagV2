@@ -1,6 +1,6 @@
 import https from 'node:https'
 import crypto from 'node:crypto'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 import { parseModelTag, type ParsedModelTarget } from '../../domain/ollama/modelUpdateChecker'
 import { httpMetrics } from './httpMetrics'
 

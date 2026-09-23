@@ -1,20 +1,17 @@
-import { BrowserWindow } from 'electron'
 import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { systemAppService } from '../application/systemAppService'
 import { taskAppService } from '../application/taskAppService'
 
-export function registerSystemIpcHandlers(winGetter: () => BrowserWindow | null) {
+export function registerSystemIpcHandlers() {
   ipcMain.handle(
     'dialog:open-file',
     async (_event: unknown, options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => {
-      const win = winGetter()
-      return systemAppService.openFileDialog(win, options)
+      return systemAppService.openFileDialog(options)
     }
   )
 
   ipcMain.handle('dialog:open-directory', async (_event: unknown, options?: { title?: string }) => {
-    const win = winGetter()
-    return systemAppService.openDirectoryDialog(win, options)
+    return systemAppService.openDirectoryDialog(options)
   })
 
   ipcMain.handle('system:check-disk-space', async (_, models: string[]) => {

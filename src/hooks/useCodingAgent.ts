@@ -1,148 +1,27 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { normalizeAgentStepBudget } from '../../shared/domain/agent/agentStepBudget'
-import {
-  AgentActionLog,
-  AgentCapabilityProfile,
-  AgentCompletionEvidence,
-  AgentCompletionStatus,
-  AgentPlan,
-  AppSettings,
-  IngestedDocument,
-  ExecutedPromptOutcome,
-  AgentChangeMetrics,
-  AgentMode,
-  AgentDoneResult,
-  AgentRunIdentity,
-  AgentContextBudgetBreakdown,
-} from '../types'
-import { useIngestedDocuments } from './useIngestedDocuments'
+import { useCallback, useEffect } from 'react'
+import type { AppSettings } from '../types'
 import { useSessionHistory } from './useSessionHistory'
 import { useWorkspaceProjects } from './useWorkspaceProjects'
 import { useWorkspaceFiles } from './useWorkspaceFiles'
-import { useAgentTerminal } from './useAgentTerminal'
 import { useGitStatus } from './useGitStatus'
-import { useGrepSearch } from './useGrepSearch'
 import { useGuestOsDiagnostics } from './useGuestOsDiagnostics'
-import { useAgentApprovals } from './useAgentApprovals'
-import { useAgentPromptQueue, type QueuedPrompt } from './useAgentPromptQueue'
-import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from '../services/globalTaskLock'
-import { soundEffectsService } from '../services/soundEffectsService'
-import { logger } from '../lib/logger'
-import { normalizeError } from '../lib/errors/errorNormalizer'
-import { createAgentRunIdentity, matchesAgentRunIdentity } from '../../shared/domain/agent/agentRunIdentity'
-import { resolveAgentCapabilityProfile } from '../../shared/domain/agent/agentCapabilityProfile'
+import type { QueuedPrompt } from './useAgentPromptQueue'
+import { useAgentActionLog } from './codingAgent/useAgentActionLog'
+import { useCodingAgentAttachments } from './codingAgent/useCodingAgentAttachments'
+import { useCodingAgentTerminal } from './codingAgent/useCodingAgentTerminal'
+import { useCodingAgentExecution } from './codingAgent/useCodingAgentExecution'
+import { useActiveSessionPlans, useCodingAgentSession } from './codingAgent/useCodingAgentSession'
 
 export type { QueuedPrompt }
 
-const EMPTY_PLANS: AgentPlan[] = []
-
-export type CodingAgentTab = 'editor' | 'terminal' | 'git_diff' | 'grep_search' | 'activities' | 'plan' | 'slm_diagnostics'
-
 /**
- * Composition root of the Coding Agent Studio: coordinates the agent loop, workspace, editor,
- * terminal, git, grep, approvals, queue and session-history hooks.
+ * Composition root of the Coding Agent Studio: wires workspace, editor, attachments, terminal, git,
+ * execution and session hooks. Each concern lives in its own hook under hooks/codingAgent/.
  */
 export function useCodingAgent(settings?: AppSettings) {
-  const [agentMode, setAgentModeState] = useState<AgentMode>('guided')
-  const [capabilityProfile, setCapabilityProfile] = useState<AgentCapabilityProfile>(() => resolveAgentCapabilityProfile(settings))
-  const [activeTab, setActiveTab] = useState<CodingAgentTab>('editor')
-  const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
+  const actionLog = useAgentActionLog()
+  const { addActionLog } = actionLog
 
-  // Agent Execution State
-  const [agentPrompt, setAgentPrompt] = useState<string>('')
-  const [actionLogs, setActionLogs] = useState<AgentActionLog[]>([])
-  const [isExecuting, setIsExecuting] = useState<boolean>(false)
-  const [activeRunIdentity, setActiveRunIdentity] = useState<Readonly<AgentRunIdentity> | null>(null)
-  const activeRunIdentityRef = useRef<Readonly<AgentRunIdentity> | null>(null)
-
-  const updateActiveRunIdentity = useCallback((identity: Readonly<AgentRunIdentity> | null) => {
-    activeRunIdentityRef.current = identity
-    setActiveRunIdentity(identity)
-  }, [])
-
-  const addActionLog = useCallback((type: AgentActionLog['type'], message: string, detail?: string, meta?: Partial<AgentActionLog>) => {
-    setActionLogs((prev) => [
-      ...prev,
-      {
-        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        type,
-        message,
-        detail,
-        timestamp: new Date().toLocaleTimeString(),
-        ...meta,
-      },
-    ])
-  }, [])
-
-  const setAgentMode = useCallback((newMode: AgentMode) => {
-    setAgentModeState(newMode)
-  }, [])
-
-  useEffect(() => {
-    if (!isExecuting) setCapabilityProfile(resolveAgentCapabilityProfile(settings))
-  }, [isExecuting, settings])
-
-  useEffect(() => {
-    if (!isExecuting) return
-    acquireGlobalTaskLock('coding')
-    return () => releaseGlobalTaskLock('coding')
-  }, [isExecuting])
-
-  const [activeSkills, setActiveSkills] = useState<string[]>([])
-  const [streamingText, setStreamingText] = useState<string>('')
-  const [currentStatusText, setCurrentStatusText] = useState<string>('')
-  const [currentStep, setCurrentStep] = useState<number>(0)
-  const [maxSteps, setMaxSteps] = useState<number | string>(() => {
-    const budget = normalizeAgentStepBudget(settings?.maxToolCallSteps)
-    return budget === 0 ? '∞' : budget
-  })
-
-  // Synchronize maxSteps with user settings when idle
-  useEffect(() => {
-    if (!isExecuting) {
-      const budget = normalizeAgentStepBudget(settings?.maxToolCallSteps)
-      setMaxSteps(budget === 0 ? '∞' : budget)
-    }
-  }, [settings?.maxToolCallSteps, isExecuting])
-
-  const [changeMetrics, setChangeMetrics] = useState<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
-  const [currentLiveModel, setCurrentLiveModel] = useState<string | null>(null)
-  const [contextBudget, setContextBudget] = useState<AgentContextBudgetBreakdown | null>(null)
-  const [forceContextCompaction, setForceContextCompaction] = useState(false)
-
-  // Modular Approvals Hook
-  const { pendingApproval, setPendingApproval, clearPendingApproval } = useAgentApprovals()
-
-  // Modular Prompt Queue Hook
-  const handleQueueNotice = useCallback((msg: string) => addActionLog('info', msg), [addActionLog])
-  const { promptQueue, addToPromptQueue, removeFromPromptQueue, editPromptInQueue, movePromptInQueue, dequeueNextPrompt, clearPromptQueue, setPromptQueue } =
-    useAgentPromptQueue(handleQueueNotice)
-
-  // Attached RAG documents
-  const [attachedDocIds, setAttachedDocIds] = useState<Set<string>>(new Set())
-  const [showDocPicker, setShowDocPicker] = useState<boolean>(false)
-
-  const handleDocsUpdated = useCallback((docs: IngestedDocument[]) => {
-    setAttachedDocIds((prev) => {
-      const next = new Set<string>()
-      const validIds = new Set(docs.map((d) => d.id))
-      prev.forEach((id) => {
-        if (validIds.has(id)) next.add(id)
-      })
-      return next
-    })
-  }, [])
-
-  const { documents: ingestedDocs } = useIngestedDocuments({
-    onDocsUpdated: handleDocsUpdated,
-  })
-
-  const ingestedDocsRef = useRef(ingestedDocs)
-  useEffect(() => {
-    ingestedDocsRef.current = ingestedDocs
-  }, [ingestedDocs])
-
-  // Workspace projects, file tree/editor, terminal, git, grep and host diagnostics
   const {
     projects,
     workspacePath,
@@ -151,53 +30,20 @@ export function useCodingAgent(settings?: AppSettings) {
     handleAddProject,
     handleRenameProject,
     handleOpenProjectPath,
-    handleRemoveProject: rawHandleRemoveProject,
+    handleRemoveProject: unregisterProject,
     handleSelectWorkspaceFolder,
-    handleToggleStandalone,
   } = useWorkspaceProjects(settings)
 
-  const handlePathPurged = useCallback((isInsideDeletedPath: (filePath: string) => boolean) => {
-    setAttachedDocIds((prev) => {
-      const next = new Set(prev)
-      for (const docId of next) {
-        const doc = ingestedDocsRef.current.find((d) => d.id === docId)
-        if (doc?.filePath && isInsideDeletedPath(doc.filePath)) next.delete(docId)
-      }
-      return next
-    })
-  }, [])
+  const attachments = useCodingAgentAttachments()
 
   const handleFileNotice = useCallback((message: string) => addActionLog('info', message), [addActionLog])
-
-  const {
-    files,
-    openFiles,
-    selectedFile,
-    editorContent,
-    setEditorContent,
-    originalContent,
-    loadedContentHash,
-    isSaved,
-    saveConflict,
-    setIsSaved,
-    pinnedFiles,
-    loadWorkspaceFiles,
-    handleOpenFile,
-    handleCloseFile,
-    handleSaveFile,
-    handleReloadConflict,
-    handleMergeConflict,
-    handleOverwriteConflict,
-    handleTogglePinFile,
-    purgeFileReferences,
-    resetWorkspaceFiles,
-    setPinnedFiles,
-  } = useWorkspaceFiles({
+  const workspaceFiles = useWorkspaceFiles({
     workspacePath,
     isStandaloneMode,
     onFileNotice: handleFileNotice,
-    onPathPurged: handlePathPurged,
+    onPathPurged: attachments.handlePathPurged,
   })
+  const { purgeFileReferences, resetWorkspaceFiles, loadWorkspaceFiles, setPinnedFiles } = workspaceFiles
 
   const handleRevealStandaloneWorkspace = useCallback(async () => {
     if (!isStandaloneMode || !workspacePath || !window.electronAPI?.openPath) return
@@ -235,723 +81,141 @@ export function useCodingAgent(settings?: AppSettings) {
     addActionLog('info', `Workspace scratch svuotato (${result.removedEntries} elementi rimossi).`)
   }, [addActionLog, isStandaloneMode, loadWorkspaceFiles, purgeFileReferences, resetWorkspaceFiles, workspacePath])
 
-  const handleCommandNotice = useCallback(
-    (command: string, output: string) => {
-      addActionLog(
-        'terminal',
-        `Command execution notice for "${command}":`,
-        `Command output indicates tool or executable is not installed on Windows PATH or exited with error.\n${output.slice(0, 300)}`,
-      )
-    },
-    [addActionLog],
-  )
-
-  const { terminalInput, setTerminalInput, terminalLogs, appendTerminalLogs, handleRunTerminalCommand, handleClearTerminal, navigateHistory } =
-    useAgentTerminal({ workspacePath, onCommandNotice: handleCommandNotice })
-
-  const { gitStatusLines, gitDiffText, isGitRepo, isFetchingGit, fetchGitStatusAndDiff, initGit } = useGitStatus(workspacePath)
-  const {
-    grepQuery,
-    setGrepQuery,
-    grepIsRegex,
-    setGrepIsRegex,
-    grepCaseInsensitive,
-    setGrepCaseInsensitive,
-    grepResults,
-    isSearchingGrep,
-    handleRunGrepSearch,
-  } = useGrepSearch(workspacePath, isStandaloneMode)
-  const { guestOsInfo, isInspectingOs, loadGuestOsInfo } = useGuestOsDiagnostics()
-
-  // Session History
-  const {
-    sessions: workspaceSessions,
-    activeSession,
-    activeSessionId,
-    createSession,
-    switchSession,
-    deleteSession,
-    clearSessions,
-    purgeWorkspace,
-    renameSession,
-    updateSessionContent,
-    updateSessionPlans,
-    persistSessionPlan,
-    beginExecutedPrompt,
-    completeExecutedPrompt,
-  } = useSessionHistory(workspacePath)
-
-  const prevSessionIdRef = useRef<string>('')
-  const [contentSessionId, setContentSessionId] = useState<string>('')
-  useEffect(() => {
-    if (activeSessionId !== prevSessionIdRef.current) {
-      prevSessionIdRef.current = activeSessionId
-      setActionLogs(activeSession?.actionLogs || [])
-      setPromptQueue(activeSession?.promptQueue || [])
-      setContentSessionId(activeSessionId)
-      setStreamingText('')
-      clearPendingApproval()
-      setCurrentStep(0)
-      setContextBudget(activeSession?.contextBudget || null)
-      setForceContextCompaction(Boolean(activeSession?.forceContextCompaction))
-    }
-  }, [activeSessionId, activeSession, clearPendingApproval, setPromptQueue])
-
-  useEffect(() => {
-    if (!activeSessionId || contentSessionId !== activeSessionId) return
-    updateSessionContent(activeSessionId, { actionLogs, promptQueue, contextBudget: contextBudget || undefined, forceContextCompaction })
-  }, [activeSessionId, actionLogs, contentSessionId, contextBudget, forceContextCompaction, promptQueue, updateSessionContent])
-
-  const completeExecutedPromptRef = useRef(completeExecutedPrompt)
-  useEffect(() => {
-    completeExecutedPromptRef.current = completeExecutedPrompt
-  }, [completeExecutedPrompt])
-
-  const runningExecutedPromptRef = useRef<{ sessionId: string; promptId: string } | null>(null)
-  const currentStepRef = useRef<number>(0)
-  const changeMetricsRef = useRef<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
-
-  const shellCommandTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const previousTabRef = useRef<CodingAgentTab | null>(null)
-  const autoOpenedTerminalRef = useRef<boolean>(false)
-  const activeTabRef = useRef(activeTab)
-
-  useEffect(() => {
-    activeTabRef.current = activeTab
-  }, [activeTab])
-
+  const terminal = useCodingAgentTerminal({ workspacePath, addActionLog })
+  const git = useGitStatus(workspacePath)
+  const { guestOsInfo, loadGuestOsInfo } = useGuestOsDiagnostics()
   useEffect(() => {
     loadGuestOsInfo()
   }, [])
 
-  useEffect(() => {
-    setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
-    setStreamingText('')
-    clearPendingApproval()
-    setCurrentStep(0)
-  }, [workspacePath, clearPendingApproval])
+  const history = useSessionHistory(workspacePath)
+  const plans = useActiveSessionPlans(history)
 
-  const toggleAttachDoc = (docId: string) => {
-    setAttachedDocIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(docId)) next.delete(docId)
-      else next.add(docId)
-      return next
-    })
-  }
+  const execution = useCodingAgentExecution({
+    settings,
+    workspacePath,
+    isStandaloneMode,
+    actionLog,
+    session: {
+      activeSessionId: history.activeSessionId,
+      activeSession: history.activeSession,
+      beginExecutedPrompt: history.beginExecutedPrompt,
+      completeExecutedPrompt: history.completeExecutedPrompt,
+      updateActiveSessionPlans: plans.updateActiveSessionPlans,
+    },
+    editor: workspaceFiles,
+    context: { ingestedDocs: attachments.ingestedDocs, attachedDocIds: attachments.attachedDocIds, pinnedFiles: workspaceFiles.pinnedFiles },
+    appendTerminalLogs: terminal.appendTerminalLogs,
+  })
 
-  // Subscribe to Agent IPC Events
-  useEffect(() => {
-    if (!window.electronAPI) return
-
-    let streamBuffer = ''
-    let streamFlushTimer: NodeJS.Timeout | null = null
-
-    const flushStreamBuffer = () => {
-      if (streamBuffer) {
-        const chunkToAdd = streamBuffer
-        streamBuffer = ''
-        setStreamingText((prev) => prev + chunkToAdd)
-      }
-      if (streamFlushTimer) {
-        clearTimeout(streamFlushTimer)
-        streamFlushTimer = null
-      }
-    }
-
-    const clearStreamBuffer = () => {
-      streamBuffer = ''
-      if (streamFlushTimer) {
-        clearTimeout(streamFlushTimer)
-        streamFlushTimer = null
-      }
-    }
-
-    const appendToStreamBuffer = (chunk: string) => {
-      if (!chunk) return
-      streamBuffer += chunk
-      if (!streamFlushTimer) {
-        streamFlushTimer = setTimeout(flushStreamBuffer, 40)
-      }
-    }
-
-    const unsubLog = window.electronAPI.onAgentLog?.((log: AgentActionLog & AgentRunIdentity) => {
-      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, log)) return
-      setActionLogs((prev) => [...prev, log])
-
-      if (log.modelName) {
-        setCurrentLiveModel(log.modelName)
-      } else if (typeof log.meta?.modelName === 'string') {
-        setCurrentLiveModel(log.meta.modelName)
-      }
-
-      if (log.type === 'tool_call') {
-        clearStreamBuffer()
-        setStreamingText('')
-        setCurrentStatusText(log.message)
-      }
-
-      if (log.type === 'terminal' && log.detail) {
-        appendTerminalLogs(`\n${log.detail}\n`)
-        if (
-          log.detail.includes('Exit Code: 1') ||
-          log.detail.includes('error') ||
-          log.detail.includes('Cannot create a project') ||
-          log.detail.includes('Error:')
-        ) {
-          soundEffectsService.play('error', settings?.enableSoundEffects !== false)
-        }
-      }
-
-      if (
-        log.type === 'info' &&
-        (log.detail?.includes('Circuit Breaker Triggered') || log.message.includes('LLM Stream error') || log.category === 'system_alert')
-      ) {
-        soundEffectsService.play('error', settings?.enableSoundEffects !== false)
-      }
-
-      if (log.type === 'tool_call' && log.message.includes('run_command')) {
-        if (shellCommandTimerRef.current) {
-          clearTimeout(shellCommandTimerRef.current)
-          shellCommandTimerRef.current = null
-        }
-        shellCommandTimerRef.current = setTimeout(() => {
-          if (activeTabRef.current !== 'terminal') {
-            previousTabRef.current = activeTabRef.current
-            autoOpenedTerminalRef.current = true
-            setActiveTab('terminal')
-          }
-          shellCommandTimerRef.current = null
-        }, 5000)
-      } else if (log.type === 'tool_call' || log.type === 'info') {
-        if (shellCommandTimerRef.current) {
-          clearTimeout(shellCommandTimerRef.current)
-          shellCommandTimerRef.current = null
-        }
-        if (autoOpenedTerminalRef.current) {
-          const prevTab: CodingAgentTab = previousTabRef.current || 'editor'
-          setActiveTab(prevTab)
-          autoOpenedTerminalRef.current = false
-          previousTabRef.current = null
-        }
-      }
-    })
-
-    const unsubFileDeleted = window.electronAPI.onWorkspaceFileDeleted?.((data: { filePath: string }) => {
-      purgeFileReferences(data.filePath)
-    })
-
-    const unsubStreamToken = window.electronAPI.onAgentStreamToken?.((data) => {
-      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, data)) return
-      if (data.chunk) {
-        appendToStreamBuffer(data.chunk)
-      }
-    })
-
-    const unsubStreamThought = window.electronAPI.onAgentStreamThought?.((data) => {
-      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, data)) return
-      if (data.chunk) {
-        appendToStreamBuffer(data.chunk)
-      }
-    })
-
-    const unsubStep = window.electronAPI.onAgentStepUpdate?.((data) => {
-      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, data)) return
-      currentStepRef.current = data.step
-      setCurrentStep(data.step)
-      clearStreamBuffer()
-      setStreamingText('')
-      if (data?.statusText) {
-        setCurrentStatusText(data.statusText)
-      }
-      if (data?.maxStepsLabel !== undefined) setMaxSteps(data.maxStepsLabel)
-      else if (data?.maxSteps !== undefined) setMaxSteps(data.maxSteps)
-      if (data?.milestones && data.milestones.length > 0) {
-        updateActiveSessionPlans((prev) => {
-          const revisionIndex = prev.findIndex((plan) => `${plan.id}:v${plan.version}` === data.planRevisionId)
-          if (revisionIndex < 0) return prev
-          const copy = [...prev]
-          copy[revisionIndex] = {
-            ...copy[revisionIndex],
-            milestones: data.milestones!,
-          }
-          return copy
-        })
-      }
-    })
-
-    const unsubContextBudget = window.electronAPI.onAgentContextBudget?.((data) => {
-      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, data)) return
-      setContextBudget(data)
-    })
-
-    const unsubApproval = window.electronAPI.onAgentApprovalRequest?.((req: any) => {
-      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, req)) return
-      setPendingApproval(req)
-      if (req) {
-        soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
-      }
-    })
-
-    const unsubSkills = window.electronAPI.onAgentSkillsMatched?.((data) => {
-      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, data)) return
-      setActiveSkills(data.skills || [])
-    })
-
-    const unsubChangeMetrics = window.electronAPI.onAgentChangeMetrics?.((data) => {
-      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, data)) return
-      if (data) {
-        changeMetricsRef.current = data
-        setChangeMetrics(data)
-      }
-    })
-
-    const unsubDone = window.electronAPI.onAgentDone?.((res: AgentDoneResult & AgentRunIdentity) => {
-      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, res)) return
-      updateActiveRunIdentity(null)
-      soundEffectsService.play(res?.success === false ? 'error' : 'completion', settings?.enableSoundEffects !== false)
-      setCurrentLiveModel(null)
-      const outcome = res?.completionStatus === 'cancelled' ? 'cancelled' : res?.success === false ? 'failed' : 'success'
-      closeRunningExecutedPrompt(outcome, res?.summary, res?.completionStatus, res?.evidence)
-      setIsExecuting(false)
-      clearStreamBuffer()
-      setStreamingText('')
-      setCurrentStatusText('')
-
-      if (shellCommandTimerRef.current) {
-        clearTimeout(shellCommandTimerRef.current)
-        shellCommandTimerRef.current = null
-      }
-      if (autoOpenedTerminalRef.current) {
-        const prevTab: CodingAgentTab = previousTabRef.current || 'editor'
-        setActiveTab(prevTab)
-        autoOpenedTerminalRef.current = false
-        previousTabRef.current = null
-      }
-
-      const nextItem = res?.completionStatus === 'cancelled' ? undefined : dequeueNextPrompt()
-      if (nextItem) {
-        setTimeout(() => {
-          executeTask(nextItem.prompt)
-        }, 300)
-      }
-    })
-
-    return () => {
-      clearStreamBuffer()
-      unsubLog?.()
-      unsubFileDeleted?.()
-      unsubStreamToken?.()
-      unsubStreamThought?.()
-      unsubStep?.()
-      unsubContextBudget?.()
-      unsubApproval?.()
-      unsubSkills?.()
-      unsubChangeMetrics?.()
-      unsubDone?.()
-    }
-  }, [dequeueNextPrompt, appendTerminalLogs, purgeFileReferences, setPendingApproval, settings?.enableSoundEffects, updateActiveRunIdentity])
-
-  const handleCancelAgent = () => {
-    const identity = activeRunIdentityRef.current
-    setCurrentStatusText('Annullamento in corso...')
-    if (window.electronAPI) {
-      if (identity && window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask(identity)
-    }
-    addActionLog('info', "Esecuzione interrotta dall'utente.")
-  }
-
-  const resetSessionViewState = () => {
-    const identity = activeRunIdentityRef.current
-    updateActiveRunIdentity(null)
-    if (isExecuting && window.electronAPI) {
-      if (identity && window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask(identity)
-    }
-    runningExecutedPromptRef.current = null
-    setIsExecuting(false)
-    setAgentPrompt('')
-    setActiveSkills([])
-    setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
-    setContextBudget(null)
-    setForceContextCompaction(false)
-    clearPendingApproval()
-  }
-
-  const handleCreateSession = () => {
-    resetSessionViewState()
-    createSession()
-    setActionLogs([])
-    clearPromptQueue()
-    setAttachedDocIds(new Set())
+  const clearRunContext = () => {
+    attachments.clearAttachedDocs()
     setPinnedFiles(new Map())
   }
 
-  const handleSwitchSession = (sessionId: string) => {
-    if (sessionId === activeSessionId) return
-    resetSessionViewState()
-    switchSession(sessionId)
-  }
-
-  const jumpToProjectAndSession = (targetWorkspacePath: string, sessionId: string) => {
-    if (targetWorkspacePath === workspacePath) {
-      handleSwitchSession(sessionId)
-      return
-    }
-    resetSessionViewState()
-    handleSelectProject(targetWorkspacePath)
-    setTimeout(() => {
-      switchSession(sessionId)
-    }, 150)
-  }
-
-  const handleDeleteSession = (sessionId: string) => {
-    if (sessionId === activeSessionId) {
-      resetSessionViewState()
-      setActionLogs([])
-      clearPromptQueue()
-      setAttachedDocIds(new Set())
-      setPinnedFiles(new Map())
-    }
-    deleteSession(sessionId)
-  }
-
-  const handleClearSessionHistory = () => {
-    resetSessionViewState()
-    clearSessions()
-    setActionLogs([])
-    clearPromptQueue()
-    setAttachedDocIds(new Set())
-    setPinnedFiles(new Map())
-  }
-
-  const handleRenameSession = (sessionId: string, newTitle: string) => {
-    renameSession(sessionId, newTitle)
-  }
-
-  const handleRemoveProject = useCallback(
-    (pathStr: string) => {
-      // 1. Purge in-memory session cache & disarm pending writes for the removed workspace
-      purgeWorkspace(pathStr)
-
-      // 2. If the removed workspace is currently active, clear all active session state immediately
-      if (pathStr === workspacePath) {
-        resetSessionViewState()
-        setActionLogs([])
-        clearPromptQueue()
-        setAttachedDocIds(new Set())
-        setPinnedFiles(new Map())
-        setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
-        setStreamingText('')
-        clearPendingApproval()
-        setCurrentStep(0)
-      }
-
-      // 3. Remove project from registry, delete .onlyrag and purge LanceDB prompt index
-      rawHandleRemoveProject(pathStr)
-    },
-    [purgeWorkspace, workspacePath, resetSessionViewState, clearPromptQueue, clearPendingApproval, rawHandleRemoveProject],
-  )
-
-  const handleNewSession = handleCreateSession
-
-  const activeSessionPlans = activeSession?.plans || EMPTY_PLANS
-  const updateActiveSessionPlans = useCallback(
-    (updater: (prev: AgentPlan[]) => AgentPlan[]) => {
-      if (!activeSessionId) return
-      updateSessionPlans(activeSessionId, updater)
-    },
-    [activeSessionId, updateSessionPlans],
-  )
-
-  const persistActiveSessionPlan = useCallback(
-    (plan: AgentPlan) => (activeSessionId ? persistSessionPlan(activeSessionId, plan) : Promise.resolve(false)),
-    [activeSessionId, persistSessionPlan],
-  )
-
-  const closeRunningExecutedPrompt = (
-    outcome: ExecutedPromptOutcome,
-    summary?: string,
-    completionStatus?: AgentCompletionStatus,
-    evidence?: AgentCompletionEvidence,
-  ) => {
-    const running = runningExecutedPromptRef.current
-    if (!running) return
-    runningExecutedPromptRef.current = null
-    completeExecutedPromptRef.current(running.sessionId, running.promptId, {
-      outcome,
-      totalSteps: currentStepRef.current,
-      metrics: changeMetricsRef.current,
-      summary,
-      completionStatus,
-      evidence,
-    })
-  }
-
-  const executeTask = async (taskPrompt: string, overrideMode?: AgentMode, planRevisionId?: string, runProfile: AgentCapabilityProfile = capabilityProfile) => {
-    if (!taskPrompt.trim() || !window.electronAPI) return
-
-    const busyModule = peekGlobalTaskLock()
-    if (busyModule && busyModule !== 'coding') {
-      const busyModuleName = busyModule === 'ingestion' ? 'Ingestione Documenti' : 'Traduzione'
-      addActionLog('info', `Impossibile avviare: ${busyModuleName} ha un task in corso. Attendi che finisca prima di procedere.`)
-      return
-    }
-
-    setIsExecuting(true)
-    setActiveSkills([])
-    setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
-    changeMetricsRef.current = { filesTouched: 0, additions: 0, deletions: 0 }
-    currentStepRef.current = 0
-    addActionLog('info', `User Prompt: ${taskPrompt}`, undefined, { category: 'user_prompt' })
-
-    const effectiveMode = overrideMode || agentMode
-    const runSessionId = activeSessionId || activeSession?.id || ''
-    if (!runSessionId) {
-      setIsExecuting(false)
-      addActionLog('info', 'Impossibile avviare: conversazione attiva non disponibile.')
-      return
-    }
-    const identity = createAgentRunIdentity({
-      conversationId: runSessionId,
-      planRevisionId,
-      workspacePath,
-    })
-    updateActiveRunIdentity(identity)
-    if (runSessionId) {
-      runningExecutedPromptRef.current = {
-        sessionId: runSessionId,
-        promptId: beginExecutedPrompt(runSessionId, taskPrompt, effectiveMode),
-      }
-    }
-
-    try {
-      const activeModel = settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
-      const activeFile =
-        selectedFile && loadedContentHash ? { name: selectedFile.name, path: selectedFile.path, content: editorContent, versionHash: loadedContentHash } : null
-
-      const attachedDocs = ingestedDocs
-        .filter((d) => attachedDocIds.has(d.id))
-        .map((d) => ({
-          id: d.id,
-          filename: d.filename,
-          extractedMarkdown: d.extractedMarkdown || '',
-        }))
-
-      const resolvedPinnedFiles = await Promise.all(
-        Array.from(pinnedFiles.values()).map(async (f) => {
-          let content = selectedFile && selectedFile.path === f.path ? editorContent : ''
-          if (!content && window.electronAPI?.readWorkspaceFile) {
-            try {
-              const res = await window.electronAPI.readWorkspaceFile(f.path)
-              if (res.success && res.content) {
-                content = res.content
-              }
-            } catch (err: any) {
-              logger.warn('useCodingAgent', `Error reading pinned file ${f.path}: ${err?.message}`)
-            }
-          }
-          return { name: f.name, path: f.path, content }
-        }),
-      )
-
-      const initialLog = actionLogs.find((l) => l.message.startsWith('User Prompt: '))
-      const initialUserTask = initialLog ? initialLog.message.replace(/^User Prompt:\s*/, '') : taskPrompt
-
-      const res = await window.electronAPI.startAgentTask({
-        identity,
-        sessionId: runSessionId,
-        userTask: taskPrompt,
-        initialUserTask,
-        agentMode: effectiveMode,
-        workspacePath,
-        isStandaloneMode,
-        activeModel,
-        activeFile,
-        pinnedFiles: resolvedPinnedFiles,
-        attachedDocs,
-        capabilityProfile: resolveAgentCapabilityProfile(runProfile),
-        forceContextCompaction,
-        settings,
-      })
-
-      if (!res?.success) {
-        if (matchesAgentRunIdentity(activeRunIdentityRef.current, identity)) updateActiveRunIdentity(null)
-        const normalized = normalizeError(res?.error || 'Errore sconosciuto', 'Coding Agent')
-        closeRunningExecutedPrompt('failed', normalized.message)
-        setIsExecuting(false)
-        addActionLog('info', `Errore avvio task: ${normalized.message}${normalized.remediation ? ` — ${normalized.remediation}` : ''}`)
-      } else if (res.runId !== identity.runId) {
-        if (matchesAgentRunIdentity(activeRunIdentityRef.current, identity)) updateActiveRunIdentity(null)
-        closeRunningExecutedPrompt('failed', 'Identità run restituita da Main non valida.')
-        setIsExecuting(false)
-        addActionLog('info', 'Errore avvio task: l’identità restituita da Main non coincide con la richiesta.')
-      } else if ((res.queuePosition || 0) > 0) {
-        addActionLog('info', `Task accettato: run ${res.runId}, posizione coda ${res.queuePosition}.`)
-      }
-    } catch (err: unknown) {
-      if (matchesAgentRunIdentity(activeRunIdentityRef.current, identity)) updateActiveRunIdentity(null)
-      const normalized = normalizeError(err, 'Coding Agent')
-      closeRunningExecutedPrompt('failed', normalized.message)
-      setIsExecuting(false)
-      addActionLog('info', `Errore esecuzione: ${normalized.message}${normalized.remediation ? ` — ${normalized.remediation}` : ''}`)
-    }
-  }
-
-  const handleAgentExecute = async (overridePrompt?: string, overrideMode?: AgentMode, planRevisionId?: string, runProfile?: AgentCapabilityProfile) => {
-    const text = typeof overridePrompt === 'string' ? overridePrompt : agentPrompt
-    if (!text.trim()) return
-
-    const isOverride = typeof overridePrompt === 'string'
-    if (isExecuting) {
-      addToPromptQueue(text)
-      if (!isOverride) setAgentPrompt('')
-      return
-    }
-
-    if (!isOverride) setAgentPrompt('')
-    await executeTask(text, overrideMode, planRevisionId, runProfile)
-  }
-
-  const FILE_MUTATION_APPROVAL_TYPES = new Set(['write_file', 'replace_chunk', 'multi_replace', 'delete_file'])
-
-  const handleApproveAction = async (approvedHunkIndices?: number[]) => {
-    if (!pendingApproval || !window.electronAPI?.respondToAgentApproval) return
-    const current = pendingApproval
-    clearPendingApproval()
-    const partialNote = approvedHunkIndices ? ` (${approvedHunkIndices.length} hunk selezionati)` : ''
-    addActionLog('tool_call', `User approved ${current.type}: ${current.target}${partialNote}`)
-    await window.electronAPI.respondToAgentApproval(current, true, approvedHunkIndices)
-    if (FILE_MUTATION_APPROVAL_TYPES.has(current.type) && selectedFile && selectedFile.path === current.target) {
-      setTimeout(() => handleOpenFile(selectedFile), 400)
-    }
-  }
-
-  const handleRejectAction = async () => {
-    if (!pendingApproval) return
-    const current = pendingApproval
-    clearPendingApproval()
-    addActionLog('info', `User rejected ${current.type}: ${current.target}`)
-    await window.electronAPI?.respondToAgentApproval?.(current, false)
-  }
-
-  const compactContext = useCallback(async () => {
-    setForceContextCompaction(true)
-    const identity = activeRunIdentityRef.current
-    const appliedToActiveRun = identity && window.electronAPI?.compactAgentContext
-      ? await window.electronAPI.compactAgentContext(identity)
-      : false
-    addActionLog(
-      'info',
-      appliedToActiveRun
-        ? '🧹 Context compaction requested: Main will reduce the next model prompt; the audit timeline remains complete.'
-        : '🧹 Context compaction enabled for the next run; the audit timeline remains complete.',
-    )
-  }, [addActionLog])
+  const session = useCodingAgentSession({
+    workspacePath,
+    history,
+    execution,
+    actionLogs: actionLog.actionLogs,
+    clearRunContext,
+    selectProject: handleSelectProject,
+    removeProject: unregisterProject,
+  })
 
   return {
-    agentMode,
-    setAgentMode,
-    activeTab,
-    setActiveTab,
-    isPromptModalOpen,
-    setIsPromptModalOpen,
-    gitStatusLines,
-    gitDiffText,
-    isGitRepo,
-    initGit,
-    changeMetrics,
-    contextBudget,
-    isFetchingGit,
-    guestOsInfo,
-    isInspectingOs,
+    // Execution
+    agentMode: execution.agentMode,
+    setAgentMode: execution.setAgentMode,
+    isPromptModalOpen: execution.isPromptModalOpen,
+    setIsPromptModalOpen: execution.setIsPromptModalOpen,
+    agentPrompt: execution.agentPrompt,
+    setAgentPrompt: execution.setAgentPrompt,
+    actionLogs: actionLog.actionLogs,
+    addActionLog,
+    isExecuting: execution.isExecuting,
+    activeRunIdentity: execution.activeRunIdentity,
+    currentLiveModel: execution.currentLiveModel,
+    currentStep: execution.currentStep,
+    maxSteps: execution.maxSteps,
+    activeSkills: execution.activeSkills,
+    streamingText: execution.streamingText,
+    currentStatusText: execution.currentStatusText,
+    changeMetrics: execution.changeMetrics,
+    contextBudget: execution.contextBudget,
+    pendingApproval: execution.pendingApproval,
+    promptQueue: execution.promptQueue,
+    removeFromPromptQueue: execution.removeFromPromptQueue,
+    editPromptInQueue: execution.editPromptInQueue,
+    handleAgentExecute: execution.handleAgentExecute,
+    handleCancelAgent: execution.handleCancelAgent,
+    handleApproveAction: execution.handleApproveAction,
+    handleRejectAction: execution.handleRejectAction,
+    compactContext: execution.compactContext,
+    // Sessions and plans
+    workspaceSessions: session.workspaceSessions,
+    activeSession: session.activeSession,
+    activeSessionId: session.activeSessionId,
+    handleCreateSession: session.handleCreateSession,
+    handleNewSession: session.handleCreateSession,
+    handleSwitchSession: session.handleSwitchSession,
+    jumpToProjectAndSession: session.jumpToProjectAndSession,
+    handleDeleteSession: session.handleDeleteSession,
+    handleRenameSession: session.handleRenameSession,
+    activeSessionPlans: plans.activeSessionPlans,
+    updateActiveSessionPlans: plans.updateActiveSessionPlans,
+    persistActiveSessionPlan: plans.persistActiveSessionPlan,
+    // Workspace, projects and host
     projects,
+    workspacePath,
+    isStandaloneMode,
     handleAddProject,
     handleRenameProject,
     handleOpenProjectPath,
-    handleRemoveProject,
+    handleRemoveProject: session.handleRemoveProject,
     handleSelectProject,
+    handleSelectWorkspaceFolder,
     handleRevealStandaloneWorkspace,
     handleExportStandaloneWorkspace,
     handleClearStandaloneWorkspace,
-    grepQuery,
-    setGrepQuery,
-    grepIsRegex,
-    setGrepIsRegex,
-    grepCaseInsensitive,
-    setGrepCaseInsensitive,
-    grepResults,
-    isSearchingGrep,
-    workspacePath,
-    isStandaloneMode,
-    files,
-    openFiles,
-    selectedFile,
-    editorContent,
-    setEditorContent,
-    originalContent,
-    isSaved,
-    saveConflict,
-    setIsSaved,
-    ingestedDocs,
-    attachedDocIds,
-    showDocPicker,
-    setShowDocPicker,
-    terminalInput,
-    setTerminalInput,
-    terminalLogs,
-    pinnedFiles,
-    agentPrompt,
-    setAgentPrompt,
-    promptQueue,
-    addToPromptQueue,
-    removeFromPromptQueue,
-    editPromptInQueue,
-    movePromptInQueue,
-    actionLogs,
-    isExecuting,
-    activeRunIdentity,
-    currentLiveModel,
-    currentStep,
-    maxSteps,
-    activeSkills,
-    streamingText,
-    currentStatusText,
-    pendingApproval,
-    setPendingApproval,
-    handleRunGrepSearch,
+    guestOsInfo,
+    // Editor and files
+    files: workspaceFiles.files,
+    openFiles: workspaceFiles.openFiles,
+    selectedFile: workspaceFiles.selectedFile,
+    editorContent: workspaceFiles.editorContent,
+    setEditorContent: workspaceFiles.setEditorContent,
+    originalContent: workspaceFiles.originalContent,
+    isSaved: workspaceFiles.isSaved,
+    setIsSaved: workspaceFiles.setIsSaved,
+    saveConflict: workspaceFiles.saveConflict,
+    pinnedFiles: workspaceFiles.pinnedFiles,
     loadWorkspaceFiles,
-    fetchGitStatusAndDiff,
-    handleSelectWorkspaceFolder,
-    handleToggleStandalone,
-    toggleAttachDoc,
-    handleTogglePinFile,
-    handleOpenFile,
-    handleCloseFile,
-    handleSaveFile,
-    handleReloadConflict,
-    handleMergeConflict,
-    handleOverwriteConflict,
-    handleRunTerminalCommand,
-    handleClearTerminal,
-    navigateHistory,
-    handleAgentExecute,
-    handleCancelAgent,
-    workspaceSessions,
-    activeSessionId,
-    activeSession,
-    activeSessionPlans,
-    updateActiveSessionPlans,
-    persistActiveSessionPlan,
-    handleCreateSession,
-    handleSwitchSession,
-    jumpToProjectAndSession,
-    handleDeleteSession,
-    handleClearSessionHistory,
-    handleRenameSession,
-    handleNewSession,
-    handleApproveAction,
-    handleRejectAction,
-    compactContext,
-    addActionLog,
+    handleOpenFile: workspaceFiles.handleOpenFile,
+    handleCloseFile: workspaceFiles.handleCloseFile,
+    handleSaveFile: workspaceFiles.handleSaveFile,
+    handleReloadConflict: workspaceFiles.handleReloadConflict,
+    handleMergeConflict: workspaceFiles.handleMergeConflict,
+    handleOverwriteConflict: workspaceFiles.handleOverwriteConflict,
+    handleTogglePinFile: workspaceFiles.handleTogglePinFile,
+    // Attachments
+    ingestedDocs: attachments.ingestedDocs,
+    attachedDocIds: attachments.attachedDocIds,
+    toggleAttachDoc: attachments.toggleAttachDoc,
+    // Terminal and git
+    terminalInput: terminal.terminalInput,
+    setTerminalInput: terminal.setTerminalInput,
+    terminalLogs: terminal.terminalLogs,
+    handleRunTerminalCommand: terminal.handleRunTerminalCommand,
+    handleClearTerminal: terminal.handleClearTerminal,
+    navigateHistory: terminal.navigateHistory,
+    gitStatusLines: git.gitStatusLines,
+    gitDiffText: git.gitDiffText,
+    isGitRepo: git.isGitRepo,
+    isFetchingGit: git.isFetchingGit,
+    fetchGitStatusAndDiff: git.fetchGitStatusAndDiff,
+    initGit: git.initGit,
   }
 }
+
+export type CodingAgentState = ReturnType<typeof useCodingAgent>

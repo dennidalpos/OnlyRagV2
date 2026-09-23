@@ -42,13 +42,13 @@ async function dispatchToLlm(
       toolCatalog: toolCallingCapable ? selectToolSchemas(toolPolicy.allowedTools) : undefined,
       previousContext: contextReuseDecision.reusedContext ? contextReuseDecision.contextTokens : undefined,
       onTokenChunk: (chunk) => {
-        if (ctx.isSessionActive() && ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
-          ctx.session.targetWindow.webContents.send('agent:stream-token', { ...ctx.session.identity, step: ctx.stepCount, chunk })
+        if (ctx.isSessionActive() && ctx.session.rendererEvents?.isAvailable()) {
+          ctx.session.rendererEvents.send('agent:stream-token', { ...ctx.session.identity, step: ctx.stepCount, chunk })
         }
       },
       onThoughtChunk: (chunk) => {
-        if (ctx.isSessionActive() && ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
-          ctx.session.targetWindow.webContents.send('agent:stream-thought', { ...ctx.session.identity, step: ctx.stepCount, chunk })
+        if (ctx.isSessionActive() && ctx.session.rendererEvents?.isAvailable()) {
+          ctx.session.rendererEvents.send('agent:stream-thought', { ...ctx.session.identity, step: ctx.stepCount, chunk })
         }
       },
       think: resolveOllamaThinkingPreference(selection.targetModel, ctx.settings, ctx.modelMetrics).think,
@@ -125,10 +125,10 @@ export async function collectTurnContext(ctx: TurnDispatchContext): Promise<Prep
     ctx.session.ollamaRuntimeProfile.options.num_predict = selection.runtimeOpts.num_predict
   }
 
-  if (ctx.isSessionActive() && ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
+  if (ctx.isSessionActive() && ctx.session.rendererEvents?.isAvailable()) {
     const promptTokens = countPromptTokens(turnPrompt)
     const promptBudgetTokens = Math.max(1, selection.runtimeOpts.num_ctx - selection.runtimeOpts.num_predict)
-    ctx.session.targetWindow.webContents.send('agent:context-budget', {
+    ctx.session.rendererEvents.send('agent:context-budget', {
       ...ctx.session.identity,
       model: selection.targetModel,
       contextWindowTokens: selection.runtimeOpts.num_ctx,
@@ -188,6 +188,7 @@ export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: Pr
     ctx.emitLog('info', `LLM Stream error on step ${ctx.stepCount}: ${dispatchResult.error}`)
     const closure = await ctx.closeApplicationRun({
       trigger: 'transport_error',
+      guard: 'transport_budget',
       reason: `Errore di trasporto LLM al passo ${ctx.stepCount}: ${dispatchResult.error}`,
     })
     return {

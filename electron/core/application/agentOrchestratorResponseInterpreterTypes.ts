@@ -1,5 +1,5 @@
 import type { AgentToolCall, AgentTaskResult } from '../domain/agent/agentTypes'
-import type { AgentCompletionEvidence, AgentCompletionStatus, AgentExecutionMode, AppSettings } from '../../../shared/types'
+import type { AgentCompletionEvidence, AgentCompletionStatus, AgentExecutionMode, AgentGuardEvent, AppSettings } from '../../../shared/types'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
@@ -10,7 +10,7 @@ import type { ToolResultMutableFlags } from './agentOrchestratorToolResultProces
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
-import type { RecoveryFailureState } from '../domain/agent/recoveryBudget'
+import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 
 export type EmitLog = (
   type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
@@ -21,22 +21,16 @@ export type EmitLog = (
 
 /** Loop-scoped counters the response interpreter and its helpers read and advance across turns. */
 export interface ResponseInterpreterState {
-  noToolStreak: number
-  /** Consecutive tool calls refused by parameter validation, reset by any call that parses. */
-  schemaRejectionStreak: number
-  /** Persistable bounded budget for equivalent invalid tool calls. */
-  schemaRecoveryFailure?: RecoveryFailureState
-  /** Persistable bounded budget for failed tool executions. */
-  executionRecoveryFailure?: RecoveryFailureState
+  /** Single progress policy: prose, schema, loop, redundancy, ask-redirect, execution and no-mutation budgets. */
+  progress: AgentProgressPolicy
   /** Existing file that must be read before another edit is accepted. */
   pendingVersionConflictReadPath?: string
   /** Latest read hash, consumed by the next edit of that file. */
   versionedReadEvidence?: { filePath: string; contentHash: string }
-  stagnationStreak: number
-  /** Consecutive loop blocks whose repeated action had actually SUCCEEDED before. */
-  redundantSuccessStreak: number
   /** Rounds of "verification failed, fix it and try again" already spent on this session. */
   verificationFixCycles: number
+  /** Every guard firing of this run (bounded), persisted and reported in the completion evidence. */
+  guardEvents: AgentGuardEvent[]
 }
 
 export interface ResponseInterpreterContext {

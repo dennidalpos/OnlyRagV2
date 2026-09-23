@@ -3,7 +3,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import yaml from 'js-yaml'
 import { app } from 'electron'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 import { SkillDefinition, SkillMetadata, SkillOriginType } from '../../domain/skills/skillTypes'
 
 export function calculateSkillChecksum(content: string): string {

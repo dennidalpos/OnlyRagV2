@@ -19,7 +19,7 @@ Renderer (src/) -> Preload (electron/preload.ts) -> IPC Main (electron/core/pres
 
 - `src/` e `electron/` non si importano a vicenda.
 - Il codice condiviso passa solo da `shared/types/` e `shared/domain/`.
-- `electron/core/presentation/` registra gli IPC tramite `secureIpcMain`, che controlla frame mittente e schema degli argomenti per canale; `application/` coordina i casi d'uso; `domain/` resta senza I/O; `infrastructure/` contiene HTTP, filesystem e processi.
+- `electron/core/presentation/` registra gli IPC tramite `secureIpcMain`, che controlla frame mittente e schema degli argomenti per canale; `application/` coordina i casi d'uso senza importare `electron` né `node:fs`; `domain/` resta senza I/O e definisce le porte (`domain/ports/`); `infrastructure/` contiene HTTP, filesystem, processi e gli adapter Electron. `npm run quality:static` verifica queste regole di import.
 - `electron/preload.ts` espone l'unica API `window.electronAPI`; `nodeIntegration` è disabilitato e `contextIsolation`/sandbox sono attivi.
 - Il Sidecar espone HTTP su `127.0.0.1:8000`; ogni operazione Ollama acquisisce l'endpoint configurato all'avvio e non condivide host mutabile. Il client supporta HTTP e HTTPS.
 

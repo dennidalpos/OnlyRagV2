@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { WorkspaceManifest } from '../../domain/agent/projectVerificationResolver'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 
 const EMPTY: WorkspaceManifest = { packageJson: null, hasFile: () => false }
 

@@ -43,4 +43,20 @@ complexity check -> [interview -> plan] -> collect_context -> propose_action
 - I comandi Git distruttivi (`reset --hard`, `clean -f`, ripristino/checkout globale, force-push e cancellazione branch) sono bloccati, non delegati alla sola approvazione.
 - Una milestone richiede deliverable ed evidenza coerenti; un esito incerto non viene ritentato automaticamente.
 
+### Politica di progresso e registro dei guard
+
+[`agentProgressPolicy.ts`](../electron/core/domain/agent/agentProgressPolicy.ts) è l'unica autorità sul non-progresso di una run: una sola tabella `PROGRESS_BUDGET` e un solo stato sostituiscono loop escape policy, circuit breaker di stagnazione, escalation dei rifiuti e contatori di streak. `AgentActionLoopDetector` resta il classificatore dei pattern (ripetizione esatta, ciclo, scritture o letture sullo stesso target, tool passato come comando shell); la policy decide quanto costa ogni evento.
+
+| Evento | Soglia | Esito |
+| --- | --- | --- |
+| Risposta solo prosa con lavoro aperto | 2 richieste di tool | poi chiusura `model_silence` |
+| Chiamata rifiutata dallo schema | 1 correzione | poi chiusura `schema_budget` |
+| Errore di esecuzione di un tool | 1 correzione, azzerata da una modifica o un comando riusciti | poi chiusura `execution_budget` |
+| Ripetizione di un'azione già riuscita | 3 avvisi `redundant_success` | poi conta come blocco di loop |
+| Blocco di loop | 2 avvisi, poi un blocco su due sposta la milestone attiva (`force_advance`) | a 20 blocchi senza budget di step: `stagnation_abort` |
+| Domanda vaga in AUTO | 2 reindirizzamenti, condivisi con i blocchi di loop | poi chiusura `ask_redirect` |
+| Step eseguiti senza modifiche effettive | 12 | chiusura `no_mutation` |
+
+Il budget di trasporto Ollama e il gate di verifica (`verification_fix_cycles`, 3 giri) restano separati. Ogni scatto viene registrato come `{ guard, action: advise | force_advance | stop, step }` (`AgentGuardId` in `shared/types`): compare nella diagnostica di sessione, in `evidence.guardEvents` dell'evento `agent:done` e nello stato persistito (`guardEvents`, `terminationGuard`), che distingue le cause raccolte sotto `terminationReason: 'circuit_breaker'`.
+
 Gli esiti tool sono strutturati (`success`, `failure`, `rejected`, `blocked`); errori incerti non vengono ripetuti automaticamente. La prova comportamentale corrente è descritta in [`verification.md`](./verification.md).

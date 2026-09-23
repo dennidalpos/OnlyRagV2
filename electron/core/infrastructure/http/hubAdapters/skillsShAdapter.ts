@@ -1,6 +1,6 @@
 import { HubSkillItem, SkillHubSource, SkillCategory } from '../../../domain/skills/skillTypes'
 import { ISkillHubAdapter } from './hubAdapterInterface'
-import { logger } from '../../../../diagnostics'
+import { logger } from '../../logging/logger'
 
 export const SKILLS_SH_FEATURED_SKILLS: Record<string, {
   name: string

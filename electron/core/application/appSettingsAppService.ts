@@ -3,7 +3,7 @@ import { normalizeOllamaHost } from '../../../shared/domain/ollamaHost'
 import { AppSettingsRepository, appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
 import { sidecarProcessManager } from '../infrastructure/process/sidecarProcessManager'
 import { sanitizeAppSettings } from '../domain/settings/appSettingsDomain'
-import { logger } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
 
 interface SidecarLifecycle {
   getLaunchedOllamaHost(): string | null
@@ -22,8 +22,9 @@ export class AppSettingsAppService {
     private readonly restartSettleMs: number = SIDECAR_RESTART_SETTLE_MS,
   ) {}
 
+  /** Rejects when settings.json exists but cannot be read, so the renderer never replaces it with defaults. */
   public async getSettings(): Promise<AppSettings | null> {
-    return this.repo.loadSettings()
+    return this.repo.loadSettingsOrThrow()
   }
 
   public async saveSettings(settings: AppSettings): Promise<boolean> {

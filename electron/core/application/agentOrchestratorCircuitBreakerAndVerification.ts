@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone, extractDeliverablePaths, findUnsatisfiedDeliverables, AWAITING_VERIFICATION_MARKER } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { captureMilestoneFileEvidence, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import {
@@ -28,14 +29,10 @@ import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
-/** Returns a `return` outcome if the stagnation circuit breaker trips into a hard stop. */
-export async function runCircuitBreaker(
-  ctx: ToolResultProcessingContext,
-  isMutating: boolean,
-  isToolFailure: boolean
-): Promise<ToolResultProcessingOutcome | null> {
-  const cbRes = ctx.circuitBreaker.recordStep(isMutating, isToolFailure)
-  if (!cbRes.shouldBreak) return null
+/** Returns a `return` outcome once the progress policy's no-mutation budget is spent. */
+export async function runCircuitBreaker(ctx: ToolResultProcessingContext, isMutating: boolean): Promise<ToolResultProcessingOutcome | null> {
+  const cbRes = ctx.recoveryState.progress.onStepExecuted(isMutating)
+  if (!cbRes) return null
 
   // The circuit breaker is forcing a pause/intervention due to stagnation/looping
   const cbMsg = `⚠️ Circuit Breaker Triggered: ${cbRes.reason}`
@@ -44,7 +41,7 @@ export async function runCircuitBreaker(
   // What the USER gets.
   const milestones = ctx.goalPlanner.getMilestones()
   const userSummary = compileSessionStopSummary({
-    reason: cbRes.reason || cbMsg,
+    reason: cbRes.reason,
     stepCount: ctx.stepCount,
     completed: milestones.filter((m) => m.status === 'verified').map((m) => `${m.id}: ${m.title}`),
     outstanding: milestones
@@ -55,7 +52,8 @@ export async function runCircuitBreaker(
 
   const closure = await ctx.closeApplicationRun({
     trigger: 'guard_stop',
-    reason: cbRes.reason || cbMsg,
+    guard: cbRes.guard,
+    reason: cbRes.reason,
     modelSummary: userSummary,
   })
   return closure.outcome === 'closed'
@@ -209,6 +207,7 @@ export async function recordMutationSideEffects(ctx: ToolResultProcessingContext
         { step: ctx.stepCount, tool: ctx.parsedTool.tool, status: 'BLOCKED', summary: stagCheck.reason || 'State Stagnation' },
         stagCheck.suggestedAction
       )
+      recordGuardEvent(ctx.recoveryState.guardEvents, 'fs_oscillation', 'advise', ctx.stepCount)
       ctx.emitLog('info', `⚡ ExecutionGuard: ${stagCheck.reason}`)
     }
   }

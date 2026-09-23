@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import fs from 'node:fs'
-import { logger, generateDiagnosticsReport, DiagnosticsData, sanitizeLogMessage } from './diagnostics'
+import { generateDiagnosticsReport, DiagnosticsData, sanitizeLogMessage } from './diagnostics'
+import { logger } from './core/infrastructure/logging/logger'
 import { redactSecrets } from './logRedactor'
 
 describe('SystemDiagnosticsLogger Tests', () => {

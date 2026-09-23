@@ -1,10 +1,11 @@
 import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
+import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import { parseAgentToolCall, type ToolCallRejection } from '../domain/agent/toolParser'
 import { buildToolSchemaCorrectionDirective } from '../domain/agent/ollamaToolSchemaCatalog'
-import { rejectionAbortSummary } from '../domain/agent/toolRejectionEscalation'
-import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recordRecoveryFailure } from '../domain/agent/recoveryBudget'
+import { schemaStopSummary } from '../domain/agent/agentProgressPolicy'
+import { MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
 import { agentToolExecutorService } from './agentToolExecutorService'
-import { logger } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { handleAskTool } from './agentOrchestratorAskAutoHealing'
 import { handleFinishTool, handleLoopDetection } from './agentOrchestratorFinishAndLoopGuards'
@@ -22,21 +23,21 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
     const rejected = rejections[rejections.length - 1]
     const toolLabel = rejected?.toolName || 'unparsed_tool'
     const signature = `${toolLabel}:${(rejected?.errors || ['unparsed']).join('|').toLowerCase()}`
-    const decision = recordRecoveryFailure(ctx.state.schemaRecoveryFailure, signature)
-    ctx.state.schemaRecoveryFailure = decision.state
-    ctx.state.schemaRejectionStreak = decision.state.equivalentFailures
+    const decision = ctx.state.progress.onSchemaRejection(signature)
 
     if (decision.action === 'stop') {
-      const summary = rejectionAbortSummary(toolLabel, ctx.state.schemaRejectionStreak)
+      const summary = schemaStopSummary(toolLabel, ctx.state.progress.schemaRejections)
       ctx.emitLog('info', `⛔ ${summary}`, undefined, { category: 'system_alert' })
       const closure = await ctx.closeApplicationRun({
         trigger: 'protocol_error',
+        guard: 'schema_budget',
         reason: summary,
         modelSummary: streamedOutput,
       })
       return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
     }
 
+    recordGuardEvent(ctx.state.guardEvents, 'schema_budget', 'advise', ctx.stepCount)
     const feedback = rejected
       ? buildToolSchemaCorrectionDirective(rejected.toolName, rejected.errors)
       : '[TOOL PARSER REJECTION DIAGNOSTIC]\nNo tool call could be parsed from your response. Emit exactly ONE fenced json block containing "tool", "parameters" and "explanation".'
@@ -49,7 +50,7 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
         target: toolLabel,
         status: 'BLOCKED',
         summary: rejected
-          ? `Tool call rejected (${ctx.state.schemaRejectionStreak}x): ${rejected.errors.join('; ').slice(0, 100)}`
+          ? `Tool call rejected (${ctx.state.progress.schemaRejections}x): ${rejected.errors.join('; ').slice(0, 100)}`
           : 'Tool call rejected: no parsable JSON tool call',
       },
       feedback,
@@ -73,8 +74,8 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
       .some((milestone) => !isCompletionMilestoneTitle(milestone) && (milestone.status === 'pending' || milestone.status === 'in_progress'))
 
   // If operational work remains, give prose-only output two chances to turn into an action.
-  if (ctx.agentMode !== 'ask' && hasOperationalWork && ctx.stepCount < ctx.maxSteps && ctx.state.noToolStreak < 2) {
-    ctx.state.noToolStreak++
+  if (ctx.agentMode !== 'ask' && hasOperationalWork && ctx.stepCount < ctx.maxSteps && ctx.state.progress.tryProseRetry()) {
+    recordGuardEvent(ctx.state.guardEvents, 'model_silence', 'advise', ctx.stepCount)
     const feedback = `[ACTION REQUIRED: NO TOOL INVOCATION DETECTED]\nYour previous response was purely descriptive while operational work is still open. Invoke one concrete tool for the current milestone. When the work is actually complete, provide the final report as prose: the application will run the final evidence gate and close the session.`
     ctx.episodicCompactor.recordStep(
       { step: ctx.stepCount, tool: 'no_tool_detected', status: 'BLOCKED', summary: 'No tool call found in conversational response' },
@@ -104,6 +105,7 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
 
   const closure = await ctx.closeApplicationRun({
     trigger: 'model_silence',
+    ...(hasOperationalWork ? { guard: 'model_silence' as const } : {}),
     reason: hasOperationalWork
       ? 'Il modello ha smesso di invocare strumenti mentre restava lavoro operativo aperto.'
       : 'Il modello ha consegnato il riepilogo finale senza richiedere un tool di chiusura.',
@@ -121,10 +123,8 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
   })
   if (!parsedTool) return handleMissingToolCall(ctx, rejections)
 
-  ctx.state.noToolStreak = 0
-  // A call that parses ends any rejection streak: the model has produced a valid shape again.
-  ctx.state.schemaRejectionStreak = 0
-  ctx.state.schemaRecoveryFailure = undefined
+  // A call that parses ends any prose or rejection streak: the model has produced a valid shape again.
+  ctx.state.progress.onToolCallParsed()
 
   if (parsedTool.tool === 'finish') return handleFinishTool(ctx, parsedTool)
 
@@ -132,7 +132,7 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
   if (loopOutcome) return loopOutcome
 
   if (parsedTool.tool === 'ask') {
-    // Deliberately does NOT reset stagnationStreak first: "ask" isn't forward progress, so a model that just burned through a write-loop's stagnation budget and pivots to asking inherits that same streak instead of getting a fresh grace period (see agentOrchestrator
+    // Deliberately does NOT reset the loop-block streak first: "ask" isn't forward progress, so a model that just burned through a write-loop's stagnation budget and pivots to asking inherits that same streak instead of getting a fresh grace period (see agentOrchestrator
     const askOutcome = await handleAskTool({
       parsedTool,
       agentMode: ctx.agentMode,
@@ -143,7 +143,8 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
       hasRecentToolFailure: ctx.hasRecentToolFailure,
       errorCountInHistory: ctx.errorCountInHistory,
       compiledHistoryBlock: ctx.compiledHistoryBlock,
-      stagnationStreak: ctx.state.stagnationStreak,
+      progress: ctx.state.progress,
+      guardEvents: ctx.state.guardEvents,
       episodicCompactor: ctx.episodicCompactor,
       emitLog: ctx.emitLog,
       emitDone: ctx.emitDone,
@@ -151,15 +152,10 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
       finalizeSession: ctx.finalizeSession,
       closeApplicationRun: ctx.closeApplicationRun,
     })
-    if (askOutcome.outcome === 'continue') {
-      ctx.state.stagnationStreak = askOutcome.stagnationStreak
-      return { outcome: 'continue' }
-    }
     return askOutcome
   }
 
-  ctx.state.stagnationStreak = 0
-  ctx.state.redundantSuccessStreak = 0
+  ctx.state.progress.onCallAccepted()
 
   ctx.emitLog('tool_call', `Step ${ctx.stepCount} Tool Call [${parsedTool.tool}]:`, JSON.stringify(parsedTool.parameters, null, 2))
   if (ctx.settings.enableCodingAgentDebugLog) {

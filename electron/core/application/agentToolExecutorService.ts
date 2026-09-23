@@ -9,10 +9,9 @@ import { visualValidationResultSchema } from '../domain/agent/visualValidationCo
 import { DiagnosticsToolService } from './diagnosticsToolService'
 import { GitToolService } from './gitToolService'
 import path from 'node:path'
-import fs from 'node:fs'
 import type { ChildProcess } from 'node:child_process'
-import { shell } from 'electron'
-import { logger } from '../../diagnostics'
+import { electronDesktopShell } from '../infrastructure/electron/electronDesktopShell'
+import { logger } from '../infrastructure/logging/logger'
 import type { AgentToolCall, SupportedToolName } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
 import { AtomicWorkspaceJournal, RollbackResult } from '../infrastructure/filesystem/atomicWorkspaceJournal'
@@ -123,8 +122,8 @@ export class AgentToolExecutorService {
     this.webToolService = new WebToolService({ recordBeforeModification: (filePath) => this.journal.recordBeforeModification(filePath) })
     this.recoveryToolService = new RecoveryToolService(this.journal)
     this.browserToolService = new BrowserToolService({
-      openExternal: (url) => shell.openExternal(url),
-      openPath: (filePath) => shell.openPath(filePath),
+      openExternal: (url) => electronDesktopShell.openExternal(url),
+      openPath: (filePath) => electronDesktopShell.openPath(filePath),
       exists: (filePath) => documentIoRepository.exists(filePath),
     })
     this.diagnosticsToolService = new DiagnosticsToolService()
@@ -640,7 +639,7 @@ export class AgentToolExecutorService {
           return { outcome: 'blocked', outputForHistory: JSON.stringify(result), logMessage: result.error || 'Visual validation unavailable', isTerminal: true }
         }
         const outputDirectory = path.join(workspacePath, '.onlyrag', 'visual-validation')
-        fs.mkdirSync(outputDirectory, { recursive: true })
+        documentIoRepository.ensureDirectory(outputDirectory)
         const evidence = await this.visualValidationRunner.captureEvidence(parameters, workspacePath, outputDirectory, signal)
         const result = 'status' in evidence && evidence.status === 'UNAVAILABLE'
           ? visualValidationResultSchema.parse({

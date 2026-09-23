@@ -1,5 +1,5 @@
 import http from 'node:http'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 import type { RunningModelInfo, OllamaGenerationOptions, OllamaModelMetrics } from '../../../../shared/types'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
 import { httpMetrics } from './httpMetrics'

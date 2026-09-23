@@ -272,6 +272,34 @@ export interface AgentCapabilityProfile {
   maxToolCallSteps: number
 }
 
+/** Editor file sent with an agent run; `versionHash` is the SHA-256 of `content`. */
+export interface ActiveFileContext {
+  name: string
+  path: string
+  content: string
+  versionHash: string
+}
+
+/** Renderer → Main request for `agent:start-task`, validated by agentTaskRequestSchema in Main. */
+export interface AgentTaskRequest {
+  identity: AgentRunIdentity
+  sessionId?: string
+  userTask: string
+  initialUserTask?: string
+  agentMode: AgentMode
+  workspacePath?: string | null
+  isStandaloneMode?: boolean
+  activeModel?: string
+  activeFile?: ActiveFileContext | null
+  pinnedFiles?: { name: string; path: string; content: string }[]
+  attachedDocs?: { id: string; filename: string; extractedMarkdown: string }[]
+  /** User-reviewed runtime constraints for this execution only. */
+  capabilityProfile?: AgentCapabilityProfile
+  /** Keeps the visible audit timeline intact while asking Main to send a smaller model context. */
+  forceContextCompaction?: boolean
+  settings?: AppSettings
+}
+
 /** Aggregate size of the file changes an agent session has applied so far. */
 export interface AgentChangeMetrics {
   filesTouched: number
@@ -651,12 +679,11 @@ export interface IElectronAPI {
   testOllamaConnection: (host?: string) => Promise<{ success: boolean; version?: string; modelsCount?: number; error?: string }>
   /** Per-model facts from Ollama's /api/tags: context length, capabilities, parameter size, quantization. */
   getOllamaModelMetrics: (host?: string) => Promise<Record<string, OllamaModelMetrics>>
-  /** Bounded in-process HTTP counters; contains no URL, query, path or payload data. */
   /** Checks for model updates against official registry using SHA256 manifest digests. */
   checkOllamaModelUpdates?: (host?: string) => Promise<Record<string, OllamaModelUpdateInfo>>
   openExternalUrl?: (url: string) => Promise<boolean>
   openPath?: (targetPath: string) => Promise<boolean>
-  startAgentTask: (payload: unknown) => Promise<AgentDoneResult & { error?: string; runId?: string; queuePosition?: number }>
+  startAgentTask: (payload: AgentTaskRequest) => Promise<AgentDoneResult & { error?: string; runId?: string; queuePosition?: number }>
   cancelAgentTask: (identity: AgentRunIdentity) => Promise<{ success: boolean; message?: string }>
   /** Answers a pending `agent:approval-request`, resuming the paused orchestrator step. */
   respondToAgentApproval?: (identity: AgentRunIdentity, approved: boolean, approvedHunkIndices?: number[]) => Promise<boolean>

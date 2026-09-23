@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.8 · 2026-09-23` — Repository facts and verified commands.
+`v1.9 · 2026-09-23` — Repository facts and verified commands.
 
 ## Scope
 
@@ -9,13 +9,13 @@
 
 ## Verified commands
 
-Run from repository root in PowerShell. The E2E commands and static checks were run on 2026-09-23.
+Run from repository root in PowerShell. The E2E commands, static checks and `npm run test:live` (8/11 scenarios passed, see tracker) were run on 2026-09-23.
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (260 files, 2017 tests; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
-| Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (140 tests) |
-| Electron Agent E2E | `npm run test:e2e:electron` (8 scenarios) |
+| Fast suite | `npm run test:fast` (262 files, 2054 tests; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (142 tests) |
+| Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 4 guard scenarios) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |
 | Cold-start network E2E | `npm run test:e2e:cold-start` (Main and Renderer first launch) |
 | Settings bootstrap E2E | `npm run test:e2e:settings-bootstrap` |
@@ -30,7 +30,8 @@ Run from repository root in PowerShell. The E2E commands and static checks were 
 ## Architecture
 
 - `src/` (Renderer) and `electron/` (Main) import shared code only from `shared/`.
-- Main layers: `electron/core/{presentation,application,domain,infrastructure}`. Domain is pure; ports live in Domain, adapters in Infrastructure.
+- Main layers: `electron/core/{presentation,application,domain,infrastructure}`. Domain is pure; ports live in `domain/ports/`, adapters in Infrastructure (Electron adapters in `infrastructure/electron/`). Application and Domain never import `electron` or `node:fs`; `scripts/check_layering.mjs` (run by `npm run quality:static`) enforces it.
+- The Main logger is `electron/core/infrastructure/logging/logger.ts`; `electron/diagnostics.ts` only holds hardware/Ollama probes and the diagnostics report.
 - `electron/core/infrastructure/http/sidecarHttpClient.ts` centralizes HTTP I/O to `:8000` and sends the per-launch `X-OnlyRag-Token` that `sidecarProcessManager` passes to the Sidecar; only `/health` is exempt.
 - Ollama HTTP from Main goes through `electron/core/infrastructure/http/ollamaTransport.ts` (http or https per configured host); defaults live in `shared/domain/ollamaHost.ts` and `shared/domain/settings/appSettingsDefaults.ts`.
 - Sidecar vectors record their `embedding_model` per chunk; search embeds the query once per stored model.

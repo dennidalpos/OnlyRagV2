@@ -76,7 +76,11 @@ export const AppLayout: React.FC = () => {
   const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false)
 
   const [settings, setSettings] = useState<AppSettings>(() => ({ ...DEFAULT_APP_SETTINGS }))
-  const [settingsReady, setSettingsReady] = useState(false)
+  // Nothing is saved, migrated or diagnosed until settings.json has been read: a failed read must never be
+  // mistaken for a first launch, or the defaults held in memory would overwrite the user's file.
+  const [settingsBootstrap, setSettingsBootstrap] = useState<{ status: 'loading' | 'ready' | 'failed'; error?: string }>({ status: 'loading' })
+  const [settingsLoadAttempt, setSettingsLoadAttempt] = useState(0)
+  const settingsReady = settingsBootstrap.status === 'ready'
   const saveChain = useRef<Promise<unknown>>(Promise.resolve())
   const isRemoteOllama = isRemoteOllamaMode(settings)
 
@@ -84,46 +88,46 @@ export const AppLayout: React.FC = () => {
   useEffect(() => {
     let isMounted = true
     const loadMainSettings = async () => {
+      if (!window.electronAPI?.getAppSettings) return
+      setSettingsBootstrap({ status: 'loading' })
       try {
-        if (window.electronAPI?.getAppSettings) {
-          let backendSettings = await window.electronAPI.getAppSettings()
-          if (!backendSettings) {
-            const legacy = localStorage.getItem('onlyrag_app_settings')
-            if (legacy) {
-              const parsed = JSON.parse(legacy) as AppSettings
-              backendSettings = {
-                ...parsed,
-                maxToolCallSteps: typeof parsed.maxToolCallSteps === 'number' && parsed.maxToolCallSteps >= 200 ? 0 : parsed.maxToolCallSteps,
-                hasCompletedInitialSetup: parsed.hasCompletedInitialSetup || localStorage.getItem('onlyrag_initial_setup_completed') === 'true',
-                language: parsed.language || (localStorage.getItem('onlyrag_language') === 'en' ? 'en' : 'it'),
-              }
-              if (window.electronAPI.saveAppSettings && !await window.electronAPI.saveAppSettings(backendSettings)) {
-                throw new Error('Legacy settings migration failed')
-              }
+        let backendSettings = await window.electronAPI.getAppSettings()
+        if (!backendSettings) {
+          const legacy = localStorage.getItem('onlyrag_app_settings')
+          if (legacy) {
+            const parsed = JSON.parse(legacy) as AppSettings
+            backendSettings = {
+              ...parsed,
+              maxToolCallSteps: typeof parsed.maxToolCallSteps === 'number' && parsed.maxToolCallSteps >= 200 ? 0 : parsed.maxToolCallSteps,
+              hasCompletedInitialSetup: parsed.hasCompletedInitialSetup || localStorage.getItem('onlyrag_initial_setup_completed') === 'true',
+              language: parsed.language || (localStorage.getItem('onlyrag_language') === 'en' ? 'en' : 'it'),
+            }
+            if (window.electronAPI.saveAppSettings && !await window.electronAPI.saveAppSettings(backendSettings)) {
+              throw new Error('Legacy settings migration failed')
             }
           }
-          if (isMounted) {
-            if (backendSettings) {
-              setSettings(backendSettings)
-              if (backendSettings.language && backendSettings.language !== language) setLanguage(backendSettings.language)
-            }
-            localStorage.removeItem('onlyrag_app_settings')
-            localStorage.removeItem('onlyrag_initial_setup_completed')
-            localStorage.removeItem('onlyrag_language')
-            if (!backendSettings?.hasCompletedInitialSetup && !backendSettings?.defaultModel) setIsWizardOpen(true)
-            setSettingsReady(true)
-          }
-          return
         }
-      } catch (err: any) {
-        logger.error('AppLayout', `Failed initializing settings from filesystem store: ${err?.message}`)
+        if (!isMounted) return
+        if (backendSettings) {
+          setSettings(backendSettings)
+          if (backendSettings.language && backendSettings.language !== language) setLanguage(backendSettings.language)
+        }
+        localStorage.removeItem('onlyrag_app_settings')
+        localStorage.removeItem('onlyrag_initial_setup_completed')
+        localStorage.removeItem('onlyrag_language')
+        if (!backendSettings?.hasCompletedInitialSetup && !backendSettings?.defaultModel) setIsWizardOpen(true)
+        setSettingsBootstrap({ status: 'ready' })
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        logger.error('AppLayout', `Failed initializing settings from filesystem store: ${message}`)
+        if (isMounted) setSettingsBootstrap({ status: 'failed', error: message })
       }
     }
     loadMainSettings()
     return () => {
       isMounted = false
     }
-  }, [setLanguage])
+  }, [setLanguage, settingsLoadAttempt])
 
   useEffect(() => {
     if (!settingsReady || !window.electronAPI?.saveAppSettings) return
@@ -452,6 +456,22 @@ export const AppLayout: React.FC = () => {
 
       {/* Main App Content View */}
       <main className="flex-1 h-full flex flex-col overflow-hidden relative">
+        {settingsBootstrap.status === 'failed' && (
+          <div
+            role="alert"
+            data-testid="settings-bootstrap-error"
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-40 w-[min(36rem,calc(100%-2rem))] flex items-start gap-3 px-4 py-3 rounded-xl border border-amber-600/60 bg-amber-950/90 text-amber-100 text-xs shadow-lg shadow-black/40"
+          >
+            <span className="flex-1 leading-relaxed">{t('sidebar.settingsLoadFailed', { error: settingsBootstrap.error || '-' })}</span>
+            <button
+              type="button"
+              onClick={() => setSettingsLoadAttempt((attempt) => attempt + 1)}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold transition-all focus-ring"
+            >
+              {t('sidebar.settingsLoadRetry')}
+            </button>
+          </div>
+        )}
         <div id="panel-ingestion" role="tabpanel" aria-labelledby="tab-ingestion" className={`h-full w-full flex flex-col ${activeTab === 'ingestion' ? '' : 'hidden'}`}>
           {visitedTabs.has('ingestion') && (
             <Suspense fallback={<ViewChunkFallback />}>

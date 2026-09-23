@@ -1,7 +1,7 @@
 import { HubSkillItem, SkillHubSource, SkillCategory } from '../../../domain/skills/skillTypes'
 import { ISkillHubAdapter } from './hubAdapterInterface'
 import { webClient } from '../webClient'
-import { logger } from '../../../../diagnostics'
+import { logger } from '../../logging/logger'
 
 export const ANTHROPIC_KNOWN_SKILLS: Record<string, { description: string; category: SkillCategory; triggers: string[]; tags: string[] }> = {
   'pdf': {

@@ -1,4 +1,4 @@
-import fs from 'node:fs'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import type { GuestOsInfo, OllamaModelMetrics } from '../../../shared/types'
 import { supportsNativeToolCalling } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 import { validateWorkspaceRealpath } from '../infrastructure/filesystem/workspaceRealpathGuard'
@@ -30,13 +30,7 @@ export interface AgentCodingPreflightResult {
 }
 
 function canWriteWorkspace(workspacePath: string | null): boolean {
-  if (!workspacePath) return false
-  try {
-    fs.accessSync(workspacePath, fs.constants.W_OK)
-    return true
-  } catch {
-    return false
-  }
+  return workspacePath ? documentIoRepository.isWritable(workspacePath) : false
 }
 
 function hasTrustedWorkspace(input: AgentCodingPreflightInput): boolean {

@@ -4,7 +4,7 @@ import https from 'node:https'
 import http from 'node:http'
 import fs from 'node:fs'
 import { spawn, exec } from 'node:child_process'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 
 export class OllamaInstallerRepository {
   installOrLaunch(): Promise<{ success: boolean; message?: string; error?: string }> {

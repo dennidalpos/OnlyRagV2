@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import fs from 'node:fs'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import path from 'node:path'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
@@ -59,7 +59,7 @@ export class WebToolService {
     }
 
     const hashFile = this.dependencies.hashFile || ((targetPath: string) =>
-      crypto.createHash('sha256').update(fs.readFileSync(targetPath)).digest('hex'))
+      crypto.createHash('sha256').update(documentIoRepository.readBytes(targetPath)).digest('hex'))
     const provenance = hashFile(pathCheck.safePath)
     return {
       outcome: 'success',

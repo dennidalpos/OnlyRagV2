@@ -10,6 +10,7 @@ import {
 } from '../domain/sidecarContract'
 import { promptHistoryIndexPayloadSchema, promptHistorySearchPayloadSchema } from '../domain/promptHistoryContract'
 import { artifactsSavePayloadSchema } from '../domain/artifactContract'
+import { agentTaskRequestSchema, planMilestoneSchema } from '../domain/agent/agentTaskContract'
 
 let mainWindow: (() => BrowserWindow | null) | null = null
 export function setTrustedIpcWindowProvider(provider: () => BrowserWindow | null): void {
@@ -39,11 +40,10 @@ const settings = z.object({
 }).passthrough()
 const session = z.object({ id: short, workspacePath: optionalPath, title: string, createdAt: short, updatedAt: short, actionLogs: z.array(jsonValue), executedPrompts: z.array(jsonValue) }).passthrough()
 const customHub = z.object({ name: short, url: z.url(), type: z.enum(['builtin', 'json-catalog', 'github-repo']).optional(), description: string.optional() })
-const hubSkill = z.object({ id: short, name: short, description: string, category: short, tags: z.array(string), triggers: z.array(string), version: short, author: string }).passthrough()
-const customSkill = z.object({ name: short, content: string, description: string.optional(), version: short.optional(), author: string.optional(), triggers: z.array(string).optional(), tags: z.array(string).optional() }).passthrough()
-const agentTask = z.object({ userTask: string, agentMode: z.enum(['ask', 'guided', 'auto']).optional() }).passthrough()
+// Display-only hub metadata may pass through; the fields read by fetchSkillContent (downloadUrl, rawContent) are validated.
+const hubSkill = z.object({ id: short, name: short, description: string, category: short, tags: z.array(string), triggers: z.array(string), version: short, author: string, downloadUrl: z.url().max(4096).optional(), rawContent: z.string().max(2_000_000).optional() }).passthrough()
+const customSkill = z.object({ name: short, content: string, description: string.optional(), version: short.optional(), author: string.optional(), triggers: z.array(string).optional(), tags: z.array(string).optional(), originHub: short.optional(), originHubId: short.optional(), originChecksum: short.optional(), isModified: z.boolean().optional() }).passthrough()
 const plan = z.object({ formatVersion: z.literal(2), id: short, version: z.number().int().nonnegative(), prompt: string, objective: string }).passthrough()
-const milestone = z.object({ id: short, title: string, status: z.enum(['pending', 'in_progress', 'verified', 'failed']) }).passthrough()
 const debugBundle = z.object({ sessionId: short, workspacePath: optionalPath, settings: settings.optional(), activeModelName: optionalString, activeSkills: z.array(short).optional() })
 const generationOptions = z.object({ num_ctx: optionalNumber, temperature: optionalNumber, top_p: optionalNumber, repeat_penalty: optionalNumber, num_thread: optionalNumber, keep_alive: optionalString, think: optionalBoolean }).strict().optional()
 const interviewAnswer = z.object({ questionId: short, questionText: string, selectedOption: string, isCustom: z.boolean().optional(), provenance: z.enum(['explicit', 'accepted_recommendation', 'unconfirmed_assumption']).optional() })
@@ -106,7 +106,7 @@ const payloadSchemas: Record<string, z.ZodType> = {
   'skills:save-custom': z.tuple([customSkill, optionalPath]),
   'skills:reset-original': z.tuple([short, optionalPath]),
   'skills:uninstall': z.tuple([short, optionalPath]),
-  'agent:start-task': z.tuple([agentTask]),
+  'agent:start-task': z.tuple([agentTaskRequestSchema]),
   'agent:cancel-task': z.tuple([identity]),
   'agent:approval-response': z.tuple([identity, z.boolean(), z.array(z.number().int().nonnegative()).optional()]),
   'agent:compact-context': z.tuple([identity]),
@@ -118,7 +118,7 @@ const payloadSchemas: Record<string, z.ZodType> = {
   'agent:plan-generate': z.tuple([string, optionalString, settings, plan.optional(), optionalPath, z.array(interviewAnswer).max(50).optional(), identity.optional()]),
   'agent:plan-cancel': z.tuple([identity]),
   'agent:get-plan-state': z.tuple([short, optionalPath, optionalString]),
-  'agent:plan-seed': z.tuple([short, optionalPath, z.array(milestone).max(100), optionalString, optionalString]),
+  'agent:plan-seed': z.tuple([short, optionalPath, z.array(planMilestoneSchema).max(100), optionalString, optionalString]),
   'agent:export-ai-debug-bundle': z.tuple([debugBundle]),
   'diagnostics:get-logs': emptyArgs,
   'diagnostics:clear-logs': emptyArgs,

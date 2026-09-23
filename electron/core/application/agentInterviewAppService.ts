@@ -3,7 +3,8 @@
 import os from 'node:os'
 import { CODING_MODEL_KEEP_ALIVE, HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
-import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
+import { getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import type {
   AppSettings,
   InterviewAnalysisResult,

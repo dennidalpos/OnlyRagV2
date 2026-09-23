@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 
 export interface FileBackupEntry {
   originalContent: string | null // null if file was newly created during the session

@@ -3,7 +3,7 @@ import type { AgentExecutionMode, AppSettings } from '../../../shared/types'
 import { compileSkillsContextBlock, type SkillMatchContext } from '../domain/skills/skillMatcher'
 import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession } from './agentOrchestratorTypes'
-import { logger } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
 import { generateCompactRepoMap } from '../infrastructure/filesystem/compactSemanticRepoMapper'
 import { resolveWorkspacePath, buildDefaultAgentSettings, buildAttachedContextBlock, buildPinnedFilesContextBlock } from './agentOrchestratorSessionSetup'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
@@ -117,7 +117,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     autoInstallMinScore: settings.autoInstallMinScore,
     onConfirmInstall: (candidate: SkillInstallCandidate) => {
       emitLog('info', `🧩 Skill Hub: richiesta conferma installazione '${candidate.skillName}' da ${candidate.hubName} (score ${candidate.score.toFixed(1)})`)
-      return skillInstallApprovalService.requestApproval(session.targetWindow, candidate, session.identity)
+      return skillInstallApprovalService.requestApproval(session.rendererEvents, candidate, session.identity)
     },
   }
 
@@ -125,8 +125,8 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   let skillsBlock = ''
   if (matchedSkills.length > 0) {
     const skillNames = matchedSkills.map((s) => s.name)
-    if (session.targetWindow && !session.targetWindow.isDestroyed()) {
-      session.targetWindow.webContents.send('agent:skills-matched', { ...session.identity, skills: skillNames })
+    if (session.rendererEvents?.isAvailable()) {
+      session.rendererEvents.send('agent:skills-matched', { ...session.identity, skills: skillNames })
     }
     emitLog('info', `✨ Skill Router: Attivate ${matchedSkills.length} skill [${skillNames.join(', ')}]`)
     if (settings.enableCodingAgentDebugLog) {

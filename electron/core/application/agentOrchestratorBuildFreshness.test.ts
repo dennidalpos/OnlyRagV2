@@ -6,7 +6,7 @@ import path from 'node:path'
 import { recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import { runToolResultProcessing } from './agentOrchestratorToolResultProcessor'
 import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
-import { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
+import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import type { ToolExecutionResult } from './agentToolExecutorService'
 import type { ToolResultProcessingContext, ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
@@ -97,10 +97,9 @@ describe('build freshness — a write that changed nothing is not a mutation', (
         getProgressSummary: () => ({ completed: 0, total: 0, percentage: 0 }),
       },
       episodicCompactor: { recordStep: () => {} },
-      circuitBreaker: new StagnationCircuitBreaker(12, 5),
       executionGuard: new TransactionalExecutionGuard(tempDir),
       loopDetector: new AgentActionLoopDetector(2),
-      recoveryState: {},
+      recoveryState: { guardEvents: [], progress: new AgentProgressPolicy() },
       sessionId: 'session-build-freshness',
       isSessionActive: () => false,
       targetWindow: null,

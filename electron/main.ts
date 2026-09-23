@@ -29,7 +29,7 @@ if (!isSingleInstance && !process.env.ONLYRAG_SMOKE_TEST && !process.argv.includ
 // Suppress noisy Chromium GPU shader disk cache locking errors on Windows
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 
-import { logger } from './diagnostics'
+import { logger } from './core/infrastructure/logging/logger'
 import { sidecarProcessManager } from './core/infrastructure/process/sidecarProcessManager'
 import { taskRunner } from './core/infrastructure/process/taskRunner'
 import { registerAgentIpcHandlers } from './core/presentation/agentIpc'
@@ -37,6 +37,7 @@ import { registerWorkspaceIpcHandlers } from './core/presentation/workspaceIpc'
 import { registerSidecarIpcHandlers } from './core/presentation/sidecarIpc'
 import { registerOllamaIpcHandlers } from './core/presentation/ollamaIpc'
 import { registerSystemIpcHandlers } from './core/presentation/systemIpc'
+import { createWindowEventSink } from './core/infrastructure/electron/rendererEventSinks'
 import { registerSkillIpcHandlers } from './core/presentation/skillIpc'
 import { registerSessionHistoryIpcHandlers } from './core/presentation/sessionHistoryIpc'
 import { registerProjectRegistryIpcHandlers } from './core/presentation/projectRegistryIpc'
@@ -154,11 +155,11 @@ app.whenReady().then(() => {
   // Clean startup residuals
   taskRunner.cleanTempResiduals().catch(() => {})
 
-  registerSystemIpcHandlers(() => win)
+  registerSystemIpcHandlers()
   registerOllamaIpcHandlers()
   registerWorkspaceIpcHandlers()
   registerSidecarIpcHandlers()
-  registerAgentIpcHandlers(() => win)
+  registerAgentIpcHandlers(createWindowEventSink(() => win))
   registerSkillIpcHandlers()
   registerSessionHistoryIpcHandlers()
   registerProjectRegistryIpcHandlers()

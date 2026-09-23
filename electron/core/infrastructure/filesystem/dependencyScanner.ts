@@ -4,7 +4,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import depcheck from 'depcheck'
 import type { MissingDependencyMap } from '../../domain/agent/dependencyIntegrityGate'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 
 /** Directories that are never the agent's own source. */
 const IGNORED = ['node_modules', 'dist', 'build', 'out', 'coverage', '.git', '.onlyrag']

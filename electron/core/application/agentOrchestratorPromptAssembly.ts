@@ -1,6 +1,7 @@
-import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
+import { getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import os from 'node:os'
-import fs from 'node:fs'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import path from 'node:path'
 import { findMatchingInstalledModel } from '../../../shared/domain/agent/modelTagMatcher'
 import { HardwareProfileResolver, type OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
@@ -133,7 +134,7 @@ export function readTurnFileContext(
     try {
       const absolute = path.resolve(root, relativePath)
       if (absolute !== root && !absolute.startsWith(`${root}${path.sep}`)) continue
-      const content = fs.readFileSync(absolute, 'utf-8')
+      const content = documentIoRepository.readText(absolute)
       if (!content.trim()) continue
       const role = index === 0 ? 'PRIMARY EDIT FILE' : 'SUPPORT FRAGMENT'
       const cap = index === 0 ? PRIMARY_FILE_CHAR_CAP : SUPPORT_FILE_CHAR_CAP
@@ -169,7 +170,7 @@ function resolveEditTargetState(ctx: TurnDispatchContext, targets: readonly stri
   const root = path.resolve(ctx.workspacePath)
   const target = path.resolve(root, targets[0])
   if (target !== root && !target.startsWith(`${root}${path.sep}`)) return 'unknown'
-  return fs.existsSync(target) ? 'existing' : 'missing'
+  return documentIoRepository.exists(target) ? 'existing' : 'missing'
 }
 
 /** Builds the fresh, bounded facts needed for only the current operation. */

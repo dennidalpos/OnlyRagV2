@@ -45,12 +45,22 @@ describe('AppSettingsRepository Unit Tests', () => {
     expect(loaded?.capabilityPolicyMode).toBe('offline-strict')
   })
 
-  it('should recover gracefully from corrupted settings.json', async () => {
+  it('falls back to null for Main readers but rejects strict reads of a corrupted settings.json', async () => {
     const target = path.join(tmpDir, 'settings.json')
     fs.writeFileSync(target, '{ invalid json syntax ...', 'utf-8')
 
-    const loaded = await repo.loadSettings()
-    expect(loaded).toBeNull()
+    await expect(repo.loadSettings()).resolves.toBeNull()
+    await expect(repo.loadSettingsOrThrow()).rejects.toThrow('Settings file is unreadable')
+    expect(fs.readFileSync(target, 'utf-8')).toBe('{ invalid json syntax ...')
+  })
+
+  it('rejects strict reads of an unsupported settings version without rewriting it', async () => {
+    const target = path.join(tmpDir, 'settings.json')
+    const content = JSON.stringify({ version: 99, settings: { defaultModel: 'future' } })
+    fs.writeFileSync(target, content, 'utf-8')
+
+    await expect(repo.loadSettingsOrThrow()).rejects.toThrow('Unsupported settings version')
+    expect(fs.readFileSync(target, 'utf-8')).toBe(content)
   })
 
   it('migrates flat legacy budgets while preserving finite 200 in the versioned format', async () => {

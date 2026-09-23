@@ -1,11 +1,47 @@
 import React from 'react'
 import { AppSettings, DiagnosticsData } from '../../types'
 import { AgentActionLogPanel } from './AgentActionLogPanel'
-import type { useCodingAgent } from '../../hooks/useCodingAgent'
+import type { CodingAgentState } from '../../hooks/useCodingAgent'
 import type { usePlanApproval } from '../../hooks/usePlanApproval'
 
+/** The Coding Agent fields the timeline and composer read. */
+export type CodingAgentLeftPanelModel = Pick<
+  CodingAgentState,
+  | 'actionLogs'
+  | 'agentMode'
+  | 'setAgentMode'
+  | 'agentPrompt'
+  | 'setAgentPrompt'
+  | 'isExecuting'
+  | 'currentStep'
+  | 'maxSteps'
+  | 'activeSkills'
+  | 'streamingText'
+  | 'currentStatusText'
+  | 'handleCancelAgent'
+  | 'pinnedFiles'
+  | 'handleTogglePinFile'
+  | 'ingestedDocs'
+  | 'attachedDocIds'
+  | 'toggleAttachDoc'
+  | 'selectedFile'
+  | 'contextBudget'
+  | 'handleOpenFile'
+  | 'promptQueue'
+  | 'removeFromPromptQueue'
+  | 'editPromptInQueue'
+  | 'setIsPromptModalOpen'
+  | 'handleNewSession'
+  | 'compactContext'
+  | 'workspacePath'
+  | 'activeSession'
+  | 'handleSelectWorkspaceFolder'
+  | 'changeMetrics'
+  | 'files'
+>
+
 interface CodingAgentLeftPanelProps {
-  c: ReturnType<typeof useCodingAgent>
+  c: CodingAgentLeftPanelModel
   planApproval: ReturnType<typeof usePlanApproval>
   leftPanelWidth: number
   showWorkspaceSidebar: boolean

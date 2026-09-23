@@ -5,7 +5,8 @@ import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGra
 import { compilePlanMilestones } from '../../../shared/domain/agent/planCompilation'
 import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { collectProjectPlanningFacts } from './projectPlanningFacts'
-import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
+import { getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type {
   AgentPlan,

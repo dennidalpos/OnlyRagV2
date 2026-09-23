@@ -4,9 +4,14 @@ import type { AgentToolCall } from './agentTypes'
 /** How the previous invocations of a repeated action actually ended. */
 export type RepeatOutcomeKind = 'succeeding' | 'failing' | 'unknown'
 
+/** Which repetition pattern tripped the detector. */
+export type LoopPattern = 'shell_tool_confusion' | 'exact_repeat' | 'cycle' | 'same_file_edits' | 'same_target_reads'
+
 export interface LoopCheckResult {
   isLooping: boolean
   consecutiveDuplicateCount: number
+  /** Set whenever `isLooping` is true. */
+  pattern?: LoopPattern
   suggestedIntervention?: string
   /** Only meaningful when `isLooping` is true. */
   repeatOutcome?: RepeatOutcomeKind
@@ -132,6 +137,7 @@ export class AgentActionLoopDetector {
           return {
             isLooping: true,
             consecutiveDuplicateCount: consecutiveToolKeywordCmds + 1,
+            pattern: 'shell_tool_confusion',
             suggestedIntervention: [
               `[CRITICAL SHELL-TOOL CONFUSION LOOP: "${matchedKeyword}" PASSED AS SHELL COMMAND ${consecutiveToolKeywordCmds + 1} TIMES]`,
               `"${matchedKeyword}" is a STRUCTURED TOOL — it is NOT a shell executable.`,
@@ -165,6 +171,7 @@ export class AgentActionLoopDetector {
       return {
         isLooping: true,
         consecutiveDuplicateCount: duplicateCount,
+        pattern: 'exact_repeat',
         suggestedIntervention,
         repeatOutcome,
       }
@@ -176,6 +183,7 @@ export class AgentActionLoopDetector {
       return {
         isLooping: true,
         consecutiveDuplicateCount: cycleRes.cycleLength || 2,
+        pattern: 'cycle',
         suggestedIntervention: cycleRes.suggestedDirective,
       }
     }
@@ -196,6 +204,7 @@ export class AgentActionLoopDetector {
         return {
           isLooping: true,
           consecutiveDuplicateCount: sameFileEdits,
+          pattern: 'same_file_edits',
           suggestedIntervention: `[CRITICAL FILE EDIT LOOP: ${sameFileEdits} EDITS ON ${target} WITHOUT VERIFICATION]\nYou have executed ${sameFileEdits} edit operations (write_file/replace_file_content/multi_replace_file_content) on "${target}" in a row, without verifying any of them.\nDO NOT edit "${target}" again in your next step.\nDirectives:\n1. Execute a build, test, or typecheck command via run_command (e.g. npm run build, npm test, npm run typecheck) to verify syntax and runtime integrity.\n2. If your implementation is complete and verified, invoke the finish tool immediately.${configDirectives}`,
           // Edits that all landed are redundancy, not stagnation: the file exists and the milestone is reachable.
           repeatOutcome: this.classifyRepeatOutcome(toolCall),
@@ -214,6 +223,7 @@ export class AgentActionLoopDetector {
         return {
           isLooping: true,
           consecutiveDuplicateCount: consecutiveReads,
+          pattern: 'same_target_reads',
           suggestedIntervention: `[CRITICAL READ LOOP INTERVENTION: REPEATED READS ON ${target}]\nYou have called read/inspect tools on "${target}" ${consecutiveReads} consecutive times without making any file changes or running commands.\nDO NOT call read_file or list_dir again on this target.\nDirectives:\n1. The file contents are ALREADY visible in your RECENT DETAILED TOOL OUTPUTS.\n2. Proceed IMMEDIATELY with write_file, replace_file_content, or run_command to make progress.\n3. If you have completed all changes, execute your verification build/test command or call finish.`,
         }
       }

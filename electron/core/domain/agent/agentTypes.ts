@@ -1,33 +1,12 @@
-import type { AgentCapabilityProfile, AgentCompletionEvidence, AgentCompletionStatus, AgentRunIdentity, AppSettings } from '../../../../shared/types'
+import type { AgentCompletionEvidence, AgentCompletionStatus, AgentRunIdentity, AgentTaskRequest } from '../../../../shared/types'
 
-export type AgentMode = 'ask' | 'guided' | 'auto'
+export type { ActiveFileContext, AgentMode } from '../../../../shared/types'
 
-export interface ActiveFileContext {
-  name: string
-  path: string
-  content: string
-  versionHash: string
-}
-
-export interface AgentTaskPayload {
+/** The validated renderer request plus fields only Main may set; in-process callers may omit the identity. */
+export type AgentTaskPayload = Omit<AgentTaskRequest, 'identity'> & {
   identity?: AgentRunIdentity
-  userTask: string
-  initialUserTask?: string
-  agentMode: AgentMode
-  sessionId?: string
-  workspacePath?: string | null
   /** Original user-selected root when the task runs in an isolated workspace copy. */
   sourceWorkspacePath?: string | null
-  /** User-reviewed runtime constraints for this execution only. */
-  capabilityProfile?: AgentCapabilityProfile
-  isStandaloneMode?: boolean
-  activeModel?: string
-  pinnedFiles?: { name: string; path: string; content: string }[]
-  attachedDocs?: { id: string; filename: string; extractedMarkdown: string }[]
-  activeFile?: ActiveFileContext | null
-  /** Keeps the visible audit timeline intact while asking Main to send a smaller model context. */
-  forceContextCompaction?: boolean
-  settings?: AppSettings
 }
 
 export type AgentLogCategory =

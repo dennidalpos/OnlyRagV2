@@ -2,7 +2,7 @@ import React from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
 import { FileCode2, ChevronRight, Copy, Check } from 'lucide-react'
 import { AppSettings } from '../../types'
-import { useCodingAgent } from '../../hooks/useCodingAgent'
+import type { CodingAgentState } from '../../hooks/useCodingAgent'
 import { useTranslation } from '../../i18n'
 import { getLanguageFromExtension, getBreadcrumbParts } from './codingEditorUtils'
 import {
@@ -11,8 +11,11 @@ import {
   getStandardMonacoOptions,
 } from '../../lib/monacoTheme'
 
+/** The editor buffer fields the Monaco view reads and writes. */
+export type CodingEditorContentModel = Pick<CodingAgentState, 'selectedFile' | 'originalContent' | 'editorContent' | 'setEditorContent' | 'setIsSaved'>
+
 interface CodingEditorContentProps {
-  c: ReturnType<typeof useCodingAgent>
+  c: CodingEditorContentModel
   settings?: AppSettings
   isDiffMode: boolean
   copiedPath: boolean

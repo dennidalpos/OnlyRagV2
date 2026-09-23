@@ -5,7 +5,6 @@ import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/plan
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import type { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import type { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
-import type { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
 import type { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import type { SkillMatchContext } from '../domain/skills/skillMatcher'
 import type { SkillMatchingOptions } from './skillAppService'
@@ -61,7 +60,6 @@ export interface AgentSessionBootstrap {
   goalPlanner: GoalDecompositionPlanner
   fsmMode: AgentRuntimeModeFsm
   executionGuard: TransactionalExecutionGuard
-  circuitBreaker: StagnationCircuitBreaker
   loopDetector: AgentActionLoopDetector
   /** DoD violation reasons already surfaced to the model -- each intercepts `finish` at most once. */
   surfacedDodReasons: Set<string>
@@ -91,8 +89,8 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
   const { payload, session, sessionId, isSessionActive, deregisterSession } = params
 
   const emitLog: AgentSessionBootstrap['emitLog'] = (type, message, detail, meta) => {
-    if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
-      session.targetWindow.webContents.send('agent:log', {
+    if (isSessionActive() && session.rendererEvents?.isAvailable()) {
+      session.rendererEvents.send('agent:log', {
         ...session.identity,
         id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         timestamp: new Date().toISOString(),
@@ -109,8 +107,8 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
   }
 
   const emitDone = (success: boolean, summary: string, completionStatus?: AgentCompletionStatus, evidence?: AgentCompletionEvidence) => {
-    if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
-      session.targetWindow.webContents.send('agent:done', { ...session.identity, success, summary, completionStatus, evidence })
+    if (isSessionActive() && session.rendererEvents?.isAvailable()) {
+      session.rendererEvents.send('agent:done', { ...session.identity, success, summary, completionStatus, evidence })
     }
   }
 

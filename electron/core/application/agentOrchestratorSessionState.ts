@@ -8,7 +8,7 @@ import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { GoalDecompositionPlanner, type PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
-import { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
+import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import type { SavedAgentSessionState } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
@@ -43,7 +43,6 @@ export interface SessionState {
   goalPlanner: GoalDecompositionPlanner
   fsmMode: AgentRuntimeModeFsm
   executionGuard: TransactionalExecutionGuard
-  circuitBreaker: StagnationCircuitBreaker
   loopDetector: AgentActionLoopDetector
   /** DoD violation reasons already surfaced to the model -- each intercepts `finish` at most once. */
   surfacedDodReasons: Set<string>
@@ -148,15 +147,12 @@ export async function initializeSessionState(params: SessionStateParams): Promis
   }
   // Same pattern, for the counters agentOrchestratorResponseInterpreter.ts advances.
   const responseInterpreterState: SessionState['responseInterpreterState'] = {
-    noToolStreak: 0,
-    schemaRejectionStreak: 0,
-    stagnationStreak: 0,
-    redundantSuccessStreak: 0,
+    progress: new AgentProgressPolicy(),
     verificationFixCycles: 0,
+    guardEvents: [],
   }
   const surfacedDodReasons = new Set<string>()
   const loopDetector = new AgentActionLoopDetector(2)
-  const circuitBreaker = new StagnationCircuitBreaker(12, 5)
   const executionGuard = new TransactionalExecutionGuard(workspacePath || process.cwd())
 
   const savedState = await agentSessionStateRepository.loadSessionState(sessionId, workspacePath)
@@ -164,12 +160,14 @@ export async function initializeSessionState(params: SessionStateParams): Promis
   const initialUserTask = executionState?.initialUserTask || seededInitialTask || payload.initialUserTask || userTask
 
   if (executionState) {
-    responseInterpreterState.schemaRecoveryFailure = executionState.recoveryFailures?.schema
-    responseInterpreterState.executionRecoveryFailure = executionState.recoveryFailures?.execution
+    responseInterpreterState.progress = new AgentProgressPolicy({
+      schemaFailure: executionState.recoveryFailures?.schema,
+      executionFailure: executionState.recoveryFailures?.execution,
+    })
     responseInterpreterState.pendingVersionConflictReadPath = executionState.recoveryFailures?.versionConflictReadPath
     responseInterpreterState.versionedReadEvidence = executionState.versionedReadEvidence
-    responseInterpreterState.schemaRejectionStreak = executionState.recoveryFailures?.schema?.equivalentFailures || 0
     responseInterpreterState.verificationFixCycles = executionState.recoveryFailures?.verificationFixCycles || 0
+    responseInterpreterState.guardEvents = [...(executionState.guardEvents || [])]
     stepCountBox.value = executionState.stepCount || 0
     if (executionState.episodes && executionState.episodes.length > 0) {
       episodicCompactor.fromState(executionState.episodes, executionState.recentFullLogs)
@@ -195,7 +193,6 @@ export async function initializeSessionState(params: SessionStateParams): Promis
     goalPlanner,
     fsmMode,
     executionGuard,
-    circuitBreaker,
     loopDetector,
     surfacedDodReasons,
     mutableFlags,

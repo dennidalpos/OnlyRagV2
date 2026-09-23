@@ -1,10 +1,12 @@
 
 
-import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { BrowserWindow } from 'electron'
-import { logger } from '../../diagnostics'
+import type { RendererEventSink } from '../domain/ports/rendererEventSink'
+import type { DesktopShellPort } from '../domain/ports/desktopShellPort'
+import { allWindowsEventSink } from '../infrastructure/electron/rendererEventSinks'
+import { electronDesktopShell } from '../infrastructure/electron/electronDesktopShell'
+import { logger } from '../infrastructure/logging/logger'
 import { sidecarProcessManager } from '../infrastructure/process/sidecarProcessManager'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
@@ -43,6 +45,11 @@ export function getAnomalyRemediation(anomalyType: string): string {
 }
 
 export class SidecarAppService {
+  constructor(
+    private readonly rendererEvents: RendererEventSink = allWindowsEventSink,
+    private readonly desktop: DesktopShellPort = electronDesktopShell,
+  ) {}
+
   async checkHealth() {
     await sidecarProcessManager.checkSidecarHealth()
     return sidecarProcessManager.getSidecarState()
@@ -100,13 +107,7 @@ export class SidecarAppService {
           normalization_think: normalizationThink === true,
           embedding_model: await this.configuredEmbeddingModel(),
         },
-        (event) => {
-          BrowserWindow.getAllWindows().forEach((win) => {
-            if (!win.isDestroyed()) {
-              win.webContents.send('ingest:stream-progress', { ...event, taskId: effectiveTaskId })
-            }
-          })
-        },
+        (event) => this.rendererEvents.send('ingest:stream-progress', { ...event, taskId: effectiveTaskId }),
         (cancelFn) => {
           cancelRequest = cancelFn
           taskRunner.registerActiveTask(
@@ -200,13 +201,7 @@ export class SidecarAppService {
         num_ctx: numCtx || undefined,
         think: think === true,
       },
-      (event) => {
-        BrowserWindow.getAllWindows().forEach((win) => {
-          if (!win.isDestroyed()) {
-            win.webContents.send('ingest:translate-progress', event)
-          }
-        })
-      }
+      (event) => this.rendererEvents.send('ingest:translate-progress', event)
     )
 
     if (result.success && result.data) {
@@ -336,25 +331,23 @@ export class SidecarAppService {
     const generatedFilename = `OnlyRag_Export_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.${defaultExt}`
 
     try {
-      const { app, dialog, shell } = await import('electron')
-
       let targetPath: string
       if (outputFolder && outputFolder.trim() && documentIoRepository.exists(outputFolder)) {
         targetPath = path.join(outputFolder, generatedFilename)
       } else {
-        const saveRes = await dialog.showSaveDialog({
+        const chosenPath = await this.desktop.showSaveDialog({
           title: `Esporta Documento (${defaultExt.toUpperCase()})`,
-          defaultPath: path.join(app.getPath('downloads'), generatedFilename),
+          defaultFileName: generatedFilename,
           filters: [
             { name: `${defaultExt.toUpperCase()} Document (*.${defaultExt})`, extensions: [defaultExt] },
             { name: 'Tutti i file (*.*)', extensions: ['*'] },
           ],
         })
 
-        if (saveRes.canceled || !saveRes.filePath) {
+        if (!chosenPath) {
           return { success: false, message: "Salvataggio annullato dall'utente." }
         }
-        targetPath = saveRes.filePath
+        targetPath = chosenPath
       }
 
       if (defaultExt === 'md') {
@@ -362,7 +355,7 @@ export class SidecarAppService {
         if (!writeRes.success) {
           return { success: false, error: writeRes.error }
         }
-        shell.showItemInFolder(targetPath)
+        this.desktop.showItemInFolder(targetPath)
         logger.log('INFO', 'SidecarApp', `Markdown document exported successfully to: ${targetPath}`)
         return {
           success: true,
@@ -379,7 +372,7 @@ export class SidecarAppService {
         if (!writeRes.success) {
           return { success: false, error: writeRes.error }
         }
-        shell.showItemInFolder(targetPath)
+        this.desktop.showItemInFolder(targetPath)
         logger.log('INFO', 'SidecarApp', `PDF/DOCX document exported successfully to: ${targetPath}`)
         return {
           success: true,
@@ -453,7 +446,7 @@ export class SidecarAppService {
 
     for (const logPath of logFiles) {
       try {
-        const raw = fs.readFileSync(logPath, 'utf8')
+        const raw = documentIoRepository.readText(logPath)
         const lines = raw.split(/\r?\n/)
         report.scanned_files.push(logPath)
         report.total_lines_scanned += lines.length
@@ -580,26 +573,9 @@ export class SidecarAppService {
   }
 
   private collectLogFiles(dirs: string[]): string[] {
-    const files: string[] = []
-    for (const dir of dirs) {
-      if (!fs.existsSync(dir)) continue
-      try {
-        const stat = fs.statSync(dir)
-        if (stat.isFile()) {
-          files.push(dir)
-        } else if (stat.isDirectory()) {
-          const entries = fs.readdirSync(dir, { withFileTypes: true })
-          for (const ent of entries) {
-            if (ent.isFile() && (ent.name.endsWith('.log') || ent.name.endsWith('.txt'))) {
-              files.push(path.join(dir, ent.name))
-            }
-          }
-        }
-      } catch (err: any) {
-        logger.log('WARN', 'SidecarApp', `Cannot scan log directory ${dir}: ${err.message}`)
-      }
-    }
-    return Array.from(new Set(files))
+    const { files, failures } = documentIoRepository.listFilesWithExtensions(dirs, ['.log', '.txt'])
+    for (const failure of failures) logger.log('WARN', 'SidecarApp', `Cannot scan log directory ${failure.path}: ${failure.error}`)
+    return files
   }
 }
 

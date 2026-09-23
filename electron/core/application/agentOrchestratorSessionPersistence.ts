@@ -104,12 +104,14 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
       completionStatus,
       executionPhase: phaseController.getPhase(),
       recoveryFailures: {
-        schema: responseInterpreterState.schemaRecoveryFailure,
-        execution: responseInterpreterState.executionRecoveryFailure,
+        schema: responseInterpreterState.progress.snapshot().schemaFailure,
+        execution: responseInterpreterState.progress.snapshot().executionFailure,
         versionConflictReadPath: responseInterpreterState.pendingVersionConflictReadPath,
         verificationFixCycles: responseInterpreterState.verificationFixCycles,
       },
       versionedReadEvidence: responseInterpreterState.versionedReadEvidence,
+      guardEvents: [...responseInterpreterState.guardEvents],
+      ...(terminationReason ? { terminationGuard: [...responseInterpreterState.guardEvents].reverse().find((event) => event.action === 'stop')?.guard } : {}),
       ollamaRuntimeProfile: session.ollamaRuntimeProfile,
       ollamaGenerationTelemetry: session.ollamaGenerationTelemetry,
       lastVerification: session.lastVerification,
@@ -121,8 +123,8 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
   }
 
   const emitStepUpdate = (statusText?: string) => {
-    if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
-      session.targetWindow.webContents.send('agent:step-update', {
+    if (isSessionActive() && session.rendererEvents?.isAvailable()) {
+      session.rendererEvents.send('agent:step-update', {
         ...session.identity,
         step: stepCountBox.value,
         maxSteps: MAX_STEPS === Infinity ? 999 : MAX_STEPS,

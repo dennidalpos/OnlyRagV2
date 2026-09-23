@@ -2,7 +2,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 
 /** Declaration files above this are re-export barrels or bundled monsters; neither repays reading further. */
 const MAX_DECLARATION_BYTES = 512 * 1024

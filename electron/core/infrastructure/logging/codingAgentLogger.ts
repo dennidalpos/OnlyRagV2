@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
-import { logger } from '../../../diagnostics'
+import { logger } from './logger'
 import { sanitizeLogMessage } from '../../../logRedactor'
 import { AgentRunMetrics } from '../../domain/agent/agentRunMetrics'
 import { createHash } from 'node:crypto'

@@ -1,6 +1,6 @@
 import type { AgentCompletionEvidence, AgentCompletionStatus, AppSettings } from '../../../shared/types'
 import type { AgentSession, ApprovalResponse } from './agentOrchestratorTypes'
-import { logger } from '../../diagnostics'
+import { logger } from '../infrastructure/logging/logger'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
@@ -75,12 +75,12 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
   /** Sends `agent:approval-request` and pauses the calling step in place until the renderer answers via the `agent:approval-response` IPC channel (see `respondToApproval` in agentOrchestratorAppService.ts), or until cancellation/timeout resolves it to `false`. */
   const requestApproval = (approvalPayload: Record<string, unknown>): Promise<ApprovalResponse> => {
     return new Promise<ApprovalResponse>((resolve) => {
-      if (!session.targetWindow || session.targetWindow.isDestroyed()) {
+      if (!session.rendererEvents?.isAvailable()) {
         resolve({ approved: false })
         return
       }
       session.pendingApprovalResolve = resolve
-      session.targetWindow.webContents.send('agent:approval-request', {
+      session.rendererEvents.send('agent:approval-request', {
         ...session.identity,
         sessionId: session.id,
         ...approvalPayload,

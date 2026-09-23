@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import type { ObservedToolCallingProtocol } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 import type { AgentCompletionStatus, AgentRunIdentity, AgentVerificationEvidence } from '../../../shared/types'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
@@ -15,7 +15,7 @@ export interface AgentSession {
   identity: Readonly<AgentRunIdentity>
   isCancelled: boolean
   abortController?: AbortController
-  targetWindow: BrowserWindow | null
+  rendererEvents: RendererEventSink | null
   activeCancelHandle?: (() => void) | null
   activeChildProcess?: any | null
   /** Global session watchdog. Cleared on every exit path so it can never outlive its own run. */

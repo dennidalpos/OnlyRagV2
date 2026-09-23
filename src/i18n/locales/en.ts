@@ -86,6 +86,9 @@ export const en: TranslationSchema = {
     switchLanguage: 'Switch Language (IT/EN)',
     contributionsAndInfo: 'Info & Credits',
     quickStatus: 'Resource Status',
+    settingsLoadFailed:
+      'Saved settings could not be read: {error}. The file is left untouched and automatic diagnostics stay paused until loading succeeds.',
+    settingsLoadRetry: 'Retry',
   },
   chat: {
     title: 'Multi-Document RAG & Chat',
@@ -368,6 +371,7 @@ export const en: TranslationSchema = {
     inplaceTargetDirLabel: 'Destination Folder (Required)',
     inplaceTargetDirPlaceholder: 'Select destination folder for the translated file...',
     inplaceTargetDirRequired: 'You must specify a destination folder before starting translation.',
+    noModelConfigured: 'No translation model is configured. Choose a translation or default model in Settings.',
     inplaceBrowse: 'Browse Folder...',
     inplaceBrowseTitle: 'Select folder to save translated document',
     inplaceStartBtn: 'Start Layout-Preserving Translation',

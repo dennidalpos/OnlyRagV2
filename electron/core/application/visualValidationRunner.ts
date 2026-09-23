@@ -1,4 +1,4 @@
-import fs from 'node:fs'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { chromium } from 'playwright'
@@ -52,8 +52,8 @@ interface BrowserRuntime {
 export class VisualValidationRunner {
   constructor(
     private readonly runtime: BrowserRuntime = chromium,
-    private readonly fileExists: (filePath: string) => boolean = (filePath) => fs.existsSync(filePath),
-    private readonly statFile: (filePath: string) => { isFile(): boolean } = (filePath) => fs.statSync(filePath),
+    private readonly fileExists: (filePath: string) => boolean = (filePath) => documentIoRepository.exists(filePath),
+    private readonly statFile: (filePath: string) => { isFile(): boolean } = (filePath) => ({ isFile: () => documentIoRepository.isFile(filePath) }),
   ) {}
 
   async launchArtifact(

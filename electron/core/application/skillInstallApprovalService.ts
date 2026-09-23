@@ -1,5 +1,5 @@
-import { BrowserWindow } from 'electron'
-import { logger } from '../../diagnostics'
+import type { RendererEventSink } from '../domain/ports/rendererEventSink'
+import { logger } from '../infrastructure/logging/logger'
 import type { AgentRunIdentity } from '../../../shared/types'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 
@@ -31,11 +31,12 @@ export class SkillInstallApprovalService {
   }
 
   public async requestApproval(
-    targetWindow: BrowserWindow | null,
+    rendererEvents: RendererEventSink | null,
     candidate: SkillInstallCandidate,
     identity: Readonly<AgentRunIdentity>
   ): Promise<boolean> {
-    if (!targetWindow || targetWindow.isDestroyed()) return false
+    if (!rendererEvents?.isAvailable()) return false
+    const events = rendererEvents
 
     const requestId = `skill-install-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
@@ -55,7 +56,7 @@ export class SkillInstallApprovalService {
         },
       })
 
-      targetWindow.webContents.send(SKILL_INSTALL_REQUEST_CHANNEL, { ...identity, requestId, ...candidate })
+      events.send(SKILL_INSTALL_REQUEST_CHANNEL, { ...identity, requestId, ...candidate })
     })
   }
 }

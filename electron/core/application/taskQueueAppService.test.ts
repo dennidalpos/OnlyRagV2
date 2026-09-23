@@ -11,6 +11,8 @@ vi.mock('./agentOrchestratorAppService', () => ({
 import { cancelActiveAgentTask, runAgentOrchestratorLoop } from './agentOrchestratorAppService'
 import { TaskQueueAppService, taskQueueAppService } from './taskQueueAppService'
 
+const noRenderer = { isAvailable: () => false, send: () => {} }
+
 describe('TaskQueueAppService serial execution invariant', () => {
   const workspaces: string[] = []
 
@@ -51,12 +53,12 @@ describe('TaskQueueAppService serial execution invariant', () => {
       userTask: 'Inspect the project',
       agentMode: 'ask',
       workspacePath,
-    }, () => null)).resolves.toMatchObject({ success: true, runId: identity.runId, queuePosition: 0 })
+    }, noRenderer)).resolves.toMatchObject({ success: true, runId: identity.runId, queuePosition: 0 })
 
     await vi.waitFor(() => {
       expect(runAgentOrchestratorLoop).toHaveBeenCalledWith(
         expect.objectContaining({ identity, sessionId: identity.conversationId }),
-        null,
+        noRenderer,
         identity.runId,
         expect.objectContaining({ sourcePath: workspacePath })
       )
@@ -80,9 +82,9 @@ describe('TaskQueueAppService serial execution invariant', () => {
     }
     const second = { ...first, runId: 'run-second', workspaceId: 'workspace:second' }
 
-    await service.scheduleAgentTask({ identity: first, sessionId: first.conversationId, userTask: 'First', agentMode: 'ask', workspacePath: firstWorkspace }, () => null)
+    await service.scheduleAgentTask({ identity: first, sessionId: first.conversationId, userTask: 'First', agentMode: 'ask', workspacePath: firstWorkspace }, noRenderer)
     await vi.waitFor(() => expect(runAgentOrchestratorLoop).toHaveBeenCalledOnce())
-    const accepted = await service.scheduleAgentTask({ identity: second, sessionId: second.conversationId, userTask: 'Second', agentMode: 'ask', workspacePath: secondWorkspace }, () => null)
+    const accepted = await service.scheduleAgentTask({ identity: second, sessionId: second.conversationId, userTask: 'Second', agentMode: 'ask', workspacePath: secondWorkspace }, noRenderer)
 
     expect(accepted).toMatchObject({ success: true, runId: 'run-second', queuePosition: 1 })
     expect(service.cancelTask(second)).toEqual({ success: true, message: 'Task run-second cancelled.' })
@@ -108,12 +110,12 @@ describe('TaskQueueAppService serial execution invariant', () => {
       agentMode: 'guided',
       workspacePath: 'C:\\Program Files\\OnlyRag V2',
       isStandaloneMode: true,
-    }, () => null)).resolves.toMatchObject({ success: true, runId: identity.runId })
+    }, noRenderer)).resolves.toMatchObject({ success: true, runId: identity.runId })
 
     await vi.waitFor(() => {
       expect(runAgentOrchestratorLoop).toHaveBeenCalledWith(
         expect.objectContaining({ workspacePath: scratchPath, isStandaloneMode: true }),
-        null,
+        noRenderer,
         identity.runId,
         undefined,
       )
@@ -129,7 +131,7 @@ describe('TaskQueueAppService serial execution invariant', () => {
       agentMode: 'guided',
       workspacePath: null,
       isStandaloneMode: false,
-    }, () => null)).resolves.toMatchObject({
+    }, noRenderer)).resolves.toMatchObject({
       success: false,
       summary: 'Project workspace is required',
     })

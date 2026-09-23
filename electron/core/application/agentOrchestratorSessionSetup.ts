@@ -1,5 +1,5 @@
-import fs from 'node:fs'
-import { logger } from '../../diagnostics'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
+import { logger } from '../infrastructure/logging/logger'
 import { isProtectedSystemDirectory } from '../domain/agent/contextFilter'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AppSettings } from '../../../shared/types'
@@ -13,14 +13,14 @@ export function resolveWorkspacePath(
 ): string | null {
   const rawPath = payload.workspacePath ? payload.workspacePath.trim() : null
   if (rawPath && !isProtectedSystemDirectory(rawPath)) {
-    if (!fs.existsSync(rawPath)) {
+    if (!documentIoRepository.exists(rawPath)) {
       try {
-        fs.mkdirSync(rawPath, { recursive: true })
+        documentIoRepository.ensureDirectory(rawPath)
       } catch (err: any) {
         logger.log('WARN', 'AgentOrchestratorApp', `Could not create workspace directory '${rawPath}': ${err.message}`)
       }
     }
-    if (fs.existsSync(rawPath)) {
+    if (documentIoRepository.exists(rawPath)) {
       return rawPath
     }
   }
@@ -69,9 +69,9 @@ export function buildPinnedFilesContextBlock(payload: Pick<AgentTaskPayload, 'pi
   return (payload.pinnedFiles || [])
     .map((f) => {
       let content = f.content || ''
-      if (!content && f.path && fs.existsSync(f.path)) {
+      if (!content && f.path && documentIoRepository.exists(f.path)) {
         try {
-          content = fs.readFileSync(f.path, 'utf-8')
+          content = documentIoRepository.readText(f.path)
         } catch (err: any) {
           logger.log('WARN', 'AgentOrchestratorApp', `Could not read pinned file ${f.path}: ${err.message}`)
         }

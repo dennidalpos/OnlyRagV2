@@ -23,6 +23,7 @@ import { redactSecrets } from '../../logRedactor'
 import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
 import type { ApprovalResponse } from './agentOrchestratorTypes'
 import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
+import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 
 export interface ApplicationClosureContext {
   workspacePath: string | null
@@ -64,6 +65,16 @@ function toVerificationEvidence(run: VerificationRunResult): AgentVerificationEv
   }
 }
 
+/** `guard×count` per guard and action, in first-firing order, e.g. `loop_exact_repeat×2, no_mutation(stop)`. */
+function summarizeGuardEvents(events: ResponseInterpreterState['guardEvents']): string {
+  const counts = new Map<string, number>()
+  for (const event of events) {
+    const key = event.action === 'advise' ? event.guard : `${event.guard}(${event.action})`
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+  return [...counts].map(([key, count]) => (count > 1 ? `${key}×${count}` : key)).join(', ')
+}
+
 function renderDiagnosticDetail(
   ctx: ApplicationClosureContext,
   request: ApplicationClosureRequest,
@@ -84,10 +95,11 @@ function renderDiagnosticDetail(
   if (verification?.evidenceLevel) lines.push(`Livello evidenza: ${verification.evidenceLevel}`)
   if (verification?.detail) lines.push(`Dettaglio verifica: ${verification.detail}`)
   lines.push(
-    recovery('Recupero schema', ctx.state.schemaRecoveryFailure?.totalFailures),
-    recovery('Recupero esecuzione', ctx.state.executionRecoveryFailure?.totalFailures),
+    recovery('Recupero schema', ctx.state.progress.schemaFailuresSpent),
+    recovery('Recupero esecuzione', ctx.state.progress.executionFailuresSpent),
     recovery('Correzioni verifica', ctx.state.verificationFixCycles, MAX_VERIFICATION_FIX_CYCLES)
   )
+  if (ctx.state.guardEvents.length > 0) lines.push(`Guard: ${summarizeGuardEvents(ctx.state.guardEvents)}`)
   if (runtime) {
     lines.push(
       `Runtime: modello=${runtime.model}; digest=${runtime.digest || 'non disponibile'}; num_ctx=${runtime.options.num_ctx}; num_predict=${runtime.options.num_predict}`
@@ -214,6 +226,8 @@ export async function closeAgentRunFromEvidence(
     }
   }
 
+  if (request.guard) recordGuardEvent(ctx.state.guardEvents, request.guard, 'stop', ctx.stepCount)
+
   let run: VerificationRunResult | undefined
   let evidenceLevel = priorEvidenceLevel(ctx)
   const shouldRunVerification =
@@ -247,6 +261,7 @@ export async function closeAgentRunFromEvidence(
       })
       if (decision.action === 'block_and_retry') {
         ctx.state.verificationFixCycles = decision.cyclesSpent
+        recordGuardEvent(ctx.state.guardEvents, 'verification_fix_cycles', 'advise', ctx.stepCount)
         ctx.episodicCompactor.recordStep(
           { step: ctx.stepCount, tool: 'application_verification', status: 'BLOCKED', summary: `Verification failed (round ${decision.cyclesSpent})` },
           decision.directive
@@ -337,6 +352,7 @@ export async function closeAgentRunFromEvidence(
     verification: ctx.lastVerification,
     cancellationStatus: 'not_cancelled',
     nonRollbackEffects: [...(ctx.nonRollbackEffects || [])],
+    ...(ctx.state.guardEvents.length > 0 ? { guardEvents: [...ctx.state.guardEvents] } : {}),
   }
   ctx.setExecutionPhase('outcome')
   agentToolExecutorService.commitJournal()

@@ -48,7 +48,7 @@ describe('SystemAppService Unit Tests', () => {
       const openedUrls: string[] = []
       const customService = new SystemAppService(
         { loadSettings: async () => ({ capabilityPolicyMode: 'network-approved' } as any) },
-        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '' }
+        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '', showOpenDialog: async () => [] }
       )
 
       expect(await customService.openExternal('')).toBe(false)
@@ -61,7 +61,7 @@ describe('SystemAppService Unit Tests', () => {
       const openedUrls: string[] = []
       const customService = new SystemAppService(
         { loadSettings: async () => ({ capabilityPolicyMode: 'offline-strict' } as any) },
-        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '' }
+        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '', showOpenDialog: async () => [] }
       )
 
       const result = await customService.openExternal('https://github.com')
@@ -73,7 +73,7 @@ describe('SystemAppService Unit Tests', () => {
       const openedUrls: string[] = []
       const customService = new SystemAppService(
         { loadSettings: async () => ({ capabilityPolicyMode: 'local-only' } as any) },
-        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '' }
+        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '', showOpenDialog: async () => [] }
       )
 
       expect(await customService.openExternal('https://github.com')).toBe(false)
@@ -87,7 +87,7 @@ describe('SystemAppService Unit Tests', () => {
       const openedUrls: string[] = []
       const customService = new SystemAppService(
         { loadSettings: async () => ({ capabilityPolicyMode: 'network-approved' } as any) },
-        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '' }
+        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '', showOpenDialog: async () => [] }
       )
 
       const result = await customService.openExternal('https://github.com/dennidalpos/OnlyRagV2')
@@ -99,7 +99,7 @@ describe('SystemAppService Unit Tests', () => {
       const openedPaths: string[] = []
       const customService = new SystemAppService(
         { loadSettings: async () => null },
-        { openExternal: async () => {}, openPath: async (p) => { openedPaths.push(p); return '' } },
+        { openExternal: async () => {}, openPath: async (p) => { openedPaths.push(p); return '' }, showOpenDialog: async () => [] },
         (p) => p === '/my/workspace/folder'
       )
 

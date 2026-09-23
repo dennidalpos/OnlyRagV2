@@ -1,7 +1,7 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import * as ts from 'typescript'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 import { contentVersion } from './fileContentVersion'
 import { isIgnoredPath, validatePathSafety as domainValidatePathSafety } from '../../domain/agent/contextFilter'
 import {

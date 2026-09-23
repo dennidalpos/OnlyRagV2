@@ -7,7 +7,9 @@ Il processo Main è organizzato in quattro layer sotto [`electron/core/`](../ele
 | Presentation | `electron/core/presentation/` | Registra gli handler IPC e valida gli argomenti. |
 | Application | `electron/core/application/` | Coordina casi d'uso, task, agent, Sidecar e Ollama. |
 | Domain | `electron/core/domain/` e `shared/domain/` | Regole pure, contratti e algoritmi. |
-| Infrastructure | `electron/core/infrastructure/` | HTTP, filesystem, PowerShell/PTY e processi. |
+| Infrastructure | `electron/core/infrastructure/` | HTTP, filesystem, PowerShell/PTY, processi e adapter Electron (`infrastructure/electron/`). |
+
+Application e Domain non importano `electron` né `node:fs`: usano le porte in [`domain/ports/`](../electron/core/domain/ports/) (`RendererEventSink` per gli eventi verso il Renderer, `DesktopShellPort` per shell e finestre di dialogo) e i repository di Infrastructure. Domain non importa layer esterni. [`check_layering.mjs`](../scripts/check_layering.mjs), eseguito da `npm run quality:static`, fa rispettare queste regole anche per `import()` dinamici e `require`.
 
 ## Avvio
 
@@ -27,7 +29,9 @@ Adapter principali:
 - [`sidecarHttpClient.ts`](../electron/core/infrastructure/http/sidecarHttpClient.ts): HTTP e NDJSON verso `:8000`.
 - [`persistentPowerShellSession.ts`](../electron/core/infrastructure/process/persistentPowerShellSession.ts): comandi persistenti con output e exit code.
 - [`sidecarProcessManager.ts`](../electron/core/infrastructure/process/sidecarProcessManager.ts): lifecycle e reclaim della porta.
-- [`diagnostics.ts`](../electron/diagnostics.ts) e [`logRedactor.ts`](../electron/logRedactor.ts): log e redazione.
+- [`logger.ts`](../electron/core/infrastructure/logging/logger.ts) e [`logRedactor.ts`](../electron/logRedactor.ts): log redatto con buffer in memoria e rotazione di `userData/logs/app.log`.
+- [`diagnostics.ts`](../electron/diagnostics.ts): probe Ollama, GPU (`nvidia-smi`), memoria e report diagnostico.
+- [`rendererEventSinks.ts`](../electron/core/infrastructure/electron/rendererEventSinks.ts) e [`electronDesktopShell.ts`](../electron/core/infrastructure/electron/electronDesktopShell.ts): adapter Electron delle porte `RendererEventSink` e `DesktopShellPort`. `main.ts` passa all'agente un sink legato alla finestra principale; ingestion, traduzione e cancellazioni del workspace usano il broadcast verso tutte le finestre.
 
 I contratti IPC sono in [`api-ipc.md`](./api-ipc.md); le dipendenze tra layer sono controllate da `npm run audit:cycles`.
 

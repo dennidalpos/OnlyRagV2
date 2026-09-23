@@ -1,5 +1,7 @@
 import type { AgentToolCall, AgentTaskResult, AgentLogEntry } from '../domain/agent/agentTypes'
-import type { AgentExecutionMode, AppSettings } from '../../../shared/types'
+import type { AgentExecutionMode, AgentGuardEvent, AppSettings } from '../../../shared/types'
+import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
+import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
@@ -16,8 +18,9 @@ export interface AskToolContext {
   hasRecentToolFailure: boolean
   errorCountInHistory: number
   compiledHistoryBlock: string
-  /** Shared with the write/edit loop detector (see ResponseInterpreterState.stagnationStreak): how many consecutive stuck-recovery interventions (loop blocks or lazy-ask redirects) have already fired this streak, so a model can't dodge an exhausted write-loop budge */
-  stagnationStreak: number
+  /** Shared with the loop guard: redirects and loop blocks draw on the same streak, so a model can't dodge an exhausted write-loop budget by asking. */
+  progress: AgentProgressPolicy
+  guardEvents: AgentGuardEvent[]
   episodicCompactor: EpisodicMemoryCompactor
   emitLog: EmitLog
   emitDone: (success: boolean, summary: string) => void
@@ -26,9 +29,7 @@ export interface AskToolContext {
   closeApplicationRun: (request: ApplicationClosureRequest) => Promise<ApplicationClosureOutcome>
 }
 
-export type AskToolOutcome = { outcome: 'continue'; stagnationStreak: number } | { outcome: 'return'; result: AgentTaskResult }
-
-const ASK_REDIRECT_LIMIT = 2
+export type AskToolOutcome = { outcome: 'continue' } | { outcome: 'return'; result: AgentTaskResult }
 
 /** In Auto mode, intercepts vague clarification after a failure and redirects the model to recovery. */
 export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome> {
@@ -55,7 +56,7 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
     ctx.stepCount === 1 ||
     VAGUE_WHAT_NEXT_REGEX.test(question)
 
-  if (ctx.agentMode === 'auto' && isVagueClarification && ctx.stepCount < ctx.maxSteps && ctx.stagnationStreak < ASK_REDIRECT_LIMIT) {
+  if (ctx.agentMode === 'auto' && isVagueClarification && ctx.stepCount < ctx.maxSteps && ctx.progress.tryAskRedirect()) {
     const feedback =
       isPermissionOrProceedQuestion || ctx.stepCount === 1
         ? `[AUTONOMOUS EXECUTION DIRECTIVE: DO NOT ASK FOR PERMISSION TO PROCEED]\nYou are operating in AUTO mode. The task is authorized for trusted local execution.\nDO NOT ask for confirmation to start. Proceed with the first milestone.`
@@ -66,6 +67,7 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
             : historyText.includes('ast validation error') || historyText.includes('ast syntax error')
               ? `[PROACTIVE AUTO-HEALING DIRECTIVE: FIX AST SYNTAX ERROR]\nInspect the reported syntax error and issue a corrected edit in AUTO mode.`
               : `[PROACTIVE AUTO-HEALING DIRECTIVE: DO NOT ASK LAZY QUESTIONS]\nInspect the failure, change strategy, and issue a corrective tool call in AUTO mode.`
+    recordGuardEvent(ctx.guardEvents, 'ask_redirect', 'advise', ctx.stepCount)
     ctx.episodicCompactor.recordStep(
       {
         step: ctx.stepCount,
@@ -82,24 +84,25 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'ask', feedback)
     }
-    return { outcome: 'continue', stagnationStreak: ctx.stagnationStreak + 1 }
+    return { outcome: 'continue' }
   }
 
   // A vague clarification that ran out of redirect budget is the model giving up after being
   // stuck, not a genuine question -- the session must not be recorded as a success.
-  const gaveUpWhileStuck = isVagueClarification && ctx.stagnationStreak >= ASK_REDIRECT_LIMIT
+  const gaveUpWhileStuck = isVagueClarification && ctx.progress.askRedirectsExhausted()
   ctx.emitLog('info', `❓ AI Agent Question: ${question}`, undefined, {
     category: 'agent_question',
   })
   if (ctx.agentMode === 'auto') {
     const closure = await ctx.closeApplicationRun({
       trigger: 'guard_stop',
+      ...(gaveUpWhileStuck ? { guard: 'ask_redirect' as const } : {}),
       reason: gaveUpWhileStuck
         ? 'Il modello ha esaurito il recupero automatico e richiede intervento.'
         : "Il modello richiede una decisione dell'utente prima di proseguire.",
       modelSummary: question,
     })
-    return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue', stagnationStreak: ctx.stagnationStreak }
+    return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
   }
 
   ctx.emitDone(!gaveUpWhileStuck, question)

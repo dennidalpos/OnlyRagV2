@@ -1,8 +1,8 @@
 import type { AgentToolCall } from '../domain/agent/agentTypes'
+import { guardForLoopPattern, recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
-import { resolveLoopEscapeAction, resolveRedundantSuccessAction } from '../domain/agent/loopEscapePolicy'
 import { abandonedMilestoneNote } from '../domain/agent/milestoneUpdateAuthority'
 import { isActiveMilestoneDelivered, resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { PlanDirectiveKind } from '../domain/agent/planDirectiveArbiter'
@@ -76,7 +76,8 @@ function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: stri
   const stuckMilestone = ctx.goalPlanner.getActiveMilestone()
   if (!stuckMilestone || isCompletionMilestoneTitle(stuckMilestone)) return null
 
-  ctx.goalPlanner.updateMilestone(stuckMilestone.id, 'failed', abandonedMilestoneNote(ctx.state.stagnationStreak, loopTarget || 'target'))
+  const loopBlocks = ctx.state.progress.consecutiveLoopBlocks
+  ctx.goalPlanner.updateMilestone(stuckMilestone.id, 'failed', abandonedMilestoneNote(loopBlocks, loopTarget || 'target'))
 
   // The next milestone may legitimately need to touch the same file the model was just
   // blocked on, so the detector's memory of that target is cleared along with the focus.
@@ -85,7 +86,7 @@ function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: stri
   const nextMilestone = ctx.goalPlanner.getActiveMilestone()
   ctx.emitLog(
     'info',
-    `⏭️ Escape strutturale: milestone ${stuckMilestone.id} abbandonata dopo ${ctx.state.stagnationStreak} blocchi consecutivi.`,
+    `⏭️ Escape strutturale: milestone ${stuckMilestone.id} abbandonata dopo ${loopBlocks} blocchi consecutivi.`,
     nextMilestone ? `Nuova milestone attiva: ${nextMilestone.id}: ${nextMilestone.title}` : 'Nessuna milestone operativa rimasta.',
     { category: 'system_alert' },
   )
@@ -200,13 +201,19 @@ ${planDirective.blockDirective}`
   const loopIsUnrelatedToActiveMilestone = isActiveMilestoneDelivered(ctx.workspacePath, ctx.goalPlanner, loopTarget)
 
   // A repeat whose earlier executions SUCCEEDED is redundancy, not stagnation: the deliverable exists.
-  ctx.state.redundantSuccessStreak = loopCheck.repeatOutcome === 'succeeding' ? ctx.state.redundantSuccessStreak + 1 : 0
-  const isExemptRedundantSuccess = loopCheck.repeatOutcome === 'succeeding' && resolveRedundantSuccessAction(ctx.state.redundantSuccessStreak) === 'advise'
+  // The milestone-advance precondition is evaluated before the policy counts this block.
+  const canAdvanceMilestone =
+    // Never abandon a milestone as FAILED while the project is verified and closable: the remaining milestones are the unprovable ones the closure directive is asking the model to close, and marking them failed would put "fallita" in the final report for work that w
+    !isClosure &&
+    !loopIsUnrelatedToActiveMilestone &&
+    ctx.goalPlanner.getMilestones().some((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m))
+  const loopDecision = ctx.state.progress.onLoopBlock(loopCheck.repeatOutcome, { canAdvanceMilestone, isUnlimitedSteps: ctx.isUnlimitedSteps })
 
-  if (isExemptRedundantSuccess) {
+  if (loopDecision.kind === 'redundant') {
+    recordGuardEvent(ctx.state.guardEvents, 'redundant_success', 'advise', ctx.stepCount)
     const redundancyIntervention =
       arbitratedIntervention ||
-      `${loopCheck.suggestedIntervention}\n\n[REDUNDANCY DIRECTIVE (Attempt ${ctx.state.redundantSuccessStreak})]\nThis is NOT a failure and it is NOT counted against you: '${loopTarget || 'target'}' already ran successfully. The milestone it belongs to is still achievable — do not abandon it and do not report it as blocked.\nDo not re-issue this identical call: its result is already in your recent tool outputs above. Advance to the next unfinished step instead.`
+      `${loopCheck.suggestedIntervention}\n\n[REDUNDANCY DIRECTIVE (Attempt ${loopDecision.redundantBlocks})]\nThis is NOT a failure and it is NOT counted against you: '${loopTarget || 'target'}' already ran successfully. The milestone it belongs to is still achievable — do not abandon it and do not report it as blocked.\nDo not re-issue this identical call: its result is already in your recent tool outputs above. Advance to the next unfinished step instead.`
 
     ctx.episodicCompactor.recordStep(
       {
@@ -214,7 +221,7 @@ ${planDirective.blockDirective}`
         tool: parsedTool.tool,
         target: loopTarget,
         status: 'BLOCKED',
-        summary: `Redundant repeat of a SUCCESSFUL action (${loopCheck.consecutiveDuplicateCount} repeats, Redundancy: ${ctx.state.redundantSuccessStreak})`,
+        summary: `Redundant repeat of a SUCCESSFUL action (${loopCheck.consecutiveDuplicateCount} repeats, Redundancy: ${loopDecision.redundantBlocks})`,
       },
       redundancyIntervention,
     )
@@ -238,26 +245,22 @@ ${planDirective.blockDirective}`
     return { outcome: 'continue' }
   }
 
-  ctx.state.stagnationStreak++
+  const loopBlocks = loopDecision.loopBlocks
   const isCommand = parsedTool.tool === 'run_command'
   // A build or test command is how the task gets verified at all, so the escape must never read as "stop running it".
   const escapeDirective = isCommand
     ? `\n[CRITICAL ESCAPE STRATEGY]: Do not re-issue this command unchanged — nothing about the workspace has changed since it last ran. Read the error text in the diagnostics above, apply the fix it names with write_file or replace_file_content, and THEN run the command again. Running a build or test command after a real edit is always allowed and is how this task gets verified. If the command is a scaffolding generator that failed, write the files it would have produced directly instead.`
     : `\n[CRITICAL ESCAPE STRATEGY]: You MUST run a verification command via run_command or read a different file to break out of this loop.`
 
-  const escapeAction = resolveLoopEscapeAction(ctx.state.stagnationStreak, {
-    // Never abandon a milestone as FAILED while the project is verified and closable: the remaining milestones are the unprovable ones the closure directive is asking the model to close, and marking them failed would put "fallita" in the final report for work that w
-    canAdvanceMilestone:
-      !isClosure &&
-      !loopIsUnrelatedToActiveMilestone &&
-      ctx.goalPlanner.getMilestones().some((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m)),
-    isUnlimitedSteps: ctx.isUnlimitedSteps,
-  })
+  const escapeAction = loopDecision.escape
   const planAdvanceDirective = escapeAction === 'force_milestone_advance' ? forceMilestoneAdvance(ctx, loopTarget) : null
+  const loopGuard = guardForLoopPattern(loopCheck.pattern)
+  recordGuardEvent(ctx.state.guardEvents, loopGuard, 'advise', ctx.stepCount)
+  if (planAdvanceDirective) recordGuardEvent(ctx.state.guardEvents, loopGuard, 'force_advance', ctx.stepCount)
 
   const enhancedIntervention =
     arbitratedIntervention ||
-    `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${ctx.state.stagnationStreak})]\nYou have been blocked ${ctx.state.stagnationStreak} times for repeating the same operation on '${loopTarget || 'target'}'. What is blocked is the IDENTICAL call, and the block lifts as soon as the situation changes: re-issuing it unchanged will be blocked again, issuing it after a real edit will not.${escapeDirective}${planAdvanceDirective || ''}`
+    `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${loopBlocks})]\nYou have been blocked ${loopBlocks} times for repeating the same operation on '${loopTarget || 'target'}'. What is blocked is the IDENTICAL call, and the block lifts as soon as the situation changes: re-issuing it unchanged will be blocked again, issuing it after a real edit will not.${escapeDirective}${planAdvanceDirective || ''}`
 
   ctx.episodicCompactor.recordStep(
     {
@@ -265,7 +268,7 @@ ${planDirective.blockDirective}`
       tool: parsedTool.tool,
       target: loopTarget,
       status: 'BLOCKED',
-      summary: `Loop / Oscillation Trap Detected (${loopCheck.consecutiveDuplicateCount} repeats, Stagnation: ${ctx.state.stagnationStreak})`,
+      summary: `Loop / Oscillation Trap Detected (${loopCheck.consecutiveDuplicateCount} repeats, Stagnation: ${loopBlocks})`,
     },
     enhancedIntervention,
   )
@@ -280,10 +283,11 @@ ${planDirective.blockDirective}`
   if (escapeAction === 'abort') {
     // A hard stop here means the model never broke out of its loop -- this is the session
     // giving up, not completing the task, so it must never be recorded as a success.
-    const stagSummary = `Pausa per stagnazione: raggiunti ${ctx.state.stagnationStreak} step consecutivi senza progresso.`
+    const stagSummary = `Pausa per stagnazione: raggiunti ${loopBlocks} step consecutivi senza progresso.`
     ctx.emitLog('info', `⚠️ Circuit Breaker: ${stagSummary}`)
     const closure = await ctx.closeApplicationRun({
       trigger: 'guard_stop',
+      guard: 'stagnation_abort',
       reason: stagSummary,
     })
     return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }

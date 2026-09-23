@@ -1,7 +1,7 @@
 import { HubSkillItem, SkillHubSource, SkillCategory } from '../../../domain/skills/skillTypes'
 import { ISkillHubAdapter } from './hubAdapterInterface'
 import { webClient } from '../webClient'
-import { logger } from '../../../../diagnostics'
+import { logger } from '../../logging/logger'
 
 function normalizeCategory(raw?: string): SkillCategory {
   const clean = (raw || '').toLowerCase().trim()

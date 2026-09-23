@@ -7,7 +7,7 @@ import { SkillsShAdapter } from './hubAdapters/skillsShAdapter'
 import { JsonCatalogAdapter } from './hubAdapters/jsonCatalogAdapter'
 import { GitHubRawAdapter } from './hubAdapters/githubRawAdapter'
 import { webClient } from './webClient'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 
 interface CachedCatalogEntry {
   timestamp: number

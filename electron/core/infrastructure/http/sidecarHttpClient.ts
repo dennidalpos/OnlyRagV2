@@ -1,5 +1,5 @@
 import http from 'node:http'
-import { logger } from '../../../diagnostics'
+import { logger } from '../logging/logger'
 import type { SlmLogDiagnosticReport } from '../../../../shared/types'
 import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
 

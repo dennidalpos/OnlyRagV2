@@ -1,5 +1,11 @@
-import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentChangeMetrics, AgentPlan, AgentRunIdentity, IElectronAPI, AppSettings, CodingSession, InterviewQuestion, OllamaGenerationOptions, OllamaStreamChunkEvent, OllamaStreamDoneEvent, PlanMilestone, SkillInstallApprovalRequest, PromptHistoryIndexPayload, UserInterviewAnswer } from '../shared/types'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import type { AgentPlan, AgentRunIdentity, IElectronAPI, AppSettings, CodingSession, InterviewQuestion, OllamaGenerationOptions, OllamaStreamChunkEvent, OllamaStreamDoneEvent, PlanMilestone, PromptHistoryIndexPayload, UserInterviewAnswer } from '../shared/types'
+
+function subscribe<T>(channel: string, callback: (data: T) => void): () => void {
+  const listener = (_event: IpcRendererEvent, data: T) => callback(data)
+  ipcRenderer.on(channel, listener)
+  return () => ipcRenderer.removeListener(channel, listener)
+}
 
 const api: IElectronAPI = {
   runDiagnostics: (host?: string) => ipcRenderer.invoke('diagnostics:run', host),
@@ -29,10 +35,10 @@ const api: IElectronAPI = {
   exportDocument: (markdownContent: string, format: string, outputFolder?: string) => ipcRenderer.invoke('ingest:export', markdownContent, format, outputFolder),
   generateOllamaStream: async (model: string, prompt: string, onChunk: (chunk: string) => void, options?: OllamaGenerationOptions, host?: string, operationId?: string, onDone?: () => void) => {
     const streamId = operationId || crypto.randomUUID()
-    const chunkListener = (_: any, event: OllamaStreamChunkEvent) => {
+    const chunkListener = (_: IpcRendererEvent, event: OllamaStreamChunkEvent) => {
       if (event.operationId === streamId) onChunk(event.chunk)
     }
-    const doneListener = (_: any, event: OllamaStreamDoneEvent) => {
+    const doneListener = (_: IpcRendererEvent, event: OllamaStreamDoneEvent) => {
       if (event.operationId === streamId) onDone?.()
     }
     ipcRenderer.on('ollama:chunk', chunkListener)
@@ -58,7 +64,7 @@ const api: IElectronAPI = {
     ipcRenderer.invoke('workspace:write-file', filePath, content, expectedContentHash, workspaceRoot),
   replaceWorkspaceFileChunk: (filePath: string, targetContent: string, replacementContent: string) =>
     ipcRenderer.invoke('workspace:replace-chunk', filePath, targetContent, replacementContent),
-  multiReplaceWorkspaceFileChunks: (filePath: string, replacements: any[]) =>
+  multiReplaceWorkspaceFileChunks: (filePath, replacements) =>
     ipcRenderer.invoke('workspace:multi-replace-chunks', filePath, replacements),
   grepWorkspaceFiles: (dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean) =>
     ipcRenderer.invoke('workspace:grep-search', dirPath, query, isRegex, caseInsensitive),
@@ -73,7 +79,7 @@ const api: IElectronAPI = {
   executePowerShellCommand: (command: string, cwd?: string, timeoutMs?: number) => ipcRenderer.invoke('workspace:execute-powershell', command, cwd, timeoutMs),
   listArtifacts: (workspacePath: string) => ipcRenderer.invoke('artifacts:list', workspacePath),
   getArtifact: (workspacePath: string, artifactId: string) => ipcRenderer.invoke('artifacts:get', workspacePath, artifactId),
-  saveArtifact: (workspacePath: string, input: any) => ipcRenderer.invoke('artifacts:save', workspacePath, input),
+  saveArtifact: (workspacePath, input) => ipcRenderer.invoke('artifacts:save', workspacePath, input),
   deleteArtifact: (workspacePath: string, artifactId: string) => ipcRenderer.invoke('artifacts:delete', workspacePath, artifactId),
   parseAgentToolCall: (rawText: string) => ipcRenderer.invoke('agent:parse-tool-call', rawText),
   checkDiskSpace: (models: string[]) => ipcRenderer.invoke('system:check-disk-space', models),
@@ -83,7 +89,7 @@ const api: IElectronAPI = {
   checkOllamaModelUpdates: (host?: string) => ipcRenderer.invoke('ollama:check-model-updates', host),
   openExternalUrl: (url: string) => ipcRenderer.invoke('system:open-external', url),
   openPath: (targetPath: string) => ipcRenderer.invoke('system:open-path', targetPath),
-  startAgentTask: (payload: any) => ipcRenderer.invoke('agent:start-task', payload),
+  startAgentTask: (payload) => ipcRenderer.invoke('agent:start-task', payload),
   cancelAgentTask: (identity: AgentRunIdentity) => ipcRenderer.invoke('agent:cancel-task', identity),
   respondToAgentApproval: (identity: AgentRunIdentity, approved: boolean, approvedHunkIndices?: number[]) =>
     ipcRenderer.invoke('agent:approval-response', identity, approved, approvedHunkIndices),
@@ -109,107 +115,43 @@ const api: IElectronAPI = {
   /** Cross-project semantic prompt history (see sidecar's /history/* routes). */
   indexPromptHistory: (payload: PromptHistoryIndexPayload) => ipcRenderer.invoke('history:index', payload),
   searchPromptHistory: (query: string, topK?: number, projectPaths?: string[]) => ipcRenderer.invoke('history:search', query, topK, projectPaths),
-  onAgentLog: (callback: (log: any) => void) => {
-    const subscription = (_: any, log: any) => callback(log)
-    ipcRenderer.on('agent:log', subscription)
-    return () => ipcRenderer.removeListener('agent:log', subscription)
-  },
-  onAgentStepUpdate: (callback: (data: AgentRunIdentity & { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string; milestones?: PlanMilestone[] }) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on('agent:step-update', subscription)
-    return () => ipcRenderer.removeListener('agent:step-update', subscription)
-  },
-  onAgentContextBudget: (callback: (data: any) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on('agent:context-budget', subscription)
-    return () => ipcRenderer.removeListener('agent:context-budget', subscription)
-  },
+  onAgentLog: (callback) => subscribe('agent:log', callback),
+  onAgentStepUpdate: (callback) => subscribe('agent:step-update', callback),
+  onAgentContextBudget: (callback) => subscribe('agent:context-budget', callback),
   compactAgentContext: (identity: AgentRunIdentity) => ipcRenderer.invoke('agent:compact-context', identity),
   /** Aggregate size of the file changes applied so far in the active agent session. */
-  onAgentChangeMetrics: (callback: (data: AgentChangeMetrics & AgentRunIdentity) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on('agent:change-metrics', subscription)
-    return () => ipcRenderer.removeListener('agent:change-metrics', subscription)
-  },
-  onAgentStreamToken: (callback: (data: any) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on('agent:stream-token', subscription)
-    return () => ipcRenderer.removeListener('agent:stream-token', subscription)
-  },
-  onAgentStreamThought: (callback: (data: any) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on('agent:stream-thought', subscription)
-    return () => ipcRenderer.removeListener('agent:stream-thought', subscription)
-  },
-  onAgentDone: (callback: (res: any) => void) => {
-    const subscription = (_: any, res: any) => callback(res)
-    ipcRenderer.on('agent:done', subscription)
-    return () => ipcRenderer.removeListener('agent:done', subscription)
-  },
-  onAgentApprovalRequest: (callback: (req: any) => void) => {
-    const subscription = (_: any, req: any) => callback(req)
-    ipcRenderer.on('agent:approval-request', subscription)
-    return () => ipcRenderer.removeListener('agent:approval-request', subscription)
-  },
+  onAgentChangeMetrics: (callback) => subscribe('agent:change-metrics', callback),
+  onAgentStreamToken: (callback) => subscribe('agent:stream-token', callback),
+  onAgentStreamThought: (callback) => subscribe('agent:stream-thought', callback),
+  onAgentDone: (callback) => subscribe('agent:done', callback),
+  onAgentApprovalRequest: (callback) => subscribe('agent:approval-request', callback),
   /** Skill Hub 'prompt' policy: install request raised while the turn prompt is assembled. */
-  onAgentSkillInstallRequest: (callback: (req: SkillInstallApprovalRequest) => void) => {
-    const subscription = (_: any, req: SkillInstallApprovalRequest) => callback(req)
-    ipcRenderer.on('agent:skill-install-request', subscription)
-    return () => ipcRenderer.removeListener('agent:skill-install-request', subscription)
-  },
+  onAgentSkillInstallRequest: (callback) => subscribe('agent:skill-install-request', callback),
   /** Skill Hub 'prompt' policy: user's answer to a pending install request. */
   respondAgentSkillInstall: (requestId: string, approved: boolean, identity: AgentRunIdentity) => {
     ipcRenderer.send('agent:skill-install-response', { ...identity, requestId, approved })
   },
-  onAgentSkillsMatched: (callback: (data: AgentRunIdentity & { skills: string[] }) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on('agent:skills-matched', subscription)
-    return () => ipcRenderer.removeListener('agent:skills-matched', subscription)
-  },
-  onWorkspaceFileDeleted: (callback: (data: { filePath: string }) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on('workspace:file-deleted', subscription)
-    return () => ipcRenderer.removeListener('workspace:file-deleted', subscription)
-  },
-  onWorkspaceFileVersionChanged: (callback: (data: AgentRunIdentity & { filePath: string; contentHash?: string; deleted?: boolean }) => void) => {
-    const subscription = (_: any, data: AgentRunIdentity & { filePath: string; contentHash?: string; deleted?: boolean }) => callback(data)
-    ipcRenderer.on('workspace:file-version', subscription)
-    return () => ipcRenderer.removeListener('workspace:file-version', subscription)
-  },
-  onIngestDocumentDeleted: (callback: (data: { docId: string }) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on('ingest:document-deleted', subscription)
-    return () => ipcRenderer.removeListener('ingest:document-deleted', subscription)
-  },
-  onIngestStreamProgress: (callback: (data: any) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on('ingest:stream-progress', subscription)
-    return () => ipcRenderer.removeListener('ingest:stream-progress', subscription)
-  },
-  onTranslateProgress: (callback: (data: any) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on('ingest:translate-progress', subscription)
-    return () => ipcRenderer.removeListener('ingest:translate-progress', subscription)
-  },
-  onOllamaPullProgress: (callback: (data: { modelName: string; status: string; completed?: number; total?: number }) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on('ollama:pull-progress', subscription)
-    return () => ipcRenderer.removeListener('ollama:pull-progress', subscription)
-  },
+  onAgentSkillsMatched: (callback) => subscribe('agent:skills-matched', callback),
+  onWorkspaceFileDeleted: (callback) => subscribe('workspace:file-deleted', callback),
+  onWorkspaceFileVersionChanged: (callback) => subscribe('workspace:file-version', callback),
+  onIngestDocumentDeleted: (callback) => subscribe('ingest:document-deleted', callback),
+  onIngestStreamProgress: (callback) => subscribe('ingest:stream-progress', callback),
+  onTranslateProgress: (callback) => subscribe('ingest:translate-progress', callback),
+  onOllamaPullProgress: (callback) => subscribe('ollama:pull-progress', callback),
   benchmarkModel: (modelName: string, host?: string) => ipcRenderer.invoke('ollama:benchmark-model', modelName, host),
   getRunningModels: (host?: string) => ipcRenderer.invoke('ollama:get-running-models', host),
   unloadModel: (modelName: string, host?: string) => ipcRenderer.invoke('ollama:unload-model', modelName, host),
   listInstalledSkills: (workspaceRoot?: string) => ipcRenderer.invoke('skills:list-installed', workspaceRoot),
   listHubSources: () => ipcRenderer.invoke('skills:list-sources'),
-  addCustomHubSource: (input: any) => ipcRenderer.invoke('skills:add-custom-source', input),
+  addCustomHubSource: (input) => ipcRenderer.invoke('skills:add-custom-source', input),
   removeCustomHubSource: (sourceId: string) => ipcRenderer.invoke('skills:remove-custom-source', sourceId),
   listHubSkillsBySource: (sourceId: string, workspaceRoot?: string, forceRefresh?: boolean) => ipcRenderer.invoke('skills:list-hub-by-source', sourceId, workspaceRoot, forceRefresh),
   listHubSkillsAcrossSources: (workspaceRoot?: string, forceRefresh?: boolean) => ipcRenderer.invoke('skills:list-hub-all', workspaceRoot, forceRefresh),
-  getHubSkillContent: (item: any) => ipcRenderer.invoke('skills:get-hub-skill-content', item),
+  getHubSkillContent: (item) => ipcRenderer.invoke('skills:get-hub-skill-content', item),
   toggleSkillActive: (skillId: string, isActive: boolean) => ipcRenderer.invoke('skills:toggle-active', skillId, isActive),
   installSkillFromHub: (hubSkillId: string, workspaceRoot?: string, hubSourceId?: string) => ipcRenderer.invoke('skills:install-from-hub', hubSkillId, workspaceRoot, hubSourceId),
   installSkillFromUrl: (url: string, workspaceRoot?: string, customName?: string) => ipcRenderer.invoke('skills:install-from-url', url, workspaceRoot, customName),
-  saveCustomSkill: (input: any, workspaceRoot?: string) => ipcRenderer.invoke('skills:save-custom', input, workspaceRoot),
+  saveCustomSkill: (input, workspaceRoot) => ipcRenderer.invoke('skills:save-custom', input, workspaceRoot),
   resetSkillToOriginal: (skillId: string, workspaceRoot?: string) => ipcRenderer.invoke('skills:reset-original', skillId, workspaceRoot),
   uninstallSkill: (skillId: string, workspaceRoot?: string) => ipcRenderer.invoke('skills:uninstall', skillId, workspaceRoot),
   /** SLM Agent Studio: trigger log anomaly scan; returns structured diagnostic report. */
@@ -228,7 +170,7 @@ const api: IElectronAPI = {
   agentGetPlanState: (sessionId: string, workspacePath?: string | null, planRevisionId?: string) =>
     ipcRenderer.invoke('agent:get-plan-state', sessionId, workspacePath, planRevisionId),
   /** Plan Approval: seed the approved plan's milestones into session state before execution starts. */
-  agentPlanSeed: (sessionId: string, workspacePath: string | null, planMilestones: any[], userTask?: string, planRevisionId?: string) =>
+  agentPlanSeed: (sessionId: string, workspacePath: string | null, planMilestones: PlanMilestone[], userTask?: string, planRevisionId?: string) =>
     ipcRenderer.invoke('agent:plan-seed', sessionId, workspacePath, planMilestones, userTask, planRevisionId),
   /** AI Debug Diagnostic Bundle: compile zero-noise high-density report for external AI analysis. */
   exportAiDebugBundle: (options: {

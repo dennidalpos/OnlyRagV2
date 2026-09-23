@@ -162,7 +162,10 @@ export const AppLayout: React.FC = () => {
     setSettings((prev) => ({ ...prev, ...newSettings }))
   }, [language, setLanguage])
 
-  const { diagnostics, refreshDiagnostics: runDiagnosticsScan } = useDiagnostics(settings, handleUpdateSettings)
+  const selectDefaultModelIfUnset = useCallback((model: string) => {
+    setSettings((current) => current.defaultModel ? current : { ...current, defaultModel: model })
+  }, [])
+  const { diagnostics, refreshDiagnostics: runDiagnosticsScan } = useDiagnostics(settings, selectDefaultModelIfUnset, settingsReady)
   const {
     isDownloading: isModelDownloading,
     modelName: downloadingModelName,

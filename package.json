@@ -19,6 +19,7 @@
     "test:agent": "vitest run --reporter=dot electron/core/domain/agent",
     "test:e2e:electron": "npm run build && node ./scripts/e2e/agentReliability.mjs",
     "test:e2e:cold-start": "npm run build && node ./scripts/e2e/coldStartNetwork.mjs",
+    "test:e2e:settings-bootstrap": "npm run build && node ./scripts/e2e/settingsBootstrap.mjs",
     "test:e2e:bundle-ux": "npm run build && node ./scripts/e2e/bundleUx.mjs",
     "test:e2e:sidecar-ownership": "vitest run --config vitest.sidecar.config.mts",
     "test:live": "vitest run --config vitest.live.config.mts",

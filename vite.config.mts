@@ -31,12 +31,18 @@ export default defineConfig({
         entry: 'electron/main.ts',
         vite: {
           build: {
+            // Keep compression while preserving names: Oxc's default mangling
+            // collided with a TypeScript compiler helper at Electron startup.
+            minify: 'oxc',
             // `rolldownOptions`, not `rollupOptions`: Vite 8 reads the former, and
             // vite-plugin-electron resolves `build.rolldownOptions || build.rollupOptions`
             // after merging its own defaults — which already set `rolldownOptions`. A
             // `rollupOptions` block here would be silently dropped, and the only symptom
             // would be a bundle of exactly the same size as before.
             rolldownOptions: {
+              output: {
+                minify: { compress: true, mangle: false, codegen: true },
+              },
               // depcheck resolves its language parsers at runtime with require('./parser/<name>'),
               // built from a name list evaluated the moment the module is imported. Inlined into
               // dist-electron/main.js that require becomes dist-electron/parser/coffee, which does

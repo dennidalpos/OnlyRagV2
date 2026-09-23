@@ -10,7 +10,7 @@ export function getDiagnosticsPollDelay(sidecarStatus: DiagnosticsData['sidecar'
   return sidecarStatus === 'online' ? intervalMs : Math.min(intervalMs, DIAGNOSTICS_STARTUP_RETRY_MS)
 }
 
-export function useDiagnostics(settings: AppSettings, onUpdateSettings: (newSettings: Partial<AppSettings>) => void, intervalMs: number = 10000) {
+export function useDiagnostics(settings: AppSettings, onSelectDefaultModelIfUnset: (model: string) => void, settingsReady: boolean, intervalMs: number = 10000) {
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null)
   const [isScanning, setIsScanning] = useState<boolean>(false)
   const prevSidecarStatusRef = useRef<string | null>(null)
@@ -37,8 +37,8 @@ export function useDiagnostics(settings: AppSettings, onUpdateSettings: (newSett
         prevSidecarStatusRef.current = currentStatus
         prevDocsCountRef.current = currentCount
 
-        if (data.ollama.models.length > 0 && !settings.defaultModel) {
-          onUpdateSettings({ defaultModel: data.ollama.models[0] })
+        if (data.ollama.models.length > 0) {
+          onSelectDefaultModelIfUnset(data.ollama.models[0])
         }
       }
       return data
@@ -48,9 +48,10 @@ export function useDiagnostics(settings: AppSettings, onUpdateSettings: (newSett
     } finally {
       setIsScanning(false)
     }
-  }, [settings.defaultModel, settings.ollamaHost, onUpdateSettings])
+  }, [settings.ollamaHost, onSelectDefaultModelIfUnset])
 
   useEffect(() => {
+    if (!settingsReady) return
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -65,7 +66,7 @@ export function useDiagnostics(settings: AppSettings, onUpdateSettings: (newSett
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [runDiagnosticsScan, intervalMs])
+  }, [runDiagnosticsScan, settingsReady, intervalMs])
 
   return { diagnostics, isScanning, refreshDiagnostics: runDiagnosticsScan }
 }

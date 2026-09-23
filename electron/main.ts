@@ -11,6 +11,7 @@ const isElectronE2ETest = process.env.ONLYRAG_E2E_TEST === '1'
 const e2eUserDataPath = process.env.ONLYRAG_E2E_USER_DATA?.trim()
 if (isElectronE2ETest && e2eUserDataPath) {
   app.setPath('userData', path.resolve(e2eUserDataPath))
+  app.setPath('appData', path.dirname(path.resolve(e2eUserDataPath)))
 }
 
 const isSingleInstance = app.requestSingleInstanceLock()

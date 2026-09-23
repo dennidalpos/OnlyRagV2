@@ -689,7 +689,7 @@ export interface IElectronAPI {
   checkOllamaModelUpdates?: (host?: string) => Promise<Record<string, OllamaModelUpdateInfo>>
   openExternalUrl?: (url: string) => Promise<boolean>
   openPath?: (targetPath: string) => Promise<boolean>
-  startAgentTask: (payload: any) => Promise<AgentDoneResult & { error?: string; runId?: string; queuePosition?: number }>
+  startAgentTask: (payload: unknown) => Promise<AgentDoneResult & { error?: string; runId?: string; queuePosition?: number }>
   cancelAgentTask: (identity: AgentRunIdentity) => Promise<{ success: boolean; message?: string }>
   /** Answers a pending `agent:approval-request`, resuming the paused orchestrator step. */
   respondToAgentApproval?: (identity: AgentRunIdentity, approved: boolean, approvedHunkIndices?: number[]) => Promise<boolean>

@@ -56,7 +56,7 @@ describe('sidecar IPC facade', () => {
       'ingest-test-1',
       undefined
     )
-    await expect(handler?.(trustedEvent, ' ')).rejects.toThrow()
+    expect(() => handler?.(trustedEvent, ' ')).toThrow('Invalid IPC payload for ingest:file')
     expect(sidecarAppService.ingestFile).toHaveBeenCalledTimes(1)
   })
 })

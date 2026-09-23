@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.6 · 2026-09-22` — Repository facts and verified commands.
+`v1.7 · 2026-09-23` — Repository facts and verified commands.
 
 ## Scope
 
@@ -9,14 +9,15 @@
 
 ## Verified commands
 
-Run from repository root in PowerShell. The new E2E commands and static checks were run on 2026-09-22.
+Run from repository root in PowerShell. The E2E commands and static checks were run on 2026-09-23.
 
 | Purpose | Command |
 | --- | --- |
 | Fast suite | `npm run test:fast` (255 files, 1982 tests) |
-| Electron Agent E2E | `npm run test:e2e:electron` (8 scenarios; 2026-09-21) |
+| Electron Agent E2E | `npm run test:e2e:electron` (8 scenarios) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |
-| Renderer network E2E | `npm run test:e2e:cold-start` (Renderer remount only) |
+| Cold-start network E2E | `npm run test:e2e:cold-start` (Main and Renderer first launch) |
+| Settings bootstrap E2E | `npm run test:e2e:settings-bootstrap` |
 | Bundle and viewport E2E | `npm run test:e2e:bundle-ux` (1024×700 and 1400×900) |
 | Static quality | `npm run quality:static` |
 | Full audit | `powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast` |

@@ -2,6 +2,10 @@
 
 Il Preload espone le funzioni in [`electron/preload.ts`](../electron/preload.ts). Le firme del Preload e i tipi in [`shared/types/index.ts`](../shared/types/index.ts) sono il contratto; gli handler stanno in Presentation.
 
+[`secureIpcMain.ts`](../electron/core/presentation/secureIpcMain.ts) accetta richieste solo dalla frame principale della finestra attendibile e valida gli argomenti con uno schema per canale prima di invocare l'handler. I canali sconosciuti falliscono. `npm run quality:static` verifica che le registrazioni non usino direttamente `ipcMain` e che i canali registrati abbiano uno schema corrispondente.
+
+Il controllo statico verifica la presenza degli schemi, non la copertura di ogni campo. In particolare `agent:start-task` lascia passare campi annidati che non valida; il completamento del contratto è tracciato in [`PROJECT_STATUS.json`](../PROJECT_STATUS.json).
+
 ## Canali request/response
 
 | Prefisso | Canali registrati |

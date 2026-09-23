@@ -145,7 +145,19 @@ describe('agent IPC session-state facade', () => {
     const decisions = [{ questionId: 'q1', questionText: 'Storage', selectedOption: 'Local' }]
 
     await handlers.get('agent:plan-interview')?.(trustedEvent, 'Build app', 'model', settings, '/repo', decisions)
-    const previousPlan = { id: 'plan-1' }
+    const previousPlan = {
+      formatVersion: 2,
+      id: 'plan-1',
+      version: 1,
+      prompt: 'Build app',
+      objective: 'Build app',
+      decisions: [],
+      retainedEvidence: [],
+      supersededWork: [],
+      status: 'ready',
+      createdAt: '2026-09-23T00:00:00.000Z',
+      milestones: [],
+    }
     await handlers.get('agent:plan-generate')?.(trustedEvent, 'Build app', 'model', settings, previousPlan, '/repo', decisions)
 
     expect(agentInterviewAppService.conductInterview).toHaveBeenCalledWith('Build app', 'model', settings, '/repo', decisions)

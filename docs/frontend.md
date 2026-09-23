@@ -30,5 +30,5 @@ Il Renderer in `src/` usa React 19, Vite, Tailwind CSS e Monaco. Lo stato è ges
 - Nel Coding Agent la larghezza del pannello sinistro si adatta allo spazio disponibile e lascia visibile l'editor anche a 1024×700.
 - `errorNormalizer.ts` converte errori tecnici in messaggi e remediation UI.
 - Le chiamate al Main passano da `window.electronAPI`; non si accede direttamente a Node o al filesystem.
-- `settings.json` sotto `userData` è la fonte canonica delle impostazioni. Il Renderer importa le vecchie chiavi `localStorage` solo se il file manca; se entrambi esistono deve prevalere il file, poi le chiavi legacy vengono rimosse. Resta aperta la race `SETTINGS-DIAGNOSTICS-RACE-01`, che può sovrascrivere il modello scelto nel file durante l'avvio.
+- `settings.json` sotto `userData` è la fonte canonica delle impostazioni. Il Renderer importa le vecchie chiavi `localStorage` solo se il file manca; se entrambi esistono prevale il file, poi le chiavi legacy vengono rimosse. La diagnostica parte dopo il caricamento; la scelta automatica di un modello si applica solo se `defaultModel` è ancora vuoto.
 - La RAM di sistema è mostrata con valori distinti per memoria disponibile, in uso e totale sia nella barra laterale sia nella diagnostica; il report copiabile mantiene le stesse etichette.

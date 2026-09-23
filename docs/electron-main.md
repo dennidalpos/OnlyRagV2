@@ -31,4 +31,6 @@ Adapter principali:
 
 I contratti IPC sono in [`api-ipc.md`](./api-ipc.md); le dipendenze tra layer sono controllate da `npm run audit:cycles`.
 
+Il bundle Main usa la compressione Oxc senza rinominare gli identificatori. La rinomina predefinita collideva con un helper del compilatore TypeScript e impediva l'avvio Electron. Il file `dist-electron/main.js` misura circa 11,4 MB, contro 14,1 MB senza minificazione. `npm run test:smoke`, gli E2E Electron, impostazioni e cold start verificano l'avvio del bundle.
+
 Su Windows il recupero di `:8000` richiede il marker `sidecar-ownership.json` in `userData` e la corrispondenza di PID, percorso eseguibile e ora di avvio letti dal processo reale. Un listener sconosciuto o un PID riutilizzato lascia il Sidecar offline senza terminare il processo sulla porta. La prova con processi reali, incluso `sidecar.exe`, è `npm run test:e2e:sidecar-ownership`.

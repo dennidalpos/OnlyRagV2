@@ -2,8 +2,8 @@ import os
 import base64
 import subprocess
 import sys
-from typing import Dict, Any, Optional, List, Tuple
-from sidecar.config import httpx_client, logger
+from typing import Dict, Any, Optional, List
+from sidecar.config import OLLAMA_BASE_URL, httpx_client, logger
 from sidecar.domain.word_segmenter import normalize_ocr_token_spacing
 
 _GPU_INFO_CACHE: Optional[Dict[str, Any]] = None
@@ -453,7 +453,7 @@ def run_layout_ocr(image_bytes: bytes) -> str:
 def run_vision_ocr(
     image_bytes: bytes,
     prompt: str = "Extract all text, tables, and key structure from this document image in clean Markdown format.",
-    ollama_url: str = "http://127.0.0.1:11434",
+    ollama_url: str = OLLAMA_BASE_URL,
     model: str = "llama3.2-vision",
     num_ctx: Optional[int] = None
 ) -> str:

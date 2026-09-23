@@ -15,7 +15,6 @@
 - FastAPI/Uvicorn/Pydantic: HTTP e validazione.
 - LanceDB/NumPy/Pandas: persistenza e dati vettoriali.
 - PyMuPDF, python-docx, Pillow, RapidOCR e ONNX Runtime GPU: parsing/OCR.
-- `flashrank`: reranking opzionale con fallback locale.
 - `wordfreq`, `symspellpy`, `langdetect`: vocabolario e normalizzazione.
 
 Versioni e vincoli sono nei manifest [`package.json`](../package.json), [`sidecar/requirements.txt`](../sidecar/requirements.txt) e [`sidecar/constraints.txt`](../sidecar/constraints.txt). Non duplicarli nella documentazione.

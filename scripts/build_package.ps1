@@ -106,7 +106,7 @@ try {
         }
         if (-not $Fast) { Write-Host "[OK] Standalone sidecar.exe generato con successo in sidecar_dist/sidecar." -ForegroundColor Green }
     } else {
-        if (-not $Fast) { Write-Host "[WARN] Flag SkipSidecar attivo: l'installer non includerà il sidecar standalone." -ForegroundColor Yellow }
+        if (-not $Fast) { Write-Host "[WARN] Flag SkipSidecar attivo: l'installer non includerà il sidecar standalone (il fallback Python non ha i font CJK per la traduzione PDF)." -ForegroundColor Yellow }
     }
 
     # 4. Compilazione Bundle Vite & Smoke Test del Main Process
@@ -123,7 +123,7 @@ try {
     if (-not $SkipSidecar -and -not (Test-Path -LiteralPath (Join-Path $rootDir "sidecar_dist\sidecar"))) {
         throw "[ERRORE] Sorgente sidecar mancante prima del packaging NSIS."
     }
-    $distPath = Join-Path $rootDir "dist"
+    $distPath = Join-Path $rootDir "release"
     if (Test-Path $distPath) {
         $staleTargets = @(
             (Join-Path $distPath "win-unpacked")
@@ -142,12 +142,12 @@ try {
     if (-not $Fast) { Write-Host "[OK] Impacchettamento completato." -ForegroundColor Green }
 
     # 6. Validazione artifact NSIS generati
-    if (-not $Fast) { Write-Host "`n[6/6] Verifica degli artifact di installazione NSIS in dist/..." -ForegroundColor Yellow }
-    $distPath = Join-Path $rootDir "dist"
+    if (-not $Fast) { Write-Host "`n[6/6] Verifica degli artifact di installazione NSIS in release/..." -ForegroundColor Yellow }
+    $distPath = Join-Path $rootDir "release"
     $nsisInstaller = Get-ChildItem -Path $distPath -Filter "*.exe" | Where-Object { $_.Name -like "*Setup*.exe" } | Select-Object -First 1
 
     if ($null -eq $nsisInstaller) {
-        throw "[ERRORE] Nessun installer NSIS (*Setup*.exe) trovato nella cartella dist! Interruzione immediata."
+        throw "[ERRORE] Nessun installer NSIS (*Setup*.exe) trovato nella cartella release! Interruzione immediata."
     }
 
     $unpackedExecutable = Join-Path $distPath "win-unpacked\OnlyRag V2.exe"

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, Suspense, lazy } from 'react'
 import { AppSettings } from '../../types'
+import { DEFAULT_APP_SETTINGS } from '../../../shared/domain/settings/appSettingsDefaults'
 import {
   Layers,
   FileText,
@@ -74,25 +75,7 @@ export const AppLayout: React.FC = () => {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false)
   const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false)
 
-  const [settings, setSettings] = useState<AppSettings>(() => ({
-      defaultModel: '',
-      ocrEngine: 'native_cuda',
-      ollamaHost: 'http://127.0.0.1:11434',
-      ollamaMode: 'local',
-      language: 'it',
-      autoInstallHubSkills: 'disabled',
-      autoInstallMinScore: 8.0,
-      enableSkillRouter: false,
-      allowFileModifications: false,
-      allowTerminalExecution: false,
-      capabilityPolicyMode: 'offline-strict',
-      maxToolCallSteps: 25,
-      enableCodingAgentDebugLog: false,
-      includeCodingAgentDebugPayloads: false,
-      modelThinkingPreferences: {},
-      codingAgentDebugRetentionFiles: 2,
-      hasCompletedInitialSetup: false,
-  }))
+  const [settings, setSettings] = useState<AppSettings>(() => ({ ...DEFAULT_APP_SETTINGS }))
   const [settingsReady, setSettingsReady] = useState(false)
   const saveChain = useRef<Promise<unknown>>(Promise.resolve())
   const isRemoteOllama = isRemoteOllamaMode(settings)

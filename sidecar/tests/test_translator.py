@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from sidecar.main import app
 from sidecar.domain import translator as translator_module
+from _stream import done_payload, ingest_path
 
 client = TestClient(app)
 
@@ -219,7 +220,7 @@ def test_translate_batch_falls_back_on_segment_mismatch(tmp_path, monkeypatch):
         assert run.text == f"TR:{original}"
 
 
-def test_translate_docx_inplace_end_to_end(tmp_path, monkeypatch):
+def test_translate_docx_end_to_end(tmp_path, monkeypatch):
     path = str(tmp_path / "e2e_sample.docx")
     _make_docx(path)
 
@@ -235,17 +236,14 @@ def test_translate_docx_inplace_end_to_end(tmp_path, monkeypatch):
 
     doc_id = None
     try:
-        ingest_res = client.post("/ingest-path", json={"file_path": path})
-        assert ingest_res.status_code == 200
-        doc_id = ingest_res.json()["id"]
+        doc_id = ingest_path(client, path)["id"]
 
         res = client.post(
-            f"/documents/{doc_id}/translate-inplace",
+            f"/documents/{doc_id}/translate-inplace-stream",
             json={"source_lang": "English", "target_lang": "Italian"},
         )
-        assert res.status_code == 200
-        data = res.json()
-        assert data["status"] == "indexed"
+        data = done_payload(res)
+        assert data["status"] == "translated"
 
         # Original file on disk remains intact and unchanged
         orig_doc = docx.Document(path)
@@ -265,27 +263,9 @@ def test_translate_docx_inplace_end_to_end(tmp_path, monkeypatch):
             client.delete(f"/documents/{doc_id}")
 
 
-def test_translate_inplace_rejects_missing_document():
+def test_prepare_translation_rejects_missing_document():
     with pytest.raises(ValueError, match="not found"):
-        translator_module.translate_docx_inplace("nonexistent-doc-id-xyz", "English", "Italian")
-
-
-def test_translate_inplace_rejects_non_docx_file_type(tmp_path):
-    txt_path = str(tmp_path / "plain.txt")
-    with open(txt_path, "w", encoding="utf-8") as f:
-        f.write("Just a plain text file, not a DOCX.")
-
-    doc_id = None
-    try:
-        ingest_res = client.post("/ingest-path", json={"file_path": txt_path})
-        assert ingest_res.status_code == 200
-        doc_id = ingest_res.json()["id"]
-
-        with pytest.raises(ValueError, match="DOCX"):
-            translator_module.translate_docx_inplace(doc_id, "English", "Italian")
-    finally:
-        if doc_id:
-            client.delete(f"/documents/{doc_id}")
+        translator_module.prepare_translation("nonexistent-doc-id-xyz")
 
 
 # --- PDF fine-mode (Fase 2) ---------------------------------------------------------------
@@ -418,7 +398,7 @@ def test_translate_pdf_blocks_happy_path(tmp_path, monkeypatch):
     assert blocks[0]["text"].startswith("[") and "Hello world" in blocks[0]["text"]
 
 
-def test_translate_pdf_inplace_fine_end_to_end(tmp_path, monkeypatch):
+def test_translate_pdf_end_to_end(tmp_path, monkeypatch):
     marker = "UNIQUEMARKERXYZ"
     translated_marker = marker[::-1]
     path = str(tmp_path / "e2e_sample.pdf")
@@ -436,17 +416,14 @@ def test_translate_pdf_inplace_fine_end_to_end(tmp_path, monkeypatch):
 
     doc_id = None
     try:
-        ingest_res = client.post("/ingest-path", json={"file_path": path})
-        assert ingest_res.status_code == 200
-        doc_id = ingest_res.json()["id"]
+        doc_id = ingest_path(client, path)["id"]
 
         res = client.post(
-            f"/documents/{doc_id}/translate-inplace",
+            f"/documents/{doc_id}/translate-inplace-stream",
             json={"source_lang": "English", "target_lang": "Italian"},
         )
-        assert res.status_code == 200
-        data = res.json()
-        assert data["status"] == "indexed"
+        data = done_payload(res)
+        assert data["status"] == "translated"
         # In-place translation separates flows: original extracted markdown in RAG DB is preserved.
         assert marker in data["extracted_markdown"]
 
@@ -470,7 +447,7 @@ def test_translate_pdf_inplace_fine_end_to_end(tmp_path, monkeypatch):
             client.delete(f"/documents/{doc_id}")
 
 
-def test_translate_pdf_inplace_fine_clips_overflow_without_crashing(tmp_path, monkeypatch):
+def test_translate_pdf_clips_overflow_without_crashing(tmp_path, monkeypatch):
     marker = "UNIQUEMARKERXYZ"
     path = str(tmp_path / "overflow_sample.pdf")
     _make_pdf(path, text=marker)
@@ -487,41 +464,39 @@ def test_translate_pdf_inplace_fine_clips_overflow_without_crashing(tmp_path, mo
 
     doc_id = None
     try:
-        ingest_res = client.post("/ingest-path", json={"file_path": path})
-        assert ingest_res.status_code == 200
-        doc_id = ingest_res.json()["id"]
+        doc_id = ingest_path(client, path)["id"]
 
         res = client.post(
-            f"/documents/{doc_id}/translate-inplace",
+            f"/documents/{doc_id}/translate-inplace-stream",
             json={"source_lang": "English", "target_lang": "Italian"},
         )
-        assert res.status_code == 200
+        data = done_payload(res)
 
-        with open(path, "rb") as f:
-            raw = f.read()
-        # The original was still genuinely erased even though the replacement got clipped.
-        assert marker.encode() not in raw
+        # The oversized replacement is auto-fitted into the redacted bbox instead of failing the job.
+        translated = pymupdf.open(str(tmp_path / data["filename"]))
+        try:
+            assert "TRANSLATED" in translated[0].get_text()
+        finally:
+            translated.close()
     finally:
         if doc_id:
             client.delete(f"/documents/{doc_id}")
 
 
-def test_translate_document_inplace_rejects_unsupported_file_type(tmp_path):
+def test_translate_stream_rejects_unsupported_file_type(tmp_path):
     txt_path = str(tmp_path / "plain.txt")
     with open(txt_path, "w", encoding="utf-8") as f:
         f.write("Just a plain text file.")
 
     doc_id = None
     try:
-        ingest_res = client.post("/ingest-path", json={"file_path": txt_path})
-        assert ingest_res.status_code == 200
-        doc_id = ingest_res.json()["id"]
+        doc_id = ingest_path(client, txt_path)["id"]
 
         with pytest.raises(translator_module.UnsupportedDocumentTypeError):
-            translator_module.translate_document_inplace(doc_id, "English", "Italian")
+            translator_module.prepare_translation(doc_id)
 
         res = client.post(
-            f"/documents/{doc_id}/translate-inplace",
+            f"/documents/{doc_id}/translate-inplace-stream",
             json={"source_lang": "English", "target_lang": "Italian"},
         )
         assert res.status_code == 400
@@ -530,9 +505,9 @@ def test_translate_document_inplace_rejects_unsupported_file_type(tmp_path):
             client.delete(f"/documents/{doc_id}")
 
 
-def test_translate_document_inplace_returns_404_for_missing_document():
+def test_translate_stream_returns_404_for_missing_document():
     res = client.post(
-        "/documents/nonexistent-doc-id-xyz/translate-inplace",
+        "/documents/nonexistent-doc-id-xyz/translate-inplace-stream",
         json={"source_lang": "English", "target_lang": "Italian"},
     )
     assert res.status_code == 404
@@ -617,10 +592,10 @@ def test_redact_and_reinsert_pdf_blocks_renders_cyrillic_fallback(tmp_path):
         reopened.close()
 
 
-def test_translate_pdf_inplace_fine_end_to_end_japanese(tmp_path, monkeypatch):
+def test_translate_pdf_end_to_end_japanese(tmp_path, monkeypatch):
     """Full pipeline end-to-end with a CJK target language: verifies the font-selection wiring
-    from translate_pdf_inplace_fine all the way through to the saved file and reindexed markdown."""
-    # Short phrase, sized to comfortably fit the narrow bbox of the "Hello world" source text (this test verifies the font-selection wiring, not overflow/clipping behavior -- that's covered separately by test_translate_pdf_inplace_fine_clips_overflow_without_crashin
+    from the streaming endpoint all the way through to the saved file and reindexed markdown."""
+    # Short phrase, sized to comfortably fit the narrow bbox of the "Hello world" source text (this test verifies the font-selection wiring, not overflow/clipping behavior -- that's covered separately by test_translate_pdf_clips_overflow_without_crashin
     japanese_text = "日本語"
     path = str(tmp_path / "jp_e2e.pdf")
     _make_pdf(path, text="Hello world")
@@ -637,16 +612,14 @@ def test_translate_pdf_inplace_fine_end_to_end_japanese(tmp_path, monkeypatch):
 
     doc_id = None
     try:
-        ingest_res = client.post("/ingest-path", json={"file_path": path})
-        assert ingest_res.status_code == 200
-        doc_id = ingest_res.json()["id"]
+        doc_id = ingest_path(client, path)["id"]
 
         res = client.post(
-            f"/documents/{doc_id}/translate-inplace",
+            f"/documents/{doc_id}/translate-inplace-stream",
             json={"source_lang": "English", "target_lang": "Japanese"},
         )
-        assert res.status_code == 200
-        assert res.json()["status"] == "indexed"
+        data = done_payload(res)
+        assert data["status"] == "translated"
 
         # Original file remains intact
         orig_doc = pymupdf.open(path)
@@ -655,7 +628,7 @@ def test_translate_pdf_inplace_fine_end_to_end_japanese(tmp_path, monkeypatch):
         finally:
             orig_doc.close()
 
-        translated_file_path = str(tmp_path / res.json()["filename"])
+        translated_file_path = str(tmp_path / data["filename"])
         translated_doc = pymupdf.open(translated_file_path)
         try:
             page_text = translated_doc[0].get_text()
@@ -663,7 +636,7 @@ def test_translate_pdf_inplace_fine_end_to_end_japanese(tmp_path, monkeypatch):
             translated_doc.close()
         assert japanese_text in page_text
         # In-place translation separates flows: original extracted markdown is preserved.
-        assert "Hello world" in res.json()["extracted_markdown"]
+        assert "Hello world" in data["extracted_markdown"]
     finally:
         if doc_id:
             client.delete(f"/documents/{doc_id}")
@@ -685,21 +658,18 @@ def test_translate_inplace_with_backup_and_target_dir(monkeypatch, tmp_path):
 
     doc_id = None
     try:
-        ingest_res = client.post("/ingest-path", json={"file_path": str(src_file)})
-        assert ingest_res.status_code == 200
-        doc_id = ingest_res.json()["id"]
+        doc_id = ingest_path(client, str(src_file))["id"]
 
         # Test target_dir saving without altering original
         res = client.post(
-            f"/documents/{doc_id}/translate-inplace",
+            f"/documents/{doc_id}/translate-inplace-stream",
             json={
                 "source_lang": "English",
                 "target_lang": "Spanish",
                 "target_dir": str(out_dir),
-                "backup_original": True,
             },
         )
-        assert res.status_code == 200
+        done_payload(res)
         target_files = list(out_dir.glob("*.docx"))
         assert len(target_files) == 1
         assert "sample_spanish.docx" in target_files[0].name
@@ -752,21 +722,17 @@ def test_translate_scanned_pdf_inplace_with_ocr_fallback(monkeypatch, tmp_path):
 
     doc_id = None
     try:
-        ingest_res = client.post("/ingest-path", json={"file_path": scanned_pdf_path})
-        assert ingest_res.status_code == 200
-        doc_id = ingest_res.json()["id"]
+        doc_id = ingest_path(client, scanned_pdf_path)["id"]
 
         # 2. In-place translate scanned PDF
         res = client.post(
-            f"/documents/{doc_id}/translate-inplace",
+            f"/documents/{doc_id}/translate-inplace-stream",
             json={
                 "source_lang": "Italian",
                 "target_lang": "English",
-                "backup_original": True,
             },
         )
-        assert res.status_code == 200
-        data = res.json()
+        data = done_payload(res)
         assert "TR-" in data["extracted_markdown"] or "Richiesta" in data["extracted_markdown"]
 
         # Verify translated PDF now contains search-enabled translated text

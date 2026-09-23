@@ -103,7 +103,7 @@ def test_ingest_path_contract_rejects_invalid_limits_and_accepts_options(tmp_pat
     source.write_bytes(b"not a real pdf")
 
     valid = client.post(
-        "/ingest-path",
+        "/ingest-path-stream",
         json={
             "file_path": str(source),
             "vision_model": "llama3.2-vision",
@@ -118,7 +118,7 @@ def test_ingest_path_contract_rejects_invalid_limits_and_accepts_options(tmp_pat
     assert valid.status_code != 422
 
     invalid = client.post(
-        "/ingest-path",
+        "/ingest-path-stream",
         json={"file_path": str(source), "max_excel_sheets": 0},
     )
     assert invalid.status_code == 422
@@ -135,11 +135,11 @@ def test_request_contracts_reject_unknown_fields_and_oversized_values():
 
 def test_translation_contract_requires_bounded_non_blank_languages():
     assert client.post(
-        "/documents/doc-1/translate-inplace",
+        "/documents/doc-1/translate-inplace-stream",
         json={"source_lang": " ", "target_lang": "en"},
     ).status_code == 422
     assert client.post(
-        "/documents/doc-1/translate-inplace",
+        "/documents/doc-1/translate-inplace-stream",
         json={"source_lang": "en", "target_lang": "x" * 101},
     ).status_code == 422
 
@@ -188,13 +188,6 @@ def test_tasks_cancel_endpoint():
     assert data["status"] == "success"
     assert "test-123" in data["message"]
     assert client.post("/tasks/cancel").status_code == 400
-
-def test_cleanup_temp_endpoint():
-    response = client.post("/cleanup/temp")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "success"
-    assert "cleaned_files" in data
 
 def test_deterministic_fallback_embeddings():
     from sidecar.infrastructure.embeddings import get_fallback_embedding
@@ -749,19 +742,6 @@ def test_vocab_sync_service_resolves_remote_pack_relative_to_master_manifest(tmp
     assert cached == {"onlyrag": 5.0, "__version__": "2.0.0"}
 
 
-def test_vocab_status_and_sync_endpoints():
-    status_resp = client.get("/vocab/status")
-    assert status_resp.status_code == 200
-    data = status_resp.json()
-    assert "wordfreq_available" in data
-    assert "cached_languages" in data
-
-    sync_resp = client.post("/vocab/sync")
-    assert sync_resp.status_code == 200
-    sync_data = sync_resp.json()
-    assert "status" in sync_data
-
-
 def test_opencv_deskew():
     import numpy as np
     import cv2
@@ -820,8 +800,9 @@ def test_translate_inplace_stream_endpoint_404():
         "target_lang": "English"
     }
     response = client.post("/documents/non-existent-doc-9999/translate-inplace-stream", json=payload)
-    assert response.status_code == 200
-    assert "error" in response.text.lower() or "not found" in response.text.lower()
+    # Validated before streaming starts, so the failure is a real HTTP status, not a 200 + error event.
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
 
 
 

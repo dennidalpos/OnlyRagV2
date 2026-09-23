@@ -45,9 +45,9 @@ export class AiDebugBundleService {
     let gitStatusLines: string[] = []
     if (workspacePath) {
       try {
-        const rawStatus = gitCliRepository.run(workspacePath, 'status --short', 10000)
+        const rawStatus = gitCliRepository.run(workspacePath, ['status', '--short'], 10000)
         gitStatusLines = rawStatus ? rawStatus.split(/\r?\n/).filter((l) => l.trim().length > 0) : []
-        const rawDiff = includePayloads ? gitCliRepository.run(workspacePath, 'diff', 15000) : ''
+        const rawDiff = includePayloads ? gitCliRepository.run(workspacePath, ['diff'], 15000) : ''
         if (rawDiff && rawDiff.trim()) {
           gitDiffBlock = `\`\`\`diff\n${rawDiff.trim().slice(0, 12000)}\n\`\`\``
         } else if (gitStatusLines.length > 0 && includePayloads) {

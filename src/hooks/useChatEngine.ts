@@ -368,12 +368,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       // Retrieval runs ONLY when documents are explicitly selected and the query is non-chitchat
       if (hasSelectedDocs && routingResult.requiresRetrieval) {
         try {
-          const searchResults = await apiService.searchVectorDb(
-            userText,
-            budget.vectorTopK,
-            settings.embeddingModel || 'nomic-embed-text',
-            scopedDocIds
-          )
+          const searchResults = await apiService.searchVectorDb(userText, budget.vectorTopK, scopedDocIds)
 
           if (Array.isArray(searchResults) && searchResults.length > 0) {
             const validResults = searchResults.filter((res: any) => res && res.text)

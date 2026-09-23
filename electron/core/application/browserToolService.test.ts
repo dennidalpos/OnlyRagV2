@@ -34,6 +34,17 @@ describe('BrowserToolService open_in_browser', () => {
     expect(openPath).not.toHaveBeenCalled()
   })
 
+  it('never opens an executable or script, even inside the workspace', async () => {
+    const openPath = vi.fn(async () => '')
+    const service = createService({ openPath })
+
+    for (const filePath of ['build\\setup.exe', 'run.bat', 'deploy.ps1', 'shortcut.lnk']) {
+      const result = await service.executeOpenInBrowser({ filePath }, 'C:\\workspace')
+      expect(result.outcome).toBe('rejected')
+    }
+    expect(openPath).not.toHaveBeenCalled()
+  })
+
   it('rejects a local path outside the workspace before checking or opening it', async () => {
     const exists = vi.fn(() => true)
     const openPath = vi.fn(async () => '')

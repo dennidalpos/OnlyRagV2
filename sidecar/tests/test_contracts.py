@@ -11,7 +11,7 @@ def test_essential_response_contracts_are_stable_and_versioned():
     assert health.status_code == 200
     payload = health.json()
     assert payload["status"] == "online"
-    assert payload["version"] == "2.3.0"
+    assert payload["version"] == "2.4.0"
     assert isinstance(payload["documents_count"], int)
     assert isinstance(payload["chunks_count"], int)
 
@@ -23,7 +23,7 @@ def test_essential_response_contracts_are_stable_and_versioned():
     assert export_payload["format"] == "html"
 
     openapi = app.openapi()
-    assert openapi["info"]["version"] == "2.3.0"
+    assert openapi["info"]["version"] == "2.4.0"
     assert openapi["paths"]["/health"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/HealthResponse"
     assert openapi["paths"]["/export"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/ExportResponse"
 

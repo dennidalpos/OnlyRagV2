@@ -7,6 +7,9 @@ from httpx import Timeout
 from sidecar.config import EMBEDDING_DIM, OLLAMA_BASE_URL, httpx_client, logger
 
 EMBEDDING_BATCH_SIZE = 32
+DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
+# Label stored on chunks embedded with get_fallback_embedding, so search embeds the query the same way.
+FALLBACK_EMBEDDING_MODEL = "fallback-hash"
 
 def get_fallback_embedding(text: str, dim: int = EMBEDDING_DIM) -> List[float]:
     """Generates a deterministic normalized pseudo-embedding vector with semantic word overlap when LLM embedding API is offline."""
@@ -35,7 +38,7 @@ def _fit_embedding_dimension(vec: Sequence[float]) -> List[float]:
 
 def generate_embeddings_with_status(
     texts: Sequence[str],
-    model: str = "nomic-embed-text",
+    model: str = DEFAULT_EMBEDDING_MODEL,
     ollama_url: str = OLLAMA_BASE_URL
 ) -> Tuple[List[List[float]], bool]:
     """Embeds one ingestion batch and reports whether deterministic fallback vectors were used.
@@ -82,14 +85,14 @@ def generate_embeddings_with_status(
 
 def generate_embedding_with_status(
     text: str,
-    model: str = "nomic-embed-text",
+    model: str = DEFAULT_EMBEDDING_MODEL,
     ollama_url: str = OLLAMA_BASE_URL
 ) -> Tuple[List[float], bool]:
     """Generates one text embedding and reports whether deterministic fallback was used."""
     vectors, is_fallback = generate_embeddings_with_status([text], model=model, ollama_url=ollama_url)
     return vectors[0], is_fallback
 
-def generate_embedding(text: str, model: str = "nomic-embed-text", ollama_url: str = OLLAMA_BASE_URL) -> List[float]:
+def generate_embedding(text: str, model: str = DEFAULT_EMBEDDING_MODEL, ollama_url: str = OLLAMA_BASE_URL) -> List[float]:
     """Generates text embedding using local Ollama Embeddings API with dynamic model selection and fallback."""
     vec, _ = generate_embedding_with_status(text, model=model, ollama_url=ollama_url)
     return vec

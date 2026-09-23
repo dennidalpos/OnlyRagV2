@@ -16,7 +16,7 @@ describe('GitToolService', () => {
 
     const result = service.executeStatus('C:\\workspace')
 
-    expect(run).toHaveBeenCalledWith('C:\\workspace', 'status --short', 10000)
+    expect(run).toHaveBeenCalledWith('C:\\workspace', ['status', '--short'], 10000)
     expect(result.outputForHistory).toContain('M src/App.tsx')
   })
 

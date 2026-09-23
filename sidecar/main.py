@@ -10,54 +10,64 @@ if _current_dir not in sys.path:
     sys.path.insert(0, _current_dir)
 
 import asyncio
+import hmac
 import json
 import uuid
 from typing import List, Optional
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request, Form
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from sidecar.config import ALLOWED_ORIGINS, EXPORT_DIR, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
+from sidecar.config import ALLOWED_ORIGINS, SIDECAR_AUTH_HEADER, SIDECAR_AUTH_TOKEN, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
 from sidecar.schemas import (
     IngestResponse, IngestPathRequest, SearchRequest, SearchResult, HealthResponse,
     DocumentRecord, DeleteResponse, ExportResponse, SuccessResponse,
-    TaskCancelResponse, CleanupResponse, VocabStatusResponse,
+    TaskCancelResponse,
     ExportRequest, UpdateDocumentRequest, PagePreviewResponse,
     LogDiagnosticQuery, LogDiagnosticReportSchema, AnomalyRecordSchema,
     IndexPromptHistoryRequest, PromptHistorySearchRequest, PromptHistorySearchResult,
     PromptHistoryRemoveRequest, TranslateInplaceRequest,
 )
 from sidecar.domain.log_analyzer import LogAnalyzer
-from sidecar.infrastructure.db import lance_db, get_existing_tables, safe_open_table, run_db_maintenance
+from sidecar.infrastructure.db import lance_db, get_existing_tables, run_db_maintenance, ensure_chunk_embedding_model_column
 from sidecar.infrastructure.ocr import detect_gpu_acceleration, get_ocr_runtime_info
 from sidecar.domain.exporter import export_markdown_to_file
 from sidecar.services.ingest_service import (
-    process_and_index_document,
     process_and_index_document_generator,
     update_and_reindex_document,
     render_document_page_preview
 )
 from sidecar.services.task_cancellation import cancel_task
 from sidecar.domain.translator import (
-    translate_document_inplace,
-    translate_document_stream_generator,
+    prepare_translation,
+    translate_document_stream,
     UnsupportedDocumentTypeError
 )
 from sidecar.services.search_service import perform_vector_search, list_stored_documents, delete_stored_document
 from sidecar.services.prompt_history_service import index_prompt_history, search_prompt_history, remove_prompt_history
-from sidecar.services.vocab_service import background_vocab_sync_startup, get_vocab_sync_service
+from sidecar.services.vocab_service import background_vocab_sync_startup
+from sidecar.infrastructure.embeddings import DEFAULT_EMBEDDING_MODEL, FALLBACK_EMBEDDING_MODEL
 
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
     logger.info("FastAPI Sidecar starting up. Loading bundled vocabulary & DB maintenance...")
-    asyncio.create_task(background_vocab_sync_startup())
-    asyncio.create_task(asyncio.to_thread(run_db_maintenance))
+    await asyncio.to_thread(
+        ensure_chunk_embedding_model_column,
+        CHUNKS_TABLE_NAME, DOCS_TABLE_NAME, DEFAULT_EMBEDDING_MODEL, FALLBACK_EMBEDDING_MODEL,
+    )
+    # Held so the event loop cannot garbage-collect the tasks mid-flight.
+    startup_tasks = {
+        asyncio.create_task(background_vocab_sync_startup()),
+        asyncio.create_task(asyncio.to_thread(run_db_maintenance)),
+    }
     yield
+    for task in startup_tasks:
+        task.cancel()
     logger.info("FastAPI Sidecar shutting down.")
 
-app = FastAPI(title="OnlyRag V2 Python Sidecar Engine", version="2.3.0", lifespan=lifespan)
+app = FastAPI(title="OnlyRag V2 Python Sidecar Engine", version="2.4.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -66,6 +76,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def require_launch_token(request: Request, call_next):
+    """Rejects callers that lack the token Electron passed at launch.
+
+    A custom header also forces browsers into a CORS preflight, which the origin allowlist
+    refuses, so a web page can no longer post "simple" requests to the local API.
+    """
+    if SIDECAR_AUTH_TOKEN and request.url.path != "/health" and request.method != "OPTIONS":
+        supplied = request.headers.get(SIDECAR_AUTH_HEADER, "")
+        if not hmac.compare_digest(supplied.encode(), SIDECAR_AUTH_TOKEN.encode()):
+            return JSONResponse(status_code=401, content={"detail": "Missing or invalid sidecar token"})
+    return await call_next(request)
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -99,7 +123,7 @@ def health_check():
     return {
         "status": "online",
         "engine": "FastAPI Python Sidecar + LanceDB OCR Engine V2",
-        "version": "2.3.0",
+        "version": "2.4.0",
         "vector_db": "LanceDB Embedded",
         "gpu": gpu_info,
         "ocr": ocr_info,
@@ -107,56 +131,6 @@ def health_check():
         "chunks_count": chunk_count,
         "python_version": sys.version
     }
-
-@app.post("/db/maintenance")
-async def db_maintenance():
-    """Triggers dataset compaction and vacuuming of obsolete versions across all LanceDB tables."""
-    return await asyncio.to_thread(run_db_maintenance)
-
-@app.post("/ingest", response_model=IngestResponse)
-async def ingest_document(
-    file: UploadFile = File(...),
-    normalize_with_llm: bool = Form(False),
-    normalization_model: Optional[str] = Form(None),
-    normalization_think: bool = Form(False)
-):
-    logger.info(f"Received file upload for ingestion: {file.filename} (normalize_with_llm={normalize_with_llm})")
-    try:
-        content = await file.read()
-        return await asyncio.to_thread(
-            process_and_index_document,
-            file.filename or "uploaded_document",
-            content,
-            normalize_with_llm=normalize_with_llm,
-            normalization_model=normalization_model,
-            normalization_think=normalization_think
-        )
-    except Exception as e:
-        logger.error(f"Error ingesting uploaded document: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/ingest-path", response_model=IngestResponse)
-async def ingest_document_by_path(req: IngestPathRequest):
-    logger.info(f"Received path for ingestion: {req.file_path} (normalize_with_llm={req.normalize_with_llm})")
-    resolved_path = os.path.abspath(req.file_path)
-    if not os.path.exists(resolved_path) or not os.path.isfile(resolved_path):
-        raise HTTPException(status_code=400, detail="Invalid or non-existent file path")
-    try:
-        filename = os.path.basename(resolved_path)
-        return await asyncio.to_thread(
-            process_and_index_document, filename, b"", resolved_path,
-            req.vision_model, req.vision_prompt,
-            normalize_with_llm=bool(req.normalize_with_llm),
-            normalization_model=req.normalization_model,
-            normalization_think=bool(req.normalization_think),
-            num_ctx=req.num_ctx,
-            max_tabular_rows=req.max_tabular_rows,
-            max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
-            max_excel_sheets=req.max_excel_sheets
-        )
-    except Exception as e:
-        logger.error(f"Error ingesting document path {req.file_path}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/ingest-path-stream")
 async def ingest_document_by_path_stream(req: IngestPathRequest):
@@ -177,7 +151,8 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
                 num_ctx=req.num_ctx,
                 max_tabular_rows=req.max_tabular_rows,
                 max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
-                max_sheets=req.max_excel_sheets
+                max_sheets=req.max_excel_sheets,
+                embedding_model=req.embedding_model or DEFAULT_EMBEDDING_MODEL,
             ),
             media_type="application/x-ndjson"
         )
@@ -189,59 +164,39 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
 async def update_document(doc_id: str, req: UpdateDocumentRequest):
     logger.info(f"Updating and re-indexing document {doc_id} in LanceDB")
     try:
-        return await asyncio.to_thread(update_and_reindex_document, doc_id, req.markdown_content)
+        return await asyncio.to_thread(
+            update_and_reindex_document,
+            doc_id,
+            req.markdown_content,
+            req.embedding_model or DEFAULT_EMBEDDING_MODEL,
+        )
     except ValueError as val_err:
         raise HTTPException(status_code=404, detail=str(val_err))
     except Exception as e:
         logger.error(f"Error updating document {doc_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/documents/{doc_id}/translate-inplace", response_model=IngestResponse)
-async def translate_document_inplace_endpoint(doc_id: str, req: TranslateInplaceRequest):
-    logger.info(f"In-place translation requested for document {doc_id}: {req.source_lang} -> {req.target_lang}")
-    try:
-        return await asyncio.to_thread(
-            translate_document_inplace,
-            doc_id,
-            req.source_lang,
-            req.target_lang,
-            req.model or "llama3.2",
-            req.backup_original if req.backup_original is not None else True,
-            req.target_dir,
-            req.num_ctx,
-            bool(req.think)
-        )
-    except UnsupportedDocumentTypeError as type_err:
-        raise HTTPException(status_code=400, detail=str(type_err))
-    except ValueError as val_err:
-        raise HTTPException(status_code=404, detail=str(val_err))
-    except Exception as e:
-        logger.error(f"Error translating document {doc_id} in place: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/documents/{doc_id}/translate-inplace-stream")
 async def translate_document_inplace_stream_endpoint(doc_id: str, req: TranslateInplaceRequest):
     logger.info(f"Streaming in-place translation requested for document {doc_id}: {req.source_lang} -> {req.target_lang}")
     try:
-        return StreamingResponse(
-            translate_document_stream_generator(
-                doc_id,
-                req.source_lang,
-                req.target_lang,
-                model=req.model or "llama3.2",
-                target_dir=req.target_dir,
-                num_ctx=req.num_ctx,
-                think=bool(req.think)
-            ),
-            media_type="application/x-ndjson"
-        )
+        record = await asyncio.to_thread(prepare_translation, doc_id)
     except UnsupportedDocumentTypeError as type_err:
         raise HTTPException(status_code=400, detail=str(type_err))
     except ValueError as val_err:
         raise HTTPException(status_code=404, detail=str(val_err))
-    except Exception as e:
-        logger.error(f"Error initiating streaming translation for document {doc_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return StreamingResponse(
+        translate_document_stream(
+            record,
+            req.source_lang,
+            req.target_lang,
+            model=req.model or "llama3.2",
+            target_dir=req.target_dir,
+            num_ctx=req.num_ctx,
+            think=bool(req.think),
+        ),
+        media_type="application/x-ndjson",
+    )
 
 @app.get("/documents/{doc_id}/page-preview/{page_num}", response_model=PagePreviewResponse)
 async def get_page_preview(doc_id: str, page_num: int):
@@ -311,23 +266,6 @@ async def cancel_sidecar_task(task_id: Optional[str] = Query(None)):
     logger.info(f"Cancellation requested for task: {task_id}")
     return {"status": "success", "message": f"Cancellation requested for task {task_id}"}
 
-@app.post("/cleanup/temp", response_model=CleanupResponse)
-async def cleanup_sidecar_temp():
-    def _do_clean():
-        cleaned = 0
-        if os.path.exists(EXPORT_DIR):
-            for fname in os.listdir(EXPORT_DIR):
-                fpath = os.path.join(EXPORT_DIR, fname)
-                try:
-                    if os.path.isfile(fpath):
-                        os.remove(fpath)
-                        cleaned += 1
-                except Exception:
-                    pass
-        return {"status": "success", "cleaned_files": cleaned}
-
-    return await asyncio.to_thread(_do_clean)
-
 # ---------------------------------------------------------------------------
 # Agent Studio Endpoints
 # ---------------------------------------------------------------------------
@@ -362,26 +300,6 @@ async def agent_logs_analyze(req: LogDiagnosticQuery):
     except Exception as exc:
         logger.error("Log analysis error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.post("/vocab/sync")
-async def sync_vocab(request: Request):
-    """Triggers vocabulary update check from upstream repository/manifest."""
-    sync_svc = get_vocab_sync_service()
-    result = await sync_svc.sync_vocabularies(timeout_sec=5.0)
-    return result
-
-
-@app.get("/vocab/status", response_model=VocabStatusResponse)
-def get_vocab_status():
-    """Returns active vocabulary statuses and wordfreq availability."""
-    from sidecar.domain.word_segmenter import _WORDFREQ_AVAILABLE, get_vocab_manager
-    mgr = get_vocab_manager()
-    return {
-        "wordfreq_available": _WORDFREQ_AVAILABLE,
-        "cached_languages": list(mgr._local_vocab_cache.keys()),
-        "cache_dir": mgr.cache_dir
-    }
 
 
 if __name__ == "__main__":

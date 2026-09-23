@@ -112,11 +112,11 @@ export const apiService = {
     }
   },
 
-  async translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal: boolean = true, targetDir?: string, numCtx?: number, think?: boolean): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
+  async translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string, targetDir?: string, numCtx?: number, think?: boolean): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       logger.info('ApiService:Ingestion', `Translating document in place ${docId} (${sourceLang} -> ${targetLang})`)
-      const res = await window.electronAPI.translateDocumentInplace(docId, sourceLang, targetLang, model, backupOriginal, targetDir, numCtx, think)
+      const res = await window.electronAPI.translateDocumentInplace(docId, sourceLang, targetLang, model, targetDir, numCtx, think)
       if (!res.success) {
         logger.warn('ApiService:Ingestion', `Translate in-place warning/error: ${res.error}`)
       } else {
@@ -154,14 +154,10 @@ export const apiService = {
     }
   },
 
-  async searchVectorDb(query: string, topK: number = 5, embeddingModel?: string, docIds?: string[]): Promise<VectorSearchResult[]> {
+  /** Rejects when the search itself fails, so callers can tell "no matches" from "search unavailable". */
+  async searchVectorDb(query: string, topK: number = 5, docIds?: string[]): Promise<VectorSearchResult[]> {
     if (!window.electronAPI) return []
-    try {
-      return await window.electronAPI.searchVectorDb(query, topK, embeddingModel, docIds)
-    } catch (err: any) {
-      logger.error('ApiService:Search', `Vector search query failed: ${err.message}`)
-      return []
-    }
+    return window.electronAPI.searchVectorDb(query, topK, docIds)
   },
 
   async exportDocument(markdownContent: string, format: string, outputFolder?: string): Promise<{ success: boolean; message?: string; error?: string }> {

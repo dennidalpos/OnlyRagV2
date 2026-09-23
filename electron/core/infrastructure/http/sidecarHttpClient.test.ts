@@ -181,8 +181,8 @@ describe('SidecarHttpClient Unit Tests', () => {
     const docs = await deadClient.listDocuments()
     expect(docs).toBeNull()
 
-    const search = await deadClient.searchVectorDb('hello')
-    expect(search).toEqual([])
+    // Search failures reject so the UI can tell "no matches" from "search unavailable".
+    await expect(deadClient.searchVectorDb('hello')).rejects.toThrow(/Vector search failed/)
 
     const del = await deadClient.deleteDocument('doc-x')
     expect(del.success).toBe(false)
@@ -246,5 +246,61 @@ describe('SidecarHttpClient health failures', () => {
       success: false,
       error: 'Documento in uso. Riprova al termine della traduzione.',
     })
+  })
+
+  it('surfaces an error event from an NDJSON stream instead of a generic termination', async () => {
+    const failing = await createMockServer([{
+      method: 'POST',
+      path: '/documents/doc-1/translate-inplace-stream',
+      handler: (_req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+        res.end(JSON.stringify({ type: 'error', error: 'No translatable text blocks found in document' }) + '\n')
+      },
+    }])
+    servers.push(failing.server)
+
+    const res = await new SidecarHttpClient(failing.baseUrl).translateDocumentInplaceStream('doc-1', { source_lang: 'en', target_lang: 'it' }, () => {})
+    expect(res).toEqual({ success: false, error: 'No translatable text blocks found in document' })
+  })
+
+  it('sends the launch token on every request once set', async () => {
+    const seen: Array<string | undefined> = []
+    const recorder = await createMockServer([{
+      method: 'GET',
+      path: '/documents',
+      handler: (req, res) => {
+        seen.push(req.headers['x-onlyrag-token'] as string | undefined)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end('[]')
+      },
+    }])
+    servers.push(recorder.server)
+
+    const tokenClient = new SidecarHttpClient(recorder.baseUrl)
+    await tokenClient.listDocuments()
+    tokenClient.setAuthToken('launch-token')
+    await tokenClient.listDocuments()
+    expect(seen).toEqual([undefined, 'launch-token'])
+  })
+
+  it('sends the configured embedding model when re-indexing a document', async () => {
+    let received: any = null
+    const recorder = await createMockServer([{
+      method: 'PUT',
+      path: '/documents/doc-1',
+      handler: (req, res) => {
+        let raw = ''
+        req.on('data', (chunk) => { raw += chunk })
+        req.on('end', () => {
+          received = JSON.parse(raw)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ id: 'doc-1' }))
+        })
+      },
+    }])
+    servers.push(recorder.server)
+
+    await new SidecarHttpClient(recorder.baseUrl).updateDocument('doc-1', '# Edited', 'mxbai-embed-large')
+    expect(received).toEqual({ markdown_content: '# Edited', embedding_model: 'mxbai-embed-large' })
   })
 })

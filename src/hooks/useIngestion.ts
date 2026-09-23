@@ -93,11 +93,9 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   // so the coding agent/translation module can block starting their own task while ingestion is mid-flight.
   const isIngestionBusy = isUploading
   useEffect(() => {
-    if (isIngestionBusy) {
-      acquireGlobalTaskLock('ingestion')
-      return () => releaseGlobalTaskLock('ingestion')
-    }
-    releaseGlobalTaskLock('ingestion')
+    if (!isIngestionBusy) return
+    acquireGlobalTaskLock('ingestion')
+    return () => releaseGlobalTaskLock('ingestion')
   }, [isIngestionBusy])
 
   const isDirty = selectedDoc !== null && markdownContent !== selectedDoc.extractedMarkdown
@@ -460,7 +458,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         ...p,
         pipeline: 'Pipeline: Vettorizzazione & Semantic Chunks LanceDB',
         modelName: settings?.embeddingModel || 'nomic-embed-text',
-        step: `Generazione embeddings con ${settings?.embeddingModel || 'nomic-embed-text'} & indicizzazione FTS BM25...`,
+        step: `Generazione embeddings con ${settings?.embeddingModel || 'nomic-embed-text'} e indicizzazione LanceDB...`,
         percent: 85,
       }))
 

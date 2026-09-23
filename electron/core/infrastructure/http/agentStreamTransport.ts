@@ -1,4 +1,3 @@
-import http from 'node:http'
 import { logger } from '../../../diagnostics'
 import type { OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
 import type { OllamaToolSchema } from '../../domain/agent/ollamaToolSchemaCatalog'
@@ -6,9 +5,9 @@ import type { ObservedToolCallingProtocol } from '../../../../shared/domain/agen
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
 import { httpMetrics } from './httpMetrics'
 import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
+import { resolveOllamaUrl, requestOllama } from './ollamaTransport'
+import { normalizeOllamaHost } from '../../../../shared/domain/ollamaHost'
 import type { OllamaStreamTelemetry } from '../../domain/agent/ollamaSessionRuntime'
-
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
 export interface StreamSession {
   targetModel: string
@@ -91,13 +90,8 @@ export class AgentStreamTransport {
       onGenerationTelemetry,
     } = session
 
-    const hostStr = ollamaEndpoint?.trim() || 'http://127.0.0.1:11434'
-    let ollamaUrl: URL
-    try {
-      ollamaUrl = new URL('/api/generate', hostStr.startsWith('http') ? hostStr : `http://${hostStr}`)
-    } catch {
-      ollamaUrl = new URL('http://127.0.0.1:11434/api/generate')
-    }
+    // Honors https:// hosts like every other Ollama call (this path used to force plain http).
+    const ollamaUrl = resolveOllamaUrl('/api/generate', ollamaEndpoint)
 
     return new Promise<string>((resolve, reject) => {
           const postData = JSON.stringify({
@@ -149,13 +143,10 @@ export class AgentStreamTransport {
             }
           }
 
-          const req = http.request(
+          const req = requestOllama(
+            ollamaUrl,
             {
-              hostname: ollamaUrl.hostname,
-              port: ollamaUrl.port || 11434,
-              path: ollamaUrl.pathname,
               method: 'POST',
-              agent: httpAgent,
               headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(postData),
@@ -247,7 +238,7 @@ export class AgentStreamTransport {
             cleanupTimers()
             recordMetric(0, /timeout|stalled/i.test(String(err?.message)) ? 'timeout' : 'network')
             if (err.code === 'ECONNREFUSED') {
-              reject(new Error(`Ollama service is not reachable at ${hostStr}. Please ensure Ollama is running.`))
+              reject(new Error(`Ollama service is not reachable at ${normalizeOllamaHost(ollamaEndpoint)}. Please ensure Ollama is running.`))
             } else {
               reject(err)
             }
@@ -267,13 +258,7 @@ export class AgentStreamTransport {
   private static async streamChatWithTools(session: StreamSession): Promise<string> {
     const { targetModel, prompt, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, onThoughtChunk, isCancelled, signal, onCancelHandle, toolCatalog } = session
 
-    const hostStr = ollamaEndpoint?.trim() || 'http://127.0.0.1:11434'
-    let chatUrl: URL
-    try {
-      chatUrl = new URL('/api/chat', hostStr.startsWith('http') ? hostStr : `http://${hostStr}`)
-    } catch {
-      chatUrl = new URL('http://127.0.0.1:11434/api/chat')
-    }
+    const chatUrl = resolveOllamaUrl('/api/chat', ollamaEndpoint)
 
     return new Promise<string>((resolve, reject) => {
       const postData = JSON.stringify({
@@ -323,13 +308,10 @@ export class AgentStreamTransport {
         }
       }
 
-      const req = http.request(
+      const req = requestOllama(
+        chatUrl,
         {
-          hostname: chatUrl.hostname,
-          port: chatUrl.port || 11434,
-          path: chatUrl.pathname,
           method: 'POST',
-          agent: httpAgent,
           headers: {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(postData),
@@ -423,7 +405,7 @@ export class AgentStreamTransport {
         cleanupTimers()
         recordMetric(0, /timeout|stalled/i.test(String(err?.message)) ? 'timeout' : 'network')
         if (err.code === 'ECONNREFUSED') {
-          reject(new Error(`Ollama service is not reachable at ${hostStr}. Please ensure Ollama is running.`))
+          reject(new Error(`Ollama service is not reachable at ${normalizeOllamaHost(ollamaEndpoint)}. Please ensure Ollama is running.`))
         } else {
           reject(err)
         }

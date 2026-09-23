@@ -43,9 +43,6 @@ export function registerOllamaIpcHandlers() {
     )
   })
 
-  ipcMain.handle('ollama:benchmark-model', async (_, modelName: string, host?: string) => {
-    return ollamaAppService.benchmarkModel(modelName, host)
-  })
 
   /**
    * Per-model facts from /api/tags — context length, capabilities, parameter size and

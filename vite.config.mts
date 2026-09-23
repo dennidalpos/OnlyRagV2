@@ -72,7 +72,9 @@ export default defineConfig({
     },
   },
   build: {
-    emptyOutDir: false,
+    // dist/ holds only the renderer build (electron-builder writes to release/), so it is safe to
+    // wipe: keeping old hashed chunks shipped every previous build's assets inside app.asar.
+    emptyOutDir: true,
     chunkSizeWarningLimit: 3000,
     rollupOptions: {
       output: {

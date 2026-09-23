@@ -80,11 +80,6 @@ export type CapabilityPolicyRequest = z.infer<typeof capabilityPolicyRequestSche
 export type CapabilityPolicyDecision = z.infer<typeof capabilityPolicyDecisionSchema>
 export type CapabilityPolicyAuditEvent = z.infer<typeof capabilityPolicyAuditEventSchema>
 
-export interface CapabilityPolicyGateway {
-  authorize(request: CapabilityPolicyRequest): CapabilityPolicyDecision
-  record(event: CapabilityPolicyAuditEvent): void
-}
-
 /** Domain port for persisting policy audit events. */
 export interface CapabilityPolicyAuditStore {
   append(event: CapabilityPolicyAuditEvent): Promise<boolean>

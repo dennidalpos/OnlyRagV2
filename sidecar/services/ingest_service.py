@@ -1,6 +1,5 @@
 import os
 import re
-import io
 import json
 import uuid
 import base64
@@ -11,7 +10,11 @@ import pymupdf
 from sidecar.config import DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, EXPORT_DIR, logger
 from sidecar.schemas import IngestResponse, PagePreviewResponse
 from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, append_records
-from sidecar.infrastructure.embeddings import generate_embeddings_with_status
+from sidecar.infrastructure.embeddings import (
+    DEFAULT_EMBEDDING_MODEL,
+    FALLBACK_EMBEDDING_MODEL,
+    generate_embeddings_with_status,
+)
 from sidecar.domain.sanitizer import sanitize_extracted_text
 from sidecar.domain.vision_prompt import is_vision_ocr_requested
 from sidecar.domain.ingestion import (
@@ -34,61 +37,24 @@ def _cleanup_partial_ingestion(doc_id: str) -> None:
         except Exception as err:
             logger.warning(f"Could not clean cancelled ingestion {doc_id} from {table_name}: {err}")
 
-def process_and_index_document(
+def _build_chunk_records(
+    raw_chunks: List[Tuple[int, str, str]],
+    doc_id: str,
     filename: str,
-    content: bytes,
-    file_path: Optional[str] = None,
-    vision_model: Optional[str] = None,
-    vision_prompt: Optional[str] = None,
-    normalize_with_llm: bool = False,
-    normalization_model: Optional[str] = None,
-    normalization_think: bool = False,
-    num_ctx: Optional[int] = None,
-    max_tabular_rows: Optional[int] = None,
-    max_excel_rows_per_sheet: Optional[int] = None,
-    max_excel_sheets: Optional[int] = None,
-    max_sheets: Optional[int] = None,
-    **kwargs: Any
-) -> IngestResponse:
-    """Orchestrates document extraction, semantic chunking, embedding generation, and LanceDB indexing."""
-    effective_max_sheets = max_excel_sheets if max_excel_sheets is not None else max_sheets
-    doc_id = str(uuid.uuid4())
+    file_type: str,
+    ingested_at: str,
+    embedding_model: str,
+) -> Tuple[List[Dict[str, Any]], bool]:
+    """Embeds the chunks and tags every row with the model that produced its vector.
 
-    persisted_path = file_path or ""
-    if not persisted_path or not os.path.exists(persisted_path):
-        if content:
-            os.makedirs(EXPORT_DIR, exist_ok=True)
-            cached_file = os.path.join(EXPORT_DIR, f"source_{doc_id}_{filename}")
-            try:
-                with open(cached_file, "wb") as f:
-                    f.write(content)
-                persisted_path = cached_file
-            except Exception as save_err:
-                logger.warning(f"Could not cache source file to disk: {save_err}")
-
-    full_markdown, num_pages = extract_document_markdown(
-        filename, content, persisted_path or file_path,
-        vision_model=vision_model, vision_prompt=vision_prompt,
-        normalize_with_llm=normalize_with_llm,
-        normalization_model=normalization_model,
-        normalization_think=normalization_think,
-        num_ctx=num_ctx,
-        max_tabular_rows=max_tabular_rows,
-        max_excel_rows=max_excel_rows_per_sheet,
-        max_sheets=effective_max_sheets
-    )
-    full_markdown = sanitize_extracted_text(full_markdown)
-    raw_chunks = create_semantic_chunks(filename, full_markdown)
-
-    ingested_at = datetime.datetime.now().isoformat()
-    file_size = os.path.getsize(persisted_path) if persisted_path and os.path.exists(persisted_path) else len(content)
-    ext = os.path.splitext(filename)[1].lower().replace(".", "") or "text"
-
-    # Parallel embedding computation with fallback tracking
-    chunk_records: List[Dict[str, Any]] = []
-    vectors, used_fallback_embeddings = generate_embeddings_with_status([item[1] for item in raw_chunks])
-    for (idx, text, sec_header), vec in zip(raw_chunks, vectors):
-        chunk_records.append({
+    Search groups rows by that tag and embeds the query with the same model, so documents
+    indexed under different embedding settings (or with the offline hash fallback) stay
+    comparable instead of mixing vectors from unrelated spaces.
+    """
+    vectors, used_fallback = generate_embeddings_with_status([item[1] for item in raw_chunks], model=embedding_model)
+    stored_model = FALLBACK_EMBEDDING_MODEL if used_fallback else embedding_model
+    records = [
+        {
             "vector": vec,
             "chunk_id": f"{doc_id}_chunk_{idx}",
             "doc_id": doc_id,
@@ -96,51 +62,13 @@ def process_and_index_document(
             "text": text,
             "chunk_index": idx,
             "section_header": sec_header,
-            "file_type": ext,
+            "file_type": file_type,
             "ingested_at": ingested_at,
-        })
-
-    doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
-
-    if chunk_records:
-        ctbl = append_records(CHUNKS_TABLE_NAME, chunk_records)
-
-        try:
-            ctbl.create_fts_index("text", replace=True)
-            logger.info("LanceDB FTS BM25 index created successfully.")
-        except Exception as fts_err:
-            logger.debug(f"FTS index creation deferred: {fts_err}")
-
-    doc_record = [{
-        "id": doc_id,
-        "filename": filename,
-        "file_path": persisted_path,
-        "file_size": file_size,
-        "num_pages": num_pages,
-        "num_chunks": len(chunk_records),
-        "extracted_markdown": full_markdown,
-        "status": doc_status,
-        "ingested_at": ingested_at,
-        "file_type": ext,
-        "used_fallback_embeddings": used_fallback_embeddings
-    }]
-
-    append_records(DOCS_TABLE_NAME, doc_record)
-
-    logger.info(f"Ingested {filename} into LanceDB: {num_pages} pages, {len(chunk_records)} chunks indexed (status={doc_status}).")
-
-    return IngestResponse(
-        id=doc_id,
-        filename=filename,
-        file_size=file_size,
-        num_pages=num_pages,
-        num_chunks=len(chunk_records),
-        extracted_markdown=full_markdown,
-        status=doc_status,
-        ingested_at=ingested_at,
-        file_type=ext,
-        used_fallback_embeddings=used_fallback_embeddings
-    )
+            "embedding_model": stored_model,
+        }
+        for (idx, text, sec_header), vec in zip(raw_chunks, vectors)
+    ]
+    return records, used_fallback
 
 def process_and_index_document_generator(
     filename: str,
@@ -157,6 +85,7 @@ def process_and_index_document_generator(
     max_excel_sheets: Optional[int] = None,
     max_sheets: Optional[int] = None,
     task_id: Optional[str] = None,
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL,
     **kwargs: Any
 ) -> Generator[str, None, None]:
     """
@@ -327,58 +256,29 @@ def process_and_index_document_generator(
         file_size = os.path.getsize(persisted_path) if persisted_path and os.path.exists(persisted_path) else len(content)
         ext = os.path.splitext(filename)[1].lower().replace(".", "") or "text"
 
-        chunk_records: List[Dict[str, Any]] = []
-        vectors, used_fallback_embeddings = generate_embeddings_with_status([item[1] for item in raw_chunks])
+        yield json.dumps({
+            "type": "progress",
+            "percent": 70,
+            "step": f"Vettorizzazione di {total_chunks} chunk ({embedding_model})...",
+            "pipeline": "LanceDB Embeddings",
+            "fileName": filename
+        }) + "\n"
+
+        chunk_records, used_fallback_embeddings = _build_chunk_records(
+            raw_chunks, doc_id, filename, ext, ingested_at, embedding_model
+        )
+        doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
 
         raise_if_cancelled(task_id)
 
-        for c_idx, (item, vec) in enumerate(zip(raw_chunks, vectors)):
-            idx, text, sec_header = item
-            chunk_records.append({
-                "vector": vec,
-                "chunk_id": f"{doc_id}_chunk_{idx}",
-                "doc_id": doc_id,
-                "doc_name": filename,
-                "text": text,
-                "chunk_index": idx,
-                "section_header": sec_header,
-                "file_type": ext,
-                "ingested_at": ingested_at,
-            })
-            if total_chunks > 0 and (c_idx % max(1, total_chunks // 10) == 0 or c_idx == total_chunks - 1):
-                progress_pct = int(70 + ((c_idx + 1) / max(1, total_chunks)) * 24)
-                yield json.dumps({
-                    "type": "progress",
-                    "percent": progress_pct,
-                    "step": f"Vettorizzazione Chunk {c_idx + 1}/{total_chunks} (nomic-embed-text)...",
-                    "pipeline": "LanceDB Embeddings",
-                    "fileName": filename
-                }) + "\n"
-
-        doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
-
         if chunk_records:
-            raise_if_cancelled(task_id)
-            ctbl = append_records(CHUNKS_TABLE_NAME, chunk_records)
+            append_records(CHUNKS_TABLE_NAME, chunk_records)
 
             try:
                 raise_if_cancelled(task_id)
             except TaskCancelled:
                 _cleanup_partial_ingestion(doc_id)
                 raise
-
-            yield json.dumps({
-                "type": "progress",
-                "percent": 96,
-                "step": "Creazione e aggiornamento indice Full-Text Search (BM25)...",
-                "pipeline": "LanceDB FTS BM25",
-                "fileName": filename
-            }) + "\n"
-
-            try:
-                ctbl.create_fts_index("text", replace=True)
-            except Exception:
-                pass
 
         doc_record = [{
             "id": doc_id,
@@ -443,7 +343,11 @@ def process_and_index_document_generator(
     finally:
         unregister_task(task_id)
 
-def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestResponse:
+def update_and_reindex_document(
+    doc_id: str,
+    new_markdown: str,
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL,
+) -> IngestResponse:
     """
     Updates previously ingested document with user edits:
     1. Sanitizes markdown
@@ -486,30 +390,13 @@ def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestRespons
     raw_chunks = create_semantic_chunks(filename, clean_markdown)
     updated_at = datetime.datetime.now().isoformat()
 
-    chunk_records: List[Dict[str, Any]] = []
-    vectors, used_fallback_embeddings = generate_embeddings_with_status([item[1] for item in raw_chunks])
-    for (idx, text, sec_header), vec in zip(raw_chunks, vectors):
-        chunk_records.append({
-            "vector": vec,
-            "chunk_id": f"{doc_id}_chunk_{idx}",
-            "doc_id": doc_id,
-            "doc_name": filename,
-            "text": text,
-            "chunk_index": idx,
-            "section_header": sec_header,
-            "file_type": file_type,
-            "ingested_at": updated_at,
-        })
-
+    chunk_records, used_fallback_embeddings = _build_chunk_records(
+        raw_chunks, doc_id, filename, file_type, updated_at, embedding_model
+    )
     doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
 
-    if chunk_records and CHUNKS_TABLE_NAME in existing_tables:
-        ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
-        ctbl.add(chunk_records)
-        try:
-            ctbl.create_fts_index("text", replace=True)
-        except Exception:
-            pass
+    if chunk_records:
+        append_records(CHUNKS_TABLE_NAME, chunk_records)
 
     # 3. Update doc record in LanceDB
     dtbl.delete(f'id = "{doc_id}"')

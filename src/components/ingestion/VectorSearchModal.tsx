@@ -33,7 +33,7 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({
     setIsSearching(true)
     setError(null)
     try {
-      const res = await apiService.searchVectorDb(query.trim(), topK, embeddingModel)
+      const res = await apiService.searchVectorDb(query.trim(), topK)
       setResults(res || [])
       setHasSearched(true)
     } catch (err: any) {

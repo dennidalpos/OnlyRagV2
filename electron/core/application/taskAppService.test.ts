@@ -6,7 +6,6 @@ describe('TaskAppService', () => {
     const runner: TaskRunnerPort = {
       cancelTask: vi.fn().mockReturnValue({ success: true, message: 'cancelled' }),
       cancelAllTasks: vi.fn(),
-      cleanTempResiduals: vi.fn(),
     }
     const service = new TaskAppService(runner)
 
@@ -18,24 +17,10 @@ describe('TaskAppService', () => {
     const runner: TaskRunnerPort = {
       cancelTask: vi.fn(),
       cancelAllTasks: vi.fn(),
-      cleanTempResiduals: vi.fn(),
     }
     const service = new TaskAppService(runner)
 
     expect(service.cancelAllTasks()).toEqual({ success: true, message: 'All active tasks cancelled.' })
     expect(runner.cancelAllTasks).toHaveBeenCalledOnce()
-  })
-
-  it('returns the cleanup result from the runner', async () => {
-    const cleanup = { success: true, cleanedCount: 2, bytesFreed: 128 }
-    const runner: TaskRunnerPort = {
-      cancelTask: vi.fn(),
-      cancelAllTasks: vi.fn(),
-      cleanTempResiduals: vi.fn().mockResolvedValue(cleanup),
-    }
-    const service = new TaskAppService(runner)
-
-    await expect(service.cleanTempResiduals()).resolves.toEqual(cleanup)
-    expect(runner.cleanTempResiduals).toHaveBeenCalledOnce()
   })
 })

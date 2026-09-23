@@ -3,6 +3,7 @@ import { Server, CheckCircle2, XCircle, Loader2, HardDrive, Wifi, Radio } from '
 import { AppSettings } from '../../types'
 import { apiService } from '../../services/api'
 import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
+import { DEFAULT_OLLAMA_HOST } from '../../../shared/domain/ollamaHost'
 
 interface OllamaServerConfigProps {
   settings: AppSettings
@@ -16,7 +17,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
   onRefreshDiagnostics,
 }) => {
   const currentMode = isRemoteOllamaMode(settings) ? 'remote' : 'local'
-  const [remoteUrl, setRemoteUrl] = useState(settings.ollamaHost && settings.ollamaHost !== 'http://127.0.0.1:11434' ? settings.ollamaHost : 'http://192.168.1.100:11434')
+  const [remoteUrl, setRemoteUrl] = useState(settings.ollamaHost && settings.ollamaHost !== DEFAULT_OLLAMA_HOST ? settings.ollamaHost : 'http://192.168.1.100:11434')
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; modelsCount?: number } | null>(null)
 
@@ -25,7 +26,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
     if (mode === 'local') {
       onUpdateSettings({
         ollamaMode: 'local',
-        ollamaHost: 'http://127.0.0.1:11434',
+        ollamaHost: DEFAULT_OLLAMA_HOST,
       })
     } else {
       const targetHost = remoteUrl.trim().startsWith('http') ? remoteUrl.trim() : `http://${remoteUrl.trim()}`
@@ -46,7 +47,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
   }
 
   const handleTestConnection = async () => {
-    const targetHost = currentMode === 'local' ? 'http://127.0.0.1:11434' : (settings.ollamaHost || remoteUrl)
+    const targetHost = currentMode === 'local' ? DEFAULT_OLLAMA_HOST : (settings.ollamaHost || remoteUrl)
     setIsTesting(true)
     setTestResult(null)
 
@@ -146,7 +147,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
             Invia prompt, tool e indicizzazioni a un server Ollama condiviso o su workstation dedicata nella rete LAN/WiFi.
           </p>
           <div className="text-[10px] font-mono text-sky-400/80 pt-1">
-            Endpoint: {settings.ollamaHost && settings.ollamaHost !== 'http://127.0.0.1:11434' ? settings.ollamaHost : remoteUrl}
+            Endpoint: {settings.ollamaHost && settings.ollamaHost !== DEFAULT_OLLAMA_HOST ? settings.ollamaHost : remoteUrl}
           </div>
         </button>
       </div>

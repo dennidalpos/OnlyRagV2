@@ -5,7 +5,6 @@ import { sidecarAppService } from '../application/sidecarAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 
 export function registerDiagnosticsIpcHandlers() {
-  ipcMain.handle('diagnostics:get-http-metrics', () => diagnosticsAppService.getHttpMetrics())
 
   ipcMain.handle('diagnostics:run', async (_, host?: string) => {
     const sidecarState = await sidecarAppService.checkHealth()

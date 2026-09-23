@@ -12,6 +12,8 @@ import {
 import { logger } from '../lib/logger'
 
 const LEGACY_SESSIONS_STORAGE_KEY = 'onlyrag_coding_sessions_v2'
+/** Coalesces the burst of per-log mutations a running agent produces into one write per session. */
+const SESSION_WRITE_DEBOUNCE_MS = 500
 const MIGRATION_FLAG_KEY = 'onlyrag_sessions_migrated_to_filesystem_v1'
 
 export interface ExecutedPromptResult {
@@ -76,16 +78,13 @@ export function useSessionHistory(workspacePath: string | null) {
   const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(true)
 
   const persistenceChainsRef = useRef<Map<string, Promise<void>>>(new Map())
+  const pendingWritesRef = useRef<Map<string, { session: CodingSession; timer: ReturnType<typeof setTimeout> }>>(new Map())
   /** Bootstrap session created for an empty workspace store, kept per workspace so a repeated load (React StrictMode double-invoke, or a workspace revisited before the debounced write lands) reuses the same record instead of creating a duplicate. */
   const bootstrapSessionsRef = useRef<Map<string, CodingSession>>(new Map())
 
   useEffect(() => {
     sessionsRef.current = sessions
   }, [sessions])
-
-  const flushPendingWrites = useCallback(async () => {
-    await Promise.all(Array.from(persistenceChainsRef.current.values()))
-  }, [])
 
   const schedulePersist = useCallback(
     (session: CodingSession): Promise<CodingSession | null> => {
@@ -113,6 +112,32 @@ export function useSessionHistory(workspacePath: string | null) {
     []
   )
 
+  /** Writes every debounced session now, then waits for all in-flight writes. */
+  const flushPendingWrites = useCallback(async () => {
+    for (const { session, timer } of pendingWritesRef.current.values()) {
+      clearTimeout(timer)
+      void schedulePersist(session)
+    }
+    pendingWritesRef.current.clear()
+    await Promise.all(Array.from(persistenceChainsRef.current.values()))
+  }, [schedulePersist])
+
+  const persistDebounced = useCallback(
+    (session: CodingSession) => {
+      const pending = pendingWritesRef.current.get(session.id)
+      if (pending) clearTimeout(pending.timer)
+      const timer = setTimeout(() => {
+        pendingWritesRef.current.delete(session.id)
+        void schedulePersist(session)
+      }, SESSION_WRITE_DEBOUNCE_MS)
+      pendingWritesRef.current.set(session.id, { session, timer })
+    },
+    [schedulePersist]
+  )
+
+  // Unmount (workspace view closed, window reload) must not drop the last debounced write.
+  useEffect(() => () => void flushPendingWrites(), [flushPendingWrites])
+
   const mutateSession = useCallback(
     (sessionId: string, mutator: (session: CodingSession) => CodingSession) => {
       if (!sessionId) return
@@ -122,9 +147,9 @@ export function useSessionHistory(workspacePath: string | null) {
       const next = { ...mutator(session), updatedAt: new Date().toISOString() }
       sessionsRef.current = current.map((item) => item.id === sessionId ? next : item)
       setSessions(sessionsRef.current)
-      void schedulePersist(next)
+      persistDebounced(next)
     },
-    [schedulePersist]
+    [persistDebounced]
   )
 
   // Loads the history of the active workspace, after the one-shot localStorage migration.
@@ -309,6 +334,12 @@ export function useSessionHistory(workspacePath: string | null) {
     sessionsRef.current = sessionsRef.current.map((candidate) => candidate.id === sessionId ? next : candidate)
     setSessions(sessionsRef.current)
 
+    // Supersedes any debounced write of this session: `next` already contains its latest state.
+    const pending = pendingWritesRef.current.get(sessionId)
+    if (pending) {
+      clearTimeout(pending.timer)
+      pendingWritesRef.current.delete(sessionId)
+    }
     return (await schedulePersist(next)) !== null
   }, [schedulePersist])
 

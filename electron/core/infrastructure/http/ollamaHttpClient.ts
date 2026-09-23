@@ -1,10 +1,11 @@
 import http from 'node:http'
-import https from 'node:https'
 import { logger } from '../../../diagnostics'
 import type { RunningModelInfo, OllamaGenerationOptions, OllamaModelMetrics } from '../../../../shared/types'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
 import { httpMetrics } from './httpMetrics'
 import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
+import { resolveOllamaUrl, requestOllama, type OllamaUrl } from './ollamaTransport'
+import { DEFAULT_OLLAMA_HOST, normalizeOllamaHost } from '../../../../shared/domain/ollamaHost'
 
 export type { OllamaModelMetrics }
 
@@ -33,9 +34,6 @@ export type OllamaStructuredResponse =
   | { status: 'incomplete'; content: string; error: string; doneReason?: string; promptEvalCount?: number; evalCount?: number; thinkingChars?: number }
   | { status: 'transport_error'; content: string; error: string }
 
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 })
-type OllamaUrl = { protocol: 'http:' | 'https:'; hostname: string; port: number | string; path: string }
 
 export interface RawOllamaTagModel {
   name?: string
@@ -56,15 +54,10 @@ export interface RawOllamaTagModel {
 
 export class OllamaHttpClient {
   private activePullReq: http.ClientRequest | null = null
-  private baseHost: string = 'http://127.0.0.1:11434'
+  private baseHost: string = DEFAULT_OLLAMA_HOST
 
   setBaseHost(host?: string) {
-    if (host && host.trim()) {
-      const h = host.trim()
-      this.baseHost = h.startsWith('http') ? h : `http://${h}`
-    } else {
-      this.baseHost = 'http://127.0.0.1:11434'
-    }
+    this.baseHost = normalizeOllamaHost(host)
   }
 
   getRunningModels(customHost?: string): Promise<{ success: boolean; models: RunningModelInfo[]; error?: string }> {
@@ -85,7 +78,6 @@ export class OllamaHttpClient {
           port: urlOpts.port,
           path: urlOpts.path,
           method: 'GET',
-          agent: httpAgent,
         },
         (res) => {
           let data = ''
@@ -148,7 +140,6 @@ export class OllamaHttpClient {
           port: urlOpts.port,
           path: urlOpts.path,
           method: 'GET',
-          agent: httpAgent,
         },
         (res) => {
           let data = ''
@@ -229,7 +220,6 @@ export class OllamaHttpClient {
         port: urlOpts.port,
         path: urlOpts.path,
         method: 'POST',
-        agent: httpAgent,
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
       }, (res) => {
         let data = ''
@@ -317,7 +307,6 @@ export class OllamaHttpClient {
           port: urlOpts.port,
           path: urlOpts.path,
           method: 'POST',
-          agent: httpAgent,
           headers: {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(postData),
@@ -375,7 +364,6 @@ export class OllamaHttpClient {
           port: urlOpts.port,
           path: urlOpts.path,
           method: 'POST',
-          agent: httpAgent,
           headers: {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(postData),
@@ -407,28 +395,11 @@ export class OllamaHttpClient {
   }
 
   private resolveUrl(apiPath: string, host?: string): OllamaUrl {
-    try {
-      const u = new URL(apiPath, host || this.baseHost)
-      if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('Unsupported protocol')
-      return {
-        protocol: u.protocol,
-        hostname: u.hostname,
-        port: u.port || (u.protocol === 'https:' ? 443 : 11434),
-        path: u.pathname,
-      }
-    } catch {
-      return {
-        protocol: 'http:',
-        hostname: '127.0.0.1',
-        port: 11434,
-        path: apiPath,
-      }
-    }
+    return resolveOllamaUrl(apiPath, host || this.baseHost)
   }
 
   private request(url: OllamaUrl, options: http.RequestOptions, listener: (response: http.IncomingMessage) => void): http.ClientRequest {
-    const transport = url.protocol === 'https:' ? https : http
-    return transport.request({ ...options, agent: url.protocol === 'https:' ? httpsAgent : httpAgent }, listener)
+    return requestOllama(url, options, listener)
   }
 
   cancelStream(operationId: string): boolean {
@@ -475,7 +446,6 @@ export class OllamaHttpClient {
           port: urlOpts.port,
           path: urlOpts.path,
           method: 'POST',
-          agent: httpAgent,
           headers: {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(postData),
@@ -576,7 +546,6 @@ export class OllamaHttpClient {
           port: urlOpts.port,
           path: urlOpts.path,
           method: 'DELETE',
-          agent: httpAgent,
           headers: {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(postData),
@@ -645,7 +614,6 @@ export class OllamaHttpClient {
           port: urlOpts.port,
           path: urlOpts.path,
           method: 'POST',
-          agent: httpAgent,
           headers: {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(postData),
@@ -766,7 +734,6 @@ export class OllamaHttpClient {
         port: urlOpts.port,
         path: urlOpts.path,
         method: 'POST',
-        agent: httpAgent,
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData),
@@ -820,178 +787,6 @@ export class OllamaHttpClient {
         req.destroy()
         finish({ status: 'transport_error', content: '', error: 'Structured generation timeout' })
       })
-      req.write(postData)
-      req.end()
-    })
-  }
-
-  benchmarkModel(modelName: string, customHost?: string): Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }> {
-    if (!modelName || typeof modelName !== 'string') {
-      return Promise.resolve({ success: false, tokensPerSec: 0, evalCount: 0, evalDurationMs: 0, error: 'Invalid model name' })
-    }
-    const cleanName = modelName.trim().toLowerCase()
-    const isLikelyEmbedding = cleanName.includes('embed') || cleanName.includes('bge') || cleanName.includes('nomic') || cleanName.includes('minilm') || cleanName.includes('snowflake') || cleanName.includes('e5')
-
-    logger.log('INFO', 'OllamaClient', `Starting performance benchmark for model: ${modelName} (isEmbedding: ${isLikelyEmbedding})`)
-
-    if (isLikelyEmbedding) {
-      const urlOpts = this.resolveUrl('/api/embeddings', customHost)
-      return ollamaGenerationScheduler.schedule('benchmark', () => this.benchmarkEmbeddingModel(modelName.trim(), urlOpts)).promise
-    }
-
-    const urlOpts = this.resolveUrl('/api/generate', customHost)
-    const embeddingUrlOpts = this.resolveUrl('/api/embeddings', customHost)
-    return ollamaGenerationScheduler.schedule('benchmark', (setActiveCancel) =>
-      this.benchmarkGenerationModel(modelName, urlOpts, embeddingUrlOpts, setActiveCancel)
-    ).promise
-  }
-
-  private benchmarkGenerationModel(
-    modelName: string,
-    urlOpts: OllamaUrl,
-    embeddingUrlOpts: OllamaUrl,
-    setActiveCancel: (cancel: () => void) => void
-  ): Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }> {
-    return new Promise((resolve) => {
-      const benchmarkPrompt = 'Write a 40 word explanation of how gravity works.'
-      const postData = JSON.stringify({
-        model: modelName.trim(),
-        prompt: benchmarkPrompt,
-        stream: false,
-        options: { num_predict: 50 },
-      })
-
-      const req = this.request(urlOpts,
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          method: 'POST',
-          agent: httpAgent,
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-          },
-        },
-        (res) => {
-          let data = ''
-          res.on('data', (chunk) => {
-            data += chunk
-          })
-          res.on('end', () => {
-            try {
-              if (res.statusCode !== 200) {
-                // If generate fails with embedding error, fallback to embedding benchmark
-                if (data.includes('embedding') || data.includes('not support')) {
-                  logger.log('INFO', 'OllamaClient', `Generate failed for ${modelName}, falling back to embedding benchmark`)
-                  this.benchmarkEmbeddingModel(modelName.trim(), embeddingUrlOpts).then(resolve)
-                  return
-                }
-                resolve({ success: false, tokensPerSec: 0, evalCount: 0, evalDurationMs: 0, error: `HTTP ${res.statusCode}: ${data.slice(0, 100)}` })
-                return
-              }
-
-              const parsed = JSON.parse(data)
-              const evalCount = parsed.eval_count || 0
-              const evalDurationNs = parsed.eval_duration || 1
-              const evalDurationMs = Number((evalDurationNs / 1e6).toFixed(0))
-              const evalDurationSec = evalDurationNs / 1e9
-              const tokensPerSec = evalDurationSec > 0 ? Number((evalCount / evalDurationSec).toFixed(1)) : 0
-
-              logger.log('INFO', 'OllamaClient', `Benchmark complete for ${modelName}: ${tokensPerSec} tokens/sec (${evalCount} tokens in ${evalDurationMs}ms)`)
-
-              resolve({
-                success: true,
-                tokensPerSec,
-                evalCount,
-                evalDurationMs,
-                isEmbedding: false,
-              })
-            } catch (err: any) {
-              resolve({ success: false, tokensPerSec: 0, evalCount: 0, evalDurationMs: 0, error: err.message })
-            }
-          })
-        }
-      )
-
-      req.on('error', (err) => {
-        logger.log('ERROR', 'OllamaClient', `Error benchmarking model ${modelName}: ${err.message}`)
-        resolve({ success: false, tokensPerSec: 0, evalCount: 0, evalDurationMs: 0, error: err.message })
-      })
-      setActiveCancel(() => req.destroy())
-
-      req.setTimeout(60000, () => {
-        req.destroy()
-        resolve({ success: false, tokensPerSec: 0, evalCount: 0, evalDurationMs: 0, error: 'Benchmark timeout' })
-      })
-
-      req.write(postData)
-      req.end()
-    })
-  }
-
-  private benchmarkEmbeddingModel(modelName: string, urlOpts = this.resolveUrl('/api/embeddings')): Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }> {
-    return new Promise((resolve) => {
-      const startTime = Date.now()
-      const postData = JSON.stringify({
-        model: modelName,
-        prompt: 'Benchmark semantic retrieval text for embedding generation throughput and vector latency testing.',
-      })
-
-      const req = this.request(urlOpts,
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          method: 'POST',
-          agent: httpAgent,
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-          },
-        },
-        (res) => {
-          let data = ''
-          res.on('data', (chunk) => {
-            data += chunk
-          })
-          res.on('end', () => {
-            const evalDurationMs = Math.max(1, Date.now() - startTime)
-            try {
-              if (res.statusCode !== 200) {
-                resolve({ success: false, tokensPerSec: 0, evalCount: 0, evalDurationMs, isEmbedding: true, error: `HTTP ${res.statusCode}` })
-                return
-              }
-              const parsed = JSON.parse(data)
-              const dimCount = Array.isArray(parsed.embedding) ? parsed.embedding.length : 1
-              const vectorsPerSec = Number(((1000 / evalDurationMs)).toFixed(1))
-
-              logger.log('INFO', 'OllamaClient', `Embedding benchmark complete for ${modelName}: ${vectorsPerSec} vec/sec (${evalDurationMs}ms, dim: ${dimCount})`)
-
-              resolve({
-                success: true,
-                tokensPerSec: vectorsPerSec,
-                evalCount: dimCount,
-                evalDurationMs,
-                isEmbedding: true,
-              })
-            } catch (err: any) {
-              resolve({ success: false, tokensPerSec: 0, evalCount: 0, evalDurationMs, isEmbedding: true, error: err.message })
-            }
-          })
-        }
-      )
-
-      req.on('error', (err) => {
-        logger.log('ERROR', 'OllamaClient', `Error benchmarking embedding model ${modelName}: ${err.message}`)
-        resolve({ success: false, tokensPerSec: 0, evalCount: 0, evalDurationMs: 0, isEmbedding: true, error: err.message })
-      })
-
-      req.setTimeout(60000, () => {
-        req.destroy()
-        resolve({ success: false, tokensPerSec: 0, evalCount: 0, evalDurationMs: 0, isEmbedding: true, error: 'Benchmark timeout' })
-      })
-
       req.write(postData)
       req.end()
     })

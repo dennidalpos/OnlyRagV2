@@ -1,22 +1,18 @@
+import json
 import os
 import re
 import time
-import uuid
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, Generator, Iterator, List, Tuple, Optional
 import docx
 import httpx
 import pymupdf
-from sidecar.config import DOCS_TABLE_NAME, logger, httpx_client
+from sidecar.config import DOCS_TABLE_NAME, OLLAMA_BASE_URL, logger, httpx_client
 from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id
-from sidecar.schemas import IngestResponse
-from sidecar.domain.ingestion import extract_document_markdown
-from sidecar.services.ingest_service import update_and_reindex_document
 
 # Preserved/removed during cleanup of legacy batch responses.
 _RUN_SEPARATOR = "<<<RUN_SEP>>>"
 _TRANSLATE_BATCH_MAX_CHARS = 350
 _TRANSLATE_BATCH_MAX_ITEMS = 4
-_OLLAMA_URL = "http://127.0.0.1:11434"
 
 # Legibility floors for PDF text reinsertion.
 _PDF_AUTOFIT_MIN_SIZE = 6.0
@@ -295,7 +291,7 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
 
     for attempt in range(1, _TRANSLATE_MAX_ATTEMPTS + 1):
         try:
-            res = httpx_client.post(f"{_OLLAMA_URL}/api/chat", json=chat_payload, timeout=120.0)
+            res = httpx_client.post(f"{OLLAMA_BASE_URL}/api/chat", json=chat_payload, timeout=120.0)
             if res.status_code == 200:
                 body = res.json()
                 content = (body.get("message", {}).get("content") or body.get("response") or "").strip()
@@ -482,67 +478,6 @@ def _translate_batch(runs: List["docx.text.run.Run"], source_lang: str, target_l
     translated = _translate_texts_with_fallback([run.text for run in runs], source_lang, target_lang, model, num_ctx, think)
     for run, text in zip(runs, translated):
         run.text = text
-
-
-def translate_docx_inplace(
-    doc_id: str,
-    source_lang: str,
-    target_lang: str,
-    model: str = "llama3.2",
-    backup_original: bool = True,
-    target_dir: Optional[str] = None,
-    num_ctx: Optional[int] = None,
-    think: bool = False
-) -> IngestResponse:
-    """
-    Translates a DOCX document's text: creates a backup of the original or writes to target_dir if provided.
-    Then re-extracts markdown from the translated file and re-indexes it in LanceDB via update path.
-    """
-    import shutil
-    doc_record = _load_doc_record(doc_id)
-    file_type = doc_record.get("file_type", "")
-    file_path = doc_record.get("file_path", "")
-    filename = doc_record.get("filename", "document.docx")
-
-    if file_type != "docx":
-        raise ValueError("In-place translation is supported for DOCX documents only in this phase")
-    if not file_path or not os.path.exists(file_path):
-        raise ValueError("Original source file is no longer available on disk")
-
-    docx_doc = docx.Document(file_path)
-    runs = _collect_docx_runs(docx_doc)
-    if not runs:
-        raise ValueError("No translatable text runs found in document")
-
-    batches = _batch_runs(runs)
-    logger.info(
-        f"Translating document {doc_id} in place: {len(runs)} runs in {len(batches)} batches "
-        f"({source_lang} -> {target_lang}, model={model})"
-    )
-    for batch in batches:
-        _translate_batch(batch, source_lang, target_lang, model, num_ctx, think)
-
-    if backup_original and not target_dir and os.path.exists(file_path):
-        import shutil
-        try:
-            shutil.copy2(file_path, f"{file_path}.original.bak")
-        except Exception as bak_err:
-            logger.warning(f"Could not create backup file: {bak_err}")
-
-    out_file_path = _resolve_output_filepath(file_path, filename, target_lang, target_dir)
-    docx_doc.save(out_file_path)
-
-    return IngestResponse(
-        id=doc_id,
-        filename=os.path.basename(out_file_path),
-        file_size=os.path.getsize(out_file_path) if os.path.exists(out_file_path) else int(doc_record.get("file_size", 0)),
-        num_pages=int(doc_record.get("num_pages", 1)),
-        num_chunks=int(doc_record.get("num_chunks", 1)),
-        extracted_markdown=str(doc_record.get("extracted_markdown", "")),
-        status=str(doc_record.get("status", "indexed")),
-        ingested_at=str(doc_record.get("ingested_at", "")),
-        file_type="docx"
-    )
 
 
 def _int_color_to_rgb(color: int) -> Tuple[float, float, float]:
@@ -838,248 +773,124 @@ def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str,
                     page.insert_textbox(expanded_rect, text, fontsize=min_legible, fontname=font_alias, fontfile=font_file, color=color_rgb)
 
 
-def translate_pdf_inplace_fine(
-    doc_id: str,
-    source_lang: str,
-    target_lang: str,
-    model: str = "llama3.2",
-    backup_original: bool = True,
-    target_dir: Optional[str] = None,
-    num_ctx: Optional[int] = None,
-    think: bool = False
-) -> IngestResponse:
-    """
-    'Fine-mode' PDF in-place translation: for every page, permanently redacts each original text
-    block and reinserts the translated text in the same bbox, auto-fitting font size and retaining 100% of text blocks.
-    Saves to target_dir or in-place, creating .original.bak if backup_original is set.
-    """
-    doc_record = _load_doc_record(doc_id)
-    file_type = doc_record.get("file_type", "")
-    file_path = doc_record.get("file_path", "")
-    filename = doc_record.get("filename", "document.pdf")
-
-    if file_type != "pdf":
-        raise ValueError("PDF fine-mode in-place translation requires a PDF document")
+def prepare_translation(doc_id: str) -> Dict[str, Any]:
+    """Loads and validates the document before any byte is streamed, so the endpoint can still
+    answer 404 (unknown id, source file gone) or 400 (unsupported type) with a real status."""
+    record = _load_doc_record(doc_id)
+    file_type = record.get("file_type", "")
+    if file_type not in ("docx", "pdf"):
+        raise UnsupportedDocumentTypeError(
+            f"In-place translation is not supported for file type '{file_type}'. Supported: docx, pdf."
+        )
+    file_path = record.get("file_path", "")
     if not file_path or not os.path.exists(file_path):
         raise ValueError("Original source file is no longer available on disk")
+    return record
 
+
+def _event(payload: Dict[str, Any]) -> str:
+    return json.dumps(payload) + "\n"
+
+
+def _translate_docx_events(
+    doc_id: str, file_path: str, filename: str, out_file_path: str,
+    source_lang: str, target_lang: str, model: str, num_ctx: Optional[int], think: bool,
+) -> Generator[str, None, int]:
+    docx_doc = docx.Document(file_path)
+    runs = _collect_docx_runs(docx_doc)
+    if not runs:
+        raise ValueError("No translatable text runs found in document")
+    batches = _batch_runs(runs)
+    logger.info(f"Translating DOCX {doc_id}: {len(runs)} runs in {len(batches)} batches ({source_lang} -> {target_lang}, model={model})")
+    yield _event({"type": "start", "doc_id": doc_id, "filename": filename, "total_pages": 1, "total_blocks": len(runs)})
+    for i, batch in enumerate(batches):
+        yield _event({"type": "progress", "page": 1, "total_pages": 1, "phase": "translating_runs", "percent": int((i / len(batches)) * 90)})
+        _translate_batch(batch, source_lang, target_lang, model, num_ctx, think)
+    docx_doc.save(out_file_path)
+    return 1
+
+
+def _translate_pdf_events(
+    doc_id: str, file_path: str, filename: str, out_file_path: str,
+    source_lang: str, target_lang: str, model: str, num_ctx: Optional[int], think: bool,
+) -> Generator[str, None, int]:
+    """Fine-mode PDF translation: each original text block is permanently redacted and the
+    translation reinserted in the same bbox with an auto-fitted font size."""
     pdf_doc = pymupdf.open(file_path)
-    if pdf_doc.needs_pass or pdf_doc.is_encrypted:
-        pdf_doc.close()
-        raise ValueError("Documento protetto da password: il file PDF richiede una password per l'apertura.")
     try:
-        page_blocks: List[Tuple[Any, List[Dict[str, Any]]]] = []
-        total_blocks = 0
-        for page in pdf_doc:
-            blocks = _extract_pdf_page_blocks(page)
-            page_blocks.append((page, blocks))
-            total_blocks += len(blocks)
-
-        if total_blocks == 0:
-            raise ValueError("No translatable text blocks found in document")
-
-        font_file = _resolve_pdf_font_file(target_lang)
-        logger.info(
-            f"Translating PDF {doc_id} (fine-mode): {total_blocks} blocks across "
-            f"{len(pdf_doc)} pages ({source_lang} -> {target_lang}, model={model}, "
-            f"font={os.path.basename(font_file)})"
-        )
-        for page, blocks in page_blocks:
-            if not blocks:
-                continue
-            _translate_pdf_blocks(blocks, source_lang, target_lang, model, num_ctx, think)
-            _redact_and_reinsert_pdf_blocks(page, blocks, font_file)
-
-        if backup_original and not target_dir and os.path.exists(file_path):
-            import shutil
-            try:
-                shutil.copy2(file_path, f"{file_path}.original.bak")
-            except Exception as bak_err:
-                logger.warning(f"Could not create backup file: {bak_err}")
-
-        out_file_path = _resolve_output_filepath(file_path, filename, target_lang, target_dir)
-        is_same_file = os.path.abspath(out_file_path) == os.path.abspath(file_path)
-        tmp_save_path = f"{out_file_path}.tmp_{uuid.uuid4().hex}.pdf" if is_same_file else out_file_path
-        pdf_doc.save(tmp_save_path, deflate=True, garbage=4, clean=True, deflate_images=True, deflate_fonts=True)
-    finally:
-        pdf_doc.close()
-
-    if is_same_file and os.path.exists(tmp_save_path):
-        os.replace(tmp_save_path, out_file_path)
-
-    return IngestResponse(
-        id=doc_id,
-        filename=os.path.basename(out_file_path),
-        file_size=os.path.getsize(out_file_path) if os.path.exists(out_file_path) else int(doc_record.get("file_size", 0)),
-        num_pages=int(doc_record.get("num_pages", 1)),
-        num_chunks=int(doc_record.get("num_chunks", 1)),
-        extracted_markdown=str(doc_record.get("extracted_markdown", "")),
-        status=str(doc_record.get("status", "indexed")),
-        ingested_at=str(doc_record.get("ingested_at", "")),
-        file_type="pdf"
-    )
-
-
-async def translate_document_stream_generator(
-    doc_id: str,
-    source_lang: str,
-    target_lang: str,
-    model: str = "llama3.2",
-    target_dir: Optional[str] = None,
-    num_ctx: Optional[int] = None,
-    think: bool = False
-):
-    """
-    Asynchronous generator yielding NDJSON events for document translation with real-time page progress.
-    """
-    import json
-    import asyncio
-
-    try:
-        doc_record = _load_doc_record(doc_id)
-    except Exception as e:
-        yield json.dumps({"type": "error", "error": str(e)}) + "\n"
-        return
-    file_type = doc_record.get("file_type", "")
-    file_path = doc_record.get("file_path", "")
-    filename = doc_record.get("filename", "document.pdf")
-
-    if not file_path or not os.path.exists(file_path):
-        yield json.dumps({"type": "error", "error": "Original source file is no longer available on disk"}) + "\n"
-        return
-
-    out_file_path = _resolve_output_filepath(file_path, filename, target_lang, target_dir)
-
-    if file_type == "docx":
-        docx_doc = docx.Document(file_path)
-        runs = _collect_docx_runs(docx_doc)
-        total_runs = len(runs)
-        yield json.dumps({"type": "start", "doc_id": doc_id, "filename": filename, "total_pages": 1, "total_blocks": total_runs}) + "\n"
-        batches = _batch_runs(runs)
-        for i, batch in enumerate(batches):
-            percent = int((i / max(1, len(batches))) * 90)
-            yield json.dumps({"type": "progress", "page": 1, "total_pages": 1, "phase": "translating_runs", "percent": percent}) + "\n"
-            await asyncio.to_thread(_translate_batch, batch, source_lang, target_lang, model, num_ctx, think)
-
-        docx_doc.save(out_file_path)
-        yield json.dumps({
-            "type": "done",
-            "data": {
-                "id": doc_id,
-                "filename": os.path.basename(out_file_path),
-                "filePath": out_file_path,
-                "file_size": os.path.getsize(out_file_path),
-                "num_pages": 1,
-                "num_chunks": int(doc_record.get("num_chunks", 1)),
-                "extracted_markdown": str(doc_record.get("extracted_markdown", "")),
-                "status": "translated",
-                "ingested_at": str(doc_record.get("ingested_at", "")),
-                "file_type": "docx"
-            }
-        }) + "\n"
-        return
-
-    if file_type != "pdf":
-        yield json.dumps({"type": "error", "error": f"Unsupported file type: {file_type}"}) + "\n"
-        return
-
-    pdf_doc = pymupdf.open(file_path)
-    if pdf_doc.needs_pass or pdf_doc.is_encrypted:
-        pdf_doc.close()
-        yield json.dumps({"type": "error", "error": "Document is password protected"}) + "\n"
-        return
-
-    try:
+        if pdf_doc.needs_pass or pdf_doc.is_encrypted:
+            raise ValueError("Document is password protected")
         total_pages = len(pdf_doc)
-        yield json.dumps({"type": "start", "doc_id": doc_id, "filename": filename, "total_pages": total_pages}) + "\n"
         font_file = _resolve_pdf_font_file(target_lang)
+        logger.info(f"Translating PDF {doc_id}: {total_pages} pages ({source_lang} -> {target_lang}, model={model}, font={os.path.basename(font_file)})")
+        yield _event({"type": "start", "doc_id": doc_id, "filename": filename, "total_pages": total_pages})
 
-        if not target_dir and os.path.exists(file_path):
-            import shutil
-            try:
-                bak_path = f"{file_path}.original.bak"
-                if not os.path.exists(bak_path):
-                    shutil.copy2(file_path, bak_path)
-            except Exception as bak_err:
-                logger.warning(f"Could not create backup file: {bak_err}")
-
+        translated_blocks = 0
         for page_idx, page in enumerate(pdf_doc):
             page_num = page_idx + 1
-            yield json.dumps({
-                "type": "progress",
-                "page": page_num,
-                "total_pages": total_pages,
-                "phase": "extracting_blocks",
-                "percent": int(((page_idx + 0.1) / total_pages) * 100)
-            }) + "\n"
+            progress = {"type": "progress", "page": page_num, "total_pages": total_pages}
+            yield _event({**progress, "phase": "extracting_blocks", "percent": int(((page_idx + 0.1) / total_pages) * 100)})
+            blocks = _extract_pdf_page_blocks(page)
+            if not blocks:
+                continue
+            yield _event({**progress, "phase": "translating_blocks", "percent": int(((page_idx + 0.5) / total_pages) * 100)})
+            _translate_pdf_blocks(blocks, source_lang, target_lang, model, num_ctx, think)
+            yield _event({**progress, "phase": "reconstructing_layout", "percent": int(((page_idx + 0.9) / total_pages) * 100)})
+            _redact_and_reinsert_pdf_blocks(page, blocks, font_file)
+            translated_blocks += len(blocks)
 
-            blocks = await asyncio.to_thread(_extract_pdf_page_blocks, page)
-            if blocks:
-                yield json.dumps({
-                    "type": "progress",
-                    "page": page_num,
-                    "total_pages": total_pages,
-                    "phase": "translating_blocks",
-                    "percent": int(((page_idx + 0.5) / total_pages) * 100)
-                }) + "\n"
-                await asyncio.to_thread(_translate_pdf_blocks, blocks, source_lang, target_lang, model, num_ctx, think)
-
-                yield json.dumps({
-                    "type": "progress",
-                    "page": page_num,
-                    "total_pages": total_pages,
-                    "phase": "reconstructing_layout",
-                    "percent": int(((page_idx + 0.9) / total_pages) * 100)
-                }) + "\n"
-                await asyncio.to_thread(_redact_and_reinsert_pdf_blocks, page, blocks, font_file)
-
-        is_same_file = os.path.abspath(out_file_path) == os.path.abspath(file_path)
-        tmp_save_path = f"{out_file_path}.tmp_{uuid.uuid4().hex}.pdf" if is_same_file else out_file_path
-        pdf_doc.save(tmp_save_path, deflate=True, garbage=4, clean=True, deflate_images=True, deflate_fonts=True)
+        if translated_blocks == 0:
+            raise ValueError("No translatable text blocks found in document")
+        pdf_doc.save(out_file_path, deflate=True, garbage=4, clean=True, deflate_images=True, deflate_fonts=True)
+        return total_pages
     finally:
         pdf_doc.close()
 
-    if is_same_file and os.path.exists(tmp_save_path):
-        os.replace(tmp_save_path, out_file_path)
 
-    yield json.dumps({
+def translate_document_stream(
+    record: Dict[str, Any],
+    source_lang: str,
+    target_lang: str,
+    model: str,
+    target_dir: Optional[str] = None,
+    num_ctx: Optional[int] = None,
+    think: bool = False,
+) -> Iterator[str]:
+    """Translates a document validated by prepare_translation into a new file (next to the source
+    or in target_dir) and yields NDJSON events ending in `done` or `error`. The source file is
+    never modified.
+
+    A plain generator on purpose: Starlette iterates sync generators in a worker thread, so the
+    blocking PyMuPDF / python-docx / Ollama work never runs on the event loop.
+    """
+    doc_id = str(record.get("id", ""))
+    file_path = str(record.get("file_path", ""))
+    filename = str(record.get("filename", ""))
+    file_type = str(record.get("file_type", ""))
+    out_file_path = _resolve_output_filepath(file_path, filename, target_lang, target_dir)
+    translate_events = _translate_docx_events if file_type == "docx" else _translate_pdf_events
+
+    try:
+        num_pages = yield from translate_events(
+            doc_id, file_path, filename, out_file_path, source_lang, target_lang, model, num_ctx, think
+        )
+    except Exception as err:
+        logger.error(f"Translation of document {doc_id} failed: {err}")
+        yield _event({"type": "error", "error": str(err)})
+        return
+
+    yield _event({
         "type": "done",
         "data": {
             "id": doc_id,
             "filename": os.path.basename(out_file_path),
             "filePath": out_file_path,
             "file_size": os.path.getsize(out_file_path),
-            "num_pages": total_pages,
-            "num_chunks": int(doc_record.get("num_chunks", 1)),
-            "extracted_markdown": str(doc_record.get("extracted_markdown", "")),
+            "num_pages": num_pages,
+            "num_chunks": int(record.get("num_chunks", 1)),
+            "extracted_markdown": str(record.get("extracted_markdown", "")),
             "status": "translated",
-            "ingested_at": str(doc_record.get("ingested_at", "")),
-            "file_type": "pdf"
-        }
-    }) + "\n"
-
-
-def translate_document_inplace(
-    doc_id: str,
-    source_lang: str,
-    target_lang: str,
-    model: str = "llama3.2",
-    backup_original: bool = True,
-    target_dir: Optional[str] = None,
-    num_ctx: Optional[int] = None,
-    think: bool = False
-) -> IngestResponse:
-    """
-    Dispatches translation to the DOCX or PDF fine-mode pipeline based on the document's
-    stored file_type. Raises UnsupportedDocumentTypeError (mapped to HTTP 400) for any other
-    type, ValueError (mapped to HTTP 404) if the document itself can't be found.
-    """
-    record = _load_doc_record(doc_id)
-    file_type = record.get("file_type", "")
-    if file_type == "docx":
-        return translate_docx_inplace(doc_id, source_lang, target_lang, model, backup_original, target_dir, num_ctx, think)
-    if file_type == "pdf":
-        return translate_pdf_inplace_fine(doc_id, source_lang, target_lang, model, backup_original, target_dir, num_ctx, think)
-    raise UnsupportedDocumentTypeError(
-        f"In-place translation is not supported for file type '{file_type}'. Supported: docx, pdf."
-    )
+            "ingested_at": str(record.get("ingested_at", "")),
+            "file_type": file_type,
+        },
+    })

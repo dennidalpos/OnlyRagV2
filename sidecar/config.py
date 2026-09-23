@@ -34,6 +34,10 @@ DOCS_TABLE_NAME: str = "documents"
 CHUNKS_TABLE_NAME: str = "chunks"
 PROMPT_HISTORY_TABLE_NAME: str = "prompt_history"
 OLLAMA_BASE_URL: str = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+# Shared secret set by the Electron main process at launch. When present, every route except
+# /health requires it, so other local processes and web pages cannot drive the API.
+SIDECAR_AUTH_TOKEN: str = os.environ.get("ONLYRAG_SIDECAR_TOKEN", "")
+SIDECAR_AUTH_HEADER: str = "X-OnlyRag-Token"
 
 # Configurable table ingestion truncation limits
 TABULAR_MAX_ROWS: int = int(os.environ.get("ONLYRAG_TABULAR_MAX_ROWS", 300))

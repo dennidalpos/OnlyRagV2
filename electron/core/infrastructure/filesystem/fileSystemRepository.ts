@@ -7,7 +7,6 @@ import { isIgnoredPath, validatePathSafety as domainValidatePathSafety } from '.
 import {
   MAX_FILE_READ_BYTES,
   MAX_PROJECT_MAP_DEPTH,
-  MAX_PROJECT_MAP_ITEMS,
   MAX_SEARCH_FILE_BYTES,
   MAX_SEARCH_MATCHES,
 } from '../../domain/agent/ioLimits'
@@ -62,54 +61,6 @@ export class FileSystemRepository {
       logger.log('ERROR', 'WorkspaceRepo', `Error listing files: ${err.message}`)
       return []
     }
-  }
-
-  async getProjectMap(dirPath: string) {
-    const rootDir = validatePathSafety(dirPath)
-    if (!rootDir) return []
-
-    try {
-      const st = await fs.promises.stat(rootDir)
-      if (!st.isDirectory()) return []
-    } catch (err: any) {
-      logger.log('WARN', 'WorkspaceRepo', `Directory stat failed for '${dirPath}': ${err.message}`)
-      return []
-    }
-
-    const safeRootDir = rootDir
-    const mapItems: { path: string; relativePath: string; isDir: boolean; sizeBytes: number }[] = []
-    async function scanAsync(currentDir: string, depth: number) {
-      if (depth > MAX_PROJECT_MAP_DEPTH || mapItems.length >= MAX_PROJECT_MAP_ITEMS) return
-      try {
-        const entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
-        for (const entry of entries) {
-          if (mapItems.length >= MAX_PROJECT_MAP_ITEMS) break
-          if (isIgnoredPath(entry.name, entry.isDirectory())) continue
-
-          const fullPath = path.join(currentDir, entry.name)
-          const relPath = path.relative(safeRootDir, fullPath).replace(/\\/g, '/')
-
-          if (entry.isDirectory()) {
-            mapItems.push({ path: fullPath, relativePath: relPath + '/', isDir: true, sizeBytes: 0 })
-            await scanAsync(fullPath, depth + 1)
-          } else {
-            let size = 0
-            try {
-              const fileStat = await fs.promises.stat(fullPath)
-              size = fileStat.size
-            } catch (statErr: any) {
-              logger.log('WARN', 'WorkspaceRepo', `Stat error on ${fullPath}: ${statErr.message}`)
-            }
-            mapItems.push({ path: fullPath, relativePath: relPath, isDir: false, sizeBytes: size })
-          }
-        }
-      } catch (err: any) {
-        logger.log('WARN', 'WorkspaceRepo', `Scan skipped on ${currentDir}: ${err.message}`)
-      }
-    }
-
-    await scanAsync(safeRootDir, 0)
-    return mapItems
   }
 
   async readFile(

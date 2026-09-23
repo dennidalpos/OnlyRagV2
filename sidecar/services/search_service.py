@@ -1,9 +1,14 @@
 import re
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Optional
 from sidecar.config import CHUNKS_TABLE_NAME, DOCS_TABLE_NAME, logger
 from sidecar.schemas import SearchRequest, SearchResult
 from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id
-from sidecar.infrastructure.embeddings import generate_embedding
+from sidecar.infrastructure.embeddings import (
+    DEFAULT_EMBEDDING_MODEL,
+    FALLBACK_EMBEDDING_MODEL,
+    generate_embedding_with_status,
+    get_fallback_embedding,
+)
 from sidecar.infrastructure.reranker import rerank_candidates
 
 # Multi-language stop words for hybrid keyword filtering
@@ -34,8 +39,21 @@ def reciprocal_rank_fusion(
     return rrf_scores
 
 
+def _sql_literal(value: str) -> str:
+    return value.replace("'", "''")
+
+
+def _stored_embedding_models(ctbl: Any, doc_filter: Optional[str]) -> List[str]:
+    """Distinct embedding models among the searchable rows."""
+    query = ctbl.search().select(["embedding_model"])
+    if doc_filter:
+        query = query.where(doc_filter, prefilter=True)
+    rows = query.limit(None).to_list()
+    return sorted({str(row.get("embedding_model") or DEFAULT_EMBEDDING_MODEL) for row in rows})
+
+
 def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
-    """Performs hybrid dense vector + sparse lexical BM25 search with Reciprocal Rank Fusion (RRF k=60)."""
+    """Dense vector search per embedding model, fused with a lexical re-rank via Reciprocal Rank Fusion (RRF k=60)."""
     query_raw = req.query.strip()
     if not query_raw:
         return []
@@ -43,115 +61,118 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
     if CHUNKS_TABLE_NAME not in get_existing_tables():
         return []
 
-    try:
-        query_vec = generate_embedding(query_raw, model=req.embedding_model or "nomic-embed-text")
-        ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
+    ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
 
-        top_k = req.top_k or 5
-        fetch_limit = max(top_k * 5, 50)
-        search_builder = ctbl.search(query_vec)
+    top_k = req.top_k or 5
+    fetch_limit = max(top_k * 5, 50)
 
-        # Multi-document filtering support
-        raw_doc_ids = set()
-        if req.doc_id:
-            raw_doc_ids.add(req.doc_id)
-        if req.doc_ids:
-            raw_doc_ids.update(req.doc_ids)
+    # Multi-document filtering support
+    raw_doc_ids = set()
+    if req.doc_id:
+        raw_doc_ids.add(req.doc_id)
+    if req.doc_ids:
+        raw_doc_ids.update(req.doc_ids)
 
-        allowed_doc_ids = set()
-        for d_id in raw_doc_ids:
-            try:
-                allowed_doc_ids.add(validate_doc_id(d_id))
-            except ValueError as invalid_id_err:
-                logger.warning(f"Rejected malformed doc_id in search request: {invalid_id_err}")
+    allowed_doc_ids = set()
+    for d_id in raw_doc_ids:
+        try:
+            allowed_doc_ids.add(validate_doc_id(d_id))
+        except ValueError as invalid_id_err:
+            logger.warning(f"Rejected malformed doc_id in search request: {invalid_id_err}")
 
-        if allowed_doc_ids:
-            where_clause = " OR ".join([f'doc_id = "{d_id}"' for d_id in allowed_doc_ids])
-            search_builder = search_builder.where(where_clause, prefilter=True)
+    doc_filter = " OR ".join([f'doc_id = "{d_id}"' for d_id in allowed_doc_ids]) if allowed_doc_ids else None
 
-        # 1. Dense retrieval
-        dense_results = search_builder.limit(fetch_limit).to_list()
-        
-        # Build map of chunk metadata
-        chunk_map: Dict[str, Dict[str, Any]] = {}
-        dense_ranks: Dict[str, int] = {}
-        dense_rank_idx = 1
+    # 1. Dense retrieval, once per embedding space. Vectors from different models are not
+    # comparable, so each model's rows are searched with a query embedded by that model and
+    # the per-model rankings are merged by rank (best rank wins), never by raw distance.
+    chunk_map: Dict[str, Dict[str, Any]] = {}
+    dense_ranks: Dict[str, int] = {}
 
+    for model in _stored_embedding_models(ctbl, doc_filter):
+        if model == FALLBACK_EMBEDDING_MODEL:
+            query_vec = get_fallback_embedding(query_raw)
+        else:
+            query_vec, query_used_fallback = generate_embedding_with_status(query_raw, model=model)
+            if query_used_fallback:
+                logger.warning(f"Skipping dense search over '{model}' chunks: the query could not be embedded.")
+                continue
+
+        model_filter = f"embedding_model = '{_sql_literal(model)}'"
+        where_clause = f"({doc_filter}) AND {model_filter}" if doc_filter else model_filter
+        dense_results = ctbl.search(query_vec).where(where_clause, prefilter=True).limit(fetch_limit).to_list()
+
+        rank = 1
         for item in dense_results:
             c_id = str(item.get("chunk_id", ""))
             item_doc_id = str(item.get("doc_id", ""))
-            if allowed_doc_ids and item_doc_id not in allowed_doc_ids:
+            if not c_id or (allowed_doc_ids and item_doc_id not in allowed_doc_ids):
                 continue
-            if c_id:
-                chunk_map[c_id] = item
-                dense_ranks[c_id] = dense_rank_idx
-                dense_rank_idx += 1
+            chunk_map[c_id] = item
+            dense_ranks[c_id] = min(rank, dense_ranks.get(c_id, rank))
+            rank += 1
 
-        # 2. Sparse Lexical BM25 ranking
-        raw_tokens = re.findall(r'\w+', query_raw.lower())
-        query_terms = [t for t in raw_tokens if len(t) > 2 and t not in _STOP_WORDS]
+    # 2. Lexical re-ranking of the dense candidates (term counts, not a BM25 index)
+    raw_tokens = re.findall(r'\w+', query_raw.lower())
+    query_terms = [t for t in raw_tokens if len(t) > 2 and t not in _STOP_WORDS]
 
-        sparse_scores: Dict[str, float] = {}
-        for c_id, item in chunk_map.items():
-            text_lower = item.get("text", "").lower()
-            doc_lower = item.get("doc_name", "").lower()
-            header_lower = item.get("section_header", "").lower()
+    sparse_scores: Dict[str, float] = {}
+    for c_id, item in chunk_map.items():
+        text_lower = item.get("text", "").lower()
+        doc_lower = item.get("doc_name", "").lower()
+        header_lower = item.get("section_header", "").lower()
 
-            term_matches = sum(
-                (text_lower.count(term) * 1.0) + (doc_lower.count(term) * 2.0) + (header_lower.count(term) * 2.0)
-                for term in query_terms
-            )
-            sparse_scores[c_id] = term_matches
+        term_matches = sum(
+            (text_lower.count(term) * 1.0) + (doc_lower.count(term) * 2.0) + (header_lower.count(term) * 2.0)
+            for term in query_terms
+        )
+        sparse_scores[c_id] = term_matches
 
-        # Sort chunks with matches to assign sparse ranks
-        matched_sparse = [c_id for c_id, score in sparse_scores.items() if score > 0]
-        matched_sparse.sort(key=lambda c_id: sparse_scores[c_id], reverse=True)
-        sparse_ranks: Dict[str, int] = {c_id: idx + 1 for idx, c_id in enumerate(matched_sparse)}
+    # Sort chunks with matches to assign sparse ranks
+    matched_sparse = [c_id for c_id, score in sparse_scores.items() if score > 0]
+    matched_sparse.sort(key=lambda c_id: sparse_scores[c_id], reverse=True)
+    sparse_ranks: Dict[str, int] = {c_id: idx + 1 for idx, c_id in enumerate(matched_sparse)}
 
-        # 3. Reciprocal Rank Fusion (RRF k=60)
-        K_RRF = 60
-        rrf_fused = reciprocal_rank_fusion(dense_ranks, sparse_ranks, k=K_RRF)
+    # 3. Reciprocal Rank Fusion (RRF k=60)
+    K_RRF = 60
+    rrf_fused = reciprocal_rank_fusion(dense_ranks, sparse_ranks, k=K_RRF)
 
-        # 4. Assemble candidate search results
-        max_possible_rrf = 2.0 / (K_RRF + 1.0)
-        candidate_dicts: List[Dict[str, Any]] = []
+    # 4. Assemble candidate search results
+    max_possible_rrf = 2.0 / (K_RRF + 1.0)
+    candidate_dicts: List[Dict[str, Any]] = []
 
-        for c_id, rrf_score in rrf_fused.items():
-            item = chunk_map.get(c_id)
-            if not item:
-                continue
+    for c_id, rrf_score in rrf_fused.items():
+        item = chunk_map.get(c_id)
+        if not item:
+            continue
 
-            normalized_score = round(min(1.0, rrf_score / max_possible_rrf), 3)
-            candidate_dicts.append({
-                "chunk_id": c_id,
-                "doc_id": item.get("doc_id", ""),
-                "doc_name": item.get("doc_name", ""),
-                "section_header": item.get("section_header", ""),
-                "text": item.get("text", ""),
-                "score": normalized_score
-            })
+        normalized_score = round(min(1.0, rrf_score / max_possible_rrf), 3)
+        candidate_dicts.append({
+            "chunk_id": c_id,
+            "doc_id": item.get("doc_id", ""),
+            "doc_name": item.get("doc_name", ""),
+            "section_header": item.get("section_header", ""),
+            "text": item.get("text", ""),
+            "score": normalized_score
+        })
 
-        candidate_dicts.sort(key=lambda x: x["score"], reverse=True)
-        # Pre-select top candidates for in-process cross-encoder re-ranking (up to top 15)
-        top_candidates = candidate_dicts[:max(top_k * 3, 15)]
+    candidate_dicts.sort(key=lambda x: x["score"], reverse=True)
+    # Shortlist for the final lexical cross-scoring pass (up to top 15)
+    top_candidates = candidate_dicts[:max(top_k * 3, 15)]
 
-        # 5. In-process FlashRank / Cross-Encoder Re-Ranking
-        reranked_dicts = rerank_candidates(query=query_raw, candidates=top_candidates, top_k=top_k)
+    # 5. Lexical cross-scoring of the fused shortlist
+    reranked_dicts = rerank_candidates(query=query_raw, candidates=top_candidates, top_k=top_k)
 
-        return [
-            SearchResult(
-                chunk_id=d["chunk_id"],
-                doc_id=d.get("doc_id"),
-                doc_name=d["doc_name"],
-                section_header=d.get("section_header"),
-                text=d["text"],
-                score=d["score"]
-            )
-            for d in reranked_dicts
-        ]
-    except Exception as e:
-        logger.error(f"Error executing LanceDB vector search: {e}")
-        return []
+    return [
+        SearchResult(
+            chunk_id=d["chunk_id"],
+            doc_id=d.get("doc_id"),
+            doc_name=d["doc_name"],
+            section_header=d.get("section_header"),
+            text=d["text"],
+            score=d["score"]
+        )
+        for d in reranked_dicts
+    ]
 
 
 def list_stored_documents() -> List[Dict[str, Any]]:

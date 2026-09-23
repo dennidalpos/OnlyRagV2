@@ -20,7 +20,7 @@ import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import { resolveTurnToolPolicy, resolveVersionConflictTurnPolicy, type EditTargetState, type TurnToolPolicy } from '../domain/agent/turnToolPolicy'
-import { normalizeOllamaHost } from '../domain/agent/ollamaSessionRuntime'
+import { normalizeOllamaHost } from '../../../shared/domain/ollamaHost'
 
 /** Resolves the coding model and hardware-tuned runtime options for the turn. */
 export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {

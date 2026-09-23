@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { authorizeAndPersistNetworkApproved, authorizeNetworkApproved, buildCapabilityPolicyAuditEvent, NetworkApprovedPolicyGateway } from './networkApprovedPolicy'
+import { authorizeAndPersistNetworkApproved, authorizeNetworkApproved, buildCapabilityPolicyAuditEvent } from './networkApprovedPolicy'
 
 const base = {
   sessionId: 'session-network',
@@ -35,16 +35,6 @@ describe('network-approved capability policy', () => {
   it('allows local filesystem operations without consent and blocks remote shell egress', () => {
     expect(authorizeNetworkApproved({ ...base, capability: 'filesystem', operation: 'read', toolName: 'read_file', consent: { requested: false, granted: false } }).allowed).toBe(true)
     expect(authorizeNetworkApproved({ ...base, capability: 'shell', operation: 'execute', toolName: 'run_command', target: 'git push origin main', consent: { requested: false, granted: false } }).allowed).toBe(false)
-  })
-
-  it('records every gateway decision as a validated audit event', () => {
-    const gateway = new NetworkApprovedPolicyGateway(() => '2026-08-27T15:00:00.000Z')
-    const decision = gateway.authorize({ ...base, consent: { requested: false, granted: false } })
-    const events = gateway.getAuditEvents()
-
-    expect(decision.allowed).toBe(false)
-    expect(events).toHaveLength(1)
-    expect(events[0]).toMatchObject({ auditId: decision.auditId, allowed: false, timestamp: '2026-08-27T15:00:00.000Z' })
   })
 
   it('persists the decision before returning it to an external caller', async () => {

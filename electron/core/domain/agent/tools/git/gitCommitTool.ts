@@ -12,13 +12,14 @@ export interface GitCommandError {
 
 export type GitCommit = (cwd: string, message: string, paths: readonly string[], expectedDiffHash: string) => string
 
-export type GitRun = (cwd: string, command: string, timeoutMs: number) => string
+/** Runs git with an argument vector; model-supplied paths must never reach a shell. */
+export type GitRun = (cwd: string, args: readonly string[], timeoutMs: number) => string
 
 export type SafePathCheck = { safePath?: string | null; error?: string }
 
 export function executeGitStatus(cwd: string, run: GitRun): import('../toolExecutionContracts').ToolExecutionResult {
   try {
-    const stdout = run(cwd, 'status --short', 10000)
+    const stdout = run(cwd, ['status', '--short'], 10000)
     const outStr = stdout.trim()
       ? `[GIT STATUS: ${cwd}]\n${stdout.trim()}\n[END GIT STATUS]`
       : `[GIT STATUS: ${cwd}]\nWorking tree clean (no modified or untracked files).\n[END GIT STATUS]`
@@ -40,9 +41,8 @@ export function executeGitDiff(
     return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Git Diff Rejected: ${pathCheck.error}` }
   }
   try {
-    const fileArg = pathCheck?.safePath ? ` -- "${pathCheck.safePath}"` : ''
-    const stagedFlag = staged ? ' --staged' : ''
-    const stdout = run(cwd, `diff${stagedFlag}${fileArg}`, 15000)
+    const args = ['diff', ...(staged ? ['--staged'] : []), ...(pathCheck?.safePath ? ['--', pathCheck.safePath] : [])]
+    const stdout = run(cwd, args, 15000)
     const truncated = stdout.trim().slice(0, 8000)
     const outStr = stdout.trim()
       ? `[GIT DIFF (${staged ? 'staged' : 'unstaged'}): ${targetPath || cwd}]\n\`\`\`diff\n${truncated}\n\`\`\`\n[END GIT DIFF]`

@@ -4,7 +4,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { execFileSync } from 'node:child_process'
 import type { BrowserWindow } from 'electron'
-import { runAgentOrchestratorLoop, cancelActiveAgentTask, requestActiveAgentContextCompaction, respondToApproval } from './agentOrchestratorAppService'
+import { runAgentOrchestratorLoop as runOrchestratorLoop, cancelActiveAgentTask, requestActiveAgentContextCompaction, respondToApproval } from './agentOrchestratorAppService'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
@@ -12,6 +12,16 @@ import { buildDefaultAgentSettings } from './agentOrchestratorSessionSetup'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import type { AppSettings } from '../../../shared/types'
+
+// The production fallback is fail-closed; these loop tests exercise tool execution, so they opt in.
+const TOOL_ENABLED_SETTINGS: AppSettings = {
+  ...buildDefaultAgentSettings(),
+  allowTerminalExecution: true,
+  allowFileModifications: true,
+  capabilityPolicyMode: undefined,
+}
+const runAgentOrchestratorLoop: typeof runOrchestratorLoop = (payload, win) =>
+  runOrchestratorLoop({ ...payload, settings: { ...TOOL_ENABLED_SETTINGS, ...payload.settings } }, win)
 
 function createMockWindow(): { window: BrowserWindow; send: ReturnType<typeof vi.fn> } {
   const send = vi.fn()
@@ -131,7 +141,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         userTask: 'Create phase.ts',
         agentMode: 'auto',
         workspacePath: tempDir,
-        settings: { ...buildDefaultAgentSettings(), verifyBeforeFinish: false },
+        settings: { ...TOOL_ENABLED_SETTINGS, verifyBeforeFinish: false },
       },
       mockWin.window,
     )
@@ -167,7 +177,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         userTask: 'Create identity.ts',
         agentMode: 'auto',
         workspacePath: tempDir,
-        settings: { ...buildDefaultAgentSettings(), verifyBeforeFinish: false },
+        settings: { ...TOOL_ENABLED_SETTINGS, verifyBeforeFinish: false },
       },
       mockWin.window,
     )
@@ -689,7 +699,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
   describe('finish gate runs the project verification instead of waiving it', () => {
     const finishVerificationSettings = {
-      ...buildDefaultAgentSettings(),
+      ...TOOL_ENABLED_SETTINGS,
       verifyBeforeFinish: true,
     } as AppSettings
 

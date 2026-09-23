@@ -87,6 +87,9 @@ function createWindow() {
     autoHideMenuBar: true,
   })
 
+  // The UI needs no camera, microphone, geolocation or notification permissions.
+  win.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (isAllowedExternalUrl(url)) {
       void systemAppService.openExternal(url).catch((error: unknown) => logger.log('WARN', 'MainProcess', `External URL failed: ${String(error)}`))

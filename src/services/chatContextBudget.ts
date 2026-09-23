@@ -1,3 +1,4 @@
+import { APPROX_CHARS_PER_TOKEN } from '../../shared/domain/agent/charsPerToken'
 import {
   classifyHardwareProfileTier,
   isMinimalHardwareHost,
@@ -33,12 +34,11 @@ export interface ChatContextBudget {
 
 /** Tokens held back for the answer, and the chars-per-token ratio used to translate the token window into the char budgets everything else is expressed in. */
 const GENERATION_RESERVE_TOKENS = 1024
-const CHARS_PER_TOKEN = 3.5
 
 /** Total chars the assembled prompt may occupy on a host, once the answer's own token reserve is held back. */
 export function resolvePromptCharBudget(maxNumCtx: number): number {
   const usableTokens = Math.max(512, maxNumCtx - GENERATION_RESERVE_TOKENS)
-  return Math.floor(usableTokens * CHARS_PER_TOKEN)
+  return Math.floor(usableTokens * APPROX_CHARS_PER_TOKEN)
 }
 
 interface TierBudget {

@@ -8,10 +8,6 @@ export const workspaceListFilesPayloadSchema = z.object({
   targetPath: nonBlankPath.optional(),
 }).strict()
 
-export const workspaceProjectMapPayloadSchema = z.object({
-  dirPath: nonBlankPath,
-}).strict()
-
 export const workspaceReadFilePayloadSchema = z.object({
   filePath: nonBlankPath,
   startLine: optionalPositiveInt,
@@ -29,11 +25,6 @@ export const workspaceReplaceChunkPayloadSchema = z.object({
   filePath: nonBlankPath,
   targetContent: z.string(),
   replacementContent: z.string(),
-}).strict()
-
-export const workspaceMultiReplaceChunksPayloadSchema = z.object({
-  filePath: nonBlankPath,
-  replacements: z.array(z.object({ targetContent: z.string(), replacementContent: z.string() }).strict()).max(100),
 }).strict()
 
 export const workspaceGrepSearchPayloadSchema = z.object({
@@ -57,12 +48,6 @@ export const workspaceDownloadFilePayloadSchema = z.object({
   url: nonBlankPath,
   targetFilePath: nonBlankPath,
   workspaceRoot: nonBlankPath.optional(),
-}).strict()
-
-export const workspaceGitCommitPayloadSchema = z.object({
-  commitMessage: nonBlankText,
-  workspaceRoot: nonBlankPath.optional(),
-  filePaths: z.array(nonBlankPath).min(1),
 }).strict()
 
 export const workspaceExecutePowerShellPayloadSchema = z.object({

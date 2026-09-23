@@ -70,16 +70,6 @@ class TaskCancelResponse(BaseModel):
     message: str
 
 
-class CleanupResponse(BaseModel):
-    status: Literal["success"]
-    cleaned_files: int = Field(..., ge=0)
-
-
-class VocabStatusResponse(BaseModel):
-    wordfreq_available: bool
-    cached_languages: List[str]
-    cache_dir: str
-
 class IngestPathRequest(StrictRequest):
     file_path: str = Field(..., min_length=1, max_length=4096, pattern=NON_BLANK)
     task_id: Optional[str] = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
@@ -92,16 +82,17 @@ class IngestPathRequest(StrictRequest):
     max_tabular_rows: Optional[int] = Field(default=None, ge=1, le=1_000_000)
     max_excel_rows_per_sheet: Optional[int] = Field(default=None, ge=1, le=1_000_000)
     max_excel_sheets: Optional[int] = Field(default=None, ge=1, le=1_000)
+    embedding_model: Optional[str] = MODEL_NAME
 
 class UpdateDocumentRequest(StrictRequest):
     markdown_content: str = Field(..., min_length=1, max_length=10_000_000)
+    embedding_model: Optional[str] = MODEL_NAME
 
 
 class TranslateInplaceRequest(StrictRequest):
     source_lang: str = Field(..., min_length=1, max_length=100, pattern=NON_BLANK)
     target_lang: str = Field(..., min_length=1, max_length=100, pattern=NON_BLANK)
     model: Optional[str] = MODEL_NAME
-    backup_original: Optional[bool] = True
     target_dir: Optional[str] = PATH_VALUE
     num_ctx: Optional[int] = Field(default=None, ge=4096, le=131072)
     think: Optional[bool] = False
@@ -116,7 +107,6 @@ class PagePreviewResponse(BaseModel):
 class SearchRequest(StrictRequest):
     query: str = Field(..., min_length=1, max_length=100_000)
     top_k: Optional[int] = Field(default=5, ge=1, le=100)
-    embedding_model: Optional[str] = Field(default="nomic-embed-text", min_length=1, max_length=200, pattern=NON_BLANK)
     doc_id: Optional[str] = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
     doc_ids: Optional[List[str]] = Field(default=None, max_length=100)
 

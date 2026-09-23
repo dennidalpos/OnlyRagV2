@@ -1,9 +1,7 @@
 import {
   capabilityPolicyDecisionSchema,
   capabilityPolicyRequestSchema,
-  type CapabilityPolicyAuditEvent,
   type CapabilityPolicyDecision,
-  type CapabilityPolicyGateway,
   type CapabilityPolicyRequest,
 } from './capabilityPolicyContract'
 
@@ -55,16 +53,3 @@ export function authorizeOfflineStrict(input: CapabilityPolicyRequest): Capabili
 
   return decision(request, true, 'Local capability allowed in offline-strict mode')
 }
-
-/** Minimal gateway adapter for the first policy mode; audit persistence is added in W2.04. */
-export class OfflineStrictPolicyGateway implements CapabilityPolicyGateway {
-  public authorize(request: CapabilityPolicyRequest): CapabilityPolicyDecision {
-    return authorizeOfflineStrict(request)
-  }
-
-  public record(_event: CapabilityPolicyAuditEvent): void {
-    // Audit persistence belongs to the network-approved policy task (W2.04).
-  }
-}
-
-export const offlineStrictPolicyGateway = new OfflineStrictPolicyGateway()

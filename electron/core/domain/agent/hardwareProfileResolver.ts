@@ -1,4 +1,5 @@
 import os from 'node:os'
+import { APPROX_CHARS_PER_TOKEN } from '../../../../shared/domain/agent/charsPerToken'
 import { resolveMaxContextTokens, type DeclaredHardwareProfile } from '../../../../shared/domain/hardware/hardwareProfileTiers'
 
 export interface OllamaRuntimeOptions {
@@ -35,8 +36,6 @@ export class HardwareProfileResolver {
 
   /** Generation reserve, as a share of the context window. */
   private static readonly GENERATION_RESERVE_RATIO = 0.35
-  /** Chars per BPE token for this prompt mix (English directives + markdown + code). */
-  private static readonly CHARS_PER_TOKEN = 3.6
 
   static deriveNumPredict(numCtx: number): number {
     return Math.max(1, Math.floor(numCtx * HardwareProfileResolver.GENERATION_RESERVE_RATIO))
@@ -45,7 +44,7 @@ export class HardwareProfileResolver {
   /** The prompt-assembly char budget that actually fits `numCtx` once the generation reserve is held back. */
   static deriveMaxContextChars(numCtx: number): number {
     const promptTokens = numCtx - HardwareProfileResolver.deriveNumPredict(numCtx)
-    return Math.floor(promptTokens * HardwareProfileResolver.CHARS_PER_TOKEN)
+    return Math.floor(promptTokens * APPROX_CHARS_PER_TOKEN)
   }
   /** Resolves optimal Ollama runtime options from user settings and hardware diagnostics. */
   static resolveOllamaOptions(

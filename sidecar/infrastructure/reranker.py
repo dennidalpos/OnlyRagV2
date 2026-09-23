@@ -1,27 +1,5 @@
 import re
 from typing import List, Dict, Any
-from sidecar.config import logger
-
-_ranker_instance = None
-_has_flashrank = None
-
-def _get_flashrank_ranker():
-    global _ranker_instance, _has_flashrank
-    if _has_flashrank is False:
-        return None
-    if _ranker_instance is not None:
-        return _ranker_instance
-    try:
-        from flashrank import Ranker
-        _ranker_instance = Ranker(model_name="ms-marco-TinyBERT-L-2-v2", cache_dir=None)
-        _has_flashrank = True
-        logger.info("FlashRank in-process CPU cross-encoder initialized successfully.")
-        return _ranker_instance
-    except Exception as e:
-        _has_flashrank = False
-        logger.debug(f"FlashRank optional package not loaded, using deterministic in-process cross-scorer: {e}")
-        return None
-
 
 def calculate_cross_score(query: str, text: str, header: str = "") -> float:
     """Fast in-process cross-scoring calculating query phrase coverage, term density and header relevance."""
@@ -59,38 +37,9 @@ def rerank_candidates(
     candidates: List[Dict[str, Any]],
     top_k: int = 5
 ) -> List[Dict[str, Any]]:
-    """
-    Re-ranks top candidate passages using FlashRank in-process CPU cross-encoder
-    or high-fidelity semantic cross-scoring fallback.
-    """
+    """Re-ranks the shortlist by blending its fused score with a lexical cross-score."""
     if not candidates or not query.strip():
         return candidates[:top_k]
-
-    ranker = _get_flashrank_ranker()
-    if ranker is not None:
-        try:
-            from flashrank import RerankRequest
-            passages = [
-                {"id": str(c.get("chunk_id", idx)), "text": c.get("text", "")}
-                for idx, c in enumerate(candidates)
-            ]
-            req = RerankRequest(query=query, passages=passages)
-            ranked_output = ranker.rerank(req)
-
-            score_map = {str(item.get("id", "")): float(item.get("score", 0.0)) for item in ranked_output}
-            
-            reranked = []
-            for c in candidates:
-                c_id = str(c.get("chunk_id", ""))
-                flash_score = score_map.get(c_id, float(c.get("score", 0.5)))
-                c_copy = dict(c)
-                c_copy["score"] = round(min(1.0, max(0.0, flash_score)), 3)
-                reranked.append(c_copy)
-
-            reranked.sort(key=lambda x: x["score"], reverse=True)
-            return reranked[:top_k]
-        except Exception as err:
-            logger.warning(f"FlashRank reranking error, falling back to in-process cross-scorer: {err}")
 
     # High-fidelity in-process cross-scorer
     reranked = []

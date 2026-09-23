@@ -34,11 +34,9 @@ describe('sidecar IPC facade', () => {
     registerSidecarIpcHandlers()
   })
 
-  it('forwards status and restart requests to the application service', async () => {
-    await expect(handlers.get('sidecar:status')?.(trustedEvent)).resolves.toEqual({ status: 'online' })
+  it('forwards restart requests to the application service', async () => {
     await expect(handlers.get('sidecar:restart')?.(trustedEvent)).resolves.toEqual({ success: true })
 
-    expect(sidecarAppService.getStatus).toHaveBeenCalledOnce()
     expect(sidecarAppService.restartSidecar).toHaveBeenCalledOnce()
   })
 

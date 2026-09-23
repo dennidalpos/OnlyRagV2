@@ -1,6 +1,7 @@
 
 
 import { countTokens } from 'gpt-tokenizer'
+import { APPROX_CHARS_PER_TOKEN } from './charsPerToken'
 
 const STANDARD_CONTEXT_BUCKETS = [2048, 4096, 8192, 16384, 32768, 65536]
 const COMPLETION_HEADROOM_TOKENS = 2048
@@ -14,13 +15,13 @@ const CONTEXT_SAFETY_RATIO = 0.02
  */
 export function countPromptTokens(prompt: string | number): number {
   if (typeof prompt === 'number') {
-    return Math.ceil(Math.max(0, prompt) / 3.8)
+    return Math.ceil(Math.max(0, prompt) / APPROX_CHARS_PER_TOKEN)
   }
   if (!prompt || typeof prompt !== 'string') return 0
   try {
     return countTokens(prompt)
   } catch {
-    return Math.ceil(prompt.length / 3.8)
+    return Math.ceil(prompt.length / APPROX_CHARS_PER_TOKEN)
   }
 }
 

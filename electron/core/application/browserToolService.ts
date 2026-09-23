@@ -3,6 +3,12 @@ import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
 import type { ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
 
+/**
+ * shell.openPath hands the file to its default handler, which for .exe/.bat/.ps1/.lnk means running
+ * it. Previews are limited to document and image types so opening a file never executes one.
+ */
+const PREVIEWABLE_EXTENSIONS = new Set(['.html', '.htm', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.md', '.txt'])
+
 interface BrowserToolDependencies {
   openExternal(url: string): Promise<void>
   openPath(filePath: string): Promise<string>
@@ -44,6 +50,13 @@ export class BrowserToolService {
             outcome: 'rejected',
             outputForHistory: `Security Violation: ${pathCheck.error}`,
             logMessage: `Open in Browser Rejected: ${pathCheck.error}`,
+          }
+        }
+        if (!PREVIEWABLE_EXTENSIONS.has(path.extname(pathCheck.safePath).toLowerCase())) {
+          return {
+            outcome: 'rejected',
+            outputForHistory: `Security Violation: open_in_browser only previews ${[...PREVIEWABLE_EXTENSIONS].join(', ')} files, not ${path.basename(filePath)}.`,
+            logMessage: `Open in Browser Rejected: non-previewable file ${path.basename(filePath)}`,
           }
         }
         if (!this.dependencies.exists(pathCheck.safePath)) {

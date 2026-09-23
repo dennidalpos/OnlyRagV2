@@ -83,11 +83,9 @@ export function useCodingAgent(settings?: AppSettings) {
   }, [isExecuting, settings])
 
   useEffect(() => {
-    if (isExecuting) {
-      acquireGlobalTaskLock('coding')
-      return () => releaseGlobalTaskLock('coding')
-    }
-    releaseGlobalTaskLock('coding')
+    if (!isExecuting) return
+    acquireGlobalTaskLock('coding')
+    return () => releaseGlobalTaskLock('coding')
   }, [isExecuting])
 
   const [activeSkills, setActiveSkills] = useState<string[]>([])

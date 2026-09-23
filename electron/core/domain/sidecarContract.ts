@@ -27,7 +27,6 @@ export const sidecarTranslatePayloadSchema = z.object({
   sourceLang: nonBlank.max(100),
   targetLang: nonBlank.max(100),
   model: modelName.optional(),
-  backupOriginal: z.boolean().optional(),
   targetDir: boundedPath.optional(),
   numCtx: contextTokens.optional(),
   think: z.boolean().optional(),
@@ -41,7 +40,6 @@ export const sidecarPagePreviewPayloadSchema = z.object({
 export const sidecarSearchPayloadSchema = z.object({
   query: z.string().min(1).max(100_000),
   topK: z.number().int().min(1).max(100).optional(),
-  embeddingModel: modelName.optional(),
   docIds: z.array(nonBlank.max(200)).max(100).optional(),
 }).strict()
 

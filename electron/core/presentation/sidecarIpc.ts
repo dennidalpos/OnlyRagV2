@@ -17,9 +17,6 @@ import {
 } from '../domain/sidecarContract'
 
 export function registerSidecarIpcHandlers() {
-  ipcMain.handle('sidecar:status', async () => {
-    return sidecarAppService.getStatus()
-  })
 
   ipcMain.handle('sidecar:restart', async () => {
     return sidecarAppService.restartSidecar()
@@ -35,9 +32,9 @@ export function registerSidecarIpcHandlers() {
     return sidecarAppService.updateDocument(payload.docId, payload.markdownContent)
   })
 
-  ipcMain.handle('ingest:translate-inplace', async (_, docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number, think?: boolean) => {
-    const payload: SidecarTranslatePayload = sidecarTranslatePayloadSchema.parse({ docId, sourceLang, targetLang, model, backupOriginal, targetDir, numCtx, think })
-    return sidecarAppService.translateDocumentInplace(payload.docId, payload.sourceLang, payload.targetLang, payload.model, payload.backupOriginal, payload.targetDir, payload.numCtx, payload.think)
+  ipcMain.handle('ingest:translate-inplace', async (_, docId: string, sourceLang: string, targetLang: string, model?: string, targetDir?: string, numCtx?: number, think?: boolean) => {
+    const payload: SidecarTranslatePayload = sidecarTranslatePayloadSchema.parse({ docId, sourceLang, targetLang, model, targetDir, numCtx, think })
+    return sidecarAppService.translateDocumentInplace(payload.docId, payload.sourceLang, payload.targetLang, payload.model, payload.targetDir, payload.numCtx, payload.think)
   })
 
   ipcMain.handle('ingest:page-preview', async (_, docId: string, pageNumber: number) => {
@@ -53,9 +50,9 @@ export function registerSidecarIpcHandlers() {
     return sidecarAppService.deleteDocument(docId)
   })
 
-  ipcMain.handle('ingest:search', async (_, query: string, topK?: number, embeddingModel?: string, docIds?: string[]) => {
-    const payload: SidecarSearchPayload = sidecarSearchPayloadSchema.parse({ query, topK, embeddingModel, docIds })
-    return sidecarAppService.searchVectorDb(payload.query, payload.topK, payload.embeddingModel, payload.docIds)
+  ipcMain.handle('ingest:search', async (_, query: string, topK?: number, docIds?: string[]) => {
+    const payload: SidecarSearchPayload = sidecarSearchPayloadSchema.parse({ query, topK, docIds })
+    return sidecarAppService.searchVectorDb(payload.query, payload.topK, payload.docIds)
   })
 
   ipcMain.handle('ingest:export', async (_, markdownContent: string, format: string, outputFolder?: string) => {

@@ -2,7 +2,6 @@ import os
 from typing import Dict, Any, Optional
 import pymupdf
 import puremagic
-from sidecar.config import logger
 
 class DocumentCategory:
     PDF = "pdf"

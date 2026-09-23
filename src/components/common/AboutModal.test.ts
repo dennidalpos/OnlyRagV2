@@ -72,7 +72,6 @@ describe('AboutModal & Credits Data Integrity Unit Tests', () => {
     // AI & Vector
     expect(moduleNames).toContain('LanceDB')
     expect(moduleNames).toContain('Apache Arrow')
-    expect(moduleNames).toContain('FlashRank')
     expect(moduleNames).toContain('Ollama')
     expect(moduleNames).toContain('FastAPI & Uvicorn')
     expect(moduleNames).toContain('PyMuPDF (fitz)')

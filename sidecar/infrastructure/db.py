@@ -1,7 +1,4 @@
-import os
 import re
-import time
-import shutil
 import lancedb
 from typing import List, Optional, Any, Dict
 from sidecar.config import LANCEDB_DIR, logger
@@ -32,24 +29,6 @@ def get_existing_tables() -> List[str]:
             return lance_db.table_names()
         except Exception:
             return []
-
-def safe_open_table(table_name: str) -> Optional[Any]:
-    """Safely opens a LanceDB table with automatic isolation and recovery in case of file/index corruption."""
-    try:
-        if table_name in get_existing_tables():
-            return lance_db.open_table(table_name)
-        return None
-    except Exception as err:
-        logger.error(f"Corruption or read error in LanceDB table '{table_name}': {err}")
-        table_path = os.path.join(LANCEDB_DIR, f"{table_name}.lance")
-        if os.path.exists(table_path):
-            backup_path = os.path.join(LANCEDB_DIR, f"{table_name}.corrupted_{int(time.time())}.bak")
-            try:
-                shutil.move(table_path, backup_path)
-                logger.warning(f"Moved corrupted table '{table_name}' to backup: {backup_path}")
-            except Exception as move_err:
-                logger.error(f"Failed to isolate corrupted table directory {table_path}: {move_err}")
-        return None
 
 class SchemaMismatchError(RuntimeError):
     """Raised when a record cannot be appended to an existing table.
@@ -91,6 +70,37 @@ def append_records(
         logger.error(f"Schema mismatch appending to LanceDB table '{table_name}': {err}")
         raise SchemaMismatchError(table_name, err) from err
     return tbl
+
+
+def ensure_chunk_embedding_model_column(
+    chunks_table: str,
+    docs_table: str,
+    default_model: str,
+    fallback_model: str,
+) -> None:
+    """Adds the per-chunk `embedding_model` column to stores created before it existed.
+
+    Search embeds the query once per stored model, so every row must say which model produced
+    its vector. Legacy rows were always embedded with the default model, except those of
+    documents marked `indexed_fallback`, whose vectors came from the deterministic hash.
+    """
+    if chunks_table not in get_existing_tables():
+        return
+    tbl = lance_db.open_table(chunks_table)
+    if "embedding_model" in tbl.schema.names:
+        return
+    tbl.add_columns({"embedding_model": f"'{default_model}'"})
+    if docs_table not in get_existing_tables():
+        return
+    fallback_ids = [
+        str(row.get("id"))
+        for row in lance_db.open_table(docs_table).to_arrow().to_pylist()
+        if str(row.get("status", "")) == "indexed_fallback" and _DOC_ID_PATTERN.match(str(row.get("id", "")))
+    ]
+    if fallback_ids:
+        id_list = ", ".join(f"'{doc_id}'" for doc_id in fallback_ids)
+        tbl.update(where=f"doc_id IN ({id_list})", values={"embedding_model": fallback_model})
+    logger.info(f"Migrated '{chunks_table}' with an embedding_model column ({len(fallback_ids)} fallback documents).")
 
 
 def run_db_maintenance() -> Dict[str, Any]:

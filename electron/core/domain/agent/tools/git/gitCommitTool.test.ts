@@ -26,7 +26,7 @@ describe('git inspection tools', () => {
     expect(executeGitStatus('workspace', run)).toMatchObject({
       outputForHistory: expect.stringContaining('Working tree clean'),
     })
-    expect(run).toHaveBeenCalledWith('workspace', 'status --short', 10000)
+    expect(run).toHaveBeenCalledWith('workspace', ['status', '--short'], 10000)
   })
 
   it('blocks a diff outside the validated workspace path', () => {
@@ -40,6 +40,13 @@ describe('git inspection tools', () => {
     const run = vi.fn(() => 'diff --git a/app.ts b/app.ts')
     const result = executeGitDiff('workspace', 'app.ts', true, { safePath: 'workspace/app.ts' }, run)
     expect(result.outputForHistory).toContain('[GIT DIFF (staged): app.ts]')
-    expect(run).toHaveBeenCalledWith('workspace', 'diff --staged -- "workspace/app.ts"', 15000)
+    expect(run).toHaveBeenCalledWith('workspace', ['diff', '--staged', '--', 'workspace/app.ts'], 15000)
+  })
+
+  it('passes shell metacharacters in a path as one literal argument', () => {
+    const run = vi.fn(() => '')
+    const hostile = 'workspace/a" & calc & ".ts'
+    executeGitDiff('workspace', hostile, false, { safePath: hostile }, run)
+    expect(run).toHaveBeenCalledWith('workspace', ['diff', '--', hostile], 15000)
   })
 })

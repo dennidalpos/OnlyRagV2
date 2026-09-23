@@ -61,6 +61,16 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+# PyInstaller's dependency scan also copies the CUDA DLLs that onnxruntime links against into the
+# _internal root, duplicating the ones bundled under nvidia/ above (~520 MB of cuBLAS). The runtime
+# puts the nvidia/ directories on PATH before loading the CUDA provider (see
+# sidecar/infrastructure/ocr.py::_configure_cuda_dll_path), so the root copies are never needed.
+bundled_cuda_dlls = {os.path.basename(src).lower() for src, dest in binaries if dest.startswith('nvidia')}
+a.binaries = [
+    entry for entry in a.binaries
+    if not (os.path.dirname(entry[0]) == '' and os.path.basename(entry[0]).lower() in bundled_cuda_dlls)
+]
+
 pyz = PYZ(a.pure)
 
 exe = EXE(
@@ -72,7 +82,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -85,7 +95,7 @@ coll = COLLECT(
     a.binaries,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     name='sidecar',
 )

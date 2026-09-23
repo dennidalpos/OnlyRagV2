@@ -1,3 +1,4 @@
+import { normalizeOllamaHost } from '../../../../shared/domain/ollamaHost'
 import type { OllamaRuntimeOptions } from './hardwareProfileResolver'
 import type { OllamaModelMetrics, RunningModelInfo } from '../../../../shared/types'
 
@@ -27,11 +28,6 @@ export interface OllamaGenerationTelemetry {
 }
 
 export type OllamaStreamTelemetry = Omit<OllamaGenerationTelemetry, 'step' | 'memoryTotalBytes' | 'memoryGpuBytes' | 'memoryCpuBytes' | 'loadedContextLength'>
-
-export function normalizeOllamaHost(host?: string): string {
-  const value = host?.trim() || 'http://127.0.0.1:11434'
-  return (value.startsWith('http') ? value : `http://${value}`).replace(/\/$/, '')
-}
 
 export function validateRestoredOllamaRuntime(
   profile: OllamaSessionRuntimeProfile,

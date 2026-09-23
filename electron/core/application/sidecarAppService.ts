@@ -9,6 +9,7 @@ import { sidecarProcessManager } from '../infrastructure/process/sidecarProcessM
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import { sidecarHttpClient } from '../infrastructure/http/sidecarHttpClient'
+import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
 import type { IngestedDocument, SlmLogDiagnosticReport } from '../../../shared/types'
 
 export function normalizeIngestedFileType(fileType?: string, filename?: string): IngestedDocument['fileType'] {
@@ -97,6 +98,7 @@ export class SidecarAppService {
           normalization_model: normalizationModel || undefined,
           num_ctx: numCtx || undefined,
           normalization_think: normalizationThink === true,
+          embedding_model: await this.configuredEmbeddingModel(),
         },
         (event) => {
           BrowserWindow.getAllWindows().forEach((win) => {
@@ -153,7 +155,7 @@ export class SidecarAppService {
       return { success: false, error: 'Invalid document ID' }
     }
     logger.log('INFO', 'SidecarApp', `Updating document: ${docId}`)
-    const result = await sidecarHttpClient.updateDocument(docId, markdownContent)
+    const result = await sidecarHttpClient.updateDocument(docId, markdownContent, await this.configuredEmbeddingModel())
     if (result.success && result.data) {
       const data = result.data
       return {
@@ -180,7 +182,6 @@ export class SidecarAppService {
     sourceLang: string,
     targetLang: string,
     model?: string,
-    backupOriginal: boolean = true,
     targetDir?: string,
     numCtx?: number,
     think?: boolean
@@ -195,7 +196,6 @@ export class SidecarAppService {
         source_lang: sourceLang,
         target_lang: targetLang,
         model: model || undefined,
-        backup_original: backupOriginal,
         target_dir: targetDir || undefined,
         num_ctx: numCtx || undefined,
         think: think === true,
@@ -256,23 +256,17 @@ export class SidecarAppService {
 
   async deleteDocument(docId: string): Promise<{ success: boolean; error?: string }> {
     if (typeof docId !== 'string' || !docId.trim()) return { success: false, error: 'ID documento non valido.' }
-    const result = await sidecarHttpClient.deleteDocument(docId)
-    if (result.success) {
-      try {
-        BrowserWindow.getAllWindows().forEach((win) => {
-          if (!win.isDestroyed()) {
-            win.webContents.send('ingest:document-deleted', { docId })
-          }
-        })
-      } catch (err: any) {
-        logger.log('DEBUG', 'SidecarApp', `Failed broadcasting document deletion event: ${err?.message}`)
-      }
-    }
-    return result
+    return sidecarHttpClient.deleteDocument(docId)
   }
 
-  searchVectorDb(query: string, topK: number = 5, embeddingModel?: string, docIds?: string[]): Promise<any[]> {
-    return sidecarHttpClient.searchVectorDb(query, topK, embeddingModel, docIds)
+  searchVectorDb(query: string, topK: number = 5, docIds?: string[]): Promise<any[]> {
+    return sidecarHttpClient.searchVectorDb(query, topK, docIds)
+  }
+
+  /** Embedding model for new vectors; search reads each chunk's own model from the store. */
+  private async configuredEmbeddingModel(): Promise<string | undefined> {
+    const settings = await appSettingsRepository.loadSettings()
+    return settings?.embeddingModel?.trim() || undefined
   }
 
   indexPromptHistory(payload: {

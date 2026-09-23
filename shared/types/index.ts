@@ -300,13 +300,6 @@ export interface TaskQueueStatus {
   queuedTasks: { id: string; type: string; status: string; createdAt: number }[]
 }
 
-export interface ProjectMapItem {
-  path: string
-  relativePath: string
-  isDir: boolean
-  sizeBytes: number
-}
-
 export interface GrepSearchResult {
   filePath: string
   relativePath: string
@@ -338,11 +331,6 @@ export interface GuestOsInfo {
     OS: string
     PROCESSOR_ARCHITECTURE: string
   }
-}
-
-export interface AgentToolReplacementChunk {
-  targetContent: string
-  replacementContent: string
 }
 
 export interface AgentToolCall {
@@ -532,17 +520,6 @@ export interface OllamaModelUpdateInfo {
   error?: string
 }
 
-export type HttpMetricErrorType = 'none' | 'http' | 'timeout' | 'network' | 'parse' | 'unknown'
-
-export interface HttpMetricSnapshot {
-  endpoint: string
-  status: number
-  errorType: HttpMetricErrorType
-  count: number
-  totalDurationMs: number
-  maxDurationMs: number
-}
-
 /** Canonical camelCase payload crossing the renderer/main IPC boundary. */
 export interface PromptHistoryIndexPayload {
   id: string
@@ -601,7 +578,6 @@ export interface IElectronAPI {
   cancelPullOllamaModel: () => Promise<{ success: boolean; error?: string }>
   deleteOllamaModel: (modelName: string, host?: string) => Promise<{ success: boolean; error?: string }>
   installOrLaunchOllama: () => Promise<{ success: boolean; message?: string; error?: string }>
-  getSidecarStatus: () => Promise<{ status: string; engine?: string; version?: string; documentsCount?: number; chunksCount?: number }>
   restartSidecar: () => Promise<{ success: boolean; message?: string; error?: string }>
   openFileDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => Promise<string[]>
   openDirectoryDialog: (options?: { title?: string }) => Promise<string | null>
@@ -621,7 +597,6 @@ export interface IElectronAPI {
     sourceLang: string,
     targetLang: string,
     model?: string,
-    backupOriginal?: boolean,
     targetDir?: string,
     numCtx?: number,
     think?: boolean,
@@ -629,7 +604,7 @@ export interface IElectronAPI {
   getDocumentPagePreview: (docId: string, pageNumber: number) => Promise<PagePreviewData | null>
   getIngestedDocuments: () => Promise<IngestedDocument[]>
   deleteIngestedDocument: (docId: string) => Promise<{ success: boolean; error?: string }>
-  searchVectorDb: (query: string, topK?: number, embeddingModel?: string, docIds?: string[]) => Promise<VectorSearchResult[]>
+  searchVectorDb: (query: string, topK?: number, docIds?: string[]) => Promise<VectorSearchResult[]>
   exportDocument: (markdownContent: string, format: string, outputFolder?: string) => Promise<{ success: boolean; message?: string; error?: string }>
   generateOllamaStream: (
     model: string,
@@ -643,12 +618,10 @@ export interface IElectronAPI {
   cancelOllamaStream: (operationId: string) => Promise<{ success: boolean }>
   getOllamaGenerationStatus: () => Promise<OllamaGenerationStatus>
   cancelTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
-  cleanTempResiduals: () => Promise<{ success: boolean; cleanedCount: number; bytesFreed: number }>
   listWorkspaceFiles: (dirPath?: string) => Promise<WorkspaceFile[]>
   getStandaloneScratchWorkspace?: () => Promise<{ path: string }>
   exportStandaloneScratchWorkspace?: (destinationDirectory: string) => Promise<{ success: boolean; path?: string; error?: string }>
   clearStandaloneScratchWorkspace?: () => Promise<{ success: boolean; removedEntries: number; error?: string }>
-  getProjectMap: (dirPath: string) => Promise<ProjectMapItem[]>
   readWorkspaceFile: (
     filePath: string,
     startLine?: number,
@@ -661,15 +634,10 @@ export interface IElectronAPI {
     workspaceRoot?: string,
   ) => Promise<{ success: boolean; contentHash?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean; error?: string }>
   replaceWorkspaceFileChunk: (filePath: string, targetContent: string, replacementContent: string) => Promise<{ success: boolean; error?: string }>
-  multiReplaceWorkspaceFileChunks: (
-    filePath: string,
-    replacements: AgentToolReplacementChunk[],
-  ) => Promise<{ success: boolean; replacedCount?: number; error?: string }>
   grepWorkspaceFiles: (dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean) => Promise<GrepSearchResult[]>
   searchWeb: (query: string, maxResults?: number) => Promise<{ success: boolean; results: { title: string; url: string; snippet: string }[]; error?: string }>
   fetchWebContent: (url: string, maxChars?: number) => Promise<{ success: boolean; content?: string; title?: string; error?: string }>
   downloadFile: (url: string, targetFilePath: string) => Promise<{ success: boolean; downloadedBytes?: number; error?: string }>
-  gitCommit: (commitMessage: string, workspaceRoot: string | undefined, filePaths: string[]) => Promise<{ success: boolean; output?: string; error?: string }>
   getGitStatusAndDiff?: (workspaceRoot?: string) => Promise<{ isGitRepo: boolean; statusLines: string[]; diffText: string }>
   initGitRepository?: (workspaceRoot?: string) => Promise<{ success: boolean; message: string }>
   inspectGuestOsEnvironment: () => Promise<GuestOsInfo>
@@ -684,7 +652,6 @@ export interface IElectronAPI {
   /** Per-model facts from Ollama's /api/tags: context length, capabilities, parameter size, quantization. */
   getOllamaModelMetrics: (host?: string) => Promise<Record<string, OllamaModelMetrics>>
   /** Bounded in-process HTTP counters; contains no URL, query, path or payload data. */
-  getHttpMetrics?: () => Promise<HttpMetricSnapshot[]>
   /** Checks for model updates against official registry using SHA256 manifest digests. */
   checkOllamaModelUpdates?: (host?: string) => Promise<Record<string, OllamaModelUpdateInfo>>
   openExternalUrl?: (url: string) => Promise<boolean>
@@ -736,13 +703,8 @@ export interface IElectronAPI {
   onAgentChangeMetrics?: (callback: (data: AgentChangeMetrics & AgentRunIdentity) => void) => () => void
   onWorkspaceFileDeleted?: (callback: (data: { filePath: string }) => void) => () => void
   onWorkspaceFileVersionChanged?: (callback: (data: AgentRunIdentity & { filePath: string; contentHash?: string; deleted?: boolean }) => void) => () => void
-  onIngestDocumentDeleted?: (callback: (data: { docId: string }) => void) => () => void
   onIngestStreamProgress?: (callback: (data: IngestionStreamProgressPayload) => void) => () => void
   onTranslateProgress?: (callback: (data: TranslateProgressPayload) => void) => () => void
-  benchmarkModel: (
-    modelName: string,
-    host?: string,
-  ) => Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }>
   listInstalledSkills: (workspaceRoot?: string) => Promise<SkillDefinition[]>
   listHubSources: () => Promise<SkillHubSource[]>
   addCustomHubSource: (input: CustomHubInput) => Promise<{ success: boolean; source?: SkillHubSource; error?: string }>

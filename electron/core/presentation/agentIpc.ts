@@ -9,6 +9,7 @@ import { planGenerationAppService } from '../application/planGenerationAppServic
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import { ollamaAppService } from '../application/ollamaAppService'
 import { aiDebugBundleService } from '../application/aiDebugBundleService'
+import { skillInstallApprovalService } from '../application/skillInstallApprovalService'
 import { logger } from '../../diagnostics'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AgentPlan, AgentRunIdentity, AppSettings, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
@@ -46,6 +47,10 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
 
   ipcMain.handle('agent:cancel-task', async (_, identity: AgentRunIdentity) => {
     return taskQueueAppService.cancelTask(identity)
+  })
+
+  ipcMain.on('agent:skill-install-response', (_event, payload: Partial<AgentRunIdentity> & { requestId?: string; approved?: boolean }) => {
+    skillInstallApprovalService.handleResponse(payload)
   })
 
   ipcMain.handle('agent:approval-response', async (_, identity: AgentRunIdentity, approved: boolean, approvedHunkIndices?: number[]) => {

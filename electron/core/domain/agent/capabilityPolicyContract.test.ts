@@ -17,7 +17,7 @@ const REQUEST = {
   limits: { maxBytes: 10_000_000, timeoutMs: 30_000 },
 }
 
-describe('CapabilityPolicyGateway contract', () => {
+describe('capability policy contract', () => {
   it('accepts an explicitly consented network download request', () => {
     expect(capabilityPolicyRequestSchema.safeParse(REQUEST).success).toBe(true)
   })

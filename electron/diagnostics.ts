@@ -5,6 +5,7 @@ import http from 'node:http'
 import { exec } from 'node:child_process'
 import { app } from 'electron'
 import { sanitizeLogMessage } from './logRedactor'
+import { DEFAULT_OLLAMA_HOST } from '../shared/domain/ollamaHost'
 
 export { sanitizeLogMessage } from './logRedactor'
 
@@ -282,7 +283,7 @@ function fetchJsonEndpoint(urlStr: string, timeoutMs = 4500): Promise<any> {
 
 let lastOllamaSignature: string | null = null
 
-export async function checkOllamaStatus(hostUrl = 'http://127.0.0.1:11434'): Promise<DiagnosticsData['ollama']> {
+export async function checkOllamaStatus(hostUrl = DEFAULT_OLLAMA_HOST): Promise<DiagnosticsData['ollama']> {
   const effectiveHost = hostUrl.replace('localhost', '127.0.0.1')
   const isLocal = effectiveHost.includes('127.0.0.1') || effectiveHost.includes('0.0.0.0') || effectiveHost.includes('localhost')
 
@@ -468,7 +469,7 @@ let lastOverallDiagnosticsSignature: string | null = null
 
 export async function runFullDiagnostics(
   sidecarStatus: DiagnosticsData['sidecar'] = { status: 'offline', error: 'Not checked' },
-  ollamaHost = 'http://127.0.0.1:11434',
+  ollamaHost = DEFAULT_OLLAMA_HOST,
 ): Promise<DiagnosticsData> {
   const [ollama, gpu] = await Promise.all([checkOllamaStatus(ollamaHost), detectNvidiaGpu()])
 

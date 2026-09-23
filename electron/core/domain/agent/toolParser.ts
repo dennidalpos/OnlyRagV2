@@ -1,5 +1,4 @@
 import { jsonrepair } from 'jsonrepair'
-import { logger } from '../../../diagnostics'
 import type { AgentToolCall } from './agentTypes'
 import { validateAndSanitize, normalizeToolName } from './toolSchemaValidator'
 
@@ -39,10 +38,8 @@ function sanitizeAndParseJson(raw: string): any {
     // Repair common model JSON errors.
     const repaired = jsonrepair(clean)
     return JSON.parse(repaired)
-  } catch (err: any) {
-    if (raw.trim().startsWith('{') || raw.trim().startsWith('[')) {
-      logger.log('WARN', 'ToolParser', `Sanitized JSON parse failed: ${err.message}`)
-    }
+  } catch {
+    // Unrepairable output: the caller reports "no tool call" to the model.
     return null
   }
 }
@@ -146,7 +143,6 @@ function extractToolCallFromText(cleanText: string, onRejection?: ToolCallReject
 
     const validation = validateAndSanitize(candidateCall)
     if (!validation.valid) {
-      logger.log('WARN', 'ToolParser', `Rejected ${toolName} call: ${validation.errors.join('; ')}`)
       onRejection?.({ toolName: String(toolName), errors: validation.errors })
       continue
     }

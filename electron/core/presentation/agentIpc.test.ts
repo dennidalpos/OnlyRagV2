@@ -10,6 +10,9 @@ vi.mock('electron', async (importOriginal) => ({
     handle: vi.fn((channel: string, handler: (...args: any[]) => any) => {
       handlers.set(channel, handler)
     }),
+    on: vi.fn((channel: string, handler: (...args: any[]) => any) => {
+      handlers.set(channel, handler)
+    }),
   },
 }))
 

@@ -4,6 +4,7 @@ import { buildToolSchemaCorrectionDirective } from '../domain/agent/ollamaToolSc
 import { rejectionAbortSummary } from '../domain/agent/toolRejectionEscalation'
 import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recordRecoveryFailure } from '../domain/agent/recoveryBudget'
 import { agentToolExecutorService } from './agentToolExecutorService'
+import { logger } from '../../diagnostics'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { handleAskTool } from './agentOrchestratorAskAutoHealing'
 import { handleFinishTool, handleLoopDetection } from './agentOrchestratorFinishAndLoopGuards'
@@ -114,7 +115,10 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
 /** Interprets one turn's raw LLM output: plan extraction, tool-call parsing (with the no-tool-call / malformed-call recovery paths), the finish/loop-detection/ask special cases (see agentOrchestratorFinishAndLoopGuards.ts and agentOrchestratorAskAutoHealing.ts), */
 export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Promise<ResponseInterpretationOutcome> {
   const rejections: ToolCallRejection[] = []
-  const parsedTool = parseAgentToolCall(ctx.streamedOutput, (rejection) => rejections.push(rejection))
+  const parsedTool = parseAgentToolCall(ctx.streamedOutput, (rejection) => {
+    logger.log('WARN', 'ToolParser', `Rejected ${rejection.toolName} call: ${rejection.errors.join('; ')}`)
+    rejections.push(rejection)
+  })
   if (!parsedTool) return handleMissingToolCall(ctx, rejections)
 
   ctx.state.noToolStreak = 0

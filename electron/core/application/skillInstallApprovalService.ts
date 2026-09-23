@@ -1,11 +1,9 @@
 import { BrowserWindow } from 'electron'
-import { secureIpcMain as ipcMain } from '../presentation/secureIpcMain'
 import { logger } from '../../diagnostics'
 import type { AgentRunIdentity } from '../../../shared/types'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 
 export const SKILL_INSTALL_REQUEST_CHANNEL = 'agent:skill-install-request'
-export const SKILL_INSTALL_RESPONSE_CHANNEL = 'agent:skill-install-response'
 
 /** Auto-install candidate submitted to the user when autoInstallHubSkills is 'prompt'. */
 export interface SkillInstallCandidate {
@@ -24,17 +22,12 @@ export class SkillInstallApprovalService {
     identity: Readonly<AgentRunIdentity>
     resolve: (approved: boolean) => void
   }>()
-  private isListenerRegistered = false
-
-  private ensureResponseListener(): void {
-    if (this.isListenerRegistered) return
-    ipcMain.on(SKILL_INSTALL_RESPONSE_CHANNEL, (_event, payload: Partial<AgentRunIdentity> & { requestId?: string; approved?: boolean }) => {
-      const pending = payload?.requestId ? this.pendingRequests.get(payload.requestId) : undefined
-      if (!pending || !payload?.requestId || !matchesAgentRunIdentity(pending.identity, payload)) return
-      this.pendingRequests.delete(payload.requestId)
-      pending.resolve(payload.approved === true)
-    })
-    this.isListenerRegistered = true
+  /** Settles a pending request; the renderer's answer arrives via the presentation layer (agentIpc). */
+  public handleResponse(payload: Partial<AgentRunIdentity> & { requestId?: string; approved?: boolean }): void {
+    const pending = payload?.requestId ? this.pendingRequests.get(payload.requestId) : undefined
+    if (!pending || !payload?.requestId || !matchesAgentRunIdentity(pending.identity, payload)) return
+    this.pendingRequests.delete(payload.requestId)
+    pending.resolve(payload.approved === true)
   }
 
   public async requestApproval(
@@ -43,7 +36,6 @@ export class SkillInstallApprovalService {
     identity: Readonly<AgentRunIdentity>
   ): Promise<boolean> {
     if (!targetWindow || targetWindow.isDestroyed()) return false
-    this.ensureResponseListener()
 
     const requestId = `skill-install-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 

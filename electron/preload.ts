@@ -19,19 +19,18 @@ const api: IElectronAPI = {
   cancelPullOllamaModel: () => ipcRenderer.invoke('ollama:cancel-pull'),
   deleteOllamaModel: (modelName: string, host?: string) => ipcRenderer.invoke('ollama:delete-model', modelName, host),
   installOrLaunchOllama: () => ipcRenderer.invoke('ollama:install-or-launch'),
-  getSidecarStatus: () => ipcRenderer.invoke('sidecar:status'),
   restartSidecar: () => ipcRenderer.invoke('sidecar:restart'),
   openFileDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke('dialog:open-file', options),
   openDirectoryDialog: (options?: { title?: string }) => ipcRenderer.invoke('dialog:open-directory', options),
   ingestFile: (filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string, numCtx?: number, taskId?: string, normalizationThink?: boolean) =>
     ipcRenderer.invoke('ingest:file', filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx, taskId, normalizationThink),
   updateIngestedDocument: (docId: string, markdownContent: string) => ipcRenderer.invoke('ingest:update', docId, markdownContent),
-  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number, think?: boolean) => ipcRenderer.invoke('ingest:translate-inplace', docId, sourceLang, targetLang, model, backupOriginal, targetDir, numCtx, think),
+  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, targetDir?: string, numCtx?: number, think?: boolean) => ipcRenderer.invoke('ingest:translate-inplace', docId, sourceLang, targetLang, model, targetDir, numCtx, think),
   getDocumentPagePreview: (docId: string, pageNumber: number) => ipcRenderer.invoke('ingest:page-preview', docId, pageNumber),
   getIngestedDocuments: () => ipcRenderer.invoke('ingest:list'),
   deleteIngestedDocument: (docId: string) => ipcRenderer.invoke('ingest:delete', docId),
-  searchVectorDb: (query: string, topK?: number, embeddingModel?: string, docIds?: string[]) =>
-    ipcRenderer.invoke('ingest:search', query, topK, embeddingModel, docIds),
+  searchVectorDb: (query: string, topK?: number, docIds?: string[]) =>
+    ipcRenderer.invoke('ingest:search', query, topK, docIds),
   exportDocument: (markdownContent: string, format: string, outputFolder?: string) => ipcRenderer.invoke('ingest:export', markdownContent, format, outputFolder),
   generateOllamaStream: async (model: string, prompt: string, onChunk: (chunk: string) => void, options?: OllamaGenerationOptions, host?: string, operationId?: string, onDone?: () => void) => {
     const streamId = operationId || crypto.randomUUID()
@@ -53,26 +52,20 @@ const api: IElectronAPI = {
   cancelOllamaStream: (operationId: string) => ipcRenderer.invoke('ollama:cancel-stream', operationId),
   getOllamaGenerationStatus: () => ipcRenderer.invoke('ollama:get-generation-status'),
   cancelTask: (taskId?: string) => ipcRenderer.invoke('task:cancel', taskId),
-  cleanTempResiduals: () => ipcRenderer.invoke('task:clean-residuals'),
   listWorkspaceFiles: (dirPath?: string) => ipcRenderer.invoke('workspace:list-files', dirPath),
   getStandaloneScratchWorkspace: () => ipcRenderer.invoke('workspace:get-standalone-scratch'),
   exportStandaloneScratchWorkspace: (destinationDirectory: string) => ipcRenderer.invoke('workspace:export-standalone-scratch', destinationDirectory),
   clearStandaloneScratchWorkspace: () => ipcRenderer.invoke('workspace:clear-standalone-scratch'),
-  getProjectMap: (dirPath: string) => ipcRenderer.invoke('workspace:get-project-map', dirPath),
   readWorkspaceFile: (filePath: string, startLine?: number, endLine?: number) => ipcRenderer.invoke('workspace:read-file', filePath, startLine, endLine),
   writeWorkspaceFile: (filePath: string, content: string, expectedContentHash?: string, workspaceRoot?: string) =>
     ipcRenderer.invoke('workspace:write-file', filePath, content, expectedContentHash, workspaceRoot),
   replaceWorkspaceFileChunk: (filePath: string, targetContent: string, replacementContent: string) =>
     ipcRenderer.invoke('workspace:replace-chunk', filePath, targetContent, replacementContent),
-  multiReplaceWorkspaceFileChunks: (filePath, replacements) =>
-    ipcRenderer.invoke('workspace:multi-replace-chunks', filePath, replacements),
   grepWorkspaceFiles: (dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean) =>
     ipcRenderer.invoke('workspace:grep-search', dirPath, query, isRegex, caseInsensitive),
   searchWeb: (query: string, maxResults?: number) => ipcRenderer.invoke('workspace:search-web', query, maxResults),
   fetchWebContent: (url: string, maxChars?: number) => ipcRenderer.invoke('workspace:fetch-web', url, maxChars),
   downloadFile: (url: string, targetFilePath: string) => ipcRenderer.invoke('workspace:download-file', url, targetFilePath),
-  gitCommit: (commitMessage: string, workspaceRoot: string | undefined, filePaths: string[]) =>
-    ipcRenderer.invoke('workspace:git-commit', commitMessage, workspaceRoot, filePaths),
   getGitStatusAndDiff: (workspaceRoot?: string) => ipcRenderer.invoke('workspace:get-git-status-and-diff', workspaceRoot),
   initGitRepository: (workspaceRoot?: string) => ipcRenderer.invoke('workspace:init-git', workspaceRoot),
   inspectGuestOsEnvironment: () => ipcRenderer.invoke('workspace:inspect-guest-os'),
@@ -85,7 +78,6 @@ const api: IElectronAPI = {
   checkDiskSpace: (models: string[]) => ipcRenderer.invoke('system:check-disk-space', models),
   testOllamaConnection: (host?: string) => ipcRenderer.invoke('ollama:test-connection', host),
   getOllamaModelMetrics: (host?: string) => ipcRenderer.invoke('ollama:get-model-metrics', host),
-  getHttpMetrics: () => ipcRenderer.invoke('diagnostics:get-http-metrics'),
   checkOllamaModelUpdates: (host?: string) => ipcRenderer.invoke('ollama:check-model-updates', host),
   openExternalUrl: (url: string) => ipcRenderer.invoke('system:open-external', url),
   openPath: (targetPath: string) => ipcRenderer.invoke('system:open-path', targetPath),
@@ -134,11 +126,9 @@ const api: IElectronAPI = {
   onAgentSkillsMatched: (callback) => subscribe('agent:skills-matched', callback),
   onWorkspaceFileDeleted: (callback) => subscribe('workspace:file-deleted', callback),
   onWorkspaceFileVersionChanged: (callback) => subscribe('workspace:file-version', callback),
-  onIngestDocumentDeleted: (callback) => subscribe('ingest:document-deleted', callback),
   onIngestStreamProgress: (callback) => subscribe('ingest:stream-progress', callback),
   onTranslateProgress: (callback) => subscribe('ingest:translate-progress', callback),
   onOllamaPullProgress: (callback) => subscribe('ollama:pull-progress', callback),
-  benchmarkModel: (modelName: string, host?: string) => ipcRenderer.invoke('ollama:benchmark-model', modelName, host),
   getRunningModels: (host?: string) => ipcRenderer.invoke('ollama:get-running-models', host),
   unloadModel: (modelName: string, host?: string) => ipcRenderer.invoke('ollama:unload-model', modelName, host),
   listInstalledSkills: (workspaceRoot?: string) => ipcRenderer.invoke('skills:list-installed', workspaceRoot),

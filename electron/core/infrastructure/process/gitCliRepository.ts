@@ -1,4 +1,4 @@
-import { execSync, execFileSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -198,9 +198,9 @@ export class GitCliRepository {
     }
   }
 
-  /** Runs `git <argsString>` in cwd, e.g. run(cwd, 'status --short', 10000). */
-  run(cwd: string, argsString: string, timeoutMs: number): string {
-    return execSync(`git ${argsString}`, { cwd, encoding: 'utf-8', timeout: timeoutMs })
+  /** Runs git with an argument vector (no shell), e.g. run(cwd, ['status', '--short'], 10000). */
+  run(cwd: string, args: readonly string[], timeoutMs: number): string {
+    return execFileSync('git', [...args], { cwd, encoding: 'utf-8', timeout: timeoutMs, stdio: ['pipe', 'pipe', 'pipe'] })
   }
 }
 

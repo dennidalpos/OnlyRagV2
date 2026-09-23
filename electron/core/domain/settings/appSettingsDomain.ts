@@ -1,26 +1,8 @@
 import type { AppSettings } from '../../../../shared/types'
 import { PROMPT_NODE_IDS, type PromptNodeId } from '../../../../shared/domain/agent/promptHierarchyRegistry'
-import { DEFAULT_AGENT_STEP_BUDGET, normalizeAgentStepBudget } from '../../../../shared/domain/agent/agentStepBudget'
+import { normalizeAgentStepBudget } from '../../../../shared/domain/agent/agentStepBudget'
+import { DEFAULT_APP_SETTINGS } from '../../../../shared/domain/settings/appSettingsDefaults'
 
-export const DEFAULT_APP_SETTINGS: AppSettings = {
-  defaultModel: '',
-  ocrEngine: 'native_cuda',
-  ollamaHost: 'http://127.0.0.1:11434',
-  ollamaMode: 'local',
-  language: 'it',
-  autoInstallHubSkills: 'disabled',
-  autoInstallMinScore: 8.0,
-  enableSkillRouter: false,
-  allowFileModifications: false,
-  allowTerminalExecution: false,
-  capabilityPolicyMode: 'offline-strict',
-  maxToolCallSteps: DEFAULT_AGENT_STEP_BUDGET,
-  enableCodingAgentDebugLog: false,
-  includeCodingAgentDebugPayloads: false,
-  codingAgentDebugRetentionFiles: 2,
-  modelThinkingPreferences: {},
-  hasCompletedInitialSetup: false,
-}
 
 export const MIN_MODEL_CONTEXT_LENGTH = 2048
 

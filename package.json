@@ -14,7 +14,6 @@
     "test": "vitest run",
     "test:fast": "vitest run --reporter=dot",
     "test:coverage": "vitest run --coverage --testTimeout=10000 --hookTimeout=10000 --reporter=dot",
-    "test:unit": "vitest run",
     "test:unit-only": "vitest run --reporter=dot electron/core/domain electron/core/application",
     "test:agent": "vitest run --reporter=dot electron/core/domain/agent",
     "test:e2e:electron": "npm run build && node ./scripts/e2e/agentReliability.mjs",
@@ -109,7 +108,7 @@
     "publish": null,
     "npmRebuild": false,
     "directories": {
-      "output": "dist"
+      "output": "release"
     },
     "files": [
       "dist/index.html",
@@ -124,7 +123,9 @@
           "**/*",
           "!**/__pycache__/**",
           "!**/*.pyc",
-          "!tests/**"
+          "!tests/**",
+          "!assets/fonts/**",
+          "!contracts/**"
         ]
       },
       {

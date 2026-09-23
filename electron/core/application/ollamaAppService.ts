@@ -6,6 +6,7 @@ import {
   type OllamaStructuredRequest,
   type OllamaStructuredResponse,
 } from '../infrastructure/http/ollamaHttpClient'
+import { normalizeOllamaHost } from '../../../shared/domain/ollamaHost'
 export type { OllamaModelMetrics, OllamaStructuredRequest, OllamaStructuredResponse }
 import { ollamaInstallerRepository } from '../infrastructure/process/ollamaInstallerRepository'
 import { ollamaModelUpdateAppService, type ModelUpdateCheckResult } from './ollamaModelUpdateAppService'
@@ -62,7 +63,7 @@ export class OllamaAppService {
 
   async getInstalledModels(host?: string): Promise<string[]> {
     try {
-      const status = await checkOllamaStatus(host || 'http://127.0.0.1:11434')
+      const status = await checkOllamaStatus(normalizeOllamaHost(host))
       return status.models || []
     } catch {
       return []
@@ -110,7 +111,7 @@ export class OllamaAppService {
   }
 
   async testConnection(host?: string): Promise<{ success: boolean; version?: string; modelsCount?: number; error?: string }> {
-    const targetHost = host?.trim() || 'http://127.0.0.1:11434'
+    const targetHost = normalizeOllamaHost(host)
     try {
       const status = await checkOllamaStatus(targetHost)
       if (status.status === 'online') {
@@ -129,10 +130,6 @@ export class OllamaAppService {
         error: err.message || 'Errore durante la connessione al server Ollama',
       }
     }
-  }
-
-  benchmarkModel(modelName: string, host?: string) {
-    return ollamaHttpClient.benchmarkModel(modelName, host)
   }
 }
 

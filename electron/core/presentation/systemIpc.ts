@@ -37,7 +37,4 @@ export function registerSystemIpcHandlers(winGetter: () => BrowserWindow | null)
     }
   })
 
-  ipcMain.handle('task:clean-residuals', async () => {
-    return await taskAppService.cleanTempResiduals()
-  })
 }

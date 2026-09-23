@@ -63,7 +63,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          ./scripts/lint_format.ps1 -Fast
+          # The Vitest suite runs once, in the coverage step below.
+          ./scripts/lint_format.ps1 -Fast -SkipTests
 
       - name: Run Coverage Gate (Fail-Fast)
         shell: pwsh

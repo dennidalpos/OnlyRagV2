@@ -9,8 +9,10 @@ import { logger } from '../../../diagnostics'
 import { validatePathSafety } from '../../domain/agent/contextFilter'
 import { MAX_DOWNLOAD_BYTES } from '../../domain/agent/ioLimits'
 import { httpMetrics } from './httpMetrics'
+import { isPrivateNetworkAddress, publicOnlyLookup } from './networkAddressPolicy'
 
 const MAX_DOWNLOAD_REDIRECTS = 3
+const MAX_FETCH_REDIRECTS = 5
 const BLOCKED_DOWNLOAD_MIME_TYPES = new Set([
   'application/x-msdownload',
   'application/x-msdos-program',
@@ -160,7 +162,8 @@ export class WebClient {
         return { safeUrl: null, error: `Forbidden protocol '${u.protocol}'. Only HTTP and HTTPS are permitted.` }
       }
 
-      const host = u.hostname.toLowerCase().trim()
+      // URL keeps IPv6 literals bracketed ("[::1]"), so compare the bare address.
+      const host = u.hostname.toLowerCase().trim().replace(/^\[|\]$/g, '')
 
       // Block known cloud metadata hostnames & IP
       if (
@@ -184,20 +187,10 @@ export class WebClient {
         return { safeUrl: null, error: 'Access to loopback/localhost addresses is forbidden (SSRF Protection).' }
       }
 
-      // Block IPv4 Link-Local (169.254.0.0/16) and RFC1918 Private ranges if raw IP is provided
-      const ipv4Match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
-      if (ipv4Match) {
-        const [, o1, o2] = ipv4Match.map(Number)
-        if (
-          o1 === 127 || // Loopback
-          o1 === 0 ||   // Current network
-          o1 === 10 ||  // Class A Private
-          (o1 === 172 && o2 >= 16 && o2 <= 31) || // Class B Private
-          (o1 === 192 && o2 === 168) ||           // Class C Private
-          (o1 === 169 && o2 === 254)              // Link-Local
-        ) {
-          return { safeUrl: null, error: `Access to private/local network IP range '${host}' is forbidden (SSRF Protection).` }
-        }
+      // IP literals (IPv4, IPv6, IPv4-mapped IPv6). Hostnames are checked again after DNS
+      // resolution by publicOnlyLookup, which every request below uses.
+      if (isPrivateNetworkAddress(host)) {
+        return { safeUrl: null, error: `Access to private/local network IP range '${host}' is forbidden (SSRF Protection).` }
       }
 
       return { safeUrl: u }
@@ -265,7 +258,12 @@ export class WebClient {
     }
   }
 
-  async fetchWebContent(urlStr: string, maxChars: number = 16000, signal?: AbortSignal): Promise<{ success: boolean; content?: string; rawHtml?: string; title?: string; error?: string }> {
+  async fetchWebContent(
+    urlStr: string,
+    maxChars: number = 16000,
+    signal?: AbortSignal,
+    redirectCount = 0,
+  ): Promise<{ success: boolean; content?: string; rawHtml?: string; title?: string; error?: string }> {
     if (signal?.aborted) return { success: false, error: 'Request cancelled by AbortSignal' }
     const urlCheck = this.validateUrlSafety(urlStr)
     if (!urlCheck.safeUrl) {
@@ -293,13 +291,18 @@ export class WebClient {
             'Accept-Language': 'it,en-US;q=0.9,en;q=0.8',
           },
           timeout: 15000,
+          lookup: publicOnlyLookup,
         },
         (res) => {
-          // Follow redirects up to 1 hop
-          if (res.statusCode && (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) && res.headers.location) {
+          // Each hop is re-validated by the recursive call; the hop count is bounded.
+          if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
             record(res.statusCode, 'none')
+            res.resume()
+            if (redirectCount >= MAX_FETCH_REDIRECTS) {
+              return resolve({ success: false, error: `Fetch exceeded ${MAX_FETCH_REDIRECTS} redirect hops.` })
+            }
             const redirectUrl = new URL(res.headers.location, targetUrl).toString()
-            return this.fetchWebContent(redirectUrl, maxChars, signal).then(resolve)
+            return this.fetchWebContent(redirectUrl, maxChars, signal, redirectCount + 1).then(resolve)
           }
 
           if (res.statusCode && res.statusCode >= 400) {
@@ -426,6 +429,7 @@ export class WebClient {
             'User-Agent': this.userAgent,
           },
           timeout: 60000,
+          lookup: publicOnlyLookup,
         },
         (res) => {
           if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {

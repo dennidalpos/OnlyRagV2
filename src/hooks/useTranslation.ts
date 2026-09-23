@@ -105,11 +105,9 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
 
   // Mirrors isTranslating into the cross-module task lock so the coding agent/ingestion module can block starting their own task while a translation is mid-flight (see globalTaskLock.ts).
   useEffect(() => {
-    if (isTranslating) {
-      acquireGlobalTaskLock('translation')
-      return () => releaseGlobalTaskLock('translation')
-    }
-    releaseGlobalTaskLock('translation')
+    if (!isTranslating) return
+    acquireGlobalTaskLock('translation')
+    return () => releaseGlobalTaskLock('translation')
   }, [isTranslating])
 
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0)
@@ -399,11 +397,9 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
 
   // Mirrors isTranslating into the cross-module task lock
   useEffect(() => {
-    if (isTranslating) {
-      acquireGlobalTaskLock('translation')
-      return () => releaseGlobalTaskLock('translation')
-    }
-    releaseGlobalTaskLock('translation')
+    if (!isTranslating) return
+    acquireGlobalTaskLock('translation')
+    return () => releaseGlobalTaskLock('translation')
   }, [isTranslating])
 
   const handleDocsUpdated = useCallback((docs: IngestedDocument[]) => {
@@ -465,7 +461,6 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
         sourceLang,
         targetLang,
         modelToUse,
-        false,
         targetDir,
         modelToUse ? resolveModelContextLength(
           modelToUse,

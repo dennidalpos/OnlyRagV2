@@ -2,9 +2,13 @@ import { app } from 'electron'
 import path from 'node:path'
 import http from 'node:http'
 import fs from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import { spawn, ChildProcess } from 'node:child_process'
 import { logger } from '../../../diagnostics'
 import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
+import { normalizeOllamaHost } from '../../../../shared/domain/ollamaHost'
+import { appSettingsRepository } from '../filesystem/appSettingsRepository'
+import { sidecarHttpClient } from '../http/sidecarHttpClient'
 import { matchesSidecarOwnership, parseListeningPidFromNetstat, type SidecarOwnershipMarker } from './orphanPortReclaim'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
@@ -69,6 +73,7 @@ export function migrateLegacyNestedSidecarData(userDataDir: string): LegacySidec
 }
 
 export class SidecarProcessManager {
+  private launchedOllamaHost: string | null = null
   private state: {
     status: 'online' | 'offline' | 'checking'
     engine?: string
@@ -343,9 +348,17 @@ export class SidecarProcessManager {
     const devSidecarDir = app.isPackaged ? path.join(process.resourcesPath, 'sidecar') : path.join(DEV_PROJECT_ROOT, 'sidecar')
     const parentSidecarDir = path.dirname(devSidecarDir)
 
+    // The sidecar calls Ollama itself (embeddings, vision OCR, translation), so it must use the configured host.
+    const ollamaHost = normalizeOllamaHost((await appSettingsRepository.loadSettings())?.ollamaHost)
+    this.launchedOllamaHost = ollamaHost
+    // Fresh per launch: only this process learns it, so no other local caller can drive the API.
+    const sidecarToken = randomBytes(32).toString('hex')
+    sidecarHttpClient.setAuthToken(sidecarToken)
     const envVars = {
       ...process.env,
       ONLYRAG_DATA_DIR: userDataDir,
+      ONLYRAG_SIDECAR_TOKEN: sidecarToken,
+      OLLAMA_BASE_URL: ollamaHost,
       PYTHONUNBUFFERED: '1',
       PYTHONPATH: `${devSidecarDir}${path.delimiter}${parentSidecarDir}${process.env.PYTHONPATH ? path.delimiter + process.env.PYTHONPATH : ''}`,
     }
@@ -486,6 +499,11 @@ export class SidecarProcessManager {
       sidecarProcess = null
       this.state = { status: 'offline' }
     }
+  }
+
+  /** Ollama host the running sidecar was started with; null when this session has not launched one. */
+  getLaunchedOllamaHost(): string | null {
+    return sidecarProcess ? this.launchedOllamaHost : null
   }
 
   async restartPythonSidecar(): Promise<boolean> {

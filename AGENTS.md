@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.7 · 2026-09-23` — Repository facts and verified commands.
+`v1.8 · 2026-09-23` — Repository facts and verified commands.
 
 ## Scope
 
@@ -13,13 +13,15 @@ Run from repository root in PowerShell. The E2E commands and static checks were 
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (255 files, 1982 tests) |
+| Fast suite | `npm run test:fast` (260 files, 2017 tests; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (140 tests) |
 | Electron Agent E2E | `npm run test:e2e:electron` (8 scenarios) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |
 | Cold-start network E2E | `npm run test:e2e:cold-start` (Main and Renderer first launch) |
 | Settings bootstrap E2E | `npm run test:e2e:settings-bootstrap` |
 | Bundle and viewport E2E | `npm run test:e2e:bundle-ux` (1024×700 and 1400×900) |
 | Static quality | `npm run quality:static` |
+| Installer | `npm run package:win` (output in `release/`; Vite owns and empties `dist/`) |
 | Full audit | `powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast` |
 | Targeted Vitest | `npx vitest run <path>` |
 | Format / types | `npm run format:check`; `npm run typecheck` |
@@ -29,12 +31,15 @@ Run from repository root in PowerShell. The E2E commands and static checks were 
 
 - `src/` (Renderer) and `electron/` (Main) import shared code only from `shared/`.
 - Main layers: `electron/core/{presentation,application,domain,infrastructure}`. Domain is pure; ports live in Domain, adapters in Infrastructure.
-- `electron/core/infrastructure/http/sidecarHttpClient.ts` centralizes HTTP I/O to `:8000`.
+- `electron/core/infrastructure/http/sidecarHttpClient.ts` centralizes HTTP I/O to `:8000` and sends the per-launch `X-OnlyRag-Token` that `sidecarProcessManager` passes to the Sidecar; only `/health` is exempt.
+- Ollama HTTP from Main goes through `electron/core/infrastructure/http/ollamaTransport.ts` (http or https per configured host); defaults live in `shared/domain/ollamaHost.ts` and `shared/domain/settings/appSettingsDefaults.ts`.
+- Sidecar vectors record their `embedding_model` per chunk; search embeds the query once per stored model.
 - Main Ollama generation uses `ollamaGenerationScheduler` at concurrency 1; model inventory uses `/api/tags`.
 
 ## Repository specifics
 
 - Sidecar lifecycle is owned by `sidecarProcessManager`; on Windows orphan port reclaim requires exact process identity from `sidecar-ownership.json`.
 - Keep UTF-8 without BOM and avoid CRLF/LF-only diffs.
+- A test outside the `dom` project that needs a DOM declares `// @vitest-environment happy-dom` on its first line.
 - `PROJECT_STATUS.json` is the canonical backlog; retain its `todos` string-array format and remove completed entries.
 - Work directly on `master`; do not create branches. Commit only when explicitly requested; push only when explicitly requested.

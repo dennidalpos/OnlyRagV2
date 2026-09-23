@@ -1,5 +1,5 @@
 
-import { countTokens } from 'gpt-tokenizer'
+import { countPromptTokens } from '../../shared/domain/agent/contextWindowCalculator'
 
 const MAX_CACHE_ENTRIES = 1000
 const tokenCountCache = new Map<string, number>()
@@ -13,13 +13,7 @@ export function estimateTokenCount(text: string | undefined | null): number {
   const cached = tokenCountCache.get(text)
   if (cached !== undefined) return cached
 
-  let count: number
-  try {
-    count = countTokens(text)
-  } catch {
-    // Pathological input (e.g. an unpaired surrogate) — fall back to a conservative estimate.
-    count = Math.ceil(text.length / 4)
-  }
+  const count = countPromptTokens(text)
 
   if (tokenCountCache.size >= MAX_CACHE_ENTRIES) {
     const oldestKey = tokenCountCache.keys().next().value

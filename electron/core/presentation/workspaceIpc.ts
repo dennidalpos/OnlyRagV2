@@ -6,13 +6,10 @@ import {
   workspaceFetchWebPayloadSchema,
   workspaceGrepSearchPayloadSchema,
   workspaceListFilesPayloadSchema,
-  workspaceMultiReplaceChunksPayloadSchema,
-  workspaceProjectMapPayloadSchema,
   workspaceReadFilePayloadSchema,
   workspaceReplaceChunkPayloadSchema,
   workspaceSearchWebPayloadSchema,
   workspaceWriteFilePayloadSchema,
-  workspaceGitCommitPayloadSchema,
 } from '../domain/workspaceContract'
 
 export function registerWorkspaceIpcHandlers() {
@@ -33,10 +30,6 @@ export function registerWorkspaceIpcHandlers() {
     return workspaceAppService.listFiles(payload.targetPath)
   })
 
-  ipcMain.handle('workspace:get-project-map', async (_event: unknown, dirPath: string) => {
-    const payload = workspaceProjectMapPayloadSchema.parse({ dirPath })
-    return workspaceAppService.getProjectMap(payload.dirPath)
-  })
 
   ipcMain.handle('workspace:read-file', async (_event: unknown, filePath: string, startLine?: number, endLine?: number) => {
     const payload = workspaceReadFilePayloadSchema.parse({ filePath, startLine, endLine })
@@ -53,10 +46,6 @@ export function registerWorkspaceIpcHandlers() {
     return workspaceAppService.replaceChunk(payload.filePath, payload.targetContent, payload.replacementContent)
   })
 
-  ipcMain.handle('workspace:multi-replace-chunks', async (_event: unknown, filePath: string, replacements: { targetContent: string; replacementContent: string }[]) => {
-    const payload = workspaceMultiReplaceChunksPayloadSchema.parse({ filePath, replacements })
-    return workspaceAppService.multiReplaceChunks(payload.filePath, payload.replacements)
-  })
 
   ipcMain.handle('workspace:grep-search', async (_event: unknown, dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean) => {
     const payload = workspaceGrepSearchPayloadSchema.parse({ dirPath, query, isRegex, caseInsensitive })
@@ -82,10 +71,6 @@ export function registerWorkspaceIpcHandlers() {
     return workspaceAppService.downloadFile(payload.url, payload.targetFilePath, payload.workspaceRoot)
   })
 
-  ipcMain.handle('workspace:git-commit', async (_event: unknown, commitMessage: string, workspaceRoot: string | undefined, filePaths: string[]) => {
-    const payload = workspaceGitCommitPayloadSchema.parse({ commitMessage, workspaceRoot, filePaths })
-    return workspaceAppService.gitCommit(payload.workspaceRoot, payload.commitMessage, payload.filePaths)
-  })
 
   ipcMain.handle('workspace:get-git-status-and-diff', async (_event: unknown, workspaceRoot?: string) => {
     return workspaceAppService.getGitStatusAndDiff(workspaceRoot)

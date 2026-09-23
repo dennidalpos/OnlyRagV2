@@ -3,6 +3,7 @@ import { logger } from '../../diagnostics'
 import { isProtectedSystemDirectory } from '../domain/agent/contextFilter'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AppSettings } from '../../../shared/types'
+import { getDefaultAppSettings } from '../domain/settings/appSettingsDomain'
 import { standaloneScratchWorkspace } from '../infrastructure/filesystem/standaloneScratchWorkspace'
 
 /** Resolves the effective workspace directory for a run: 1. */
@@ -37,18 +38,18 @@ export function resolveWorkspacePath(
   return null
 }
 
-/** Fallback settings used only when the caller (renderer) didn't supply any. */
+/**
+ * Fallback settings used only when the caller (renderer) didn't supply any. Derived from the
+ * canonical defaults so the fallback is fail-closed: no terminal, no file writes, offline-strict.
+ */
 export function buildDefaultAgentSettings(): AppSettings {
   return {
+    ...getDefaultAppSettings(),
     defaultModel: 'llama3.2',
-    ocrEngine: 'native_cuda',
-    ollamaHost: '',
     codingModel: 'llama3.2',
     translationModel: 'llama3.2',
     visionModel: 'llama3.2-vision',
     embeddingModel: 'nomic-embed-text',
-    allowTerminalExecution: true,
-    allowFileModifications: true,
     customPromptOverrides: {},
   }
 }

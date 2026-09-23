@@ -1,5 +1,3 @@
-
-
 import http from 'node:http'
 import { logger } from '../../../diagnostics'
 import type { SlmLogDiagnosticReport } from '../../../../shared/types'
@@ -14,13 +12,13 @@ export interface SidecarIngestStreamPayload {
   normalization_model?: string
   num_ctx?: number
   normalization_think?: boolean
+  embedding_model?: string
 }
 
 export interface SidecarTranslateStreamPayload {
   source_lang: string
   target_lang: string
   model?: string
-  backup_original?: boolean
   target_dir?: string
   num_ctx?: number
   think?: boolean
@@ -49,693 +47,335 @@ export interface SidecarPagePreviewResult {
   mimeType: string
 }
 
-export class SidecarHttpClient {
-  private baseHost: string = 'http://127.0.0.1:8000'
-  private httpAgent: http.Agent
+type Envelope<T> = { success: true; data: T } | { success: false; error: string }
 
-  constructor(baseHost: string = 'http://127.0.0.1:8000') {
+interface SendOptions {
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  path: string
+  body?: unknown
+  timeoutMs: number
+  /** Timeout message; defaults to "<path> timed out after <n>ms". */
+  timeoutMessage?: string
+  /** NDJSON mode: called for every complete line; the unterminated tail is returned as `body`. */
+  onLine?: (line: string) => void
+  onRequest?: (req: http.ClientRequest) => void
+}
+
+interface SendResult {
+  status: number
+  body: string
+}
+
+const DEFAULT_BASE_HOST = 'http://127.0.0.1:8000'
+const STREAM_TIMEOUT_MS = 600_000
+/** The query embedding may wait for a cold embedding model to load (sidecar read timeout: 60s). */
+const VECTOR_SEARCH_TIMEOUT_MS = 65_000
+
+/** FastAPI's `detail` (or an `error` field) from an error body, if it carries one. */
+function parseDetail(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body.trim()) as { detail?: unknown; error?: unknown }
+    if (typeof parsed.detail === 'string') return parsed.detail
+    if (parsed.detail !== undefined) return JSON.stringify(parsed.detail)
+    return typeof parsed.error === 'string' ? parsed.error : null
+  } catch {
+    return null
+  }
+}
+
+function errorDetail(status: number, body: string, fallback = `Sidecar error HTTP ${status}`): string {
+  const detail = parseDetail(body)
+  if (detail) return detail
+  return body.trim() ? `${fallback}: ${body.trim().slice(0, 200)}` : fallback
+}
+
+export class SidecarHttpClient {
+  private baseHost: string
+  private authToken = ''
+  private readonly httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
+
+  constructor(baseHost: string = DEFAULT_BASE_HOST) {
     this.baseHost = baseHost
-    this.httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
   }
 
   setBaseHost(host?: string) {
-    if (host && host.trim()) {
-      const h = host.trim()
-      this.baseHost = h.startsWith('http') ? h : `http://${h}`
-    } else {
-      this.baseHost = 'http://127.0.0.1:8000'
-    }
+    const h = host?.trim()
+    this.baseHost = h ? (h.startsWith('http') ? h : `http://${h}`) : DEFAULT_BASE_HOST
   }
 
   getBaseHost(): string {
     return this.baseHost
   }
 
-  private resolveUrl(urlPath: string): { hostname: string; port: number; path: string } {
-    const url = new URL(urlPath, this.baseHost)
-    return {
-      hostname: url.hostname,
-      port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80),
-      path: `${url.pathname}${url.search}`,
+  /** Token the sidecar was launched with; sent on every request (the sidecar exempts only /health). */
+  setAuthToken(token: string) {
+    this.authToken = token
+  }
+
+  /** Single transport for every sidecar call: resolves on any HTTP status, rejects on network error or timeout. */
+  private send(options: SendOptions): Promise<SendResult> {
+    const url = new URL(options.path, this.baseHost)
+    const payload = options.body === undefined ? undefined : JSON.stringify(options.body)
+    const headers: http.OutgoingHttpHeaders = payload === undefined
+      ? { 'Content-Length': 0 }
+      : { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+    if (this.authToken) headers['X-OnlyRag-Token'] = this.authToken
+
+    return new Promise((resolve, reject) => {
+      const req = http.request(
+        {
+          hostname: url.hostname,
+          port: Number(url.port) || 80,
+          path: `${url.pathname}${url.search}`,
+          method: options.method,
+          agent: this.httpAgent,
+          headers,
+        },
+        (res) => {
+          let buffer = ''
+          res.on('data', (chunk: Buffer) => {
+            buffer += chunk.toString('utf-8')
+            if (!options.onLine) return
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ''
+            for (const line of lines) {
+              if (line.trim()) options.onLine(line.trim())
+            }
+          })
+          res.on('end', () => resolve({ status: res.statusCode || 0, body: buffer }))
+          res.on('error', reject)
+        }
+      )
+      req.on('error', reject)
+      req.setTimeout(options.timeoutMs, () => {
+        req.destroy()
+        reject(new Error(options.timeoutMessage || `${options.path} timed out after ${options.timeoutMs}ms`))
+      })
+      options.onRequest?.(req)
+      if (payload !== undefined) req.write(payload)
+      req.end()
+    })
+  }
+
+  /** POSTs to an NDJSON progress endpoint and resolves with the `done` event's data. */
+  private async streamNdjson(
+    path: string,
+    body: unknown,
+    label: string,
+    onProgress: (event: any) => void,
+    onRequest?: (req: http.ClientRequest) => void
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    let finalResult: any = null
+    let streamError: string | null = null
+    const handleLine = (line: string) => {
+      let event: any
+      try {
+        event = JSON.parse(line)
+      } catch {
+        return
+      }
+      onProgress(event)
+      if (event.type === 'done' && event.data) finalResult = event.data
+      if (event.type === 'error') streamError = String(event.error || event.step || `${label} failed`)
+    }
+
+    try {
+      const res = await this.send({
+        method: 'POST',
+        path,
+        body,
+        timeoutMs: STREAM_TIMEOUT_MS,
+        timeoutMessage: `${label} timed out (10 minute limit)`,
+        onLine: handleLine,
+        onRequest,
+      })
+      if (res.status !== 200) {
+        const detail = errorDetail(res.status, res.body)
+        logger.log('ERROR', 'SidecarClient', `${label} sidecar error: ${detail}`)
+        return { success: false, error: detail }
+      }
+      if (res.body.trim()) handleLine(res.body.trim())
+      if (finalResult) return { success: true, data: finalResult }
+      if (streamError) return { success: false, error: streamError }
+      logger.log('WARN', 'SidecarClient', `${label} stream ended without a done event`)
+      return { success: false, error: `${label} stream terminated without completion confirmation` }
+    } catch (err: any) {
+      logger.log('ERROR', 'SidecarClient', `${label} HTTP error: ${err.message}`)
+      return { success: false, error: err.message }
     }
   }
 
   private notifyTaskCancellation(taskId: string): void {
-    const urlOpts = this.resolveUrl(`/tasks/cancel?task_id=${encodeURIComponent(taskId)}`)
-    const req = http.request({
-      hostname: urlOpts.hostname,
-      port: urlOpts.port,
-      path: urlOpts.path,
-      method: 'POST',
-      agent: this.httpAgent,
-      headers: { 'Content-Length': 0 },
-    })
-    req.on('error', (err) => logger.log('WARN', 'SidecarClient', `Cancellation relay failed: ${err.message}`))
-    req.end()
+    this.send({ method: 'POST', path: `/tasks/cancel?task_id=${encodeURIComponent(taskId)}`, timeoutMs: 5000 })
+      .catch((err) => logger.log('WARN', 'SidecarClient', `Cancellation relay failed: ${err.message}`))
   }
 
-  /**
-   * Health / Status probe of the sidecar process.
-   */
-  getStatus(timeoutMs = 3000): Promise<{ status: string; [key: string]: any }> {
-    const urlOpts = this.resolveUrl('/health')
-    return new Promise((resolve) => {
-      let settled = false
-      const finish = (status: { status: string; [key: string]: any }) => {
-        if (settled) return
-        settled = true
-        resolve(status)
+  /** Health / status probe of the sidecar process. */
+  async getStatus(timeoutMs = 3000): Promise<{ status: string; [key: string]: any }> {
+    try {
+      const res = await this.send({
+        method: 'GET',
+        path: '/health',
+        timeoutMs,
+        timeoutMessage: `Health probe timed out after ${timeoutMs}ms`,
+      })
+      if (res.status !== 200) return { status: 'offline', error: `HTTP ${res.status || 'unknown'}` }
+      let data: ReturnType<typeof parseSidecarHealthResponse> = null
+      try {
+        data = parseSidecarHealthResponse(JSON.parse(res.body))
+      } catch (err: any) {
+        logger.log('WARN', 'SidecarClient', `Failed to parse /health JSON response: ${err.message}`)
       }
-      const req = http.get(
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          agent: this.httpAgent,
-          timeout: timeoutMs,
-        },
-        (res) => {
-          let raw = ''
-          res.on('data', (chunk) => { raw += chunk })
-          res.on('end', () => {
-            if (res.statusCode !== 200) {
-              finish({ status: 'offline', error: `HTTP ${res.statusCode || 'unknown'}` })
-              return
-            }
-            try {
-              const data = parseSidecarHealthResponse(JSON.parse(raw))
-              if (!data) {
-                finish({ status: 'offline', error: 'Malformed /health response' })
-                return
-              }
-              finish({
-                status: data.status,
-                engine: data.engine,
-                version: data.version,
-                documentsCount: data.documents_count,
-                chunksCount: data.chunks_count,
-              })
-            } catch (err: any) {
-              logger.log('WARN', 'SidecarClient', `Failed to parse /health JSON response: ${err.message}`)
-              finish({ status: 'offline', error: 'Malformed /health response' })
-            }
-          })
-        }
-      )
-      req.on('error', (err) => {
-        finish({ status: 'offline', error: err.message })
-      })
-      req.setTimeout(timeoutMs, () => {
-        finish({ status: 'offline', error: `Health probe timed out after ${timeoutMs}ms` })
-        req.destroy()
-      })
-    })
+      if (!data) return { status: 'offline', error: 'Malformed /health response' }
+      return {
+        status: data.status,
+        engine: data.engine,
+        version: data.version,
+        documentsCount: data.documents_count,
+        chunksCount: data.chunks_count,
+      }
+    } catch (err: any) {
+      return { status: 'offline', error: err.message }
+    }
   }
 
-  /**
-   * Streaming file ingestion with real-time SSE progress events.
-   */
+  /** Streaming file ingestion with NDJSON progress events. */
   ingestFileStream(
     payload: SidecarIngestStreamPayload,
     onProgress: (event: any) => void,
     onCancelRegister?: (cancelFn: () => void) => void
   ): Promise<{ success: boolean; data?: any; error?: string }> {
-    const urlOpts = this.resolveUrl('/ingest-path-stream')
-    const postData = JSON.stringify(payload)
-
-    return new Promise((resolve) => {
-      const req = http.request(
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          method: 'POST',
-          agent: this.httpAgent,
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-          },
-        },
-        (res) => {
-          let buffer = ''
-          let finalResult: any = null
-
-          res.on('data', (chunk) => {
-            buffer += chunk.toString('utf-8')
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-
-            for (const line of lines) {
-              const trimmed = line.trim()
-              if (!trimmed) continue
-              try {
-                const event = JSON.parse(trimmed)
-                onProgress(event)
-                if (event.type === 'done' && event.data) {
-                  finalResult = event.data
-                }
-              } catch {
-                // ignore partial chunk parse errors
-              }
-            }
-          })
-
-          res.on('end', () => {
-            if (res.statusCode === 200) {
-              if (buffer.trim()) {
-                try {
-                  const event = JSON.parse(buffer.trim())
-                  if (event.type === 'done' && event.data) {
-                    finalResult = event.data
-                  }
-                } catch (err: any) {
-                  logger.log('DEBUG', 'SidecarClient', `Trailing buffer was not SSE JSON: ${err?.message}`)
-                }
-              }
-
-              if (finalResult) {
-                resolve({ success: true, data: finalResult })
-              } else {
-                logger.log('WARN', 'SidecarClient', 'Stream ended without explicit done event')
-                resolve({ success: false, error: 'Ingestion stream terminated without completion confirmation' })
-              }
-            } else {
-              let errorDetail = `Sidecar error HTTP ${res.statusCode}`
-              if (buffer.trim()) {
-                try {
-                  const parsed = JSON.parse(buffer.trim())
-                  if (parsed.detail) {
-                    errorDetail = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail)
-                  } else if (parsed.error) {
-                    errorDetail = parsed.error
-                  }
-                } catch {
-                  errorDetail = `${errorDetail}: ${buffer.trim().slice(0, 200)}`
-                }
-              }
-              logger.log('ERROR', 'SidecarClient', `Sidecar streaming error: ${errorDetail}`)
-              resolve({ success: false, error: errorDetail })
-            }
-          })
-        }
-      )
-
-      if (onCancelRegister) {
-        onCancelRegister(() => {
-          try {
-            this.notifyTaskCancellation(payload.task_id)
-            req.destroy()
-          } catch (cancelErr: any) {
-            logger.log('WARN', 'SidecarClient', `Task cancel error: ${cancelErr.message}`)
-          }
-        })
-      }
-
-      req.on('error', (err) => {
-        logger.log('ERROR', 'SidecarClient', `Ingestion HTTP error: ${err.message}`)
-        resolve({ success: false, error: err.message })
-      })
-
-      req.setTimeout(600_000, () => {
+    return this.streamNdjson('/ingest-path-stream', payload, 'Ingestion', onProgress, (req) => {
+      onCancelRegister?.(() => {
+        this.notifyTaskCancellation(payload.task_id)
         req.destroy()
-        logger.log('ERROR', 'SidecarClient', 'Ingestion timed out (10 minute limit)')
-        resolve({ success: false, error: 'Ingestion timed out (10 minute limit)' })
       })
-
-      req.write(postData)
-      req.end()
     })
   }
 
-  /**
-   * Update markdown content and re-index a document.
-   */
-  updateDocument(docId: string, markdownContent: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    const urlOpts = this.resolveUrl(`/documents/${encodeURIComponent(docId)}`)
-    const postData = JSON.stringify({ markdown_content: markdownContent })
-
-    return new Promise((resolve) => {
-      const req = http.request(
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          method: 'PUT',
-          agent: this.httpAgent,
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-          },
-        },
-        (res) => {
-          let raw = ''
-          res.on('data', (chunk) => { raw += chunk })
-          res.on('end', () => {
-            if (res.statusCode === 200) {
-              try {
-                const data = JSON.parse(raw)
-                resolve({ success: true, data })
-              } catch (parseErr: any) {
-                logger.log('ERROR', 'SidecarClient', `Failed parsing update response: ${parseErr.message}`)
-                resolve({ success: false, error: 'Failed parsing response from sidecar' })
-              }
-            } else {
-              let detail = `Error HTTP ${res.statusCode}`
-              try {
-                const parsed = JSON.parse(raw)
-                if (parsed.detail) detail = parsed.detail
-              } catch (err: any) {
-                logger.log('DEBUG', 'SidecarClient', `Sidecar error response was not JSON: ${err?.message}`)
-              }
-              resolve({ success: false, error: detail })
-            }
-          })
-        }
-      )
-
-      req.on('error', (err) => {
-        logger.log('ERROR', 'SidecarClient', `Update document HTTP error: ${err.message}`)
-        resolve({ success: false, error: err.message })
-      })
-
-      req.setTimeout(60_000, () => {
-        req.destroy()
-        logger.log('WARN', 'SidecarClient', 'Document update timed out (60s)')
-        resolve({ success: false, error: 'Document update timed out' })
-      })
-
-      req.write(postData)
-      req.end()
-    })
-  }
-
-  /**
-   * Streaming document translation in-place with real-time SSE progress events.
-   */
+  /** Streaming in-place document translation with NDJSON progress events. */
   translateDocumentInplaceStream(
     docId: string,
     payload: SidecarTranslateStreamPayload,
     onProgress: (event: any) => void
   ): Promise<{ success: boolean; data?: any; error?: string }> {
-    const urlOpts = this.resolveUrl(`/documents/${encodeURIComponent(docId)}/translate-inplace-stream`)
-    const postData = JSON.stringify(payload)
-
-    return new Promise((resolve) => {
-      const req = http.request(
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          method: 'POST',
-          agent: this.httpAgent,
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-          },
-        },
-        (res) => {
-          let buffer = ''
-          let finalResult: any = null
-
-          res.on('data', (chunk) => {
-            buffer += chunk.toString('utf-8')
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-
-            for (const line of lines) {
-              const trimmed = line.trim()
-              if (!trimmed) continue
-              try {
-                const event = JSON.parse(trimmed)
-                onProgress(event)
-                if (event.type === 'done' && event.data) {
-                  finalResult = event.data
-                }
-              } catch {
-                // ignore partial JSON parse errors
-              }
-            }
-          })
-
-          res.on('end', () => {
-            if (res.statusCode === 200) {
-              if (buffer.trim()) {
-                try {
-                  const event = JSON.parse(buffer.trim())
-                  if (event.type === 'done' && event.data) {
-                    finalResult = event.data
-                  }
-                } catch (err: any) {
-                  logger.log('DEBUG', 'SidecarClient', `Trailing translate buffer was not JSON: ${err?.message}`)
-                }
-              }
-
-              if (finalResult) {
-                resolve({ success: true, data: finalResult })
-              } else {
-                logger.log('WARN', 'SidecarClient', 'Translation stream ended without explicit done event')
-                resolve({ success: false, error: 'Translation stream terminated unexpectedly' })
-              }
-            } else {
-              let errorDetail = `Sidecar error HTTP ${res.statusCode}`
-              if (buffer.trim()) {
-                try {
-                  const parsed = JSON.parse(buffer.trim())
-                  if (parsed.detail) {
-                    errorDetail = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail)
-                  } else if (parsed.error) {
-                    errorDetail = parsed.error
-                  }
-                } catch {
-                  errorDetail = `${errorDetail}: ${buffer.trim().slice(0, 200)}`
-                }
-              }
-              logger.log('ERROR', 'SidecarClient', `Translation sidecar error: ${errorDetail}`)
-              resolve({ success: false, error: errorDetail })
-            }
-          })
-        }
-      )
-
-      req.on('error', (err) => {
-        logger.log('ERROR', 'SidecarClient', `Translate in place HTTP error: ${err.message}`)
-        resolve({ success: false, error: err.message })
-      })
-
-      req.setTimeout(600_000, () => {
-        req.destroy()
-        logger.log('WARN', 'SidecarClient', 'Translate in place timed out (10 min)')
-        resolve({ success: false, error: 'Translation timed out' })
-      })
-
-      req.write(postData)
-      req.end()
-    })
+    return this.streamNdjson(`/documents/${encodeURIComponent(docId)}/translate-inplace-stream`, payload, 'Translation', onProgress)
   }
 
-  /**
-   * Get pre-rendered bitmap preview of a specific document page.
-   */
-  getDocumentPagePreview(docId: string, pageNumber: number): Promise<SidecarPagePreviewResult | null> {
+  /** Replaces a document's markdown and re-indexes it. */
+  async updateDocument(
+    docId: string,
+    markdownContent: string,
+    embeddingModel?: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const result = await this.requestJson<any>(
+      'PUT',
+      `/documents/${encodeURIComponent(docId)}`,
+      { markdown_content: markdownContent, embedding_model: embeddingModel || undefined },
+      60_000
+    )
+    return result.success ? result : { success: false, error: result.error }
+  }
+
+  /** Pre-rendered bitmap preview of one document page, or null when unavailable. */
+  async getDocumentPagePreview(docId: string, pageNumber: number): Promise<SidecarPagePreviewResult | null> {
     const page = Math.max(1, Number(pageNumber) || 1)
-    const urlOpts = this.resolveUrl(`/documents/${encodeURIComponent(docId)}/page-preview/${page}`)
-
-    return new Promise((resolve) => {
-      const req = http.get(
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          agent: this.httpAgent,
-          timeout: 5000,
-        },
-        (res) => {
-          let raw = ''
-          res.on('data', (chunk) => { raw += chunk })
-          res.on('end', () => {
-            if (res.statusCode === 200) {
-              try {
-                const data = JSON.parse(raw)
-                resolve({
-                  docId: data.doc_id,
-                  pageNumber: data.page_number,
-                  totalPages: data.total_pages,
-                  imageBase64: data.image_base64,
-                  mimeType: data.mime_type || 'image/png',
-                })
-              } catch (parseErr: any) {
-                logger.log('WARN', 'SidecarClient', `Failed parsing page preview JSON for ${docId}: ${parseErr.message}`)
-                resolve(null)
-              }
-            } else {
-              logger.log('DEBUG', 'SidecarClient', `Page preview HTTP ${res.statusCode} for doc ${docId} page ${page}`)
-              resolve(null)
-            }
-          })
-        }
-      )
-
-      req.on('error', (err) => {
-        logger.log('WARN', 'SidecarClient', `Failed page preview request for ${docId}: ${err.message}`)
-        resolve(null)
-      })
-
-      req.setTimeout(5000, () => {
-        req.destroy()
-        logger.log('WARN', 'SidecarClient', `Page preview request timed out (5s) for ${docId}`)
-        resolve(null)
-      })
-    })
-  }
-
-  /**
-   * Lists all indexed documents. Resolves null when unreachable so callers can distinguish
-   * network failure from an empty library.
-   */
-  listDocuments(): Promise<SidecarDocumentRecord[] | null> {
-    const urlOpts = this.resolveUrl('/documents')
-    return new Promise((resolve) => {
-      const req = http.get(
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          agent: this.httpAgent,
-          timeout: 5000,
-        },
-        (res) => {
-          let raw = ''
-          res.on('data', (chunk) => { raw += chunk })
-          res.on('end', () => {
-            try {
-              const data = JSON.parse(raw)
-              resolve(data)
-            } catch (parseErr: any) {
-              logger.log('ERROR', 'SidecarClient', `Failed parsing /documents list: ${parseErr.message}`)
-              resolve(null)
-            }
-          })
-        }
-      )
-
-      req.on('error', (err: any) => {
-        if (err?.message && !err.message.includes('ECONNREFUSED')) {
-          logger.log('WARN', 'SidecarClient', `Failed requesting /documents: ${err.message}`)
-        }
-        resolve(null)
-      })
-
-      req.setTimeout(5000, () => {
-        req.destroy()
-        logger.log('WARN', 'SidecarClient', 'Listing documents timed out (5s)')
-        resolve(null)
-      })
-    })
-  }
-
-  /**
-   * Deletes a document and all its embedded chunks from LanceDB.
-   */
-  deleteDocument(docId: string): Promise<{ success: boolean; error?: string }> {
-    const urlOpts = this.resolveUrl(`/documents/${encodeURIComponent(docId)}`)
-    return new Promise((resolve) => {
-      const req = http.request(
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          method: 'DELETE',
-          agent: this.httpAgent,
-          timeout: 5000,
-        },
-        (res) => {
-          let raw = ''
-          res.on('data', (chunk) => { raw += chunk })
-          res.on('end', () => {
-            if (res.statusCode === 200) {
-              resolve({ success: true })
-              return
-            }
-            let detail = ''
-            try {
-              const parsed = JSON.parse(raw) as { detail?: unknown; error?: unknown }
-              detail = typeof parsed.detail === 'string' ? parsed.detail : typeof parsed.error === 'string' ? parsed.error : ''
-            } catch {}
-            resolve({
-              success: false,
-              error: detail || `Il Sidecar ha rifiutato l'eliminazione (HTTP ${res.statusCode || 'sconosciuto'}).`,
-            })
-          })
-        }
-      )
-
-      req.on('error', (err) => {
-        logger.log('ERROR', 'SidecarClient', `Failed deleting document ${docId}: ${err.message}`)
-        resolve({ success: false, error: `Sidecar non raggiungibile: ${err.message}` })
-      })
-
-      req.setTimeout(5000, () => {
-        req.destroy()
-        logger.log('WARN', 'SidecarClient', `Deleting document ${docId} timed out`)
-        resolve({ success: false, error: 'Eliminazione scaduta dopo 5 secondi. Verifica il Sidecar e riprova.' })
-      })
-
-      req.end()
-    })
-  }
-
-  /**
-   * Hybrid / Dense vector search over indexed chunks.
-   */
-  searchVectorDb(query: string, topK: number = 5, embeddingModel?: string, docIds?: string[]): Promise<any[]> {
-    if (typeof query !== 'string' || !query.trim()) return Promise.resolve([])
-    const payload: Record<string, any> = {
-      query,
-      top_k: topK,
-      embedding_model: embeddingModel || 'nomic-embed-text',
+    const result = await this.requestJson<any>('GET', `/documents/${encodeURIComponent(docId)}/page-preview/${page}`, undefined, 5000)
+    if (!result.success) {
+      logger.log('DEBUG', 'SidecarClient', `Page preview unavailable for doc ${docId} page ${page}: ${result.error}`)
+      return null
     }
-    if (docIds && docIds.length > 0) {
-      payload.doc_ids = docIds
+    const data = result.data
+    return {
+      docId: data.doc_id,
+      pageNumber: data.page_number,
+      totalPages: data.total_pages,
+      imageBase64: data.image_base64,
+      mimeType: data.mime_type || 'image/png',
     }
-    return this.postJson<any[]>('/vector/search', payload, 4000, [])
+  }
+
+  /** Lists all indexed documents; null when unreachable, so callers can tell a network failure from an empty library. */
+  async listDocuments(): Promise<SidecarDocumentRecord[] | null> {
+    const result = await this.requestJson<SidecarDocumentRecord[]>('GET', '/documents', undefined, 5000)
+    if (result.success) return result.data
+    if (!result.error.includes('ECONNREFUSED')) {
+      logger.log('WARN', 'SidecarClient', `Failed requesting /documents: ${result.error}`)
+    }
+    return null
+  }
+
+  /** Deletes a document and all its embedded chunks from LanceDB. */
+  async deleteDocument(docId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await this.send({
+        method: 'DELETE',
+        path: `/documents/${encodeURIComponent(docId)}`,
+        timeoutMs: 5000,
+        timeoutMessage: 'Eliminazione scaduta dopo 5 secondi. Verifica il Sidecar e riprova.',
+      })
+      if (res.status === 200) return { success: true }
+      return { success: false, error: parseDetail(res.body) || `Il Sidecar ha rifiutato l'eliminazione (HTTP ${res.status || 'sconosciuto'}).` }
+    } catch (err: any) {
+      logger.log('ERROR', 'SidecarClient', `Failed deleting document ${docId}: ${err.message}`)
+      const timedOut = err.message.startsWith('Eliminazione scaduta')
+      return { success: false, error: timedOut ? err.message : `Sidecar non raggiungibile: ${err.message}` }
+    }
   }
 
   /**
-   * Generic POST JSON helper with timeout, error handling, and safe fallback.
+   * Hybrid vector search over indexed chunks. Rejects on failure so callers can tell
+   * "no matches" from "search unavailable"; the sidecar embeds the query with each chunk's own model.
    */
-  postJson<T>(urlPath: string, payload: unknown, timeoutMs: number = 5000, fallback: T): Promise<T> {
-    const urlOpts = this.resolveUrl(urlPath)
-    const postData = JSON.stringify(payload)
-
-    return new Promise((resolve) => {
-      const req = http.request(
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          method: 'POST',
-          agent: this.httpAgent,
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-          },
-        },
-        (res) => {
-          let raw = ''
-          res.on('data', (chunk) => { raw += chunk })
-          res.on('end', () => {
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-              try {
-                resolve(JSON.parse(raw) as T)
-              } catch (parseErr: any) {
-                logger.log('ERROR', 'SidecarClient', `JSON parse error on ${urlPath}: ${parseErr.message}`)
-                resolve(fallback)
-              }
-            } else {
-              logger.log('ERROR', 'SidecarClient', `Non-2xx HTTP ${res.statusCode} from ${urlPath}`)
-              resolve(fallback)
-            }
-          })
-        }
-      )
-
-      req.on('error', (err) => {
-        logger.log('ERROR', 'SidecarClient', `${urlPath} request failed: ${err.message}`)
-        resolve(fallback)
-      })
-
-      req.setTimeout(timeoutMs, () => {
-        req.destroy()
-        logger.log('WARN', 'SidecarClient', `${urlPath} timed out after ${timeoutMs}ms`)
-        resolve(fallback)
-      })
-
-      req.write(postData)
-      req.end()
-    })
+  async searchVectorDb(query: string, topK: number = 5, docIds?: string[]): Promise<any[]> {
+    if (typeof query !== 'string' || !query.trim()) return []
+    const payload: Record<string, unknown> = { query, top_k: topK }
+    if (docIds && docIds.length > 0) payload.doc_ids = docIds
+    const result = await this.requestJson<any[]>('POST', '/vector/search', payload, VECTOR_SEARCH_TIMEOUT_MS)
+    if (!result.success) throw new Error(`Vector search failed: ${result.error}`)
+    return result.data
   }
 
-  /**
-   * Typed POST JSON that returns a structured result envelope { success, data, error }.
-   */
-  postJsonEnvelope<T>(
-    urlPath: string,
-    payload: unknown,
-    timeoutMs: number = 15_000
-  ): Promise<{ success: true; data: T } | { success: false; error: string }> {
-    const urlOpts = this.resolveUrl(urlPath)
-    const postData = JSON.stringify(payload)
-
-    return new Promise((resolve) => {
-      const req = http.request(
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          method: 'POST',
-          agent: this.httpAgent,
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-          },
-        },
-        (res) => {
-          let raw = ''
-          res.on('data', (chunk) => { raw += chunk })
-          res.on('end', () => {
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-              try {
-                resolve({ success: true, data: JSON.parse(raw) as T })
-              } catch (parseErr: any) {
-                logger.log('ERROR', 'SidecarClient', `JSON parse error on ${urlPath}: ${parseErr.message}`)
-                resolve({ success: false, error: `Response parse error: ${parseErr.message}` })
-              }
-            } else {
-              let detail = `HTTP ${res.statusCode}`
-              try { detail = JSON.parse(raw)?.detail || detail } catch { /* ignore */ }
-              logger.log('ERROR', 'SidecarClient', `Non-2xx from ${urlPath}: ${detail}`)
-              resolve({ success: false, error: detail })
-            }
-          })
-        }
-      )
-
-      req.on('error', (err) => {
-        logger.log('ERROR', 'SidecarClient', `HTTP error on ${urlPath}: ${err.message}`)
-        resolve({ success: false, error: `Sidecar connection error: ${err.message}` })
-      })
-
-      req.setTimeout(timeoutMs, () => {
-        req.destroy()
-        logger.log('WARN', 'SidecarClient', `Request to ${urlPath} timed out after ${timeoutMs}ms`)
-        resolve({ success: false, error: `Request timed out after ${timeoutMs}ms` })
-      })
-
-      req.write(postData)
-      req.end()
-    })
+  /** POST JSON returning `fallback` on any failure; for best-effort calls. */
+  async postJson<T>(urlPath: string, payload: unknown, timeoutMs: number = 5000, fallback: T): Promise<T> {
+    const result = await this.requestJson<T>('POST', urlPath, payload, timeoutMs)
+    return result.success ? result.data : fallback
   }
 
-  /**
-   * Log analysis diagnostics via FastAPI sidecar endpoint /agent/logs/analyze.
-   */
-  analyzeLogs(extraPaths?: string[]): Promise<{ success: true; data: SlmLogDiagnosticReport } | { success: false; error: string }> {
-    return this.postJsonEnvelope<SlmLogDiagnosticReport>(
-      '/agent/logs/analyze',
-      { extra_paths: extraPaths ?? [] },
-      15_000
-    )
+  /** POST JSON returning a `{ success, data, error }` envelope. */
+  postJsonEnvelope<T>(urlPath: string, payload: unknown, timeoutMs: number = 15_000): Promise<Envelope<T>> {
+    return this.requestJson<T>('POST', urlPath, payload, timeoutMs)
   }
 
-  /**
-   * Export markdown to PDF / DOCX via Python sidecar /export endpoint.
-   */
+  private async requestJson<T>(method: SendOptions['method'], urlPath: string, body: unknown, timeoutMs: number): Promise<Envelope<T>> {
+    let res: SendResult
+    try {
+      res = await this.send({ method, path: urlPath, body, timeoutMs })
+    } catch (err: any) {
+      logger.log('ERROR', 'SidecarClient', `${urlPath} request failed: ${err.message}`)
+      return { success: false, error: err.message.includes('timed out') ? err.message : `Sidecar connection error: ${err.message}` }
+    }
+    if (res.status < 200 || res.status >= 300) {
+      const detail = errorDetail(res.status, res.body, `HTTP ${res.status}`)
+      logger.log('ERROR', 'SidecarClient', `Non-2xx from ${urlPath}: ${detail}`)
+      return { success: false, error: detail }
+    }
+    try {
+      return { success: true, data: JSON.parse(res.body) as T }
+    } catch (err: any) {
+      logger.log('ERROR', 'SidecarClient', `JSON parse error on ${urlPath}: ${err.message}`)
+      return { success: false, error: `Response parse error: ${err.message}` }
+    }
+  }
+
+  /** Log analysis diagnostics via /agent/logs/analyze. */
+  analyzeLogs(extraPaths?: string[]): Promise<Envelope<SlmLogDiagnosticReport>> {
+    return this.postJsonEnvelope<SlmLogDiagnosticReport>('/agent/logs/analyze', { extra_paths: extraPaths ?? [] }, 15_000)
+  }
+
+  /** Export markdown to PDF / DOCX via /export. */
   exportDocument(markdownContent: string, format: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    return this.postJsonEnvelope<any>(
-      '/export',
-      { markdown_content: markdownContent, export_format: format },
-      30_000
-    )
+    return this.postJsonEnvelope<any>('/export', { markdown_content: markdownContent, export_format: format }, 30_000)
   }
 }
 

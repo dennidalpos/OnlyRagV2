@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { authorizeOfflineStrict, offlineStrictPolicyGateway, shellCommandHasEgress } from './offlineStrictPolicy'
+import { authorizeOfflineStrict, shellCommandHasEgress } from './offlineStrictPolicy'
 
 function request(overrides: Record<string, unknown> = {}) {
   return {
@@ -38,6 +38,6 @@ describe('offline-strict capability policy', () => {
   it('blocks Git network operations and rejects unimplemented policy modes', () => {
     expect(authorizeOfflineStrict(request({ capability: 'git', operation: 'connect', toolName: 'git_remote' })).allowed).toBe(false)
     expect(authorizeOfflineStrict(request({ mode: 'local-only' })).allowed).toBe(false)
-    expect(offlineStrictPolicyGateway.authorize(request({ capability: 'filesystem', operation: 'write', toolName: 'write_file' })).auditId).toContain('policy-session-42')
+    expect(authorizeOfflineStrict(request({ capability: 'filesystem', operation: 'write', toolName: 'write_file' })).auditId).toContain('policy-session-42')
   })
 })

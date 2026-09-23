@@ -5,7 +5,6 @@ import {
   type CapabilityPolicyAuditEvent,
   type CapabilityPolicyDecision,
   type CapabilityPolicyRequest,
-  type CapabilityPolicyGateway,
   type CapabilityPolicyAuditStore,
 } from './capabilityPolicyContract'
 import { shellCommandHasEgress } from './offlineStrictPolicy'
@@ -58,28 +57,6 @@ export function buildCapabilityPolicyAuditEvent(
     reason: parsedDecision.reason,
     consentId: request.consent.consentId,
   })
-}
-
-/** In-process audit sink for policy decisions; durable retention is intentionally a later task. */
-export class NetworkApprovedPolicyGateway implements CapabilityPolicyGateway {
-  private readonly events: CapabilityPolicyAuditEvent[] = []
-
-  constructor(private readonly clock: () => string = () => new Date().toISOString()) {}
-
-  public authorize(request: CapabilityPolicyRequest): CapabilityPolicyDecision {
-    const decision = authorizeNetworkApproved(request)
-    this.record(buildCapabilityPolicyAuditEvent(request, decision, this.clock()))
-    return decision
-  }
-
-  public record(event: CapabilityPolicyAuditEvent): void {
-    const parsed = capabilityPolicyAuditEventSchema.parse(event)
-    this.events.push(parsed)
-  }
-
-  public getAuditEvents(): CapabilityPolicyAuditEvent[] {
-    return this.events.map((event) => ({ ...event }))
-  }
 }
 
 /** Application boundary for the durable audit path; authorization remains pure and testable. */

@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { dialog, BrowserWindow, shell } from 'electron'
 import { logger } from '../../diagnostics'
 import { systemStorageRepository } from '../infrastructure/filesystem/systemStorageRepository'
@@ -24,10 +25,20 @@ export interface SettingsLoader {
   loadSettings: () => Promise<AppSettings | null> | AppSettings | null
 }
 
+/** shell.openPath launches files with their default handler, so only folders may be opened. */
+const isExistingDirectory = (targetPath: string): boolean => {
+  try {
+    return fs.statSync(targetPath).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 export class SystemAppService {
   constructor(
     private readonly settingsRepo: SettingsLoader = appSettingsRepository,
-    private readonly shellAdapter: ShellAdapter = shell
+    private readonly shellAdapter: ShellAdapter = shell,
+    private readonly isDirectory: (targetPath: string) => boolean = isExistingDirectory
   ) {}
 
   getOllamaStoragePath(): string {
@@ -126,11 +137,10 @@ export class SystemAppService {
   }
 
   async openPath(targetPath: string): Promise<boolean> {
-    if (targetPath && typeof targetPath === 'string' && targetPath.trim()) {
-      await this.shellAdapter.openPath(targetPath.trim())
-      return true
-    }
-    return false
+    const trimmed = typeof targetPath === 'string' ? targetPath.trim() : ''
+    if (!trimmed || !this.isDirectory(trimmed)) return false
+    await this.shellAdapter.openPath(trimmed)
+    return true
   }
 }
 

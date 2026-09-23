@@ -13,14 +13,17 @@
     Esegue la verifica della sintassi JSON e della pulizia del workspace.
 .PARAMETER UnitOnly
     Esegue unicamente la suite di unit test TypeScript.
+.PARAMETER SkipTests
+    Salta la suite Vitest (la CI la esegue una sola volta, con coverage, in uno step dedicato).
 #>
 
 [CmdletBinding()]
 param(
-    [switch]$Fast = $true,
-    [switch]$Full = $false,
-    [switch]$Format = $false,
-    [switch]$UnitOnly = $false
+    [switch]$Fast,
+    [switch]$Full,
+    [switch]$Format,
+    [switch]$UnitOnly,
+    [switch]$SkipTests
 )
 
 $ErrorActionPreference = "Stop"
@@ -103,15 +106,12 @@ try {
         throw "[FAIL] Python virtualenv non trovato in $venvPython. Eseguire npm run setup:dev."
     }
     if (Test-Path $sidecarDir) {
-        $pyFiles = Get-ChildItem -Path $sidecarDir -Filter "*.py" -Recurse
-        foreach ($py in $pyFiles) {
-            & $venvPython -m py_compile $py.FullName
-            if ($LASTEXITCODE -ne 0) {
-                throw "[FAIL] Python syntax check failed on $($py.FullName) with exit code $LASTEXITCODE."
-            }
+        & $venvPython -m compileall -q $sidecarDir
+        if ($LASTEXITCODE -ne 0) {
+            throw "[FAIL] Python syntax check failed with exit code $LASTEXITCODE."
         }
         if (-not $Fast -or $Full) {
-            Write-Host "[PASS] Python sidecar ($($pyFiles.Count) files) syntax clean." -ForegroundColor Green
+            Write-Host "[PASS] Python sidecar syntax clean." -ForegroundColor Green
         }
     } else {
         throw "[FAIL] Required sidecar directory not found: $sidecarDir"
@@ -121,18 +121,20 @@ try {
     if (-not $Fast -or $Full) {
         Write-Host "`n[5/6] Running Vitest serial test suite..." -ForegroundColor Yellow
     }
-    if ($UnitOnly) {
-        npm run test:unit-only
-    } elseif ($Full) {
-        npm run test
-    } else {
-        npm run test:fast
-    }
-    if ($LASTEXITCODE -ne 0) {
-        throw "[FAIL] Vitest test suite failed with exit code $LASTEXITCODE."
-    }
-    if (-not $Fast -or $Full) {
-        Write-Host "[PASS] Vitest unit test suite clean." -ForegroundColor Green
+    if (-not $SkipTests) {
+        if ($UnitOnly) {
+            npm run test:unit-only
+        } elseif ($Full) {
+            npm run test
+        } else {
+            npm run test:fast
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "[FAIL] Vitest test suite failed with exit code $LASTEXITCODE."
+        }
+        if (-not $Fast -or $Full) {
+            Write-Host "[PASS] Vitest unit test suite clean." -ForegroundColor Green
+        }
     }
 
     # 6. Electron Main Process Bundle Smoke Test
@@ -157,15 +159,9 @@ try {
         }
     }
 
-    if ($Fast -and -not $Full) {
-        Write-Host "`n=====================================================" -ForegroundColor Green
-        Write-Host " ALL SERIAL QUALITY CHECKS PASSED!" -ForegroundColor Green
-        Write-Host "=====================================================" -ForegroundColor Green
-    } else {
-        Write-Host "`n=====================================================" -ForegroundColor Green
-        Write-Host " ALL SERIAL QUALITY CHECKS PASSED!" -ForegroundColor Green
-        Write-Host "=====================================================" -ForegroundColor Green
-    }
+    Write-Host "`n=====================================================" -ForegroundColor Green
+    Write-Host " ALL SERIAL QUALITY CHECKS PASSED!" -ForegroundColor Green
+    Write-Host "=====================================================" -ForegroundColor Green
 
     exit 0
 } catch {

@@ -8,7 +8,7 @@ Lo stato è `online` solo con HTTP 200 e un payload `/health` completo: risposta
 - Parser per PDF, DOCX, testo, immagini e dati tabellari.
 - `file_type` è parte del contratto di ingestione, aggiornamento e lista: il Main lo normalizza senza perdere `docx`, così l'idoneità alla traduzione in-place resta stabile.
 - PDF: estrazione nativa; OCR locale RapidOCR quando serve; Vision Ollama come percorso configurabile.
-- I chunk ricevono intestazioni contestuali e vengono indicizzati in LanceDB.
+- I chunk ricevono intestazioni contestuali e vengono indicizzati in LanceDB con il modello di embedding configurato (`embeddingModel`), registrato su ogni chunk.
 - Se l'embedding Ollama fallisce, il vettore deterministico CPU marca il documento `indexed_fallback`.
 - Ogni stream ha un `task_id`: l'annullamento è cooperativo ai confini sicuri e pulisce i record LanceDB parziali.
 - L'eliminazione aggiorna lista e selezione del Renderer solo dopo `DELETE /documents/{doc_id}` riuscita; errori HTTP, rete e timeout restano visibili e non producono uno stato locale falso.
@@ -19,10 +19,10 @@ Implementazione: [`sidecar/domain/ingestion.py`](../sidecar/domain/ingestion.py)
 
 [`search_service.py`](../sidecar/services/search_service.py) esegue:
 
-1. retrieval denso sui chunk LanceDB;
-2. matching lessicale sui token, nome documento e sezione;
+1. retrieval denso sui chunk LanceDB, una query per ciascun modello di embedding presente nei chunk (i ranking si fondono per posizione, mai per distanza);
+2. matching lessicale sui token, nome documento e sezione dei candidati;
 3. RRF con `k=60`;
-4. reranking dei candidati con FlashRank o fallback locale.
+4. cross-score lessicale locale sui candidati finali.
 
 ## Traduzione in-place
 
@@ -31,7 +31,7 @@ Implementazione: [`sidecar/domain/ingestion.py`](../sidecar/domain/ingestion.py)
 ## Dati e lifecycle
 
 - Tabelle e filtri sono gestiti da [`sidecar/infrastructure/db.py`](../sidecar/infrastructure/db.py).
-- Il Main avvia e arresta il processo tramite `sidecarProcessManager`.
+- Il Main avvia e arresta il processo tramite `sidecarProcessManager`, passando `OLLAMA_BASE_URL` (dal setting `ollamaHost`) e un token di sessione; cambiare host Ollama riavvia il Sidecar.
 - Il database persistente vive in `<userData>/data/lancedb_store`. All'avvio il Main sposta in modo non distruttivo gli archivi creati dal vecchio percorso `<userData>/data/data`; in caso di collisione conserva entrambe le copie e registra un avviso.
 - Durante l'avvio il Renderer ripete la diagnostica ogni secondo finché il Sidecar non risponde, poi torna all'intervallo ordinario di 10 secondi. Il primo controllo `offline` non viene quindi mantenuto mentre LanceDB sta ancora inizializzando.
 - Lo stderr del processo viene classificato dal contenuto: le righe `INFO:` di Uvicorn restano informative, mentre `WARNING:`, `ERROR:`, `CRITICAL:` e traceback mantengono una severità operativa.

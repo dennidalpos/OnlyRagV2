@@ -95,15 +95,17 @@ describe('SystemAppService Unit Tests', () => {
       expect(openedUrls).toContain('https://github.com/dennidalpos/OnlyRagV2')
     })
 
-    it('should validate targetPath and invoke shell.openPath', async () => {
+    it('opens folders only, never files that shell.openPath would launch', async () => {
       const openedPaths: string[] = []
       const customService = new SystemAppService(
         { loadSettings: async () => null },
-        { openExternal: async () => {}, openPath: async (p) => { openedPaths.push(p); return '' } }
+        { openExternal: async () => {}, openPath: async (p) => { openedPaths.push(p); return '' } },
+        (p) => p === '/my/workspace/folder'
       )
 
       expect(await customService.openPath('')).toBe(false)
       expect(await customService.openPath('   ')).toBe(false)
+      expect(await customService.openPath('C:/Users/me/Downloads/setup.exe')).toBe(false)
       expect(await customService.openPath('/my/workspace/folder')).toBe(true)
       expect(openedPaths).toEqual(['/my/workspace/folder'])
     })

@@ -68,8 +68,10 @@ describe('agentOrchestratorSessionSetup', () => {
   it('should build default agent settings properly', () => {
     const settings = buildDefaultAgentSettings()
     expect(settings.defaultModel).toBe('llama3.2')
-    expect(settings.allowFileModifications).toBe(true)
-    expect(settings.allowTerminalExecution).toBe(true)
+    // Fail-closed: a payload without settings must not unlock the terminal or file writes.
+    expect(settings.allowFileModifications).toBe(false)
+    expect(settings.allowTerminalExecution).toBe(false)
+    expect(settings.capabilityPolicyMode).toBe('offline-strict')
   })
 
   it('should format attached context and pinned files blocks', () => {

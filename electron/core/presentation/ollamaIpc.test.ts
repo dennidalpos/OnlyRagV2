@@ -20,7 +20,6 @@ vi.mock('../application/ollamaAppService', () => ({
     cancelStream: vi.fn(),
     getGenerationStatus: vi.fn(),
     generateStream: vi.fn(),
-    benchmarkModel: vi.fn(),
     getModelMetrics: vi.fn(),
     getRunningModels: vi.fn(),
     unloadModel: vi.fn(),

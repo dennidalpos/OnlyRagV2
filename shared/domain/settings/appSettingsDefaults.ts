@@ -1,0 +1,24 @@
+import type { AppSettings } from '../../types'
+import { DEFAULT_AGENT_STEP_BUDGET } from '../agent/agentStepBudget'
+import { DEFAULT_OLLAMA_HOST } from '../ollamaHost'
+
+/** Canonical defaults for renderer and main alike: fail-closed tools, offline-strict network policy. */
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  defaultModel: '',
+  ocrEngine: 'native_cuda',
+  ollamaHost: DEFAULT_OLLAMA_HOST,
+  ollamaMode: 'local',
+  language: 'it',
+  autoInstallHubSkills: 'disabled',
+  autoInstallMinScore: 8.0,
+  enableSkillRouter: false,
+  allowFileModifications: false,
+  allowTerminalExecution: false,
+  capabilityPolicyMode: 'offline-strict',
+  maxToolCallSteps: DEFAULT_AGENT_STEP_BUDGET,
+  enableCodingAgentDebugLog: false,
+  includeCodingAgentDebugPayloads: false,
+  codingAgentDebugRetentionFiles: 2,
+  modelThinkingPreferences: {},
+  hasCompletedInitialSetup: false,
+}

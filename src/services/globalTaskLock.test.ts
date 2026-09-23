@@ -4,9 +4,7 @@ import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from
 describe('globalTaskLock', () => {
   beforeEach(() => {
     // Reset shared module-level state between tests.
-    releaseGlobalTaskLock('coding')
-    releaseGlobalTaskLock('ingestion')
-    releaseGlobalTaskLock('translation')
+    for (let holder = peekGlobalTaskLock(); holder; holder = peekGlobalTaskLock()) releaseGlobalTaskLock(holder)
   })
 
   it('grants the lock to the first module that acquires it', () => {
@@ -40,5 +38,16 @@ describe('globalTaskLock', () => {
     // A superseded/late release from a different module must not clobber the real holder.
     releaseGlobalTaskLock('coding')
     expect(peekGlobalTaskLock()).toBe('ingestion')
+  })
+
+  it('stays held until every holder of the same module has released', () => {
+    // Document and in-place translation both hold 'translation'; one finishing must not free the other.
+    acquireGlobalTaskLock('translation')
+    acquireGlobalTaskLock('translation')
+    releaseGlobalTaskLock('translation')
+    expect(peekGlobalTaskLock()).toBe('translation')
+    expect(acquireGlobalTaskLock('coding')).toBe(false)
+    releaseGlobalTaskLock('translation')
+    expect(peekGlobalTaskLock()).toBeNull()
   })
 })

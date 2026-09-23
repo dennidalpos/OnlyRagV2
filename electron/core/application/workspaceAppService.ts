@@ -34,11 +34,6 @@ export class WorkspaceAppService {
     return standaloneScratchWorkspace.clear()
   }
 
-  getProjectMap(dirPath: string) {
-    if (!dirPath) return Promise.resolve([])
-    return this.repo.getProjectMap(dirPath)
-  }
-
   readFile(filePath: string, startLine?: number, endLine?: number) {
     return this.repo.readFile(filePath, startLine, endLine)
   }
@@ -69,10 +64,6 @@ export class WorkspaceAppService {
 
   replaceChunk(filePath: string, targetContent: string, replacementContent: string) {
     return this.repo.replaceChunk(filePath, targetContent, replacementContent)
-  }
-
-  multiReplaceChunks(filePath: string, replacements: { targetContent: string; replacementContent: string }[]) {
-    return this.repo.multiReplaceChunks(filePath, replacements)
   }
 
   grepSearch(dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean) {
@@ -124,25 +115,6 @@ export class WorkspaceAppService {
     } as const
     const policy = mode === 'local-only' ? authorizeLocalOnly(request) : authorizeOfflineStrict(request)
     return policy.allowed ? null : policy.reason
-  }
-
-  gitCommit(workspaceRoot: string | undefined, commitMessage: string, filePaths: readonly string[]) {
-    const cwd = workspaceRoot || process.cwd()
-    const trimmedMessage = (commitMessage || '').trim()
-    if (!trimmedMessage) {
-      return { success: false, output: 'Git Commit Error: commitMessage parameter is required.', error: 'Git Commit Error: commitMessage parameter is required.' }
-    }
-    try {
-      const preview = gitCliRepository.previewCommit(cwd, filePaths)
-      const stdout = gitCliRepository.commit(cwd, trimmedMessage, preview.paths, preview.diffHash)
-      return {
-        success: true,
-        output: `[GIT COMMIT: ${cwd}]\n${stdout.trim()}\n[END GIT COMMIT]`,
-      }
-    } catch (err: any) {
-      const detail = (err.stdout?.toString().trim() || err.stderr?.toString().trim() || err.message) as string
-      return { success: false, output: `Git Commit Error: ${detail}`, error: `Git Commit Error: ${detail}` }
-    }
   }
 
   async inspectGuestOsEnvironment(): Promise<GuestOsInfo> {

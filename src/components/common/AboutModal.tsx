@@ -127,14 +127,6 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
     url: 'https://arrow.apache.org',
   },
   {
-    name: 'FlashRank',
-    version: '>= v0.2.0',
-    description: 'Ultra-fast in-process re-ranking engine for dense vector retrieval scoring.',
-    license: 'Apache-2.0',
-    category: 'aiAndVector',
-    url: 'https://github.com/PrithivirajDamodaran/FlashRank',
-  },
-  {
     name: 'Ollama',
     version: 'REST API',
     description: '100% private local LLM & Vision model inference server (Llama, Qwen, DeepSeek, Nomic, BGE).',

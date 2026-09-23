@@ -18,18 +18,26 @@ const appDefines = {
   ),
 }
 
+const nodeTestGlobs = [
+  'electron/**/*.test.{ts,tsx}',
+  'shared/**/*.test.{ts,tsx}',
+  'src/services/**/*.test.{ts,tsx}',
+  'src/constants/**/*.test.{ts,tsx}',
+  'scripts/**/*.test.{ts,tsx,mts}',
+]
+
 export default defineConfig({
   define: appDefines,
   test: {
     globals: true,
-    environment: 'happy-dom',
-    environmentMatchGlobs: [
-      ['electron/**', 'node'],
-      ['electron/**/*', 'node'],
-      ['shared/**', 'node'],
-      ['shared/**/*', 'node'],
-      ['src/services/**', 'node'],
-      ['src/constants/**', 'node'],
+    // Main-process, shared and pure-service tests run in Node; only renderer UI tests get a DOM.
+    // (environmentMatchGlobs was removed in Vitest 4 and silently ignored, putting everything in happy-dom.)
+    projects: [
+      { extends: true, test: { name: 'node', environment: 'node', include: nodeTestGlobs } },
+      {
+        extends: true,
+        test: { name: 'dom', environment: 'happy-dom', include: ['src/**/*.test.{ts,tsx}'], exclude: nodeTestGlobs },
+      },
     ],
     fileParallelism: false,
     maxWorkers: 1,
@@ -37,13 +45,12 @@ export default defineConfig({
     // Test files declare different Electron/application mock factories. Per-file module
     // isolation prevents those factories from leaking through the shared module cache.
     isolate: true,
-    include: ['src/**/*.test.{ts,tsx}', 'electron/**/*.test.{ts,tsx}', 'shared/**/*.test.{ts,tsx}', 'scripts/**/*.test.{ts,tsx,mts}'],
     testTimeout: 5000,
     hookTimeout: 5000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
-      include: ['src/**/*.{ts,tsx}', 'electron/**/*.{ts,tsx}'],
+      include: ['src/**/*.{ts,tsx}', 'electron/**/*.{ts,tsx}', 'shared/**/*.{ts,tsx}'],
       exclude: [
         '**/*.test.{ts,tsx}',
         '**/*.d.ts',

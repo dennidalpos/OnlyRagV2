@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   workspaceExecutePowerShellPayloadSchema,
-  workspaceGitCommitPayloadSchema,
   workspaceListFilesPayloadSchema,
   workspaceReadFilePayloadSchema,
   workspaceSearchWebPayloadSchema,
@@ -28,13 +27,5 @@ describe('workspace IPC contracts', () => {
     expect(workspaceSearchWebPayloadSchema.parse({ query: 'react', maxResults: 8 })).toEqual({ query: 'react', maxResults: 8 })
     expect(() => workspaceSearchWebPayloadSchema.parse({ query: ' ' })).toThrow()
     expect(() => workspaceExecutePowerShellPayloadSchema.parse({ command: 'Get-ChildItem', timeoutMs: 900_001 })).toThrow()
-  })
-
-  it('requires explicit commit paths', () => {
-    expect(workspaceGitCommitPayloadSchema.parse({ commitMessage: 'Update app', filePaths: ['src/App.tsx'] })).toEqual({
-      commitMessage: 'Update app',
-      filePaths: ['src/App.tsx'],
-    })
-    expect(() => workspaceGitCommitPayloadSchema.parse({ commitMessage: 'Update app', filePaths: [] })).toThrow()
   })
 })

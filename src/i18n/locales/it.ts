@@ -1,7 +1,6 @@
-import { TranslationSchema } from '../types'
 import { AGENT_MAIN_TEXT_IT } from '../../../shared/domain/agent/agentMainText'
 
-export const it: TranslationSchema = {
+export const it = {
   common: {
     appName: 'OnlyRag V2',
     tagline: 'AI Studio Locale & Vector RAG',

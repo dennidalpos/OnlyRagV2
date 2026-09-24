@@ -16,7 +16,6 @@ export type {
   CustomHubInput,
   HubSkillCompatibility,
   HubSkillItem,
-  HubSourceType,
   SkillCategory,
   SkillDefinition,
   SkillHubSource,

@@ -1,5 +1,5 @@
 import { secureIpcMain as ipcMain } from './secureIpcMain'
-import { type LogLevel } from '../infrastructure/logging/logger'
+import type { LogLevel } from '../../../shared/types'
 import { diagnosticsAppService } from '../application/diagnosticsAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 

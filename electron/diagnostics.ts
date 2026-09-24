@@ -1,71 +1,14 @@
-import type { UntrustedJson } from '../shared/types'
+import type { DiagnosticsData, LogEntry, SystemRequirementsCheck, UntrustedJson } from '../shared/types'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import http from 'node:http'
 import { exec } from 'node:child_process'
-import { logger, type LogEntry } from './core/infrastructure/logging/logger'
+import { logger } from './core/infrastructure/logging/logger'
 import { DEFAULT_OLLAMA_HOST } from '../shared/domain/ollamaHost'
 import { errorMessage } from '../shared/domain/errors/errorMessage'
 
 export { sanitizeLogMessage } from './logRedactor'
-
-export interface SystemRequirementsCheck {
-  isOsSupported: boolean
-  hasMinRam: boolean
-  hasRecRam: boolean
-  isOllamaReady: boolean
-  isGpuAccelerated: boolean
-  isSidecarReady: boolean
-  overallStatus: 'optimal' | 'warning' | 'incompatible'
-}
-
-export interface DiagnosticsData {
-  sidecar: {
-    status: 'online' | 'offline' | 'checking'
-    engine?: string
-    version?: string
-    endpoint?: string
-    documentsCount?: number
-    chunksCount?: number
-    error?: string
-  }
-  ollama: {
-    status: 'online' | 'offline' | 'checking'
-    url: string
-    modelsCount: number
-    models: string[]
-    /** Per-model metadata from /api/tags' `details` field (parameter_size, quantization_level, ...), when available. */
-    modelDetails?: Record<
-      string,
-      { parent_model?: string; format?: string; family?: string; families?: string[]; parameter_size?: string; quantization_level?: string }
-    >
-    error?: string
-  }
-  gpu: {
-    hasNvidiaGpu: boolean
-    gpuName?: string
-    vramTotalMB?: number
-    vramUsedMB?: number
-    cudaVersion?: string
-    driverVersion?: string
-    error?: string
-  }
-  memory: {
-    totalRAMGB: number
-    freeRAMGB: number
-    usedRAMGB: number
-    ramUsagePercent: number
-  }
-  system: {
-    platform: string
-    arch: string
-    cpusCount: number
-    cpuModel: string
-  }
-  requirements: SystemRequirementsCheck
-  timestamp: string
-}
 
 export function generateDiagnosticsReport(diagnostics: DiagnosticsData, recentLogs: LogEntry[] = []): string {
   return `# OnlyRag V2 - System Diagnostics & Health Report

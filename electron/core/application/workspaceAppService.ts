@@ -5,7 +5,7 @@ import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRep
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { webClient } from '../infrastructure/http/webClient'
 import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
-import type { GuestOsInfo } from '../domain/workspace/workspaceTypes'
+import type { GuestOsInfo } from '../../../shared/types'
 import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
 import { authorizeOfflineStrict } from '../domain/agent/offlineStrictPolicy'
 import { authorizeLocalOnly } from '../domain/agent/localOnlyPolicy'
@@ -140,14 +140,6 @@ export class WorkspaceAppService {
         python: hasPython,
         ollama: hasOllama,
       },
-      cpus: cpuList.length,
-      totalMemMb: Math.round(totalBytes / (1024 * 1024)),
-      freeMemMb: Math.round(freeBytes / (1024 * 1024)),
-      hasGit,
-      hasNode,
-      hasNpm,
-      hasPython,
-      hasOllama,
     }
   }
 

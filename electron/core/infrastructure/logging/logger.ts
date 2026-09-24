@@ -2,15 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { sanitizeLogMessage } from '../../../logRedactor'
-
-export type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG'
-
-export interface LogEntry {
-  timestamp: string
-  level: LogLevel
-  message: string
-  category: string
-}
+import type { LogEntry, LogLevel } from '../../../../shared/types'
 
 /** Process-wide Main logger: redacts, keeps a bounded in-memory buffer and appends to a rotated userData/logs/app.log. */
 class SystemDiagnosticsLogger {

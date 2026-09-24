@@ -4,7 +4,8 @@ import type { HardwareProbePort } from '../domain/ports/hardwareProbePort'
 import type { DiagnosticsData } from '../../../shared/types'
 import { electronDesktopShell } from '../infrastructure/electron/electronDesktopShell'
 import { hardwareProbe } from '../infrastructure/diagnostics/hardwareProbe'
-import { logger, type LogEntry, type LogLevel } from '../infrastructure/logging/logger'
+import { logger } from '../infrastructure/logging/logger'
+import type { LogEntry, LogLevel } from '../../../shared/types'
 import { sidecarAppService } from './sidecarAppService'
 
 export class DiagnosticsAppService {

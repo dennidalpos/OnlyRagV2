@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import fs from 'node:fs'
-import { generateDiagnosticsReport, DiagnosticsData, sanitizeLogMessage } from './diagnostics'
+import { generateDiagnosticsReport, sanitizeLogMessage } from './diagnostics'
+import type { DiagnosticsData } from '../shared/types'
 import { logger } from './core/infrastructure/logging/logger'
 import { redactSecrets } from './logRedactor'
 

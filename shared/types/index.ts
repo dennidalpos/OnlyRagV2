@@ -13,7 +13,7 @@ export interface SystemRequirementsCheck {
   hasRecRam: boolean
   isOllamaReady: boolean
   isGpuAccelerated: boolean
-  isSidecarReady?: boolean
+  isSidecarReady: boolean
   overallStatus: 'optimal' | 'warning' | 'incompatible'
 }
 
@@ -61,7 +61,7 @@ export interface DiagnosticsData {
     cpusCount: number
     cpuModel: string
   }
-  requirements?: SystemRequirementsCheck
+  requirements: SystemRequirementsCheck
   timestamp: string
 }
 
@@ -362,12 +362,6 @@ export interface GuestOsInfo {
     npm: boolean
     python: boolean
     ollama: boolean
-  }
-  env: {
-    PATH: string
-    USERPROFILE: string
-    OS: string
-    PROCESSOR_ARCHITECTURE: string
   }
 }
 

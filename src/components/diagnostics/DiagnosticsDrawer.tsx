@@ -115,7 +115,7 @@ Generated at: ${diagnostics.timestamp}
 - **Platform:** ${diagnostics.system.platform} (${diagnostics.system.arch})
 - **CPU:** ${diagnostics.system.cpuModel} (${diagnostics.system.cpusCount} cores)
 - **Memory:** available ${diagnostics.memory.freeRAMGB} GB; used ${diagnostics.memory.usedRAMGB} GB (${diagnostics.memory.ramUsagePercent}%); total ${diagnostics.memory.totalRAMGB} GB
-- **Status:** ${(diagnostics.requirements?.overallStatus || 'UNKNOWN').toUpperCase()}
+- **Status:** ${diagnostics.requirements.overallStatus.toUpperCase()}
 
 ## Hardware & Acceleration
 - **NVIDIA GPU:** ${diagnostics.gpu.hasNvidiaGpu ? `${diagnostics.gpu.gpuName} (CUDA ${diagnostics.gpu.cudaVersion || 'N/A'})` : 'None / CPU Only'}

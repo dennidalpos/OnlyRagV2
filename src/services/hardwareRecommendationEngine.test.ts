@@ -61,6 +61,15 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
       cpusCount: 16,
       cpuModel: 'AMD Ryzen 7',
     },
+    requirements: {
+      isOsSupported: true,
+      hasMinRam: true,
+      hasRecRam: true,
+      isOllamaReady: true,
+      isGpuAccelerated: hasGpu,
+      isSidecarReady: true,
+      overallStatus: 'optimal',
+    },
     timestamp: new Date().toISOString(),
   })
 

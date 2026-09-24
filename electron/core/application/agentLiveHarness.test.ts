@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { snapshotLiveAuditLogs } from '../../../scripts/live/agentLiveHarness'
+import { snapshotLiveAuditLogs, UNREDACTED_AUDIT_SNAPSHOT_NAME } from '../../../scripts/live/agentLiveHarness'
 
 const tempRoots: string[] = []
 
@@ -34,6 +34,26 @@ describe('snapshotLiveAuditLogs', () => {
       sessionId: 'session-1',
       label: 'full task/run',
     })
+  })
+
+  it('moves the unredacted mirror into the snapshot and starts it afresh', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-live-snapshot-'))
+    tempRoots.push(root)
+    const sourceLogPath = path.join(root, 'coding_agent_audit.log')
+    const unredactedLogPath = path.join(root, 'unredacted.log')
+    fs.writeFileSync(sourceLogPath, 'redacted', 'utf-8')
+    fs.writeFileSync(unredactedLogPath, 'ReferenceError: App is not defined', 'utf-8')
+
+    const snapshotDir = snapshotLiveAuditLogs({
+      sessionId: 'session-3',
+      label: 'mirror',
+      sourceLogPath,
+      destinationRoot: path.join(root, 'snapshots'),
+      unredactedLogPath,
+    })
+
+    expect(fs.readFileSync(path.join(snapshotDir, UNREDACTED_AUDIT_SNAPSHOT_NAME), 'utf-8')).toBe('ReferenceError: App is not defined')
+    expect(fs.readFileSync(unredactedLogPath, 'utf-8')).toBe('')
   })
 
   it('fails clearly when neither audit-log generation exists', () => {

@@ -40,7 +40,7 @@ describe('CapabilityPolicyAuditRepository', () => {
     const filePath = path.join(tempDir, 'audit.json')
     fs.writeFileSync(filePath, JSON.stringify([event(1), { invalid: true }]), 'utf-8')
     expect(await repository.load()).toHaveLength(1)
-    expect(await repository.append({ invalid: true } as any)).toBe(false)
+    expect(await repository.append({ invalid: true } as never)).toBe(false)
   })
 
   it('retains only the latest 1000 events', async () => {

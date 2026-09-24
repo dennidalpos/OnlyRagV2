@@ -10,6 +10,7 @@ import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
 import { closeAgentRunFromEvidence, type ApplicationClosureContext } from './agentOrchestratorApplicationClosure'
+import { renderAgentLines } from '../../../shared/domain/agent/agentMainText'
 
 vi.mock('./agentOrchestratorVerificationRunner', () => ({
   runProjectVerification: vi.fn(),
@@ -175,7 +176,7 @@ describe('application-owned agent closure', () => {
       publish: vi.fn(() => ({ success: true, changedPaths: ['src/app.ts'] })),
       dispose: vi.fn(),
     }
-    ctx.workspaceTransaction = transaction as any
+    ctx.workspaceTransaction = transaction as never
     ctx.requestApproval = vi.fn(async () => ({ approved: true }))
 
     const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: 'Model requested closure.' })
@@ -209,7 +210,7 @@ describe('application-owned agent closure', () => {
       }),
       dispose: vi.fn(),
     }
-    ctx.workspaceTransaction = transaction as any
+    ctx.workspaceTransaction = transaction as never
     ctx.requestApproval = vi.fn(async () => ({ approved: true }))
 
     await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: 'Model requested closure.' })
@@ -312,6 +313,36 @@ describe('application-owned agent closure', () => {
     expect(outcome).toMatchObject({ outcome: 'closed', result: { success: false, completionStatus: 'blocked' } })
     if (outcome.outcome === 'closed') expect(outcome.result.summary).toContain('Run fermato dal guard "execution_budget"')
     expect(emitDone).toHaveBeenCalledWith(false, expect.any(String), 'blocked', expect.anything())
+  })
+
+  it('emits the closure summary as message keys whose Italian rendering is the summary text', async () => {
+    vi.mocked(runProjectVerification).mockResolvedValue({
+      hasVerificationCommand: true,
+      status: 'verified',
+      passed: true,
+      command: 'npm run build',
+      evidenceLevel: 'structural',
+    })
+    const { ctx, emitLog } = makeContext({ milestoneStatus: 'verified' })
+
+    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'guard_stop', guard: 'execution_budget', reason: 'Execution budget exhausted.' })
+
+    const closureCall = emitLog.mock.calls.find((call) => call[1] === 'Chiusura applicativa: blocked')
+    expect(closureCall).toBeDefined()
+    const [, , detail, meta] = closureCall!
+    expect(meta.localized.message).toEqual({ key: 'closureMessage', params: { status: 'blocked' } })
+    expect(meta.localized.detail[0]).toEqual({ key: 'closureOutcomeBlocked' })
+    expect(meta.localized.detail[2]).toEqual({
+      key: 'closureEvidence',
+      params: {
+        evidence: {
+          key: 'evidenceGuardStop',
+          params: { guard: 'execution_budget', evidence: { key: 'evidenceStructuralPassedCommand', params: { command: 'npm run build' } } },
+        },
+      },
+    })
+    expect(renderAgentLines(meta.localized.detail)).toBe(detail)
+    if (outcome.outcome === 'closed') expect(outcome.result.summary).toBe(detail)
   })
 
   it('allows only bounded correction rounds when finish exposes a failing check', async () => {

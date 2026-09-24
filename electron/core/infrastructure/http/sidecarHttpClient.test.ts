@@ -191,7 +191,7 @@ describe('SidecarHttpClient Unit Tests', () => {
   })
 
   it('handles streaming ingest via /ingest-path-stream', async () => {
-    const events: any[] = []
+    const events: unknown[] = []
     const res = await client.ingestFileStream({ file_path: 'doc.txt', task_id: 'ingest-test-1' }, (ev) => events.push(ev))
     expect(events.length).toBeGreaterThanOrEqual(1)
     expect(res.success).toBe(true)
@@ -376,7 +376,7 @@ describe('SidecarHttpClient health failures', () => {
   })
 
   it('sends the configured embedding model when re-indexing a document', async () => {
-    let received: any = null
+    let received: unknown = null
     const recorder = await createMockServer([
       {
         method: 'PUT',

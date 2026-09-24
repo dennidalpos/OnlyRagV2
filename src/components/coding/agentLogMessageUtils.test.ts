@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getBadgeLang, getStepModelName, extractBaseName, resolveLogCategory } from './agentLogMessageUtils'
+import { getBadgeLang, getStepModelName, extractBaseName, localizeAgentLog, resolveLogCategory } from './agentLogMessageUtils'
 import { AgentActionLog } from '../../types'
 
 describe('agentLogMessageUtils Unit Tests', () => {
@@ -94,6 +94,37 @@ describe('agentLogMessageUtils Unit Tests', () => {
         timestamp: new Date().toISOString(),
       }
       expect(resolveLogCategory(finalLog).category).toBe('final_report')
+    })
+  })
+
+  describe('localizeAgentLog', () => {
+    const t = (key: string, params?: Record<string, string | number>) => `${key}${params ? JSON.stringify(params) : ''}`
+    const base: AgentActionLog = {
+      id: '1',
+      timestamp: '2026-09-24T10:00:00Z',
+      type: 'info',
+      message: 'Chiusura applicativa: blocked',
+      detail: 'Italian detail',
+    }
+
+    it('leaves entries without message keys untouched', () => {
+      expect(localizeAgentLog(base, t)).toBe(base)
+    })
+
+    it('renders message and detail keys, nested parameters first, keeping verbatim lines', () => {
+      const localized = localizeAgentLog(
+        {
+          ...base,
+          localized: {
+            message: { key: 'closureMessage', params: { status: 'blocked' } },
+            detail: [{ key: 'closureEvidence', params: { evidence: { key: 'evidenceBehavioralPassed' } } }, { text: '- src/App.jsx' }],
+          },
+        },
+        t,
+      )
+
+      expect(localized.message).toBe('agentMain.closureMessage{"status":"blocked"}')
+      expect(localized.detail).toBe('agentMain.closureEvidence{"evidence":"agentMain.evidenceBehavioralPassed{}"}\n- src/App.jsx')
     })
   })
 })

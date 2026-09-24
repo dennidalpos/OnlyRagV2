@@ -32,7 +32,7 @@ Registrazione: [`agentIpc.ts`](../electron/core/presentation/agentIpc.ts), [`wor
 
 Eventi `on` esposti: `agent:approval-request`, `agent:change-metrics`, `agent:done`, `agent:log`, `agent:skill-install-request`, `agent:skills-matched`, `agent:step-update`, `agent:stream-thought`, `agent:stream-token`, `ingest:document-deleted`, `ingest:stream-progress`, `ingest:translate-progress`, `ollama:chunk`, `ollama:done`, `ollama:pull-progress`, `workspace:file-deleted`, `workspace:file-version`.
 
-I comandi di esecuzione Agent Coding e tutti gli eventi `agent:*` della run includono l'identità immutabile `{ runId, conversationId, planRevisionId, workspaceId }`. Risposte di annullamento e approvazione vengono accettate solo per la stessa identità.
+I comandi di esecuzione Agent Coding e tutti gli eventi `agent:*` della run includono l'identità immutabile `{ runId, conversationId, planRevisionId, workspaceId }`. Risposte di annullamento e approvazione vengono accettate solo per la stessa identità. Una voce `agent:log` può portare il campo facoltativo `localized` (`{ message?, detail? }` con chiavi `agentMain.*` e parametri, vedi [`agentMainText.ts`](../shared/domain/agent/agentMainText.ts)); `message` e `detail` restano sempre presenti come testo italiano, e Main redige i segreti anche nei parametri.
 
 Nel flusso Agent Coding la richiesta di approvazione `git_commit` include `commitDiff` e i soli `commitPaths` attribuiti alla run.
 

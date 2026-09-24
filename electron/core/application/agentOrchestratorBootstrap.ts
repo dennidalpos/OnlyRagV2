@@ -20,6 +20,7 @@ import { initializeSessionState } from './agentOrchestratorSessionState'
 import { buildSessionPersistence } from './agentOrchestratorSessionPersistence'
 import { armSessionWatchdog } from './agentOrchestratorSessionWatchdog'
 import { redactSecrets } from '../../logRedactor'
+import { mapAgentLocalizedStrings } from '../../../shared/domain/agent/agentMainText'
 
 export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
@@ -96,6 +97,7 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
         detail: detail ? redactSecrets(detail) : undefined,
         target: meta?.target ? redactSecrets(meta.target) : meta?.target,
         testRun: meta?.testRun ? { ...meta.testRun, summary: redactSecrets(meta.testRun.summary) } : undefined,
+        localized: meta?.localized ? mapAgentLocalizedStrings(meta.localized, redactSecrets) : undefined,
       })
     }
   }

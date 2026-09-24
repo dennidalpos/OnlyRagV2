@@ -125,7 +125,7 @@ describe('installableRange', () => {
       installed: { name: 'eslint', version: '9.7.0' },
       requiredBy: { name: 'eslint-plugin-react', version: '7.32.2' },
       requiredRange: '^3 || ^4 || ^9.7',
-    } as any)
+    } as never)
 
     expect(directive).toContain('npm install eslint@^9.7')
     expect(directive).not.toContain('npm install eslint@^3 ||')

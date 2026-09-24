@@ -1,4 +1,5 @@
 import { TranslationSchema } from '../types'
+import { AGENT_MAIN_TEXT_IT } from '../../../shared/domain/agent/agentMainText'
 
 export const it: TranslationSchema = {
   common: {
@@ -909,6 +910,7 @@ export const it: TranslationSchema = {
     scratchInitializing: 'Inizializzazione del workspace scratch…',
     noProjectFolder: 'Nessuna cartella di progetto collegata.',
   },
+  agentMain: AGENT_MAIN_TEXT_IT,
   agentRun: {
     noActiveConversation: 'Impossibile avviare: conversazione attiva non disponibile.',
     unknownError: 'Errore sconosciuto',
@@ -1002,6 +1004,7 @@ export const it: TranslationSchema = {
     fileReadError: '// Errore durante la lettura del file: {message}',
   },
   agentTimeline: {
+    finalReportTitle: 'Report Finale di Implementazione',
     copyReport: 'Copia Report',
     copied: 'Copiato',
     copy: 'Copia',

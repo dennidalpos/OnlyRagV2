@@ -3,7 +3,7 @@ import { consumeNdjsonChunk } from './ndjsonStreamParser'
 
 describe('NDJSON Stream Parser Unit Tests', () => {
   it('should parse complete single-line and multi-line chunks', () => {
-    const parsed: any[] = []
+    const parsed: unknown[] = []
     let buffer = ''
 
     buffer = consumeNdjsonChunk(buffer, '{"response": "Hello"}\n{"response": " World"}\n', (obj) => {
@@ -17,7 +17,7 @@ describe('NDJSON Stream Parser Unit Tests', () => {
   })
 
   it('should handle partial split chunks cleanly across calls', () => {
-    const parsed: any[] = []
+    const parsed: unknown[] = []
     let buffer = ''
 
     // Chunk 1: half of first object
@@ -45,7 +45,7 @@ describe('NDJSON Stream Parser Unit Tests', () => {
   })
 
   it('should skip malformed chunks and invoke warning callback without throwing', () => {
-    const parsed: any[] = []
+    const parsed: unknown[] = []
     const warnings: string[] = []
     let buffer = ''
 

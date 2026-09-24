@@ -11,7 +11,7 @@ function request(overrides: Record<string, unknown> = {}) {
     workspaceRoot: 'D:/projects/demo',
     consent: { requested: false, granted: false },
     ...overrides,
-  } as any
+  } as never
 }
 
 describe('offline-strict capability policy', () => {

@@ -20,6 +20,13 @@ import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disp
 import type { ApprovalResponse } from './agentOrchestratorTypes'
 import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
+import {
+  type AgentLocalizedLine,
+  type AgentLocalizedText,
+  type AgentMainTextKey,
+  formatAgentTextIt,
+  renderAgentLines,
+} from '../../../shared/domain/agent/agentMainText'
 
 export interface ApplicationClosureContext {
   workspacePath: string | null
@@ -134,32 +141,45 @@ function terminationReasonFor(trigger: ApplicationClosureTrigger, status: AgentC
   return 'model_silence'
 }
 
-function renderClosureSummary(status: AgentCompletionStatus, request: ApplicationClosureRequest, tracker: SessionDebtTracker, evidence: string): string {
+const OUTCOME_KEYS: Record<AgentCompletionStatus, AgentMainTextKey> = {
+  verified: 'closureOutcomeVerified',
+  unverifiable: 'closureOutcomeUnverifiable',
+  blocked: 'closureOutcomeBlocked',
+  cancelled: 'closureOutcomeCancelled',
+}
+
+/** The closure summary as localizable lines; the Italian rendering is the summary text. */
+function closureSummaryLines(
+  status: AgentCompletionStatus,
+  request: ApplicationClosureRequest,
+  tracker: SessionDebtTracker,
+  evidence: AgentLocalizedText,
+): AgentLocalizedLine[] {
   const data = tracker.getData()
-  const labels: Record<AgentCompletionStatus, string> = {
-    verified: 'VERIFICATO',
-    unverifiable: 'NON VERIFICABILE',
-    blocked: 'BLOCCATO',
-    cancelled: 'ANNULLATO',
-  }
-  const lines = [`Esito applicativo: ${labels[status]}.`, `Motivo di chiusura: ${request.reason}`, `Evidenza: ${evidence}`]
+  const blank = { text: '' }
+  const items = (values: readonly string[]) => values.slice(0, 8).map((item) => ({ text: `- ${item}` }))
+  const lines: AgentLocalizedLine[] = [
+    { key: OUTCOME_KEYS[status] },
+    { key: 'closureReason', params: { reason: request.reason } },
+    { key: 'closureEvidence', params: { evidence } },
+  ]
   if (request.modelSummary?.trim()) {
-    lines.push('', `Ultima consegna del modello: ${request.modelSummary.trim()}`)
+    lines.push(blank, { key: 'closureModelSummary', params: { summary: request.modelSummary.trim() } })
   }
   if (data.completedTasks.length > 0) {
-    lines.push('', `Completato (${data.completedTasks.length}):`, ...data.completedTasks.slice(0, 8).map((item) => `- ${item}`))
+    lines.push(blank, { key: 'closureCompleted', params: { count: data.completedTasks.length } }, ...items(data.completedTasks))
   }
   const outstanding = [...data.unresolvedIssues, ...data.nextSteps]
   if (outstanding.length > 0) {
-    lines.push('', `Residuo (${outstanding.length}):`, ...outstanding.slice(0, 8).map((item) => `- ${item}`))
+    lines.push(blank, { key: 'closureOutstanding', params: { count: outstanding.length } }, ...items(outstanding))
   }
   if (data.modifiedFiles.length > 0) {
-    lines.push('', `File modificati (${data.modifiedFiles.length}):`, ...data.modifiedFiles.slice(0, 8).map((item) => `- ${item}`))
+    lines.push(blank, { key: 'closureModifiedFiles', params: { count: data.modifiedFiles.length } }, ...items(data.modifiedFiles))
   }
   if (data.completedTasks.length === 0 && data.modifiedFiles.length === 0) {
-    lines.push('', 'Nessuna modifica è stata scritta sul workspace durante questa sessione.')
+    lines.push(blank, { key: 'closureNoChanges' })
   }
-  return lines.join('\n')
+  return lines
 }
 
 async function offerPublishedWorkspaceCommit(
@@ -252,32 +272,35 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
   const abandoned = operational.filter((milestone) => milestone.status === 'failed')
 
   let status: AgentCompletionStatus
-  let evidence: string
+  let evidence: AgentLocalizedText
   if (run?.hasVerificationCommand && run.passed === false) {
     status = 'blocked'
-    evidence = `La verifica "${run.command || 'comando di progetto'}" è fallita.${run.failureDetail ? ` ${run.failureDetail}` : ''}`
+    const detail = run.failureDetail ? ` ${run.failureDetail}` : ''
+    evidence = run.command
+      ? { key: 'evidenceVerificationFailed', params: { command: run.command, detail } }
+      : { key: 'evidenceProjectCheckFailed', params: { detail } }
   } else if (outstanding.length > 0 || abandoned.length > 0) {
     status = 'blocked'
-    evidence = `${outstanding.length} milestone operative aperte e ${abandoned.length} abbandonate.`
+    evidence = { key: 'evidenceOpenMilestones', params: { outstanding: outstanding.length, abandoned: abandoned.length } }
   } else if (evidenceLevel === 'behavioral') {
     status = 'verified'
-    evidence = `Controllo comportamentale superato${run?.command ? `: "${run.command}"` : ''}.`
+    evidence = run?.command ? { key: 'evidenceBehavioralPassedCommand', params: { command: run.command } } : { key: 'evidenceBehavioralPassed' }
   } else if (evidenceLevel === 'structural') {
     status = 'unverifiable'
-    evidence = `Controllo strutturale superato${run?.command ? `: "${run.command}"` : ''}; build, typecheck, lint e presenza dei file non provano il comportamento end-to-end.`
+    evidence = run?.command ? { key: 'evidenceStructuralPassedCommand', params: { command: run.command } } : { key: 'evidenceStructuralPassed' }
   } else if (ctx.settings.verifyBeforeFinish === false) {
     status = 'unverifiable'
-    evidence = 'La verifica finale è disabilitata nelle impostazioni; nessuna prova comportamentale è stata raccolta.'
+    evidence = { key: 'evidenceVerificationDisabled' }
   } else {
     status = 'unverifiable'
-    evidence = 'Il progetto non espone un controllo comportamentale eseguibile; il risultato non è stato dichiarato funzionante.'
+    evidence = { key: 'evidenceNoBehavioralCheck' }
   }
 
   // A safeguard ended the run before the model did: whatever the evidence, the work was cut off,
   // so it is never reported (or published) like an honest finish.
   if (request.guard && status !== 'blocked') {
     status = 'blocked'
-    evidence = `Run fermato dal guard "${request.guard}". ${evidence}`
+    evidence = { key: 'evidenceGuardStop', params: { guard: request.guard, evidence } }
   }
 
   // Legacy plans may still contain a synthetic “invoke finish” milestone. It is control flow,
@@ -300,12 +323,12 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
       })
       if (!approval.approved) {
         status = 'blocked'
-        evidence = 'La pubblicazione delle modifiche dal workspace isolato è stata rifiutata.'
+        evidence = { key: 'evidencePublishRejected' }
       } else {
         const publication = transaction.publish()
         if (!publication.success) {
           status = 'blocked'
-          evidence = `Pubblicazione bloccata: ${publication.error || 'errore sconosciuto'}`
+          evidence = publication.error ? { key: 'evidencePublishBlocked', params: { error: publication.error } } : { key: 'evidencePublishBlockedUnknown' }
         } else {
           ctx.emitLog('info', `Workspace pubblicato: ${publication.changedPaths.length} path(s).`, undefined, { category: 'file_mutation' })
           await offerPublishedWorkspaceCommit(transaction, publication.changedPaths, ctx.requestApproval, ctx.emitLog)
@@ -315,12 +338,13 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
   }
 
   const tracker = ctx.buildSessionTracker()
-  const summary = renderClosureSummary(status, request, tracker, evidence)
+  const summaryLines = closureSummaryLines(status, request, tracker, evidence)
+  const summary = renderAgentLines(summaryLines)
   if (!ctx.lastVerification && status === 'unverifiable') {
     const unavailable: AgentVerificationEvidence = {
       status: 'unavailable',
       checkedAt: new Date().toISOString(),
-      detail: redactSecrets(evidence),
+      detail: redactSecrets(formatAgentTextIt(evidence)),
     }
     ctx.lastVerification = unavailable
     ctx.recordVerificationEvidence?.(unavailable)
@@ -336,8 +360,10 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
   ctx.setExecutionPhase('outcome')
   agentToolExecutorService.commitJournal()
   const success = status === 'verified'
-  ctx.emitLog('info', `Chiusura applicativa: ${status}`, summary, {
+  const closureMessage: AgentLocalizedText = { key: 'closureMessage', params: { status } }
+  ctx.emitLog('info', formatAgentTextIt(closureMessage), summary, {
     category: status === 'verified' ? 'final_report' : 'system_alert',
+    localized: { message: closureMessage, detail: summaryLines },
   })
   ctx.emitLog('info', `Diagnostica sessione: ${status}`, diagnosticDetail, {
     category: 'generic_info',

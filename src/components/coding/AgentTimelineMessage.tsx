@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, User, Bot, AlertTriangle, CheckCircle2, XCir
 import { AgentActionLog, WorkspaceFile } from '../../types'
 import { formatClockTime } from '../../lib/timeFormat'
 import { useTranslation } from '../../i18n'
-import { getStepModelName, getBadgeLang, extractBaseName, resolveLogCategory } from './agentLogMessageUtils'
+import { getStepModelName, getBadgeLang, extractBaseName, localizeAgentLog, resolveLogCategory } from './agentLogMessageUtils'
 
 function formatInlineMarkdown(text: string): React.ReactNode {
   const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|`.*?`)/g)
@@ -155,8 +155,9 @@ interface AgentTimelineMessageProps {
 }
 
 export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.memo(
-  ({ log, isExpanded, onToggleExpand, activeModelName, onOpenFile, onOpenRightTab }) => {
+  ({ log: sourceLog, isExpanded, onToggleExpand, activeModelName, onOpenFile, onOpenRightTab }) => {
     const { t } = useTranslation()
+    const log = React.useMemo(() => localizeAgentLog(sourceLog, t), [sourceLog, t])
     const [isCopied, setIsCopied] = React.useState(false)
     const resolved = React.useMemo(() => resolveLogCategory(log), [log])
 
@@ -210,7 +211,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
               <div className="w-4 h-4 rounded-full bg-emerald-500/20 border border-emerald-400/60 flex items-center justify-center text-emerald-400 shadow-sm">
                 <CheckCircle2 className="w-3 h-3" />
               </div>
-              <span className="font-bold text-xs text-emerald-300">Report Finale di Implementazione</span>
+              <span className="font-bold text-xs text-emerald-300">{t('agentTimeline.finalReportTitle')}</span>
               <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-bold">
                 {getStepModelName(log.message, activeModelName)}
               </span>

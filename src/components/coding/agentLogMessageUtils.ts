@@ -1,4 +1,17 @@
 import { AgentActionLog } from '../../types'
+import type { TranslationKey } from '../../i18n'
+import { type AgentLocalizedText, formatAgentText, renderAgentLines } from '../../../shared/domain/agent/agentMainText'
+
+/** The entry with Main's message keys rendered in the UI language; entries without keys are unchanged. */
+export function localizeAgentLog(log: AgentActionLog, t: (key: TranslationKey, params?: Record<string, string | number>) => string): AgentActionLog {
+  if (!log.localized) return log
+  const format = (text: AgentLocalizedText) => formatAgentText(text, (key, params) => t(`agentMain.${key}`, params))
+  return {
+    ...log,
+    message: log.localized.message ? format(log.localized.message) : log.message,
+    detail: log.localized.detail ? renderAgentLines(log.localized.detail, format) : log.detail,
+  }
+}
 
 export function getStepModelName(message?: string, defaultModelName?: string): string {
   if (!message) return defaultModelName || 'LLM'

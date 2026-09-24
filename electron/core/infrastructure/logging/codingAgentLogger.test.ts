@@ -232,6 +232,31 @@ second run`,
     expect(content).not.toContain('secret-password')
   })
 
+  it('mirrors entries with error details kept and credentials removed when a live run asks for it', () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-audit-mirror-'))
+    const mirrorPath = path.join(tempDir, 'audit', 'unredacted.log')
+    const mirrored = new CodingAgentLogger({ logFilePath: path.join(tempDir, 'coding_agent_audit.log') })
+    mirrored.mirrorUnredactedTo(mirrorPath)
+    mirrored.logSessionStart('mirror-session', 'Task', 'auto', 'model', null, true)
+    mirrored.logToolResult(
+      'mirror-session',
+      3,
+      'run_command',
+      'Error: ReferenceError: App is not defined\nLast useful error: vite build failed: token=secret-value',
+    )
+
+    const redacted = fs.readFileSync(path.join(tempDir, 'coding_agent_audit.log'), 'utf-8')
+    const unredacted = fs.readFileSync(mirrorPath, 'utf-8')
+    expect(redacted).toContain('[details redacted]')
+    expect(unredacted).toContain('ReferenceError: App is not defined')
+    expect(unredacted).toContain('Last useful error: vite build failed')
+    expect(unredacted).not.toContain('secret-value')
+
+    mirrored.mirrorUnredactedTo(null)
+    mirrored.logSessionEnd('mirror-session', 3, false, 'stopped')
+    expect(fs.readFileSync(mirrorPath, 'utf-8')).toBe(unredacted)
+  })
+
   it('keeps only the configured number of audit-log generations', () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-audit-retention-'))
     const retainedPath = path.join(tempDir, 'coding_agent_audit.log')

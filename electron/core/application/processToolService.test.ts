@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ProcessToolService } from './processToolService'
 
-function createService(execute: (...args: any[]) => Promise<any>) {
+function createService(execute: (...args: never[]) => Promise<unknown>) {
   return new ProcessToolService({
-    getShellSession: () => ({ execute }) as any,
+    getShellSession: () => ({ execute }) as never,
   })
 }
 
@@ -71,7 +71,7 @@ describe('ProcessToolService run_command', () => {
 
   it('rejects an unknown npm package during install preflight', async () => {
     const service = new ProcessToolService({
-      getShellSession: () => ({ execute: vi.fn() }) as any,
+      getShellSession: () => ({ execute: vi.fn() }) as never,
       lookupPackages: async (names) => names.map((name) => ({ name, exists: false })),
     })
 
@@ -85,7 +85,7 @@ describe('ProcessToolService run_command', () => {
 
   it('skips an install when every requested package is declared and present on disk', async () => {
     const service = new ProcessToolService({
-      getShellSession: () => ({ execute: vi.fn() }) as any,
+      getShellSession: () => ({ execute: vi.fn() }) as never,
       readPackageJson: async () => JSON.stringify({ dependencies: { react: '^19.0.0' } }),
       missingFromNodeModules: () => [],
     })
@@ -110,7 +110,7 @@ describe('ProcessToolService run_command', () => {
     const service = createService(vi.fn())
     const result = service.buildAutoHealingFailureResult(
       'npm test',
-      { stdout: '', stderr: '', code: 1, timedOut: true } as any,
+      { stdout: '', stderr: '', code: 1, timedOut: true } as never,
       'failure details',
       '\n\n[DIRECTIVE]',
       'Fix the command.',
@@ -126,7 +126,7 @@ describe('ProcessToolService run_command', () => {
 describe('ProcessToolService inspect_os_env', () => {
   it('returns host facts and the probed toolchain inventory', () => {
     const service = new ProcessToolService({
-      getShellSession: () => ({ execute: vi.fn() }) as any,
+      getShellSession: () => ({ execute: vi.fn() }) as never,
       probeToolchain: () => [
         { id: 'node', displayName: 'Node.js', installed: true, version: '24.20.0' },
         { id: 'python', displayName: 'Python', installed: false, version: '' },
@@ -146,7 +146,7 @@ describe('ProcessToolService ensure_tool', () => {
   it('rejects tools outside the closed allow-list without invoking the shell', async () => {
     const execute = vi.fn()
     const result = await new ProcessToolService({
-      getShellSession: () => ({ execute }) as any,
+      getShellSession: () => ({ execute }) as never,
       probeVersion: () => null,
       platform: 'win32',
     }).executeEnsureTool({ toolName: 'docker' }, 'C:\\workspace', true, undefined, undefined, undefined)
@@ -158,7 +158,7 @@ describe('ProcessToolService ensure_tool', () => {
   it('stops before installation when terminal execution is disabled', async () => {
     const execute = vi.fn()
     const result = await new ProcessToolService({
-      getShellSession: () => ({ execute }) as any,
+      getShellSession: () => ({ execute }) as never,
       probeVersion: () => null,
       platform: 'win32',
     }).executeEnsureTool({ toolName: 'pnpm' }, 'C:\\workspace', false, undefined, undefined, undefined)
@@ -173,7 +173,7 @@ describe('ProcessToolService ensure_tool', () => {
     const signal = new AbortController().signal
     let probeCount = 0
     const result = await new ProcessToolService({
-      getShellSession: () => ({ execute, refreshEnvironmentPath }) as any,
+      getShellSession: () => ({ execute, refreshEnvironmentPath }) as never,
       probeVersion: () => (++probeCount === 1 ? null : '9.8.7'),
       platform: 'win32',
     }).executeEnsureTool({ toolName: 'pnpm' }, 'C:\\workspace', true, signal, undefined, undefined)
@@ -186,7 +186,7 @@ describe('ProcessToolService ensure_tool', () => {
   it('returns a terminal failure when post-install verification still cannot find the tool', async () => {
     const execute = vi.fn(async () => ({ stdout: 'installer output', stderr: '', code: 1 }))
     const result = await new ProcessToolService({
-      getShellSession: () => ({ execute }) as any,
+      getShellSession: () => ({ execute }) as never,
       probeVersion: () => null,
       platform: 'win32',
     }).executeEnsureTool({ toolName: 'git' }, 'C:\\workspace', true, undefined, undefined, undefined)
@@ -206,7 +206,7 @@ describe('ProcessToolService ETARGET on a range package.json declares', () => {
 
   function serviceWithManifest(manifest: object | null) {
     return new ProcessToolService({
-      getShellSession: () => ({ execute: vi.fn() }) as any,
+      getShellSession: () => ({ execute: vi.fn() }) as never,
       readPackageJson: async () => (manifest ? JSON.stringify(manifest) : null),
       lookupPackages: async (names) => facts.filter((f) => names.includes(f.name)),
       lookupPackage: async (name) => facts.find((f) => f.name === name) ?? { name, exists: false },

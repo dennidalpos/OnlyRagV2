@@ -4,6 +4,7 @@ import { it } from './locales/it'
 import { en } from './locales/en'
 import { logger } from '../lib/logger'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import { interpolateTemplate } from '../../shared/domain/agent/agentMainText'
 
 type NestedKeyOf<ObjectType extends object> = {
   [Key in keyof ObjectType & (string | number)]: ObjectType[Key] extends object ? `${Key}.${NestedKeyOf<ObjectType[Key]>}` : `${Key}`
@@ -38,7 +39,7 @@ function lookup(dictionary: TranslationSchema, key: string): string | undefined 
 }
 
 function interpolate(template: string, params?: Record<string, string | number>): string {
-  return params ? Object.entries(params).reduce((acc, [name, value]) => acc.replaceAll(`{${name}}`, String(value)), template) : template
+  return params ? interpolateTemplate(template, params) : template
 }
 
 /** Non-hook translation in the active provider language (Italian fallback, then the key itself). */

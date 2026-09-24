@@ -56,6 +56,8 @@ complexity check -> [interview -> plan] -> collect_context -> propose_action
 | Ripetizione di un'azione già riuscita | 3 avvisi `redundant_success` | poi conta come blocco di loop |
 | Blocco di loop | 2 avvisi, poi un blocco su due sposta la milestone attiva (`force_advance`) | a 20 blocchi senza budget di step: `stagnation_abort` |
 | Domanda vaga in AUTO | 2 reindirizzamenti, condivisi con i blocchi di loop | poi chiusura `ask_redirect` |
+| Domanda sulle versioni delle dipendenze in AUTO | risposta dell'applicazione dal registro npm ([`versionQuestion.ts`](../electron/core/domain/agent/versionQuestion.ts): pacchetti nominati o `nome@versione`, altrimenti tutti quelli dichiarati in `package.json`, al massimo 12), la run prosegue; consuma lo stesso budget dei reindirizzamenti | a budget esaurito: chiusura `ask_redirect` |
+| `read_file` su una directory o su un file che non esiste | non è un errore di esecuzione: la directory viene elencata, il file mancante restituisce `[FILE NOT FOUND: …]` con l'elenco della cartella madre ([`readFileTool.ts`](../electron/core/domain/agent/tools/fs/readFileTool.ts)) | nessuno: i guard di lettura ripetuta restano attivi |
 | Step eseguiti senza modifiche effettive | 12 | chiusura `no_mutation` |
 | Chiamata negata dalla policy del turno (tool non esposto dalla fase) | registrata come guard `tool_policy` e contata come step senza modifiche | con gli step precedenti: chiusura `no_mutation` |
 | Conflitto di versione in attesa di rilettura, modello che propone altro | l'applicazione esegue lei stessa `read_file` sul file in conflitto (sola lettura) al posto della chiamata proposta | nessuno: la lettura sblocca la modifica successiva |

@@ -85,7 +85,7 @@ describe('diffEngine — unified diff parsing', () => {
 
   it('should return an empty list for empty or non-diff input instead of throwing', () => {
     expect(parseUnifiedDiff('')).toEqual([])
-    expect(parseUnifiedDiff(null as any)).toEqual([])
+    expect(parseUnifiedDiff(null as never)).toEqual([])
     expect(parseUnifiedDiff('No uncommitted changes in Git working tree.')).toEqual([])
   })
 })

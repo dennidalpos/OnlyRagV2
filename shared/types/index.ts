@@ -209,10 +209,13 @@ export interface AgentActionLog extends Partial<AgentRunIdentity> {
     passedCount?: number
     failedCount?: number
   }
+  /** Main-side text in message keys the renderer shows in the UI language; `message`/`detail` hold the Italian fallback. */
+  localized?: AgentLocalizedLog
   meta?: Record<string, unknown>
 }
 
 import type { AgentCompletionEvidence, AgentCompletionStatus, ExecutedPrompt, ExecutedPromptOutcome, QueuedPromptRecord, WorkspaceProject } from './workspace'
+import type { AgentLocalizedLog } from '../domain/agent/agentMainText'
 
 export * from './workspace'
 

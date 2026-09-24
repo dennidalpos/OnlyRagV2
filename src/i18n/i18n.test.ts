@@ -1,14 +1,20 @@
 import { describe, it as test, expect } from 'vitest'
-import { it as itLocale } from './locales/it'
-import { en as enLocale } from './locales/en'
+import { it as itSchema } from './locales/it'
+import { en as enSchema } from './locales/en'
+
+type LocaleTree = { readonly [key: string]: string | LocaleTree }
+
+const itLocale = itSchema as unknown as LocaleTree
+const enLocale = enSchema as unknown as LocaleTree
 
 // Helper to recursively collect all keys
-function collectKeys(obj: any, prefix = ''): string[] {
+function collectKeys(obj: LocaleTree, prefix = ''): string[] {
   let keys: string[] = []
   for (const k of Object.keys(obj)) {
     const nextPrefix = prefix ? `${prefix}.${k}` : k
-    if (typeof obj[k] === 'object' && obj[k] !== null) {
-      keys = keys.concat(collectKeys(obj[k], nextPrefix))
+    const value = obj[k]
+    if (typeof value === 'object' && value !== null) {
+      keys = keys.concat(collectKeys(value, nextPrefix))
     } else {
       keys.push(nextPrefix)
     }
@@ -29,12 +35,12 @@ describe('i18n Localization Unit Tests', () => {
     const itKeys = collectKeys(itLocale)
     for (const key of itKeys) {
       const parts = key.split('.')
-      let val: any = itLocale
+      let val: string | LocaleTree = itLocale
       for (const p of parts) {
-        val = val[p]
+        val = (val as LocaleTree)[p]
       }
       expect(typeof val).toBe('string')
-      expect(val.trim().length).toBeGreaterThan(0)
+      expect(String(val).trim().length).toBeGreaterThan(0)
     }
   })
 
@@ -42,12 +48,19 @@ describe('i18n Localization Unit Tests', () => {
     const enKeys = collectKeys(enLocale)
     for (const key of enKeys) {
       const parts = key.split('.')
-      let val: any = enLocale
+      let val: string | LocaleTree = enLocale
       for (const p of parts) {
-        val = val[p]
+        val = (val as LocaleTree)[p]
       }
       expect(typeof val).toBe('string')
-      expect(val.trim().length).toBeGreaterThan(0)
+      expect(String(val).trim().length).toBeGreaterThan(0)
+    }
+  })
+
+  test('keeps the placeholders of every Main timeline template in both languages', () => {
+    const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort()
+    for (const [key, template] of Object.entries(itSchema.agentMain)) {
+      expect(placeholders(enSchema.agentMain[key as keyof typeof itSchema.agentMain]), key).toEqual(placeholders(template))
     }
   })
 })

@@ -61,7 +61,7 @@ export class FsToolService {
   constructor(private readonly dependencies: DeleteFileDependencies) {}
 
   executeReadFile(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): Promise<ToolExecutionResult> {
-    return executeReadFileTool(parameters, workspacePath, this.dependencies.readRepository!)
+    return executeReadFileTool(parameters, workspacePath, this.dependencies.readRepository!, this.dependencies.directoryRepository)
   }
 
   executeExtractCodeSymbols(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): Promise<ToolExecutionResult> {

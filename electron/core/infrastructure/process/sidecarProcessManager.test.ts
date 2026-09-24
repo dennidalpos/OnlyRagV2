@@ -24,9 +24,10 @@ afterEach(() => {
 describe('SidecarProcessManager process state', () => {
   it('marks an online sidecar offline when its owned process exits', () => {
     const manager = new SidecarProcessManager()
-    ;(manager as any).state = { status: 'online' }
+    const internals = manager as unknown as { state: { status: string }; markProcessExited(code: number): void }
+    internals.state = { status: 'online' }
 
-    ;(manager as any).markProcessExited(1)
+    internals.markProcessExited(1)
 
     expect(manager.getSidecarState()).toEqual({ status: 'offline', error: 'Process exited with code 1' })
   })

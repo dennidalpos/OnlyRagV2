@@ -1,5 +1,6 @@
 import type { UntrustedJson } from '../../../../shared/types'
 import type { AgentCompletionEvidence, AgentCompletionStatus, AgentRunIdentity, AgentTaskRequest } from '../../../../shared/types'
+import type { AgentLocalizedLog } from '../../../../shared/domain/agent/agentMainText'
 
 export type { ActiveFileContext, AgentMode } from '../../../../shared/types'
 
@@ -42,6 +43,8 @@ export interface AgentLogEntry {
     passedCount?: number
     failedCount?: number
   }
+  /** Message keys the renderer localizes; `message`/`detail` hold the Italian fallback. */
+  localized?: AgentLocalizedLog
 }
 
 export interface AgentTaskResult {

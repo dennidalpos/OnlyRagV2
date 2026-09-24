@@ -431,7 +431,7 @@ describe('usePlanApproval interview and error flow', () => {
   })
 
   it('ignores a late plan response after a newer request starts', async () => {
-    let resolveFirst!: (value: any) => void
+    let resolveFirst!: (value: unknown) => void
     const agentPlanGenerate = vi
       .fn()
       .mockImplementationOnce(

@@ -78,7 +78,24 @@ function createMockSidecar(routes: MockRoute[]): Promise<{ server: http.Server; 
 // service sends (mirrors SidecarSlmBridgeService.analyzeLogs()).
 // ---------------------------------------------------------------------------
 
-async function callAnalyzeLogs(baseUrl: string, extraPaths?: string[]): Promise<unknown> {
+interface LogAnomaly {
+  anomaly_type: string
+  severity: string
+}
+
+interface AnalyzeLogsResponse {
+  status: number
+  error?: string
+  body: {
+    has_critical: boolean
+    anomalies: LogAnomaly[]
+    summary: string
+    scanned_files: string[]
+    total_lines_scanned: number
+  }
+}
+
+async function callAnalyzeLogs(baseUrl: string, extraPaths?: string[]): Promise<AnalyzeLogsResponse> {
   return new Promise((resolve) => {
     const body = JSON.stringify({ extra_paths: extraPaths ?? [] })
     const url = new URL('/agent/logs/analyze', baseUrl)
@@ -95,10 +112,12 @@ async function callAnalyzeLogs(baseUrl: string, extraPaths?: string[]): Promise<
         res.on('data', (c) => {
           raw += c
         })
-        res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(raw) }))
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body: JSON.parse(raw) }))
       },
     )
-    req.on('error', (e) => resolve({ status: 0, error: e.message }))
+    req.on('error', (e) =>
+      resolve({ status: 0, error: e.message, body: { has_critical: false, anomalies: [], summary: '', scanned_files: [], total_lines_scanned: 0 } }),
+    )
     req.write(body)
     req.end()
   })
@@ -126,7 +145,7 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     })
 
     it('returns 200 with empty anomalies and has_critical=false for clean logs', async () => {
-      const res = (await callAnalyzeLogs(baseUrl)) as any
+      const res = await callAnalyzeLogs(baseUrl)
       expect(res.status).toBe(200)
       expect(res.body.has_critical).toBe(false)
       expect(res.body.anomalies).toHaveLength(0)
@@ -134,7 +153,7 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     })
 
     it('response body matches SlmLogDiagnosticReport schema shape', async () => {
-      const res = (await callAnalyzeLogs(baseUrl)) as any
+      const res = await callAnalyzeLogs(baseUrl)
       expect(res.body).toHaveProperty('scanned_files')
       expect(res.body).toHaveProperty('total_lines_scanned')
       expect(res.body).toHaveProperty('anomalies')
@@ -148,7 +167,7 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     it('forwards extra_paths in the request body', async () => {
       // Verify our caller serialises extra_paths correctly (mock ignores it,
       // but the request must still succeed — no schema error)
-      const res = (await callAnalyzeLogs(baseUrl, ['/custom/logs/'])) as any
+      const res = await callAnalyzeLogs(baseUrl, ['/custom/logs/'])
       expect(res.status).toBe(200)
     })
   })
@@ -170,18 +189,18 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     })
 
     it('returns has_critical=true with CUDA_OOM and TOOL_LOOP anomalies', async () => {
-      const res = (await callAnalyzeLogs(baseUrl)) as any
+      const res = await callAnalyzeLogs(baseUrl)
       expect(res.status).toBe(200)
       expect(res.body.has_critical).toBe(true)
       expect(res.body.anomalies.length).toBeGreaterThanOrEqual(2)
 
-      const types = res.body.anomalies.map((a: any) => a.anomaly_type)
+      const types = res.body.anomalies.map((a) => a.anomaly_type)
       expect(types).toContain('CUDA_OOM')
       expect(types).toContain('TOOL_LOOP')
     })
 
     it('each anomaly record has all required fields', async () => {
-      const res = (await callAnalyzeLogs(baseUrl)) as any
+      const res = await callAnalyzeLogs(baseUrl)
       for (const anomaly of res.body.anomalies) {
         expect(anomaly).toHaveProperty('anomaly_type')
         expect(anomaly).toHaveProperty('severity')
@@ -194,8 +213,8 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     })
 
     it('CRITICAL anomalies have severity CRITICAL', async () => {
-      const res = (await callAnalyzeLogs(baseUrl)) as any
-      const criticals = res.body.anomalies.filter((a: any) => a.anomaly_type === 'CUDA_OOM')
+      const res = await callAnalyzeLogs(baseUrl)
+      const criticals = res.body.anomalies.filter((a) => a.anomaly_type === 'CUDA_OOM')
       expect(criticals.length).toBeGreaterThan(0)
       expect(criticals[0].severity).toBe('CRITICAL')
     })
@@ -208,7 +227,7 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     const deadPort = 19999
 
     it('analyzeLogs() returns a response (error surfaced, not thrown) when sidecar is down', async () => {
-      const res = (await callAnalyzeLogs(`http://127.0.0.1:${deadPort}`)) as any
+      const res = await callAnalyzeLogs(`http://127.0.0.1:${deadPort}`)
       expect(res).toBeDefined()
       expect(res.status === 0 || res.error).toBeTruthy()
     })

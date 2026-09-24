@@ -4,7 +4,7 @@ import type { IElectronAPI } from '../shared/types'
 const electronMock = vi.hoisted(() => ({
   api: null as IElectronAPI | null,
   invoke: vi.fn(),
-  listeners: new Map<string, Set<(...args: any[]) => void>>(),
+  listeners: new Map<string, Set<(...args: unknown[]) => void>>(),
 }))
 
 vi.mock('electron', () => ({
@@ -15,12 +15,12 @@ vi.mock('electron', () => ({
   },
   ipcRenderer: {
     invoke: electronMock.invoke,
-    on: vi.fn((channel: string, listener: (...args: any[]) => void) => {
+    on: vi.fn((channel: string, listener: (...args: unknown[]) => void) => {
       const listeners = electronMock.listeners.get(channel) || new Set()
       listeners.add(listener)
       electronMock.listeners.set(channel, listeners)
     }),
-    removeListener: vi.fn((channel: string, listener: (...args: any[]) => void) => {
+    removeListener: vi.fn((channel: string, listener: (...args: unknown[]) => void) => {
       electronMock.listeners.get(channel)?.delete(listener)
     }),
   },

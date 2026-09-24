@@ -47,7 +47,7 @@ describe('SystemAppService Unit Tests', () => {
     it('should reject invalid or non-http/mailto schemes', async () => {
       const openedUrls: string[] = []
       const customService = new SystemAppService(
-        { loadSettings: async () => ({ capabilityPolicyMode: 'network-approved' }) as any },
+        { loadSettings: async () => ({ capabilityPolicyMode: 'network-approved' }) as never },
         {
           openExternal: async (u) => {
             openedUrls.push(u)
@@ -66,7 +66,7 @@ describe('SystemAppService Unit Tests', () => {
     it('should block external URLs when policy is offline-strict', async () => {
       const openedUrls: string[] = []
       const customService = new SystemAppService(
-        { loadSettings: async () => ({ capabilityPolicyMode: 'offline-strict' }) as any },
+        { loadSettings: async () => ({ capabilityPolicyMode: 'offline-strict' }) as never },
         {
           openExternal: async (u) => {
             openedUrls.push(u)
@@ -84,7 +84,7 @@ describe('SystemAppService Unit Tests', () => {
     it('should block non-loopback URLs when policy is local-only', async () => {
       const openedUrls: string[] = []
       const customService = new SystemAppService(
-        { loadSettings: async () => ({ capabilityPolicyMode: 'local-only' }) as any },
+        { loadSettings: async () => ({ capabilityPolicyMode: 'local-only' }) as never },
         {
           openExternal: async (u) => {
             openedUrls.push(u)
@@ -104,7 +104,7 @@ describe('SystemAppService Unit Tests', () => {
     it('should allow external URLs when policy is permissive or default', async () => {
       const openedUrls: string[] = []
       const customService = new SystemAppService(
-        { loadSettings: async () => ({ capabilityPolicyMode: 'network-approved' }) as any },
+        { loadSettings: async () => ({ capabilityPolicyMode: 'network-approved' }) as never },
         {
           openExternal: async (u) => {
             openedUrls.push(u)

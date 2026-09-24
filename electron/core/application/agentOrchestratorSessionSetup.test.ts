@@ -46,7 +46,7 @@ describe('agentOrchestratorSessionSetup', () => {
       workspacePath: 'C:\\Program Files\\OnlyRag V2',
       isStandaloneMode: false,
       sessionId,
-    } as any)
+    } as never)
     expect(resolved).toBeNull()
   })
 

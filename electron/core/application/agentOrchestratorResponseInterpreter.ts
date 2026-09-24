@@ -151,6 +151,7 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
       persistCurrentState: ctx.persistCurrentState,
       finalizeSession: ctx.finalizeSession,
       closeApplicationRun: ctx.closeApplicationRun,
+      answerVersionQuestion: (question) => agentToolExecutorService.answerVersionQuestion(question, ctx.workspacePath),
     })
     return askOutcome
   }

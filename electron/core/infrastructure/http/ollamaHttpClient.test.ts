@@ -144,7 +144,7 @@ describe('OllamaHttpClient — structured chat responses', () => {
   let server: http.Server
   let client: OllamaHttpClient
   let responseBody: Record<string, unknown>
-  let capturedRequest: any
+  let capturedRequest: Record<string, unknown> | null
 
   beforeEach(async () => {
     capturedRequest = null
@@ -211,7 +211,7 @@ describe('OllamaHttpClient — structured chat responses', () => {
       think: false,
       options: { num_ctx: 4096, temperature: 0, num_predict: 128 },
     })
-    expect(capturedRequest.tools).toBeUndefined()
+    expect(capturedRequest?.tools).toBeUndefined()
   })
 
   it('sends enabled thinking while returning only final JSON content', async () => {
@@ -220,14 +220,14 @@ describe('OllamaHttpClient — structured chat responses', () => {
       message: { content: '{"result":"ok"}', thinking: 'not JSON' },
     }
     const result = await client.generateStructured({ ...request(), think: true })
-    expect(capturedRequest.think).toBe(true)
+    expect(capturedRequest?.think).toBe(true)
     expect(result).toMatchObject({ status: 'complete', content: '{"result":"ok"}' })
   })
 
   it('passes a reasoning level through for level-only models', async () => {
     responseBody = { done: true, message: { content: '{"result":"ok"}', thinking: 'brief' } }
     await client.generateStructured({ ...request(), think: 'low' })
-    expect(capturedRequest.think).toBe('low')
+    expect(capturedRequest?.think).toBe('low')
   })
 
   it('reports missing completion and length truncation as incomplete', async () => {
@@ -310,7 +310,8 @@ describe('OllamaHttpClient — immutable request hosts', () => {
 
   it('retains HTTPS as an explicit transport choice', () => {
     const client = new OllamaHttpClient()
-    expect((client as any).resolveUrl('/api/tags', 'https://ollama.example.test')).toMatchObject({
+    const internals = client as unknown as { resolveUrl(path: string, host: string): unknown }
+    expect(internals.resolveUrl('/api/tags', 'https://ollama.example.test')).toMatchObject({
       protocol: 'https:',
       hostname: 'ollama.example.test',
       port: 443,

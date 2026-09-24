@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { logger } from './logger'
-import { sanitizeLogMessage } from '../../../logRedactor'
+import { redactSecrets, sanitizeLogMessage } from '../../../logRedactor'
 import { AgentRunMetrics } from '../../domain/agent/agentRunMetrics'
 import { createHash } from 'node:crypto'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
@@ -19,6 +19,8 @@ export class CodingAgentLogger {
   private previousPromptBySession = new Map<string, { step: number; prompt: string }>()
   private runMetricsBySession = new Map<string, AgentRunMetrics>()
   private payloadCaptureBySession = new Map<string, boolean>()
+  /** Local live-run diagnosis only (scripts/live): the app never sets it, so persisted app logs stay redacted. */
+  private unredactedMirrorPath: string | null = null
 
   constructor(options?: { logFilePath?: string; maxSizeBytes?: number; maxRetainedFiles?: number }) {
     const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : process.cwd()
@@ -38,6 +40,20 @@ export class CodingAgentLogger {
 
   public getLogFilePath(): string {
     return this.logFilePath
+  }
+
+  /**
+   * Mirrors every later entry to `filePath` with credentials removed but paths, URLs and error
+   * details kept: the redacted audit log hid the runner messages live full task runs 12-26 had to
+   * be diagnosed from. `null` stops the mirror.
+   */
+  public mirrorUnredactedTo(filePath: string | null): void {
+    if (filePath) fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    this.unredactedMirrorPath = filePath
+  }
+
+  public getUnredactedMirrorPath(): string | null {
+    return this.unredactedMirrorPath
   }
 
   public configureRetention(maxRetainedFiles: number): void {
@@ -168,8 +184,10 @@ export class CodingAgentLogger {
     try {
       this.rotateIfNeeded()
       const timestamp = new Date().toISOString()
-      const formatted = `\n================================================================================\n[${timestamp}] ${sanitizeLogMessage(sectionHeader)}\n================================================================================\n${sanitizeLogMessage(bodyContent).trim()}\n`
-      fs.appendFileSync(this.logFilePath, formatted, 'utf-8')
+      const format = (redact: (message: string) => string) =>
+        `\n================================================================================\n[${timestamp}] ${redact(sectionHeader)}\n================================================================================\n${redact(bodyContent).trim()}\n`
+      fs.appendFileSync(this.logFilePath, format(sanitizeLogMessage), 'utf-8')
+      if (this.unredactedMirrorPath) fs.appendFileSync(this.unredactedMirrorPath, format(redactSecrets), 'utf-8')
     } catch (err: unknown) {
       logger.log('WARN', 'CodingAgentLogger', `Failed writing agent audit log: ${errorMessage(err)}`)
     }

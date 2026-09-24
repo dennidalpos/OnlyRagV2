@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const handlers = new Map<string, (...args: any[]) => any>()
+const handlers = new Map<string, (...args: unknown[]) => unknown>()
 
 vi.mock('electron', async (importOriginal) => ({
   ...(await importOriginal<typeof import('electron')>()),
   ipcMain: {
-    handle: vi.fn((channel: string, handler: (...args: any[]) => any) => {
+    handle: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(channel, handler)
     }),
   },

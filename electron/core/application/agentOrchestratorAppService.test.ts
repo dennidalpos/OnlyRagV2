@@ -626,7 +626,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     expect(fs.existsSync(path.join(tempDir, 'legacy.txt'))).toBe(false)
     const saved = JSON.parse(fs.readFileSync(path.join(sessionDir, `.agent_state_${sessionId}.json`), 'utf-8'))
-    const m1 = saved.planMilestones.find((m: any) => m.id === 'm-1')
+    const m1 = saved.planMilestones.find((m: { id: string }) => m.id === 'm-1')
     expect(m1.status).not.toBe('verified')
     expect(m1.notes).toContain('refused')
   })
@@ -639,7 +639,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     await runAgentOrchestratorLoop({ userTask: 'List the workspace', agentMode: 'auto', workspacePath: tempDir }, null)
 
-    const ctxPerTurn = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls.map((call) => (call[0] as any).runtimeOpts.num_ctx as number)
+    const ctxPerTurn = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls.map((call) => call[0].runtimeOpts.num_ctx)
 
     expect(ctxPerTurn.length).toBeGreaterThanOrEqual(2)
     for (let i = 1; i < ctxPerTurn.length; i++) {
@@ -651,10 +651,10 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   it('should disarm the session watchdog when the loop exits early', async () => {
     vi.useFakeTimers()
     try {
-      const sent: Array<{ channel: string; payload: any }> = []
+      const sent: Array<{ channel: string; payload: unknown }> = []
       const fakeWin: RendererEventSink = {
         isAvailable: () => true,
-        send: (channel: string, payload: any) => sent.push({ channel, payload }),
+        send: (channel: string, payload: unknown) => sent.push({ channel, payload }),
       }
 
       vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(

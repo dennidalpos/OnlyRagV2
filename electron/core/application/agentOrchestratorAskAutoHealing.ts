@@ -1,6 +1,7 @@
 import type { AgentToolCall, AgentTaskResult, AgentLogEntry } from '../domain/agent/agentTypes'
 import type { AgentExecutionMode, AgentGuardEvent, AppSettings } from '../../../shared/types'
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
+import { isVersionQuestion } from '../domain/agent/versionQuestion'
 import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
@@ -27,14 +28,36 @@ export interface AskToolContext {
   persistCurrentState: () => Promise<void>
   finalizeSession: () => void
   closeApplicationRun: (request: ApplicationClosureRequest) => Promise<ApplicationClosureOutcome>
+  /** Registry-backed answer to a dependency version question. */
+  answerVersionQuestion: (question: string) => Promise<string>
 }
 
 export type AskToolOutcome = { outcome: 'continue' } | { outcome: 'return'; result: AgentTaskResult }
 
-/** In Auto mode, intercepts vague clarification after a failure and redirects the model to recovery. */
+/** In Auto mode, answers version questions from the registry, intercepts vague clarification after a failure and redirects the model to recovery. */
 export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome> {
   const { parsedTool } = ctx
   const question = parsedTool.parameters?.question || parsedTool.parameters?.query || parsedTool.explanation || 'Clarification requested from user.'
+
+  // Shares the redirect budget, so a model that keeps asking about versions still reaches the ask_redirect closure.
+  if (ctx.agentMode === 'auto' && isVersionQuestion(question) && ctx.stepCount < ctx.maxSteps && ctx.progress.tryAskRedirect()) {
+    const answer = await ctx.answerVersionQuestion(question)
+    recordGuardEvent(ctx.guardEvents, 'ask_redirect', 'advise', ctx.stepCount)
+    ctx.episodicCompactor.recordStep(
+      {
+        step: ctx.stepCount,
+        tool: 'ask',
+        status: 'BLOCKED',
+        summary: 'Version question answered from the npm registry in AUTO mode',
+      },
+      answer,
+    )
+    ctx.emitLog('info', `📦 Domanda sulle versioni risolta dal registro npm: ${question}`, answer)
+    if (ctx.settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'ask', answer)
+    }
+    return { outcome: 'continue' }
+  }
 
   const historyText = ctx.compiledHistoryBlock.toLowerCase()
   const hasCancellationInHistory = historyText.includes('cancelled') || historyText.includes('canceled') || historyText.includes('interrupted')

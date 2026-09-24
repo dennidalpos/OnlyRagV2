@@ -31,7 +31,7 @@ describe('ProjectRegistryAppService project removal and purge fan-out', () => {
   })
 
   it('removeProject should clear sessions, purge prompt history, and unregister project', async () => {
-    ;(projectRegistryRepository.remove as any).mockResolvedValue(true)
+    vi.mocked(projectRegistryRepository.remove).mockResolvedValue(true)
 
     const result = await projectRegistryAppService.removeProject('/repo/a')
 
@@ -42,7 +42,7 @@ describe('ProjectRegistryAppService project removal and purge fan-out', () => {
   })
 
   it('removeProject should safely purge internal .onlyrag metadata without deleting user workspace folder', async () => {
-    ;(projectRegistryRepository.remove as any).mockResolvedValue(true)
+    vi.mocked(projectRegistryRepository.remove).mockResolvedValue(true)
 
     // Create a real temp workspace with user file and .onlyrag metadata folder
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-proj-test-'))

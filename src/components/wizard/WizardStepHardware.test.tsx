@@ -23,8 +23,8 @@ describe('WizardStepHardware remote recovery', () => {
     await act(async () =>
       root.render(
         <WizardStepHardware
-          diagnostics={{ ollama: { status: 'offline', models: [] } } as any}
-          recommendations={{ profileName: 'Test', safeVramBudgetGB: 0, gpuSummary: 'CPU', ramSummary: '16 GB' } as any}
+          diagnostics={{ ollama: { status: 'offline', models: [] } } as never}
+          recommendations={{ profileName: 'Test', safeVramBudgetGB: 0, gpuSummary: 'CPU', ramSummary: '16 GB' } as never}
           downloadedModels={[]}
           isInstallingOllama={false}
           onLaunchOrInstallOllama={vi.fn()}

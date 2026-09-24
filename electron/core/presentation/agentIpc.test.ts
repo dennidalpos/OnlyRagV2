@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const handlers = new Map<string, (...args: any[]) => any>()
+const handlers = new Map<string, (...args: unknown[]) => unknown>()
 
 vi.mock('electron', async (importOriginal) => ({
   ...(await importOriginal<typeof import('electron')>()),
   app: { getPath: vi.fn(() => process.cwd()) },
   BrowserWindow: class {},
   ipcMain: {
-    handle: vi.fn((channel: string, handler: (...args: any[]) => any) => {
+    handle: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(channel, handler)
     }),
-    on: vi.fn((channel: string, handler: (...args: any[]) => any) => {
+    on: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(channel, handler)
     }),
   },
@@ -218,7 +218,7 @@ describe('agent IPC session-state facade', () => {
   })
 
   it('forwards workspace context and prior decisions to interview and planning', async () => {
-    const settings = {} as any
+    const settings = {} as never
     const decisions = [{ questionId: 'q1', questionText: 'Storage', selectedOption: 'Local' }]
 
     await handlers.get('agent:plan-interview')?.(trustedEvent, 'Build app', 'model', settings, '/repo', decisions)

@@ -18,7 +18,8 @@ import { AtomicWorkspaceJournal, RollbackResult } from '../infrastructure/filesy
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { PersistentPowerShellSession } from '../infrastructure/process/persistentPowerShellSession'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
-import { declaredDependencies, findVersionReality, buildVersionRealityDirective } from '../domain/agent/dependencyVersionReality'
+import { declaredDependencies, findVersionReality, buildVersionRealityDirective, type DeclaredDependency } from '../domain/agent/dependencyVersionReality'
+import { buildVersionAnswer, versionQuestionPackages } from '../domain/agent/versionQuestion'
 import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
 import { extractRequestedPackages } from '../domain/agent/installCommandParser'
 import { evaluateFileImportIntegrity } from '../domain/agent/importDeclarationGate'
@@ -321,6 +322,25 @@ export class AgentToolExecutorService {
     }
     logger.log('WARN', 'AgentToolExecutor', `[VERSION_REALITY] package.json declares versions the registry contradicts`)
     return directive
+  }
+
+  /** Registry-backed answer to a version question the model asked in AUTO mode (see versionQuestion.ts). */
+  async answerVersionQuestion(question: string, workspacePath: string | null | undefined): Promise<string> {
+    let declared: DeclaredDependency[] = []
+    if (workspacePath) {
+      const manifest = await this.repo.readFile(path.join(workspacePath, 'package.json'))
+      try {
+        declared = manifest.success && manifest.content ? declaredDependencies(JSON.parse(manifest.content)) : []
+      } catch {
+        declared = [] // Malformed JSON: the question is answered from the names it carries.
+      }
+    }
+    const names = versionQuestionPackages(
+      question,
+      declared.map((dependency) => dependency.name),
+    )
+    const facts = names.length > 0 ? await npmRegistryClient.lookupAll(names) : []
+    return buildVersionAnswer(facts, declared)
   }
 
   /** When the user approved only a subset of hunks in the PendingApprovalModal (instead of the whole proposal), rewrites the tool call into an equivalent write_file carrying just the approved hunks' effect, computed against the file's current on-disk content — the */

@@ -23,7 +23,7 @@ describe('WorkspaceAppService File Deletion & Reference Purge Unit Tests', () =>
   })
 
   it('blocks non-agent web access when offline-strict is enabled', async () => {
-    vi.mocked(appSettingsRepository.loadSettings).mockResolvedValue({ capabilityPolicyMode: 'offline-strict' } as any)
+    vi.mocked(appSettingsRepository.loadSettings).mockResolvedValue({ capabilityPolicyMode: 'offline-strict' } as never)
     const search = vi.spyOn(webClient, 'searchWeb')
 
     const result = await workspaceAppService.searchWeb('blocked query')
@@ -33,7 +33,7 @@ describe('WorkspaceAppService File Deletion & Reference Purge Unit Tests', () =>
   })
 
   it('allows loopback fetches but blocks external fetches in local-only mode', async () => {
-    vi.mocked(appSettingsRepository.loadSettings).mockResolvedValue({ capabilityPolicyMode: 'local-only' } as any)
+    vi.mocked(appSettingsRepository.loadSettings).mockResolvedValue({ capabilityPolicyMode: 'local-only' } as never)
     const fetchContent = vi.spyOn(webClient, 'fetchWebContent').mockResolvedValue({ success: true, content: 'local' })
 
     const localResult = await workspaceAppService.fetchWebContent('http://127.0.0.1:11434/api')

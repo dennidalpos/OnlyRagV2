@@ -27,7 +27,7 @@ describe('TaskQueueAppService serial execution invariant', () => {
   it('should run agent tasks strictly one at a time and expose no way to raise the limit', () => {
     // Runs remain serial so an active project cannot be staged twice at once.
     expect(taskQueueAppService.getMaxConcurrency()).toBe(1)
-    expect((taskQueueAppService as any).setMaxConcurrency).toBeUndefined()
+    expect(Reflect.get(taskQueueAppService, 'setMaxConcurrency')).toBeUndefined()
   })
 
   it('should report a queue status consistent with the fixed serial limit', () => {

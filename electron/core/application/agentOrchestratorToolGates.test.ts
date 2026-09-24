@@ -10,10 +10,10 @@ describe('runToolGates network-approved policy', () => {
     const result = await runToolGates({
       parsedTool: { tool: 'run_command', parameters: { command: 'npm test' } },
       agentMode: 'auto',
-      fsmMode: { isToolAllowed: vi.fn(() => true) } as any,
+      fsmMode: { isToolAllowed: vi.fn(() => true) } as never,
       workspacePath: null,
       stepCount: 2,
-      episodicCompactor: { recordStep } as any,
+      episodicCompactor: { recordStep } as never,
       emitLog: vi.fn(),
       requestApproval,
       allowedToolsForTurn: ['read_file'],
@@ -34,10 +34,10 @@ describe('runToolGates network-approved policy', () => {
         isToolAllowed: vi.fn(() => false),
         filterAllowedTools: vi.fn(() => []),
         getMode: vi.fn(() => 'ASK'),
-      } as any,
+      } as never,
       workspacePath: null,
       stepCount: 4,
-      episodicCompactor: { recordStep: vi.fn() } as any,
+      episodicCompactor: { recordStep: vi.fn() } as never,
       emitLog: vi.fn(),
       requestApproval,
       capabilityPolicyMode: 'network-approved',
@@ -60,10 +60,10 @@ describe('runToolGates network-approved policy', () => {
         isToolAllowed: vi.fn(() => false),
         filterAllowedTools: vi.fn(() => []),
         getMode: vi.fn(() => 'ASK'),
-      } as any,
+      } as never,
       workspacePath: 'C:\\workspace',
       stepCount: 5,
-      episodicCompactor: { recordStep: vi.fn() } as any,
+      episodicCompactor: { recordStep: vi.fn() } as never,
       emitLog: vi.fn(),
       requestApproval,
       capabilityPolicyMode: 'network-approved',
@@ -78,10 +78,10 @@ describe('runToolGates network-approved policy', () => {
     const result = await runToolGates({
       parsedTool: { tool: 'download_file', parameters: { url: 'https://example.test/data.txt', filePath: 'data.txt' } },
       agentMode: 'guided',
-      fsmMode: { isToolAllowed: vi.fn(() => true) } as any,
+      fsmMode: { isToolAllowed: vi.fn(() => true) } as never,
       workspacePath: 'C:\\workspace',
       stepCount: 5,
-      episodicCompactor: { recordStep: vi.fn() } as any,
+      episodicCompactor: { recordStep: vi.fn() } as never,
       emitLog: vi.fn(),
       requestApproval,
       capabilityPolicyMode: 'network-approved',
@@ -96,10 +96,10 @@ describe('runToolGates network-approved policy', () => {
 describe('runToolGates structured command safety', () => {
   const base = {
     agentMode: 'auto' as const,
-    fsmMode: { isToolAllowed: vi.fn(() => true) } as any,
+    fsmMode: { isToolAllowed: vi.fn(() => true) } as never,
     workspacePath: 'C:\\workspace',
     stepCount: 6,
-    episodicCompactor: { recordStep: vi.fn() } as any,
+    episodicCompactor: { recordStep: vi.fn() } as never,
     emitLog: vi.fn(),
   }
 
@@ -131,10 +131,10 @@ describe('runToolGates structured command safety', () => {
 describe('runToolGates version refresh', () => {
   const base = {
     agentMode: 'auto' as const,
-    fsmMode: { isToolAllowed: vi.fn(() => true) } as any,
+    fsmMode: { isToolAllowed: vi.fn(() => true) } as never,
     workspacePath: 'C:\\workspace',
     stepCount: 3,
-    episodicCompactor: { recordStep: vi.fn() } as any,
+    episodicCompactor: { recordStep: vi.fn() } as never,
     emitLog: vi.fn(),
     requestApproval: vi.fn(),
     allowedToolsForTurn: ['read_file'] as const,
@@ -190,13 +190,13 @@ describe('runToolGates shell reads', () => {
   const baseCtx = (command: string, allowedToolsForTurn: string[] | undefined) => ({
     parsedTool: { tool: 'run_command' as const, parameters: { command } },
     agentMode: 'auto' as const,
-    fsmMode: { isToolAllowed: vi.fn(() => true) } as any,
+    fsmMode: { isToolAllowed: vi.fn(() => true) } as never,
     workspacePath: 'D:/work/app',
     stepCount: 16,
-    episodicCompactor: { recordStep: vi.fn() } as any,
+    episodicCompactor: { recordStep: vi.fn() } as never,
     emitLog: vi.fn(),
     requestApproval: vi.fn(),
-    allowedToolsForTurn: allowedToolsForTurn as any,
+    allowedToolsForTurn: allowedToolsForTurn as never,
   })
 
   it('runs a single-file shell read as read_file, even where only read_file is exposed', async () => {

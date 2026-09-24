@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest'
 import { notifyDocumentsChanged, notifyTabChanged, DOCUMENTS_CHANGED_EVENT, TAB_CHANGED_EVENT } from './useIngestedDocuments'
 
 describe('useIngestedDocuments event synchronization', () => {
-  let dispatchEventSpy: any
+  let dispatchEventSpy: MockInstance<Window['dispatchEvent']>
 
   beforeEach(() => {
     dispatchEventSpy = vi.spyOn(window, 'dispatchEvent')

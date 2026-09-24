@@ -21,6 +21,8 @@ import { resolvePlanDirective } from '../domain/agent/planDirectiveArbiter'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 
+type RecoveryState = ToolResultProcessingContext['recoveryState']
+
 describe('structured tool outcomes', () => {
   it('does not infer failure from output text', () => {
     expect(isToolExecutionFailure({ outcome: 'success', outputForHistory: 'Error is discussed here.', logMessage: 'Read file' })).toBe(false)
@@ -72,7 +74,7 @@ describe('file version recovery', () => {
   })
 
   it('requires a read after conflict and clears it only after a successful read', () => {
-    const recoveryState: any = { progress: new AgentProgressPolicy(), versionEvidence: { 'src/app.tsx': 'sha256:stale' } }
+    const recoveryState = { progress: new AgentProgressPolicy(), versionEvidence: { 'src/app.tsx': 'sha256:stale' } } as unknown as RecoveryState
     recoveryState.progress.onExecutionFailure('write_file:src/App.tsx:conflict')
     expect(
       updateVersionConflictRecovery({
@@ -111,7 +113,7 @@ describe('file version recovery', () => {
   })
 
   it('does not require an impossible read before creating an absent file', () => {
-    const recoveryState: any = { pendingVersionConflictReadPath: 'src/Old.tsx', versionEvidence: {} }
+    const recoveryState = { pendingVersionConflictReadPath: 'src/Old.tsx', versionEvidence: {} } as unknown as RecoveryState
     expect(
       updateVersionConflictRecovery({
         toolRes: {
@@ -165,7 +167,7 @@ describe('file version recovery', () => {
     try {
       fs.mkdirSync(path.join(tempDir, 'src'))
       fs.writeFileSync(path.join(tempDir, 'src', 'App.jsx'), 'export default function App() { return null }\n')
-      const recoveryState: any = { progress: new AgentProgressPolicy(), versionEvidence: {} }
+      const recoveryState = { progress: new AgentProgressPolicy(), versionEvidence: {} } as unknown as RecoveryState
 
       expect(
         updateVersionConflictRecovery({
@@ -241,7 +243,7 @@ describe('refused installs reach the plan directive arbiter', () => {
       hasVerifiedBuild: false,
       milestones: [],
       activeMilestone: undefined,
-      deliverableStatusOf: () => ({ satisfied: false, missing: [], resolved: [] }) as any,
+      deliverableStatusOf: () => ({ satisfied: false, missing: [], resolved: [] }) as never,
       missingDependencies: [],
       undeclaredDependencies: undeclared,
       verificationCommand: null,

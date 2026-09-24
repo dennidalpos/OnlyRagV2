@@ -89,7 +89,7 @@ describe('Coding Agent Prompt Queue & Active Model Extraction Unit Tests', () =>
   })
 
   it('should reset queue, prompts, and context cleanly when starting a new session', () => {
-    let actionLogs: any[] = [
+    let actionLogs: Array<{ id: string; message: string }> = [
       { id: '1', message: 'User prompt' },
       { id: '2', message: 'Tool result' },
     ]

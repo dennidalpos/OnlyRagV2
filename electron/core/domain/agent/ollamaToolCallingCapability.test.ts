@@ -40,7 +40,7 @@ describe('ollamaToolCallingCapability', () => {
 
     it('should handle missing/empty model names safely', () => {
       expect(supportsNativeToolCallingByFamily('')).toBe(false)
-      expect(supportsNativeToolCallingByFamily(undefined as any)).toBe(false)
+      expect(supportsNativeToolCallingByFamily(undefined as never)).toBe(false)
     })
   })
 

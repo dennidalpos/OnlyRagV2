@@ -1,3 +1,5 @@
+import type { AgentMainTextKey } from '../../shared/domain/agent/agentMainText'
+
 export type Language = 'it' | 'en'
 
 export interface TranslationSchema {
@@ -900,6 +902,8 @@ export interface TranslationSchema {
     scratchInitializing: string
     noProjectFolder: string
   }
+  /** Agent timeline text produced in Main, keyed like shared/domain/agent/agentMainText.ts. */
+  agentMain: Record<AgentMainTextKey, string>
   agentRun: {
     noActiveConversation: string
     unknownError: string
@@ -993,6 +997,7 @@ export interface TranslationSchema {
     fileReadError: string
   }
   agentTimeline: {
+    finalReportTitle: string
     copyReport: string
     copied: string
     copy: string

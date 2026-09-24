@@ -39,7 +39,7 @@
         "noUnusedVariables": "off"
       },
       "suspicious": {
-        "noExplicitAny": "warn",
+        "noExplicitAny": "error",
         "noDuplicateCase": "error",
         "noDuplicateObjectKeys": "error",
         "noFallthroughSwitchClause": "error"
@@ -52,17 +52,5 @@
       "semicolons": "asNeeded",
       "trailingCommas": "all"
     }
-  },
-  "overrides": [
-    {
-      "includes": ["electron/**", "shared/**", "src/**", "scripts/**", "!**/*.test.ts", "!**/*.test.tsx"],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noExplicitAny": "error"
-          }
-        }
-      }
-    }
-  ]
+  }
 }

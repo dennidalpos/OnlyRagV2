@@ -1,13 +1,16 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
 import { SoundEffectsService } from './soundEffectsService'
 
+type WindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext }
+
 describe('SoundEffectsService Unit Tests', () => {
-  let mockOscillator: any
-  let mockGain: any
-  let mockAudioContext: any
+  let mockOscillator: object
+  let mockGain: object
+  let mockAudioContext: Record<string, unknown> & { createOscillator: Mock }
+  const webkitWindow = window as WindowWithWebkitAudio
   const originalAudioContext = window.AudioContext
-  const originalWebkitAudioContext = (window as any).webkitAudioContext
+  const originalWebkitAudioContext = webkitWindow.webkitAudioContext
 
   beforeEach(() => {
     mockOscillator = {
@@ -43,13 +46,13 @@ describe('SoundEffectsService Unit Tests', () => {
       return mockAudioContext
     }
 
-    window.AudioContext = MockAudioContext as any
-    ;(window as any).webkitAudioContext = MockAudioContext as any
+    window.AudioContext = MockAudioContext as never
+    webkitWindow.webkitAudioContext = MockAudioContext as never
   })
 
   afterEach(() => {
     window.AudioContext = originalAudioContext
-    ;(window as any).webkitAudioContext = originalWebkitAudioContext
+    webkitWindow.webkitAudioContext = originalWebkitAudioContext
   })
 
   it('should not play sound when enabled is false', () => {

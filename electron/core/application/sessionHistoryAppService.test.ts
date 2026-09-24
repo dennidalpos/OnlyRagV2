@@ -32,8 +32,8 @@ import { sidecarAppService } from './sidecarAppService'
 describe('SessionHistoryAppService prompt-history index fan-out', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(sessionHistoryRepository.deleteSession as any).mockResolvedValue(true)
-    ;(sessionHistoryRepository.clearSessions as any).mockResolvedValue(true)
+    vi.mocked(sessionHistoryRepository.deleteSession).mockResolvedValue(true)
+    vi.mocked(sessionHistoryRepository.clearSessions).mockResolvedValue(true)
   })
 
   it('deleteSession should also remove the deleted session from the prompt-history index', async () => {
@@ -45,7 +45,7 @@ describe('SessionHistoryAppService prompt-history index fan-out', () => {
   })
 
   it('clearSessions should remove every session id that belonged to the workspace from the prompt-history index', async () => {
-    ;(sessionHistoryRepository.listSessions as any).mockResolvedValue([{ id: 'session-1' }, { id: 'session-2' }])
+    vi.mocked(sessionHistoryRepository.listSessions).mockResolvedValue([{ id: 'session-1' }, { id: 'session-2' }] as never)
 
     const result = await sessionHistoryAppService.clearSessions('/repo/a')
 
@@ -55,7 +55,7 @@ describe('SessionHistoryAppService prompt-history index fan-out', () => {
   })
 
   it('clearSessions should still succeed and call the index removal with an empty list when the workspace has no sessions', async () => {
-    ;(sessionHistoryRepository.listSessions as any).mockResolvedValue([])
+    vi.mocked(sessionHistoryRepository.listSessions).mockResolvedValue([])
 
     await sessionHistoryAppService.clearSessions('/repo/empty')
 

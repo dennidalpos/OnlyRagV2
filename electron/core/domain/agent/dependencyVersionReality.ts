@@ -43,7 +43,7 @@ export function majorOf(range: string): number | null {
 
 /** What the registry says about what the manifest declares. */
 /** Packages whose major bump rewrites the configuration, not just the version string. */
-const CONFIG_BREAKING_ON_MAJOR = new Set(['typescript', 'tailwindcss', 'eslint'])
+export const CONFIG_BREAKING_ON_MAJOR: ReadonlySet<string> = new Set(['typescript', 'tailwindcss', 'eslint'])
 
 export function findVersionReality(declared: DeclaredDependency[], facts: RegistryFact[]): VersionRealityFindings {
   const byName = new Map(facts.map((f) => [f.name, f]))

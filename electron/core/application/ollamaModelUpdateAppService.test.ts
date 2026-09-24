@@ -1,16 +1,16 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
 import { OllamaModelUpdateAppService } from './ollamaModelUpdateAppService'
 import { ollamaHttpClient } from '../infrastructure/http/ollamaHttpClient'
 
 describe('OllamaModelUpdateAppService Unit Tests', () => {
   let appService: OllamaModelUpdateAppService
-  let mockRegistryClient: any
+  let mockRegistryClient: { fetchRemoteManifestDigest: Mock }
 
   beforeEach(() => {
     mockRegistryClient = {
       fetchRemoteManifestDigest: vi.fn(),
     }
-    appService = new OllamaModelUpdateAppService(mockRegistryClient)
+    appService = new OllamaModelUpdateAppService(mockRegistryClient as never)
   })
 
   afterEach(() => {

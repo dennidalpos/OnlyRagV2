@@ -65,6 +65,35 @@ describe('AgentToolExecutorService Unit Tests', () => {
     expect(readRes.outputForHistory).toContain('Hello AI Agent')
   })
 
+  it('lists a directory given to read_file and reports a missing file with its parent listing', async () => {
+    fs.mkdirSync(path.join(tempDir, 'src'))
+    fs.writeFileSync(path.join(tempDir, 'src', 'App.jsx'), 'export default function App() {}\n', 'utf-8')
+
+    const directory = await agentToolExecutorService.executeTool({ tool: 'read_file', parameters: { filePath: 'src' } }, tempDir, settings)
+    const missing = await agentToolExecutorService.executeTool({ tool: 'read_file', parameters: { filePath: 'src/main.jsx' } }, tempDir, settings)
+
+    expect(directory.outcome).toBe('success')
+    expect(directory.outputForHistory).toContain('[READ_FILE ON DIRECTORY: src]')
+    expect(directory.outputForHistory).toContain('[FILE] App.jsx')
+    expect(missing.outcome).toBe('success')
+    expect(missing.outputForHistory).toContain('[FILE NOT FOUND: src/main.jsx]')
+    expect(missing.outputForHistory).toContain('Parent directory [src] (1 items)')
+  })
+
+  it('answers a version question from the manifest and the registry', async () => {
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ dependencies: { react: '^18.2.0' }, devDependencies: { vite: '^7.0.0' } }), 'utf-8')
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const name = decodeURIComponent(String(input).split('/').pop() || '')
+      const latest = name === 'react' ? '19.1.0' : '7.1.0'
+      return new Response(JSON.stringify({ 'dist-tags': { latest }, versions: { [latest]: {}, '18.3.1': {}, '7.0.0': {} } }), { status: 200 })
+    })
+
+    const answer = await agentToolExecutorService.answerVersionQuestion('Which version of react should I use?', tempDir)
+
+    expect(answer).toContain('- react: declared ^18.2.0 is a major behind; declare "^19.1.0".')
+    expect(answer).not.toContain('vite')
+  })
+
   it('rejects stale or unversioned whole-file rewrites and returns a useful diff', async () => {
     const filePath = path.join(tempDir, 'concurrent.ts')
     fs.writeFileSync(filePath, 'export const value = 2\n', 'utf-8')
@@ -1247,7 +1276,7 @@ async def async_handler():
   })
 
   it('should refuse to install anything outside the toolchain allow-list', async () => {
-    const res = await agentToolExecutorService.executeTool({ tool: 'ensure_tool', parameters: { toolName: 'docker' } } as any, tempDir, settings)
+    const res = await agentToolExecutorService.executeTool({ tool: 'ensure_tool', parameters: { toolName: 'docker' } } as never, tempDir, settings)
 
     expect(res.outputForHistory).toContain('ENSURE_TOOL REJECTED')
     expect(res.outputForHistory).toContain('not an installable development tool')
@@ -1256,7 +1285,7 @@ async def async_handler():
 
   it('should report an already-installed tool without attempting any installation', async () => {
     // node is running this very test suite, so it is guaranteed present.
-    const res = await agentToolExecutorService.executeTool({ tool: 'ensure_tool', parameters: { toolName: 'node' } } as any, tempDir, settings)
+    const res = await agentToolExecutorService.executeTool({ tool: 'ensure_tool', parameters: { toolName: 'node' } } as never, tempDir, settings)
 
     expect(res.outputForHistory).toContain('already installed')
     expect(res.outputForHistory).not.toContain('winget install')

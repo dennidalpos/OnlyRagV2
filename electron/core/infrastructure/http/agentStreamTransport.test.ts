@@ -6,6 +6,16 @@ import { parseAgentToolCall } from '../../domain/agent/toolParser'
 import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../../domain/agent/ollamaToolSchemaCatalog'
 import { AGENT_STOP_SEQUENCES, type OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
 
+/** The request body the mock Ollama server received. */
+interface CapturedOllamaBody {
+  tools: unknown[]
+  messages: unknown
+  stream: boolean
+  context?: number[]
+  prompt: string
+  options: { num_predict?: number; stop?: string[]; num_ctx?: number }
+}
+
 const runtimeOpts: OllamaRuntimeOptions = {
   num_ctx: 8192,
   temperature: 0.1,
@@ -52,7 +62,7 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
   })
 
   it('should route to /api/chat streamed (stream:true) with a tools array when toolCallingCapable + toolCatalog are set, and serialize a populated tool_calls response into the {"name","arguments"} shape toolParser.ts understands (AGT7: incremental streaming, tool_calls arrives on the final NDJSON line)', async () => {
-    let capturedBody: any = null
+    let capturedBody = {} as CapturedOllamaBody
     const observed: string[] = []
     const mock = await startMockOllama((req, res) => {
       let raw = ''
@@ -278,7 +288,7 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
   })
 
   it('should include the `context` field in the request body when previousContext is provided', async () => {
-    let capturedBody: any = null
+    let capturedBody = {} as CapturedOllamaBody
     const mock = await startMockOllama((req, res) => {
       let raw = ''
       req.on('data', (c) => (raw += c))
@@ -305,7 +315,7 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
   })
 
   it('should NOT include a `context` field when previousContext is absent (default/first-turn behavior unchanged)', async () => {
-    let capturedBody: any = null
+    let capturedBody = {} as CapturedOllamaBody
     const mock = await startMockOllama((req, res) => {
       let raw = ''
       req.on('data', (c) => (raw += c))
@@ -378,7 +388,7 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
   })
 
   it('should forward num_predict and the stop sequences to Ollama on the /api/generate path, so a small model cannot ramble past its tool call', async () => {
-    let capturedBody: any = null
+    let capturedBody = {} as CapturedOllamaBody
     const mock = await startMockOllama((req, res) => {
       let raw = ''
       req.on('data', (c) => (raw += c))
@@ -423,7 +433,7 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
   })
 
   it('should forward num_predict and the stop sequences on the native tool-calling /api/chat path too', async () => {
-    let capturedBody: any = null
+    let capturedBody = {} as CapturedOllamaBody
     const mock = await startMockOllama((req, res) => {
       let raw = ''
       req.on('data', (c) => (raw += c))

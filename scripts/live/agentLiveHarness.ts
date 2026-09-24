@@ -13,15 +13,28 @@ import { codingAgentLogger } from '../../electron/core/infrastructure/logging/co
 /** One dedicated folder for every live workspace and snapshot, so runs never scatter directories on the Desktop. */
 export const LIVE_RUN_ROOT = process.env.ONLYRAG_LIVE_ROOT || path.join(os.homedir(), 'OnlyRag-Live')
 const LIVE_RUN_SNAPSHOT_ROOT = path.join(LIVE_RUN_ROOT, 'snapshots')
+/** Audit entries with paths, URLs and error details kept (credentials still removed); local live runs only. */
+const LIVE_UNREDACTED_AUDIT_PATH = path.join(LIVE_RUN_ROOT, 'audit', 'coding_agent_audit.unredacted.log')
+export const UNREDACTED_AUDIT_SNAPSHOT_NAME = 'coding_agent_audit.unredacted.log'
 
 /** The workspace a live scenario owns inside {@link LIVE_RUN_ROOT}. */
 export function liveWorkspacePath(name: string): string {
   return path.join(LIVE_RUN_ROOT, name)
 }
 
-/** Copies both audit-log generations before a later run or workspace cleanup can remove them. */
-export function snapshotLiveAuditLogs(args: { sessionId: string; label: string; sourceLogPath?: string; destinationRoot?: string }): string {
+/**
+ * Copies both audit-log generations before a later run or workspace cleanup can remove them, and
+ * moves the unredacted mirror into the snapshot so the next run starts a fresh one.
+ */
+export function snapshotLiveAuditLogs(args: {
+  sessionId: string
+  label: string
+  sourceLogPath?: string
+  destinationRoot?: string
+  unredactedLogPath?: string | null
+}): string {
   const sourceLogPath = args.sourceLogPath || codingAgentLogger.getLogFilePath()
+  const unredactedLogPath = args.unredactedLogPath === undefined ? codingAgentLogger.getUnredactedMirrorPath() : args.unredactedLogPath
   const sourceDir = path.dirname(sourceLogPath)
   const sourceFiles = [sourceLogPath, path.join(sourceDir, 'coding_agent_audit.1.log')].filter((filePath) => fs.existsSync(filePath))
   if (sourceFiles.length === 0) {
@@ -33,6 +46,10 @@ export function snapshotLiveAuditLogs(args: { sessionId: string; label: string; 
   const runDir = path.join(args.destinationRoot || LIVE_RUN_SNAPSHOT_ROOT, `${timestamp}_${args.sessionId}_${safeLabel}`)
   fs.mkdirSync(runDir, { recursive: true })
   for (const sourceFile of sourceFiles) fs.copyFileSync(sourceFile, path.join(runDir, path.basename(sourceFile)))
+  if (unredactedLogPath && fs.existsSync(unredactedLogPath)) {
+    fs.copyFileSync(unredactedLogPath, path.join(runDir, UNREDACTED_AUDIT_SNAPSHOT_NAME))
+    fs.writeFileSync(unredactedLogPath, '', 'utf-8')
+  }
   fs.writeFileSync(
     path.join(runDir, 'manifest.json'),
     JSON.stringify({ sessionId: args.sessionId, label: args.label, capturedAt: new Date().toISOString() }, null, 2),
@@ -48,9 +65,11 @@ export function loadRealSettings(overrides: Partial<AppSettings> = {}): AppSetti
   if (!fs.existsSync(settingsPath)) {
     throw new Error(`No settings at ${settingsPath}. Run the app once, or pass an explicit settings object to the scenario.`)
   }
-  // A live run is a diagnosis: its snapshot must show which file the model rewrote and what the
-  // prompt said, not only hashes (the 2026-09-24 full-task loop could not be read back otherwise).
+  // A live run is a diagnosis: its snapshot must show which file the model rewrote, what the
+  // prompt said and the runner's own error text, not only hashes and '[details redacted]' (the
+  // 2026-09-24 full-task loop could not be read back otherwise).
   const diagnostics: Partial<AppSettings> = { enableCodingAgentDebugLog: true, includeCodingAgentDebugPayloads: true }
+  codingAgentLogger.mirrorUnredactedTo(LIVE_UNREDACTED_AUDIT_PATH)
   return { ...JSON.parse(fs.readFileSync(settingsPath, 'utf-8')), ...diagnostics, ...overrides } as AppSettings
 }
 

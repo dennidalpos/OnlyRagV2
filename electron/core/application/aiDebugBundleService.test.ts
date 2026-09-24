@@ -103,7 +103,7 @@ describe('AiDebugBundleService Unit Tests', () => {
         detail: 'password=secret-password',
       },
       updatedAt: new Date().toISOString(),
-    } as any)
+    } as never)
 
     vi.mocked(gitCliRepository.run).mockImplementation((_cwd, args) => {
       if (args.includes('status')) return ' M src/app.ts'
@@ -116,7 +116,7 @@ describe('AiDebugBundleService Unit Tests', () => {
     const bundle = await aiDebugBundleService.generateDebugBundle({
       sessionId: 'session-123',
       workspacePath: 'D:/TestWorkspace',
-      settings: { enableCodingAgentDebugLog: true, includeCodingAgentDebugPayloads: true } as any,
+      settings: { enableCodingAgentDebugLog: true, includeCodingAgentDebugPayloads: true } as never,
       activeModelName: 'qwen2.5-coder:7b',
       activeSkills: ['test-skill'],
     })
@@ -148,7 +148,7 @@ describe('AiDebugBundleService Unit Tests', () => {
       episodes: [{ step: 1, tool: 'read_file', target: 'src/private.ts', status: 'FAILURE', summary: 'private summary' }],
       recentFullLogs: [{ step: 1, tool: 'read_file', output: 'private failure output', isFailure: true }],
       updatedAt: new Date().toISOString(),
-    } as any)
+    } as never)
     vi.mocked(gitCliRepository.run).mockImplementation((_cwd, args) => (args.includes('status') ? ' M src/private.ts' : '+private source'))
     vi.mocked(devToolProbeRepository.probeVersion).mockReturnValue('v20.18.0')
 
@@ -167,7 +167,7 @@ describe('AiDebugBundleService Unit Tests', () => {
     const savedPreferenceWithLoggingOff = await aiDebugBundleService.generateDebugBundle({
       sessionId: 'metadata-session',
       workspacePath: 'D:/PrivateWorkspace',
-      settings: { enableCodingAgentDebugLog: false, includeCodingAgentDebugPayloads: true } as any,
+      settings: { enableCodingAgentDebugLog: false, includeCodingAgentDebugPayloads: true } as never,
     })
     expect(savedPreferenceWithLoggingOff).not.toContain('private prompt')
     expect(savedPreferenceWithLoggingOff).not.toContain('src/private.ts')

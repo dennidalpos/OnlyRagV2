@@ -13,7 +13,6 @@ Il server FastAPI ascolta su `127.0.0.1:8000`. Route e schemi sono definiti in [
 | Ricerca | `POST /vector/search` |
 | Storico prompt | `POST /history/index`, `POST /history/search`, `POST /history/remove` |
 | Export | `POST /export` |
-| Agent | `POST /agent/logs/analyze` |
 
 ## Note operative
 

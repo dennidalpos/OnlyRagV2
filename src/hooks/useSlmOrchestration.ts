@@ -53,9 +53,6 @@ export function useSlmOrchestration(): UseSlmOrchestrationReturn {
       const report = await window.electronAPI.agentLogsAnalyze!(extraPaths)
       if (mountedRef.current) {
         setLastReport(report)
-        if (!report) {
-          setAnalyzeLogsError('Log analysis returned no report (sidecar offline?).')
-        }
       }
       return report
     } catch (err: unknown) {

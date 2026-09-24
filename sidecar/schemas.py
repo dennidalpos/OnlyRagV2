@@ -135,31 +135,6 @@ class ExportRequest(StrictRequest):
     export_format: Literal["pdf", "docx", "html", "htm"] = "pdf"
 
 # ---------------------------------------------------------------------------
-# Log Diagnostics Schemas
-# ---------------------------------------------------------------------------
-
-class LogDiagnosticQuery(StrictRequest):
-    extra_paths: Optional[List[str]] = Field(default=None, max_length=100)
-
-
-class AnomalyRecordSchema(BaseModel):
-    anomaly_type: str
-    severity: str
-    log_file: str
-    line_number: int
-    snippet: str
-    count: int = 1
-
-
-class LogDiagnosticReportSchema(BaseModel):
-    scanned_files: List[str]
-    total_lines_scanned: int
-    anomalies: List[AnomalyRecordSchema]
-    has_critical: bool
-    summary: str
-
-
-# ---------------------------------------------------------------------------
 # Prompt History Semantic Search Schemas
 # ---------------------------------------------------------------------------
 

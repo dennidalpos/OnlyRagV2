@@ -129,22 +129,6 @@ describe('SidecarHttpClient Unit Tests', () => {
       },
       {
         method: 'POST',
-        path: '/agent/logs/analyze',
-        handler: (_req, res) => {
-          res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(
-            JSON.stringify({
-              scanned_files: ['test.log'],
-              total_lines_scanned: 10,
-              anomalies: [],
-              has_critical: false,
-              summary: 'Clean',
-            }),
-          )
-        },
-      },
-      {
-        method: 'POST',
         path: '/export',
         handler: (_req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -196,14 +180,6 @@ describe('SidecarHttpClient Unit Tests', () => {
     expect(events.length).toBeGreaterThanOrEqual(1)
     expect(res.success).toBe(true)
     expect(res.data?.id).toBe('doc-new')
-  })
-
-  it('analyzes logs via /agent/logs/analyze', async () => {
-    const res = await client.analyzeLogs()
-    expect(res.success).toBe(true)
-    if (res.success) {
-      expect(res.data.summary).toBe('Clean')
-    }
   })
 
   it('exports document via /export', async () => {

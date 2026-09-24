@@ -1,44 +1,6 @@
 {
   "components": {
     "schemas": {
-      "AnomalyRecordSchema": {
-        "properties": {
-          "anomaly_type": {
-            "title": "Anomaly Type",
-            "type": "string"
-          },
-          "count": {
-            "default": 1,
-            "title": "Count",
-            "type": "integer"
-          },
-          "line_number": {
-            "title": "Line Number",
-            "type": "integer"
-          },
-          "log_file": {
-            "title": "Log File",
-            "type": "string"
-          },
-          "severity": {
-            "title": "Severity",
-            "type": "string"
-          },
-          "snippet": {
-            "title": "Snippet",
-            "type": "string"
-          }
-        },
-        "required": [
-          "anomaly_type",
-          "severity",
-          "log_file",
-          "line_number",
-          "snippet"
-        ],
-        "title": "AnomalyRecordSchema",
-        "type": "object"
-      },
       "DeleteResponse": {
         "properties": {
           "message": {
@@ -650,67 +612,6 @@
         "title": "IngestResponse",
         "type": "object"
       },
-      "LogDiagnosticQuery": {
-        "additionalProperties": false,
-        "properties": {
-          "extra_paths": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "maxItems": 100,
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Extra Paths"
-          }
-        },
-        "title": "LogDiagnosticQuery",
-        "type": "object"
-      },
-      "LogDiagnosticReportSchema": {
-        "properties": {
-          "anomalies": {
-            "items": {
-              "$ref": "#/components/schemas/AnomalyRecordSchema"
-            },
-            "title": "Anomalies",
-            "type": "array"
-          },
-          "has_critical": {
-            "title": "Has Critical",
-            "type": "boolean"
-          },
-          "scanned_files": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Scanned Files",
-            "type": "array"
-          },
-          "summary": {
-            "title": "Summary",
-            "type": "string"
-          },
-          "total_lines_scanned": {
-            "title": "Total Lines Scanned",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "scanned_files",
-          "total_lines_scanned",
-          "anomalies",
-          "has_critical",
-          "summary"
-        ],
-        "title": "LogDiagnosticReportSchema",
-        "type": "object"
-      },
       "PagePreviewResponse": {
         "properties": {
           "doc_id": {
@@ -1200,45 +1101,6 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/agent/logs/analyze": {
-      "post": {
-        "description": "Scan OnlyRag V2 log files and return a structured anomaly diagnostic report.\nDetects: truncated JSON, VRAM thrashing, infinite tool-calling loops.",
-        "operationId": "agent_logs_analyze_agent_logs_analyze_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LogDiagnosticQuery"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LogDiagnosticReportSchema"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Agent Logs Analyze"
-      }
-    },
     "/documents": {
       "get": {
         "operationId": "list_documents_documents_get",

@@ -782,7 +782,7 @@ export interface IElectronAPI {
   getRunningModels: (host?: string) => Promise<{ success: boolean; models: RunningModelInfo[]; error?: string }>
   unloadModel: (modelName: string, host?: string) => Promise<{ success: boolean; error?: string }>
   /** SLM Agent Studio: trigger log anomaly diagnostics scan and return structured report. */
-  agentLogsAnalyze?: (extraPaths?: string[]) => Promise<SlmLogDiagnosticReport | null>
+  agentLogsAnalyze?: (extraPaths?: string[]) => Promise<SlmLogDiagnosticReport>
   /** Pre-flight Clarification Interview: analyze prompt for architectural decisions before drafting plan. */
   agentPlanInterview?: (
     prompt: string,

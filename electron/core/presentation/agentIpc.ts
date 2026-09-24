@@ -4,7 +4,7 @@ import { taskQueueAppService } from '../application/taskQueueAppService'
 import { requestActiveAgentContextCompaction, respondToApproval } from '../application/agentOrchestratorAppService'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { agentSessionStateAppService } from '../application/agentSessionStateAppService'
-import { sidecarAppService } from '../application/sidecarAppService'
+import { analyzeLogs } from '../application/logDiagnosticsAppService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import { ollamaAppService } from '../application/ollamaAppService'
@@ -58,7 +58,7 @@ export function registerAgentIpcHandlers(rendererEvents: RendererEventSink) {
 
   /** SLM Agent Studio: trigger log anomaly diagnostics analysis. */
   ipcMain.handle('agent:logs-analyze', async (_, extraPaths?: string[]) => {
-    return sidecarAppService.analyzeLogs(extraPaths)
+    return analyzeLogs(extraPaths)
   })
 
   /**

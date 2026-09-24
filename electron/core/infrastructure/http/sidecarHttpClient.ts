@@ -1,6 +1,6 @@
 import http from 'node:http'
 import { logger } from '../logging/logger'
-import type { SlmLogDiagnosticReport, VectorSearchResult } from '../../../../shared/types'
+import type { VectorSearchResult } from '../../../../shared/types'
 import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
@@ -419,11 +419,6 @@ export class SidecarHttpClient {
       logger.log('ERROR', 'SidecarClient', `JSON parse error on ${urlPath}: ${errorMessage(err)}`)
       return { success: false, error: `Response parse error: ${errorMessage(err)}` }
     }
-  }
-
-  /** Log analysis diagnostics via /agent/logs/analyze. */
-  analyzeLogs(extraPaths?: string[]): Promise<Envelope<SlmLogDiagnosticReport>> {
-    return this.postJsonEnvelope<SlmLogDiagnosticReport>('/agent/logs/analyze', { extra_paths: extraPaths ?? [] }, 15_000)
   }
 
   /** Export markdown to PDF / DOCX via /export. */

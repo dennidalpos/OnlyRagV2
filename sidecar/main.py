@@ -24,11 +24,9 @@ from sidecar.schemas import (
     DocumentRecord, DocumentSummary, DeleteResponse, ExportResponse, SuccessResponse,
     TaskCancelResponse,
     ExportRequest, UpdateDocumentRequest, PagePreviewResponse,
-    LogDiagnosticQuery, LogDiagnosticReportSchema, AnomalyRecordSchema,
     IndexPromptHistoryRequest, PromptHistorySearchRequest, PromptHistorySearchResult,
     PromptHistoryRemoveRequest, TranslateInplaceRequest,
 )
-from sidecar.domain.log_analyzer import LogAnalyzer
 from sidecar.infrastructure.db import lance_db, get_existing_tables, run_db_maintenance, ensure_chunk_embedding_model_column
 from sidecar.infrastructure.ocr import detect_gpu_acceleration, get_ocr_runtime_info
 from sidecar.domain.exporter import export_markdown_to_file
@@ -271,41 +269,6 @@ async def cancel_sidecar_task(task_id: Optional[str] = Query(None)):
     cancel_task(task_id)
     logger.info(f"Cancellation requested for task: {task_id}")
     return {"status": "success", "message": f"Cancellation requested for task {task_id}"}
-
-# ---------------------------------------------------------------------------
-# Agent Studio Endpoints
-# ---------------------------------------------------------------------------
-
-@app.post("/agent/logs/analyze", response_model=LogDiagnosticReportSchema)
-async def agent_logs_analyze(req: LogDiagnosticQuery):
-    """
-    Scan OnlyRag V2 log files and return a structured anomaly diagnostic report.
-    Detects: truncated JSON, VRAM thrashing, infinite tool-calling loops.
-    """
-    logger.info("Log analysis triggered. Extra paths: %s", req.extra_paths)
-    try:
-        analyzer = LogAnalyzer(extra_paths=req.extra_paths)
-        report = await asyncio.to_thread(analyzer.analyze)
-        return LogDiagnosticReportSchema(
-            scanned_files=report.scanned_files,
-            total_lines_scanned=report.total_lines_scanned,
-            anomalies=[
-                AnomalyRecordSchema(
-                    anomaly_type=a.anomaly_type,
-                    severity=a.severity,
-                    log_file=a.log_file,
-                    line_number=a.line_number,
-                    snippet=a.snippet,
-                    count=a.count,
-                )
-                for a in report.anomalies
-            ],
-            has_critical=report.has_critical,
-            summary=report.summary,
-        )
-    except Exception as exc:
-        logger.error("Log analysis error: %s", exc, exc_info=True)
-        raise
 
 
 if __name__ == "__main__":

@@ -43,28 +43,6 @@ export function normalizeError(err: unknown, context?: string): NormalizedError 
 }
 
 /**
- * Extracts a user-facing concise message suitable for alerts or toasts
- */
-export function toUserFriendlyMessage(err: unknown, context?: string): string {
-  const normalized = normalizeError(err, context)
-  if (normalized.remediation) {
-    return `${normalized.message} — ${normalized.remediation}`
-  }
-  return normalized.message
-}
-
-/**
- * Checks if the error is fatal and requires reload or user intervention
- */
-export function isFatalError(err: unknown): boolean {
-  if (err instanceof AppError) {
-    return err.isFatal
-  }
-  const normalized = normalizeError(err)
-  return Boolean(normalized.isFatal)
-}
-
-/**
  * Extracts raw error message from various error formats
  */
 function extractRawErrorMessage(err: unknown): string {

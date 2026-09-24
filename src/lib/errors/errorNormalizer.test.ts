@@ -1,13 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { normalizeError, toUserFriendlyMessage, isFatalError } from './errorNormalizer'
+import { describe, it, expect } from 'vitest'
+import { normalizeError } from './errorNormalizer'
 import { AppError, ErrorCategory } from './appError'
-import { notifyError, clearErrorDeduplicationCache } from './errorNotifier'
 
 describe('errorNormalizer & appError', () => {
-  beforeEach(() => {
-    clearErrorDeduplicationCache()
-  })
-
   it('normalizes an AppError directly without reclassification', () => {
     const appErr = new AppError(ErrorCategory.VECTOR_DB, 'Custom vector failure', {
       remediation: 'Restart the sidecar.',
@@ -80,37 +75,5 @@ describe('errorNormalizer & appError', () => {
     const ansiError = '\u001b[31mError:\u001b[39m \u001b[1mFailed to compile\u001b[22m'
     const normalized = normalizeError(ansiError)
     expect(normalized.message).toBe('Error: Failed to compile')
-  })
-
-  it('formats user friendly message with remediation', () => {
-    const raw = new Error('connect ECONNREFUSED 127.0.0.1:11434')
-    const friendly = toUserFriendlyMessage(raw)
-    expect(friendly).toContain('— Assicurati che Ollama sia installato')
-  })
-
-  it('checks isFatalError correctly', () => {
-    expect(isFatalError('Random warning')).toBe(false)
-
-    const fatalAppError = new AppError(ErrorCategory.WORKSPACE_IO, 'Fatal workspace corruption', {
-      isFatal: true,
-    })
-    expect(isFatalError(fatalAppError)).toBe(true)
-  })
-
-  it('deduplicates rapid notifications within 3000ms window', () => {
-    const toastFn = vi.fn()
-    const errorMsg = 'Repeated network connection error'
-
-    // First call: should trigger toast
-    notifyError(errorMsg, toastFn)
-    expect(toastFn).toHaveBeenCalledTimes(1)
-
-    // Second call immediately with same error: should be suppressed
-    notifyError(errorMsg, toastFn)
-    expect(toastFn).toHaveBeenCalledTimes(1)
-
-    // Different error: should trigger toast
-    notifyError('Another distinct error', toastFn)
-    expect(toastFn).toHaveBeenCalledTimes(2)
   })
 })

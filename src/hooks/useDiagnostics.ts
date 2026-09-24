@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { DiagnosticsData, AppSettings } from '../types'
-import { apiService } from '../services/api'
+import { electronApi } from '../services/electronApi'
 import { logger } from '../lib/logger'
 import { notifyDocumentsChanged } from './useIngestedDocuments'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
@@ -25,7 +25,7 @@ export function useDiagnostics(
   const runDiagnosticsScan = useCallback(async () => {
     setIsScanning(true)
     try {
-      const data = await apiService.runDiagnostics(settings.ollamaHost)
+      const data = await electronApi().runDiagnostics(settings.ollamaHost)
       if (data) {
         setDiagnostics(data)
 

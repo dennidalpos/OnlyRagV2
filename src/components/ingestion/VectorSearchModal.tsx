@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { Search, X, AlertTriangle, Sparkles, Copy, Check, SlidersHorizontal, Database } from 'lucide-react'
-import { apiService } from '../../services/api'
+import { electronApi } from '../../services/electronApi'
 import { VectorSearchResult } from '../../types'
 import { useTranslation } from '../../i18n'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
@@ -29,7 +29,7 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({ isOpen, on
     setIsSearching(true)
     setError(null)
     try {
-      const res = await apiService.searchVectorDb(query.trim(), topK)
+      const res = await electronApi().searchVectorDb(query.trim(), topK)
       setResults(res || [])
       setHasSearched(true)
     } catch (err: unknown) {

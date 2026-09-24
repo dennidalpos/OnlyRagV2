@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AppSettings, DiagnosticsData, IngestedDocument, ChatMessage, ChatConversation, CitationSource } from '../types'
-import { apiService } from '../services/api'
+import { electronApi } from '../services/electronApi'
 import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../constants/promptConfig'
 import { evaluateDomainIntent } from '../services/domainRouter'
@@ -373,7 +373,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       // Retrieval runs ONLY when documents are explicitly selected and the query is non-chitchat
       if (hasSelectedDocs && routingResult.requiresRetrieval) {
         try {
-          const searchResults = await apiService.searchVectorDb(userText, budget.vectorTopK, scopedDocIds)
+          const searchResults = await electronApi().searchVectorDb(userText, budget.vectorTopK, scopedDocIds)
 
           if (Array.isArray(searchResults) && searchResults.length > 0) {
             const validResults = searchResults.filter((res) => res && res.text)

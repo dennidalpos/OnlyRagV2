@@ -15,7 +15,7 @@ import {
   PinOff,
 } from 'lucide-react'
 import { WorkspaceFile } from '../../types'
-import { apiService } from '../../services/api'
+import { electronApi } from '../../services/electronApi'
 import { logger } from '../../lib/logger'
 import { useTranslation } from '../../i18n'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
@@ -85,7 +85,7 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({ item, level, selecte
       if (children.length === 0) {
         setIsLoading(true)
         try {
-          const subFiles = await apiService.listWorkspaceFiles(item.path)
+          const subFiles = await electronApi().listWorkspaceFiles(item.path)
           setChildren(subFiles)
         } catch (err: unknown) {
           logger.error('FileTree', `Failed to expand folder: ${errorMessage(err)}`)

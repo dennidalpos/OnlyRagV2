@@ -1,7 +1,8 @@
+// @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getIngestedDocument = vi.fn()
-vi.mock('./api', () => ({ apiService: { getIngestedDocument: (docId: string) => getIngestedDocument(docId) } }))
+vi.mock('./electronApi', () => ({ electronApi: () => ({ getIngestedDocument: (docId: string) => getIngestedDocument(docId) }) }))
 
 import { clearDocumentMarkdownCache, loadDocumentMarkdown, peekDocumentMarkdown, primeDocumentMarkdown } from './documentMarkdown'
 
@@ -37,6 +38,13 @@ describe('on-demand document Markdown', () => {
 
     expect(await loadDocumentMarkdown(doc('gone'))).toBeNull()
     expect(await loadDocumentMarkdown(doc('gone'))).toBe('# gone')
+  })
+
+  it('returns null when the IPC call fails and retries it later', async () => {
+    getIngestedDocument.mockRejectedValueOnce(new Error('ipc down'))
+
+    expect(await loadDocumentMarkdown(doc('flaky'))).toBeNull()
+    expect(await loadDocumentMarkdown(doc('flaky'))).toBe('# flaky')
   })
 
   it('keeps a bounded number of documents', async () => {

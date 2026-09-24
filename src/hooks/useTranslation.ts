@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { IngestedDocument, AppSettings, DiagnosticsData, TranslateProgressPayload } from '../types'
-import { apiService } from '../services/api'
+import { electronApi } from '../services/electronApi'
 import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../constants/promptConfig'
-import { useIngestedDocuments } from './useIngestedDocuments'
+import { notifyDocumentsChanged, useIngestedDocuments } from './useIngestedDocuments'
 import { useDocumentMarkdown } from './useDocumentMarkdown'
 import { loadDocumentMarkdown } from '../services/documentMarkdown'
 import { useTranslation as useI18n } from '../i18n'
@@ -377,7 +377,7 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     if (!isTranslationComplete || !translatedMarkdown.trim()) return
     setExportMessage(t('translation.exportPreparing', { format: format.toUpperCase() }))
     try {
-      const res = await apiService.exportDocument(translatedMarkdown, format, settings?.translationOutputFolder)
+      const res = await electronApi().exportDocument(translatedMarkdown, format, settings?.translationOutputFolder)
       if (res.success) {
         setExportMessage(res.message || t('translation.exportSuccess', { format: format.toUpperCase() }))
       } else {
@@ -518,7 +518,7 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
     cancelRequestedRef.current = false
 
     try {
-      const res = await apiService.translateDocumentInplace(
+      const res = await electronApi().translateDocumentInplace(
         docToTranslate.id,
         sourceLang,
         targetLang,
@@ -536,6 +536,7 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
           message: t('translation.inplaceSuccess', { filename: res.data.filename }),
           filename: res.data.filename,
         })
+        notifyDocumentsChanged()
         await base.fetchDocuments()
       } else {
         setStatus({

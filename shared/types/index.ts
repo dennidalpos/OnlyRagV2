@@ -628,7 +628,7 @@ export interface IElectronAPI {
   clearLogs: () => Promise<boolean>
   clearCodingAgentAuditLog?: () => Promise<boolean>
   getLogFilePath: () => Promise<string>
-  openLogsFolder?: () => Promise<{ success: boolean; path?: string; error?: string }>
+  openLogsFolder: () => Promise<{ success: boolean; path?: string; error?: string }>
   logTelemetry: (level: LogLevel, category: string, message: string) => Promise<boolean>
   pullOllamaModel: (modelName: string, host?: string) => Promise<{ success: boolean; data?: string; error?: string }>
   cancelPullOllamaModel: () => Promise<{ success: boolean; error?: string }>
@@ -658,7 +658,7 @@ export interface IElectronAPI {
     think?: boolean,
   ) => Promise<{ success: boolean; data?: IngestedDocumentContent; error?: string }>
   getDocumentPagePreview: (docId: string, pageNumber: number) => Promise<PagePreviewData | null>
-  getIngestedDocuments: () => Promise<IngestedDocument[]>
+  getIngestedDocuments: () => Promise<IngestedDocument[] | null>
   getIngestedDocument: (docId: string) => Promise<IngestedDocumentContent | null>
   deleteIngestedDocument: (docId: string) => Promise<{ success: boolean; error?: string }>
   searchVectorDb: (query: string, topK?: number, docIds?: string[]) => Promise<VectorSearchResult[]>

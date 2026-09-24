@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Server, CheckCircle2, XCircle, Loader2, HardDrive, Wifi, Radio } from 'lucide-react'
 import { AppSettings } from '../../types'
-import { apiService } from '../../services/api'
+import { electronApi } from '../../services/electronApi'
 import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
 import { DEFAULT_OLLAMA_HOST } from '../../../shared/domain/ollamaHost'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
@@ -53,7 +53,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
     setTestResult(null)
 
     try {
-      const res = await apiService.testOllamaConnection(targetHost)
+      const res = await electronApi().testOllamaConnection(targetHost)
       if (res.success) {
         setTestResult({
           success: true,

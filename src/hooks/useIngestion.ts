@@ -1,7 +1,7 @@
 import type { editor } from 'monaco-editor'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { IngestedDocument, AppSettings, DiagnosticsData, IngestionStreamProgressPayload } from '../types'
-import { apiService } from '../services/api'
+import { electronApi } from '../services/electronApi'
 import { logger } from '../lib/logger'
 import { useIngestedDocuments, notifyDocumentsChanged } from './useIngestedDocuments'
 import { useDocumentMarkdown } from './useDocumentMarkdown'
@@ -68,7 +68,7 @@ export async function runDocumentDeletion(
   id: string,
   onFailure: (message?: string) => void,
   onSuccess: () => void,
-  deleteDocument: (docId: string) => Promise<{ success: boolean; error?: string }> = apiService.deleteIngestedDocument,
+  deleteDocument: (docId: string) => Promise<{ success: boolean; error?: string }> = (docId) => electronApi().deleteIngestedDocument(docId),
 ): Promise<boolean> {
   const result = await deleteDocument(id)
   if (!result.success) {
@@ -335,7 +335,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     if (!selectedDoc || !markdownContent) return
     setExportStatus({ active: true, message: t('ingestion.exportPreparing', { format: format.toUpperCase() }) })
     try {
-      const res = await apiService.exportDocument(markdownContent, format)
+      const res = await electronApi().exportDocument(markdownContent, format)
       if (res.success) {
         setExportStatus({ active: false, message: res.message || t('ingestion.exportSuccess', { format: format.toUpperCase() }) })
       } else {
@@ -377,6 +377,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     } catch (err: unknown) {
       const normalized = normalizeError(err, 'Ingestion')
       logger.error('IngestionView', `Error deleting document ${filename || id}: ${normalized.message}`)
+      setUploadError(t('ingestion.deleteError', { message: normalized.message }))
     }
   }
 
@@ -451,7 +452,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         percent: 55,
       }))
 
-      const res = await apiService.ingestFile(
+      const res = await electronApi().ingestFile(
         targetFilePath,
         settings?.visionModel,
         visionPrompt,
@@ -513,7 +514,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
 
   const handleSelectFileNative = async () => {
     try {
-      const selected = await apiService.openFileDialog({
+      const selected = await electronApi().openFileDialog({
         title: t('ingestion.selectFileTitle'),
         filters: [
           { name: t('ingestion.supportedDocuments'), extensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'bmp', 'docx', 'txt', 'md'] },
@@ -542,7 +543,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     setSaveStatus(null)
 
     try {
-      const res = await apiService.updateIngestedDocument(selectedDoc.id, markdownContent)
+      const res = await electronApi().updateIngestedDocument(selectedDoc.id, markdownContent)
       if (res.success && res.data) {
         primeDocumentMarkdown(res.data)
         editorSourceRef.current = { id: res.data.id, ingestedAt: res.data.ingestedAt, markdown: res.data.extractedMarkdown }

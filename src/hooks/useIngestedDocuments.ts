@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { IngestedDocument } from '../types'
-import { apiService } from '../services/api'
+import { electronApi } from '../services/electronApi'
 import { logger } from '../lib/logger'
 import { nextRetryDelayMs, shouldReportFailure, DEFAULT_RETRY_POLICY } from '../lib/pollingRetryPolicy'
 import { createSingleFlight } from '../lib/singleFlight'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 // Every mounted consumer of this hook keeps its own copy of the list and its own callbacks, but they all read the same backend collection -- and a single documents-changed or focus event reaches all of them at once.
-const fetchDocumentsShared = createSingleFlight(() => apiService.getIngestedDocuments())
+const fetchDocumentsShared = createSingleFlight(() => electronApi().getIngestedDocuments())
 
 export const DOCUMENTS_CHANGED_EVENT = 'onlyrag:documents-changed'
 export const TAB_CHANGED_EVENT = 'onlyrag:tab-changed'

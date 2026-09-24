@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Modal } from '../common/Modal'
 import { DiagnosticsData, LogEntry } from '../../types'
-import { apiService } from '../../services/api'
+import { electronApi, openLogsFolder } from '../../services/electronApi'
+import { logger } from '../../lib/logger'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 import {
   Terminal,
   RefreshCw,
@@ -47,9 +49,11 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({ isOpen, on
   const fetchLogs = useCallback(async () => {
     setIsRefreshingLogs(true)
     try {
-      const fetchedLogs = await apiService.getLogs()
+      const fetchedLogs = await electronApi().getLogs()
       // An unchanged buffer keeps the same array, so the console neither re-renders nor re-scrolls.
       setLogs((current) => (isSameLogSnapshot(current, fetchedLogs) ? current : fetchedLogs))
+    } catch (err: unknown) {
+      logger.error('DiagnosticsDrawer', `Failed to fetch logs: ${errorMessage(err)}`)
     } finally {
       setIsRefreshingLogs(false)
     }
@@ -397,9 +401,7 @@ ${logs
           {/* Open Logs Folder Button */}
           <button
             type="button"
-            onClick={async () => {
-              await apiService.openLogsFolder()
-            }}
+            onClick={openLogsFolder}
             title={t('diagnostics.openLogsFolder')}
             aria-label={t('diagnostics.openLogsFolder')}
             className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-400 rounded-xl text-xs transition-all focus-ring active:scale-95"

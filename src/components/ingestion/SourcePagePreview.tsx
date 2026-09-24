@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
-import { apiService } from '../../services/api'
+import { electronApi } from '../../services/electronApi'
+import { logger } from '../../lib/logger'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 import { RenderedPagePreview } from './RenderedPagePreview'
 import { useTranslation } from '../../i18n'
 
@@ -24,13 +26,14 @@ export const SourcePagePreview: React.FC<SourcePagePreviewProps> = ({ docId, pag
     const loadPreview = async () => {
       setIsLoading(true)
       try {
-        const previewData = await apiService.getDocumentPagePreview(docId, pageNumber)
+        const previewData = await electronApi().getDocumentPagePreview(docId, pageNumber)
         if (isMounted && previewData && previewData.imageBase64) {
           setImageBase64(previewData.imageBase64)
         } else if (isMounted) {
           setImageBase64(null)
         }
-      } catch (err) {
+      } catch (err: unknown) {
+        logger.warn('SourcePagePreview', `Failed getting page preview for ${docId}, p.${pageNumber}: ${errorMessage(err)}`)
         if (isMounted) setImageBase64(null)
       } finally {
         if (isMounted) setIsLoading(false)

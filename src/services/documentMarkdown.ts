@@ -1,5 +1,7 @@
 import type { IngestedDocument, IngestedDocumentContent } from '../types'
-import { apiService } from './api'
+import { electronApi } from './electronApi'
+import { logger } from '../lib/logger'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 /**
  * On-demand Markdown of ingested documents. `ingest:list` carries metadata only, so every consumer
@@ -49,13 +51,17 @@ export function loadDocumentMarkdown(doc: DocumentKey): Promise<string | null> {
   const pending = inFlight.get(key)
   if (pending) return pending
 
-  const request = apiService
-    .getIngestedDocument(doc.id)
+  const request = Promise.resolve()
+    .then(() => electronApi().getIngestedDocument(doc.id))
     .then((loaded) => {
       if (!loaded) return null
       const markdown = loaded.extractedMarkdown || ''
       remember(key, markdown)
       return markdown
+    })
+    .catch((err: unknown) => {
+      logger.error('DocumentMarkdown', `Failed to load document ${doc.id}: ${errorMessage(err)}`)
+      return null
     })
     .finally(() => inFlight.delete(key))
   inFlight.set(key, request)

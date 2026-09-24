@@ -32,7 +32,9 @@ import { useSettingsManager } from '../../hooks/useSettingsManager'
 import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
 import { useOllamaModelUpdates } from '../../hooks/useOllamaModelUpdates'
 import { useTranslation, Language } from '../../i18n'
-import { apiService } from '../../services/api'
+import { electronApi, openLogsFolder } from '../../services/electronApi'
+import { logger } from '../../lib/logger'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 import { compareContextAllocation } from '../../services/contextAllocation'
 import { ModelContextControl } from './ModelContextControl'
 import { extractHardwareFacts, isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
@@ -271,10 +273,14 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                 <button
                   type="button"
                   onClick={async () => {
-                    const chosen = await apiService.openDirectoryDialog({
-                      title: t('settings.translationOutputFolderTitle'),
-                    })
-                    if (chosen) onUpdateSettings({ translationOutputFolder: chosen })
+                    try {
+                      const chosen = await electronApi().openDirectoryDialog({
+                        title: t('settings.translationOutputFolderTitle'),
+                      })
+                      if (chosen) onUpdateSettings({ translationOutputFolder: chosen })
+                    } catch (err: unknown) {
+                      logger.error('SettingsView', `Directory dialog failed: ${errorMessage(err)}`)
+                    }
                   }}
                   className="w-full py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-700 hover:border-cyan-500/50 text-slate-200 text-xs font-semibold rounded-lg transition-all focus-ring flex items-center justify-center gap-2 active:scale-95 shadow-sm"
                 >
@@ -296,9 +302,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                 </div>
                 <button
                   type="button"
-                  onClick={async () => {
-                    await apiService.openLogsFolder()
-                  }}
+                  onClick={openLogsFolder}
                   className="w-full py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-700 hover:border-cyan-500/50 text-slate-200 text-xs font-semibold rounded-lg transition-all focus-ring flex items-center justify-center gap-2 active:scale-95 shadow-sm"
                 >
                   <FolderOpen className="w-3.5 h-3.5 text-cyan-400" /> {t('settings.openLogsFolder')}

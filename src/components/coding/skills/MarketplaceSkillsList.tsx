@@ -18,7 +18,9 @@ import {
   Check,
 } from 'lucide-react'
 import { HubSkillItem } from '../../../types'
-import { apiService } from '../../../services/api'
+import { electronApi } from '../../../services/electronApi'
+import { logger } from '../../../lib/logger'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 import { useTranslation, TranslationKey } from '../../../i18n'
 
 const CATEGORY_LABEL_KEYS: Record<string, TranslationKey> = {
@@ -58,12 +60,13 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({ hu
     if (!hubItem.rawContent && !fetchedContents[hubItem.id]) {
       setLoadingContentId(hubItem.id)
       try {
-        const res = await apiService.getHubSkillContent(hubItem)
+        const res = await electronApi().getHubSkillContent(hubItem)
         if (res.success && res.content) {
           setFetchedContents((prev) => ({ ...prev, [hubItem.id]: res.content! }))
         }
-      } catch {
+      } catch (err: unknown) {
         // Fallback handled in UI
+        logger.error('MarketplaceSkillsList', `Failed fetching skill content for ${hubItem.name}: ${errorMessage(err)}`)
       } finally {
         setLoadingContentId(null)
       }

@@ -23,6 +23,20 @@ describe('selectMilestonesProvenByVerification', () => {
     expect(selectMilestonesProvenByVerification(plan, 'npm run build', statusMap()).map((m) => m.id)).toEqual(['m-1', 'm-2', 'm-3'])
   })
 
+  it('does not let a build prove a milestone that promises behavior', () => {
+    // Live full task run 2026-09-24: the smoke-test milestone (npm test) was marked verified by a
+    // green `npm run build` although package.json had no test script and the test never ran.
+    const smoke = {
+      ...milestone('m-2', 'A smoke test renders the App — `src/App.test.jsx`'),
+      verificationCommand: undefined,
+      proposedVerificationCommand: 'npm test',
+    }
+    const plan = [{ ...milestone('m-1', 'Create `a.ts`'), verificationCommand: undefined }, smoke]
+
+    expect(selectMilestonesProvenByVerification(plan, 'npm run build', statusMap()).map((m) => m.id)).toEqual(['m-1'])
+    expect(selectMilestonesProvenByVerification(plan, 'npm test', statusMap()).map((m) => m.id)).toEqual(['m-1', 'm-2'])
+  })
+
   it('leaves alone a milestone that is already verified', () => {
     const plan = [milestone('m-1', 'Create `a.ts`', 'verified'), milestone('m-2', 'Create `b.ts`')]
     expect(selectMilestonesProvenByVerification(plan, 'npm run build', statusMap()).map((m) => m.id)).toEqual(['m-2'])

@@ -20,12 +20,22 @@ export function selectMilestonesProvenByVerification(
   deliverableStatusOf: (milestone: PlanMilestone) => MilestoneDeliverableStatus,
 ): PromotionCandidate[] {
   const executed = verificationCommand.trim().toLowerCase()
-  return milestones
-    .filter((m) => m.status !== 'verified' && m.status !== 'failed')
-    .filter((m) => !isCompletionMilestoneTitle(m))
-    .filter((m) => !m.verificationCommand || m.verificationCommand.trim().toLowerCase() === executed)
-    .filter((m) => deliverableStatusOf(m) === 'satisfied')
-    .map((m) => ({ id: m.id, title: m.title }))
+  return (
+    milestones
+      .filter((m) => m.status !== 'verified' && m.status !== 'failed')
+      .filter((m) => !isCompletionMilestoneTitle(m))
+      .filter((m) => !m.verificationCommand || m.verificationCommand.trim().toLowerCase() === executed)
+      // A milestone that promises behavior (e.g. a smoke test run by `npm test`) is not proven by a
+      // build: its test file existing next to a green build says nothing about the test passing.
+      .filter((m) => !requiresBehaviorEvidence(m) || verificationEvidenceKind(verificationCommand) === 'behavior')
+      .filter((m) => deliverableStatusOf(m) === 'satisfied')
+      .map((m) => ({ id: m.id, title: m.title }))
+  )
+}
+
+function requiresBehaviorEvidence(milestone: PlanMilestone): boolean {
+  const declared = milestone.verificationCommand || milestone.proposedVerificationCommand
+  return Boolean(declared) && verificationEvidenceKind(declared!) === 'behavior'
 }
 
 export function verificationEvidenceKind(verificationCommand: string): 'compilation' | 'behavior' {

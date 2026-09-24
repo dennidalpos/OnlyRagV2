@@ -41,6 +41,7 @@ npm run test:e2e:electron
 - L'offload CPU può aumentare la latenza per modelli oltre la VRAM disponibile.
 - Le prove su Ollama dipendono da versione, modelli installati, hardware e stato del daemon.
 - Una verifica non disponibile non equivale a una verifica superata; il sistema conserva esiti distinti.
+- Build, typecheck e lint sono prova strutturale: la chiusura è `verified` solo se il controllo primario del progetto è un test che passa. Per questo un piano greenfield JavaScript/TypeScript (web React/Vite o Node) termina con una milestone di smoke test comportamentale ([`greenfieldScaffoldResolver.ts`](../electron/core/domain/agent/greenfieldScaffoldResolver.ts), `placement: 'end'`): per React un `src/App.test.jsx`/`.tsx` che rende `App` con `react-dom/server` ed è eseguito una volta dallo script `test` (`vitest run`). Python e Rust restano con controlli strutturali (`compileall`, `cargo check`).
 - Al ripristino di una sessione, le prove persistite vengono rivalidate. Un `verificationCommand` che modifica il workspace viene rifiutato senza essere eseguito e la milestone non passa a `verified`.
 
 Per i contratti da verificare consultare [`api-ipc.md`](./api-ipc.md), [`api-rest.md`](./api-rest.md) e [`PROJECT_STATUS.json`](../PROJECT_STATUS.json).

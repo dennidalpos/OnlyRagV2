@@ -5,14 +5,23 @@ const paths = (prompt: string) => resolveGreenfieldScaffold(true, prompt).scaffo
 
 describe('resolveGreenfieldScaffold', () => {
   it('derives the minimal accepted web stack without assuming TypeScript', () => {
-    expect(paths('Create a React web app')).toEqual(['package.json', 'index.html', 'src/main.jsx'])
-    expect(paths('Create a React TypeScript web app')).toEqual(['package.json', 'tsconfig.json', 'index.html', 'src/main.tsx'])
+    expect(paths('Create a React web app')).toEqual(['package.json', 'index.html', 'src/main.jsx', 'src/App.test.jsx'])
+    expect(paths('Create a React TypeScript web app')).toEqual(['package.json', 'tsconfig.json', 'index.html', 'src/main.tsx', 'src/App.test.tsx'])
   })
 
   it('keeps Python, Rust and non-web JavaScript free of web entrypoints', () => {
     expect(paths('Create a Python CLI')).toEqual(['pyproject.toml', 'src/main.py'])
     expect(paths('Create a Rust CLI')).toEqual(['Cargo.toml', 'src/main.rs'])
-    expect(paths('Create a Node.js CLI')).toEqual(['package.json', 'src/index.js'])
+    expect(paths('Create a Node.js CLI')).toEqual(['package.json', 'src/index.js', 'src/index.test.js'])
+  })
+
+  it('ends a JavaScript/TypeScript plan with a behavioral smoke test run by npm test', () => {
+    const result = resolveGreenfieldScaffold(true, 'Create a React web app')
+    const smoke = result.scaffold.requirements.at(-1)
+
+    expect(smoke).toMatchObject({ path: 'src/App.test.jsx', placement: 'end', proposedVerificationCommand: 'npm test' })
+    expect(smoke?.acceptanceCriteria?.[0]).toMatch(/npm test runs src\/App\.test\.jsx/)
+    expect(result.proposedVerificationCommands).toContain('npm test')
   })
 
   it('uses accepted interview answers and makes future checks non-executable', () => {

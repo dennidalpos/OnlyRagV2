@@ -34,6 +34,34 @@ describe('ensureScaffoldMilestones', () => {
     expect(plan.map((m) => m.id)).toEqual(['m-1', 'm-2', 'm-3', 'm-4', 'm-5'])
   })
 
+  it('appends end-placed requirements after the work they verify', () => {
+    const withSmokeTest = {
+      ...web,
+      requirements: [
+        ...web.requirements,
+        {
+          path: 'src/App.test.tsx',
+          title: 'A behavioral smoke test renders the App',
+          proposedVerificationCommand: 'npm test',
+          acceptanceCriteria: ['npm test runs src/App.test.tsx and exits with code 0.'],
+          placement: 'end' as const,
+        },
+      ],
+    }
+
+    const plan = ensureScaffoldMilestones(pagePlan, withSmokeTest)
+
+    expect(plan).toHaveLength(6)
+    expect(plan.at(-1)).toMatchObject({
+      id: 'm-6',
+      filePaths: ['src/App.test.tsx'],
+      proposedVerificationCommand: 'npm test',
+      acceptanceCriteria: ['npm test runs src/App.test.tsx and exits with code 0.'],
+      falsifiableHypothesis: 'npm test runs src/App.test.tsx and exits with code 0.',
+    })
+    expect(plan[3].title).toContain('DashboardPage')
+  })
+
   it('adds only what the plan is missing', () => {
     const withEntry = [{ id: 'm-1', title: 'The entry script mounts the app — `src/main.tsx`', status: 'pending' as const }, ...pagePlan]
 

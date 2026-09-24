@@ -1,5 +1,5 @@
 import type { UserInterviewAnswer } from '../../../../shared/types'
-import type { WorkspaceScaffoldFacts } from '../../../../shared/domain/agent/planCompilation'
+import type { ScaffoldRequirement, WorkspaceScaffoldFacts } from '../../../../shared/domain/agent/planCompilation'
 
 export interface GreenfieldScaffoldResolution {
   acceptedStack: string | null
@@ -8,6 +8,21 @@ export interface GreenfieldScaffoldResolution {
 }
 
 const matches = (text: string, pattern: RegExp) => pattern.test(text)
+
+/**
+ * A build, typecheck or lint only proves structure; the application closes as verified only on a
+ * passing test (see agentOrchestratorVerificationRunner.ts). A greenfield JavaScript/TypeScript
+ * plan therefore ends with a behavioral smoke test the project's own "test" script runs once.
+ */
+function behavioralSmokeTest(path: string, subject: string, runner: string): ScaffoldRequirement {
+  return {
+    path,
+    title: `A behavioral smoke test exercises ${subject} and the package.json "test" script runs it once (${runner})`,
+    proposedVerificationCommand: 'npm test',
+    acceptanceCriteria: [`npm test runs ${path}, asserts real output of ${subject} and exits with code 0.`],
+    placement: 'end',
+  }
+}
 
 /** Resolves only stack choices stated by the user or accepted during the interview. */
 export function resolveGreenfieldScaffold(isGreenfield: boolean, prompt: string, decisions: readonly UserInterviewAnswer[] = []): GreenfieldScaffoldResolution {
@@ -64,15 +79,22 @@ export function resolveGreenfieldScaffold(isGreenfield: boolean, prompt: string,
 
     const extension = react ? (typescript ? 'tsx' : 'jsx') : typescript ? 'ts' : 'js'
     const proposed = 'npm run build'
-    const requirements = [
-      { path: 'package.json', title: 'The project declares its accepted web stack and terminating build script', proposedVerificationCommand: proposed },
+    const requirements: ScaffoldRequirement[] = [
+      {
+        path: 'package.json',
+        title: 'The project declares its accepted web stack, a terminating build script and a terminating test script',
+        proposedVerificationCommand: proposed,
+      },
       ...(typescript ? [{ path: 'tsconfig.json', title: 'TypeScript checks source without emitting build artifacts' }] : []),
       { path: 'index.html', title: 'The web application has a root entry page' },
       { path: `src/main.${extension}`, title: 'The entry module mounts or starts the web application' },
+      react
+        ? behavioralSmokeTest(`src/App.test.${extension}`, 'the rendered App component (react-dom/server renderToString, no browser needed)', 'vitest run')
+        : behavioralSmokeTest(`src/app.test.${extension}`, 'the application modules', 'vitest run'),
     ]
     return {
       acceptedStack: [react ? 'react' : 'web', typescript ? 'typescript' : 'javascript'].join('-'),
-      proposedVerificationCommands: [proposed],
+      proposedVerificationCommands: [proposed, 'npm test'],
       scaffold: { isGreenfield: true, requirements },
     }
   }
@@ -81,13 +103,20 @@ export function resolveGreenfieldScaffold(isGreenfield: boolean, prompt: string,
     const proposed = typescript ? 'npm run typecheck' : 'node --check src/index.js'
     return {
       acceptedStack: typescript ? 'node-typescript' : 'node-javascript',
-      proposedVerificationCommands: [proposed],
+      proposedVerificationCommands: [proposed, 'npm test'],
       scaffold: {
         isGreenfield: true,
         requirements: [
-          { path: 'package.json', title: 'The project declares its Node.js package and scripts', proposedVerificationCommand: proposed },
+          {
+            path: 'package.json',
+            title: 'The project declares its Node.js package and scripts, including a terminating test script',
+            proposedVerificationCommand: proposed,
+          },
           ...(typescript ? [{ path: 'tsconfig.json', title: 'TypeScript checks the Node.js source' }] : []),
           { path: typescript ? 'src/index.ts' : 'src/index.js', title: 'The Node.js application has a minimal entry module' },
+          typescript
+            ? behavioralSmokeTest('src/index.test.ts', 'the entry module', 'vitest run')
+            : behavioralSmokeTest('src/index.test.js', 'the entry module', 'node --test'),
         ],
       },
     }

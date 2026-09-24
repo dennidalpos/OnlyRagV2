@@ -31,6 +31,13 @@ export interface ScaffoldRequirement {
   path: string
   title: string
   proposedVerificationCommand?: string
+  /** Replaces the generic "provides the accepted stack capability" criterion. */
+  acceptanceCriteria?: string[]
+  /**
+   * 'end' appends the requirement after the model's milestones: a behavioral test can only be
+   * written once the code it exercises exists. Default 'start' (scaffold files come first).
+   */
+  placement?: 'start' | 'end'
 }
 
 export interface WorkspaceScaffoldFacts {
@@ -46,17 +53,22 @@ export function ensureScaffoldMilestones(milestones: PlanMilestone[], workspace?
   const missing = workspace.requirements.filter((entry) => !named.includes(entry.path))
   if (missing.length === 0) return milestones
 
-  const prepended: PlanMilestone[] = missing.map((entry) => ({
-    id: '',
-    title: `${entry.title} — \`${entry.path}\``,
-    status: 'pending',
-    filePaths: [entry.path],
-    acceptanceCriteria: [`${entry.path} provides the accepted stack capability.`],
-    proposedVerificationCommand: entry.proposedVerificationCommand,
-    falsifiableHypothesis: `${entry.path} provides the accepted stack capability.`,
-  }))
+  const toMilestone = (entry: ScaffoldRequirement): PlanMilestone => {
+    const criteria = entry.acceptanceCriteria?.length ? entry.acceptanceCriteria : [`${entry.path} provides the accepted stack capability.`]
+    return {
+      id: '',
+      title: `${entry.title} — \`${entry.path}\``,
+      status: 'pending',
+      filePaths: [entry.path],
+      acceptanceCriteria: criteria,
+      proposedVerificationCommand: entry.proposedVerificationCommand,
+      falsifiableHypothesis: criteria[0],
+    }
+  }
+  const prepended = missing.filter((entry) => entry.placement !== 'end').map(toMilestone)
+  const appended = missing.filter((entry) => entry.placement === 'end').map(toMilestone)
 
-  return [...prepended, ...milestones].map((m, idx) => ({ ...m, id: `m-${idx + 1}` }))
+  return [...prepended, ...milestones, ...appended].map((m, idx) => ({ ...m, id: `m-${idx + 1}` }))
 }
 
 /** Applies canonical normalisation without merging distinct interventions. */

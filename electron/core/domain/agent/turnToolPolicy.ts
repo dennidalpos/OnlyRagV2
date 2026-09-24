@@ -72,10 +72,14 @@ function requestsFileMutation(task: string): boolean {
 export function resolveTurnToolPolicy(input: TurnToolPolicyInput): TurnToolPolicy {
   const advanced = requestedAdvancedTools(input.userTask)
   const controls: SupportedToolName[] = ['ask', 'update_plan']
-  const policy = (tools: readonly SupportedToolName[], rationale: string): TurnToolPolicy => ({
-    allowedTools: Array.from(new Set([...tools, ...controls, ...advanced])),
-    rationale,
-  })
+  const policy = (tools: readonly SupportedToolName[], rationale: string): TurnToolPolicy => {
+    const allowed = new Set([...tools, ...controls, ...advanced])
+    // A shell command that prints one file already runs as read_file, so denying the direct call only
+    // costs a turn: live gpt-oss:20b run 4 of 2026-09-24 lost 8 of 41 steps to read_file denials
+    // while its `sed -n`/`cat` reads of the same files went through.
+    if (allowed.has('run_command')) allowed.add('read_file')
+    return { allowedTools: Array.from(allowed), rationale }
+  }
 
   switch (input.directiveKind) {
     case 'session_closure':

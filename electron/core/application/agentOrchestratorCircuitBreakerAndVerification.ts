@@ -40,6 +40,8 @@ import {
   readLocalModuleExports,
   readPackageExports,
   toWorkspaceRelativePath,
+  readLocalModuleSource,
+  readWorkspaceTextFile,
 } from '../infrastructure/filesystem/packageExportScanner'
 import { checkHtmlEntrypoint, CONVENTIONAL_ENTRY_PATHS } from '../domain/agent/entrypointIntegrity'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
@@ -361,6 +363,8 @@ export function resolvePlanDirectiveForTurn(
     toWorkspaceRelative: (filePath: string) => toWorkspaceRelativePath(workspacePath, filePath),
     fileExists: (relativePath: string) => probe(relativePath).exists,
     binaryInstalled: (name: string) => isBinaryInstalled(workspacePath, name),
+    readWorkspaceFile: (relativePath: string) => readWorkspaceTextFile(workspacePath, relativePath),
+    readLocalModuleSource: (importingFile: string, specifier: string) => readLocalModuleSource(workspacePath, importingFile, specifier),
   }
   const diagnose = (output: string) =>
     buildDiagnosticFixDirective(

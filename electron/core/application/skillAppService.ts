@@ -5,6 +5,7 @@ import { projectStackDetectionRepository } from '../infrastructure/filesystem/pr
 import { matchSkillsForTask, matchHubSkillsForTask, compileSkillsContextBlock, SkillMatchContext } from '../domain/skills/skillMatcher'
 import { assessHubSkillQuality, compareHubSkillQuality } from '../domain/skills/skillQuality'
 import { assessHubSkillCompatibility, LocalModelProbe } from '../domain/skills/skillCompatibility'
+import { skillsFittingDeclaredVersions, skillVersionConflict } from '../domain/skills/skillVersionFit'
 import { ollamaHttpClient } from '../infrastructure/http/ollamaHttpClient'
 import { SkillDefinition, HubSkillItem, SkillHubSource, CustomHubInput, SkillSaveInput } from '../domain/skills/skillTypes'
 import { logger } from '../infrastructure/logging/logger'
@@ -22,6 +23,7 @@ export interface SkillMatchingOptions {
 
 export class SkillAppService {
   private localModelProbe: Promise<LocalModelProbe[]> | null = null
+  private readonly reportedVersionConflicts = new Set<string>()
 
   private async getLocalModelProbe(forceRefresh = false): Promise<LocalModelProbe[]> {
     if (forceRefresh || !this.localModelProbe) {
@@ -346,6 +348,9 @@ export class SkillAppService {
       if (!ctx.projectStack && ctx.workspacePath) {
         ctx.projectStack = projectStackDetectionRepository.detect(ctx.workspacePath)
       }
+      if (!ctx.declaredDependencies && ctx.workspacePath) {
+        ctx.declaredDependencies = projectStackDetectionRepository.declaredDependencies(ctx.workspacePath)
+      }
 
       let matched = matchSkillsForTask(ctx, availableSkills, maxSkills)
 
@@ -384,6 +389,27 @@ export class SkillAppService {
       logger.log('WARN', 'SkillAppService', `Error matching skills: ${errorMessage(err)}`)
       return []
     }
+  }
+
+  /**
+   * The guideline block of the session's matched skills that still fit the workspace manifest.
+   * Skills are matched once, often before package.json exists; this is re-read every turn so a
+   * `<package>-v<major>` skill leaves both the prompt and the adherence check as soon as the
+   * manifest declares another major.
+   */
+  skillsBlockForWorkspace(skills: readonly SkillDefinition[], workspacePath?: string | null): string {
+    if (skills.length === 0) return ''
+    const declared = projectStackDetectionRepository.declaredDependencies(workspacePath)
+    const fitting = skillsFittingDeclaredVersions(skills, declared)
+    for (const skill of skills) {
+      if (fitting.includes(skill)) continue
+      const conflict = skillVersionConflict(skill.name, declared)
+      if (conflict && !this.reportedVersionConflicts.has(`${workspacePath}|${skill.name}`)) {
+        this.reportedVersionConflicts.add(`${workspacePath}|${skill.name}`)
+        logger.log('INFO', 'SkillAppService', `Skill '${skill.name}' withdrawn: the workspace declares ${conflict.packageName} ${conflict.declaredRange}.`)
+      }
+    }
+    return compileSkillsContextBlock(fitting)
   }
 
   async getContextSkillsBlock(

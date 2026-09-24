@@ -79,6 +79,7 @@ vi.mock('./skillAppService', () => ({
   skillAppService: {
     getMatchedSkills: vi.fn().mockResolvedValue([]),
     getContextSkillsBlock: vi.fn().mockResolvedValue(''),
+    skillsBlockForWorkspace: vi.fn().mockReturnValue(''),
   },
 }))
 

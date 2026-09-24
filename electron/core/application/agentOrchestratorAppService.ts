@@ -9,6 +9,7 @@ import { collectTurnContext, requestTurnProposal } from './agentOrchestratorTurn
 import { bootstrapAgentSession } from './agentOrchestratorBootstrap'
 import { closeAgentRunFromEvidence } from './agentOrchestratorApplicationClosure'
 import { agentToolExecutorService } from './agentToolExecutorService'
+import { skillAppService } from './skillAppService'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import type { AgentSession } from './agentOrchestratorTypes'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
@@ -203,7 +204,7 @@ export async function runAgentOrchestratorLoop(
     modelMetrics,
     skillMatchContext,
     skillMatchingOptions,
-    skillsBlock,
+    matchedSkills,
     resumeValidationError,
     episodicCompactor,
     phaseController,
@@ -341,6 +342,8 @@ export async function runAgentOrchestratorLoop(
   while (stepCountBox.value < MAX_STEPS && isSessionActive()) {
     stepCountBox.value++
     setExecutionPhase('collect_context')
+    // Re-fitted every turn: the manifest the skills must agree with is usually written during the run.
+    const skillsBlock = skillAppService.skillsBlockForWorkspace(matchedSkills, workspacePath)
     // Periodic checkpoint: persisting on every single step is unnecessary I/O churn.
     if (stepCountBox.value === 1 || stepCountBox.value % PERSIST_EVERY_N_STEPS === 0) {
       await persistCurrentState()

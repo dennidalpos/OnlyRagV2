@@ -7,6 +7,7 @@ import type { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import type { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import type { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import type { SkillMatchContext } from '../domain/skills/skillMatcher'
+import type { SkillDefinition } from '../domain/skills/skillTypes'
 import type { SkillMatchingOptions } from './skillAppService'
 import type { ResponseInterpreterState } from './agentOrchestratorResponseInterpreterTypes'
 import type { ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
@@ -49,7 +50,7 @@ export interface AgentSessionBootstrap {
   modelMetrics: Record<string, OllamaModelMetrics>
   skillMatchContext: SkillMatchContext
   skillMatchingOptions: SkillMatchingOptions
-  skillsBlock: string
+  matchedSkills: SkillDefinition[]
   resumeValidationError: string | null
   episodicCompactor: EpisodicMemoryCompactor
   goalPlanner: GoalDecompositionPlanner

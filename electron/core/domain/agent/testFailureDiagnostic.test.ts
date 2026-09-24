@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTestFailureDirective, extractFailingTest, isTestFilePath, renderedTextFragment } from './testFailureDiagnostic'
+import { buildTestFailureDirective, extractFailingTest, isTestFilePath, literalJsxText, renderedTextFragment, testedModuleText } from './testFailureDiagnostic'
 import { buildDiagnosticFixDirective, diagnosticFixTargetFile } from './compilerDiagnosticDirective'
 
 /** The Jest output of the full-task run of 2026-09-24 (run 6), ANSI colours included. */
@@ -269,5 +269,53 @@ describe('a test global missing inside a test that ran', () => {
 
     expect(directive).toContain(`import { describe, it, expect } from 'vitest'`)
     expect(directive).not.toContain('ASSERTION FAILED')
+  })
+})
+
+describe('the Vitest 0.x one-line assertion message', () => {
+  /** Full task run 26 of 2026-09-24: Vitest 0.26 printed chai's message with the received value cut at 40 characters. */
+  const output = [
+    '> vitest run',
+    ' FAIL  src/App.test.jsx > App > renders the dashboard title',
+    `AssertionError: expected '<div class="min-h-screen flex"><aside…' to include 'Project Dashboard'`,
+    ' ❯ src/App.test.jsx:8:18',
+    "      8|     expect(html).toContain('Project Dashboard')",
+    '       |                  ^',
+  ].join('\n')
+
+  it('reads expected and received from the message and marks the received value cut short', () => {
+    const failing = extractFailingTest(output)!
+    expect(failing.kind).toBe('assertion')
+    expect(failing.expected).toBe('Project Dashboard')
+    expect(failing.received).toBe('<div class="min-h-screen flex"><aside…')
+    expect(failing.receivedTruncated).toBe(true)
+  })
+
+  it('rewrites the assertion on literal text of the module the test renders', () => {
+    const files: Record<string, string> = {
+      'src/App.test.jsx': "import { renderToString } from 'react-dom/server'\nimport './index.css'\nimport App from './App'\n",
+      'src/App.jsx':
+        'export default function App() {\n  return (\n    <div className="min-h-screen flex">\n      <aside>{links}</aside>\n      <h1 className="text-2xl">\n        Projects overview\n      </h1>\n    </div>\n  )\n}\n',
+    }
+    const readFile = (relativePath: string) => files[relativePath] ?? null
+    const readModule = (_importingFile: string, specifier: string) => (specifier === './App' ? files['src/App.jsx'] : null)
+    expect(testedModuleText('src/App.test.jsx', readFile, readModule)).toEqual({ text: 'Projects overview', module: './App' })
+
+    const directive = buildDiagnosticFixDirective(output, undefined, undefined, { readWorkspaceFile: readFile, readLocalModuleSource: readModule })!
+    expect(directive).toContain('Received (cut short by the runner)')
+    expect(directive).toContain(`"./App", which the test renders, contains the literal text 'Projects overview'.`)
+    expect(directive).toContain(`replaced by exactly: expect(html).toContain('Projects overview')`)
+  })
+
+  it('keeps the generic rewrite advice when no module text can be read', () => {
+    const directive = buildTestFailureDirective(extractFailingTest(output)!)
+    expect(directive).toContain('asserts content the code really produces')
+  })
+})
+
+describe('literalJsxText', () => {
+  it('skips expressions, code and quoted text', () => {
+    expect(literalJsxText('const a = useState<string>(null)\nreturn <p>{count}</p>')).toBeNull()
+    expect(literalJsxText("<span>Don't</span><li>Team members</li>")).toBe('Team members')
   })
 })

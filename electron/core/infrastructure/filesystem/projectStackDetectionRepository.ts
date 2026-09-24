@@ -4,6 +4,21 @@ import { logger } from '../logging/logger'
 
 /** Sniffs a workspace's manifest files to build a lowercase tag set of its declared dependencies/tooling. */
 export class ProjectStackDetectionRepository {
+  /** package.json dependency and devDependency ranges by package name; empty without a readable manifest. */
+  declaredDependencies(workspacePath?: string | null): Record<string, string> {
+    if (!workspacePath) return {}
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(workspacePath, 'package.json'), 'utf-8'))
+      const declared: Record<string, string> = {}
+      for (const [name, range] of Object.entries({ ...pkg?.dependencies, ...pkg?.devDependencies })) {
+        if (typeof range === 'string') declared[name] = range
+      }
+      return declared
+    } catch {
+      return {}
+    }
+  }
+
   detect(workspacePath?: string | null): string[] {
     if (!workspacePath || !fs.existsSync(workspacePath)) return []
     const stack = new Set<string>()

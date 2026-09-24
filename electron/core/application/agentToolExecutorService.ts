@@ -28,6 +28,8 @@ import {
   readLocalModuleExports,
   readPackageExports,
   toWorkspaceRelativePath,
+  readLocalModuleSource,
+  readWorkspaceTextFile,
 } from '../infrastructure/filesystem/packageExportScanner'
 import { computeLineDiff, countDiffLines } from '../../../shared/domain/agent/diffEngine'
 import { reconcileApprovedHunks } from '../domain/agent/tools/fs/hunkApproval'
@@ -595,6 +597,8 @@ export class AgentToolExecutorService {
                   toWorkspaceRelative: (filePath) => toWorkspaceRelativePath(workspacePath, filePath),
                   fileExists: (relativePath) => agentToolFileRepository.getFileInfo(path.resolve(workspacePath, relativePath)) !== null,
                   binaryInstalled: (name) => isBinaryInstalled(workspacePath, name),
+                  readWorkspaceFile: (relativePath) => readWorkspaceTextFile(workspacePath, relativePath),
+                  readLocalModuleSource: (importingFile, specifier) => readLocalModuleSource(workspacePath, importingFile, specifier),
                 }
               : {},
           )

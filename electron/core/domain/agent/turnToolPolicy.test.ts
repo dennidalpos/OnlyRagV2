@@ -34,6 +34,10 @@ describe('resolveTurnToolPolicy', () => {
     expect(ordinary.allowedTools).not.toContain('run_command')
     expect(ordinary.allowedTools).not.toContain('git_status')
 
+    const buildTask = resolveTurnToolPolicy({ directiveKind: 'focus', editTargetState: 'missing', userTask: 'Create src/app.ts and run the build' })
+    // A shell read would run as read_file anyway, so the direct call is not denied either.
+    expect(buildTask.allowedTools).toEqual(expect.arrayContaining(['write_file', 'run_command', 'read_file']))
+
     const requested = resolveTurnToolPolicy({ directiveKind: 'focus', editTargetState: 'unknown', userTask: 'Inspect the git diff' })
     expect(requested.allowedTools).toEqual(expect.arrayContaining(['git_status', 'git_diff']))
   })

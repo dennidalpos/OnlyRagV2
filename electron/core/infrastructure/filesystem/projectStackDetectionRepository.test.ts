@@ -34,6 +34,18 @@ describe('ProjectStackDetectionRepository Unit Tests', () => {
     expect(stack).toContain('vitest')
   })
 
+  it('should read the declared package.json ranges, and nothing without a readable manifest', () => {
+    expect(repo.declaredDependencies(tempDir)).toEqual({})
+    fs.writeFileSync(
+      path.join(tempDir, 'package.json'),
+      JSON.stringify({ dependencies: { react: '^18.2.0' }, devDependencies: { tailwindcss: '^3.4.1' } }),
+      'utf-8',
+    )
+    expect(repo.declaredDependencies(tempDir)).toEqual({ react: '^18.2.0', tailwindcss: '^3.4.1' })
+    fs.writeFileSync(path.join(tempDir, 'package.json'), '{ "dependencies": ', 'utf-8')
+    expect(repo.declaredDependencies(tempDir)).toEqual({})
+  })
+
   it('should detect Python from requirements.txt and pyproject.toml, ignoring comments and version pins', () => {
     fs.writeFileSync(path.join(tempDir, 'requirements.txt'), '# comment\nfastapi==0.110.0\nuvicorn>=0.25\n', 'utf-8')
     const stack = repo.detect(tempDir)

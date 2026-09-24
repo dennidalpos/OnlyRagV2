@@ -20,6 +20,14 @@ const KNOWN_PROVIDERS: Record<string, string> = {
 const NO_TEST_DECLARED = /No test suite found in file|Your test suite must contain at least one test/i
 const FAILED_TO_RESOLVE = /Failed to resolve import\s+["'](\.{1,2}\/[^"']+)["']/
 const RELATIVE_SPECIFIER = /(?:\bfrom\s+|\bimport\s+|\brequire\(\s*)["'](\.{1,2}\/[^"']+)["']/
+/**
+ * Chai's one-line message, which Vitest 0.x prints instead of Expected/Received lines:
+ * `AssertionError: expected '<div class="app">…' to include 'Dashboard'`. The received side is cut
+ * at 40 characters (live full task run 26 of 2026-09-24, Vitest 0.26 pinned by the model).
+ */
+const CHAI_INCLUDE =
+  /AssertionError:\s*expected\s+(['"])((?:\\.|(?!\1).)*)\1\s+to\s+(?:include|contain|match|have string)\s+(?:(['"])((?:\\.|(?!\3).)*)\3|(\/.+?\/[a-z]*))/
+const TRUNCATED = /(?:…|\.\.\.)$/
 
 export interface FailingTest {
   /** Workspace-relative path of the test file the runner reported as failing. */
@@ -41,13 +49,25 @@ export interface FailingTest {
   declaresNoTest?: boolean
   /** A name the test uses without importing it (`renderToString is not defined`), when it is not a test global. */
   undefinedName?: string
+  /** The runner cut the received value short (chai's 40-character preview), so it may hold no rendered text. */
+  receivedTruncated?: boolean
+}
+
+/** A text the tested module renders literally, read from its source when the runner's output shows none. */
+export interface TestedModuleText {
+  text: string
+  /** The import specifier as the test wrote it (`../App`). */
+  module: string
+}
+
+function bounded(value: string): string {
+  const clean = value.trim()
+  return clean.length > MAX_EVIDENCE_CHARS ? `${clean.slice(0, MAX_EVIDENCE_CHARS)}…` : clean
 }
 
 function evidenceLine(text: string, label: RegExp): string | null {
   const match = label.exec(text)
-  if (!match) return null
-  const value = match[1].trim()
-  return value.length > MAX_EVIDENCE_CHARS ? `${value.slice(0, MAX_EVIDENCE_CHARS)}…` : value
+  return match ? bounded(match[1]) : null
 }
 
 function escapeRegExp(value: string): string {
@@ -87,12 +107,18 @@ export function extractFailingTest(output: string): FailingTest | null {
     didNotLoad && !missingGlobal && !declaresNoTest && !undefinedName
       ? (FAILED_TO_RESOLVE.exec(text)?.[1] ?? RELATIVE_SPECIFIER.exec(loadLine?.source ?? '')?.[1])
       : undefined
+  const chai = CHAI_INCLUDE.exec(text)
+  const receivedLine = evidenceLine(text, /^\s*Received(?: string| value)?:\s*(.+)$/m)
+  const expected = evidenceLine(text, /^\s*Expected(?: substring| value)?:\s*(.+)$/m) ?? (chai ? bounded(chai[4] ?? chai[5]) : null)
+  const received = receivedLine ?? (chai ? bounded(chai[2]) : null)
+  const receivedTruncated = Boolean(!receivedLine && received && TRUNCATED.test(received))
   return {
     file,
     kind: didNotLoad ? 'load' : 'assertion',
     loadLine,
-    expected: evidenceLine(text, /^\s*Expected(?: substring| value)?:\s*(.+)$/m),
-    received: evidenceLine(text, /^\s*Received(?: string| value)?:\s*(.+)$/m),
+    expected,
+    received,
+    ...(receivedTruncated ? { receivedTruncated } : {}),
     ...(runner ? { runner } : {}),
     ...(missingGlobal ? { missingGlobal } : {}),
     ...(unresolvedImport ? { unresolvedImport } : {}),
@@ -199,6 +225,36 @@ export function renderedTextFragment(received: string | null): string | null {
   return null
 }
 
+/** The first JSX text child of at least three letters in `source`, whitespace-collapsed as React renders it and quote-free. */
+export function literalJsxText(source: string): string | null {
+  for (const match of source.matchAll(/>([^<>{}]+)<\//g)) {
+    const text = match[1].replace(/\s+/g, ' ').trim()
+    if (/[A-Za-z]{3}/.test(text) && !/["'`\\&=;()|]/.test(text)) return text
+  }
+  return null
+}
+
+/**
+ * Literal text a module the test imports renders, so a failing text assertion can be rewritten even
+ * when the runner printed no usable received value. Read, never guessed: a JSX text child in the
+ * module source is what renderToString and the testing libraries return for it.
+ */
+export function testedModuleText(
+  testFile: string,
+  readFile: (workspaceRelativePath: string) => string | null,
+  readModule: (importingFile: string, specifier: string) => string | null,
+): TestedModuleText | null {
+  const testSource = readFile(testFile)
+  if (!testSource) return null
+  for (const match of testSource.matchAll(/\bfrom\s+["'](\.{1,2}\/[^"']+)["']/g)) {
+    const module = match[1]
+    if (/\.(?:css|scss|sass|less|svg|png|jpe?g|gif|json)$/i.test(module) || isTestFilePath(module)) continue
+    const text = literalJsxText(readModule(testFile, module) ?? '')
+    if (text) return { text, module }
+  }
+  return null
+}
+
 /** A code-frame line without its trailing comment, which the runner may have cut short with "…". */
 function withoutTrailingComment(source: string): string {
   return source.replace(/\s*\/\/.*$/, '').trimEnd()
@@ -210,7 +266,11 @@ function assertionRewrite(source: string, text: string): string | null {
   return pattern.test(source) ? source.replace(pattern, (_match, matcher: string) => `.${matcher}('${text}')`) : null
 }
 
-export function buildTestFailureDirective(failing: FailingTest, resolvesTo?: (importingFile: string, specifier: string) => boolean): string {
+export function buildTestFailureDirective(
+  failing: FailingTest,
+  resolvesTo?: (importingFile: string, specifier: string) => boolean,
+  moduleText?: TestedModuleText | null,
+): string {
   // A test global missing inside a test that ran (`expect is not defined`) needs the same import as one missing at load.
   const undefinedName = failing.undefinedName ?? (failing.kind === 'assertion' ? failing.missingGlobal : undefined)
   if (undefinedName) return buildUndefinedNameDirective(failing, undefinedName)
@@ -218,7 +278,9 @@ export function buildTestFailureDirective(failing: FailingTest, resolvesTo?: (im
   // Full task run 14 of 2026-09-24: told to "assert content the code really produces", the model
   // re-proposed the same failing toContain('<div class="bg-white">') twenty times. The rendered
   // output is in the runner's Received line, so the corrected assertion is computable.
-  const text = renderedTextFragment(failing.received)
+  // When the runner cut the received value short (Vitest 0.x), the tested module's own JSX text is the fallback.
+  const receivedText = renderedTextFragment(failing.received)
+  const text = receivedText ?? moduleText?.text ?? null
   const failingLine = failing.loadLine ? withoutTrailingComment(failing.loadLine.source) : null
   const rewritten = text && failingLine ? assertionRewrite(failingLine, text) : null
   const exactFix = rewritten
@@ -229,7 +291,8 @@ export function buildTestFailureDirective(failing: FailingTest, resolvesTo?: (im
   return [
     `[THE TEST RAN AND ITS ASSERTION FAILED — "${failing.file}"${failing.loadLine ? ` line ${failing.loadLine.line}` : ''}]`,
     ...(failing.expected ? [`Expected: ${failing.expected}`] : []),
-    ...(failing.received ? [`Received: ${failing.received}`] : []),
+    ...(failing.received ? [`Received${failing.receivedTruncated ? ' (cut short by the runner)' : ''}: ${failing.received}`] : []),
+    ...(!receivedText && moduleText ? [`"${moduleText.module}", which the test renders, contains the literal text '${moduleText.text}'.`] : []),
     `The runner, the dependencies and the script all work: only the assertion disagrees with what the code produced. Running the test again cannot change that.`,
     `Directives:`,
     `1. Your next tool call MUST be "write_file" on "${failing.file}": the same complete file with ${exactFix}. If the Received output shows the application itself is broken (empty, or an error), fix the application file instead.`,

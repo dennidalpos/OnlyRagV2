@@ -1,5 +1,5 @@
 import type { SupportedToolName } from './agentTypes'
-import { buildTestFailureDirective, extractFailingTest } from './testFailureDiagnostic'
+import { buildTestFailureDirective, extractFailingTest, testedModuleText } from './testFailureDiagnostic'
 
 const ANSI_SEQUENCE = /\u001b\[[0-9;]*m/g
 
@@ -251,6 +251,10 @@ export interface DiagnosticWorkspaceFacts {
   fileExists?: (workspaceRelativePath: string) => boolean
   /** Whether an installed package provides this command (`node_modules/.bin/<name>`). */
   binaryInstalled?: (name: string) => boolean
+  /** The text of a workspace-relative file, or null when it cannot be read. */
+  readWorkspaceFile?: (workspaceRelativePath: string) => string | null
+  /** The source of the local module a relative import resolves to, or null. */
+  readLocalModuleSource?: (importingFile: string, specifier: string) => string | null
 }
 
 export interface MissingScriptProgram {
@@ -551,9 +555,13 @@ export function buildDiagnosticFixDirective(
   if (all.length === 0) {
     // No compiler error: a test that ran and failed its assertion is the other diagnosable case.
     const failingTest = extractFailingTest(output)
-    return failingTest
-      ? buildTestFailureDirective(failingTest, (importingFile, specifier) => resolveLocalModuleExports(importingFile, specifier).length > 0)
-      : null
+    if (!failingTest) return null
+    const { readWorkspaceFile, readLocalModuleSource } = facts
+    const moduleText =
+      failingTest.kind === 'assertion' && readWorkspaceFile && readLocalModuleSource
+        ? testedModuleText(failingTest.file, readWorkspaceFile, readLocalModuleSource)
+        : null
+    return buildTestFailureDirective(failingTest, (importingFile, specifier) => resolveLocalModuleExports(importingFile, specifier).length > 0, moduleText)
   }
 
   // Errors inside an installed package are never the project's code, and telling the model to rewrite one sends it editing a dependency.

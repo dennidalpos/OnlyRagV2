@@ -1,6 +1,7 @@
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AgentExecutionMode, AppSettings } from '../../../shared/types'
-import { compileSkillsContextBlock, type SkillMatchContext } from '../domain/skills/skillMatcher'
+import type { SkillMatchContext } from '../domain/skills/skillMatcher'
+import type { SkillDefinition } from '../domain/skills/skillTypes'
 import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession } from './agentOrchestratorTypes'
 import { logger } from '../infrastructure/logging/logger'
@@ -49,7 +50,8 @@ export interface SessionContext {
   modelMetrics: Record<string, OllamaModelMetrics>
   skillMatchContext: SkillMatchContext
   skillMatchingOptions: SkillMatchingOptions
-  skillsBlock: string
+  /** Skills matched at session start; each turn injects the ones that still fit the workspace manifest. */
+  matchedSkills: SkillDefinition[]
   /** Non-null when a resumed run cannot safely reproduce its pinned runtime. */
   resumeValidationError: string | null
 }
@@ -125,7 +127,6 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   }
 
   const matchedSkills = await skillAppService.getMatchedSkills(skillMatchContext, workspacePath, 3, skillMatchingOptions)
-  let skillsBlock = ''
   if (matchedSkills.length > 0) {
     const skillNames = matchedSkills.map((s) => s.name)
     if (session.rendererEvents?.isAvailable()) {
@@ -135,7 +136,6 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     if (settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logSkillsMatched(sessionId, skillNames)
     }
-    skillsBlock = compileSkillsContextBlock(matchedSkills)
   }
 
   return {
@@ -153,7 +153,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     modelMetrics,
     skillMatchContext,
     skillMatchingOptions,
-    skillsBlock,
+    matchedSkills,
     resumeValidationError,
   }
 }

@@ -1,5 +1,6 @@
 import type { SkillDefinition, HubSkillItem } from './skillTypes'
 import { assessHubSkillQuality } from './skillQuality'
+import { skillVersionConflict } from './skillVersionFit'
 
 const STOP_WORDS = new Set([
   'about',
@@ -125,6 +126,8 @@ export interface SkillMatchContext {
   pinnedFiles?: { path: string; name?: string }[]
   workspacePath?: string
   projectStack?: string[]
+  /** package.json dependency ranges; a `<package>-v<major>` skill contradicting one is never matched. */
+  declaredDependencies?: Record<string, string>
 }
 
 export function matchSkillsForTask(
@@ -171,6 +174,7 @@ export function matchSkillsForTask(
 
   for (const skill of availableSkills) {
     if (skill.isActive === false) continue
+    if (ctx.declaredDependencies && skillVersionConflict(skill.name, ctx.declaredDependencies)) continue
 
     let promptScore = 0
     let projectScore = 0
@@ -312,6 +316,7 @@ export function matchHubSkillsForTask(
 
   for (const item of hubSkills) {
     if (item.isInstalled) continue
+    if (ctx.declaredDependencies && skillVersionConflict(item.name, ctx.declaredDependencies)) continue
 
     let promptScore = 0
     let projectScore = 0

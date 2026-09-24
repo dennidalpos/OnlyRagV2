@@ -143,6 +143,29 @@ describe('SkillMatcher Domain Tests', () => {
     expect(matched[0].id).toBe('react19')
   })
 
+  it('should skip installed and hub skills written for another major of a declared package', () => {
+    const tailwindV4: SkillDefinition = {
+      id: 'tailwind-css-v4',
+      name: 'tailwind-css-v4',
+      description: 'Tailwind CSS v4 guidelines.',
+      content: 'Use @import "tailwindcss".',
+      filePath: 'skills/tailwind-css-v4/SKILL.md',
+      isActive: true,
+      isWorkspaceLocal: true,
+      triggers: ['tailwind', 'css'],
+      tags: ['tailwind'],
+      originType: 'hub_original',
+    }
+    const task = 'Build a dashboard styled with Tailwind CSS'
+    expect(matchSkillsForTask({ userTask: task }, [tailwindV4]).map((s) => s.id)).toEqual(['tailwind-css-v4'])
+    expect(matchSkillsForTask({ userTask: task, declaredDependencies: { tailwindcss: '^3.4.1' } }, [tailwindV4])).toEqual([])
+    expect(matchSkillsForTask({ userTask: task, declaredDependencies: { tailwindcss: '^4.1.0' } }, [tailwindV4])).toHaveLength(1)
+
+    const hubItem: HubSkillItem = { ...tailwindV4, category: 'frontend', version: '1.0.0', author: 'Official', isInstalled: false }
+    expect(matchHubSkillsForTask({ userTask: task }, [hubItem], 8)).toHaveLength(1)
+    expect(matchHubSkillsForTask({ userTask: task, declaredDependencies: { tailwindcss: '^3.4.1' } }, [hubItem], 8)).toEqual([])
+  })
+
   it('should auto-discover high confidence uninstalled hub skills when score exceeds threshold', () => {
     const hubSkills: HubSkillItem[] = [
       {

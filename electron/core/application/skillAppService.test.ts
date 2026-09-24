@@ -29,6 +29,21 @@ describe('SkillAppService Unit Tests', () => {
     expect(hubSkills.some((s) => s.name === 'react19-modern-patterns')).toBe(true)
   })
 
+  it('withdraws a versioned skill from the turn block once the manifest declares another major', async () => {
+    const installRes = await skillAppService.installFromHub('tailwind-css-v4', tempDir, 'official-core')
+    expect(installRes.success).toBe(true)
+    const skills = installRes.skill ? [installRes.skill] : []
+
+    // Matched before package.json exists: nothing contradicts it yet.
+    expect(skillAppService.skillsBlockForWorkspace(skills, tempDir)).toContain('tailwind-css-v4')
+
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ devDependencies: { tailwindcss: '^3.4.1' } }), 'utf-8')
+    expect(skillAppService.skillsBlockForWorkspace(skills, tempDir)).toBe('')
+
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ devDependencies: { tailwindcss: '^4.1.0' } }), 'utf-8')
+    expect(skillAppService.skillsBlockForWorkspace(skills, tempDir)).toContain('tailwind-css-v4')
+  })
+
   it('should install a skill from official hub and track it as hub_original', async () => {
     const installRes = await skillAppService.installFromHub('react19-modern-patterns', tempDir, 'official-core')
     expect(installRes.success).toBe(true)

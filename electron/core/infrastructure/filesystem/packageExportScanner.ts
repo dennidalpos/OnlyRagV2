@@ -108,23 +108,49 @@ export function readPackageExports(workspacePath: string, packageName: string): 
   }
 }
 
+function isInsideWorkspace(workspaceRoot: string, candidate: string): boolean {
+  const relative = path.relative(workspaceRoot, candidate)
+  return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative)
+}
+
+/** A workspace file's text, or null when it is outside the workspace, missing, not a file or too large. */
+export function readWorkspaceTextFile(workspacePath: string, relativePath: string): string | null {
+  if (!workspacePath || !relativePath) return null
+  try {
+    const workspaceRoot = path.resolve(workspacePath)
+    const filePath = path.resolve(workspaceRoot, relativePath)
+    if (!isInsideWorkspace(workspaceRoot, filePath) || !fs.existsSync(filePath)) return null
+    const stat = fs.statSync(filePath)
+    return stat.isFile() && stat.size <= MAX_DECLARATION_BYTES ? fs.readFileSync(filePath, 'utf-8') : null
+  } catch {
+    return null
+  }
+}
+
+/** The source of the local module a relative import from `importingFile` resolves to, or null. */
+export function readLocalModuleSource(workspacePath: string, importingFile: string, specifier: string): string | null {
+  if (!workspacePath || !importingFile || !specifier.startsWith('.')) return null
+  const workspaceRoot = path.resolve(workspacePath)
+  const base = path.resolve(workspaceRoot, path.dirname(importingFile), specifier)
+  const candidates = [
+    base,
+    ...['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'].map((extension) => `${base}${extension}`),
+    ...['index.ts', 'index.tsx', 'index.js', 'index.jsx'].map((fileName) => path.join(base, fileName)),
+  ]
+  for (const candidate of candidates) {
+    if (!isInsideWorkspace(workspaceRoot, candidate)) continue
+    const source = readWorkspaceTextFile(workspaceRoot, path.relative(workspaceRoot, candidate))
+    if (source !== null) return source
+  }
+  return null
+}
+
 /** Export names from the local module named by a relative import in a compiler diagnostic. */
 export function readLocalModuleExports(workspacePath: string, importingFile: string, specifier: string): string[] {
   if (!workspacePath || !importingFile || !specifier.startsWith('.')) return []
   try {
-    const workspaceRoot = path.resolve(workspacePath)
-    const base = path.resolve(workspaceRoot, path.dirname(importingFile), specifier)
-    const candidates = [
-      base,
-      ...['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'].map((extension) => `${base}${extension}`),
-      ...['index.ts', 'index.tsx', 'index.js', 'index.jsx'].map((fileName) => path.join(base, fileName)),
-    ]
-    const sourcePath = candidates.find((candidate) => {
-      const relative = path.relative(workspaceRoot, candidate)
-      return relative && !relative.startsWith('..') && !path.isAbsolute(relative) && fs.existsSync(candidate)
-    })
-    if (!sourcePath || fs.statSync(sourcePath).size > MAX_DECLARATION_BYTES) return []
-    const source = fs.readFileSync(sourcePath, 'utf-8')
+    const source = readLocalModuleSource(workspacePath, importingFile, specifier)
+    if (source === null) return []
     const names = extractExportedNames(source)
     if (/\bexport\s+default\b/.test(source)) names.unshift('default')
     return names.slice(0, MAX_NAMES)

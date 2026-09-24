@@ -11,19 +11,13 @@ export interface DomainRoutingResult {
   requiresRetrieval: boolean
 }
 
-/**
- * Multi-language Semantic Centroid Profile.
- * Contains subword morphemes, stems, and terminological anchors across IT, EN, ES, FR, DE.
- */
+/** Semantic centroid profile across IT, EN, ES, FR, DE. */
 export interface DomainCentroidProfile {
   name: ChatDomainIntent
   weights: Record<string, number>
 }
 
-/**
- * Medical / Clinical Domain Centroid (IT, EN, ES, FR, DE)
- * Covers pharmacology, anatomy, diagnostics, pathology, clinical workflows and bio-medical roots.
- */
+/** Medical domain centroid weights. */
 const MEDICAL_CENTROID_WEIGHTS: Record<string, number> = {
   // Morphemes & Clinical Roots (Latin / Greek international stems)
   cillin: 3.5,
@@ -116,12 +110,8 @@ const MEDICAL_CENTROID_WEIGHTS: Record<string, number> = {
   pneumonia: 3.2,
 }
 
-/**
- * Legal & Compliance Domain Centroid (IT, EN, ES, FR, DE)
- * Covers contracts, statutory law, civil/penal codes, liability, litigation, GDPR, jurisprudence.
- */
+/** Legal domain centroid weights. */
 const LEGAL_CENTROID_WEIGHTS: Record<string, number> = {
-  // Morphemes & Jurisprudential Roots
   giuris: 3.2,
   juris: 3.2,
   decret: 3.0,
@@ -230,10 +220,7 @@ export const LEGAL_CENTROID: DomainCentroidProfile = {
 export const MEDICAL_CENTROID_ROOTS = Object.keys(MEDICAL_CENTROID_WEIGHTS)
 export const LEGAL_CENTROID_ROOTS = Object.keys(LEGAL_CENTROID_WEIGHTS)
 
-/**
- * Calculates zero-latency Centroid Similarity between input tokens/query and a domain centroid profile.
- * Executes synchronously in <0.2ms.
- */
+/** Calculates centroid similarity between input tokens/query and a domain profile. */
 export function calculateCentroidSimilarity(input: string[] | string, centroid: DomainCentroidProfile | string[]): number {
   if (!input || (Array.isArray(input) && input.length === 0)) {
     return 0.0
@@ -258,7 +245,7 @@ export function calculateCentroidSimilarity(input: string[] | string, centroid: 
   let totalMatchWeight = 0.0
   const matchedFeatures = new Set<string>()
 
-  // 1. Check direct phrase / whole word / morpheme matches in the full query text
+  // Direct phrase / whole word matches
   for (const [key, weight] of Object.entries(weightsMap)) {
     if (key.length >= 4) {
       if (queryText.includes(key)) {
@@ -270,7 +257,7 @@ export function calculateCentroidSimilarity(input: string[] | string, centroid: 
     }
   }
 
-  // 2. Check token-level containment (only if token is long enough and contains the key)
+  // Token-level containment
   for (const token of tokens) {
     if (token.length < 3) continue
     for (const [key, weight] of Object.entries(weightsMap)) {
@@ -283,7 +270,7 @@ export function calculateCentroidSimilarity(input: string[] | string, centroid: 
     }
   }
 
-  // Explicit boost for statutory article markers (e.g. art. 1341, c.c., bgb)
+  // Boost for statutory article markers (e.g. art. 1341, c.c., bgb)
   if (/\bart(icolo|\.)?\s*\d+/i.test(queryText)) {
     if (weightsMap['art.'] !== undefined && !matchedFeatures.has('art.')) {
       matchedFeatures.add('art.')
@@ -293,7 +280,6 @@ export function calculateCentroidSimilarity(input: string[] | string, centroid: 
 
   if (totalMatchWeight === 0) return 0.0
 
-  // Normalized score against token count
   const normalized = totalMatchWeight / Math.sqrt(Math.max(1, tokens.length))
   const score = Math.min(1.0, Math.round((normalized / 4.0) * 100) / 100)
   return score
@@ -326,10 +312,7 @@ const CHITCHAT_PATTERNS: RegExp[] = [
   /^gracias\b/i,
 ]
 
-/**
- * Universal Synchronous Domain Intent Router.
- * Evaluates user queries against pre-computed multi-language TF-IDF Semantic Centroids in <1ms.
- */
+/** Evaluates user query domain intent against semantic centroids. */
 export function evaluateDomainIntent(query: string, settings: AppSettings, _availableModels?: string[]): DomainRoutingResult {
   const cleanQuery = (query || '').trim()
   const defaultModel = resolveConfiguredModel('chat', settings)
@@ -348,7 +331,6 @@ export function evaluateDomainIntent(query: string, settings: AppSettings, _avai
   const isChitChat = CHITCHAT_PATTERNS.some((pattern) => pattern.test(cleanQuery.toLowerCase())) && cleanQuery.split(/\s+/).length <= 6
   const requiresRetrieval = !isChitChat
 
-  // Fast Vector Similarity against Domain Centroids
   const medicalSim = calculateCentroidSimilarity(cleanQuery, MEDICAL_CENTROID)
   const legalSim = calculateCentroidSimilarity(cleanQuery, LEGAL_CENTROID)
 

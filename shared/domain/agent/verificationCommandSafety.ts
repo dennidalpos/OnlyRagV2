@@ -1,4 +1,4 @@
-/** Rejects commands that cannot provide falsifiable, non-mutating milestone evidence. */
+/** Validates commands for falsifiable, non-mutating verification. */
 
 export interface VerificationCommandVerdict {
   /** True when the command may be executed as proof of a milestone. */
@@ -7,7 +7,7 @@ export interface VerificationCommandVerdict {
   reason?: string
 }
 
-/** Commands whose whole purpose is to create or overwrite a named file. */
+/** Mutating commands that write/delete files. */
 const MUTATING_COMMANDS = new Set([
   'touch',
   'cp',
@@ -41,10 +41,10 @@ const MUTATING_COMMANDS = new Set([
 /** Commands that exit 0 regardless of the workspace, so their exit code proves nothing. */
 const VACUOUS_COMMANDS = new Set(['echo', 'true', ':', 'cd', 'exit', 'set-location', 'write-host', 'write-output'])
 
-/** Commands that print a file or list a directory: they exit 0 for anything that exists, whatever it contains. */
+/** Existence/listing commands that prove no code behavior. */
 const EXISTENCE_ONLY_COMMANDS = new Set(['cat', 'type', 'get-content', 'gc', 'head', 'tail', 'ls', 'dir', 'get-childitem', 'gci', 'test-path', 'stat'])
 
-/** Terminal editors and pagers. */
+/** Interactive editors, pagers, and GUI openers. */
 const INTERACTIVE_PROGRAMS = new Set([
   'nano',
   'vi',
@@ -57,8 +57,6 @@ const INTERACTIVE_PROGRAMS = new Set([
   'less',
   'more',
   'man',
-  // Openers and editors that hand the workspace to a graphical application and return an exit
-  // code describing the launch, never the code.
   'start',
   'open',
   'xdg-open',
@@ -69,7 +67,7 @@ const INTERACTIVE_PROGRAMS = new Set([
   'start-storybook',
 ])
 
-/** Test runners invoked in their graphical mode. */
+/** Checks for graphical-mode test runner invocations. */
 function isGuiModeVerificationSegment(segment: string): boolean {
   const cmd = segment.trim().toLowerCase()
   if (!cmd) return false
@@ -79,15 +77,13 @@ function isGuiModeVerificationSegment(segment: string): boolean {
   )
 }
 
-/** Mirrors isBlockingDevServerSubcommand in agentToolExecutorService.ts. */
+/** Checks for non-terminating dev/watch server commands. */
 function isNonExitingVerificationSegment(segment: string): boolean {
   const cmd = segment.trim().toLowerCase()
   if (!cmd) return false
 
-  // Install commands are never dev servers, even when the package name is "vite" or "next".
   if (/^(npm|pnpm|yarn|bun)\s+(install|i|add)\b/.test(cmd)) return false
 
-  // Pure build/test/lint/typecheck commands exit on their own and stay allowed.
   if (
     /^(npm|pnpm|yarn|bun)\s+(run\s+)?(build|test|lint|typecheck|check|format)\b/.test(cmd) ||
     /^(npx\s+)?(tsc|eslint|prettier|vitest\s+run|jest\s+--runInBand)\b/.test(cmd) ||
@@ -120,18 +116,15 @@ function isDependencyMutationSegment(segment: string): boolean {
   )
 }
 
-/** Replaces contents of quoted spans to prevent false positives from string literals (e.g. JSX tag `>`). */
+/** Replaces quoted strings to prevent false positives from literals. */
 function stripQuotedSpans(command: string): string {
   return command.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''")
 }
 
-/**
- * Output redirection to a file. `2>&1` and `>&2` are handle redirections, not writes, so a
- * digit or `&` before the operator and an `&` after it are both excluded.
- */
+/** File redirection operator pattern. */
 const FILE_REDIRECTION = /(?:^|[^0-9&>])>>?(?!&)/
 
-/** Splits a command chain into its segments so `npm test; touch x` is judged on both halves. */
+/** Splits command chain into segments. */
 function splitSegments(command: string): string[] {
   return command.split(/;|&&|\|\||\|/)
 }
@@ -139,8 +132,6 @@ function splitSegments(command: string): string[] {
 function firstToken(segment: string): string {
   const match = segment.trim().match(/^[^\s]+/)
   if (!match) return ''
-  // A command may be spelled as a path (`./node_modules/.bin/tsc`, `C:\tools\touch.exe`);
-  // the basename is what identifies it.
   const basename = match[0].split(/[\\/]/).pop() || match[0]
   return basename.replace(/\.(exe|cmd|bat|ps1)$/i, '').toLowerCase()
 }
@@ -153,7 +144,7 @@ function tokens(segment: string): string[] {
     .map((t) => t.toLowerCase())
 }
 
-/** Decides whether a command may stand as proof that a milestone is done. */
+/** Assesses if a command is a safe, falsifiable verification check. */
 export function checkVerificationCommandSafety(rawCommand: string): VerificationCommandVerdict {
   if (!rawCommand || typeof rawCommand !== 'string' || !rawCommand.trim()) {
     return { isSafe: false, reason: 'the command is empty' }
@@ -174,13 +165,11 @@ export function checkVerificationCommandSafety(rawCommand: string): Verification
       return { isSafe: false, reason: `\`${head}\` writes files, so it cannot also be the proof that they are correct` }
     }
 
-    // `npm init`, `npx tailwindcss init -p`, `git init`, `tsc --init`: scaffolding subcommands
-    // that generate the artefact rather than inspect it.
+    // Scaffolding subcommands
     if (parts.some((t) => t === 'init' || t === '--init')) {
       return { isSafe: false, reason: 'it is a scaffolding command (`init`), which generates the artefact instead of checking it' }
     }
 
-    // `npm create vite`, `npx create-react-app .`
     if (parts.some((t) => t === 'create' || t.startsWith('create-'))) {
       return { isSafe: false, reason: 'it scaffolds a project (`create`), which generates the artefact instead of checking it' }
     }

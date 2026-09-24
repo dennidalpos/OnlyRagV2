@@ -200,11 +200,7 @@ function invalidateVerifiedBuild(ctx: ToolResultProcessingContext) {
   ctx.flags.hasVerifiedBuild = false
 }
 
-/**
- * Whether writing `targetParam` can change what the project's primary check examined. A bundler
- * build follows the import graph from the app entry, which never reaches a test file: live full
- * task run 19 of 2026-09-24 rebuilt after each of five smoke-test fixes, a step each time.
- */
+/** Checks if mutating targetParam invalidates the verified primary build. */
 function mutationStalesVerifiedBuild(ctx: ToolResultProcessingContext, targetParam: string | undefined): boolean {
   if (!isTestFilePath(targetParam) || !ctx.workspacePath) return true
   const primary = resolvePrimaryProfileVerificationTargets(discoverProjectProfile(ctx.workspacePath))[0]
@@ -214,7 +210,7 @@ function mutationStalesVerifiedBuild(ctx: ToolResultProcessingContext, targetPar
 export async function recordMutationSideEffects(ctx: ToolResultProcessingContext, targetParam: string | undefined) {
   ctx.flags.hasFileMutations = true
   if (mutationStalesVerifiedBuild(ctx, targetParam)) invalidateVerifiedBuild(ctx)
-  // Checkpoint immediately after a successful file mutation, independent of the periodic PERSIST_EVERY_N_STEPS cadence, so a crash right after a write never loses track of what was actually changed on disk.
+  // Checkpoint immediately on mutation so crash never loses disk state.
   await ctx.persistCurrentState()
   if (targetParam) {
     const snap = ctx.executionGuard.captureWorkspaceSnapshot([targetParam])

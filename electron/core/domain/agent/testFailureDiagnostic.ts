@@ -20,43 +20,28 @@ const KNOWN_PROVIDERS: Record<string, string> = {
 const NO_TEST_DECLARED = /No test suite found in file|Your test suite must contain at least one test/i
 const FAILED_TO_RESOLVE = /Failed to resolve import\s+["'](\.{1,2}\/[^"']+)["']/
 const RELATIVE_SPECIFIER = /(?:\bfrom\s+|\bimport\s+|\brequire\(\s*)["'](\.{1,2}\/[^"']+)["']/
-/**
- * Chai's one-line message, which Vitest 0.x prints instead of Expected/Received lines:
- * `AssertionError: expected '<div class="app">…' to include 'Dashboard'`. The received side is cut
- * at 40 characters (live full task run 26 of 2026-09-24, Vitest 0.26 pinned by the model).
- */
+/** Chai assertion message in Vitest 0.x (expected '...' to include '...'). */
 const CHAI_INCLUDE =
   /AssertionError:\s*expected\s+(['"])((?:\\.|(?!\1).)*)\1\s+to\s+(?:include|contain|match|have string)\s+(?:(['"])((?:\\.|(?!\3).)*)\3|(\/.+?\/[a-z]*))/
 const TRUNCATED = /(?:…|\.\.\.)$/
 
 export interface FailingTest {
-  /** Workspace-relative path of the test file the runner reported as failing. */
   file: string
-  /** 'load': the file never ran (e.g. an import that does not resolve); 'assertion': a test ran and failed. */
   kind: 'load' | 'assertion'
-  /** The source line the runner pointed at: the failing import when the file did not load, the failing assertion otherwise. */
   loadLine?: { line: number; source: string }
-  /** The runner's own expected/received lines, bounded, or null when it printed none. */
   expected: string | null
   received: string | null
-  /** A test global (`describe`, `it`, `expect`...) the runner did not inject: Vitest without `globals: true`. */
   missingGlobal?: string
-  /** The relative import the file could not resolve, as written (`../App`). */
   unresolvedImport?: string
-  /** Which runner printed the output, when it says so. */
   runner?: 'vitest' | 'jest'
-  /** The file loaded but declares no test: assertions outside any `it`/`test` call, or none at all. */
   declaresNoTest?: boolean
-  /** A name the test uses without importing it (`renderToString is not defined`), when it is not a test global. */
   undefinedName?: string
-  /** The runner cut the received value short (chai's 40-character preview), so it may hold no rendered text. */
   receivedTruncated?: boolean
 }
 
-/** A text the tested module renders literally, read from its source when the runner's output shows none. */
+/** Text the tested module renders literally, used when runner output is truncated. */
 export interface TestedModuleText {
   text: string
-  /** The import specifier as the test wrote it (`../App`). */
   module: string
 }
 

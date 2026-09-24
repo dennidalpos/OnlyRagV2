@@ -82,9 +82,7 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
 
     doc_filter = " OR ".join([f'doc_id = "{d_id}"' for d_id in allowed_doc_ids]) if allowed_doc_ids else None
 
-    # 1. Dense retrieval, once per embedding space. Vectors from different models are not
-    # comparable, so each model's rows are searched with a query embedded by that model and
-    # the per-model rankings are merged by rank (best rank wins), never by raw distance.
+    # Dense retrieval per embedding model; rankings merged by rank across spaces
     chunk_map: Dict[str, Dict[str, Any]] = {}
     dense_ranks: Dict[str, int] = {}
 
@@ -111,7 +109,7 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
             dense_ranks[c_id] = min(rank, dense_ranks.get(c_id, rank))
             rank += 1
 
-    # 2. Lexical re-ranking of the dense candidates (term counts, not a BM25 index)
+    # Lexical re-ranking of dense candidates
     raw_tokens = re.findall(r'\w+', query_raw.lower())
     query_terms = [t for t in raw_tokens if len(t) > 2 and t not in _STOP_WORDS]
 
@@ -132,11 +130,10 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
     matched_sparse.sort(key=lambda c_id: sparse_scores[c_id], reverse=True)
     sparse_ranks: Dict[str, int] = {c_id: idx + 1 for idx, c_id in enumerate(matched_sparse)}
 
-    # 3. Reciprocal Rank Fusion (RRF k=60)
+    # RRF fusion (k=60)
     K_RRF = 60
     rrf_fused = reciprocal_rank_fusion(dense_ranks, sparse_ranks, k=K_RRF)
 
-    # 4. Assemble candidate search results
     max_possible_rrf = 2.0 / (K_RRF + 1.0)
     candidate_dicts: List[Dict[str, Any]] = []
 
@@ -156,10 +153,9 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
         })
 
     candidate_dicts.sort(key=lambda x: x["score"], reverse=True)
-    # Shortlist for the final lexical cross-scoring pass (up to top 15)
     top_candidates = candidate_dicts[:max(top_k * 3, 15)]
 
-    # 5. Lexical cross-scoring of the fused shortlist
+    # Lexical cross-scoring
     reranked_dicts = rerank_candidates(query=query_raw, candidates=top_candidates, top_k=top_k)
 
     return [
@@ -175,11 +171,10 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
     ]
 
 
-# Documents ingested with fallback embeddings carry status "indexed_fallback" (see ingest_service.doc_status).
+# Documents with fallback embeddings carry "indexed_fallback"
 LISTABLE_STATUSES = {"indexed", "indexed_fallback"}
 
-# The list carries metadata only: the extracted Markdown of every document made each refresh (window
-# focus, tab change) ship the whole corpus to the renderer. GET /documents/{doc_id} returns it on demand.
+# Metadata-only columns for document list; full markdown loaded via GET /documents/{doc_id}
 DOCUMENT_SUMMARY_COLUMNS = ["id", "filename", "file_path", "file_size", "num_pages", "num_chunks", "status", "ingested_at", "file_type"]
 
 

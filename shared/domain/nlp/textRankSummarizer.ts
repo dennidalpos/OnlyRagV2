@@ -1,13 +1,8 @@
 export interface TextRankOptions {
-  /** Target number of summary sentences to extract (default: 3) */
   targetSentences?: number
-  /** Damping factor for PageRank graph random walk (default: 0.85) */
   dampingFactor?: number
-  /** Convergence tolerance for power iteration (default: 0.0001) */
   tolerance?: number
-  /** Maximum power iteration cycles (default: 50) */
   maxIterations?: number
-  /** Minimum sentence length in characters to be considered (default: 15) */
   minSentenceLength?: number
 }
 
@@ -217,28 +212,23 @@ export class TextRankSummarizer {
     'von',
   ])
 
-  /**
-   * Splits input text into discrete sentences using multi-language punctuation boundaries.
-   */
+  /** Splits input text into discrete sentences. */
   public static splitSentences(text: string, minLength = 15): string[] {
     if (!text || typeof text !== 'string') return []
 
-    // Clean markdown code blocks, headers, bullet symbols
+    // Strip markdown code blocks, headers, bullet symbols
     const clean = text
       .replace(/```[\s\S]*?```/g, ' [codice] ')
       .replace(/`[^`]+`/g, ' [token] ')
       .replace(/^#+\s+/gm, '')
       .replace(/^[•\-\*\+]\s+/gm, '')
 
-    // Split on period/question/exclamation followed by space or newline, or multi-newlines
     const rawSentences = clean.split(/(?<=[.?!;:\n])\s+(?=[A-ZÀ-ÖØ-ö0-9\(\[\"'])/g).flatMap((s) => s.split(/\n{2,}/))
 
     return rawSentences.map((s) => s.replace(/\s+/g, ' ').trim()).filter((s) => s.length >= minLength && !/^[0-9\W]+$/.test(s))
   }
 
-  /**
-   * Tokenizes and stems a sentence into a set of lowercased content words (excluding stop words).
-   */
+  /** Tokenizes a sentence into content words excluding stop words. */
   public static tokenize(sentence: string): Set<string> {
     const words = sentence
       .toLowerCase()
@@ -248,9 +238,7 @@ export class TextRankSummarizer {
     return new Set(words)
   }
 
-  /**
-   * Computes BM25-normalized logarithmic similarity between two sentence token sets.
-   */
+  /** Computes logarithmic similarity between two sentence token sets. */
   public static computeSimilarity(tokensA: Set<string>, tokensB: Set<string>): number {
     if (tokensA.size === 0 || tokensB.size === 0) return 0.0
 
@@ -263,14 +251,11 @@ export class TextRankSummarizer {
 
     if (commonCount === 0) return 0.0
 
-    // Mihalcea & Tarau TextRank normalization: common / (log(sizeA) + log(sizeB))
     const norm = Math.log(tokensA.size + 1) + Math.log(tokensB.size + 1)
     return norm > 0 ? commonCount / norm : 0.0
   }
 
-  /**
-   * Executes PageRank power iteration over the sentence similarity graph.
-   */
+  /** Summarizes text using PageRank power iteration over sentence similarity graph. */
   public static summarize(text: string, options: TextRankOptions = {}): string {
     const { targetSentences = 3, dampingFactor = 0.85, tolerance = 0.0001, maxIterations = 50, minSentenceLength = 15 } = options
 
@@ -278,7 +263,6 @@ export class TextRankSummarizer {
     if (sentences.length === 0) return ''
     if (sentences.length <= targetSentences) return sentences.join(' ')
 
-    // 1. Build sentence nodes and token sets
     const nodes: ScoredSentence[] = sentences.map((s, idx) => ({
       index: idx,
       text: s,
@@ -287,7 +271,6 @@ export class TextRankSummarizer {
     }))
 
     const n = nodes.length
-    // 2. Build adjacency weight matrix
     const weights: number[][] = Array.from({ length: n }, () => Array(n).fill(0))
     const outSums: number[] = Array(n).fill(0)
 
@@ -303,7 +286,6 @@ export class TextRankSummarizer {
       }
     }
 
-    // 3. Power iteration PageRank convergence loop
     for (let iter = 0; iter < maxIterations; iter++) {
       let maxDelta = 0.0
       const nextScores = Array(n).fill(0)
@@ -327,7 +309,7 @@ export class TextRankSummarizer {
       if (maxDelta < tolerance) break
     }
 
-    // 4. Select top K highest scoring sentences, sorted by original document appearance order
+    // Top K sentences in original appearance order
     const sortedByRank = [...nodes].sort((a, b) => b.score - a.score)
     const selectedNodes = sortedByRank.slice(0, targetSentences)
     selectedNodes.sort((a, b) => a.index - b.index)

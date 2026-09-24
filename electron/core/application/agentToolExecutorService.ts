@@ -258,27 +258,23 @@ export class AgentToolExecutorService {
     return this.gitToolService.commit(cwd, commitMessage, paths, expectedDiffHash)
   }
 
-  /**
-   * Probes one allow-listed tool by running its version command. A non-zero exit, a missing
-   * binary, or a timeout all mean "not installed" — the caller only needs presence and version.
-   */
-  /** Presence and version of every allow-listed development tool. */
+  /** Presence and version of allow-listed development tools. */
   public probeToolchain(): DevToolStatus[] {
     return probeToolchain((binary, versionArgs) => devToolProbeRepository.probeVersion(binary, versionArgs))
   }
 
-  /** Current on-disk content, or '' when the file does not exist yet (a pure addition). */
+  /** Current on-disk content, or '' when the file does not exist yet. */
   private readContentSafely(absolutePath: string): string {
     return agentToolFileRepository.readIfExists(absolutePath)
   }
 
-  /** Line-level +/- size of a completed mutation, for the session change metrics. */
+  /** Line-level +/- size of a completed mutation for session metrics. */
   private buildChangeStats(filePath: string, before: string, after: string) {
     const { additions, deletions } = countDiffLines(computeLineDiff(before, after))
     return { filePath, additions, deletions }
   }
 
-  /** Appended to a successful write when the file imports a package the project never declared. */
+  /** Appended to a successful write when the file imports an undeclared package. */
   private importIntegrityDirective(filePath: string | undefined, content: string, workspacePath: string | null | undefined): string {
     if (!workspacePath) return ''
     const declared = agentToolFileRepository.readDeclaredPackages(workspacePath)
@@ -289,13 +285,7 @@ export class AgentToolExecutorService {
     return `\n\n${verdict.directive}`
   }
 
-  /** The first install target the npm registry does not know, if any. */
-  /** The first install target that would take a declared dependency backwards past a major, if any. */
-  /** Registry-backed preflight for stale first installs and ranges that publish no version. */
-  /**
-   * Validates freshly written package.json against npm registry to detect nonexistent or invalid package versions.
-   * Emitted only on package.json writes when errors exist. Connection drops remain silent to prevent false positives.
-   */
+  /** Validates package.json against npm registry for invalid package versions. */
   private async versionRealityDirective(filePath: string | undefined, content: string): Promise<string> {
     if (!/(^|[\\/])package\.json$/i.test(String(filePath || ''))) return ''
     let manifest: unknown
@@ -540,7 +530,7 @@ export class AgentToolExecutorService {
 
         const { result: res, rawOutput, isCancelled, isFailure } = execution
 
-        // Failure is decided by the process's own exit status, not by scanning its output for words like "Error:" or "FAIL" — those matched grep hits, verbose build logs and passing test suites, sending successful commands into the auto-healing loop.
+        // Failure is determined by process exit code, not output scanning.
         if (isFailure) {
           const commonFailureDirectives = this.processToolService.buildCommonFailureDirectives(
             cmd,
@@ -550,53 +540,14 @@ export class AgentToolExecutorService {
             isCancelled,
             (workspace, fileName) => documentIoRepository.exists(path.join(workspace, fileName)),
           )
-          // A peer-version conflict, parsed from npm's own report.
+          // Classify failure diagnostics: peer conflicts, unpublished versions, module resolution.
           const failureDiagnostics = await this.processToolService.classifyFailureDiagnostics(rawOutput, workspacePath)
           const { resolutionConflictDirective, versionNotFoundDirective, moduleResolutionDirective, missingDepDirective } = failureDiagnostics
-          // ETARGET: a version that was never published. Its sibling ERESOLVE has been handled
-          // since §5.3 and this case never was, so run 17 of 2026-08-25 repeated the same
-          // refused install until the circuit breaker stopped the session. Placed after
-          // ERESOLVE because that output can also mention versions, and a peer conflict is a
-          // different fix.
-          // "Cannot find module X" is two different failures wearing one message, and telling
-          // them apart needs the disk, not the text: a package that is already in node_modules
-          // cannot be installed into existence again. See moduleResolutionDiagnostic.ts for the
-          // runs that spent their steps reinstalling packages that were already there.
-          // `Cannot find module './api'` is not a missing dependency. `packageOfSpecifier` in
-          // moduleResolutionDiagnostic.ts already knows this — "Relative imports belong to no
-          // package" — but this gate matched the raw text instead of asking it, so a project
-          // file that had not been written yet was diagnosed as an uninstalled package.
-          //
-          // Measured 2026-08-25T19:16, session live-full-task, step 34. `npm run build` reported
-          // four errors: a TS2614 export/import mismatch carrying the compiler's own verbatim
-          // fix, a TS2322, and two `Cannot find module` on './api' and './auth' — files the plan
-          // had not created yet. This gate fired on the relative ones, which set
-          // `specificDirectiveFired` and therefore suppressed buildDiagnosticFixDirective, so
-          // the one directive that could name a file and a fix never reached the model. What
-          // reached it was an order to install a package the text never names. The model
-          // guessed `@mui/material`, the loop guard blocked it, and steps 35-50 were sixteen
-          // consecutive blocked repeats of that guess until the step ceiling ended the run.
-          //
-          // The two non-tsc phrasings stay on the raw match: the `Cannot find module 'x'` regex
-          // does not parse them, so requiring a resolved package name would silence genuine
-          // bundler failures.
-          // Naming them is the whole difference between an instruction and a riddle: the old
-          // text shipped the literal placeholder `<package-name>` and left the model to invent
-          // one. `unresolved` already holds the answer (§6.2.1).
           const { npmNamingDirective, interactivePromptDirective } = this.processToolService.buildInteractionFailureDirectives(
             rawOutput,
             res.interruptedByPrompt,
           )
-          // What the model is told to do about the failure, decided ONCE instead of stated
-          // twice. The old tail said "apply the fix ... and re-run the command autonomously",
-          // two imperatives in one sentence, and in the live run of 2026-08-24 the model did
-          // the second: tsc named three files and lines at step 21 and the identical command
-          // was re-run at steps 22-31 with nothing edited in between.
-          //
-          // When the compiler localised the error, the directive names that file and forbids
-          // the re-run until something changes. When a more specific directive above already
-          // fired (ERESOLVE, missing dependency, npm naming, interactive prompt), the tail
-          // stops issuing an instruction of its own and defers to it.
+          // Specific directives take precedence over generic auto-healing tail.
           const specificDirectiveFired = Boolean(
             commonFailureDirectives ||
               resolutionConflictDirective ||

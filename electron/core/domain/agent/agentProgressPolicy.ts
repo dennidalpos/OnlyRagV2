@@ -2,22 +2,19 @@ import type { AgentGuardId } from '../../../../shared/types'
 import type { RepeatOutcomeKind } from './loopDetector'
 import { recordRecoveryFailure, type RecoveryDecision, type RecoveryFailureState } from './recoveryBudget'
 
-/**
- * Every non-progress threshold of an agent run, in one table. The values are model-agnostic:
- * they bound how long any model may stay without progress, not how a specific model behaves.
- */
+/** Non-progress thresholds bounding stalls and loops for an agent run. */
 export const PROGRESS_BUDGET = {
-  /** Prose-only replies answered with a request for a tool call while operational work is open. */
+  /** Prose-only replies with work open. */
   proseReplies: 2,
-  /** Executed steps without an effective file change before the run stops (`no_mutation`). */
+  /** Steps without mutation before stopping. */
   stepsWithoutMutation: 12,
-  /** Loop blocks answered with advice alone; afterwards every second block may move the plan focus. */
+  /** Loop blocks answered with advice alone before force_advance. */
   advisoryLoopBlocks: 2,
-  /** Loop blocks after which a run without a step budget stops (`stagnation_abort`). */
+  /** Loop blocks before stagnation abort. */
   abortLoopBlocks: 20,
-  /** Blocks of an action that SUCCEEDED before, treated as redundancy rather than stagnation. */
+  /** Blocks of previously succeeded action before treating as loop. */
   redundantSuccessBlocks: 3,
-  /** Vague clarification questions redirected back to work in AUTO mode (shares the loop-block count). */
+  /** Vague questions redirected in AUTO mode. */
   askRedirects: 2,
 } as const
 
@@ -39,13 +36,7 @@ export interface LoopBlockContext {
   isUnlimitedSteps: boolean
 }
 
-/**
- * Single progress policy of an agent run: it owns the counters that used to live in the loop
- * escape policy, the stagnation circuit breaker, the rejection escalation and the per-category
- * recovery budgets, and decides advise / re-plan / stop from one budget table. Pattern
- * detection (which repeat is a loop) stays in AgentActionLoopDetector; this class only decides
- * what a detected non-progress event costs.
- */
+/** Manages non-progress budgets, deciding advise/force_advance/stop from PROGRESS_BUDGET. */
 export class AgentProgressPolicy {
   private proseReplies = 0
   private stepsWithoutMutation = 0

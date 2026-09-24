@@ -2,15 +2,12 @@
 export interface DeliverableProbeResult {
   exists: boolean
   contentLength: number
-  /**
-   * The file body, supplied only when the file is small enough to plausibly be a placeholder.
-   * Left undefined for anything large, which is definitionally not a stub.
-   */
+  /** File body for small files to detect placeholders. */
   content?: string
   contentHash?: string
 }
 
-/** Injected by the infrastructure/application layer; the domain never touches `fs`. */
+/** Injected probe; domain never touches fs. */
 export type DeliverableProbe = (relativePath: string) => DeliverableProbeResult
 
 export type MilestoneDeliverableStatus = 'satisfied' | 'unsatisfied' | 'not_applicable'
@@ -20,19 +17,16 @@ export interface MilestoneDeliverableDeclaration {
   filePaths?: string[]
 }
 
-/** Marker for milestones whose deliverables are on disk but awaiting verification command pass. */
+/** Marker for deliverables on disk awaiting verification command pass. */
 export const AWAITING_VERIFICATION_MARKER = 'Awaiting a passing verification command'
 
-/** A path-shaped token: an optional directory chain plus a `stem.extension` tail. */
+/** Path-shaped token pattern. */
 const PATH_TOKEN_PATTERN = /[A-Za-z0-9_@.\-]+(?:[\\/][A-Za-z0-9_@.\-]+)*\.[A-Za-z][A-Za-z0-9]{0,7}/g
 
-/** Wrapping punctuation the planner routinely puts around a path (backticks, quotes, brackets). */
+/** Wrapping punctuation around path tokens. */
 const WRAPPING_CHARS = /^[`'"“”‘’(\[{<]+|[`'"“”‘’)\]}>,.;:!?]+$/g
 
-/**
- * Extracts the file deliverables referenced by a milestone title, normalised to
- * forward-slash workspace-relative form and de-duplicated in first-seen order.
- */
+/** Extracts normalized workspace-relative file deliverable paths from a milestone title. */
 export function extractDeliverablePaths(title: string): string[] {
   if (!title || typeof title !== 'string') return []
 
@@ -70,13 +64,10 @@ export function resolveDeclaredFilePaths(input: string | MilestoneDeliverableDec
 /** Line prefixes that mark a comment across the languages a generated project can use. */
 const COMMENT_LINE_PATTERN = /^(\/\/|\/\*|\*\/|\*|#|--|<!--|;)/
 
-/** Words a model writes when it is deferring the actual work. */
+/** Placeholder marker pattern. */
 const PLACEHOLDER_MARKER_PATTERN = /\b(todo|fixme|placeholder|stub|not implemented|implement (me|here|this)|coming soon|lorem ipsum)\b/i
 
-/** Below this, a file carries no implementation whatever its extension. */
 const MIN_MEANINGFUL_LENGTH = 12
-
-/** A marker only condemns a file that has essentially nothing else in it. */
 const MAX_MARKER_ONLY_LENGTH = 200
 const MAX_MARKER_ONLY_CODE_LINES = 2
 
@@ -91,7 +82,7 @@ export function isPlaceholderContent(content: string): boolean {
     .filter(Boolean)
   const codeLines = lines.filter((line) => !COMMENT_LINE_PATTERN.test(line))
 
-  // Nothing but comments: the model described the work instead of doing it.
+  // Comment-only body is treated as placeholder
   if (codeLines.length === 0) return true
 
   return codeLines.length <= MAX_MARKER_ONLY_CODE_LINES && trimmed.length <= MAX_MARKER_ONLY_LENGTH && PLACEHOLDER_MARKER_PATTERN.test(trimmed)
@@ -110,7 +101,6 @@ export function findUnsatisfiedDeliverables(milestone: string | MilestoneDeliver
   return resolveDeclaredFilePaths(milestone).filter((deliverable) => {
     const result = probe(deliverable)
     if (!result.exists || result.contentLength <= 0) return true
-    // Inspect small files to reject empty stubs or comment-only placeholders.
     return result.content !== undefined && isPlaceholderContent(result.content)
   })
 }
@@ -125,16 +115,12 @@ export function isDeliverableOfMilestone(milestone: string | MilestoneDeliverabl
   return resolveDeclaredFilePaths(milestone).some((deliverable) => normalisedMutation === deliverable || normalisedMutation.endsWith(`/${deliverable}`))
 }
 
-/** Script-module extensions a bundler resolves from the same extensionless import (`./App`). */
+/** Script-module extensions resolved from extensionless imports. */
 const SCRIPT_MODULE_EXTENSION = /\.(?:[cm]?[jt]sx?)$/i
 
 /**
- * Declared deliverables `writtenPath` delivers under another script extension: the plan named
- * `src/App.js`, the model wrote `src/App.jsx`, and `import App from './App'` resolves either. Live
- * full task run 11 of 2026-09-24: m-6 and m-9 named `src/App.js` while the scaffold's entry
- * imported `src/App.jsx`; every focus turn targeted the missing `.js` path, so the prompt never
- * showed the real file and the milestones could never be satisfied. Same directory and stem only;
- * `App.test.jsx` is not an alias of `App.js`.
+ * Finds declared deliverables matching writtenPath under a different script extension
+ * (e.g. App.js vs App.jsx) within the same directory and stem.
  */
 export function findModuleExtensionAliases(declaredPaths: readonly string[], writtenPath: string): string[] {
   const written = writtenPath.replace(/\\/g, '/').replace(/^\.\//, '')

@@ -63,10 +63,7 @@ function accumulate(previous: SignatureOutcomeRecord | undefined, succeeded: boo
   }
 }
 
-/**
- * Fingerprints agent tool invocations and tracks target-level semantic patterns
- * to detect and prevent infinite loops, oscillation traps, and redundant read loops.
- */
+/** Edit tools monitored for modification oscillations. */
 const EDIT_TOOLS = new Set(['write_file', 'replace_file_content', 'multi_replace_file_content'])
 
 export class AgentActionLoopDetector {
@@ -153,7 +150,7 @@ export class AgentActionLoopDetector {
     const target = this.extractTarget(toolCall)
     this.targetHistory.push({ tool: toolCall.tool, target })
 
-    // 0.5 Shell-Command Tool-Keyword Loop Check: Detects when the model repeatedly passes a tool name as a shell command (e.g.
+    // Check for tool keyword passed as shell command
     const SHELL_TOOL_KEYWORDS = [
       'write_file',
       'read_file',
@@ -204,13 +201,11 @@ export class AgentActionLoopDetector {
       }
     }
 
-    // 1. Exact parameter repeat check (last 5 steps)
+    // 1. Exact parameter repeat check
     const recentSignatures = this.signatureHistory.slice(-5)
     const duplicateCount = recentSignatures.filter((sig) => sig === signature).length
 
-    // 1a. A failed check re-issued with nothing changed since reproduces the same failure. Refusing it
-    // before it runs costs a loop block; running it would spend the execution budget on a known result
-    // (live TS2305 run of 2026-09-23: build, fix attempt, build, build again -> execution_budget stop).
+    // Block unchanged failing check to avoid wasting execution budget
     if (this.isUnchangedFailingCheck(toolCall, signature)) {
       return {
         isLooping: true,

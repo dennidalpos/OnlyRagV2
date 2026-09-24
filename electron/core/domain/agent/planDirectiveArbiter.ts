@@ -19,84 +19,54 @@ import type { SupportedToolName } from './agentTypes'
 import type { PackageImportStatement } from './importDeclarationGate'
 
 export type PlanDirectiveKind =
-  /** The build is green and the plan is accounted for: close the session. */
   | 'session_closure'
-  /** The code imports packages the manifest never declares: no build can resolve them. */
   | 'dependencies_undeclared'
-  /** Those packages were already tried and cannot be installed: the importing file must change. */
   | 'dependencies_uninstallable'
-  /** package.json declares a package or range npm does not publish: no install can pass until it changes. */
   | 'dependencies_unpublished'
-  /** The manifest declares packages that are not installed: no build can pass until they are. */
   | 'dependencies_missing'
-  /** Every open milestone has its files on disk and nothing has been verified: run the check. */
   | 'verification_due'
-  /** A milestone promises behavior and the runner its "test" script needs is not declared. */
   | 'behavior_test_runner_missing'
-  /** A milestone promises behavior and package.json has no runnable "test" script. */
   | 'behavior_test_script_missing'
-  /** The check has already run and failed with nothing written since: fix, do not re-run. */
   | 'verification_failing'
-  /** The HTML entry page references none of the project's own code, so nothing ever runs. */
   | 'entrypoint_disconnected'
-  /** The active milestone names no artefact, so writing files cannot close it. */
   | 'unprovable_milestone'
-  /** Ordinary case: the standing focus block, unmodified. */
   | 'focus'
 
 export interface PlanDirectiveDecision {
   kind: PlanDirectiveKind
-  /** Replaces the ENTIRE active-milestone focus block when present. */
+  /** Replaces entire active focus block when present. */
   blockDirective: string | null
-  /** Replaces ONLY directive 2 inside the focus block; the rest of the block stands. */
+  /** Replaces directive 2 inside focus block. */
   closureStepDirective: string | null
-  /** Workspace files this directive orders the model to REWRITE, when it names any. */
+  /** Target workspace files to rewrite. */
   rewriteTargets?: readonly string[]
-  /** Tools beyond the file edit that this directive orders (e.g. move_file to rename a file). */
+  /** Required tools beyond standard edit. */
   requiredTools?: readonly SupportedToolName[]
 }
 
-/** A package the code imports and package.json does not declare. */
+/** Imported package not declared in package.json. */
 export interface UndeclaredDependency {
   packageName: string
-  /** Workspace-relative files that import it. */
   importedBy: readonly string[]
 }
 
 export interface PlanDirectiveInput {
-  /** A real verification passed and no file has been written since. */
   hasVerifiedBuild: boolean
   milestones: readonly PlanMilestone[]
-  /** The milestone the plan is currently focused on, as the planner resolves it. */
   activeMilestone: PlanMilestone | undefined
   deliverableStatusOf: (milestone: PlanMilestone) => MilestoneDeliverableStatus
-  /**
-   * Packages the manifest declares that are absent from `node_modules`. Empty both when
-   * everything is installed and when the workspace declares nothing.
-   */
+  /** Packages declared in manifest but missing from node_modules. */
   missingDependencies: readonly string[]
-  /**
-   * Packages the code on disk imports that the manifest does not declare. Disjoint from
-   * `missingDependencies` by definition: that one is about what IS declared.
-   */
+  /** Imported packages not declared in manifest. */
   undeclaredDependencies: readonly UndeclaredDependency[]
-  /** Packages this session already tried to install and failed on. */
+  /** Packages whose installation already failed. */
   packagesWithFailedInstall: readonly string[]
-  /**
-   * The package.json rewrite a tool result already ordered (dependencyVersionReality.ts) and no
-   * later write has answered. Null or absent when none is pending.
-   */
+  /** Pending package.json rewrite from dependency checks. */
   pendingManifestDirective?: string | null
-  /** Reads the verbatim import statements of a package in a workspace file; omitted in pure tests. */
   importStatementsOf?: (file: string, packageName: string) => readonly PackageImportStatement[]
-  /** The command the project itself offers to prove it works, or null when it offers none. */
   verificationCommand: { command: string; source: string } | null
-  /** The verification command has already run, failed, and nothing has been written since. */
   verificationFailing: boolean
-  /**
-   * The diagnostic directive built from the last failing verification, ready to be carried by the
-   * plan block instead of referred to. Null when there is none to embed.
-   */
+  /** Directive from last failing verification. */
   verificationFailureDirective?: string | null
   /** The file that directive orders written, so the prompt can carry its current content. */
   verificationFailureTargetFile?: string | null

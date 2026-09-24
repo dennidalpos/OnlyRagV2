@@ -24,25 +24,19 @@ export function extractSuggestedCommand(output: string): string | null {
   return null
 }
 
-/**
- * `src/main.tsx(4,8): error TS1192: Module ... has no default export.`
- * The TypeScript compiler's own format, which is what this agent hits most.
- */
+/** Matches TypeScript compiler errors: file(line,col): error TS... */
 const TSC_PATTERN = /^\s*(\S+?)\((\d+),(\d+)\):\s*error\s+([A-Z]+\d+):\s*(.+)$/
 
-/**
- * `src/App.tsx:12:5: error: Unexpected token` — the colon-separated form used by esbuild,
- * eslint, rustc and most POSIX tooling.
- */
+/** Matches colon-separated compiler errors: file:line:col: error ... */
 const COLON_PATTERN = /^\s*(\S+?):(\d+):(\d+):\s*(?:error|ERROR)\s*:?\s*(.+)$/
 
-/** Diagnostics beyond this add prompt weight without changing the next action. */
+/** Maximum diagnostics reported to avoid prompt bloat. */
 const MAX_REPORTED = 5
 
-/** A remedy the compiler itself printed, e.g. */
+/** Compiler remedy command pattern. */
 const SUGGESTED_COMMAND_PATTERN = /\bTry\s+`([^`]+)`/
 
-/** Every error the output names, in order, deduplicated by file+line. */
+/** Parses and deduplicates compiler diagnostics by file+line. */
 export function parseCompilerDiagnostics(output: string): CompilerDiagnostic[] {
   if (!output) return []
   const found: CompilerDiagnostic[] = []
@@ -66,25 +60,24 @@ export function parseCompilerDiagnostics(output: string): CompilerDiagnostic[] {
   return found
 }
 
-/** A diagnostic about resolving a module, which a config or install fix clears, not an edit. */
+/** Module resolution error pattern cleared by config or install. */
 const MODULE_DIAGNOSTIC = /cannot find module|could not find a declaration file|failed to resolve import/i
 
-/** A file inside an installed package: never something the agent should be told to edit. */
+/** Matches node_modules paths. */
 const IN_DEPENDENCY = /(^|[\\/])node_modules[\\/]/i
 
-/** The import statement TypeScript itself proposes when an import and an export disagree. */
+/** TypeScript suggested replacement import. */
 const SUGGESTED_IMPORT_PATTERN = /\bDid you mean to use '([^']+)' instead\?/
 const IMPORT_SPECIFIER_PATTERN = /\bfrom\s+["']([^"']+)["']/
 
-/** The only codes this remedy is read from. */
+/** TypeScript codes for import/export mismatch. */
 const EXPORT_MISMATCH_CODES = new Set(['TS2613', 'TS2614'])
 
-/** A diagnostic whose fix the compiler already wrote out as a complete import statement. */
 export interface ExportMismatch {
   diagnostic: CompilerDiagnostic
-  /** The compiler's own replacement line, copied out of its message with nothing added. */
+  /** Compiler replacement line. */
   suggestedImport: string
-  /** Module named by that import, used to distinguish editable local code from a package. */
+  /** Imported module specifier. */
   moduleSpecifier: string
 }
 
@@ -101,15 +94,12 @@ function findExportMismatch(diagnostics: CompilerDiagnostic[]): ExportMismatch |
   return null
 }
 
-/** The first export/import mismatch the output reports, with the compiler's replacement line. */
+/** Extracts the first export/import mismatch with compiler replacement line. */
 export function extractExportMismatch(output: string): ExportMismatch | null {
   return findExportMismatch(parseCompilerDiagnostics(output).filter((d) => !IN_DEPENDENCY.test(d.file)))
 }
 
-/**
- * Formats secondary compiler diagnostics as a deferred advisory note rather than an immediate imperative.
- * Ensures the model addresses the primary blocking directive first without cognitive conflict.
- */
+/** Formats secondary compiler diagnostics as a deferred advisory note. */
 export function buildDeferredDiagnosticNote(output: string): string | null {
   const codeErrors = parseCompilerDiagnostics(output).filter((d) => !MODULE_DIAGNOSTIC.test(d.message) && !IN_DEPENDENCY.test(d.file))
   if (codeErrors.length === 0) return null
@@ -126,22 +116,16 @@ export function buildDeferredDiagnosticNote(output: string): string | null {
     .join('\n')
 }
 
-/** The directive for a command that failed with diagnostics a compiler already localised. */
-/**
- * Relative import that resolves to nothing.
- * Orders creation of the imported target rather than rewriting the importing file.
- */
+/** Missing relative import target to be created. */
 export interface MissingRelativeModule {
   diagnostic: CompilerDiagnostic
-  /** The specifier as written, e.g. `./api`. */
   specifier: string
-  /** Workspace-relative path of the file that has to be created. */
   expectedPath: string
 }
 
 const RELATIVE_MODULE_MISSING = /cannot find module\s+'(\.[^']*)'/i
 
-/** Resolves a relative specifier against the importing file, and gives the new file the importer's own extension — `.ts` importing `./api` wants `api.ts`, `.tsx` importing `./Button` wants `Button.tsx`. */
+/** Resolves relative import path using the importer's extension. */
 export function resolveRelativeImportPath(importingFile: string, specifier: string): string {
   const normalised = importingFile.replace(/\\/g, '/')
   const dir = normalised.split('/').slice(0, -1)
@@ -214,10 +198,10 @@ function extractMissingLocalExportMember(output: string): MissingLocalExportMemb
   return null
 }
 
-/** The bundler refused JSX because the file's extension says plain JavaScript. */
+/** Pattern indicating bundler refused JSX in plain JS file. */
 const JSX_DISABLED =
   /JSX syntax is disabled|JSX syntax extension is not currently enabled|Unexpected JSX expression|name the file with the \.jsx or \.tsx extension/i
-/** A `.js` path, never the `.js` prefix of `.jsx`/`.json` (a test file `App.test.jsx` is not `App.test.js`). */
+/** Script file path reference pattern (.js/.mjs/.cjs). */
 const SCRIPT_FILE_REFERENCE = /([^\s\[\]()'"`]+\.(?:js|mjs|cjs))(?![\w])(?::(\d+))?/g
 
 export interface JsxInScriptFile {
@@ -226,11 +210,7 @@ export interface JsxInScriptFile {
   renamedFile: string
 }
 
-/**
- * JSX written into a `.js` file. tsc and Create React App parse it, but Vite 8/rolldown and
- * esbuild only enable JSX for `.jsx`/`.tsx`, so no rewrite of the content can fix the build:
- * the file has to be renamed (live full task run of 2026-09-23, src/App.js).
- */
+/** Extracts JSX in .js files requiring rename to .jsx. */
 export function extractJsxInScriptFile(output: string): JsxInScriptFile | null {
   if (!output || !JSX_DISABLED.test(output)) return null
   for (const match of output.matchAll(SCRIPT_FILE_REFERENCE)) {
@@ -241,48 +221,33 @@ export function extractJsxInScriptFile(output: string): JsxInScriptFile | null {
   return null
 }
 
-/** Facts about the workspace a directive may need, injected because this module is pure domain. */
+/** Injected workspace probes to keep domain pure. */
 export interface DiagnosticWorkspaceFacts {
-  /** True when the installed package declares a stylesheet entry (`style`, or `exports["."].style`). */
   packageHasStyleEntry?: (packageName: string) => boolean
-  /** The workspace-relative form of a path the tool printed absolute. */
   toWorkspaceRelative?: (filePath: string) => string
-  /** Whether a workspace-relative file exists. */
   fileExists?: (workspaceRelativePath: string) => boolean
-  /** Whether an installed package provides this command (`node_modules/.bin/<name>`). */
   binaryInstalled?: (name: string) => boolean
-  /** The text of a workspace-relative file, or null when it cannot be read. */
   readWorkspaceFile?: (workspaceRelativePath: string) => string | null
-  /** The source of the local module a relative import resolves to, or null. */
   readLocalModuleSource?: (importingFile: string, specifier: string) => string | null
 }
 
 export interface MissingScriptProgram {
-  /** The npm script that ran, e.g. `build`. */
   script: string
-  /** Its body as npm echoed it, e.g. `react-scripts build`. */
   body: string
-  /** The program the shell could not find, e.g. `react-scripts`. */
   program: string
 }
 
-/** cmd.exe (English and Italian) and POSIX shells reporting a program that is not on PATH. */
+/** Shell missing program pattern (cmd.exe and POSIX). */
 const PROGRAM_NOT_FOUND: RegExp[] = [
   /^['"]?([\w@./-]+?)['"]? (?:is not recognized as an internal or external command|non [^\s]{1,3} riconosciuto come comando interno o esterno)/m,
   /^(?:sh|bash|zsh)(?:: line \d+)?: (?:\d+: )?([\w@./-]+): (?:command )?not found/m,
 ]
-/** npm's echo of the script it runs: `> name@version script` then `> body`. */
+/** npm script execution echo pattern. */
 const NPM_SCRIPT_ECHO = /^> \S+@\S+ ([\w:-]+)\r?\n> (.+)$/m
-/** Bundler CLIs a declared Vite can stand in for, with the Vite command for each script role. */
 const VITE_REPLACEABLE = new Set(['react-scripts', 'webpack', 'webpack-cli', 'parcel'])
-/** Commands whose package has another name. */
 const PROGRAM_PACKAGES: Record<string, string> = { tsc: 'typescript', 'webpack-cli': 'webpack-cli', vite: 'vite', 'react-scripts': 'react-scripts' }
 
-/**
- * An npm script whose program is not installed. Live full task run 23 of 2026-09-24: the build
- * script ran `react-scripts build` in a Vite project that never installed react-scripts; under the
- * generic auto-healing text the model rewrote package.json until the edit-loop guard blocked it.
- */
+/** Extracts an npm script whose program is not installed on PATH. */
 export function extractMissingScriptProgram(output: string): MissingScriptProgram | null {
   const text = (output || '').replace(ANSI_SEQUENCE, '')
   const echo = NPM_SCRIPT_ECHO.exec(text)
@@ -418,11 +383,7 @@ function packageNameOf(specifier: string): string | null {
   return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
 }
 
-/**
- * A stylesheet `@import` the bundler could not resolve. Live full task run 16 of 2026-09-24:
- * `@import "tailwindcss/tailwind.min.css"` in src/index.css failed the build and no directive
- * named the file, so the model tried to reinstall Tailwind and invented a typecheck script.
- */
+/** Extracts an unresolved stylesheet @import. */
 export function extractUnresolvedCssImport(output: string): UnresolvedCssImport | null {
   const specifier = CSS_IMPORT_UNRESOLVED.exec(output || '')?.[1]
   if (!specifier) return null
@@ -435,19 +396,14 @@ export function extractUnresolvedCssImport(output: string): UnresolvedCssImport 
 }
 
 export interface CssSyntaxFailure {
-  /** The stylesheet PostCSS could not parse, as the bundler printed it. */
   file: string
   line?: number
-  /** PostCSS's reason, e.g. `Unknown word`. */
   reason?: string
 }
 
 const CSS_SYNTAX_ERROR = /CssSyntaxError:\s*(?:\[postcss\]\s*)?(?:(\S+?\.(?:css|pcss|scss|sass|less)):(\d+):\d+:\s*)?(.*)$/m
 
-/**
- * A stylesheet PostCSS could not parse. Live full task run 25 of 2026-09-24: a CssSyntaxError under
- * `[plugin vite:css]` got the generic auto-healing text, and the build was re-run unchanged six times.
- */
+/** Extracts PostCSS stylesheet parsing failure. */
 export function extractCssSyntaxFailure(output: string): CssSyntaxFailure | null {
   const text = (output || '').replace(ANSI_SEQUENCE, '')
   const match = CSS_SYNTAX_ERROR.exec(text)
@@ -661,8 +617,7 @@ export function buildDiagnosticFixDirective(
       .join('\n')
   }
 
-  // Ordered after the export mismatch and before the generic branch: like that one this knows
-  // the exact fix, unlike that one the file to write is NOT the file the error is reported on.
+  // Missing relative module requires creating the imported target.
   const missingRelative = extractMissingRelativeModule(output)
   if (missingRelative) {
     const target = missingRelative.diagnostic

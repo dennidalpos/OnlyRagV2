@@ -2,21 +2,13 @@ import { DiagnosticOutputReducer } from './diagnosticOutputReducer'
 import { AutoHealingLogCapper } from './autoHealingLogCapper'
 
 export interface PromptSegment {
-  /** Priority 1 — never compacted */
   systemPrompt: string
-  /** Priority 1.5 — never compacted */
   activePlanBlock: string
-  /** Priority 2 — compacted if over budget */
   pinnedFilesBlock: string
-  /** Priority 2 — compacted if over budget */
   activeFileBlock: string
-  /** Priority 2.5 — compacted if over budget */
   skillsBlock: string
-  /** Priority 3 — aggressively truncated above 75% watermark */
   historyBlock: string
-  /** Priority 4 — first to be removed when over budget */
   attachedContext: string
-  /** Priority 4 — first to be removed when over budget */
   projectMapBlock: string
 }
 
@@ -27,14 +19,11 @@ export interface CompactionResult {
   finalChars: number
 }
 
-/** Zero-cost heuristic context compactor triggered at a configurable watermark. */
+/** Heuristic context compactor triggered at watermark. */
 export class HeuristicContextCompactor {
   private static readonly WATERMARK_RATIO = 0.75
 
-  /**
-   * Assembles the final prompt string, applying heuristic compaction
-   * if total size exceeds the 75% watermark of the hardware context limit.
-   */
+  /** Assembles final prompt string, applying heuristic compaction if over watermark. */
   public static compile(segments: PromptSegment, hardwareMaxContextChars: number, options: { force?: boolean } = {}): CompactionResult {
     const parts = this.buildParts(segments)
     const fullPrompt = parts.filter(Boolean).join('\n\n')
@@ -46,28 +35,27 @@ export class HeuristicContextCompactor {
       return { prompt: fullPrompt, wasCompacted: false, originalChars, finalChars: originalChars }
     }
 
-    // --- Heuristic Compaction ---
-    // Tier 1 (immutable): system prompt + active plan
+    // Tier 1: system prompt + active plan (immutable)
     const immutableSize = (segments.systemPrompt || '').length + (segments.activePlanBlock || '').length
     const regularBudget = Math.floor(hardwareMaxContextChars * 0.72)
     const budget = options.force ? Math.max(immutableSize, Math.min(regularBudget, Math.floor(originalChars * 0.65))) : regularBudget
 
-    // Tool history is what makes the agent stateful: without it the prompt is byte-identical every turn and the model deterministically repeats its last action.
+    // Ensure history floor to maintain agent statefulness
     const historyFloor = Math.min(segments.historyBlock.length, Math.max(0, Math.floor(hardwareMaxContextChars * 0.2)))
     let remaining = Math.max(0, budget - immutableSize)
 
-    // Tier 2 caps: pinned files and active file — bid only for space above the history floor
+    // Tier 2: pinned files, active file, skills
     const tier2Pool = Math.max(0, remaining - historyFloor)
     const pinnedAlloc = Math.min(segments.pinnedFilesBlock.length, Math.floor(tier2Pool * 0.3))
     const activeFileAlloc = Math.min(segments.activeFileBlock.length, Math.floor(tier2Pool * 0.15))
     const skillsAlloc = Math.min(segments.skillsBlock.length, Math.floor(tier2Pool * 0.1))
     remaining = Math.max(0, remaining - (pinnedAlloc + activeFileAlloc + skillsAlloc))
 
-    // Tier 3: history — distill terminal outputs, keep top-level summary table
+    // Tier 3: history distillation
     const historyAlloc = Math.max(historyFloor, Math.floor(remaining * 0.7))
     const distilledHistory = this.compactHistoryBlock(segments.historyBlock, historyAlloc)
 
-    // Tier 4: auxiliary context — what's left
+    // Tier 4: auxiliary context
     const auxRemaining = Math.max(0, remaining - historyAlloc)
     const attachedAlloc = Math.min(segments.attachedContext.length, Math.floor(auxRemaining * 0.6))
     const mapAlloc = Math.min(segments.projectMapBlock.length, Math.floor(auxRemaining * 0.4))
@@ -93,14 +81,10 @@ export class HeuristicContextCompactor {
     }
   }
 
-  /**
-   * Applies intelligent truncation to a history block by distilling
-   * terminal/diagnostic outputs and preserving the trajectory summary table.
-   */
+  /** Distills terminal/diagnostic outputs while preserving trajectory summary table. */
   private static compactHistoryBlock(historyBlock: string, maxChars: number): string {
     if (!historyBlock || historyBlock.length <= maxChars) return historyBlock
 
-    // Preserve the trajectory table header and rows, distill raw outputs
     const lines = historyBlock.split('\n')
     const tableLines: string[] = []
     const rawOutputBuffer: string[] = []
@@ -125,7 +109,7 @@ export class HeuristicContextCompactor {
 
     const tableStr = tableLines.join('\n')
 
-    // Cap retained [TERMINAL AUTO-HEALING DIAGNOSTICS LOG] blocks to the 2 most recent occurrences before distillation, so repeated build/test failure diagnostics don't crowd out newer turn context once the watermark is hit.
+    // Cap diagnostics log blocks to 2 most recent before distillation
     const { text: cappedRawOutput } = AutoHealingLogCapper.capBlocks(rawOutputBuffer.join('\n'), 2)
 
     const distilledRaw = DiagnosticOutputReducer.distillTerminalOutput(cappedRawOutput, Math.max(400, maxChars - tableStr.length - 100))

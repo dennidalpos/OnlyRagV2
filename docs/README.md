@@ -13,7 +13,10 @@ Documentazione tecnica breve, verificata contro il codice. I contratti prevalgon
 | Architettura e confini | [`architecture.md`](./architecture.md) |
 | Electron Main e processi | [`electron-main.md`](./electron-main.md) |
 | Renderer React | [`frontend.md`](./frontend.md) |
-| Coding Agent | [`agent.md`](./agent.md) |
+| Coding Agent (Panoramica) | [`agent.md`](./agent.md) |
+| Agent Runtime e orchestrazione | [`agent-runtime.md`](./agent-runtime.md) |
+| Agent Guardrail e progresso | [`agent-guards.md`](./agent-guards.md) |
+| Agent Diagnostica e auto-healing | [`agent-diagnostics.md`](./agent-diagnostics.md) |
 | IPC | [`api-ipc.md`](./api-ipc.md) |
 | REST Sidecar | [`api-rest.md`](./api-rest.md) |
 | RAG, OCR e traduzione | [`rag-sidecar.md`](./rag-sidecar.md) |
@@ -32,5 +35,5 @@ Documentazione tecnica breve, verificata contro il codice. I contratti prevalgon
 ## Lettura rapida
 
 - Nuovo contributore: [`operations.md`](./operations.md) → [`architecture.md`](./architecture.md).
-- Coding Agent: [`agent.md`](./agent.md) → [`api-ipc.md`](./api-ipc.md) → [`verification.md`](./verification.md).
+- Coding Agent: [`agent.md`](./agent.md) ([`agent-runtime.md`](./agent-runtime.md), [`agent-guards.md`](./agent-guards.md), [`agent-diagnostics.md`](./agent-diagnostics.md)) → [`api-ipc.md`](./api-ipc.md) → [`verification.md`](./verification.md).
 - Sidecar: [`rag-sidecar.md`](./rag-sidecar.md) → [`api-rest.md`](./api-rest.md).

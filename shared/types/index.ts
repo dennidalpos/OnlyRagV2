@@ -1,10 +1,5 @@
-/**
- * A value parsed from JSON this application does not control: a model's tool-call arguments, a
- * skill hub catalog, an Ollama NDJSON chunk. Its shape is checked where it is consumed
- * (toolSchemaValidator for tool arguments), so it stays open-ended at the boundary. Everywhere
- * else noExplicitAny is an error outside test files (biome.json).
- */
-// biome-ignore lint/suspicious/noExplicitAny: untrusted JSON is narrowed by its consumer, not here.
+/** External untrusted JSON, narrowed by consumers at system boundaries. */
+// biome-ignore lint/suspicious/noExplicitAny: narrowed at consumption
 export type UntrustedJson = any
 
 export interface SystemRequirementsCheck {
@@ -235,42 +230,33 @@ export interface AppSettings {
   ocrEngine: 'native_cuda' | 'vision_model'
   normalizeWithLlm?: boolean
   ollamaHost: string
-  /** Ollama deployment mode: 'local' (same PC: 127.0.0.1:11434) or 'remote' (network server). Default: 'local' */
+  /** Ollama mode: 'local' (127.0.0.1:11434) or 'remote'. Default: 'local'. */
   ollamaMode?: 'local' | 'remote'
   customWorkspacePath?: string
   noWorkspaceMode?: boolean
-  /** Default translation export folder; unset uses the save dialog. */
+  /** Default translation export folder; unset uses save dialog. */
   translationOutputFolder?: string
-  /** User-edited system prompts, keyed by prompt node id ('coding:master', 'chat', ...). */
+  /** User-edited system prompts keyed by prompt node id. */
   customPromptOverrides?: Record<string, string>
-  // Concurrency & Task Queue Settings
-  maxToolCallSteps?: number // 0 = unlimited; finite range 10-200; default 25
-  // Coding Agent Audit & Debug Logging
+  maxToolCallSteps?: number
   enableCodingAgentDebugLog?: boolean
-  /** Explicit opt-in for prompts, source snippets and tool payloads in the audit log. */
+  /** Opt-in for full prompts, snippets and tool payloads in audit log. */
   includeCodingAgentDebugPayloads?: boolean
-  /** Total audit-log generations kept on disk, including the active file. */
+  /** Audit log generations retained on disk. */
   codingAgentDebugRetentionFiles?: number
-  /** Per-installed-model binary thinking preferences. Missing entries are disabled. */
+  /** Per-model binary thinking preferences. */
   modelThinkingPreferences?: Record<string, boolean>
-  // Plan Approval Settings
   enablePrePlanInterview?: boolean
-  // Verification and execution guards
   verifyBeforeFinish?: boolean
   agentSessionTimeoutMinutes?: number
-  // Initial Setup Wizard Flag
   hasCompletedInitialSetup?: boolean
-  // Skill Hub Auto-Discovery & On-Demand Installation
-  enableSkillRouter?: boolean // Default: false. Set true to enable automatic skill injection.
+  enableSkillRouter?: boolean
   autoInstallHubSkills?: 'disabled' | 'prompt'
   autoInstallMinScore?: number
-  // Internationalization
   language?: 'it' | 'en'
-  // Sound Effects
   enableSoundEffects?: boolean
-  // Editor & Display Options
   editorWordWrap?: boolean
-  /** Per-model context preference in tokens; Ollama's reported context_length remains the ceiling. */
+  /** Per-model context limit in tokens. */
   modelContextLengths?: Record<string, number>
 }
 
@@ -408,14 +394,12 @@ export interface CodingSession {
   id: string
   workspacePath: string | null
   title: string
-  /** ISO 8601 timestamp. */
   createdAt: string
-  /** ISO 8601 timestamp. */
   updatedAt: string
   actionLogs: AgentActionLog[]
-  /** Prompts executed in this session, oldest first (see ExecutedPrompt). */
+  /** Executed prompts in chronological order. */
   executedPrompts: ExecutedPrompt[]
-  /** Plan versions drafted in this session, oldest first (see AgentPlan). */
+  /** Drafted plan versions in chronological order. */
   plans?: AgentPlan[]
   promptQueue?: QueuedPromptRecord[]
   pinnedFilePaths?: string[]
@@ -423,7 +407,7 @@ export interface CodingSession {
   contextBudget?: AgentContextBudgetBreakdown
 }
 
-/** Hub skill the router wants to install while autoInstallHubSkills is set to 'prompt'. */
+/** Hub skill installation confirmation request. */
 export interface SkillInstallApprovalRequest extends AgentRunIdentity {
   requestId: string
   skillName: string
@@ -576,7 +560,6 @@ export interface OllamaModelUpdateInfo {
   error?: string
 }
 
-/** Canonical camelCase payload crossing the renderer/main IPC boundary. */
 export interface PromptHistoryIndexPayload {
   id: string
   sessionId: string
@@ -861,22 +844,15 @@ export interface AgentDoneResult {
   evidence?: AgentCompletionEvidence
 }
 
-// ---------------------------------------------------------------------------
-// Agent Plan — Canonical Milestone Types
-// ---------------------------------------------------------------------------
-
-/**
- * A drafted (and possibly approved) execution plan, versioned per coding session.
- * Persisted inside its CodingSession by the session history store.
- */
+/** Execution plan versioned per coding session. */
 export interface AgentPlan {
   formatVersion: 2
   id: string
   version: number
   prompt: string
-  /** Exact request entered before the interview; `prompt` is the effective execution prompt. */
+  /** Initial request before interview; `prompt` is effective execution prompt. */
   originalPrompt?: string
-  /** Structured decisions retained independently from the rendered prompt. */
+  /** Retained decisions independent of rendered prompt. */
   interviewAnswers?: UserInterviewAnswer[]
   objective: string
   decisions: PlanDecision[]
@@ -885,14 +861,11 @@ export interface AgentPlan {
   status: 'idle' | 'generating' | 'ready' | 'approved' | 'rejected' | 'error' | 'cancelled'
   errorPhase?: 'interview' | 'planning'
   errorMessage?: string
-  /** ISO 8601 timestamp. */
   createdAt: string
   baseStepOffset?: number
-  /** Canonical interventions used directly by review, persistence and execution. */
   milestones: PlanMilestone[]
-  /** Recoverable reason why this exact revision could not be persisted or seeded for execution. */
+  /** Reason this revision could not be persisted or seeded. */
   approvalError?: string
-  /** Capability snapshot reviewed for this plan's execution. */
   capabilityProfile?: AgentCapabilityProfile
 }
 
@@ -906,7 +879,7 @@ export interface PlanMilestone {
   sourceInterventionId?: string
   falsifiableHypothesis?: string
   verificationCommand?: string
-  /** Suggested after scaffolding; never executable until rediscovered from project capabilities. */
+  /** Scaffolding suggestion, re-verified against project capabilities before execution. */
   proposedVerificationCommand?: string
   /** Content hashes captured when file-backed evidence was verified. */
   fileEvidence?: Record<string, string>
@@ -965,7 +938,7 @@ export interface RunningModelInfo {
   details?: RunningModelDetails
   expires_at?: string
   size_vram?: number
-  /** Context currently allocated by Ollama for this loaded model, from `/api/ps`. */
+  /** Context currently allocated by Ollama from `/api/ps`. */
   context_length?: number
 }
 
@@ -974,10 +947,6 @@ declare global {
     electronAPI?: IElectronAPI
   }
 }
-
-// ---------------------------------------------------------------------------
-// SLM Agent Studio — Log Diagnostics Types
-// ---------------------------------------------------------------------------
 
 export interface SlmAnomalyRecord {
   anomaly_type: string

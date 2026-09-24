@@ -140,31 +140,8 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
     ctx.episodicCompactor.getRecentFullLogs(),
   )
 
-  // REPLACES the advisory text rather than following it. Appended, it lost: the live
-  // eresolve run of 2026-08-24 shows the directive arriving at step 11 correctly, third in a
-  // message whose first two blocks read "move to the NEXT unfinished step of your active
-  // milestone" and "Advance to the next unfinished step instead". The model did what the
-  // first two said and ran another command. One message may carry one instruction.
-  //
-  // The preamble deliberately says nothing about whether the repeats SUCCEEDED: this text
-  // replaces both branches, and the stagnation branch is reached by repeats that failed. In
-  // the live run of 2026-08-24 it landed on an `update_plan` rejected twice for having no
-  // plan, under a sentence asserting it "succeeded every time".
-  // The one case the replacement above did not anticipate: the arbitrated directive ordering the
-  // very call that was just blocked. The preamble then asserts "repeating it cannot move the
-  // plan" and hands the model, as the single action that can, the repeat itself. There is no
-  // move that satisfies both, so the model reissues the call and is blocked again.
-  //
-  // Measured 2026-08-25T19:59, session live-full-task. `verification_due` fired for the first
-  // time in 250 recorded turns — every deliverable was finally on disk — and collided with the
-  // guard on its first appearance: steps 44 to 50 were seven blocked `npm run build`s under a
-  // directive reading "EVERY DELIVERABLE IS ON DISK — VERIFY THE PROJECT NOW", until the ceiling
-  // ended the run.
-  //
-  // The arbiter is the authority on the single legal move, so when it names the blocked call the
-  // block is what gives way. This cannot spin: a check that runs and fails with nothing written
-  // after it makes `isVerificationFailing` true, and the arbiter then returns `verification_failing`
-  // instead, which orders the opposite. At most one extra run per intervening write.
+  // Replace advisory text with single clear directive to avoid conflicting instructions.
+  // If arbiter ordered the blocked command (e.g. verification_due), yield to let verification run.
   if (planDirective.kind === 'verification_due' && commandIsOrderedBy(planDirective.blockDirective, loopTarget)) {
     ctx.emitLog(
       'info',
@@ -182,29 +159,11 @@ ${planDirective.blockDirective}`
     : null
   const isClosure = planDirective.kind === 'session_closure'
 
-  // A repeated COMMAND says nothing about the active milestone. Live run of 2026-08-24, steps
-  // 17-18: the model re-ran a failing `npm run build` and the structural escape marked m-1
-  // "Create `package.json`" FAILED — a file written correctly at step 1 and on disk
-  // throughout. The report then carried "fallita" for work that was done, which is the same
-  // damage the closure suspension below already exists to prevent. Unreachable before this
-  // wave, because the model never ran a command; reachable now that it does.
-  //
-  // Narrow on purpose: only when the milestone's own files are all delivered. A milestone
-  // still owing a file, or naming none at all, can genuinely deadlock the plan, and the escape
-  // keeps its full power there.
-  // Extended after run 9 of 2026-08-25, which lost its last milestone to exactly this: m-1
-  // `package.json` — written, correct, on disk — was marked FAILED because the model was
-  // looping on `src/pages/DashboardPage.tsx`, a file m-1 does not name. The guard covered
-  // command loops only, so a loop on somebody else's file still cost a milestone its status.
-  // The question is not which tool repeated, it is whether the repeat is about THIS milestone:
-  // `isActiveMilestoneDelivered` answers false when the loop target is one of the milestone's
-  // own files, so the escape keeps full power exactly where the milestone is the problem.
+  // Do not mark active milestone FAILED if its deliverables are already satisfied on disk.
   const loopIsUnrelatedToActiveMilestone = isActiveMilestoneDelivered(ctx.workspacePath, ctx.goalPlanner, loopTarget)
 
-  // A repeat whose earlier executions SUCCEEDED is redundancy, not stagnation: the deliverable exists.
-  // The milestone-advance precondition is evaluated before the policy counts this block.
+  // A repeat of a successful action is redundancy, not stagnation.
   const canAdvanceMilestone =
-    // Never abandon a milestone as FAILED while the project is verified and closable: the remaining milestones are the unprovable ones the closure directive is asking the model to close, and marking them failed would put "fallita" in the final report for work that w
     !isClosure &&
     !loopIsUnrelatedToActiveMilestone &&
     ctx.goalPlanner.getMilestones().some((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m))

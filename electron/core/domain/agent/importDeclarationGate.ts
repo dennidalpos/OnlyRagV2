@@ -2,32 +2,26 @@ import ts from 'typescript'
 import { builtinModules } from 'node:module'
 import { scriptKindForPath } from './sourceScriptKind'
 
-/** What the caller must be able to tell us about the project's declarations. */
+/** Declared project packages and import path aliases. */
 export interface DeclaredPackages {
-  /** Every name in dependencies / devDependencies / peerDependencies / optionalDependencies. */
+  /** Declared dependency package names. */
   names: ReadonlySet<string>
-  /**
-   * Bare prefixes that resolve through tsconfig `compilerOptions.paths` or a bundler alias
-   * (`@/`, `~/`, `@app/`). A specifier starting with one of these is a local path in disguise.
-   */
+  /** Specifier path alias prefixes (e.g. `@/`, `~/`). */
   aliasPrefixes?: readonly string[]
 }
 
 export interface ImportIntegrityVerdict {
   ok: boolean
-  /** Bare specifiers this file imports that the project does not declare, sorted, deduplicated. */
+  /** Bare specifiers this file imports that the project does not declare. */
   undeclared: string[]
-  /** Present only when `ok` is false: what the model must do, in the loop's directive format. */
+  /** Present only when `ok` is false: corrective directive for the agent. */
   directive?: string
 }
 
-/** Extensions whose imports this gate understands. Anything else returns no specifiers. */
+/** Supported file extensions for import scanning. */
 const SCANNABLE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'])
 
-/**
- * Node's own modules, which are always resolvable and never belong in package.json.
- * Read from the runtime rather than listed here so the set tracks the Node version in use.
- */
+/** Built-in Node modules that do not require declaration in package.json. */
 const NODE_BUILTINS: ReadonlySet<string> = new Set(builtinModules)
 
 function extensionOf(filePath: string): string {
@@ -35,29 +29,21 @@ function extensionOf(filePath: string): string {
   return match ? match[0].toLowerCase() : ''
 }
 
-/**
- * The package a specifier belongs to: `react-dom/client` -> `react-dom`,
- * `@scope/pkg/sub/path` -> `@scope/pkg`.
- */
+/** Extracts package name from specifier (handles scopes and subpaths). */
 export function packageNameOfSpecifier(specifier: string): string {
   const segments = specifier.split('/')
   return specifier.startsWith('@') && segments.length >= 2 ? `${segments[0]}/${segments[1]}` : segments[0]
 }
 
-/**
- * True for a specifier that names a package rather than a file: not relative, not absolute,
- * not a Node builtin, not a subpath import (`#internal`), not a URL.
- */
+/** Checks if specifier is a non-builtin bare package. */
 function isBareSpecifier(specifier: string): boolean {
   if (!specifier) return false
-  // Relative, absolute, or a package-internal subpath import.
   if (specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('#')) return false
-  // Any protocol form — `node:fs`, `bun:test`, `https://…`, `data:` — resolves outside the manifest.
   if (/^[a-z][a-z0-9+.-]*:/i.test(specifier)) return false
   return !NODE_BUILTINS.has(packageNameOfSpecifier(specifier))
 }
 
-/** Every bare module specifier the file imports, verbatim, in first-seen order and deduplicated. */
+/** Extracts deduplicated bare import specifiers in AST order. */
 export function extractBareImportSpecifiers(filePath: string, content: string): string[] {
   if (!SCANNABLE_EXTENSIONS.has(extensionOf(filePath))) return []
   if (!content || !content.trim()) return []
@@ -93,13 +79,13 @@ export function extractBareImportSpecifiers(filePath: string, content: string): 
   return found
 }
 
-/** One import of a package, verbatim, with the local names it binds. */
+/** Package import statement and its bound names. */
 export interface PackageImportStatement {
   statement: string
   boundNames: string[]
 }
 
-/** The top-level import/require statements through which a file uses one package, verbatim. */
+/** Extracts import/require statements referencing a specific package. */
 export function extractPackageImportStatements(filePath: string, content: string, packageName: string): PackageImportStatement[] {
   if (!SCANNABLE_EXTENSIONS.has(extensionOf(filePath)) || !content?.trim()) return []
   const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true, scriptKindForPath(filePath))
@@ -141,17 +127,15 @@ export function extractPackageImportStatements(filePath: string, content: string
   return found
 }
 
-/** Judges one written file against the project's declarations. */
+/** Evaluates file import integrity against declared packages. */
 export function evaluateFileImportIntegrity(filePath: string, content: string, declared: DeclaredPackages): ImportIntegrityVerdict {
   const specifiers = extractBareImportSpecifiers(filePath, content)
   if (specifiers.length === 0) return { ok: true, undeclared: [] }
 
-  // No manifest, or one with nothing declared at all: the project is too early for this check
-  // to mean anything, and every import would be reported.
+  // Skip if project has no declared packages yet
   if (declared.names.size === 0) return { ok: true, undeclared: [] }
 
-  // Alias prefixes are matched against the specifier as written; package names are resolved
-  // only afterwards, since `~/services/api` reduces to `~` and would match no prefix.
+  // Filter alias prefixes before resolving package names
   const aliasPrefixes = declared.aliasPrefixes || []
   const undeclared = Array.from(
     new Set(

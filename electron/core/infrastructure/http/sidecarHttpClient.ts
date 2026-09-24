@@ -26,7 +26,7 @@ export interface SidecarTranslateStreamPayload {
   task_id: string
 }
 
-/** One entry of GET /documents: metadata only, the Markdown is loaded with GET /documents/{id}. */
+/** Metadata summary for GET /documents. */
 export interface SidecarDocumentSummary {
   id: string
   filename: string
@@ -53,7 +53,7 @@ export interface SidecarPagePreviewResult {
   mimeType: string
 }
 
-/** GET /documents/{id}/page-preview/{page}, as the Sidecar serialises it. */
+/** Wire representation of GET /documents/{id}/page-preview/{page}. */
 interface SidecarPagePreviewWire {
   doc_id: string
   page_number: number
@@ -62,7 +62,7 @@ interface SidecarPagePreviewWire {
   mime_type?: string
 }
 
-/** One NDJSON line of a progress stream; `done` carries the result, `error` the failure. */
+/** NDJSON stream progress event. */
 export interface SidecarStreamEvent {
   type?: string
   data?: unknown
@@ -71,7 +71,7 @@ export interface SidecarStreamEvent {
   [key: string]: unknown
 }
 
-/** What a stream endpoint resolves with: the `done` event's data, or why there is none. */
+/** Stream endpoint resolution result. */
 export interface SidecarStreamResult<T> {
   success: boolean
   data?: T
@@ -85,9 +85,7 @@ interface SendOptions {
   path: string
   body?: unknown
   timeoutMs: number
-  /** Timeout message; defaults to "<path> timed out after <n>ms". */
   timeoutMessage?: string
-  /** NDJSON mode: called for every complete line; the unterminated tail is returned as `body`. */
   onLine?: (line: string) => void
   onRequest?: (req: http.ClientRequest) => void
 }
@@ -99,10 +97,10 @@ interface SendResult {
 
 const DEFAULT_BASE_HOST = 'http://127.0.0.1:8000'
 const STREAM_TIMEOUT_MS = 600_000
-/** The query embedding may wait for a cold embedding model to load (sidecar read timeout: 60s). */
+/** Vector search timeout allowing for model load. */
 const VECTOR_SEARCH_TIMEOUT_MS = 65_000
 
-/** FastAPI's `detail` (or an `error` field) from an error body, if it carries one. */
+/** Extracts error detail from response body. */
 function parseDetail(body: string): string | null {
   try {
     const parsed = JSON.parse(body.trim()) as { detail?: unknown; error?: unknown }
@@ -138,12 +136,12 @@ export class SidecarHttpClient {
     return this.baseHost
   }
 
-  /** Token the sidecar was launched with; sent on every request (the sidecar exempts only /health). */
+  /** Sets shared auth token for sidecar requests. */
   setAuthToken(token: string) {
     this.authToken = token
   }
 
-  /** Single transport for every sidecar call: resolves on any HTTP status, rejects on network error or timeout. */
+  /** Sends HTTP request to sidecar. */
   private send(options: SendOptions): Promise<SendResult> {
     const url = new URL(options.path, this.baseHost)
     const payload = options.body === undefined ? undefined : JSON.stringify(options.body)
@@ -187,7 +185,7 @@ export class SidecarHttpClient {
     })
   }
 
-  /** POSTs to an NDJSON progress endpoint and resolves with the `done` event's data. */
+  /** Consumes an NDJSON progress stream. */
   private async streamNdjson<T>(
     path: string,
     body: unknown,
@@ -243,7 +241,7 @@ export class SidecarHttpClient {
     )
   }
 
-  /** Health / status probe of the sidecar process. */
+  /** Sidecar health probe. */
   async getStatus(timeoutMs = 3000): Promise<{ status: string; [key: string]: unknown }> {
     try {
       const res = await this.send({
@@ -272,7 +270,7 @@ export class SidecarHttpClient {
     }
   }
 
-  /** Streaming file ingestion with NDJSON progress events. */
+  /** Streaming file ingestion. */
   ingestFileStream(
     payload: SidecarIngestStreamPayload,
     onProgress: (event: SidecarStreamEvent) => void,
@@ -287,7 +285,7 @@ export class SidecarHttpClient {
     )
   }
 
-  /** Streaming in-place document translation with NDJSON progress events; cancellable like ingestion. */
+  /** Streaming in-place document translation. */
   translateDocumentInplaceStream(
     docId: string,
     payload: SidecarTranslateStreamPayload,
@@ -303,7 +301,7 @@ export class SidecarHttpClient {
     )
   }
 
-  /** Cancelling asks the Sidecar to stop the task cooperatively, then drops the stream. */
+  /** Registers cancellation handler for streaming request. */
   private cancellableBy(taskId: string, onCancelRegister?: (cancelFn: () => void) => void) {
     return (req: http.ClientRequest) => {
       onCancelRegister?.(() => {
@@ -313,7 +311,7 @@ export class SidecarHttpClient {
     }
   }
 
-  /** Replaces a document's markdown and re-indexes it. */
+  /** Updates document markdown and re-indexes. */
   async updateDocument(docId: string, markdownContent: string, embeddingModel?: string): Promise<SidecarStreamResult<SidecarDocumentRecord>> {
     const result = await this.requestJson<SidecarDocumentRecord>(
       'PUT',
@@ -324,7 +322,7 @@ export class SidecarHttpClient {
     return result.success ? result : { success: false, error: result.error }
   }
 
-  /** Pre-rendered bitmap preview of one document page, or null when unavailable. */
+  /** Fetches bitmap preview of document page. */
   async getDocumentPagePreview(docId: string, pageNumber: number): Promise<SidecarPagePreviewResult | null> {
     const page = Math.max(1, Number(pageNumber) || 1)
     const result = await this.requestJson<SidecarPagePreviewWire>('GET', `/documents/${encodeURIComponent(docId)}/page-preview/${page}`, undefined, 5000)
@@ -342,7 +340,7 @@ export class SidecarHttpClient {
     }
   }
 
-  /** Lists all indexed documents; null when unreachable, so callers can tell a network failure from an empty library. */
+  /** Lists all indexed documents. */
   async listDocuments(): Promise<SidecarDocumentSummary[] | null> {
     const result = await this.requestJson<SidecarDocumentSummary[]>('GET', '/documents', undefined, 5000)
     if (result.success) return result.data
@@ -352,13 +350,13 @@ export class SidecarHttpClient {
     return null
   }
 
-  /** One document with its extracted Markdown; null when it does not exist or the sidecar is unreachable. */
+  /** Fetches single document record by ID. */
   async getDocument(docId: string): Promise<SidecarDocumentRecord | null> {
     const result = await this.requestJson<SidecarDocumentRecord>('GET', `/documents/${encodeURIComponent(docId)}`, undefined, 10_000)
     return result.success ? result.data : null
   }
 
-  /** Deletes a document and all its embedded chunks from LanceDB. */
+  /** Deletes document and chunks from vector store. */
   async deleteDocument(docId: string): Promise<{ success: boolean; error?: string }> {
     try {
       const res = await this.send({
@@ -376,10 +374,7 @@ export class SidecarHttpClient {
     }
   }
 
-  /**
-   * Hybrid vector search over indexed chunks. Rejects on failure so callers can tell
-   * "no matches" from "search unavailable"; the sidecar embeds the query with each chunk's own model.
-   */
+  /** Hybrid vector search over indexed chunks. */
   async searchVectorDb(query: string, topK: number = 5, docIds?: string[]): Promise<VectorSearchResult[]> {
     if (typeof query !== 'string' || !query.trim()) return []
     const payload: Record<string, unknown> = { query, top_k: topK }
@@ -389,13 +384,13 @@ export class SidecarHttpClient {
     return result.data
   }
 
-  /** POST JSON returning `fallback` on any failure; for best-effort calls. */
+  /** POST JSON with fallback on failure. */
   async postJson<T>(urlPath: string, payload: unknown, timeoutMs: number = 5000, fallback: T): Promise<T> {
     const result = await this.requestJson<T>('POST', urlPath, payload, timeoutMs)
     return result.success ? result.data : fallback
   }
 
-  /** POST JSON returning a `{ success, data, error }` envelope. */
+  /** POST JSON returning envelope. */
   postJsonEnvelope<T>(urlPath: string, payload: unknown, timeoutMs: number = 15_000): Promise<Envelope<T>> {
     return this.requestJson<T>('POST', urlPath, payload, timeoutMs)
   }

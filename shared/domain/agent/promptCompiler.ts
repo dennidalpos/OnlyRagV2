@@ -9,10 +9,7 @@ export interface CompileOptions {
   /** Values for the template's `{{variables}}`. */
   variables?: Record<string, unknown>
   settings?: AppSettings
-  /**
-   * Capabilities the active model reports to Ollama (`/api/tags` -> ["completion","tools"]).
-   * This is the only thing prompt assembly adapts to: there is no per-model-family branching.
-   */
+  /** Capabilities reported by the model (e.g. ['completion', 'tools']). */
   capabilities?: readonly string[]
   /** Runtime-owned partial values, such as a phase-filtered tool catalogue. */
   partialOverrides?: Readonly<Record<string, string>>
@@ -24,10 +21,7 @@ export interface CompiledPrompt {
   isCustom: boolean
 }
 
-/**
- * Resolves one node's template: the user's override when present and non-empty, otherwise the
- * factory default. One key per node, so nothing can shadow anything else.
- */
+/** Resolves node template: returns custom override if set, otherwise default. */
 export function resolveNodeTemplate(nodeId: PromptNodeId, settings?: AppSettings): { template: string; isCustom: boolean } {
   const node = findPromptNode(nodeId)
   if (!node) return { template: '', isCustom: false }
@@ -43,10 +37,7 @@ function isOmitted(node: PromptNode, capabilities: readonly string[]): boolean {
 }
 
 export class PromptCompiler {
-  /**
-   * Compiles a module's system prompt from its root node plus whichever child nodes the template
-   * still references as partials.
-   */
+  /** Compiles a module system prompt from root and referenced partial nodes. */
   static compileModulePrompt(module: FeatureModule, options: CompileOptions = {}): CompiledPrompt {
     const { variables = {}, settings, capabilities = [], partialOverrides = {} } = options
 
@@ -59,7 +50,7 @@ export class PromptCompiler {
     const partials: Record<string, string> = {}
     for (const child of partialNodesForModule(module)) {
       if (isOmitted(child, capabilities)) {
-        // AGT2: the schema is already on the wire via the native `tools` parameter.
+        // Native tools parameter supplies schema
         partials[child.partialName as string] = ''
         continue
       }
@@ -82,10 +73,7 @@ export class PromptCompiler {
     return { prompt, isCustom }
   }
 
-  /**
-   * Coding-agent entrypoint. Kept as a named method because the turn assembler calls it on every
-   * step and passes the capability as a boolean it already computed.
-   */
+  /** Compiles coding agent prompt. */
   static compileCodingPrompt(
     variables: Record<string, unknown> = {},
     settings?: AppSettings,
@@ -129,10 +117,7 @@ export function activeModelForModule(module: string, settings?: AppSettings): st
   }
 }
 
-/**
- * Renders a template with the registry's sample values or live context values, for the modal's preview pane.
- * Never used on the wire.
- */
+/** Renders a template with sample/context values for preview. */
 export function compilePromptWithSampleVars(
   rawTemplate: string,
   nodeId: PromptNodeId,
@@ -207,8 +192,7 @@ export function compilePromptWithSampleVars(
   try {
     return collapseBlankRuns(renderPromptTemplate(rawTemplate, view, partials)).trim()
   } catch {
-    // A half-typed template is the normal state of a live editor; show the raw text instead of
-    // blanking the preview pane.
+    // Fall back to raw template during live editing syntax errors
     return rawTemplate
   }
 }

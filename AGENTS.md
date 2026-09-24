@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.15 · 2026-09-24` — Repository facts and verified commands.
+`v1.16 · 2026-09-25` — Repository facts and verified commands.
 
 ## Scope
 
@@ -9,7 +9,7 @@
 
 ## Verified commands
 
-Run from repository root in PowerShell. Static checks, typecheck, `audit:deadcode`, `audit:cycles` and `build` were rerun on 2026-09-24 after the simplification pass (dead modules, shared types, single log scanner, no `apiService`, `AgentRunContext`), the fast suite and the Sidecar tests (Python 3.12) on Linux only (35 Windows/PowerShell-bound failures, unchanged by the changes, tracked as TEST-PLATFORM-01), the Electron Agent E2E earlier after the agent directive changes; the cold-start, settings-bootstrap and bundle-ux E2E commands were rerun earlier the same day, before the simplification pass (every E2E script launches `electron.exe`, so they run on Windows only). `npm run test:live` on 2026-09-24: the 10 scenarios other than the full task pass (13/13 tests, `gptOssThinking.live.ts` included); the full task run closes `verified` with qwen2.5-coder:7b (runs 15, 17 and 22, 8/8) but not reliably (2 of 10 runs, tracked as FULLTASK-RELIABILITY-01); gpt-oss:20b still ends 0/10 (tracked as GPTOSS-FULLTASK-01). Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides), never the Desktop.
+Run from repository root in PowerShell. On 2026-09-25 on Windows: `npm run docs:check` (22/22 documentation files passed), `npm run format:check`, `npm run typecheck`, `npm run audit:deadcode`, `npm run audit:cycles`, `npx @biomejs/biome lint --diagnostic-level=error` (0 errors across 733 files), IPC registration check (`scripts/check_ipc_registration.mjs`), layering guard (`scripts/check_layering.mjs`), and targeted Vitest (71/71 tests passing across 6 suites) were rerun and verified after auditing docs against code (splitting agent docs into `docs/agent-runtime.md`, `docs/agent-guards.md`, `docs/agent-diagnostics.md`, updating `docs/api-ipc.md`), and synthesizing source comments across 25 core modules. Prior runs: static checks, fast suite, Sidecar tests (Python 3.12) on Linux (TEST-PLATFORM-01), Electron Agent E2E, and `npm run test:live` on 2026-09-24 (10 scenarios pass 13/13; full task run verified with qwen2.5-coder:7b in runs 15, 17, 22; FULLTASK-RELIABILITY-01, GPTOSS-FULLTASK-01). Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides), never the Desktop.
 
 | Purpose | Command |
 | --- | --- |

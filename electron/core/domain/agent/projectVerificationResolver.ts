@@ -1,32 +1,25 @@
-/** What the caller must be able to tell us about the workspace. */
+/** Workspace manifest probe interface. */
 export interface WorkspaceManifest {
   /** Parsed package.json, or null when absent/unparseable. */
   packageJson: { scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> } | null
-  /** Relative paths that exist in the workspace root (only the ones probed below are needed). */
+  /** Relative paths that exist in the workspace root. */
   hasFile: (relativePath: string) => boolean
 }
 
 export type VerificationKind = 'build' | 'typecheck' | 'test' | 'lint'
 
-/** How much of the project a check actually looks at. */
-export type VerificationCoverage =
-  /** Reads every source file the project declares, reachable from the entry or not. */
-  | 'whole-project'
-  /** Follows the import graph from an entrypoint; anything unreferenced is never examined. */
-  | 'entry-reachable'
+/** Scope of verification coverage. */
+export type VerificationCoverage = 'whole-project' | 'entry-reachable'
 
 export interface VerificationCommand {
   kind: VerificationKind
   command: string
   coverage: VerificationCoverage
-  /** Why this command was chosen — surfaced to the model so a failure is actionable. */
+  /** Rationale for command selection. */
   source: string
 }
 
-/**
- * Script names that mean each kind, in preference order. Read from the manifest rather than
- * assumed: a project that does not declare the script simply does not offer that check.
- */
+/** Candidate script names per verification kind in preference order. */
 const SCRIPT_CANDIDATES: Record<VerificationKind, string[]> = {
   build: ['build'],
   typecheck: ['typecheck', 'type-check', 'tsc', 'check-types'],
@@ -37,22 +30,14 @@ const SCRIPT_CANDIDATES: Record<VerificationKind, string[]> = {
 const WATCH_FLAG = /(^|\s)(--watch|-w)(\s|$)/
 const SERVER_WORD = /(^|[\s&|;])(dev|serve|start|preview|watch)([\s&|;]|$)/
 
-/**
- * CLIs that start a long-running server when invoked with no terminating subcommand.
- * `vite` alone IS the dev server — the commonest way a generated project spells it.
- */
+/** CLIs that run long-running servers without terminating subcommands. */
 const SERVER_CLIS = new Set(['vite', 'nodemon', 'next', 'nuxt', 'parcel', 'webpack-dev-server', 'http-server', 'serve'])
 const TERMINATING_SUBCOMMANDS = new Set(['build', 'generate', 'export'])
 
-/** Typecheckers that read the project's own file set rather than an import graph. */
+/** Whole-project typecheck CLIs. */
 const WHOLE_PROJECT_CHECKERS = /(^|[\s&|;/\\])(tsc|vue-tsc|svelte-check|astro\s+check)([\s&|;]|$)/
 
-/**
- * How much of the project a declared script actually examines. A test runner collects its test
- * files from config but examines only the code those files import, so it is entry-reachable like
- * a bundler: counting it as whole-project made `npm run test` outrank `npm run build`, and live
- * full task run 15 of 2026-09-24 closed 'verified' without the build ever running.
- */
+/** Evaluates verification coverage of a script. */
 export function coverageOfScript(kind: VerificationKind, scriptBody: string): VerificationCoverage {
   if (kind === 'test') return 'entry-reachable'
   if (kind !== 'build') return 'whole-project'
@@ -100,8 +85,7 @@ export function resolveVerificationCommands(manifest: WorkspaceManifest): Verifi
     }
   }
 
-  // A TypeScript project without a typecheck script can still be typechecked; the compiler is
-  // reachable through the local toolchain without adding anything to the project.
+  // Fall back to tsc --noEmit when tsconfig exists but no typecheck script is declared
   const hasTypecheck = commands.some((c) => c.kind === 'typecheck')
   if (!hasTypecheck && manifest.hasFile('tsconfig.json')) {
     commands.push({
@@ -115,7 +99,7 @@ export function resolveVerificationCommands(manifest: WorkspaceManifest): Verifi
   return commands
 }
 
-/** The single command that best attests the project still works, or null when the project offers none. */
+/** Resolves primary verification command (prefers whole-project). */
 export function resolvePrimaryVerificationCommand(manifest: WorkspaceManifest): VerificationCommand | null {
   const commands = resolveVerificationCommands(manifest)
   return commands.find((c) => c.coverage === 'whole-project') ?? commands[0] ?? null

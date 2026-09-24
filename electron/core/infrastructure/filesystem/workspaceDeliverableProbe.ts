@@ -7,21 +7,14 @@ import { contentVersion } from './fileContentVersion'
 
 const MISSING: DeliverableProbeResult = { exists: false, contentLength: 0 }
 
-/**
- * Files above this are never inspected: no placeholder runs to four kilobytes, and reading
- * every large deliverable on every probe is exactly the cost this adapter was built to avoid.
- */
+/** Max byte size to inspect for placeholder detection. */
 const MAX_INSPECTABLE_BYTES = 4096
 
-/** Bounded like every other per-turn walk in this loop; a plan's deliverables live shallow. */
+/** Indexing limits for shallow deliverable resolution. */
 const MAX_INDEXED_FILES = 400
 const MAX_INDEX_DEPTH = 6
 
-/**
- * Every file in the workspace, indexed by basename, shortest path first.
- *
- * Built only when a bare filename fails to resolve at the root, and only once per probe.
- */
+/** Indexes workspace files by basename, prioritizing shortest relative paths. */
 function buildBasenameIndex(root: string): Map<string, string> {
   const index = new Map<string, string>()
   let seen = 0
@@ -45,7 +38,7 @@ function buildBasenameIndex(root: string): Map<string, string> {
       seen++
       const existing = index.get(entry.name)
       const candidate = path.relative(root, full)
-      // Shortest path wins, so a file at the root always beats one nested under it.
+      // Shortest path wins
       if (!existing || candidate.split(path.sep).length < existing.split(path.sep).length) {
         index.set(entry.name, candidate)
       }
@@ -89,24 +82,8 @@ function buildWorkspaceDeliverableProbe(workspacePath: string, includeHash: bool
     const direct = inspect(resolved)
     if (direct.exists) return direct
 
-    // A deliverable named without a directory is a name, not a location, and resolving it only
-    // against the root turned a delivered file into an eternally missing one. Live run of
-    // 2026-08-24: milestone m-9 read "Add Tailwind directives to `globals.css`"; the file was
-    // written to `src/styles/globals.css` at step 8 with exactly those directives; `update_plan`
-    // was refused at step 17 with "Still missing: globals.css", whose own directive says to
-    // write the missing file — so the model rewrote the same 58 bytes at steps 18, 19, 35, 36
-    // and 43, each one a no-op, each one blocked as a loop. An instruction that cannot be
-    // executed, in the same shape this project has now found four times.
-    //
-    // Scoped to bare filenames on purpose: a deliverable that DOES name a directory
-    // (`src/pages/Tasks.tsx`) keeps exact-path semantics, because there the title stated a
-    // location and a file elsewhere would not be it.
-    //
-    // What this deliberately does NOT answer is whether the file is in the right place — a
-    // `tailwind.config.js` under `src/styles/` satisfies a milestone that named no directory
-    // and still never reaches the bundler. That is a separate check, and it is open in the
-    // tracker; a permanently unsatisfiable milestone is the worse of the two failures, and it
-    // is the one that was measured.
+    // Bare filenames without directory paths fall back to shortest-path basename search
+    // to match deliverables located in subdirectories (e.g. globals.css -> src/styles/globals.css).
     if (relativePath.includes('/') || relativePath.includes(path.sep)) return MISSING
 
     basenameIndex = basenameIndex ?? buildBasenameIndex(root)

@@ -10,12 +10,12 @@ Il controllo statico verifica la presenza degli schemi, non la copertura di ogni
 
 | Prefisso | Canali registrati |
 | --- | --- |
-| `agent` | `approval-response`, `cancel-task`, `export-ai-debug-bundle`, `get-plan-state`, `get-queue-status`, `logs-analyze`, `parse-tool-call`, `plan-cancel`, `plan-enrich-prompt`, `plan-generate`, `plan-interview`, `plan-seed`, `start-task` |
+| `agent` | `approval-response`, `cancel-task`, `compact-context`, `export-ai-debug-bundle`, `get-plan-state`, `get-queue-status`, `logs-analyze`, `parse-tool-call`, `plan-cancel`, `plan-enrich-prompt`, `plan-generate`, `plan-interview`, `plan-seed`, `skill-install-response`, `start-task` |
 | `artifacts` | `delete`, `get`, `list`, `save` |
 | `diagnostics` | `clear-logs`, `clear-agent-audit-log`, `get-log-filepath`, `get-logs`, `log-telemetry`, `open-logs-folder`, `run` |
 | `dialog` | `open-directory`, `open-file` |
 | `history` | `index`, `search` |
-| `ingest` | `delete`, `export`, `file`, `list`, `page-preview`, `search`, `translate-inplace`, `update` |
+| `ingest` | `delete`, `export`, `file`, `get`, `list`, `page-preview`, `search`, `translate-inplace`, `update` |
 | `ollama` | `cancel-pull`, `cancel-stream`, `check-model-updates`, `delete-model`, `generate-stream`, `get-generation-status`, `get-model-metrics`, `get-running-models`, `install-or-launch`, `pull-model`, `test-connection`, `unload-model` |
 | `projects` | `list`, `migrate-legacy`, `register`, `remove`, `rename`, `touch` |
 | `sessions` | `clear`, `delete`, `list`, `migrate-legacy`, `save` |

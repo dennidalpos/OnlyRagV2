@@ -1,7 +1,4 @@
-/**
- * Universal Error Normalizer for OnlyRag V2
- * Converts raw IPC, Node.js, Python sidecar, Ollama, and DOM errors into clean NormalizedError objects.
- */
+/** Normalizes errors into typed NormalizedError objects. */
 
 import stripAnsi from 'strip-ansi'
 import { AppError, ErrorCategory, getCategoryTitle, NormalizedError } from './appError'
@@ -10,23 +7,15 @@ import { translate } from '../../i18n/I18nContext'
 
 export { AppError, ErrorCategory, type NormalizedError }
 
-/**
- * Normalizes any error object, string, or IPC rejection into a typed NormalizedError
- */
+/** Normalizes errors or IPC rejections into a NormalizedError. */
 export function normalizeError(err: unknown, context?: string): NormalizedError {
-  // If it's already an AppError, return its normalized form directly
   if (err instanceof AppError) {
     return err.toNormalized()
   }
 
-  // Extract raw string message
   const rawMessage = extractRawErrorMessage(err)
   const cleanMessage = stripAnsi(rawMessage).trim()
-
-  // Extract technical stack or details if available
   const technicalDetails = extractTechnicalDetails(err)
-
-  // Pattern detection for category and remediations
   const classified = classifyError(cleanMessage, err)
 
   const prefix = context ? `[${context}] ` : ''
@@ -42,16 +31,12 @@ export function normalizeError(err: unknown, context?: string): NormalizedError 
   }
 }
 
-/**
- * Extracts raw error message from various error formats
- */
+/** Extracts raw error message from various error formats. */
 function extractRawErrorMessage(err: unknown): string {
   return errorMessage(err)
 }
 
-/**
- * Extracts stack trace or nested error details
- */
+/** Extracts stack trace or nested error details. */
 function extractTechnicalDetails(err: unknown): string | undefined {
   if (err instanceof Error && err.stack) {
     return stripAnsi(err.stack)
@@ -69,13 +54,11 @@ interface ClassifiedError {
   code?: string | number
 }
 
-/**
- * Deterministic error classification and remediation recommendation
- */
+/** Deterministic error classification and remediation recommendation. */
 function classifyError(message: string, rawErr: unknown): ClassifiedError {
   const lower = message.toLowerCase()
 
-  // 1. Ollama Connection & Server Failures
+  // Ollama connection & server failures
   if (
     lower.includes('11434') ||
     lower.includes('econnrefused 127.0.0.1:11434') ||
@@ -93,7 +76,7 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
     }
   }
 
-  // 2. Memory / VRAM / CUDA Out of Memory
+  // Memory / VRAM / CUDA out of memory
   if (
     lower.includes('cuda out of memory') ||
     lower.includes('out of memory') ||
@@ -110,7 +93,7 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
     }
   }
 
-  // 3. Security Guardrails & Policy Blocks
+  // Security guardrails & policy blocks
   if (
     lower.includes('security guardrail') ||
     lower.includes('blocked by security') ||
@@ -128,7 +111,7 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
     }
   }
 
-  // 4. Node / File System I/O Errors (ENOENT, EACCES, EPERM, EBUSY)
+  // File system I/O errors (ENOENT, EACCES, EPERM, EBUSY)
   if (lower.includes('enoent') || lower.includes('no such file or directory')) {
     return {
       category: ErrorCategory.WORKSPACE_IO,
@@ -159,7 +142,7 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
     }
   }
 
-  // 5. LanceDB / Vector Sidecar
+  // Vector sidecar / LanceDB
   if (
     lower.includes('lancedb') ||
     lower.includes('vector store') ||
@@ -175,7 +158,7 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
     }
   }
 
-  // 6. Network & HTTP Timeout
+  // Network & HTTP timeout
   if (
     lower.includes('etimedout') ||
     lower.includes('enotfound') ||
@@ -191,7 +174,6 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
     }
   }
 
-  // 7. Check for raw code property
   if (typeof rawErr === 'object' && rawErr !== null && 'code' in rawErr) {
     const code = String((rawErr as { code: unknown }).code)
     return {
@@ -201,7 +183,6 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
     }
   }
 
-  // Fallback
   return {
     category: ErrorCategory.UNKNOWN,
     message,

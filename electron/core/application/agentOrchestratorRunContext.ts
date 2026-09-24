@@ -28,31 +28,27 @@ import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession, EmitLog } from './agentOrchestratorTypes'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
 
-/** The loop's mutable counters a tool step can flip. Mutated in place by design, like the AgentSession object. */
+/** Tool step mutable outcome flags. */
 export interface ToolResultMutableFlags {
   hasFileMutations: boolean
   hasVerifiedBuild: boolean
 }
 
-/** Loop-scoped counters the turn phases read and advance across turns. */
+/** Loop-scoped state shared across turns. */
 export interface ResponseInterpreterState {
-  /** Single progress policy: prose, schema, loop, redundancy, ask-redirect, execution and no-mutation budgets. */
+  /** Progress policy enforcing execution budgets. */
   progress: AgentProgressPolicy
-  /** Existing file that must be read before another edit is accepted. */
+  /** Path requiring read before next edit due to version conflict. */
   pendingVersionConflictReadPath?: string
-  /** Last content version the agent saw per file (read, full prompt injection or its own edit); see fileVersionEvidence.ts. */
+  /** File version evidence per tracked path. */
   versionEvidence: FileVersionEvidence
-  /** Rounds of "verification failed, fix it and try again" already spent on this session. */
+  /** Count of verification fix cycles spent. */
   verificationFixCycles: number
-  /** Every guard firing of this run (bounded), persisted and reported in the completion evidence. */
+  /** Guard events recorded during run. */
   guardEvents: AgentGuardEvent[]
 }
 
-/**
- * Everything run-scoped the turn phases share: the resolved task and model configuration, the
- * loop-scoped state objects they mutate in place, and the reporting/persistence callbacks. Built
- * once per run after bootstrap; each phase context adds only its own per-turn fields.
- */
+/** Shared run-scoped execution context across turn phases. */
 export interface AgentRunContext {
   session: AgentSession
   payload: AgentTaskPayload
@@ -65,10 +61,9 @@ export interface AgentRunContext {
   isStandaloneMode: boolean
   settings: AppSettings
   availableModels: string[]
-  /** Exact model selected once during bootstrap and held for the execution. */
   codingModel: string
   modelCapabilities: Record<string, string[]>
-  /** `/api/tags` facts per model tag. Carries the trained `context_length` that caps `num_ctx`. */
+  /** Model metrics from /api/tags including trained context length ceiling. */
   modelMetrics: Record<string, OllamaModelMetrics>
   attachedContext: string
   pinnedFilesContextStr: string
@@ -80,17 +75,17 @@ export interface AgentRunContext {
   isUnlimitedSteps: boolean
   flags: ToolResultMutableFlags
   state: ResponseInterpreterState
-  /** DoD violation reasons already surfaced to the model -- each intercepts `finish` at most once. */
+  /** Surfaced DoD violation reasons intercepting finish. */
   surfacedDodReasons: Set<string>
-  /** Per-file line deltas applied during this session, for the UI's change metrics. */
+  /** Per-file line deltas applied during session. */
   sessionChangedFiles: Map<string, { additions: number; deletions: number }>
-  /** Frozen per-session Ollama context window. */
+  /** Frozen per-session Ollama num_ctx. */
   sessionNumCtxBox: { value: number | null }
   episodicCompactor: EpisodicMemoryCompactor
   goalPlanner: GoalDecompositionPlanner
   fsmMode: AgentRuntimeModeFsm
   executionGuard: TransactionalExecutionGuard
-  /** Checked by the response interpreter and fed the real execution outcome by tool-result processing. */
+  /** Loop detector tracking repeated action sequences. */
   loopDetector: AgentActionLoopDetector
   rendererEvents: RendererEventSink | null
   isSessionActive: () => boolean
@@ -104,11 +99,11 @@ export interface AgentRunContext {
   recordNonRollbackEffect?: (effect: string) => void
 }
 
-/** Turn dispatch: model routing, prompt assembly and the LLM request. */
+/** Turn dispatch: model routing, prompt assembly and LLM request. */
 export type TurnDispatchContext = AgentRunContext & {
   stepCount: number
   skillsBlock?: string
-  /** Optional hardware snapshot for deterministic callers/tests; production resolves it once upstream. */
+  /** Hardware snapshot for model/budget resolution. */
   hardwareFacts?: HardwareFacts
 }
 
@@ -139,11 +134,11 @@ export interface ModelSelection {
   targetModelToolCallingCapable: boolean
   targetModelToolCallingProbe: boolean
   runtimeOpts: OllamaRuntimeOptions
-  /** The largest `num_ctx` Ollama will honour for `targetModel`: its trained `context_length`, as reported on `/api/tags`. */
+  /** Model trained context length ceiling. */
   contextCeiling: number | null
 }
 
-/** Response interpretation: plan extraction, tool-call parsing and the finish/loop/ask special cases. */
+/** Response interpretation context. */
 export type ResponseInterpreterContext = AgentRunContext & {
   streamedOutput: string
   stepCount: number
@@ -157,11 +152,11 @@ export type ResponseInterpretationOutcome =
   | { outcome: 'return'; result: AgentTaskResult }
   | { outcome: 'proceed'; parsedTool: AgentToolCall }
 
-/** Tool-result processing: recovery budgets, plan and verification bookkeeping after one executed tool. */
+/** Tool result processing context. */
 export type ToolResultProcessingContext = AgentRunContext & {
   toolRes: ClassifiedToolExecutionResult
   parsedTool: AgentToolCall
-  /** Wall-clock ms captured immediately before the tool ran; used to attribute files a shell command touched (see commandTouchedFilesScanner.ts). */
+  /** Wall-clock start timestamp in ms. */
   toolStartedAtMs: number
   stepCount: number
   targetModel: string

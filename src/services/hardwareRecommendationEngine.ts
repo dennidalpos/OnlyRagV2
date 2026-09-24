@@ -62,7 +62,7 @@ export interface HardwareRecommendations {
   gpuSummary: string
   ramSummary: string
   safeVramBudgetGB: number
-  /** Every coding-capable model in the built-in catalogs, deduplicated and hardware-assessed. */
+  /** Coding models assessed for current hardware. */
   codingModels: ModelRecommendation[]
   chatTierModels: ModelRecommendation[]
   translationTierModels: ModelRecommendation[]
@@ -72,9 +72,7 @@ export interface HardwareRecommendations {
   embeddingTierModels: ModelRecommendation[]
 }
 
-/**
- * Derives a normalized model family badge from an Ollama model tag or name.
- */
+/** Derives model family badge from model name. */
 export function getModelFamily(modelName: string): string {
   if (!modelName) return 'generic'
   const lower = modelName.toLowerCase().trim()
@@ -104,9 +102,7 @@ export function getModelFamily(modelName: string): string {
   return lower.split(':')[0].split('/')[0].split('-')[0] || 'generic'
 }
 
-/**
- * Returns an approximate memory/disk footprint string based on known model tags and parameter counts.
- */
+/** Approximate memory/disk footprint string for model. */
 export function getModelApproxSize(modelName: string, details?: RunningModelDetails): string | undefined {
   if (!modelName) return undefined
   const lower = modelName.toLowerCase().trim()
@@ -119,19 +115,15 @@ export function getModelApproxSize(modelName: string, details?: RunningModelDeta
   return `${weightGB.toFixed(1)} GB`
 }
 
-/** Calculates KV-Cache VRAM footprint in GB: KV_Cache = 2 * n_layers * n_kv_heads * head_dim * context_tokens * bytes_per_elem Using standard Q8 quantization (1 byte/elem) or FP16 (2 bytes/elem). */
+/** Estimates KV-Cache VRAM footprint in GB. */
 export function estimateKvCacheMemoryGB(contextTokens: number = 4096, isQuantizedQ8: boolean = true): number {
   const bytesPerElem = isQuantizedQ8 ? 1 : 2
-  // Approximate standard 32 layers, 8 KV heads, 128 head dim
   const bytes = 2 * 32 * 8 * 128 * contextTokens * bytesPerElem
   const gb = bytes / (1024 * 1024 * 1024)
   return Math.round(gb * 100) / 100
 }
 
-/**
- * Calculates total model footprint in GB:
- * Footprint_Totale = VRAM_Modello + VRAM_KV_Cache + Overhead_CUDA
- */
+/** Calculates total model footprint in GB (weights + KV cache + CUDA overhead). */
 export function calculateTotalModelFootprintGB(
   modelName: string,
   contextTargetTokens: number = 4096,
@@ -145,9 +137,7 @@ export function calculateTotalModelFootprintGB(
   return Math.round(total * 100) / 100
 }
 
-/**
- * Assesses model compatibility against detected hardware and safe usable VRAM budget.
- */
+/** Assesses model compatibility against detected hardware VRAM/RAM. */
 export function assessModelHardwareCompatibility(
   modelName: string,
   vramTotalMB: number,

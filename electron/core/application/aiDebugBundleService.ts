@@ -21,15 +21,13 @@ export interface AiDebugBundleOptions {
 }
 
 export class AiDebugBundleService {
-  /**
-   * Generates a self-contained AI-optimized debug diagnostic bundle in Markdown.
-   */
+  /** Generates self-contained debug diagnostic bundle in Markdown. */
   public async generateDebugBundle(options: AiDebugBundleOptions): Promise<string> {
     const { sessionId, workspacePath, settings, activeModelName = 'LLM', activeSkills = [] } = options
     const includePayloads = isCodingAgentDebugPayloadCaptureEnabled(settings)
     const timestamp = new Date().toISOString()
 
-    // 1. Host & Toolchain facts
+    // Host & toolchain facts
     const hostInfo = `${os.platform()} (${os.arch()}) | CPUs: ${os.cpus().length} | RAM Free: ${(os.freemem() / 1024 / 1024 / 1024).toFixed(2)}GB / ${(os.totalmem() / 1024 / 1024 / 1024).toFixed(2)}GB`
 
     const toolchainStatuses = DEV_TOOL_ALLOWLIST.map((tool) => {
@@ -38,10 +36,9 @@ export class AiDebugBundleService {
       return `${tool.displayName}: ${version || 'NOT INSTALLED'}`
     }).join(' | ')
 
-    // 2. Load Session State
     const sessionState = await agentSessionStateRepository.loadSessionState(sessionId, workspacePath)
 
-    // 3. Load Git Diff
+    // Git working tree diff
     let gitDiffBlock = 'No Git repository detected or no working tree changes.'
     let gitStatusLines: string[] = []
     if (workspacePath) {
@@ -61,7 +58,7 @@ export class AiDebugBundleService {
       }
     }
 
-    // 4. Build Trajectory Table & Extract Failures
+    // Trajectory table & failure logs
     const episodes = sessionState?.episodes || []
     const rawLogs = sessionState?.recentFullLogs || []
 
@@ -77,7 +74,6 @@ export class AiDebugBundleService {
         ? ['| Step | Tool | Target | Status | Esito / Summary |', '|:---:|:---|:---|:---:|:---|', ...trajectoryRows].join('\n')
         : 'Nessun passaggio registrato per questa sessione.'
 
-    // 5. Extract critical failures & stack traces
     const failureLogs = rawLogs.filter((l) => {
       const text = l.output || ''
       return (
@@ -100,7 +96,7 @@ export class AiDebugBundleService {
         .join('\n\n')
     }
 
-    // Keep the complete chronological payload available to a log analyst.
+    // Chronological audit log
     const persistedAuditLog = includePayloads ? codingAgentLogger.readSessionAuditLog(sessionId) : ''
     const detailedLogSection =
       persistedAuditLog ||
@@ -117,7 +113,7 @@ export class AiDebugBundleService {
             .join('\n\n')
         : 'Nessun dettaglio cronologico persistito per questa sessione.')
 
-    // 6. Plan Milestones State
+    // Milestones state
     const milestones = sessionState?.planMilestones || []
     let planSummary = 'Nessun piano formalizzato per questa sessione.'
     if (milestones.length > 0) {
@@ -131,7 +127,7 @@ export class AiDebugBundleService {
       planSummary = `Progresso: **${completed}/${milestones.length} (${Math.round((completed / milestones.length) * 100)}%)**\n${lines.join('\n')}`
     }
 
-    // 7. Compile the Final Markdown Bundle
+    // Compile markdown bundle
     const rawUserPrompt = sessionState?.userTask || sessionState?.initialUserTask || 'N/A'
     const userPrompt = includePayloads ? rawUserPrompt : `[payload omitted; ${rawUserPrompt.length} chars]`
     const agentMode = sessionState?.agentMode || 'GUIDED'

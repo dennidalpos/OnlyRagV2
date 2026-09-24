@@ -6,7 +6,7 @@ import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAnd
 import { abandonedMilestoneNote } from '../domain/agent/milestoneUpdateAuthority'
 import { isActiveMilestoneDelivered, resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { PlanDirectiveKind } from '../domain/agent/planDirectiveArbiter'
-import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
+import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorRunContext'
 
 /** Handles the optional finish signal; the application-owned closure decides the real outcome. */
 export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome> {

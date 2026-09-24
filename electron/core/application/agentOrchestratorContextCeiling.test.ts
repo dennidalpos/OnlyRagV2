@@ -10,7 +10,7 @@ vi.mock('../infrastructure/diagnostics/hardwareProbe', () => ({
 
 import { selectModelForTurn, freezeContextWindow } from './agentOrchestratorPromptAssembly'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
-import type { TurnDispatchContext } from './agentOrchestratorTurnDispatchTypes'
+import type { TurnDispatchContext } from './agentOrchestratorRunContext'
 import type { AppSettings, OllamaModelMetrics } from '../../../shared/types'
 
 /** Ollama clamps any requested `num_ctx` down to the model's trained `context_length`, then truncates the HEAD of the prompt to fit — the system prompt and the plan block, measured 2026-08-24 (see ollamaHttpClient.getModelMetrics). */

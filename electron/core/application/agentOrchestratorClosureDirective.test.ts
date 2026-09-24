@@ -11,7 +11,7 @@ import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSo
 import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import type { AppSettings } from '../../../shared/types'
-import type { ResponseInterpreterContext } from './agentOrchestratorResponseInterpreterTypes'
+import type { ResponseInterpreterContext } from './agentOrchestratorRunContext'
 
 /** Blueprint §5.4 symptom A: in the ERESOLVE probe the model re-ran a `npm run build` that was already green four times instead of closing. */
 
@@ -187,7 +187,7 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
       finalizeSession: () => {},
       buildSessionTracker: (() => ({})) as unknown as ResponseInterpreterContext['buildSessionTracker'],
       closeApplicationRun: async () => ({ outcome: 'closed', result: { success: false, summary: 'closed' } }),
-    }
+    } as unknown as ResponseInterpreterContext
   }
 
   /** Mirrors the orchestrator turn: guard first, tool afterwards, outcome reported last. */
@@ -301,7 +301,7 @@ describe('a repeated command must not abandon a milestone that is already delive
       finalizeSession: () => {},
       buildSessionTracker: (() => ({})) as unknown as ResponseInterpreterContext['buildSessionTracker'],
       closeApplicationRun: async () => ({ outcome: 'closed', result: { success: false, summary: 'closed' } }),
-    }
+    } as unknown as ResponseInterpreterContext
   }
 
   function writeWorkspaceFile(rel: string, body: string) {

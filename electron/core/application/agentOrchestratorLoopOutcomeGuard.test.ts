@@ -7,7 +7,7 @@ import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transa
 import { AgentProgressPolicy, PROGRESS_BUDGET } from '../domain/agent/agentProgressPolicy'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import type { AppSettings } from '../../../shared/types'
-import type { ResponseInterpreterContext } from './agentOrchestratorResponseInterpreterTypes'
+import type { ResponseInterpreterContext } from './agentOrchestratorRunContext'
 
 /** Regression cover for the loop guard's outcome awareness. */
 describe('handleLoopDetection — successful vs failed repeats', () => {
@@ -51,7 +51,7 @@ describe('handleLoopDetection — successful vs failed repeats', () => {
       finalizeSession: () => {},
       buildSessionTracker: (() => ({})) as unknown as ResponseInterpreterContext['buildSessionTracker'],
       closeApplicationRun: async () => ({ outcome: 'closed', result: { success: false, summary: 'closed' } }),
-    }
+    } as unknown as ResponseInterpreterContext
   })
 
   /** Mirrors the orchestrator turn: guard first, tool afterwards, outcome reported last. */

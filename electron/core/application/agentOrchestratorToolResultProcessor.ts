@@ -6,14 +6,12 @@ import type { ClassifiedToolExecutionResult } from './agentToolExecutorService'
 import { DiagnosticOutputReducer, extractErrorDiagnostics, formatDiagnosticPrompt } from '../domain/agent/diagnosticOutputReducer'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { runCircuitBreaker, recordMutationSideEffects, recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
-import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
+import type { ResponseInterpreterState, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorRunContext'
 import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recoveryStopDiagnostic } from '../domain/agent/recoveryBudget'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { redactSecrets } from '../../logRedactor'
 import { findModuleExtensionAliases, resolveDeclaredFilePaths } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { fileVersionEvidenceKey, forgetFileVersion, knownFileVersion, recordFileVersion } from '../domain/agent/fileVersionEvidence'
-
-export type { ToolResultMutableFlags, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
 export function isToolExecutionFailure(toolRes: ClassifiedToolExecutionResult): boolean {
   return toolRes.outcome !== 'success'
@@ -61,20 +59,20 @@ function versionAfterOwnEdit(workspacePath: string | null | undefined, filePath:
 }
 
 export function updateVersionConflictRecovery(
-  ctx: Pick<ToolResultProcessingContext, 'toolRes' | 'parsedTool' | 'recoveryState'> & { workspacePath?: string | null },
+  ctx: Pick<ToolResultProcessingContext, 'toolRes' | 'parsedTool' | 'state'> & { workspacePath?: string | null },
 ): VersionRecoveryUpdate {
-  ctx.recoveryState.versionEvidence ??= {}
-  const evidence = ctx.recoveryState.versionEvidence
+  ctx.state.versionEvidence ??= {}
+  const evidence = ctx.state.versionEvidence
   const conflict = ctx.toolRes.outputForHistory.match(/\[FILE VERSION CONFLICT:\s*([^\]\r\n]+)\]/)
   if (ctx.toolRes.outcome !== 'success' && conflict) {
     const conflictPath = conflict[1].trim()
     forgetFileVersion(evidence, conflictPath)
     const missingNewFile = ctx.parsedTool.tool === 'write_file' && /\nCurrent:\s*missing(?:\r?\n|$)/i.test(ctx.toolRes.outputForHistory)
     if (missingNewFile) {
-      ctx.recoveryState.pendingVersionConflictReadPath = undefined
+      ctx.state.pendingVersionConflictReadPath = undefined
       return { changed: true }
     }
-    ctx.recoveryState.pendingVersionConflictReadPath = conflictPath
+    ctx.state.pendingVersionConflictReadPath = conflictPath
     return { changed: true, conflictPath }
   }
   if (ctx.toolRes.outcome !== 'success') return { changed: false }
@@ -85,9 +83,9 @@ export function updateVersionConflictRecovery(
     const version = ctx.toolRes.outputForHistory.match(/\[FILE VERSION:\s*(sha256:[a-f0-9]+)\]/i)?.[1]
     if (!version) return { changed: false }
     recordFileVersion(evidence, filePath, version)
-    if (ctx.recoveryState.pendingVersionConflictReadPath && sameFilePath(filePath, ctx.recoveryState.pendingVersionConflictReadPath)) {
-      ctx.recoveryState.pendingVersionConflictReadPath = undefined
-      ctx.recoveryState.progress.clearExecutionFailures()
+    if (ctx.state.pendingVersionConflictReadPath && sameFilePath(filePath, ctx.state.pendingVersionConflictReadPath)) {
+      ctx.state.pendingVersionConflictReadPath = undefined
+      ctx.state.progress.clearExecutionFailures()
     }
     return { changed: true }
   }
@@ -103,7 +101,7 @@ export function updateVersionConflictRecovery(
 /** Attaches the version the agent last saw of the edited file, unless the call carries its own. */
 export function applyVersionedReadEvidence(
   toolCall: AgentToolCall,
-  state: Pick<ToolResultProcessingContext['recoveryState'], 'versionEvidence'>,
+  state: Pick<ResponseInterpreterState, 'versionEvidence'>,
 ): { toolCall: AgentToolCall; consumed: boolean } {
   if (!VERSIONED_EDIT_TOOLS.has(toolCall.tool) || toolCall.parameters.expectedContentHash) return { toolCall, consumed: false }
   const known = knownFileVersion(state.versionEvidence, String(toolCall.parameters.filePath || ''))
@@ -267,7 +265,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
 
   if (isToolFailure && shouldSpendExecutionRecoveryBudget(toolRes)) {
     const signature = `${parsedTool.tool}:${targetParam || ''}:${toolRes.logMessage.toLowerCase()}`
-    const decision = ctx.recoveryState.progress.onExecutionFailure(signature)
+    const decision = ctx.state.progress.onExecutionFailure(signature)
     if (toolRes.effectOutcome === 'uncertain' || decision.action === 'stop') {
       const reason =
         toolRes.effectOutcome === 'uncertain'
@@ -297,14 +295,14 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
       })
       return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
     }
-    recordGuardEvent(ctx.recoveryState.guardEvents, 'execution_budget', 'advise', ctx.stepCount)
+    recordGuardEvent(ctx.state.guardEvents, 'execution_budget', 'advise', ctx.stepCount)
     ctx.emitLog('info', `Recupero esecuzione ${decision.state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}: correzione richiesta.`, toolRes.logDetail, {
       category: 'system_alert',
       toolName: parsedTool.tool,
       target: targetParam,
     })
   } else if (!isToolFailure && (isMutating || ['run_command', 'run_tests', 'ensure_tool', 'move_file', 'copy_file'].includes(parsedTool.tool))) {
-    ctx.recoveryState.progress.clearExecutionFailures()
+    ctx.state.progress.clearExecutionFailures()
   }
 
   const breakerOutcome = await runCircuitBreaker(ctx, isMutating)

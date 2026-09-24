@@ -46,11 +46,11 @@ import {
 import { checkHtmlEntrypoint, CONVENTIONAL_ENTRY_PATHS } from '../domain/agent/entrypointIntegrity'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
-import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
+import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorRunContext'
 
 /** Returns a `return` outcome once the progress policy's no-mutation budget is spent. */
 export async function runCircuitBreaker(ctx: ToolResultProcessingContext, isMutating: boolean): Promise<ToolResultProcessingOutcome | null> {
-  const cbRes = ctx.recoveryState.progress.onStepExecuted(isMutating)
+  const cbRes = ctx.state.progress.onStepExecuted(isMutating)
   if (!cbRes) return null
 
   // The circuit breaker is forcing a pause/intervention due to stagnation/looping
@@ -224,7 +224,7 @@ export async function recordMutationSideEffects(ctx: ToolResultProcessingContext
         { step: ctx.stepCount, tool: ctx.parsedTool.tool, status: 'BLOCKED', summary: stagCheck.reason || 'State Stagnation' },
         stagCheck.suggestedAction,
       )
-      recordGuardEvent(ctx.recoveryState.guardEvents, 'fs_oscillation', 'advise', ctx.stepCount)
+      recordGuardEvent(ctx.state.guardEvents, 'fs_oscillation', 'advise', ctx.stepCount)
       ctx.emitLog('info', `⚡ ExecutionGuard: ${stagCheck.reason}`)
     }
   }

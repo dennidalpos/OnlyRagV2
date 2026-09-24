@@ -6,7 +6,7 @@ import path from 'node:path'
 import { recordMutationSideEffects } from './agentOrchestratorCircuitBreakerAndVerification'
 import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
-import type { ToolResultProcessingContext } from './agentOrchestratorToolResultTypes'
+import type { ToolResultProcessingContext } from './agentOrchestratorRunContext'
 
 /** live-full-task, 2026-08-24. */
 

@@ -5,7 +5,7 @@ import path from 'node:path'
 
 import { promoteMilestonesProvenBy, selectMilestonesAwaitingVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
-import type { ToolResultProcessingContext } from './agentOrchestratorToolResultTypes'
+import type { ToolResultProcessingContext } from './agentOrchestratorRunContext'
 
 /** Reproduction of live-full-task, 2026-08-25T12:11 — the run behind the tracker entry "nessuna milestone promossa a verified nonostante 16 file su disco". */
 

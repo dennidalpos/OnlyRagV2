@@ -12,6 +12,7 @@ import { agentToolExecutorService } from './agentToolExecutorService'
 import { skillAppService } from './skillAppService'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import type { AgentSession } from './agentOrchestratorTypes'
+import type { AgentRunContext } from './agentOrchestratorRunContext'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import type { AgentRunIdentity } from '../../../shared/types'
@@ -336,6 +337,55 @@ export async function runAgentOrchestratorLoop(
       request,
     )
 
+  const run: AgentRunContext = {
+    session,
+    payload,
+    sessionId,
+    runIdentity: identity,
+    userTask,
+    initialUserTask,
+    agentMode,
+    workspacePath,
+    isStandaloneMode,
+    settings,
+    availableModels,
+    codingModel,
+    modelCapabilities,
+    modelMetrics,
+    attachedContext,
+    pinnedFilesContextStr,
+    projectContextMapStr,
+    skillMatchContext,
+    skillMatchingOptions,
+    maxSteps: MAX_STEPS,
+    maxStepsLabel,
+    isUnlimitedSteps,
+    flags: mutableFlags,
+    state: responseInterpreterState,
+    surfacedDodReasons,
+    sessionChangedFiles,
+    sessionNumCtxBox,
+    episodicCompactor,
+    goalPlanner,
+    fsmMode,
+    executionGuard,
+    loopDetector,
+    rendererEvents: session.rendererEvents,
+    isSessionActive,
+    emitLog,
+    emitDone,
+    persistCurrentState,
+    finalizeSession,
+    buildSessionTracker,
+    closeApplicationRun,
+    recordChangedFile: (filePath) => {
+      if (!session.changedFiles!.includes(filePath)) session.changedFiles!.push(filePath)
+    },
+    recordNonRollbackEffect: (effect) => {
+      if (!session.nonRollbackEffects!.includes(effect)) session.nonRollbackEffects!.push(effect)
+    },
+  }
+
   // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
   const PERSIST_EVERY_N_STEPS = 5
 
@@ -350,42 +400,7 @@ export async function runAgentOrchestratorLoop(
     }
 
     // Routes the turn to a model, assembles/compacts the prompt, freezes/grows num_ctx, decides Ollama context-cache reuse, and dispatches to the LLM with resilient fallback.
-    const turnContext = {
-      userTask,
-      initialUserTask,
-      agentMode,
-      stepCount: stepCountBox.value,
-      maxStepsLabel,
-      maxSteps: MAX_STEPS,
-      workspacePath,
-      isStandaloneMode,
-      settings,
-      sessionId,
-      payload,
-      availableModels,
-      codingModel,
-      modelCapabilities,
-      modelMetrics,
-      attachedContext,
-      pinnedFilesContextStr,
-      projectContextMapStr,
-      skillMatchContext,
-      skillMatchingOptions,
-      skillsBlock,
-      episodicCompactor,
-      responseInterpreterState,
-      goalPlanner,
-      fsmMode,
-      hasVerifiedBuild: mutableFlags.hasVerifiedBuild,
-      session,
-      sessionNumCtxBox,
-      isSessionActive,
-      emitLog,
-      emitDone,
-      persistCurrentState,
-      finalizeSession,
-      closeApplicationRun,
-    }
+    const turnContext = { ...run, stepCount: stepCountBox.value, skillsBlock }
     const hadRuntimeProfile = Boolean(session.ollamaRuntimeProfile)
     const preparedTurn = await collectTurnContext(turnContext)
     if (!hadRuntimeProfile && session.ollamaRuntimeProfile) await persistCurrentState()
@@ -399,30 +414,12 @@ export async function runAgentOrchestratorLoop(
 
     // Interprets the raw LLM output for this turn: plan extraction, tool-call parsing (with no-tool-call / malformed-call recovery), and the finish/loop-detection/ask special cases.
     const interpretation = await interpretTurnResponse({
+      ...run,
       streamedOutput,
-      agentMode,
       stepCount: stepCountBox.value,
-      maxSteps: MAX_STEPS,
-      isUnlimitedSteps,
-      workspacePath,
-      settings,
-      sessionId,
       hasRecentToolFailure,
       errorCountInHistory,
       compiledHistoryBlock,
-      flags: mutableFlags,
-      surfacedDodReasons,
-      state: responseInterpreterState,
-      episodicCompactor,
-      goalPlanner,
-      executionGuard,
-      loopDetector,
-      emitLog,
-      emitDone,
-      persistCurrentState,
-      finalizeSession,
-      buildSessionTracker,
-      closeApplicationRun,
     })
     if (interpretation.outcome === 'continue') {
       setExecutionPhase('collect_context')
@@ -525,36 +522,12 @@ export async function runAgentOrchestratorLoop(
 
     setExecutionPhase('verify')
     const processingOutcome = await runToolResultProcessing({
+      ...run,
       toolRes,
       parsedTool: toolCallForExecution,
       toolStartedAtMs,
       stepCount: stepCountBox.value,
-      sessionId,
-      settings,
-      workspacePath,
       targetModel,
-      isUnlimitedSteps,
-      flags: mutableFlags,
-      sessionChangedFiles,
-      episodicCompactor,
-      goalPlanner,
-      executionGuard,
-      loopDetector,
-      recoveryState: responseInterpreterState,
-      isSessionActive,
-      rendererEvents: session.rendererEvents,
-      runIdentity: identity,
-      emitLog,
-      emitDone,
-      recordChangedFile: (filePath) => {
-        if (!session.changedFiles!.includes(filePath)) session.changedFiles!.push(filePath)
-      },
-      recordNonRollbackEffect: (effect) => {
-        if (!session.nonRollbackEffects!.includes(effect)) session.nonRollbackEffects!.push(effect)
-      },
-      persistCurrentState,
-      finalizeSession,
-      closeApplicationRun,
     })
     if (processingOutcome.outcome === 'return') {
       setExecutionPhase('outcome')

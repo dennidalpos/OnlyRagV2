@@ -18,7 +18,7 @@ import { resolveTurnContextPolicy, omittedBlockNames } from '../domain/agent/tur
 import { extractDeliverablePaths } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { buildExplicitFirstCommandDirective } from '../domain/agent/planDirectiveArbiter'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
-import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
+import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorRunContext'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import { resolveTurnToolPolicy, resolveVersionConflictTurnPolicy, type EditTargetState, type TurnToolPolicy } from '../domain/agent/turnToolPolicy'
 import { normalizeOllamaHost } from '../../../shared/domain/ollamaHost'
@@ -135,7 +135,7 @@ export function readTurnFileContext(ctx: TurnDispatchContext, targets: readonly 
       const cap = index === 0 ? PRIMARY_FILE_CHAR_CAP : SUPPORT_FILE_CHAR_CAP
       // The prompt carries the whole file, so the model has seen this exact version and may edit it
       // without a read_file round trip; a truncated body is not the whole file.
-      const evidence = ctx.responseInterpreterState?.versionEvidence
+      const evidence = ctx.state?.versionEvidence
       if (evidence && content.length <= cap) recordFileVersion(evidence, relativePath, contentVersion(content))
       blocks.push(`--- ${role}: ${relativePath} (${reason}) ---\n${boundedFileContent(content, cap)}`)
     } catch {
@@ -232,7 +232,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   const directive = resolvePlanDirectiveForTurn(
     ctx.workspacePath,
     ctx.goalPlanner,
-    ctx.hasVerifiedBuild,
+    ctx.flags.hasVerifiedBuild,
     ctx.episodicCompactor.getEpisodes(),
     (command) => ctx.episodicCompactor.lastFailureOutputFor('run_command', command),
     ctx.episodicCompactor.getRecentFullLogs(),
@@ -249,7 +249,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   }
 
   // Rewrite directives expose the target file; version conflicts require a fresh read.
-  const requiredReadPath = ctx.responseInterpreterState.pendingVersionConflictReadPath
+  const requiredReadPath = ctx.state.pendingVersionConflictReadPath
   const turnFiles = requiredReadPath
     ? { targets: [requiredReadPath], reason: 'the file whose previous edit used a stale version' }
     : resolveTurnFileTargets(ctx, directive)

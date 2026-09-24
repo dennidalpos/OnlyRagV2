@@ -9,9 +9,7 @@ import { logger } from '../infrastructure/logging/logger'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { handleAskTool } from './agentOrchestratorAskAutoHealing'
 import { handleFinishTool, handleLoopDetection } from './agentOrchestratorFinishAndLoopGuards'
-import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
-
-export type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
+import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorRunContext'
 
 async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections: readonly ToolCallRejection[] = []): Promise<ResponseInterpretationOutcome> {
   const streamedOutput = ctx.streamedOutput || ''

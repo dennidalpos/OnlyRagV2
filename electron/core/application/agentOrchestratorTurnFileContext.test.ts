@@ -12,7 +12,7 @@ vi.mock('../infrastructure/diagnostics/hardwareProbe', () => ({
 }))
 
 import { buildCurrentOperationContext, latestUnresolvedFailure, readTurnFileContext, resolveTurnFileTargets } from './agentOrchestratorPromptAssembly'
-import type { TurnDispatchContext } from './agentOrchestratorTurnDispatchTypes'
+import type { TurnDispatchContext } from './agentOrchestratorRunContext'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 
@@ -55,13 +55,13 @@ describe('readTurnFileContext', () => {
     const app = 'export default function App() { return <main /> }\n'
     fs.writeFileSync(path.join(tempDir, 'src', 'App.jsx'), app)
     fs.writeFileSync(path.join(tempDir, 'src', 'Big.jsx'), `export const big = '${'x'.repeat(13000)}'\n`)
-    const ctx = { ...ctxWith(), responseInterpreterState: { versionEvidence: {} } } as unknown as TurnDispatchContext
+    const ctx = { ...ctxWith(), state: { versionEvidence: {} } } as unknown as TurnDispatchContext
 
     readTurnFileContext(ctx, ['src/App.jsx'], 'because')
     // Truncated in the prompt, so the model has not seen this version whole.
     readTurnFileContext(ctx, ['src/Big.jsx'], 'because')
 
-    expect(ctx.responseInterpreterState.versionEvidence).toEqual({ 'src/app.jsx': contentVersion(app) })
+    expect(ctx.state.versionEvidence).toEqual({ 'src/app.jsx': contentVersion(app) })
   })
 
   it('is silent when the file does not exist yet', () => {

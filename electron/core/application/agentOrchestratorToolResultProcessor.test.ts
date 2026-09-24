@@ -12,7 +12,7 @@ import {
   terminalOutcomeFor,
   updateVersionConflictRecovery,
 } from './agentOrchestratorToolResultProcessor'
-import type { ToolResultProcessingContext } from './agentOrchestratorToolResultTypes'
+import type { ResponseInterpreterState, ToolResultProcessingContext } from './agentOrchestratorRunContext'
 import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
@@ -20,8 +20,6 @@ import { packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { resolvePlanDirective } from '../domain/agent/planDirectiveArbiter'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
-
-type RecoveryState = ToolResultProcessingContext['recoveryState']
 
 describe('structured tool outcomes', () => {
   it('does not infer failure from output text', () => {
@@ -74,17 +72,17 @@ describe('file version recovery', () => {
   })
 
   it('requires a read after conflict and clears it only after a successful read', () => {
-    const recoveryState = { progress: new AgentProgressPolicy(), versionEvidence: { 'src/app.tsx': 'sha256:stale' } } as unknown as RecoveryState
-    recoveryState.progress.onExecutionFailure('write_file:src/App.tsx:conflict')
+    const state = { progress: new AgentProgressPolicy(), versionEvidence: { 'src/app.tsx': 'sha256:stale' } } as unknown as ResponseInterpreterState
+    state.progress.onExecutionFailure('write_file:src/App.tsx:conflict')
     expect(
       updateVersionConflictRecovery({
         toolRes: { outcome: 'rejected', outputForHistory: '[FILE VERSION CONFLICT: src/App.tsx]\nNo content was written.', logMessage: 'Conflict' },
         parsedTool: { tool: 'write_file', parameters: { filePath: 'src/App.tsx' } },
-        recoveryState,
+        state,
       }),
     ).toEqual({ changed: true, conflictPath: 'src/App.tsx' })
-    expect(recoveryState.pendingVersionConflictReadPath).toBe('src/App.tsx')
-    expect(recoveryState.versionEvidence).toEqual({})
+    expect(state.pendingVersionConflictReadPath).toBe('src/App.tsx')
+    expect(state.versionEvidence).toEqual({})
 
     updateVersionConflictRecovery({
       toolRes: {
@@ -93,9 +91,9 @@ describe('file version recovery', () => {
         logMessage: 'Read',
       },
       parsedTool: { tool: 'read_file', parameters: { filePath: 'src/Other.tsx' } },
-      recoveryState,
+      state,
     })
-    expect(recoveryState.pendingVersionConflictReadPath).toBe('src/App.tsx')
+    expect(state.pendingVersionConflictReadPath).toBe('src/App.tsx')
 
     updateVersionConflictRecovery({
       toolRes: {
@@ -104,16 +102,16 @@ describe('file version recovery', () => {
         logMessage: 'Read',
       },
       parsedTool: { tool: 'read_file', parameters: { filePath: 'src/App.tsx' } },
-      recoveryState,
+      state,
     })
-    expect(recoveryState.pendingVersionConflictReadPath).toBeUndefined()
-    expect(recoveryState.versionEvidence['src/app.tsx']).toBe('sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
-    expect(recoveryState.versionEvidence['src/other.tsx']).toBe('sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
-    expect(recoveryState.progress.executionFailuresSpent).toBe(0)
+    expect(state.pendingVersionConflictReadPath).toBeUndefined()
+    expect(state.versionEvidence['src/app.tsx']).toBe('sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+    expect(state.versionEvidence['src/other.tsx']).toBe('sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+    expect(state.progress.executionFailuresSpent).toBe(0)
   })
 
   it('does not require an impossible read before creating an absent file', () => {
-    const recoveryState = { pendingVersionConflictReadPath: 'src/Old.tsx', versionEvidence: {} } as unknown as RecoveryState
+    const state = { pendingVersionConflictReadPath: 'src/Old.tsx', versionEvidence: {} } as unknown as ResponseInterpreterState
     expect(
       updateVersionConflictRecovery({
         toolRes: {
@@ -122,11 +120,11 @@ describe('file version recovery', () => {
           logMessage: 'Conflict',
         },
         parsedTool: { tool: 'write_file', parameters: { filePath: 'tailwind.config.js' } },
-        recoveryState,
+        state,
       }),
     ).toEqual({ changed: true })
-    expect(recoveryState.pendingVersionConflictReadPath).toBeUndefined()
-    expect(recoveryState.versionEvidence).toEqual({})
+    expect(state.pendingVersionConflictReadPath).toBeUndefined()
+    expect(state.versionEvidence).toEqual({})
   })
 
   it('applies the last seen version to every later edit and still rejects an external modification', () => {
@@ -167,19 +165,19 @@ describe('file version recovery', () => {
     try {
       fs.mkdirSync(path.join(tempDir, 'src'))
       fs.writeFileSync(path.join(tempDir, 'src', 'App.jsx'), 'export default function App() { return null }\n')
-      const recoveryState = { progress: new AgentProgressPolicy(), versionEvidence: {} } as unknown as RecoveryState
+      const state = { progress: new AgentProgressPolicy(), versionEvidence: {} } as unknown as ResponseInterpreterState
 
       expect(
         updateVersionConflictRecovery({
           toolRes: { outcome: 'success', outputForHistory: 'Successfully wrote file src/App.jsx (updated existing file)', logMessage: 'Updated' },
           parsedTool: { tool: 'write_file', parameters: { filePath: 'src/App.jsx' } },
-          recoveryState,
+          state,
           workspacePath: tempDir,
         }),
       ).toEqual({ changed: true })
-      expect(recoveryState.versionEvidence['src/app.jsx']).toBe(contentVersion('export default function App() { return null }\n'))
+      expect(state.versionEvidence['src/app.jsx']).toBe(contentVersion('export default function App() { return null }\n'))
 
-      const next = applyVersionedReadEvidence({ tool: 'write_file', parameters: { filePath: 'src\\App.jsx', content: 'x' } }, recoveryState)
+      const next = applyVersionedReadEvidence({ tool: 'write_file', parameters: { filePath: 'src\\App.jsx', content: 'x' } }, state)
       expect(next.toolCall.parameters.expectedContentHash).toBe(contentVersion('export default function App() { return null }\n'))
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true })
@@ -274,7 +272,7 @@ describe('plan follows a successful move_file', () => {
       episodicCompactor: { recordStep: () => {} },
       executionGuard: new TransactionalExecutionGuard(workspace),
       loopDetector: new AgentActionLoopDetector(2),
-      recoveryState: { guardEvents: [], progress: new AgentProgressPolicy(), versionEvidence: {} },
+      state: { guardEvents: [], progress: new AgentProgressPolicy(), versionEvidence: {} },
       sessionId: 'session-move-remap',
       isSessionActive: () => false,
       rendererEvents: null,
@@ -324,7 +322,7 @@ describe('plan follows a write under another script extension', () => {
       episodicCompactor: { recordStep: () => {}, getEpisodes: () => [], getRecentFullLogs: () => [] },
       executionGuard: new TransactionalExecutionGuard(workspace),
       loopDetector: new AgentActionLoopDetector(2),
-      recoveryState: { guardEvents: [], progress: new AgentProgressPolicy(), versionEvidence: {} },
+      state: { guardEvents: [], progress: new AgentProgressPolicy(), versionEvidence: {} },
       sessionId: 'session-alias-remap',
       isSessionActive: () => false,
       rendererEvents: null,

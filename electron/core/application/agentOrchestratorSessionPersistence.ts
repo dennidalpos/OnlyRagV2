@@ -6,7 +6,7 @@ import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { agentSessionStateRepository, type AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AgentExecutionPhaseController } from '../domain/agent/agentExecutionPhase'
-import type { ResponseInterpreterState } from './agentOrchestratorResponseInterpreterTypes'
+import type { ResponseInterpreterState } from './agentOrchestratorRunContext'
 
 export interface SessionPersistenceParams {
   sessionId: string

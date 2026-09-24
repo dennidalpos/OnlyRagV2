@@ -4,7 +4,7 @@ import { AgentStreamTransport } from '../infrastructure/http/agentStreamTranspor
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { selectModelForTurn, assembleTurnPrompt, freezeContextWindow, decideContextReuse } from './agentOrchestratorPromptAssembly'
-import type { PreparedAgentTurn, TurnDispatchContext, TurnDispatchOutcome, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
+import type { PreparedAgentTurn, TurnDispatchContext, TurnDispatchOutcome, ModelSelection } from './agentOrchestratorRunContext'
 import type { TurnToolPolicy } from '../domain/agent/turnToolPolicy'
 import { recordRecoveryFailure, recoveryStopDiagnostic, type RecoveryFailureState } from '../domain/agent/recoveryBudget'
 import { CODING_MODEL_KEEP_ALIVE } from '../domain/agent/hardwareProfileResolver'
@@ -12,8 +12,6 @@ import { enrichOllamaGenerationTelemetry, type OllamaStreamTelemetry } from '../
 import { ollamaAppService } from './ollamaAppService'
 import { calculateAvailableOutputTokens, countPromptTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 import { resolveOllamaThinkingPreference } from '../../../shared/domain/agent/ollamaThinkingPolicy'
-
-export type { TurnDispatchContext, TurnDispatchOutcome } from './agentOrchestratorTurnDispatchTypes'
 
 async function dispatchToLlm(
   ctx: TurnDispatchContext,

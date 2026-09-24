@@ -9,7 +9,7 @@ import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import type { ToolExecutionResult } from './agentToolExecutorService'
-import type { ToolResultProcessingContext, ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
+import type { ToolResultProcessingContext, ToolResultMutableFlags } from './agentOrchestratorRunContext'
 
 /** `hasVerifiedBuild` was monotonic: any passing build kept vouching for files written long afterwards, so the Definition of Done gate let a session finish on stale evidence. */
 
@@ -99,7 +99,7 @@ describe('build freshness — a write that changed nothing is not a mutation', (
       episodicCompactor: { recordStep: () => {} },
       executionGuard: new TransactionalExecutionGuard(tempDir),
       loopDetector: new AgentActionLoopDetector(2),
-      recoveryState: { guardEvents: [], progress: new AgentProgressPolicy(), versionEvidence: {} },
+      state: { guardEvents: [], progress: new AgentProgressPolicy(), versionEvidence: {} },
       sessionId: 'session-build-freshness',
       isSessionActive: () => false,
       targetWindow: null,

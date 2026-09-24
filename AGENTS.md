@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.14 · 2026-09-24` — Repository facts and verified commands.
+`v1.15 · 2026-09-24` — Repository facts and verified commands.
 
 ## Scope
 
@@ -9,12 +9,12 @@
 
 ## Verified commands
 
-Run from repository root in PowerShell. Static checks and typecheck were rerun on 2026-09-24 after the read_file, version-answer, audit-mirror, `any` and closure i18n changes, the fast suite on Linux only (35 Windows/PowerShell-bound failures, unchanged by the changes, tracked as TEST-PLATFORM-01), the Electron Agent E2E earlier after the agent directive changes; the cold-start, settings-bootstrap and bundle-ux E2E commands and the Sidecar tests were rerun earlier the same day. `npm run test:live` on 2026-09-24: the 10 scenarios other than the full task pass (13/13 tests, `gptOssThinking.live.ts` included); the full task run closes `verified` with qwen2.5-coder:7b (runs 15, 17 and 22, 8/8) but not reliably (2 of 10 runs, tracked as FULLTASK-RELIABILITY-01); gpt-oss:20b still ends 0/10 (tracked as GPTOSS-FULLTASK-01). Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides), never the Desktop.
+Run from repository root in PowerShell. Static checks, typecheck, `audit:deadcode`, `audit:cycles` and `build` were rerun on 2026-09-24 after the simplification pass (dead modules, shared types, single log scanner, no `apiService`, `AgentRunContext`), the fast suite and the Sidecar tests (Python 3.12) on Linux only (35 Windows/PowerShell-bound failures, unchanged by the changes, tracked as TEST-PLATFORM-01), the Electron Agent E2E earlier after the agent directive changes; the cold-start, settings-bootstrap and bundle-ux E2E commands were rerun earlier the same day, before the simplification pass (every E2E script launches `electron.exe`, so they run on Windows only). `npm run test:live` on 2026-09-24: the 10 scenarios other than the full task pass (13/13 tests, `gptOssThinking.live.ts` included); the full task run closes `verified` with qwen2.5-coder:7b (runs 15, 17 and 22, 8/8) but not reliably (2 of 10 runs, tracked as FULLTASK-RELIABILITY-01); gpt-oss:20b still ends 0/10 (tracked as GPTOSS-FULLTASK-01). Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides), never the Desktop.
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (276 files, 2230 tests; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
-| Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (148 tests) |
+| Fast suite | `npm run test:fast` (273 files, 2195 tests; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (133 tests) |
 | Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 4 guard scenarios) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |
 | Cold-start network E2E | `npm run test:e2e:cold-start` (Main and Renderer first launch) |

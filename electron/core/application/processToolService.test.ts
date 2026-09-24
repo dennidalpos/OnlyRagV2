@@ -196,3 +196,39 @@ describe('ProcessToolService ensure_tool', () => {
     expect(result.isTerminal).toBe(true)
   })
 })
+
+describe('ProcessToolService ETARGET on a range package.json declares', () => {
+  const etarget = 'npm error code ETARGET\nnpm error notarget No matching version found for react@^19.8.0.'
+  const facts = [
+    { name: 'react', exists: true, latest: '19.3.0', versions: ['19.3.0'] },
+    { name: 'react-dom', exists: true, latest: '19.3.0', versions: ['19.3.0'] },
+  ]
+
+  function serviceWithManifest(manifest: object | null) {
+    return new ProcessToolService({
+      getShellSession: () => ({ execute: vi.fn() }) as any,
+      readPackageJson: async () => (manifest ? JSON.stringify(manifest) : null),
+      lookupPackages: async (names) => facts.filter((f) => names.includes(f.name)),
+      lookupPackage: async (name) => facts.find((f) => f.name === name) ?? { name, exists: false },
+    })
+  }
+
+  it('orders one manifest rewrite that fixes every unpublished range, not an install of the first one', async () => {
+    const service = serviceWithManifest({ dependencies: { react: '^19.8.0', 'react-dom': '^19.8.0' } })
+
+    const { versionNotFoundDirective } = await service.classifyFailureDiagnostics(etarget, 'C:\workspace')
+
+    expect(versionNotFoundDirective).toContain('[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]')
+    expect(versionNotFoundDirective).toContain('react: you declared ^19.8.0')
+    expect(versionNotFoundDirective).toContain('react-dom: you declared ^19.8.0')
+    expect(versionNotFoundDirective).toContain('MUST be "write_file" on "package.json"')
+  })
+
+  it('keeps the install directive when the refused range came from the command, not the manifest', async () => {
+    const service = serviceWithManifest({ dependencies: { vite: '^5.0.0' } })
+
+    const { versionNotFoundDirective } = await service.classifyFailureDiagnostics(etarget, 'C:\workspace')
+
+    expect(versionNotFoundDirective).toContain('npm install react@19.3.0')
+  })
+})

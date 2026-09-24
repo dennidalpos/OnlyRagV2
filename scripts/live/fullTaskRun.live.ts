@@ -1,13 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import path from 'node:path'
-import os from 'node:os'
 import { runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
-import { loadRealSettings, reportRun, resetWorkspace, seedGeneratedPlan } from './agentLiveHarness'
+import { liveWorkspacePath, loadRealSettings, reportRun, resetWorkspace, seedGeneratedPlan } from './agentLiveHarness'
 
 const MODEL = process.env.ONLYRAG_LIVE_MODEL || 'qwen2.5-coder:7b'
 const RUN_LABEL = process.env.ONLYRAG_LIVE_RUN || 'default'
 const SAFE_RUN = `${MODEL}-${RUN_LABEL}`.replace(/[^a-z0-9_-]+/gi, '-')
-const WORKSPACE = path.join(os.homedir(), 'Desktop', `onlyrag_live_fulltask_${SAFE_RUN}`)
+const WORKSPACE = liveWorkspacePath(`fulltask_${SAFE_RUN}`)
 const SESSION = `live-full-task-${SAFE_RUN}`
 
 /** The bar is the independently reviewed regression baseline for this scenario: 12/13 milestone verificate (92%), chiusura raggiunta autonomamente, `npm run build` con exit code 0. */

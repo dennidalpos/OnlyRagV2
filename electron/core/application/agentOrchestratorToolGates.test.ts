@@ -141,12 +141,21 @@ describe('runToolGates version refresh', () => {
     requiredReadPath: 'src/App.tsx',
   }
 
-  it('rejects a read of another file', async () => {
+  it('performs the required read itself instead of a read of another file', async () => {
     const result = await runToolGates({
       ...base,
       parsedTool: { tool: 'read_file', parameters: { filePath: 'src/Other.tsx' } },
     })
-    expect(result.outcome).toBe('denied')
+    expect(result).toEqual({ outcome: 'allowed', toolCallForExecution: { tool: 'read_file', parameters: { filePath: 'src/App.tsx' } } })
+  })
+
+  it('performs the required read itself instead of another edit, which the turn policy would refuse', async () => {
+    const result = await runToolGates({
+      ...base,
+      parsedTool: { tool: 'write_file', parameters: { filePath: 'package.json', content: '{}' } },
+    })
+    expect(result).toEqual({ outcome: 'allowed', toolCallForExecution: { tool: 'read_file', parameters: { filePath: 'src/App.tsx' } } })
+    expect(base.requestApproval).not.toHaveBeenCalled()
   })
 
   it('accepts the required file read', async () => {

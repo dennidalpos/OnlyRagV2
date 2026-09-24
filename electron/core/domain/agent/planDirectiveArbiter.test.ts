@@ -335,6 +335,23 @@ describe('dependencies_uninstallable — the directive has to name the tool and 
     expect(numbered[1]!.startsWith('2. Do NOT')).toBe(true)
   })
 
+  it('names the exact import lines to delete and the names to replace, when it can read the file', () => {
+    const directive = resolvePlanDirective(
+      input({
+        undeclaredDependencies: [dashboard],
+        packagesWithFailedInstall: [dashboard.packageName],
+        importStatementsOf: (file, pkg) =>
+          file === 'src/pages/DashboardPage.tsx' && pkg === '@tailwindcss/react'
+            ? [{ statement: "import {\n  Button,\n  Card\n} from '@tailwindcss/react'", boundNames: ['Button', 'Card'] }]
+            : [],
+      }),
+    ).blockDirective!
+
+    expect(directive).toContain("    import { Button, Card } from '@tailwindcss/react'")
+    expect(directive).toContain('replace every use of "Button", "Card"')
+    expect(directive.split('\n').filter((line) => /^\d+\. /.test(line))).toHaveLength(2)
+  })
+
   it('names exactly one file even when several imports are uninstallable', () => {
     const directive = uninstallable([dashboard, sidebar])
 
@@ -452,5 +469,129 @@ describe('verification_failing publishes the file it orders rewritten', () => {
 
     expect(decision.kind).toBe('verification_failing')
     expect(decision.rewriteTargets).toBeUndefined()
+  })
+})
+
+describe('behavioral smoke test — a build never proves it, so the arbiter carries it to npm test', () => {
+  const smoke: PlanMilestone = {
+    id: 'm-9',
+    title: 'A behavioral smoke test exercises the rendered App component and the package.json "test" script runs it once (vitest run) — `src/App.test.jsx`',
+    status: 'in_progress',
+    filePaths: ['src/App.test.jsx'],
+    proposedVerificationCommand: 'npm test',
+  }
+  const milestones = [milestone('m-1', 'Create `src/App.jsx`', 'verified'), smoke]
+
+  it('orders the runner install when the test script is missing and vitest is not declared', () => {
+    const decision = resolvePlanDirective(input({ milestones, hasVerifiedBuild: true, packageTestScript: null, declaredPackages: ['react'] }))
+
+    expect(decision.kind).toBe('behavior_test_runner_missing')
+    expect(decision.blockDirective).toContain('MUST be "run_command" with the command: npm install --save-dev vitest')
+  })
+
+  it('orders the "test" script written into package.json once the runner is declared', () => {
+    const decision = resolvePlanDirective(input({ milestones, hasVerifiedBuild: true, packageTestScript: null, declaredPackages: ['react', 'vitest'] }))
+
+    expect(decision.kind).toBe('behavior_test_script_missing')
+    expect(decision.blockDirective).toContain('"test": "vitest run"')
+    expect(decision.rewriteTargets).toEqual(['package.json'])
+  })
+
+  it('treats npm init’s placeholder as no script at all, and needs no package for node --test', () => {
+    const nodeSmoke = { ...smoke, title: 'A behavioral smoke test exercises the entry module (node --test) — `src/index.test.js`' }
+    const decision = resolvePlanDirective(
+      input({
+        milestones: [nodeSmoke],
+        hasVerifiedBuild: true,
+        packageTestScript: 'echo "Error: no test specified" && exit 1',
+        declaredPackages: [],
+      }),
+    )
+
+    expect(decision.kind).toBe('behavior_test_script_missing')
+    expect(decision.blockDirective).toContain('"test": "node --test"')
+  })
+
+  it('treats a script whose runner is not a dependency as missing (react-scripts test without react-scripts)', () => {
+    const decision = resolvePlanDirective(
+      input({ milestones, hasVerifiedBuild: true, packageTestScript: 'react-scripts test', declaredPackages: ['react', 'vitest'] }),
+    )
+
+    expect(decision.kind).toBe('behavior_test_script_missing')
+    expect(decision.blockDirective).toContain('"react-scripts" is not a dependency')
+    expect(decision.blockDirective).toContain('"test": "vitest run"')
+  })
+
+  it('sets the script up before the build has passed, but still lets the build run first once it exists', () => {
+    expect(resolvePlanDirective(input({ milestones, packageTestScript: null, declaredPackages: ['vitest'] })).kind).toBe('behavior_test_script_missing')
+
+    const decision = resolvePlanDirective(input({ milestones, packageTestScript: 'vitest run', declaredPackages: ['vitest'] }))
+    expect(decision.kind).toBe('verification_due')
+    expect(decision.blockDirective).toContain('the command: npm run build')
+  })
+
+  it('orders npm test after the build passed, since that build cannot promote the milestone', () => {
+    const decision = resolvePlanDirective(input({ milestones, hasVerifiedBuild: true, packageTestScript: 'vitest run', declaredPackages: ['vitest'] }))
+
+    expect(decision.kind).toBe('verification_due')
+    expect(decision.blockDirective).toContain('MUST be "run_command" with the command: npm test')
+  })
+
+  it('stops ordering npm test once it failed with nothing written since', () => {
+    const decision = resolvePlanDirective(
+      input({ milestones, hasVerifiedBuild: true, packageTestScript: 'vitest run', declaredPackages: ['vitest'], behaviorVerificationFailing: true }),
+    )
+
+    expect(decision.kind).toBe('verification_failing')
+    expect(decision.blockDirective).toContain('"npm test" has already been executed')
+  })
+
+  it('stays out of the way while the test file itself is missing, or when there is no package.json', () => {
+    expect(
+      resolvePlanDirective(input({ milestones, hasVerifiedBuild: true, packageTestScript: null, deliverableStatusOf: statusMap({ 'm-9': 'unsatisfied' }) }))
+        .kind,
+    ).not.toMatch(/^behavior_/)
+    expect(resolvePlanDirective(input({ milestones, hasVerifiedBuild: true })).kind).toBe('focus')
+  })
+})
+
+describe('dependencies_unpublished — a manifest npm cannot satisfy outranks every install', () => {
+  const manifestOrder = '[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]\n- react: you declared ^19.8.0, npm currently publishes 19.3.0'
+
+  it('orders the pending package.json rewrite instead of npm install, and shows the file', () => {
+    const decision = resolvePlanDirective(input({ missingDependencies: ['react'], pendingManifestDirective: manifestOrder }))
+
+    expect(decision.kind).toBe('dependencies_unpublished')
+    expect(decision.blockDirective).toBe(manifestOrder)
+    expect(decision.rewriteTargets).toEqual(['package.json'])
+  })
+
+  it('falls back to the install once no rewrite is pending', () => {
+    expect(resolvePlanDirective(input({ missingDependencies: ['react'], pendingManifestDirective: null })).kind).toBe('dependencies_missing')
+  })
+})
+
+describe('a failed check with a concrete diagnostic is fixed before more files are written', () => {
+  it('orders the diagnostic, with its tool, while a later milestone still owes a file', () => {
+    const milestones = [milestone('m-1', 'Create `src/App.js`'), milestone('m-2', 'Create `src/Tasks.jsx`')]
+    const decision = resolvePlanDirective(
+      input({
+        milestones,
+        deliverableStatusOf: statusMap({ 'm-2': 'unsatisfied' }),
+        verificationFailing: true,
+        verificationFailureDirective: '[JSX IN A .js FILE — THIS BUNDLER ONLY PARSES JSX IN .jsx OR .tsx]',
+        verificationFailureTools: ['move_file'],
+      }),
+    )
+
+    expect(decision.kind).toBe('verification_failing')
+    expect(decision.requiredTools).toEqual(['move_file'])
+  })
+
+  it('keeps the ordinary focus when the failure carries no diagnostic to act on', () => {
+    const milestones = [milestone('m-1', 'Create `src/App.js`'), milestone('m-2', 'Create `src/Tasks.jsx`')]
+    const decision = resolvePlanDirective(input({ milestones, deliverableStatusOf: statusMap({ 'm-2': 'unsatisfied' }), verificationFailing: true }))
+
+    expect(decision.kind).toBe('focus')
   })
 })

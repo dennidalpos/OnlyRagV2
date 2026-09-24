@@ -51,3 +51,12 @@ export function resolveOllamaThinkingPreference(
 export function updateModelThinkingPreference(preferences: Record<string, boolean> | undefined, model: string, enabled: boolean): Record<string, boolean> {
   return { ...(preferences || {}), [model]: enabled }
 }
+
+/**
+ * The `think` value for a structured (JSON schema) request. A level-only model cannot switch its
+ * reasoning off, and `think: false` left gpt-oss:20b with empty content under a schema (827 output
+ * tokens, `done_reason=stop`, 2026-09-24): it gets the lowest level instead, which returns JSON.
+ */
+export function resolveStructuredThinkValue(resolution: Pick<OllamaThinkingResolution, 'mode' | 'think'>): boolean | 'low' {
+  return resolution.mode === 'level-only' ? 'low' : resolution.think
+}

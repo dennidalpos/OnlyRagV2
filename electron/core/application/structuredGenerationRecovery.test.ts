@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 import { ollamaAppService } from './ollamaAppService'
-import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
+import { describeInvalidStructuredResponse, generateStructuredWithRecovery } from './structuredGenerationRecovery'
 
 vi.mock('./ollamaAppService', () => ({
   ollamaAppService: { generateStructured: vi.fn() },
@@ -61,5 +61,24 @@ describe('generateStructuredWithRecovery', () => {
     if (result.status !== 'error') throw new Error('Expected recovery failure')
     expect(result.error).toContain('no larger output budget is available')
     expect(ollamaAppService.generateStructured).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('describeInvalidStructuredResponse', () => {
+  it('names why the model stopped, what it spent, and the edges of what it wrote', () => {
+    const line = describeInvalidStructuredResponse(
+      'gpt-oss:20b',
+      2,
+      { content: 'Here is the plan:\n{"milestones": [', doneReason: 'stop', evalCount: 812, promptEvalCount: 4100, thinkingChars: 5200 },
+      { think: false, options: { num_predict: 2048 } },
+      'Response is not valid JSON',
+    )
+
+    expect(line).toContain('gpt-oss:20b (call 2/2): Response is not valid JSON')
+    expect(line).toContain('done_reason=stop')
+    expect(line).toContain('output_tokens=812')
+    expect(line).toContain('num_predict=2048')
+    expect(line).toContain('thinking_chars=5200')
+    expect(line).toContain('head="Here is the plan: {\\"milestones\\": ["')
   })
 })

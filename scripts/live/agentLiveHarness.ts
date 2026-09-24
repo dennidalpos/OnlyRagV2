@@ -10,7 +10,14 @@ import { agentInterviewAppService } from '../../electron/core/application/agentI
 import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../../electron/core/infrastructure/logging/codingAgentLogger'
 
-const LIVE_RUN_SNAPSHOT_ROOT = path.join(os.homedir(), 'Desktop', 'onlyrag_live_snapshots')
+/** One dedicated folder for every live workspace and snapshot, so runs never scatter directories on the Desktop. */
+export const LIVE_RUN_ROOT = process.env.ONLYRAG_LIVE_ROOT || path.join(os.homedir(), 'OnlyRag-Live')
+const LIVE_RUN_SNAPSHOT_ROOT = path.join(LIVE_RUN_ROOT, 'snapshots')
+
+/** The workspace a live scenario owns inside {@link LIVE_RUN_ROOT}. */
+export function liveWorkspacePath(name: string): string {
+  return path.join(LIVE_RUN_ROOT, name)
+}
 
 /** Copies both audit-log generations before a later run or workspace cleanup can remove them. */
 export function snapshotLiveAuditLogs(args: { sessionId: string; label: string; sourceLogPath?: string; destinationRoot?: string }): string {
@@ -41,7 +48,10 @@ export function loadRealSettings(overrides: Partial<AppSettings> = {}): AppSetti
   if (!fs.existsSync(settingsPath)) {
     throw new Error(`No settings at ${settingsPath}. Run the app once, or pass an explicit settings object to the scenario.`)
   }
-  return { ...JSON.parse(fs.readFileSync(settingsPath, 'utf-8')), ...overrides } as AppSettings
+  // A live run is a diagnosis: its snapshot must show which file the model rewrote and what the
+  // prompt said, not only hashes (the 2026-09-24 full-task loop could not be read back otherwise).
+  const diagnostics: Partial<AppSettings> = { enableCodingAgentDebugLog: true, includeCodingAgentDebugPayloads: true }
+  return { ...JSON.parse(fs.readFileSync(settingsPath, 'utf-8')), ...diagnostics, ...overrides } as AppSettings
 }
 
 /** Empties a workspace directory without deleting the directory itself (it may be open elsewhere). */

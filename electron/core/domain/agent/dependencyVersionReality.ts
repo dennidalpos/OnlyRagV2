@@ -110,3 +110,34 @@ export function buildVersionRealityDirective(findings: VersionRealityFindings): 
 
   return null
 }
+
+/** Headers of the directives above that make every install fail until package.json changes. */
+const BLOCKING_MANIFEST_MARKERS = ['[THESE PACKAGES DO NOT EXIST ON NPM]', '[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]']
+
+/**
+ * The manifest rewrite a tool result ordered and no later write of package.json has answered, or
+ * null. Without it the arbiter kept ordering `npm install` (run_command only) while the tool
+ * result ordered a package.json rewrite the turn policy then refused: 28 denied writes and a
+ * `no_mutation` stop in the full-task run of 2026-09-24.
+ */
+export function pendingManifestDirective(
+  recentLogs: readonly { step: number; output: string }[],
+  episodes: readonly { step?: number; tool: string; target?: string; status: 'SUCCESS' | 'FAILURE' | 'BLOCKED' }[],
+): string | null {
+  for (let i = recentLogs.length - 1; i >= 0; i--) {
+    const log = recentLogs[i]
+    const start = BLOCKING_MANIFEST_MARKERS.map((marker) => log.output.lastIndexOf(marker)).reduce((a, b) => Math.max(a, b), -1)
+    if (start < 0) continue
+    const answered = episodes.some(
+      (e) => (e.step ?? 0) > log.step && e.status === 'SUCCESS' && e.tool === 'write_file' && /(^|[\\/])package\.json$/i.test((e.target || '').trim()),
+    )
+    if (answered) return null
+    const lines = log.output.slice(start).split('\n')
+    const end = lines.findIndex((line) => /^2\. /.test(line))
+    return lines
+      .slice(0, end < 0 ? lines.length : end + 1)
+      .join('\n')
+      .trim()
+  }
+  return null
+}

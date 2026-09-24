@@ -1,13 +1,12 @@
 /** Live scenario — the terminal budget exit performs the final project verification. */
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
 import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
-import { loadRealSettings, readRunMetrics, resetWorkspace } from './agentLiveHarness'
+import { liveWorkspacePath, loadRealSettings, readRunMetrics, resetWorkspace } from './agentLiveHarness'
 
-const WORKSPACE = path.join(os.homedir(), 'Desktop', 'onlyrag_live_budget_exhaustion')
+const WORKSPACE = liveWorkspacePath('budget_exhaustion')
 const SESSION = 'live-budget-exhaustion'
 
 describe('live: budget exhaustion verification', () => {

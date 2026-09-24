@@ -1,10 +1,9 @@
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { loadRealSettings, resetWorkspace, seedGeneratedPlan } from './agentLiveHarness'
+import { liveWorkspacePath, loadRealSettings, resetWorkspace, seedGeneratedPlan } from './agentLiveHarness'
 
-const WORKSPACE = path.join(os.homedir(), 'Desktop', 'onlyrag_live_preseeded')
+const WORKSPACE = liveWorkspacePath('preseeded')
 const SESSION = 'live-preseeded'
 
 function seedExistingWorkspace(): void {

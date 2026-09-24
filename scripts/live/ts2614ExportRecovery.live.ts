@@ -1,12 +1,11 @@
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
 import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
-import { loadRealSettings, reportRun, resetWorkspace } from './agentLiveHarness'
+import { liveWorkspacePath, loadRealSettings, reportRun, resetWorkspace } from './agentLiveHarness'
 
-const WORKSPACE = path.join(os.homedir(), 'Desktop', 'onlyrag_live_ts2614')
+const WORKSPACE = liveWorkspacePath('ts2614')
 const SESSION = 'live-ts2614'
 
 function seedWorkspace(): { packageJson: string; buttonSource: string } {

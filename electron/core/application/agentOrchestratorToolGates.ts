@@ -40,7 +40,7 @@ export type ToolGateResult =
       outcome: 'denied'
       feedback?: string
       /** Set when the application's turn policy (not the user) refused the call: it spends a step without progress. */
-      policyDenial?: 'turn_policy' | 'version_recovery'
+      policyDenial?: 'turn_policy'
     }
   | {
       outcome: 'allowed'
@@ -190,6 +190,18 @@ function denyFsm(ctx: ToolGateContext) {
 
 /** Applies phase constraints, strict Ask read-only permissions, contextual consent, and the always-on git_commit gate. */
 export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult> {
+  if (ctx.requiredReadPath) {
+    const requested = String(ctx.parsedTool.parameters.filePath || '')
+    const root = ctx.workspacePath ? path.resolve(ctx.workspacePath) : process.cwd()
+    if (ctx.parsedTool.tool !== 'read_file' || path.resolve(root, requested) !== path.resolve(root, ctx.requiredReadPath)) {
+      // The refresh is read-only and fully determined, so the application performs it instead of
+      // refusing whatever else the model proposed: denying it cost 18 steps and a no_mutation stop
+      // when qwen2.5-coder:7b kept proposing writes (full-task run 7, 2026-09-24).
+      ctx.emitLog('info', `🔄 Lettura versione eseguita dall'applicazione: ${ctx.requiredReadPath} (proposto: ${ctx.parsedTool.tool}).`)
+      return { outcome: 'allowed', toolCallForExecution: { tool: 'read_file', parameters: { filePath: ctx.requiredReadPath } } }
+    }
+  }
+
   if (ctx.allowedToolsForTurn && !ctx.allowedToolsForTurn.includes(ctx.parsedTool.tool)) {
     const allowed = ctx.allowedToolsForTurn.join(', ') || 'none'
     const feedback = `[TURN TOOL POLICY DENIED] Tool "${ctx.parsedTool.tool}" is not available for this phase. Available now: ${allowed}.`
@@ -199,20 +211,6 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
     )
     ctx.emitLog('info', `🧰 Tool blocked by current phase: ${ctx.parsedTool.tool}`)
     return { outcome: 'denied', feedback, policyDenial: 'turn_policy' }
-  }
-
-  if (ctx.requiredReadPath) {
-    const requested = String(ctx.parsedTool.parameters.filePath || '')
-    const root = ctx.workspacePath ? path.resolve(ctx.workspacePath) : process.cwd()
-    if (ctx.parsedTool.tool !== 'read_file' || path.resolve(root, requested) !== path.resolve(root, ctx.requiredReadPath)) {
-      const feedback = `[FILE VERSION RECOVERY DENIED] Read "${ctx.requiredReadPath}" before proposing another edit.`
-      ctx.episodicCompactor.recordStep(
-        { step: ctx.stepCount, tool: ctx.parsedTool.tool, status: 'BLOCKED', summary: 'Required version refresh was not performed' },
-        feedback,
-      )
-      ctx.emitLog('info', `🔒 Lettura versione richiesta: ${ctx.requiredReadPath}`)
-      return { outcome: 'denied', feedback, policyDenial: 'version_recovery' }
-    }
   }
 
   // Ask is a hard read-only boundary. Network or command consent must never turn a

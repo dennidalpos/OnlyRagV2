@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateFileImportIntegrity, extractBareImportSpecifiers, packageNameOfSpecifier } from './importDeclarationGate'
+import { evaluateFileImportIntegrity, extractBareImportSpecifiers, extractPackageImportStatements, packageNameOfSpecifier } from './importDeclarationGate'
 
 const declared = (names: string[], aliasPrefixes: string[] = []) => ({
   names: new Set(names),
@@ -95,5 +95,30 @@ describe('evaluateFileImportIntegrity', () => {
   it('flags a devDependency-only import as declared, since a typecheck resolves it', () => {
     const verdict = evaluateFileImportIntegrity('src/App.test.tsx', `import { describe } from 'vitest'`, declared(['vitest']))
     expect(verdict.ok).toBe(true)
+  })
+})
+
+describe('extractPackageImportStatements', () => {
+  it('returns each import of the package verbatim with the names it binds', () => {
+    const content = [
+      "import React from 'react'",
+      "import Btn, { Card as UiCard } from 'tailwindcss-react-components'",
+      "import * as Icons from 'tailwindcss-react-components/icons'",
+      "const { Grid } = require('tailwindcss-react-components')",
+      'export default function App() { return null }',
+    ].join('\n')
+
+    const found = extractPackageImportStatements('src/App.jsx', content, 'tailwindcss-react-components')
+
+    expect(found.map((f) => f.statement)).toEqual([
+      "import Btn, { Card as UiCard } from 'tailwindcss-react-components'",
+      "import * as Icons from 'tailwindcss-react-components/icons'",
+      "const { Grid } = require('tailwindcss-react-components')",
+    ])
+    expect(found.flatMap((f) => f.boundNames)).toEqual(['Btn', 'UiCard', 'Icons', 'Grid'])
+  })
+
+  it('finds nothing in a file that does not use the package', () => {
+    expect(extractPackageImportStatements('src/App.jsx', "import React from 'react'", 'tailwindcss-react-components')).toEqual([])
   })
 })

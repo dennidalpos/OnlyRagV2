@@ -459,6 +459,21 @@ describe('JSX in a .js file', () => {
     })
   })
 
+  it('reads the Vitest import-analysis spelling, and never mistakes the .jsx test file for a .js one', () => {
+    // Full-task run 9, 2026-09-24: the smoke test could not load src/App.js, which still held JSX.
+    const vitest = [
+      ' ❯ src/App.test.jsx (0 test)',
+      ' FAIL  src/App.test.jsx [ src/App.test.jsx ]',
+      'Error: Failed to parse source for import analysis because the content contains invalid JS syntax. If you are using JSX, make sure to name the file with the .jsx or .tsx extension.',
+      '  Plugin: vite:import-analysis',
+      '  File: src/App.js:15:16',
+      ' ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8393:39',
+    ].join('\n')
+
+    expect(extractJsxInScriptFile(vitest)).toEqual({ file: 'src/App.js', line: 15, renamedFile: 'src/App.jsx' })
+    expect(buildDiagnosticFixDirective(vitest)).toContain('MUST be "move_file" with sourcePath "src/App.js"')
+  })
+
   it('orders a rename instead of a rewrite, and publishes move_file as the tool it needs', () => {
     const directive = buildDiagnosticFixDirective(ROLLDOWN_JSX_IN_JS)!
 

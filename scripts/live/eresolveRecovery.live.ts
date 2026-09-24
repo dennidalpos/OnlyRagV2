@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
 import { execSync } from 'node:child_process'
 import { runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
-import { loadRealSettings, reportRun, resetWorkspace } from './agentLiveHarness'
+import { liveWorkspacePath, loadRealSettings, reportRun, resetWorkspace } from './agentLiveHarness'
 
-const WORKSPACE = path.join(os.homedir(), 'Desktop', 'onlyrag_live_eresolve')
+const WORKSPACE = liveWorkspacePath('eresolve')
 const SESSION = 'live-eresolve'
 
 /** The version the probe pins, and the plugin release that cannot coexist with it. */

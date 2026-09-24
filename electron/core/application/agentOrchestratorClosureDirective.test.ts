@@ -173,6 +173,7 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
         },
         getEpisodes: () => [],
         lastFailureOutputFor: () => null,
+        getRecentFullLogs: () => [],
       } as unknown as ResponseInterpreterContext['episodicCompactor'],
       goalPlanner: plannerWith([
         { id: 'm-1', title: 'Create `src/App.tsx`', status: 'verified' },
@@ -289,6 +290,7 @@ describe('a repeated command must not abandon a milestone that is already delive
         recordStep: () => {},
         getEpisodes: () => [],
         lastFailureOutputFor: () => null,
+        getRecentFullLogs: () => [],
       } as unknown as ResponseInterpreterContext['episodicCompactor'],
       goalPlanner: planner,
       executionGuard: new TransactionalExecutionGuard(tempDir),
@@ -383,6 +385,7 @@ describe('the loop guard yields when the arbitrated directive orders the blocked
         recordStep: () => {},
         getEpisodes: () => [],
         lastFailureOutputFor: () => null,
+        getRecentFullLogs: () => [],
       } as unknown as ResponseInterpreterContext['episodicCompactor'],
       goalPlanner: plannerWith([{ id: 'm-1', title: 'The app renders — `App.tsx`', status: 'in_progress' }]),
       executionGuard: new TransactionalExecutionGuard(tempDir),

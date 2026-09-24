@@ -7,7 +7,16 @@ import { assessPostVerificationClosure, buildClosureDirective } from './postVeri
 import { shouldDirectUnprovableClosure, buildUnprovableMilestoneDirective } from './unprovableMilestoneDirective'
 import { buildVerificationFailingDirective } from './verificationAttemptTracker'
 import { buildEntrypointDirective } from './entrypointIntegrity'
+import {
+  BEHAVIOR_TEST_COMMAND,
+  buildBehaviorTestRunnerInstallDirective,
+  buildBehaviorTestScriptDirective,
+  isUsableTestScript,
+  resolveBehaviorTestRunner,
+  selectOpenBehaviorMilestone,
+} from './behaviorTestDirective'
 import type { SupportedToolName } from './agentTypes'
+import type { PackageImportStatement } from './importDeclarationGate'
 
 export type PlanDirectiveKind =
   /** The build is green and the plan is accounted for: close the session. */
@@ -16,10 +25,16 @@ export type PlanDirectiveKind =
   | 'dependencies_undeclared'
   /** Those packages were already tried and cannot be installed: the importing file must change. */
   | 'dependencies_uninstallable'
+  /** package.json declares a package or range npm does not publish: no install can pass until it changes. */
+  | 'dependencies_unpublished'
   /** The manifest declares packages that are not installed: no build can pass until they are. */
   | 'dependencies_missing'
   /** Every open milestone has its files on disk and nothing has been verified: run the check. */
   | 'verification_due'
+  /** A milestone promises behavior and the runner its "test" script needs is not declared. */
+  | 'behavior_test_runner_missing'
+  /** A milestone promises behavior and package.json has no runnable "test" script. */
+  | 'behavior_test_script_missing'
   /** The check has already run and failed with nothing written since: fix, do not re-run. */
   | 'verification_failing'
   /** The HTML entry page references none of the project's own code, so nothing ever runs. */
@@ -67,6 +82,13 @@ export interface PlanDirectiveInput {
   undeclaredDependencies: readonly UndeclaredDependency[]
   /** Packages this session already tried to install and failed on. */
   packagesWithFailedInstall: readonly string[]
+  /**
+   * The package.json rewrite a tool result already ordered (dependencyVersionReality.ts) and no
+   * later write has answered. Null or absent when none is pending.
+   */
+  pendingManifestDirective?: string | null
+  /** Reads the verbatim import statements of a package in a workspace file; omitted in pure tests. */
+  importStatementsOf?: (file: string, packageName: string) => readonly PackageImportStatement[]
   /** The command the project itself offers to prove it works, or null when it offers none. */
   verificationCommand: { command: string; source: string } | null
   /** The verification command has already run, failed, and nothing has been written since. */
@@ -85,6 +107,19 @@ export interface PlanDirectiveInput {
    * such page or the question does not apply. See entrypointIntegrity.ts.
    */
   disconnectedEntrypoint: { htmlPath: string; expectedEntry: string } | null
+  /**
+   * The package.json "test" script body: null when the manifest declares none, undefined when the
+   * workspace has no package.json and the question does not apply.
+   */
+  packageTestScript?: string | null
+  /** Every dependency and dev dependency package.json declares. */
+  declaredPackages?: readonly string[]
+  /** `npm test` has already run, failed, and nothing has been written since. */
+  behaviorVerificationFailing?: boolean
+  /** The diagnostic built from that failing `npm test`, carried like `verificationFailureDirective`. */
+  behaviorFailureDirective?: string | null
+  /** The file that diagnostic orders written. */
+  behaviorFailureTargetFile?: string | null
 }
 
 const FOCUS: PlanDirectiveDecision = { kind: 'focus', blockDirective: null, closureStepDirective: null }
@@ -152,12 +187,18 @@ export function buildUndeclaredDependencyDirective(undeclared: readonly Undeclar
  * Directive emitted when a package install repeatedly fails (e.g. invalid name or unresolvable conflict).
  * Instructs model to rewrite the importing file using `write_file` on a single deterministic target.
  */
-export function buildUninstallablePackageDirective(undeclared: readonly UndeclaredDependency[]): string {
+export function buildUninstallablePackageDirective(
+  undeclared: readonly UndeclaredDependency[],
+  /** The verbatim import statements of that package in that file, when the caller can read them. */
+  importStatementsOf?: (file: string, packageName: string) => readonly PackageImportStatement[],
+): string {
   // Pin one deterministic target until resolved to prevent target oscillation across turns.
   const ordered = [...undeclared].sort((a, b) => a.packageName.localeCompare(b.packageName))
   const target = ordered[0]
   const file = [...target.importedBy].sort()[0]
   const others = ordered.length - 1
+  const imports = importStatementsOf?.(file, target.packageName) ?? []
+  const names = Array.from(new Set(imports.flatMap((i) => i.boundNames)))
 
   return [
     `[THIS PACKAGE CANNOT BE INSTALLED — STOP TRYING]`,
@@ -168,8 +209,20 @@ export function buildUninstallablePackageDirective(undeclared: readonly Undeclar
           `${others} other import${others === 1 ? '' : 's'} in this project ${others === 1 ? 'has' : 'have'} the same problem. ${others === 1 ? 'It is' : 'They are'} handled one at a time, after this one; this turn is about "${file}" only.`,
         ]
       : []),
+    // A small model told to "rewrite so nothing imports X" re-emitted the same file, import
+    // included, for 30 steps (full-task run 3, 2026-09-24): naming the exact lines to delete
+    // and the names to replace turns the order into an edit it can check.
+    ...(imports.length > 0
+      ? [
+          `Delete ${imports.length === 1 ? 'this line' : 'these lines'} from "${file}":`,
+          ...imports.map((i) => `    ${i.statement.replace(/\s*\n\s*/g, ' ')}`),
+          ...(names.length > 0
+            ? [`Then replace every use of ${names.map((n) => `"${n}"`).join(', ')} in that file with plain HTML elements or code the project already declares.`]
+            : []),
+        ]
+      : []),
     `Directives:`,
-    `1. Your next tool call MUST be "write_file" on "${file}", with the complete file rewritten so that nothing in it imports "${target.packageName}", using only packages package.json already declares, and keeping the rest of the file's content intact.`,
+    `1. Your next tool call MUST be "write_file" on "${file}", with the complete file rewritten so that nothing in it imports "${target.packageName}", using only packages package.json already declares, and keeping the rest of the file's content intact. A file that still contains "${target.packageName}" does not satisfy this, however much the rest of it changed.`,
     `2. Do NOT run any install command for "${target.packageName}" again, and do NOT write any other file this step.`,
   ].join('\n')
 }
@@ -199,6 +252,17 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
     return { kind: 'session_closure', blockDirective: closureDirective, closureStepDirective: null }
   }
 
+  // Ahead of every install: while package.json names what npm does not publish, each install
+  // fails the same way, and ordering one spends the execution budget on a known failure.
+  if (!input.hasVerifiedBuild && input.pendingManifestDirective) {
+    return {
+      kind: 'dependencies_unpublished',
+      blockDirective: input.pendingManifestDirective,
+      closureStepDirective: null,
+      rewriteTargets: ['package.json'],
+    }
+  }
+
   if (!input.hasVerifiedBuild && input.undeclaredDependencies.length > 0) {
     // Split by what this session has already learned. Ordering an install that has already
     // failed is not a directive, it is a loop with a preamble.
@@ -218,7 +282,7 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
 
     return {
       kind: 'dependencies_uninstallable',
-      blockDirective: buildUninstallablePackageDirective(uninstallable),
+      blockDirective: buildUninstallablePackageDirective(uninstallable, input.importStatementsOf),
       closureStepDirective: null,
       // The files that import the package which cannot be installed: exactly the files this
       // directive orders rewritten, and therefore exactly the ones the model must be able to see.
@@ -242,6 +306,28 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
       closureStepDirective: null,
     }
   }
+
+  // A check that failed with a concrete diagnostic and nothing written since is fixed first, even
+  // while later milestones still owe files: otherwise the turn policy withheld the tool that
+  // diagnostic ordered (move_file for JSX in a .js file, full-task run 10 of 2026-09-24).
+  if (
+    !input.hasVerifiedBuild &&
+    input.verificationCommand &&
+    input.verificationFailing &&
+    input.verificationFailureDirective &&
+    !isEveryDeliverableSatisfied(input)
+  ) {
+    return {
+      kind: 'verification_failing',
+      blockDirective: buildVerificationFailingDirective(input.verificationCommand.command, input.verificationFailureDirective),
+      closureStepDirective: null,
+      rewriteTargets: input.verificationFailureTargetFile ? [input.verificationFailureTargetFile] : undefined,
+      requiredTools: input.verificationFailureTools?.length ? input.verificationFailureTools : undefined,
+    }
+  }
+
+  const behaviorDecision = resolveBehaviorTestDirective(input)
+  if (behaviorDecision) return behaviorDecision
 
   if (!input.hasVerifiedBuild && input.verificationCommand && isEveryDeliverableSatisfied(input)) {
     // The check has run and failed, and nothing has changed since: ordering it again is ordering the model to re-read code it has already been told is wrong — and it was doing exactly that from the one channel that always wins, against a tool result telling it the o
@@ -277,6 +363,50 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
   }
 
   return FOCUS
+}
+
+/**
+ * A milestone that promises behavior is proven only by `npm test`, and a build never promotes it
+ * (milestoneVerificationPromotion.ts). On 2026-09-24 the full-task run verified 9/11 because
+ * package.json never got a "test" script and no directive ever asked for one: these name the
+ * missing runner, then the missing script, then the command itself once the build has passed.
+ */
+function resolveBehaviorTestDirective(input: PlanDirectiveInput): PlanDirectiveDecision | null {
+  if (input.packageTestScript === undefined || !isEveryDeliverableSatisfied(input)) return null
+  const milestone = selectOpenBehaviorMilestone(input.milestones)
+  if (!milestone) return null
+
+  const runner = resolveBehaviorTestRunner(milestone)
+  if (!isUsableTestScript(input.packageTestScript, input.declaredPackages)) {
+    if (runner.devPackage && !(input.declaredPackages ?? []).includes(runner.devPackage)) {
+      return { kind: 'behavior_test_runner_missing', blockDirective: buildBehaviorTestRunnerInstallDirective(milestone, runner), closureStepDirective: null }
+    }
+    return {
+      kind: 'behavior_test_script_missing',
+      blockDirective: buildBehaviorTestScriptDirective(milestone, runner, input.packageTestScript, input.declaredPackages),
+      closureStepDirective: null,
+      rewriteTargets: ['package.json'],
+    }
+  }
+
+  // Before the build has passed, the project's own check still comes first (verification_due).
+  if (!input.hasVerifiedBuild && input.verificationCommand) return null
+  if (input.behaviorVerificationFailing) {
+    return {
+      kind: 'verification_failing',
+      blockDirective: buildVerificationFailingDirective(BEHAVIOR_TEST_COMMAND, input.behaviorFailureDirective ?? null),
+      closureStepDirective: null,
+      rewriteTargets: input.behaviorFailureTargetFile ? [input.behaviorFailureTargetFile] : undefined,
+    }
+  }
+  return {
+    kind: 'verification_due',
+    blockDirective: buildVerificationDueDirective({
+      command: BEHAVIOR_TEST_COMMAND,
+      source: `package.json script "test"; milestone ${milestone.id} promises behavior that a build cannot prove`,
+    }),
+    closureStepDirective: null,
+  }
 }
 
 /** True when no open milestone is still owed a file. */

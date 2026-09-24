@@ -28,6 +28,10 @@ import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolF
 import { scanUndeclaredImports } from '../infrastructure/filesystem/undeclaredImportScanner'
 import { extractRequestedPackages, packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { isVerificationFailing } from '../domain/agent/verificationAttemptTracker'
+import { isProjectTestCommand, isUsableTestScript } from '../domain/agent/behaviorTestDirective'
+import { extractPackageImportStatements } from '../domain/agent/importDeclarationGate'
+import { pendingManifestDirective } from '../domain/agent/dependencyVersionReality'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import { buildDiagnosticFixDirective, diagnosticFixRequiredTools, diagnosticFixTargetFile } from '../domain/agent/compilerDiagnosticDirective'
 import { readLocalModuleExports, readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
 import { checkHtmlEntrypoint, CONVENTIONAL_ENTRY_PATHS } from '../domain/agent/entrypointIntegrity'
@@ -315,8 +319,10 @@ export function resolvePlanDirectiveForTurn(
   goalPlanner: GoalDecompositionPlanner,
   hasVerifiedBuild: boolean,
   episodes: readonly { tool: string; target?: string; status: 'SUCCESS' | 'FAILURE' | 'BLOCKED' }[] = [],
-  /** The raw output of the last failing verification, when the caller can supply it. */
-  lastVerificationFailureOutput: string | null = null,
+  /** The raw output of the last failing run of a command, when the caller can supply it. */
+  lastFailureOutputOf: (command: string) => string | null = () => null,
+  /** Recent full tool outputs, where a pending package.json rewrite order is found. */
+  recentFullLogs: readonly { step: number; output: string }[] = [],
 ): PlanDirectiveDecision {
   if (!workspacePath) return { kind: 'focus', blockDirective: null, closureStepDirective: null }
 
@@ -328,6 +334,17 @@ export function resolvePlanDirectiveForTurn(
     ...(manifest.packageJson?.dependencies ?? {}),
     ...(manifest.packageJson?.devDependencies ?? {}),
   })
+  // `npm test` and `npm run test` are one script, recorded under whichever spelling was run.
+  const failureOutputOf = (command: string) =>
+    lastFailureOutputOf(command) ?? (isProjectTestCommand(command) ? (lastFailureOutputOf('npm test') ?? lastFailureOutputOf('npm run test')) : null)
+  const lastVerificationFailureOutput = verification ? failureOutputOf(verification.command) : null
+  const diagnose = (output: string) =>
+    buildDiagnosticFixDirective(
+      output,
+      (pkg) => readPackageExports(workspacePath, pkg),
+      (importingFile, specifier) => readLocalModuleExports(workspacePath, importingFile, specifier),
+    )
+  const behaviorFailureOutput = failureOutputOf('npm test')
 
   return resolvePlanDirective({
     hasVerifiedBuild,
@@ -341,19 +358,32 @@ export function resolvePlanDirectiveForTurn(
     undeclaredDependencies: scanUndeclaredImports(workspacePath),
     // Read back from the session's own trajectory rather than kept as a second piece of state: the episodes are already recorded, already persisted, and already say which installs failed and which later succeeded.
     packagesWithFailedInstall: packagesWithFailedInstall(episodes),
+    pendingManifestDirective: pendingManifestDirective(recentFullLogs, episodes),
+    importStatementsOf: (file, packageName) => {
+      try {
+        return extractPackageImportStatements(file, documentIoRepository.readText(path.join(workspacePath, file)), packageName)
+      } catch {
+        return []
+      }
+    },
     verificationCommand: verification,
     verificationFailing: isVerificationFailing(episodes, verification?.command),
-    verificationFailureDirective: lastVerificationFailureOutput
-      ? buildDiagnosticFixDirective(
-          lastVerificationFailureOutput,
-          (pkg) => (workspacePath ? readPackageExports(workspacePath, pkg) : []),
-          (importingFile, specifier) => (workspacePath ? readLocalModuleExports(workspacePath, importingFile, specifier) : []),
-        )
-      : null,
+    verificationFailureDirective: lastVerificationFailureOutput ? diagnose(lastVerificationFailureOutput) : null,
     verificationFailureTargetFile: lastVerificationFailureOutput ? diagnosticFixTargetFile(lastVerificationFailureOutput) : null,
     verificationFailureTools: lastVerificationFailureOutput ? diagnosticFixRequiredTools(lastVerificationFailureOutput) : [],
     disconnectedEntrypoint: resolveDisconnectedEntrypoint(workspacePath, probe),
+    packageTestScript: manifest.packageJson ? (manifest.packageJson.scripts?.test ?? null) : undefined,
+    declaredPackages: declared,
+    behaviorVerificationFailing: isBehaviorTestFailing(episodes),
+    behaviorFailureDirective: behaviorFailureOutput ? diagnose(behaviorFailureOutput) : null,
+    behaviorFailureTargetFile: behaviorFailureOutput ? diagnosticFixTargetFile(behaviorFailureOutput) : null,
   })
+}
+
+/** `npm test` and `npm run test` run the same script, so either failing run counts. */
+function isBehaviorTestFailing(episodes: readonly { tool: string; target?: string; status: 'SUCCESS' | 'FAILURE' | 'BLOCKED' }[]): boolean {
+  const last = [...episodes].reverse().find((e) => e.tool === 'run_command' && isProjectTestCommand(e.target || ''))
+  return last ? isVerificationFailing(episodes, last.target) : false
 }
 
 /** Whether every file the ACTIVE milestone names is on disk with real content. */
@@ -423,8 +453,12 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
   const rawCmd = ctx.parsedTool.parameters?.command || ''
   const normalizedCommand = rawCmd.trim().replace(/\s+/g, ' ').toLowerCase()
   const projectChecks = ctx.workspacePath ? resolvePrimaryProfileVerificationTargets(discoverProjectProfile(ctx.workspacePath)) : []
+  // The project's own "test" script counts too: it is the only check that can prove a milestone
+  // promising behavior, and it is rarely the primary one while a typecheck is declared.
+  const runsDeclaredTestScript =
+    isProjectTestCommand(rawCmd) && Boolean(ctx.workspacePath) && isUsableTestScript(readWorkspaceManifest(ctx.workspacePath!).packageJson?.scripts?.test)
   const isVerificationCmd =
-    projectChecks.some((target) => target.command.trim().replace(/\s+/g, ' ').toLowerCase() === normalizedCommand) &&
+    (projectChecks.some((target) => target.command.trim().replace(/\s+/g, ' ').toLowerCase() === normalizedCommand) || runsDeclaredTestScript) &&
     checkVerificationCommandSafety(rawCmd).isSafe
   if (isVerificationCmd && !ctx.toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') && !isToolFailure) {
     ctx.flags.hasVerifiedBuild = true

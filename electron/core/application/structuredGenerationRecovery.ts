@@ -2,6 +2,7 @@ import type { OllamaStructuredRequest } from '../infrastructure/http/ollamaHttpC
 import { recordRecoveryFailure, recoveryStopDiagnostic, type RecoveryFailureState } from '../domain/agent/recoveryBudget'
 import { ollamaAppService } from './ollamaAppService'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
+import { logger } from '../infrastructure/logging/logger'
 
 export type StructuredContentValidation<T> = { status: 'valid'; data: T } | { status: 'invalid'; error: string }
 
@@ -37,6 +38,34 @@ function maximumStructuredOutput(request: OllamaStructuredRequest): number | und
 function withMaximumStructuredOutput(request: OllamaStructuredRequest): OllamaStructuredRequest {
   const numPredict = maximumStructuredOutput(request)
   return numPredict === undefined ? request : { ...request, options: { ...request.options, num_predict: numPredict } }
+}
+
+/**
+ * What an invalid structured response looked like, bounded: why the model stopped, how much it
+ * thought and wrote, and the edges of the text. "Response is not valid JSON" alone could not tell
+ * truncation from prose from an empty reply (gpt-oss:20b planning failure, 2026-09-24).
+ */
+export function describeInvalidStructuredResponse(
+  model: string,
+  attempt: number,
+  response: { content: string; doneReason?: string; evalCount?: number; promptEvalCount?: number; thinkingChars?: number },
+  request: Pick<OllamaStructuredRequest, 'options' | 'think'>,
+  validationError: string,
+): string {
+  const content = response.content || ''
+  const edge = (text: string) => JSON.stringify(text.replace(/\s+/g, ' '))
+  return [
+    `Invalid structured response from ${model} (call ${attempt}/2): ${validationError}`,
+    `done_reason=${response.doneReason ?? 'unknown'}`,
+    `prompt_tokens=${response.promptEvalCount ?? '?'}`,
+    `output_tokens=${response.evalCount ?? '?'}`,
+    `num_predict=${request.options?.num_predict ?? 'default'}`,
+    `think=${String(request.think ?? false)}`,
+    `thinking_chars=${response.thinkingChars ?? 0}`,
+    `content_chars=${content.length}`,
+    `head=${edge(content.slice(0, 160))}`,
+    `tail=${edge(content.slice(-160))}`,
+  ].join(' | ')
 }
 
 /** Shares one two-call ceiling across transport and schema recovery. */
@@ -105,6 +134,7 @@ export async function generateStructuredWithRecovery<T>(
 
     const validated = validate(response.content)
     if (validated.status === 'valid') return { status: 'success', data: validated.data, content: response.content, attempts: attempt }
+    logger.log('WARN', 'StructuredGeneration', describeInvalidStructuredResponse(request.model, attempt, response, currentRequest, validated.error))
 
     const decision = recordRecoveryFailure(schemaFailure, normalizedSignature('schema', validated.error))
     schemaFailure = decision.state

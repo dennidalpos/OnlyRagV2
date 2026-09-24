@@ -252,12 +252,12 @@ export function normalizeToolParams(raw: Record<string, any>): Record<string, an
   if (!p.command) {
     const rawCmd = p.cmd || p.terminal_command || p.exec || p.command_line || p.CommandLine || p.parameters
     if (Array.isArray(rawCmd)) {
-      p.command = rawCmd.filter((c: any) => typeof c === 'string' && c.trim()).join('; ')
+      p.command = rawCmd.filter((c: unknown): c is string => typeof c === 'string' && c.trim() !== '').join('; ')
     } else if (typeof rawCmd === 'string') {
       p.command = rawCmd
     }
   } else if (Array.isArray(p.command)) {
-    p.command = p.command.filter((c: any) => typeof c === 'string' && c.trim()).join('; ')
+    p.command = p.command.filter((c: unknown): c is string => typeof c === 'string' && c.trim() !== '').join('; ')
   }
   if (!p.question) {
     p.question = p.question || p.query || p.prompt || p.message || p.text || p.explanation || p.reason || ''
@@ -271,7 +271,7 @@ export function normalizeToolParams(raw: Record<string, any>): Record<string, an
   const rawChunks = p.replacements || p.replacement_chunks || p.chunks || p.ReplacementChunks || p.edits
   if (Array.isArray(rawChunks)) {
     p.replacements = rawChunks
-      .map((chunk: any) => ({
+      .map((chunk: Record<string, unknown>) => ({
         targetContent: String(chunk.targetContent || chunk.target || chunk.target_content || chunk.old_content || chunk.TargetContent || ''),
         replacementContent: String(
           chunk.replacementContent || chunk.replacement || chunk.replacement_content || chunk.new_content || chunk.ReplacementContent || '',

@@ -18,7 +18,7 @@ import {
 } from '../domain/agent/ollamaStructuredResponse'
 import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
-import { resolveOllamaThinkingPreference } from '../../../shared/domain/agent/ollamaThinkingPolicy'
+import { resolveOllamaThinkingPreference, resolveStructuredThinkValue } from '../../../shared/domain/agent/ollamaThinkingPolicy'
 import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/agent/codingAgentDebugPolicy'
 import { ollamaAppService } from './ollamaAppService'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
@@ -200,7 +200,7 @@ export class PlanGenerationAppService {
           systemPrompt: PLAN_SYSTEM_PROMPT,
           userContent,
           format: toOllamaJsonSchema(planningPhaseResponseSchema),
-          think: resolveOllamaThinkingPreference(model, req.settings, modelMetrics).think,
+          think: resolveStructuredThinkValue(resolveOllamaThinkingPreference(model, req.settings, modelMetrics)),
           host: req.settings.ollamaHost,
           keepAlive: CODING_MODEL_KEEP_ALIVE,
           options: runtimeOpts,

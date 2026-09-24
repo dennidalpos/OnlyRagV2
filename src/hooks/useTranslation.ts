@@ -17,6 +17,10 @@ import { useOllamaGenerationState } from './useOllamaGenerationState'
 import { resolveOllamaThinkingPreference } from '../../shared/domain/agent/ollamaThinkingPolicy'
 import { resolveConfiguredModel } from '../../shared/domain/settings/configuredModel'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import type { OnMount } from '@monaco-editor/react'
+
+/** The editor instance Monaco hands to `onMount`; a type-only import, so Monaco still loads on demand. */
+type MonacoCodeEditor = Parameters<OnMount>[0]
 
 export const LANGUAGES = ['English', 'Italian', 'German', 'French', 'Spanish', 'Portuguese', 'Russian', 'Chinese', 'Japanese']
 
@@ -207,12 +211,12 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [pageViewMode, setPageViewMode] = useState<'page' | 'all'>('all')
 
-  const leftEditorRef = useRef<any>(null)
-  const editorRef = useRef<any>(null)
+  const leftEditorRef = useRef<MonacoCodeEditor | null>(null)
+  const editorRef = useRef<MonacoCodeEditor | null>(null)
   const isSyncingScrollRef = useRef<boolean>(false)
   const abortTranslationRef = useRef<boolean>(false)
 
-  const syncEditorScroll = (source: any, target: any) => {
+  const syncEditorScroll = (source: MonacoCodeEditor, target: MonacoCodeEditor) => {
     const scrollHeight = source.getScrollHeight()
     const layout = source.getLayoutInfo()
     const clientHeight = layout ? layout.height : 0
@@ -229,9 +233,9 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     }
   }
 
-  const handleLeftEditorDidMount = (editor: any) => {
+  const handleLeftEditorDidMount = (editor: MonacoCodeEditor) => {
     leftEditorRef.current = editor
-    editor.onDidScrollChange((e: any) => {
+    editor.onDidScrollChange((e) => {
       if (!syncScroll || isSyncingScrollRef.current || !editorRef.current || !e.scrollTopChanged) return
       isSyncingScrollRef.current = true
       syncEditorScroll(editor, editorRef.current)
@@ -241,9 +245,9 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     })
   }
 
-  const handleEditorDidMount = (editor: any) => {
+  const handleEditorDidMount = (editor: MonacoCodeEditor) => {
     editorRef.current = editor
-    editor.onDidScrollChange((e: any) => {
+    editor.onDidScrollChange((e) => {
       if (!syncScroll || isSyncingScrollRef.current || !leftEditorRef.current || !e.scrollTopChanged) return
       isSyncingScrollRef.current = true
       syncEditorScroll(editor, leftEditorRef.current)

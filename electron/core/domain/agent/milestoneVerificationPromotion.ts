@@ -33,7 +33,8 @@ export function selectMilestonesProvenByVerification(
   )
 }
 
-function requiresBehaviorEvidence(milestone: PlanMilestone): boolean {
+/** The milestone declares or proposes a test run: a build cannot prove it. */
+export function requiresBehaviorEvidence(milestone: PlanMilestone): boolean {
   const declared = milestone.verificationCommand || milestone.proposedVerificationCommand
   return Boolean(declared) && verificationEvidenceKind(declared!) === 'behavior'
 }

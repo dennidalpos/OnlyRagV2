@@ -12,7 +12,7 @@ import { collectProjectPlanningFacts, type ProjectPlanningFacts } from './projec
 import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 import { ollamaAppService } from './ollamaAppService'
-import { resolveOllamaThinkingPreference } from '../../../shared/domain/agent/ollamaThinkingPolicy'
+import { resolveOllamaThinkingPreference, resolveStructuredThinkValue } from '../../../shared/domain/agent/ollamaThinkingPolicy'
 import { noConfiguredModelMessage, resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
@@ -76,7 +76,7 @@ export class AgentInterviewAppService {
           systemPrompt: INTERVIEW_SYSTEM_PROMPT,
           userContent,
           format: toOllamaJsonSchema(interviewPhaseResponseSchema),
-          think: resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics).think,
+          think: resolveStructuredThinkValue(resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics)),
           host: settings.ollamaHost,
           keepAlive: CODING_MODEL_KEEP_ALIVE,
           options: runtimeOpts,

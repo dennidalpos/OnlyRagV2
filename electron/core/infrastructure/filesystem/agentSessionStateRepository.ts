@@ -35,7 +35,7 @@ export interface SavedAgentSessionState {
   stepCount: number
   maxSteps: number
   episodes: EpisodicStepRecord[]
-  recentFullLogs: Array<{ step: number; tool: string; output: string }>
+  recentFullLogs: Array<{ step: number; tool: string; output: string; isFailure?: boolean; target?: string }>
   planMilestones: PlanMilestone[]
   /** Approved plan awaiting the next run; distinct from a run's mutable milestones. */
   pendingPlanMilestones?: PlanMilestone[]

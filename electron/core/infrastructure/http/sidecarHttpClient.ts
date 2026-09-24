@@ -1,6 +1,6 @@
 import http from 'node:http'
 import { logger } from '../logging/logger'
-import type { SlmLogDiagnosticReport } from '../../../../shared/types'
+import type { SlmLogDiagnosticReport, VectorSearchResult } from '../../../../shared/types'
 import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
@@ -51,6 +51,31 @@ export interface SidecarPagePreviewResult {
   totalPages: number
   imageBase64: string
   mimeType: string
+}
+
+/** GET /documents/{id}/page-preview/{page}, as the Sidecar serialises it. */
+interface SidecarPagePreviewWire {
+  doc_id: string
+  page_number: number
+  total_pages: number
+  image_base64: string
+  mime_type?: string
+}
+
+/** One NDJSON line of a progress stream; `done` carries the result, `error` the failure. */
+export interface SidecarStreamEvent {
+  type?: string
+  data?: unknown
+  error?: unknown
+  step?: unknown
+  [key: string]: unknown
+}
+
+/** What a stream endpoint resolves with: the `done` event's data, or why there is none. */
+export interface SidecarStreamResult<T> {
+  success: boolean
+  data?: T
+  error?: string
 }
 
 type Envelope<T> = { success: true; data: T } | { success: false; error: string }
@@ -163,24 +188,26 @@ export class SidecarHttpClient {
   }
 
   /** POSTs to an NDJSON progress endpoint and resolves with the `done` event's data. */
-  private async streamNdjson(
+  private async streamNdjson<T>(
     path: string,
     body: unknown,
     label: string,
-    onProgress: (event: any) => void,
+    onProgress: (event: SidecarStreamEvent) => void,
     onRequest?: (req: http.ClientRequest) => void,
-  ): Promise<{ success: boolean; data?: any; error?: string }> {
-    let finalResult: any = null
+  ): Promise<SidecarStreamResult<T>> {
+    let finalResult: T | null = null
     let streamError: string | null = null
     const handleLine = (line: string) => {
-      let event: any
+      let event: SidecarStreamEvent
       try {
-        event = JSON.parse(line)
+        const parsed: unknown = JSON.parse(line)
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return
+        event = parsed as SidecarStreamEvent
       } catch {
         return
       }
       onProgress(event)
-      if (event.type === 'done' && event.data) finalResult = event.data
+      if (event.type === 'done' && event.data) finalResult = event.data as T
       if (event.type === 'error') streamError = String(event.error || event.step || `${label} failed`)
     }
 
@@ -217,7 +244,7 @@ export class SidecarHttpClient {
   }
 
   /** Health / status probe of the sidecar process. */
-  async getStatus(timeoutMs = 3000): Promise<{ status: string; [key: string]: any }> {
+  async getStatus(timeoutMs = 3000): Promise<{ status: string; [key: string]: unknown }> {
     try {
       const res = await this.send({
         method: 'GET',
@@ -248,20 +275,26 @@ export class SidecarHttpClient {
   /** Streaming file ingestion with NDJSON progress events. */
   ingestFileStream(
     payload: SidecarIngestStreamPayload,
-    onProgress: (event: any) => void,
+    onProgress: (event: SidecarStreamEvent) => void,
     onCancelRegister?: (cancelFn: () => void) => void,
-  ): Promise<{ success: boolean; data?: any; error?: string }> {
-    return this.streamNdjson('/ingest-path-stream', payload, 'Ingestion', onProgress, this.cancellableBy(payload.task_id, onCancelRegister))
+  ): Promise<SidecarStreamResult<SidecarDocumentRecord>> {
+    return this.streamNdjson<SidecarDocumentRecord>(
+      '/ingest-path-stream',
+      payload,
+      'Ingestion',
+      onProgress,
+      this.cancellableBy(payload.task_id, onCancelRegister),
+    )
   }
 
   /** Streaming in-place document translation with NDJSON progress events; cancellable like ingestion. */
   translateDocumentInplaceStream(
     docId: string,
     payload: SidecarTranslateStreamPayload,
-    onProgress: (event: any) => void,
+    onProgress: (event: SidecarStreamEvent) => void,
     onCancelRegister?: (cancelFn: () => void) => void,
-  ): Promise<{ success: boolean; data?: any; error?: string }> {
-    return this.streamNdjson(
+  ): Promise<SidecarStreamResult<SidecarDocumentRecord>> {
+    return this.streamNdjson<SidecarDocumentRecord>(
       `/documents/${encodeURIComponent(docId)}/translate-inplace-stream`,
       payload,
       'Translation',
@@ -281,8 +314,8 @@ export class SidecarHttpClient {
   }
 
   /** Replaces a document's markdown and re-indexes it. */
-  async updateDocument(docId: string, markdownContent: string, embeddingModel?: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    const result = await this.requestJson<any>(
+  async updateDocument(docId: string, markdownContent: string, embeddingModel?: string): Promise<SidecarStreamResult<SidecarDocumentRecord>> {
+    const result = await this.requestJson<SidecarDocumentRecord>(
       'PUT',
       `/documents/${encodeURIComponent(docId)}`,
       { markdown_content: markdownContent, embedding_model: embeddingModel || undefined },
@@ -294,7 +327,7 @@ export class SidecarHttpClient {
   /** Pre-rendered bitmap preview of one document page, or null when unavailable. */
   async getDocumentPagePreview(docId: string, pageNumber: number): Promise<SidecarPagePreviewResult | null> {
     const page = Math.max(1, Number(pageNumber) || 1)
-    const result = await this.requestJson<any>('GET', `/documents/${encodeURIComponent(docId)}/page-preview/${page}`, undefined, 5000)
+    const result = await this.requestJson<SidecarPagePreviewWire>('GET', `/documents/${encodeURIComponent(docId)}/page-preview/${page}`, undefined, 5000)
     if (!result.success) {
       logger.log('DEBUG', 'SidecarClient', `Page preview unavailable for doc ${docId} page ${page}: ${result.error}`)
       return null
@@ -347,11 +380,11 @@ export class SidecarHttpClient {
    * Hybrid vector search over indexed chunks. Rejects on failure so callers can tell
    * "no matches" from "search unavailable"; the sidecar embeds the query with each chunk's own model.
    */
-  async searchVectorDb(query: string, topK: number = 5, docIds?: string[]): Promise<any[]> {
+  async searchVectorDb(query: string, topK: number = 5, docIds?: string[]): Promise<VectorSearchResult[]> {
     if (typeof query !== 'string' || !query.trim()) return []
     const payload: Record<string, unknown> = { query, top_k: topK }
     if (docIds && docIds.length > 0) payload.doc_ids = docIds
-    const result = await this.requestJson<any[]>('POST', '/vector/search', payload, VECTOR_SEARCH_TIMEOUT_MS)
+    const result = await this.requestJson<VectorSearchResult[]>('POST', '/vector/search', payload, VECTOR_SEARCH_TIMEOUT_MS)
     if (!result.success) throw new Error(`Vector search failed: ${result.error}`)
     return result.data
   }
@@ -394,8 +427,8 @@ export class SidecarHttpClient {
   }
 
   /** Export markdown to PDF / DOCX via /export. */
-  exportDocument(markdownContent: string, format: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    return this.postJsonEnvelope<any>('/export', { markdown_content: markdownContent, export_format: format }, 30_000)
+  async exportDocument(markdownContent: string, format: string): Promise<SidecarStreamResult<{ base64_content?: string }>> {
+    return await this.postJsonEnvelope<{ base64_content?: string }>('/export', { markdown_content: markdownContent, export_format: format }, 30_000)
   }
 }
 

@@ -24,6 +24,7 @@ import { extractRequestedPackages } from '../domain/agent/installCommandParser'
 import { findAlreadyInstalledPackages } from '../domain/agent/tools/execution/commandPolicy'
 import { npmResolutionDirectiveFor } from '../domain/agent/npmResolutionConflict'
 import { buildVersionNotFoundDirective, parseVersionNotFound } from '../domain/agent/npmVersionNotFound'
+import { buildVersionRealityDirective, declaredDependencies, findVersionReality } from '../domain/agent/dependencyVersionReality'
 import { buildModuleResolutionDirective, classifyModuleDiagnostic, unresolvedPackages } from '../domain/agent/moduleResolutionDiagnostic'
 import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote } from '../domain/agent/compilerDiagnosticDirective'
 
@@ -212,6 +213,27 @@ export class ProcessToolService {
     return `${permissions}${viteMissing}${createViteCancelled}`
   }
 
+  /**
+   * When npm refuses a range package.json itself declares, the fix is the manifest, and every
+   * unpublished range in it at once. Ordering `npm install <that package>@<latest>` instead
+   * failed again on the next unpublished range (react-dom after react, full-task run of
+   * 2026-09-24), and the second failure spent the execution budget at step 5.
+   */
+  private async manifestVersionRealityDirective(refusedPackage: string, workspacePath: string | null | undefined): Promise<string> {
+    if (!workspacePath || !this.dependencies.readPackageJson || !this.dependencies.lookupPackages) return ''
+    let manifest: unknown
+    try {
+      manifest = JSON.parse((await this.dependencies.readPackageJson(workspacePath)) || 'null')
+    } catch {
+      return ''
+    }
+    const declared = declaredDependencies(manifest)
+    if (!declared.some((dep) => dep.name === refusedPackage)) return ''
+    const findings = findVersionReality(declared, await this.dependencies.lookupPackages(declared.map((dep) => dep.name)))
+    // Only what blocks the install: an old major is advice, not the reason this command failed.
+    return buildVersionRealityDirective({ ...findings, outdated: [] }) || ''
+  }
+
   async classifyFailureDiagnostics(
     rawOutput: string,
     workspacePath: string | null | undefined,
@@ -224,10 +246,12 @@ export class ProcessToolService {
   }> {
     const resolutionConflictDirective = npmResolutionDirectiveFor(rawOutput)
     const versionNotFound = resolutionConflictDirective ? null : parseVersionNotFound(rawOutput)
+    const manifestVersionDirective = versionNotFound ? await this.manifestVersionRealityDirective(versionNotFound.packageName, workspacePath) : ''
     const versionNotFoundDirective =
-      versionNotFound && this.dependencies.lookupPackage
+      manifestVersionDirective ||
+      (versionNotFound && this.dependencies.lookupPackage
         ? buildVersionNotFoundDirective(versionNotFound, (await this.dependencies.lookupPackage(versionNotFound.packageName)).latest)
-        : ''
+        : '')
     const unresolved = resolutionConflictDirective ? [] : unresolvedPackages(rawOutput)
     const moduleCause =
       workspacePath && unresolved.length > 0 && this.dependencies.missingFromNodeModules

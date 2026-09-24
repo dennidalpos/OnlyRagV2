@@ -224,6 +224,12 @@ describe('OllamaHttpClient — structured chat responses', () => {
     expect(result).toMatchObject({ status: 'complete', content: '{"result":"ok"}' })
   })
 
+  it('passes a reasoning level through for level-only models', async () => {
+    responseBody = { done: true, message: { content: '{"result":"ok"}', thinking: 'brief' } }
+    await client.generateStructured({ ...request(), think: 'low' })
+    expect(capturedRequest.think).toBe('low')
+  })
+
   it('reports missing completion and length truncation as incomplete', async () => {
     responseBody = { done: false, message: { content: '{"result":' } }
     expect(await client.generateStructured(request())).toMatchObject({ status: 'incomplete' })

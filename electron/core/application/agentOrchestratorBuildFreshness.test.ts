@@ -201,3 +201,48 @@ describe('build freshness — a verification command does not invalidate itself'
     expect(flags.hasVerifiedBuild).toBe(false)
   })
 })
+
+describe('the project "test" script is a verification even when it is not the primary check', () => {
+  function writeManifest(testScript: string) {
+    fs.writeFileSync(path.join(tempDir, 'tsconfig.json'), '{}')
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ scripts: { build: 'vite build', test: testScript } }))
+  }
+
+  it('promotes the behavioral milestone when npm test passes', () => {
+    writeManifest('vitest run')
+    fs.mkdirSync(path.join(tempDir, 'src'))
+    fs.writeFileSync(path.join(tempDir, 'src', 'App.test.jsx'), "import { it } from 'vitest'\nit('renders', () => {})\n")
+    const smoke = {
+      id: 'm-9',
+      title: 'Smoke test — `src/App.test.jsx`',
+      status: 'in_progress',
+      filePaths: ['src/App.test.jsx'],
+      proposedVerificationCommand: 'npm test',
+    }
+    const updates: string[] = []
+    const flags: ToolResultMutableFlags = { hasFileMutations: true, hasVerifiedBuild: false }
+    const ctx = makeContext('npm test', flags)
+    ctx.goalPlanner = {
+      ...ctx.goalPlanner,
+      getMilestones: () => [smoke],
+      updateMilestone: (id: string, status: string) => {
+        updates.push(`${id}:${status}`)
+        return true
+      },
+    } as unknown as ToolResultProcessingContext['goalPlanner']
+
+    trackVerification(ctx, false)
+
+    expect(flags.hasVerifiedBuild).toBe(true)
+    expect(updates).toEqual(['m-9:verified'])
+  })
+
+  it('does not count npm init’s placeholder script as a verification', () => {
+    writeManifest('echo "Error: no test specified" && exit 1')
+    const flags: ToolResultMutableFlags = { hasFileMutations: true, hasVerifiedBuild: false }
+
+    trackVerification(makeContext('npm test', flags), false)
+
+    expect(flags.hasVerifiedBuild).toBe(false)
+  })
+})

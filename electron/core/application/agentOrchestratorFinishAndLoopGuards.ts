@@ -136,7 +136,8 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
     ctx.goalPlanner,
     ctx.flags.hasVerifiedBuild,
     ctx.episodicCompactor.getEpisodes(),
-    ctx.episodicCompactor.lastFailureOutputFor('run_command', 'npm run build'),
+    (command) => ctx.episodicCompactor.lastFailureOutputFor('run_command', command),
+    ctx.episodicCompactor.getRecentFullLogs(),
   )
 
   // REPLACES the advisory text rather than following it. Appended, it lost: the live

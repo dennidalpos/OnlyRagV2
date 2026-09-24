@@ -11,7 +11,7 @@ import { taskRunner } from '../infrastructure/process/taskRunner'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import { sidecarHttpClient, type SidecarDocumentSummary } from '../infrastructure/http/sidecarHttpClient'
 import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
-import type { IngestedDocument, IngestedDocumentContent, SlmLogDiagnosticReport } from '../../../shared/types'
+import type { IngestedDocument, IngestedDocumentContent, PromptHistorySearchResult, SlmLogDiagnosticReport, VectorSearchResult } from '../../../shared/types'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export function normalizeIngestedFileType(fileType?: string, filename?: string): IngestedDocument['fileType'] {
@@ -264,7 +264,7 @@ export class SidecarAppService {
     return sidecarHttpClient.deleteDocument(docId)
   }
 
-  searchVectorDb(query: string, topK: number = 5, docIds?: string[]): Promise<any[]> {
+  searchVectorDb(query: string, topK: number = 5, docIds?: string[]): Promise<VectorSearchResult[]> {
     return sidecarHttpClient.searchVectorDb(query, topK, docIds)
   }
 
@@ -301,11 +301,11 @@ export class SidecarAppService {
     )
   }
 
-  searchPromptHistory(query: string, topK: number = 10, projectPaths?: string[]): Promise<any[]> {
+  searchPromptHistory(query: string, topK: number = 10, projectPaths?: string[]): Promise<PromptHistorySearchResult[]> {
     if (typeof query !== 'string' || !query.trim()) return Promise.resolve([])
     const payload: Record<string, any> = { query, top_k: topK }
     if (projectPaths && projectPaths.length > 0) payload.project_paths = projectPaths
-    return sidecarHttpClient.postJson<any[]>('/history/search', payload, 4000, [])
+    return sidecarHttpClient.postJson<PromptHistorySearchResult[]>('/history/search', payload, 4000, [])
   }
 
   removePromptHistoryForSessions(sessionIds: string[]): Promise<{ success: boolean }> {

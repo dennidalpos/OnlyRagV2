@@ -14,6 +14,12 @@ describe('isVerificationFailing', () => {
     expect(isVerificationFailing([step('run_command', BUILD, 'FAILURE')], BUILD)).toBe(true)
   })
 
+  it('treats npm test and npm run test as the same failing check', () => {
+    expect(isVerificationFailing([step('run_command', 'npm test', 'FAILURE')], 'npm run test')).toBe(true)
+    expect(isVerificationFailing([step('run_command', 'npm run test', 'FAILURE')], 'npm test')).toBe(true)
+    expect(isVerificationFailing([step('run_command', 'npm run build', 'FAILURE')], 'npm test')).toBe(false)
+  })
+
   it('is false before the check has ever run', () => {
     expect(isVerificationFailing([step('write_file', 'src/App.tsx', 'SUCCESS')], BUILD)).toBe(false)
   })

@@ -16,17 +16,29 @@ const MUTATING_TOOLS = new Set([
   'delete_file',
 ])
 
+/**
+ * `npm test` and `npm t` run the same script as `npm run test`: treating them as different
+ * commands let the arbiter re-order a check that had just failed (full-task run 6, 2026-09-24).
+ */
+export function canonicalCommand(command: string): string {
+  return command
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .replace(/^npm (?:test|t)(?= |$)/, 'npm run test')
+}
+
 /** True when the project's own check has run, failed, and nothing has been written since. */
 export function isVerificationFailing(episodes: readonly TrajectoryStep[], verificationCommand: string | null | undefined): boolean {
   if (!verificationCommand) return false
-  const needle = verificationCommand.trim().toLowerCase()
+  const needle = canonicalCommand(verificationCommand)
   if (!needle) return false
 
   for (let i = (episodes?.length ?? 0) - 1; i >= 0; i--) {
     const step = episodes[i]
     if (step.status === 'SUCCESS' && MUTATING_TOOLS.has(step.tool)) return false
     if (step.tool !== 'run_command') continue
-    const command = (step.target || '').trim().toLowerCase()
+    const command = canonicalCommand(step.target || '')
     if (!command.includes(needle)) continue
     // A blocked call never ran: the last real run still decides. Returning false here flipped the
     // arbiter back to verification_due (run_command only) right after the loop guard refused an

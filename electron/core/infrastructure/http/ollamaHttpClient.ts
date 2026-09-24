@@ -17,8 +17,8 @@ export interface OllamaStructuredRequest {
   format: Record<string, unknown>
   host?: string
   keepAlive?: string
-  /** Structured JSON does not benefit from hidden reasoning consuming its output budget. */
-  think?: boolean
+  /** Structured JSON does not benefit from hidden reasoning; level-only models take their lowest level. */
+  think?: boolean | 'low' | 'medium' | 'high'
   options?: {
     num_ctx?: number
     temperature?: number
@@ -97,7 +97,7 @@ export class OllamaHttpClient {
         },
       )
 
-      req.on('error', (err: any) => {
+      req.on('error', (err: NodeJS.ErrnoException) => {
         resolve({ success: false, models: [], error: err.message })
       })
 
@@ -309,7 +309,7 @@ export class OllamaHttpClient {
         },
       )
 
-      req.on('error', (err: any) => {
+      req.on('error', (err: NodeJS.ErrnoException) => {
         logger.log('WARN', 'OllamaClient', `Failed to unload model ${cleanModel}: ${err.message}`)
         resolve({ success: false, error: err.message })
       })
@@ -370,7 +370,7 @@ export class OllamaHttpClient {
         },
       )
 
-      req.on('error', (err: any) => {
+      req.on('error', (err: NodeJS.ErrnoException) => {
         logger.log('WARN', 'OllamaClient', `Model warm-up skipped for ${cleanModel}: ${err.message}`)
         resolve({ success: false, error: err.message })
       })
@@ -504,7 +504,7 @@ export class OllamaHttpClient {
 
       this.activePullReq = req
 
-      req.on('error', (err: any) => {
+      req.on('error', (err: NodeJS.ErrnoException) => {
         this.activePullReq = null
         const errMsg = err.code === 'ECONNREFUSED' ? 'Ollama service is not running locally (http://127.0.0.1:11434).' : err.message
         logger.log('ERROR', 'OllamaClient', `Error pulling model ${cleanModelName}: ${errMsg}`)
@@ -657,7 +657,7 @@ export class OllamaHttpClient {
 
       setActiveCancel(() => req.destroy())
 
-      req.on('error', (err: any) => {
+      req.on('error', (err: NodeJS.ErrnoException) => {
         const errMsg = err.code === 'ECONNREFUSED' ? 'Ollama service is not running locally (http://127.0.0.1:11434).' : err.message
         resolve({ success: false, error: errMsg })
       })
@@ -702,7 +702,7 @@ export class OllamaHttpClient {
       ],
       format: request.format,
       stream: false,
-      think: request.think === true,
+      think: typeof request.think === 'string' ? request.think : request.think === true,
       keep_alive: request.keepAlive || '30m',
       options: {
         num_ctx: request.options?.num_ctx || 16384,
@@ -777,7 +777,7 @@ export class OllamaHttpClient {
       )
 
       setActiveCancel(() => req.destroy())
-      req.on('error', (err: any) => {
+      req.on('error', (err: NodeJS.ErrnoException) => {
         const message = err.code === 'ECONNREFUSED' ? 'Ollama service is not running locally (http://127.0.0.1:11434).' : err.message
         finish({ status: 'transport_error', content: '', error: message })
       })

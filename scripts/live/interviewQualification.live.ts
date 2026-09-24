@@ -1,16 +1,15 @@
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { UserInterviewAnswer } from '../../shared/types'
 import { shouldRunPlanInterview } from '../../shared/domain/agent/planInterviewPolicy'
 import { agentInterviewAppService } from '../../electron/core/application/agentInterviewAppService'
 import { planGenerationAppService } from '../../electron/core/application/planGenerationAppService'
-import { loadRealSettings, resetWorkspace } from './agentLiveHarness'
+import { liveWorkspacePath, loadRealSettings, resetWorkspace } from './agentLiveHarness'
 
 const MODEL = process.env.ONLYRAG_LIVE_MODEL || 'qwen2.5-coder:7b'
 const SAFE_MODEL = MODEL.replace(/[^a-z0-9_-]+/gi, '-')
-const WORKSPACE = path.join(os.homedir(), 'Desktop', `onlyrag_live_interview_${SAFE_MODEL}`)
+const WORKSPACE = liveWorkspacePath(`interview_${SAFE_MODEL}`)
 
 function seedWorkspace(): void {
   resetWorkspace(WORKSPACE)

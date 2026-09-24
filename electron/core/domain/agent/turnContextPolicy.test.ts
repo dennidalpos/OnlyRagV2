@@ -11,8 +11,11 @@ const ALL_KINDS: PlanDirectiveKind[] = [
   'dependencies_undeclared',
   'dependencies_uninstallable',
   'dependencies_missing',
+  'dependencies_unpublished',
   'verification_due',
   'verification_failing',
+  'behavior_test_runner_missing',
+  'behavior_test_script_missing',
   'entrypoint_disconnected',
   'unprovable_milestone',
   'focus',
@@ -43,7 +46,14 @@ describe('resolveTurnContextPolicy', () => {
   it('withholds every optional block when the directive names the exact command', () => {
     // The install command is composed verbatim by npmResolutionConflict.ts / the undeclared
     // dependency directive. No amount of repository context can make it more correct.
-    for (const kind of ['dependencies_undeclared', 'dependencies_missing', 'verification_due', 'session_closure', 'unprovable_milestone'] as const) {
+    for (const kind of [
+      'dependencies_undeclared',
+      'dependencies_missing',
+      'verification_due',
+      'behavior_test_runner_missing',
+      'session_closure',
+      'unprovable_milestone',
+    ] as const) {
       const policy = resolveTurnContextPolicy(kind)
       for (const flag of OPTIONAL_FLAGS) {
         expect(policy[flag], `${kind}.${flag}`).toBe(false)
@@ -53,7 +63,7 @@ describe('resolveTurnContextPolicy', () => {
   })
 
   it('keeps the code context, and only the code context, when the directive names a file to fix', () => {
-    for (const kind of ['verification_failing', 'dependencies_uninstallable'] as const) {
+    for (const kind of ['verification_failing', 'dependencies_uninstallable', 'dependencies_unpublished', 'behavior_test_script_missing'] as const) {
       const policy = resolveTurnContextPolicy(kind)
       expect(policy.includeSkills, kind).toBe(true)
       expect(policy.includePinnedFiles, kind).toBe(true)
@@ -85,7 +95,7 @@ describe('omittedBlockNames', () => {
 
 /** The `codeFixOnly` states admit pinned files and the active file on the assumption that those carry the code the directive is about. */
 describe('states that order a file rewrite keep the channel that carries the file', () => {
-  it.each(['dependencies_uninstallable', 'verification_failing'] as const)(
+  it.each(['dependencies_uninstallable', 'verification_failing', 'behavior_test_script_missing'] as const)(
     '%s admits pinned files, the channel the directive target is injected on',
     (kind) => {
       expect(resolveTurnContextPolicy(kind).includePinnedFiles).toBe(true)

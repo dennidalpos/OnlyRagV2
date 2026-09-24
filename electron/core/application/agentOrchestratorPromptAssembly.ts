@@ -200,7 +200,8 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     ctx.goalPlanner,
     ctx.hasVerifiedBuild,
     ctx.episodicCompactor.getEpisodes(),
-    ctx.episodicCompactor.lastFailureOutputFor('run_command', 'npm run build'),
+    (command) => ctx.episodicCompactor.lastFailureOutputFor('run_command', command),
+    ctx.episodicCompactor.getRecentFullLogs(),
   )
   const progressPlanBlock = [buildExplicitFirstCommandDirective(ctx.userTask, ctx.stepCount === 1), ctx.goalPlanner.compileProgressPrompt({ directive })]
     .filter(Boolean)

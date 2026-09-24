@@ -73,6 +73,8 @@ export function resolveTurnContextPolicy(kind: PlanDirectiveKind): TurnContextPo
     // The action is the project's own verification command, resolved by projectVerificationResolver.
     case 'verification_due':
       return commandOnly('running project verification — directive names the exact command')
+    case 'behavior_test_runner_missing':
+      return commandOnly('installing the smoke-test runner — directive names the exact command')
 
     // These name a file and a reason. Background context cannot improve the edit; the file's own
     // conventions can.
@@ -80,6 +82,10 @@ export function resolveTurnContextPolicy(kind: PlanDirectiveKind): TurnContextPo
       return codeFixOnly('rewriting an unresolvable import — code context only')
     case 'verification_failing':
       return codeFixOnly('fixing a compiler diagnostic — code context only')
+    case 'dependencies_unpublished':
+      return codeFixOnly('rewriting package.json ranges npm does not publish — code context only')
+    case 'behavior_test_script_missing':
+      return codeFixOnly('adding the package.json "test" script — code context only')
 
     // The fix is a single exact `<script>` tag, composed by entrypointIntegrity.ts. Pinned files
     // stay because the entry HTML is frequently one of them.

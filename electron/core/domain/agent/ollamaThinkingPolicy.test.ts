@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { resolveOllamaThinkingMode, resolveOllamaThinkingPreference, updateModelThinkingPreference } from '../../../../shared/domain/agent/ollamaThinkingPolicy'
+import {
+  resolveOllamaThinkingMode,
+  resolveOllamaThinkingPreference,
+  resolveStructuredThinkValue,
+  updateModelThinkingPreference,
+} from '../../../../shared/domain/agent/ollamaThinkingPolicy'
 
 const metrics = {
   'qwen3:4b': { capabilities: ['completion', 'tools', 'thinking'], family: 'qwen3' },
@@ -42,5 +47,18 @@ describe('ollamaThinkingPolicy', () => {
       'qwen3:4b': true,
       'qwen3-vl:4b': false,
     })
+  })
+})
+
+describe('resolveStructuredThinkValue', () => {
+  it('gives level-only models their lowest level, since think:false leaves gpt-oss with empty JSON content', () => {
+    expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('gpt-oss:20b', {}, metrics as never))).toBe('low')
+  })
+
+  it('keeps the boolean preference of every other model', () => {
+    expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('qwen3:4b', { modelThinkingPreferences: { 'qwen3:4b': true } }, metrics as never))).toBe(
+      true,
+    )
+    expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('llama3.2:latest', {}, metrics as never))).toBe(false)
   })
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { declaredDependencies, majorOf, findVersionReality, buildVersionRealityDirective } from './dependencyVersionReality'
+import { declaredDependencies, majorOf, findVersionReality, buildVersionRealityDirective, pendingManifestDirective } from './dependencyVersionReality'
 
 /** The manifest run 10 of 2026-08-25 wrote, which took that session to 0/12. */
 const RUN_10_MANIFEST = {
@@ -162,5 +162,39 @@ describe('packages whose major bump rewrites the configuration', () => {
     const findings = findVersionReality([{ name: 'typescript', range: '^5.0.0' }], [{ name: 'typescript', exists: false }])
 
     expect(findings.nonexistent).toEqual(['typescript'])
+  })
+})
+
+describe('pendingManifestDirective', () => {
+  const output = [
+    'npm error code ETARGET',
+    '',
+    '[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]',
+    '- react: you declared ^19.8.0, npm currently publishes 19.3.0',
+    'Directives:',
+    '1. Your next tool call MUST be "write_file" on "package.json", with the complete file and that range replaced by the current version above.',
+    '2. Do NOT run an install first and do NOT guess another version.',
+    '',
+    'DO NOT ask the user vague clarification questions: carry out the directive above.',
+  ].join('\n')
+
+  it('returns the ordered rewrite, without the text around it, while nothing has written package.json since', () => {
+    const directive = pendingManifestDirective([{ step: 4, output }], [{ step: 4, tool: 'run_command', target: 'npm install', status: 'FAILURE' }])
+
+    expect(directive?.startsWith('[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]')).toBe(true)
+    expect(directive?.endsWith('do NOT guess another version.')).toBe(true)
+  })
+
+  it('counts the order as answered once package.json is written successfully afterwards', () => {
+    const episodes = [
+      { step: 4, tool: 'run_command', target: 'npm install', status: 'FAILURE' as const },
+      { step: 5, tool: 'write_file', target: 'C:\\ws\\package.json', status: 'SUCCESS' as const },
+    ]
+
+    expect(pendingManifestDirective([{ step: 4, output }], episodes)).toBeNull()
+  })
+
+  it('ignores advisory output such as an outdated major', () => {
+    expect(pendingManifestDirective([{ step: 2, output: '[THESE VERSIONS ARE MAJOR RELEASES BEHIND — THE REGISTRY WAS ASKED]' }], [])).toBeNull()
   })
 })

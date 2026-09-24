@@ -85,8 +85,12 @@ export function resolveTurnToolPolicy(input: TurnToolPolicyInput): TurnToolPolic
       return policy(['run_command'], 'the application selected an exact dependency command')
     case 'verification_due':
       return policy(['run_command'], 'the application selected the project verification command')
+    case 'behavior_test_runner_missing':
+      return policy(['run_command'], 'the application selected the smoke-test runner install')
     case 'dependencies_uninstallable':
     case 'verification_failing':
+    case 'dependencies_unpublished':
+    case 'behavior_test_script_missing':
     case 'entrypoint_disconnected': {
       const editTool = editToolFor(input.editTargetState) ?? 'write_file'
       const tools = [...(input.requiredTools ?? []), editTool]

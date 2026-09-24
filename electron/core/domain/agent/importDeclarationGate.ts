@@ -93,6 +93,54 @@ export function extractBareImportSpecifiers(filePath: string, content: string): 
   return found
 }
 
+/** One import of a package, verbatim, with the local names it binds. */
+export interface PackageImportStatement {
+  statement: string
+  boundNames: string[]
+}
+
+/** The top-level import/require statements through which a file uses one package, verbatim. */
+export function extractPackageImportStatements(filePath: string, content: string, packageName: string): PackageImportStatement[] {
+  if (!SCANNABLE_EXTENSIONS.has(extensionOf(filePath)) || !content?.trim()) return []
+  const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true, scriptKindForPath(filePath))
+  const belongs = (specifier: string) => isBareSpecifier(specifier) && packageNameOfSpecifier(specifier) === packageName
+  const found: PackageImportStatement[] = []
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier) && belongs(statement.moduleSpecifier.text)) {
+      const clause = statement.importClause
+      const names: string[] = []
+      if (clause?.name) names.push(clause.name.text)
+      if (clause?.namedBindings) {
+        if (ts.isNamespaceImport(clause.namedBindings)) names.push(clause.namedBindings.name.text)
+        else for (const element of clause.namedBindings.elements) names.push(element.name.text)
+      }
+      found.push({ statement: statement.getText(sourceFile), boundNames: names })
+      continue
+    }
+    if (ts.isVariableStatement(statement)) {
+      const requires = statement.declarationList.declarations.filter((d) => {
+        const init = d.initializer
+        return (
+          init &&
+          ts.isCallExpression(init) &&
+          ts.isIdentifier(init.expression) &&
+          init.expression.text === 'require' &&
+          init.arguments[0] &&
+          ts.isStringLiteral(init.arguments[0]) &&
+          belongs(init.arguments[0].text)
+        )
+      })
+      if (requires.length === 0) continue
+      const names = requires.flatMap((d) =>
+        ts.isIdentifier(d.name) ? [d.name.text] : ts.isObjectBindingPattern(d.name) ? d.name.elements.map((e) => e.name.getText(sourceFile)) : [],
+      )
+      found.push({ statement: statement.getText(sourceFile), boundNames: names })
+    }
+  }
+  return found
+}
+
 /** Judges one written file against the project's declarations. */
 export function evaluateFileImportIntegrity(filePath: string, content: string, declared: DeclaredPackages): ImportIntegrityVerdict {
   const specifiers = extractBareImportSpecifiers(filePath, content)

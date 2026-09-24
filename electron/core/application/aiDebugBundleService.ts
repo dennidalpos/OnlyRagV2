@@ -78,7 +78,7 @@ export class AiDebugBundleService {
         : 'Nessun passaggio registrato per questa sessione.'
 
     // 5. Extract critical failures & stack traces
-    const failureLogs = rawLogs.filter((l: any) => {
+    const failureLogs = rawLogs.filter((l) => {
       const text = l.output || ''
       return (
         l.isFailure ||
@@ -93,7 +93,7 @@ export class AiDebugBundleService {
     let failureSection = "Nessun errore fatale riscontrato durante l'esecuzione."
     if (failureLogs.length > 0) {
       failureSection = failureLogs
-        .map((f: any) => {
+        .map((f) => {
           const cleanOutput = includePayloads ? stripAnsi(f.output).slice(0, 3000) : `[payload omitted; ${String(f.output || '').length} chars]`
           return `### ⚠️ Step ${f.step} — Tool: \`${f.tool}\`\n\`\`\`text\n${cleanOutput}\n\`\`\``
         })
@@ -106,7 +106,7 @@ export class AiDebugBundleService {
       persistedAuditLog ||
       (rawLogs.length > 0
         ? rawLogs
-            .map((entry: any) =>
+            .map((entry) =>
               [
                 `### Step ${entry.step} — Tool: \`${entry.tool}\``,
                 '```text',

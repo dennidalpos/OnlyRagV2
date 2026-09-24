@@ -1,4 +1,5 @@
 import type { SupportedToolName } from './agentTypes'
+import { buildTestFailureDirective, extractFailingTest } from './testFailureDiagnostic'
 
 export interface CompilerDiagnostic {
   file: string
@@ -212,8 +213,10 @@ function extractMissingLocalExportMember(output: string): MissingLocalExportMemb
 }
 
 /** The bundler refused JSX because the file's extension says plain JavaScript. */
-const JSX_DISABLED = /JSX syntax is disabled|JSX syntax extension is not currently enabled|Unexpected JSX expression/i
-const SCRIPT_FILE_REFERENCE = /([^\s\[\]()'"`]+\.(?:js|mjs|cjs))(?::(\d+))?/g
+const JSX_DISABLED =
+  /JSX syntax is disabled|JSX syntax extension is not currently enabled|Unexpected JSX expression|name the file with the \.jsx or \.tsx extension/i
+/** A `.js` path, never the `.js` prefix of `.jsx`/`.json` (a test file `App.test.jsx` is not `App.test.js`). */
+const SCRIPT_FILE_REFERENCE = /([^\s\[\]()'"`]+\.(?:js|mjs|cjs))(?![\w])(?::(\d+))?/g
 
 export interface JsxInScriptFile {
   file: string
@@ -258,7 +261,7 @@ export function diagnosticFixTargetFile(output: string): string | null {
   if (missingExport) return missingExport.diagnostic.file
 
   const first = parseCompilerDiagnostics(output).filter((d) => !IN_DEPENDENCY.test(d.file))[0]
-  return first ? first.file : null
+  return first ? first.file : (extractFailingTest(output)?.file ?? null)
 }
 
 export function buildDiagnosticFixDirective(
@@ -281,7 +284,11 @@ export function buildDiagnosticFixDirective(
   }
 
   const all = parseCompilerDiagnostics(output)
-  if (all.length === 0) return null
+  if (all.length === 0) {
+    // No compiler error: a test that ran and failed its assertion is the other diagnosable case.
+    const failingTest = extractFailingTest(output)
+    return failingTest ? buildTestFailureDirective(failingTest) : null
+  }
 
   // Errors inside an installed package are never the project's code, and telling the model to rewrite one sends it editing a dependency.
   const diagnostics = all.filter((d) => !IN_DEPENDENCY.test(d.file))

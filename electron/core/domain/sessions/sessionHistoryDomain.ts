@@ -14,10 +14,21 @@ export function toIsoTimestamp(value: unknown, fallback: string): string {
   return fallback
 }
 
-/** Session title derived from the first executed prompt, truncated for the sidebar. */
+/**
+ * Titles earlier versions persisted for a session nobody named, in whichever language was active.
+ * They read as untitled, so the renderer can show its own localized default.
+ */
+const LEGACY_UNTITLED_TITLES = new Set(['Nuova Sessione', 'New Session'])
+
+export function isUntitledSessionTitle(title: string): boolean {
+  const clean = title.trim()
+  return !clean || LEGACY_UNTITLED_TITLES.has(clean) || clean.startsWith('Session ')
+}
+
+/** Session title derived from the first executed prompt, truncated for the sidebar; empty when there is nothing to derive it from. */
 export function deriveSessionTitle(prompt: string): string {
   const clean = prompt.replace(/\s+/g, ' ').trim()
-  if (!clean) return 'Nuova Sessione'
+  if (!clean) return ''
   return clean.length > MAX_TITLE_LENGTH ? `${clean.slice(0, MAX_TITLE_LENGTH)}...` : clean
 }
 
@@ -191,12 +202,13 @@ export function normalizeSession(value: unknown): CodingSession | null {
     : []
 
   const title = typeof raw.title === 'string' ? raw.title : ''
-  const hasCustomTitle = title.trim().length > 0 && title !== 'Nuova Sessione' && title !== 'New Session' && !title.startsWith('Session ')
+  const hasCustomTitle = !isUntitledSessionTitle(title)
 
   return {
     id: sessionId,
     workspacePath: typeof raw.workspacePath === 'string' && raw.workspacePath ? raw.workspacePath : null,
-    title: hasCustomTitle ? title.trim() : executedPrompts.length > 0 ? deriveSessionTitle(executedPrompts[0].prompt) : 'Nuova Sessione',
+    // '' is the untitled marker: the renderer shows its localized default for it.
+    title: hasCustomTitle ? title.trim() : executedPrompts.length > 0 ? deriveSessionTitle(executedPrompts[0].prompt) : '',
     createdAt,
     updatedAt,
     actionLogs,

@@ -279,7 +279,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                               className="flex items-center gap-1.5 flex-1 min-w-0 text-left truncate cursor-pointer"
                             >
                               <MessageSquare className={`w-3 h-3 shrink-0 ${isSessionActive ? 'text-indigo-400' : 'text-slate-500'}`} />
-                              <span className="truncate text-[11px]">{session.title}</span>
+                              <span className="truncate text-[11px]">{session.title || t('coding.sessionTitleDefault')}</span>
                             </button>
                             <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
@@ -291,7 +291,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                                 <Edit2 className="w-3 h-3" />
                               </button>
                               <InlineDestructiveConfirm
-                                itemLabel={session.title}
+                                itemLabel={session.title || t('coding.sessionTitleDefault')}
                                 hint={t('workspaceExplorer.deleteSessionHint')}
                                 iconClassName="w-3 h-3"
                                 className="!p-0.5 text-slate-400 hover:text-rose-400"
@@ -520,7 +520,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                                   className="flex items-center gap-1.5 flex-1 min-w-0 text-left truncate cursor-pointer"
                                 >
                                   <MessageSquare className={`w-3 h-3 shrink-0 ${isSessionActive ? 'text-cyan-400' : 'text-slate-500'}`} />
-                                  <span className="truncate text-[11px]">{session.title}</span>
+                                  <span className="truncate text-[11px]">{session.title || t('coding.sessionTitleDefault')}</span>
                                 </button>
                                 <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button
@@ -532,7 +532,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                                     <Edit2 className="w-3 h-3" />
                                   </button>
                                   <InlineDestructiveConfirm
-                                    itemLabel={session.title}
+                                    itemLabel={session.title || t('coding.sessionTitleDefault')}
                                     hint={t('workspaceExplorer.deleteSessionHint')}
                                     iconClassName="w-3 h-3"
                                     className="!p-0.5 text-slate-400 hover:text-rose-400"

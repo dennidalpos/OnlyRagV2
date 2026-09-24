@@ -329,7 +329,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                           role={isEditing ? undefined : 'button'}
                           tabIndex={isEditing ? undefined : 0}
                           aria-pressed={isEditing ? undefined : isActive}
-                          aria-label={isEditing ? undefined : `${conv.title} (${conv.messages?.length || 0} messaggi)`}
+                          aria-label={isEditing ? undefined : `${conv.title || t('chat.newChat')} (${conv.messages?.length || 0} messaggi)`}
                           onKeyDown={(e) => {
                             if (!isEditing && (e.key === 'Enter' || e.key === ' ')) {
                               e.preventDefault()
@@ -380,9 +380,9 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                           ) : (
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
-                                <div className="font-semibold text-slate-200 truncate flex items-center gap-1.5" title={conv.title}>
+                                <div className="font-semibold text-slate-200 truncate flex items-center gap-1.5" title={conv.title || t('chat.newChat')}>
                                   <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
-                                  <span className="truncate">{conv.title}</span>
+                                  <span className="truncate">{conv.title || t('chat.newChat')}</span>
                                 </div>
                                 <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
                                   <span className="flex items-center gap-1">

@@ -502,7 +502,11 @@ export async function runAgentOrchestratorLoop(
       session.abortController?.signal,
       gateResult.policyConsent,
       sessionId,
-      preparedTurn.toolPolicy.allowedTools,
+      // A call the gate substituted (a shell read run as read_file) was authorized by the gate
+      // itself; re-checking it against the proposed tool's phase would deny what the gate allowed.
+      toolCallForExecution.tool === parsedTool.tool
+        ? preparedTurn.toolPolicy.allowedTools
+        : [...preparedTurn.toolPolicy.allowedTools, toolCallForExecution.tool],
       gateResult.commandApprovalGranted,
     )
     agentToolExecutorService.endJournalStep()

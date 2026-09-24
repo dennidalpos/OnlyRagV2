@@ -138,6 +138,30 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(tracker).toContain('All tasks done perfectly.')
   })
 
+  it('runs a shell read as read_file even when the phase exposes only run_command', async () => {
+    fs.writeFileSync(path.join(tempDir, 'notes.txt'), 'shell-read-marker\n')
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce('```json\n{"tool":"run_command","parameters":{"command":"cat notes.txt"}}\n```')
+      .mockResolvedValueOnce('```json\n{"tool":"finish","parameters":{"summary":"Done"}}\n```')
+
+    await runAgentOrchestratorLoop(
+      {
+        sessionId: 'shell-read-as-read-file',
+        userTask: 'Create src/app.ts and run the build',
+        agentMode: 'auto',
+        workspacePath: tempDir,
+        settings: { ...TOOL_ENABLED_SETTINGS, verifyBeforeFinish: false },
+      },
+      null,
+    )
+
+    // Gpt-oss:20b full task run of 2026-09-24: the gate turned `cat` into read_file and the
+    // executor then refused read_file as outside the phase, three times in seven steps.
+    const secondTurn = JSON.stringify(vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[1][0])
+    expect(secondTurn).toContain('shell-read-marker')
+    expect(secondTurn).not.toContain('TURN TOOL POLICY DENIED')
+  })
+
   it('runs and persists the explicit application phase sequence', async () => {
     vi.mocked(AgentStreamTransport.streamCompletion)
       .mockResolvedValueOnce('```json\n{"tool":"write_file","parameters":{"filePath":"phase.ts","content":"export const phase = true"}}\n```')

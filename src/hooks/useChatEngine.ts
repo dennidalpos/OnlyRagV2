@@ -28,13 +28,19 @@ const createDefaultGreetingMessage = (): ChatMessage => ({
   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
 })
 
+/** Untitled conversations, including the Italian and English defaults earlier versions stored as titles. */
+export function isUntitledConversationTitle(title: string | undefined): boolean {
+  const clean = (title ?? '').trim()
+  return !clean || clean === 'Nuova Conversazione' || clean === 'New Chat'
+}
+
 function loadInitialConversations(): ChatConversation[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_CONVERSATIONS)
     if (raw) {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed
+        return (parsed as ChatConversation[]).map((conv) => (isUntitledConversationTitle(conv.title) ? { ...conv, title: '' } : conv))
       }
     }
   } catch (e) {
@@ -42,7 +48,7 @@ function loadInitialConversations(): ChatConversation[] {
   }
   const defaultConv: ChatConversation = {
     id: `session-${Date.now()}`,
-    title: 'Nuova Conversazione',
+    title: '',
     messages: [createDefaultGreetingMessage()],
     selectedDocIds: [],
     createdAt: new Date().toISOString(),
@@ -338,7 +344,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     // Auto-update conversation title on first turn if generic
     setConversations((prev) =>
       prev.map((conv) => {
-        if (conv.id === activeConversationId && (conv.title === 'Nuova Conversazione' || conv.title === 'New Chat')) {
+        if (conv.id === activeConversationId && isUntitledConversationTitle(conv.title)) {
           const cleanTitle = userText.length > 36 ? `${userText.slice(0, 33)}...` : userText
           return { ...conv, title: cleanTitle }
         }
@@ -597,7 +603,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
     const newConv: ChatConversation = {
       id: `session-${Date.now()}`,
-      title: 'Nuova Conversazione',
+      title: '',
       messages: [createDefaultGreetingMessage()],
       selectedDocIds: [],
       createdAt: new Date().toISOString(),
@@ -637,7 +643,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         if (remaining.length === 0) {
           const fresh: ChatConversation = {
             id: `session-${Date.now()}`,
-            title: 'Nuova Conversazione',
+            title: '',
             messages: [createDefaultGreetingMessage()],
             selectedDocIds: [],
             createdAt: new Date().toISOString(),

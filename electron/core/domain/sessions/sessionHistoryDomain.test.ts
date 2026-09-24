@@ -14,7 +14,14 @@ describe('SessionHistoryDomain Unit Tests', () => {
   it('should derive a truncated session title from the first prompt', () => {
     expect(deriveSessionTitle('  Fix   the login bug ')).toBe('Fix the login bug')
     expect(deriveSessionTitle('x'.repeat(80))).toBe(`${'x'.repeat(48)}...`)
-    expect(deriveSessionTitle('   ')).toBe('Nuova Sessione')
+    expect(deriveSessionTitle('   ')).toBe('')
+  })
+
+  it('stores an untitled session as an empty title, whatever default an older version persisted', () => {
+    for (const legacy of ['Nuova Sessione', 'New Session', 'Session 3', '  ']) {
+      expect(normalizeSession({ id: 'untitled', title: legacy, actionLogs: [] })?.title).toBe('')
+    }
+    expect(normalizeSession({ id: 'named', title: 'Sprint 42', actionLogs: [] })?.title).toBe('Sprint 42')
   })
 
   it('should migrate a legacy session: ISO timestamps, prompts rebuilt from logs, derived title', () => {

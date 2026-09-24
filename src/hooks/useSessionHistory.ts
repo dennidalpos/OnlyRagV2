@@ -36,7 +36,8 @@ function createEmptySession(workspacePath: string | null): CodingSession {
   return {
     id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     workspacePath,
-    title: 'Nuova Sessione',
+    // Untitled: shown with the localized default until the first prompt names it.
+    title: '',
     createdAt: nowIso,
     updatedAt: nowIso,
     actionLogs: [],

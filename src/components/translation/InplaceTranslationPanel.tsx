@@ -1,20 +1,20 @@
 import React from 'react'
 import { FileCheck2, Folder, ArrowLeftRight, Play, Loader2, AlertCircle, CheckCircle2, AlertTriangle, Info, X, FileText } from 'lucide-react'
-import { AppSettings, DiagnosticsData } from '../../types'
-import { useInplaceTranslation, LANGUAGES } from '../../hooks/useTranslation'
+import { AppSettings } from '../../types'
+import { LANGUAGES, type InplaceTranslationState } from '../../hooks/useTranslation'
 import { useTranslation } from '../../i18n'
 
 interface InplaceTranslationPanelProps {
-  settings?: AppSettings
-  diagnostics?: DiagnosticsData | null
+  /** Owned by TranslationView so a running job survives switching to the Markdown tab. */
+  inp: InplaceTranslationState
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
 }
 
-export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = ({ settings, diagnostics, onUpdateSettings }) => {
+export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = ({ inp, onUpdateSettings }) => {
   const { t } = useTranslation()
-  const inp = useInplaceTranslation(settings, diagnostics)
 
-  const isFormValid = Boolean(inp.selectedDoc) && Boolean(inp.targetDir.trim()) && inp.sourceLang !== inp.targetLang && !inp.isTranslating
+  const isFormValid =
+    Boolean(inp.selectedDoc) && Boolean(inp.targetDir.trim()) && inp.sourceLang !== inp.targetLang && !inp.isTranslating && !inp.otherJobRunning
 
   const progressPercent = inp.translateProgress?.percent ?? 0
   const currentPhase = inp.translateProgress?.phase
@@ -261,7 +261,18 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
           )}
 
           {/* Action Trigger Bar */}
-          <div className="pt-2 flex items-center justify-end">
+          <div className="pt-2 flex items-center justify-end gap-3">
+            {inp.isTranslating && (
+              <button
+                type="button"
+                onClick={() => inp.handleCancelInplaceTranslation()}
+                disabled={!inp.canCancel || inp.isCancelling}
+                className="px-4 py-3 border border-slate-700 hover:border-rose-500/60 hover:text-rose-300 disabled:opacity-50 disabled:cursor-not-allowed text-slate-300 font-semibold text-xs rounded-xl transition-all focus-ring flex items-center gap-2 cursor-pointer"
+              >
+                {inp.isCancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                <span>{inp.isCancelling ? t('translation.inplaceCancelling') : t('translation.inplaceCancelBtn')}</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => inp.handleStartInplaceTranslation()}

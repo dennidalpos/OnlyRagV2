@@ -1,7 +1,8 @@
 import { HubSkillItem, SkillHubSource, SkillCategory } from '../../../domain/skills/skillTypes'
-import { ISkillHubAdapter } from './hubAdapterInterface'
+import type { ISkillHubAdapter } from '../../../domain/ports/skillHubAdapterPort'
 import { webClient } from '../webClient'
 import { logger } from '../../logging/logger'
+import { errorMessage } from '../../../../../shared/domain/errors/errorMessage'
 
 function mapLobeCategory(category?: string): SkillCategory {
   const clean = (category || '').toLowerCase()
@@ -103,8 +104,8 @@ export class LobeHubAdapter implements ISkillHubAdapter {
       }
 
       if (items.length > 0) return items
-    } catch (err: any) {
-      logger.log('WARN', 'LobeHubAdapter', `Live LobeHub fetch failed: ${err.message}. Using fallback.`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'LobeHubAdapter', `Live LobeHub fetch failed: ${errorMessage(err)}. Using fallback.`)
     }
 
     return this.getFallbackLobeHubSkills(source)

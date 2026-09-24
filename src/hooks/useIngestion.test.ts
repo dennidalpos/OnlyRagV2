@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getPageLineNumber, getTotalLines, resolveVisionOcrPrompt, runDocumentDeletion } from './useIngestion'
+import { getPageLineNumber, getTotalLines, resolveVisionOcrPrompt, runDocumentDeletion, sidecarStepText } from './useIngestion'
 import { DEFAULT_IMAGE_ANALYSIS_PROMPT } from '../constants/promptConfig'
 import type { AppSettings } from '../types'
 
@@ -115,5 +115,21 @@ describe('document deletion state guard', () => {
 
     expect(deleted).toBe(true)
     expect(successCalls).toBe(1)
+  })
+})
+
+describe('Sidecar progress codes', () => {
+  const t = (key: string, params?: Record<string, string | number>) =>
+    key === 'ingestionSteps.page_ocr' ? `Pagina ${params?.page}/${params?.total}: ${params?.engine}` : key
+
+  it('translates a known step code with its parameters', () => {
+    expect(sidecarStepText({ step: 'Page 2/5: OCR completed.', step_code: 'page_ocr', step_params: { page: 2, total: 5, engine: 'OCR' } }, t as never)).toBe(
+      'Pagina 2/5: OCR',
+    )
+  })
+
+  it('falls back to the English text for an unknown or missing code', () => {
+    expect(sidecarStepText({ step: 'Future step', step_code: 'future_step' }, t as never)).toBe('Future step')
+    expect(sidecarStepText({ step: 'Plain step' }, t as never)).toBe('Plain step')
   })
 })

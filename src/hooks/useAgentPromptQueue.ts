@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { QueuedPromptRecord } from '../types'
+import { translate } from '../i18n/I18nContext'
 
 export type QueuedPrompt = QueuedPromptRecord
 
@@ -22,7 +23,7 @@ export function useAgentPromptQueue(onNotice?: (message: string) => void) {
       }
       setPromptQueue((prev) => [...prev, item])
       if (onNotice) {
-        onNotice(`Nuovo prompt aggiunto alla coda (#${promptQueueRef.current.length + 1}): "${trimmed.slice(0, 80)}..."`)
+        onNotice(translate('uiShell.promptQueued', { position: promptQueueRef.current.length + 1, preview: trimmed.slice(0, 80) }))
       }
     },
     [onNotice],

@@ -98,7 +98,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
       if (!files || files.length === 0) return
 
       if (files.length > 1) {
-        toast.info(`Caricamento di ${files.length} file in sequenza...`)
+        toast.info(t('uiShell.uploadingSequentially', { count: files.length }))
       }
       // Sequential, matching handleSelectFileNative: ingestion isn't safe to run concurrently
       // for multiple files (shared upload/progress state in useIngestion).
@@ -351,7 +351,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
                 {/* Active Model Badge */}
                 {ing.ingestionProgress.modelName && (
                   <span className="px-2 py-0.5 rounded-lg bg-indigo-950/70 border border-indigo-800 text-indigo-300 text-[11px] font-mono flex items-center gap-1">
-                    <span className="text-indigo-400 font-bold">Modello:</span>
+                    <span className="text-indigo-400 font-bold">{t('uiShell.modelLabel')}</span>
                     <span>{ing.ingestionProgress.modelName}</span>
                   </span>
                 )}
@@ -752,8 +752,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>
-                    <strong>Vettorizzazione in modalità fallback:</strong> Questo documento è stato indicizzato con vettori di emergenza perché il modello di
-                    embedding non era disponibile o la richiesta non è riuscita durante l'ingestione.
+                    <strong>{t('uiShell.fallbackVectorsTitle')}</strong> {t('uiShell.fallbackVectorsDescription')}
                   </span>
                 </div>
                 <button

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Code2, Eye, Plus, Save, Trash2 } from 'lucide-react'
 import type { ArtifactKind, ArtifactRecord } from '../../types'
+import { useTranslation } from '../../i18n'
 
 interface ArtifactPreviewPanelProps {
   workspacePath: string | null
@@ -20,6 +21,7 @@ function previewSource(artifact: ArtifactRecord): string {
 }
 
 export const ArtifactPreviewPanel: React.FC<ArtifactPreviewPanelProps> = ({ workspacePath }) => {
+  const { t } = useTranslation()
   const [artifacts, setArtifacts] = useState<ArtifactRecord[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState(EMPTY_ARTIFACT)
@@ -99,7 +101,7 @@ export const ArtifactPreviewPanel: React.FC<ArtifactPreviewPanelProps> = ({ work
         <div className="ml-auto flex gap-2">
           <button type="button" onClick={createArtifact} className="px-2 py-1 rounded border border-slate-700 text-xs hover:text-white">
             <Plus className="w-3 h-3 inline mr-1" />
-            Nuovo
+            {t('codingPanels.artifactNew')}
           </button>
           <button
             type="button"
@@ -108,7 +110,7 @@ export const ArtifactPreviewPanel: React.FC<ArtifactPreviewPanelProps> = ({ work
             className="px-2 py-1 rounded bg-cyan-600 text-slate-950 text-xs font-semibold disabled:opacity-40"
           >
             <Save className="w-3 h-3 inline mr-1" />
-            Salva
+            {t('codingPanels.artifactSave')}
           </button>
           <button
             type="button"
@@ -117,17 +119,17 @@ export const ArtifactPreviewPanel: React.FC<ArtifactPreviewPanelProps> = ({ work
             className="px-2 py-1 rounded border border-red-900/70 text-red-300 text-xs disabled:opacity-40"
           >
             <Trash2 className="w-3 h-3 inline mr-1" />
-            Elimina
+            {t('codingPanels.artifactDelete')}
           </button>
         </div>
       </div>
       {!workspacePath ? (
-        <div className="p-6 text-sm text-slate-400">Apri un workspace per usare gli artefatti.</div>
+        <div className="p-6 text-sm text-slate-400">{t('uiShell.artifactsNeedWorkspace')}</div>
       ) : (
         <div className="flex-1 min-h-0 flex">
           <aside className="w-56 shrink-0 border-r border-slate-800 p-3 overflow-y-auto">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Artefatti</div>
-            {artifacts.length === 0 && <div className="text-xs text-slate-500">Nessun artefatto salvato.</div>}
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">{t('codingPanels.artifacts')}</div>
+            {artifacts.length === 0 && <div className="text-xs text-slate-500">{t('uiShell.noArtifacts')}</div>}
             {artifacts.map((artifact) => (
               <button
                 key={artifact.id}
@@ -147,13 +149,13 @@ export const ArtifactPreviewPanel: React.FC<ArtifactPreviewPanelProps> = ({ work
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs"
-                aria-label="Nome artefatto"
+                aria-label={t('codingPanels.artifactName')}
               />
               <select
                 value={kind}
                 onChange={(event) => setKind(event.target.value as ArtifactKind)}
                 className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs"
-                aria-label="Tipo artefatto"
+                aria-label={t('codingPanels.artifactKind')}
               >
                 <option value="html">HTML</option>
                 <option value="svg">SVG</option>
@@ -165,7 +167,7 @@ export const ArtifactPreviewPanel: React.FC<ArtifactPreviewPanelProps> = ({ work
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 className="min-h-0 resize-none bg-slate-950 p-4 font-mono text-xs text-slate-300 outline-none"
-                aria-label="Contenuto artefatto"
+                aria-label={t('codingPanels.artifactContent')}
                 spellCheck={false}
               />
               <iframe title={`Anteprima ${displayed.name}`} sandbox="" srcDoc={previewSource(displayed)} className="w-full h-full bg-white border-0" />

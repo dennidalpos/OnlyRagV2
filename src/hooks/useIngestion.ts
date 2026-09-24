@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { IngestedDocument, AppSettings, DiagnosticsData } from '../types'
+import { IngestedDocument, AppSettings, DiagnosticsData, IngestionStreamProgressPayload } from '../types'
 import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { useIngestedDocuments, notifyDocumentsChanged } from './useIngestedDocuments'
-import { useTranslation as useI18n } from '../i18n'
+import { useDocumentMarkdown } from './useDocumentMarkdown'
+import { peekDocumentMarkdown, primeDocumentMarkdown } from '../services/documentMarkdown'
+import { useTranslation as useI18n, type TranslationKey } from '../i18n'
 import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from '../services/globalTaskLock'
 import { normalizeError } from '../lib/errors/errorNormalizer'
 import { resolveNodeTemplate } from '../constants/promptConfig'
@@ -76,6 +78,19 @@ export async function runDocumentDeletion(
   return true
 }
 
+/** The Sidecar's locale-neutral progress code in the UI language, or its English fallback text. */
+export function sidecarStepText(
+  payload: Pick<IngestionStreamProgressPayload, 'step' | 'step_code' | 'step_params'>,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string,
+): string {
+  if (payload.step_code) {
+    const key = `ingestionSteps.${payload.step_code}` as TranslationKey
+    const translated = t(key, payload.step_params)
+    if (translated !== key) return translated
+  }
+  return payload.step
+}
+
 export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
   const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics || null))
   const { metrics: modelMetrics } = useOllamaModelMetrics(settings?.ollamaHost)
@@ -98,7 +113,30 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     return () => releaseGlobalTaskLock('ingestion')
   }, [isIngestionBusy])
 
-  const isDirty = selectedDoc !== null && markdownContent !== selectedDoc.extractedMarkdown
+  // The document list carries metadata only: the selected document's Markdown is loaded on demand
+  // and copied into the editor once per document version (see editorSourceRef below).
+  const { markdown: loadedMarkdown } = useDocumentMarkdown(selectedDoc)
+  const isDirty = selectedDoc !== null && loadedMarkdown !== null && markdownContent !== loadedMarkdown
+
+  /** Which document version the editor content was loaded from; unsaved edits survive a refresh of the same document. */
+  const editorSourceRef = useRef<{ id: string; ingestedAt: string; markdown: string } | null>(null)
+  const selectedDocId = selectedDoc?.id
+  const selectedDocVersion = selectedDoc?.ingestedAt
+  useEffect(() => {
+    if (!selectedDocId || selectedDocVersion === undefined || loadedMarkdown === null) return
+    const source = editorSourceRef.current
+    if (source?.id === selectedDocId && source.ingestedAt === selectedDocVersion) return
+    editorSourceRef.current = { id: selectedDocId, ingestedAt: selectedDocVersion, markdown: loadedMarkdown }
+    setMarkdownContent((current) => (source?.id === selectedDocId && current !== source.markdown ? current : loadedMarkdown))
+  }, [selectedDocId, selectedDocVersion, loadedMarkdown])
+
+  /** Selects a document; the editor stays empty (and unsaveable) until its Markdown is loaded. */
+  const showDocument = useCallback((doc: IngestedDocument | null) => {
+    setSelectedDoc(doc)
+    if (doc && editorSourceRef.current?.id === doc.id) return
+    editorSourceRef.current = null
+    setMarkdownContent(doc ? (peekDocumentMarkdown(doc) ?? '') : '')
+  }, [])
 
   const [ingestionProgress, setIngestionProgress] = useState<IngestionProgressState>({
     active: false,
@@ -109,30 +147,17 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
 
   const activeTaskIdRef = useRef<string | null>(null)
 
-  const handleDocUpdateCallback = useCallback((docs: IngestedDocument[]) => {
-    setSelectedDoc((prev) => {
-      if (prev) {
-        const updated = docs.find((d) => d.id === prev.id)
-        if (updated) {
-          setMarkdownContent((curr) => curr || updated.extractedMarkdown)
-          return updated
-        }
-        // prev is no longer in docs (was deleted)
-        if (docs.length > 0) {
-          setMarkdownContent(docs[0].extractedMarkdown)
-          return docs[0]
-        }
-        setMarkdownContent('')
-        return null
-      }
-      if (docs.length > 0) {
-        setMarkdownContent(docs[0].extractedMarkdown)
-        return docs[0]
-      }
-      setMarkdownContent('')
-      return null
-    })
-  }, [])
+  const selectedDocRef = useRef<IngestedDocument | null>(null)
+  selectedDocRef.current = selectedDoc
+
+  const handleDocUpdateCallback = useCallback(
+    (docs: IngestedDocument[]) => {
+      const prev = selectedDocRef.current
+      // A deleted selection falls back to the first document, as does an empty one.
+      showDocument((prev && docs.find((d) => d.id === prev.id)) || docs[0] || null)
+    },
+    [showDocument],
+  )
 
   const { documents, refetchDocuments: fetchDocuments } = useIngestedDocuments({
     onDocsUpdated: handleDocUpdateCallback,
@@ -147,7 +172,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     activeTaskIdRef.current = null
     setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 })
     setIsUploading(false)
-    setUploadError('Ingestion cancelled by user. Temporary files and partial task data cleaned.')
+    setUploadError(t('ingestion.cancelledByUser'))
   }
 
   // Real-time streaming progress subscription from Electron/FastAPI sidecar
@@ -161,7 +186,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
           ...prev,
           active: true,
           fileName: payload.fileName || prev.fileName,
-          step: payload.step || prev.step,
+          step: sidecarStepText(payload, t) || prev.step,
           percent: typeof payload.percent === 'number' ? payload.percent : prev.percent,
           pipeline: payload.pipeline || prev.pipeline,
           modelName: payload.modelName || prev.modelName,
@@ -172,9 +197,9 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
           ...prev,
           active: true,
           fileName: payload.fileName || prev.fileName,
-          step: 'Ingestione e indicizzazione completate con successo!',
+          step: t('ingestion.stepCompleted'),
           percent: 100,
-          pipeline: 'Completato',
+          pipeline: t('ingestion.pipelineCompleted'),
         }))
       }
     })
@@ -326,8 +351,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   }
 
   const handleSelectDoc = (doc: IngestedDocument) => {
-    setSelectedDoc(doc)
-    setMarkdownContent(doc.extractedMarkdown)
+    showDocument(doc)
     setCurrentPage(1)
     setExportStatus(null)
   }
@@ -346,8 +370,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         if (remaining.length > 0) {
           handleSelectDoc(remaining[0])
         } else {
-          setSelectedDoc(null)
-          setMarkdownContent('')
+          showDocument(null)
         }
       }
     } catch (err: unknown) {
@@ -381,28 +404,28 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     const useVisionOcr = visionPrompt !== undefined
     const visionModelName = settings?.visionModel || 'llama3.2-vision'
 
-    let detectedCategory = 'Documento Testo'
+    let detectedCategory = t('ingestion.categoryText')
     let initialPipeline = 'Fast-Router: Pre-analisi & Classificazione'
     let ocrTech = 'PyMuPDF Text Extraction'
 
     if (ext === 'pdf') {
-      detectedCategory = 'PDF (Ibrido / Scansione / Testo)'
+      detectedCategory = t('ingestion.categoryPdf')
       initialPipeline = 'Pipeline: PDF Fast-Router & Layout Extraction'
       ocrTech = useVisionOcr ? `PyMuPDF / Vision LLM OCR (${visionModelName}) + RapidOCR fallback` : 'PyMuPDF / RapidOCR (CUDA nativo)'
     } else if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) {
-      detectedCategory = 'Immagine Raster'
+      detectedCategory = t('ingestion.categoryImage')
       initialPipeline = useVisionOcr ? 'Pipeline: Multimodal Vision & OCR' : 'Pipeline: RapidOCR Layout'
       ocrTech = useVisionOcr ? `Vision LLM OCR (${visionModelName}) + RapidOCR fallback` : 'RapidOCR (CUDA nativo)'
     } else if (ext === 'docx') {
-      detectedCategory = 'Microsoft Word'
+      detectedCategory = t('ingestion.categoryWord')
       initialPipeline = 'Pipeline: DOCX Structured XML Parser'
       ocrTech = 'Structured Table & Heading Extraction'
     } else if (['csv', 'tsv', 'json'].includes(ext)) {
-      detectedCategory = 'Dati Tabellari / Strutturati'
+      detectedCategory = t('ingestion.categoryTabular')
       initialPipeline = 'Pipeline: Tabular Markdown Transformer'
       ocrTech = 'Structured Matrix & JSON Parser'
     } else {
-      detectedCategory = 'File Testo / Codice Sorgente'
+      detectedCategory = t('ingestion.categorySource')
       initialPipeline = 'Pipeline: Direct Stream Sanitizer (NFC/UTF-8)'
       ocrTech = 'UTF-8 Control Character Sanitizer'
     }
@@ -415,7 +438,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
       pipeline: initialPipeline,
       modelName: useVisionOcr ? visionModelName : 'RapidOCR PP-OCRv4',
       ocrTechnology: ocrTech,
-      step: 'Pre-elaborazione, Fast-Routing e classificazione del file...',
+      step: t('ingestion.stepPreprocessing'),
       percent: 20,
     })
 
@@ -423,7 +446,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
       if (activeTaskIdRef.current !== taskId) return
       setIngestionProgress((p) => ({
         ...p,
-        step: `Estrazione Layout & OCR in corso (${ocrTech})...`,
+        step: t('ingestion.stepExtracting', { technology: ocrTech }),
         percent: 55,
       }))
 
@@ -441,7 +464,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
       if (activeTaskIdRef.current !== taskId) return
 
       if (!res.success) {
-        setUploadError(res.error || 'Ingestion failed: unknown error from sidecar engine')
+        setUploadError(res.error || t('ingestion.failedUnknown'))
         setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 })
         return
       }
@@ -450,7 +473,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         ...p,
         pipeline: 'Pipeline: Vettorizzazione & Semantic Chunks LanceDB',
         modelName: settings?.embeddingModel || 'nomic-embed-text',
-        step: `Generazione embeddings con ${settings?.embeddingModel || 'nomic-embed-text'} e indicizzazione LanceDB...`,
+        step: t('ingestion.stepEmbedding', { model: settings?.embeddingModel || 'nomic-embed-text' }),
         percent: 85,
       }))
 
@@ -458,6 +481,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
       await fetchDocuments()
       if (activeTaskIdRef.current !== taskId) return
       if (res.data) {
+        primeDocumentMarkdown(res.data)
         handleSelectDoc(res.data)
       }
 
@@ -468,11 +492,11 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         pipeline: 'Pipeline: Ingestione & Re-indexing Completati',
         modelName: settings?.embeddingModel || 'nomic-embed-text',
         ocrTechnology: ocrTech,
-        step: 'Ingestione e indicizzazione completate con successo!',
+        step: t('ingestion.stepCompleted'),
         percent: 100,
       })
       setTimeout(() => setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 }), 2000)
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (activeTaskIdRef.current === taskId) {
         const normalized = normalizeError(err, 'Ingestion')
         setUploadError(normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message)
@@ -489,10 +513,10 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   const handleSelectFileNative = async () => {
     try {
       const selected = await apiService.openFileDialog({
-        title: 'Seleziona Documento per Ingestion & OCR',
+        title: t('ingestion.selectFileTitle'),
         filters: [
-          { name: 'Documenti Supportati', extensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'bmp', 'docx', 'txt', 'md'] },
-          { name: 'Tutti i file', extensions: ['*'] },
+          { name: t('ingestion.supportedDocuments'), extensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'bmp', 'docx', 'txt', 'md'] },
+          { name: t('ingestion.allFiles'), extensions: ['*'] },
         ],
       })
       if (selected && selected.length > 0) {
@@ -512,22 +536,24 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   }
 
   const handleSaveDocument = async () => {
-    if (!selectedDoc || !markdownContent || isSaving) return
+    if (!selectedDoc || !markdownContent || loadedMarkdown === null || isSaving) return
     setIsSaving(true)
     setSaveStatus(null)
 
     try {
       const res = await apiService.updateIngestedDocument(selectedDoc.id, markdownContent)
       if (res.success && res.data) {
-        setSelectedDoc(res.data)
+        primeDocumentMarkdown(res.data)
+        editorSourceRef.current = { id: res.data.id, ingestedAt: res.data.ingestedAt, markdown: res.data.extractedMarkdown }
+        setSelectedDoc({ ...selectedDoc, ...res.data })
         setMarkdownContent(res.data.extractedMarkdown)
-        setSaveStatus({ success: true, message: 'Modifiche salvate e vettori LanceDB ri-indicizzati con successo!' })
+        setSaveStatus({ success: true, message: t('ingestion.saveSuccess') })
         notifyDocumentsChanged()
         await fetchDocuments()
       } else {
-        setSaveStatus({ success: false, message: res.error || 'Errore durante il salvataggio del documento' })
+        setSaveStatus({ success: false, message: res.error || t('ingestion.saveFailed') })
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const normalized = normalizeError(err, 'Ingestion Save')
       setSaveStatus({ success: false, message: normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message })
     } finally {

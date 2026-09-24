@@ -3,6 +3,7 @@ import { AlertCircle, RefreshCw, ScanLine, Loader2 } from 'lucide-react'
 import { useSlmOrchestration } from '../../hooks/useSlmOrchestration'
 import type { SlmLogDiagnosticReport } from '../../types'
 import { SlmDiagnosticsReport } from './SlmDiagnosticsReport'
+import { useTranslation } from '../../i18n'
 
 export interface SlmDiagnosticsPanelProps {
   /** Optional additional log directory paths to scan. */
@@ -12,6 +13,7 @@ export interface SlmDiagnosticsPanelProps {
 }
 
 export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({ extraLogPaths, onScanComplete }) => {
+  const { t } = useTranslation()
   const { isAnalyzingLogs, lastReport, analyzeLogsError, analyzeLogs } = useSlmOrchestration()
 
   const handleScan = useCallback(async () => {
@@ -32,7 +34,7 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({ extraL
       <div className="h-11 px-3 bg-slate-900/60 border-b border-slate-800 flex items-center justify-between shrink-0 sticky top-0 z-10">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
           <ScanLine className="w-4 h-4 text-amber-400 shrink-0" />
-          <span>SLM Diagnostica Log</span>
+          <span>{t('ollamaServer.panelTitle')}</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -52,11 +54,11 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({ extraL
             id="slm-diagnostics-scan-btn"
             onClick={handleScan}
             disabled={isAnalyzingLogs}
-            title="Avvia scansione anomalie log"
+            title={t('ollamaServer.scanTitle')}
             className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-700/50 hover:bg-amber-500/25 hover:border-amber-600 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isAnalyzingLogs ? 'animate-spin' : ''}`} />
-            {isAnalyzingLogs ? 'Analisi...' : 'Scansiona'}
+            {isAnalyzingLogs ? t('ollamaServer.analyzing') : t('ollamaServer.scan')}
           </button>
         </div>
       </div>
@@ -67,7 +69,7 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({ extraL
         {isAnalyzingLogs && (
           <div className="flex items-center justify-center gap-3 py-12 text-sm text-slate-400 font-mono animate-in fade-in">
             <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
-            <span>Scansione log in corso...</span>
+            <span>{t('ollamaServer.scanning')}</span>
           </div>
         )}
 
@@ -76,7 +78,7 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({ extraL
           <div className="p-4 rounded-2xl bg-red-950/40 border border-red-800 flex items-start gap-3 animate-in fade-in">
             <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
             <div className="space-y-0.5">
-              <div className="text-xs font-bold text-red-300">Errore analisi log</div>
+              <div className="text-xs font-bold text-red-300">{t('uiShell.logAnalysisError')}</div>
               <div className="text-[11px] font-mono text-red-400/80">{analyzeLogsError}</div>
             </div>
           </div>
@@ -86,10 +88,8 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({ extraL
         {!isAnalyzingLogs && !lastReport && !analyzeLogsError && (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400 animate-in fade-in">
             <ScanLine className="w-10 h-10 text-slate-700" />
-            <div className="text-sm font-bold text-slate-400">Nessun report disponibile</div>
-            <div className="text-[11px] text-slate-400 text-center max-w-xs leading-relaxed">
-              Avvia una scansione per rilevare anomalie nei log di OnlyRag V2 (CUDA OOM, tool loop, JSON troncati).
-            </div>
+            <div className="text-sm font-bold text-slate-400">{t('uiShell.noReport')}</div>
+            <div className="text-[11px] text-slate-400 text-center max-w-xs leading-relaxed">{t('ollamaServer.scanIntro')}</div>
             <button
               type="button"
               id="slm-diagnostics-empty-scan-btn"
@@ -97,7 +97,7 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({ extraL
               className="mt-2 flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-700/50 hover:bg-amber-500/25 hover:border-amber-600 active:scale-95 transition-all duration-150"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              Avvia Prima Scansione
+              {t('ollamaServer.firstScan')}
             </button>
           </div>
         )}

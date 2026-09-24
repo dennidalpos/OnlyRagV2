@@ -2,6 +2,7 @@ import { logger } from '../infrastructure/logging/logger'
 import { hasDigestDiscrepancy } from '../domain/ollama/modelUpdateChecker'
 import { ollamaHttpClient } from '../infrastructure/http/ollamaHttpClient'
 import { ollamaRegistryClient, type OllamaRegistryClient } from '../infrastructure/http/ollamaRegistryClient'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export interface ModelUpdateCheckResult {
   updateAvailable: boolean
@@ -93,19 +94,19 @@ export class OllamaModelUpdateAppService {
               error: remoteRes.error,
             }
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           results[modelName] = {
             updateAvailable: false,
             localDigest,
-            error: err.message,
+            error: errorMessage(err),
           }
         }
       })
 
       await Promise.allSettled(checkPromises)
       return results
-    } catch (err: any) {
-      logger.log('WARN', 'ModelUpdateAppService', `Failed checking model updates: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'ModelUpdateAppService', `Failed checking model updates: ${errorMessage(err)}`)
       return {}
     }
   }

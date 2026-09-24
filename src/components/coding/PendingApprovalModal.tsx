@@ -162,9 +162,9 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({ pend
               <span className="text-[11px] text-slate-300 truncate">{targetPath}</span>
             </div>
             {isLoadingContent ? (
-              <div className="px-3 py-3 text-[11px] text-slate-400 italic">Calcolo del diff in corso…</div>
+              <div className="px-3 py-3 text-[11px] text-slate-400 italic">{t('uiShell.computingDiff')}</div>
             ) : diffLines.length === 0 ? (
-              <div className="px-3 py-3 text-[11px] text-slate-400 italic">Nessuna differenza rilevata rispetto al contenuto attuale del file.</div>
+              <div className="px-3 py-3 text-[11px] text-slate-400 italic">{t('uiShell.noDiff')}</div>
             ) : showPerHunkSelection ? (
               <div className="max-h-72 overflow-auto divide-y divide-slate-800/60">
                 <div className="flex items-center justify-between gap-2 px-2.5 py-1 bg-slate-900/70 text-[10px] text-slate-400 sticky top-0">
@@ -177,10 +177,10 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({ pend
                       onClick={() => setSelectedHunkIds(new Set(hunks.map((h) => h.id)))}
                       className="text-cyan-400 hover:text-cyan-300 font-semibold"
                     >
-                      Tutte
+                      {t('codingPanels.selectAllHunks')}
                     </button>
                     <button type="button" onClick={() => setSelectedHunkIds(new Set())} className="text-slate-400 hover:text-slate-300 font-semibold">
-                      Nessuna
+                      {t('codingPanels.selectNoHunks')}
                     </button>
                   </div>
                 </div>
@@ -190,9 +190,7 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({ pend
                     <div key={hunk.id}>
                       <label className="flex items-center gap-2 px-2.5 py-1 bg-slate-900/40 cursor-pointer select-none hover:bg-slate-900/70">
                         <input type="checkbox" checked={selectedHunkIds.has(hunk.id)} onChange={() => toggleHunk(hunk.id)} className="accent-emerald-500" />
-                        <span className="text-[10px] text-slate-400">
-                          Modifica {hunk.id + 1}/{hunks.length}
-                        </span>
+                        <span className="text-[10px] text-slate-400">{t('uiShell.hunkLabel', { index: hunk.id + 1, total: hunks.length })}</span>
                         <ChangeCounts additions={hunkCounts.additions} deletions={hunkCounts.deletions} />
                       </label>
                       <DiffLinesView lines={hunk.lines} />

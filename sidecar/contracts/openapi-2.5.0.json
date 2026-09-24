@@ -119,13 +119,78 @@
           "file_size",
           "num_pages",
           "num_chunks",
-          "extracted_markdown",
+          "status",
+          "ingested_at",
+          "file_type",
+          "used_fallback_embeddings",
+          "extracted_markdown"
+        ],
+        "title": "DocumentRecord",
+        "type": "object"
+      },
+      "DocumentSummary": {
+        "properties": {
+          "file_path": {
+            "title": "File Path",
+            "type": "string"
+          },
+          "file_size": {
+            "minimum": 0.0,
+            "title": "File Size",
+            "type": "integer"
+          },
+          "file_type": {
+            "title": "File Type",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ingested_at": {
+            "title": "Ingested At",
+            "type": "string"
+          },
+          "num_chunks": {
+            "minimum": 0.0,
+            "title": "Num Chunks",
+            "type": "integer"
+          },
+          "num_pages": {
+            "minimum": 0.0,
+            "title": "Num Pages",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "indexed",
+              "indexed_fallback"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "used_fallback_embeddings": {
+            "title": "Used Fallback Embeddings",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "file_path",
+          "file_size",
+          "num_pages",
+          "num_chunks",
           "status",
           "ingested_at",
           "file_type",
           "used_fallback_embeddings"
         ],
-        "title": "DocumentRecord",
+        "title": "DocumentSummary",
         "type": "object"
       },
       "ExportRequest": {
@@ -975,18 +1040,11 @@
         "additionalProperties": false,
         "properties": {
           "model": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "pattern": ".*\\S.*",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": ".*\\S.*",
+            "title": "Model",
+            "type": "string"
           },
           "num_ctx": {
             "anyOf": [
@@ -1058,7 +1116,8 @@
         },
         "required": [
           "source_lang",
-          "target_lang"
+          "target_lang",
+          "model"
         ],
         "title": "TranslateInplaceRequest",
         "type": "object"
@@ -1137,7 +1196,7 @@
   },
   "info": {
     "title": "OnlyRag V2 Python Sidecar Engine",
-    "version": "2.4.0"
+    "version": "2.5.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1189,7 +1248,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/DocumentRecord"
+                    "$ref": "#/components/schemas/DocumentSummary"
                   },
                   "title": "Response List Documents Documents Get",
                   "type": "array"
@@ -1239,6 +1298,43 @@
           }
         },
         "summary": "Delete Document"
+      },
+      "get": {
+        "operationId": "get_document_documents__doc_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "doc_id",
+            "required": true,
+            "schema": {
+              "title": "Doc Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Document"
       },
       "put": {
         "operationId": "update_document_documents__doc_id__put",

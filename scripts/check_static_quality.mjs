@@ -13,7 +13,8 @@ function runBiome(args) {
   if (result.status !== 0) process.exit(result.status || 1)
 }
 
-runBiome(['lint'])
+// Errors fail the gate and are listed in full; warnings (noExplicitAny) are listed by `npx biome lint`.
+runBiome(['lint', '--diagnostic-level=error'])
 // Every supported file under biome.json `files.includes` must stay formatted (FORMAT-BASELINE-01).
 runBiome(['format'])
 console.log('Static formatting: every supported file matches biome.json.')

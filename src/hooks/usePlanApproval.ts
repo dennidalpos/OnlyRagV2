@@ -8,6 +8,9 @@ import { validateInterviewAnswers } from '../../shared/domain/agent/interviewVal
 import { createAgentRunIdentity } from '../../shared/domain/agent/agentRunIdentity'
 import { useOllamaGenerationState } from './useOllamaGenerationState'
 import { resolveAgentCapabilityProfile } from '../../shared/domain/agent/agentCapabilityProfile'
+import { resolveConfiguredModel } from '../../shared/domain/settings/configuredModel'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import { useTranslation } from '../i18n'
 
 export type { AgentPlan } from '../types'
 
@@ -62,6 +65,7 @@ export function usePlanApproval({
   onPersistPlan,
   onPlanApproved,
 }: UsePlanApprovalOptions) {
+  const { t } = useTranslation()
   const [activePlanIndex, setActivePlanIndex] = useState<number>(0)
   const [isGeneratingPlan, setIsGeneratingPlan] = useState<boolean>(false)
   const [isApprovingPlan, setIsApprovingPlan] = useState<boolean>(false)
@@ -199,7 +203,8 @@ export function usePlanApproval({
       setActivePlanIndex(newIdx)
 
       try {
-        const modelToUse = targetModel || settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
+        // '' when none is configured: plan generation reports it instead of guessing a model.
+        const modelToUse = resolveConfiguredModel('coding', settings, targetModel)
         let generationError: string | undefined
         let generatedPlan: PlanGenerationResult | undefined
 
@@ -218,19 +223,19 @@ export function usePlanApproval({
             )
             if (!isFlowCurrent(scope)) return null
             generatedPlan = genRes
-            if (genRes?.status === 'error') generationError = genRes.error || 'Pianificazione non completata'
-          } catch (ipcErr: any) {
+            if (genRes?.status === 'error') generationError = genRes.error || t('agentRun.planningIncomplete')
+          } catch (ipcErr: unknown) {
             if (!isFlowCurrent(scope)) return null
-            logger.warn('usePlanApproval', `agentPlanGenerate IPC failed: ${ipcErr?.message}`)
-            generationError = ipcErr?.message || 'IPC di pianificazione non disponibile'
+            logger.warn('usePlanApproval', `agentPlanGenerate IPC failed: ${errorMessage(ipcErr)}`)
+            generationError = errorMessage(ipcErr)
           }
         } else {
           logger.warn('usePlanApproval', 'agentPlanGenerate not available: ensure Electron preload is loaded and settings are set.')
-          generationError = 'Servizio di pianificazione non disponibile'
+          generationError = t('agentRun.planningServiceUnavailable')
         }
 
         if (!generationError && !generatedPlan?.milestones.length) {
-          generationError = 'Il pianificatore non ha restituito un piano eseguibile'
+          generationError = t('agentRun.planningNoExecutablePlan')
         }
 
         if (generationError) {
@@ -283,9 +288,9 @@ export function usePlanApproval({
         if (activeOperationRef.current?.token === scope.token) activeOperationRef.current = null
         soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
         return finalPlan
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!isFlowCurrent(scope)) return null
-        logger.error('usePlanApproval', `Error generating plan: ${err?.message}`)
+        logger.error('usePlanApproval', `Error generating plan: ${errorMessage(err)}`)
         const failedPlan: AgentPlan = {
           formatVersion: 2,
           id: planId,
@@ -302,7 +307,7 @@ export function usePlanApproval({
           createdAt: new Date().toISOString(),
           baseStepOffset: currentStep,
           errorPhase: 'planning',
-          errorMessage: err?.message || 'Errore inatteso durante la pianificazione',
+          errorMessage: errorMessage(err),
           capabilityProfile: resolveAgentCapabilityProfile(settings),
         }
         updateCurrentSessionPlans((prev) => {
@@ -348,8 +353,8 @@ export function usePlanApproval({
       replacePlanRevision(recoverable)
       try {
         await onPersistPlan(recoverable)
-      } catch (err: any) {
-        logger.warn('usePlanApproval', `Could not persist approval recovery for ${target.id}: ${err?.message}`)
+      } catch (err: unknown) {
+        logger.warn('usePlanApproval', `Could not persist approval recovery for ${target.id}: ${errorMessage(err)}`)
       }
     }
 
@@ -357,11 +362,11 @@ export function usePlanApproval({
       let persisted = false
       try {
         persisted = await onPersistPlan(approved)
-      } catch (err: any) {
-        logger.warn('usePlanApproval', `Could not persist approved revision ${target.id}: ${err?.message}`)
+      } catch (err: unknown) {
+        logger.warn('usePlanApproval', `Could not persist approved revision ${target.id}: ${errorMessage(err)}`)
       }
       if (!persisted) {
-        replacePlanRevision({ ...target, status: 'ready', approvalError: 'Salvataggio della revisione non riuscito. Riprova.' })
+        replacePlanRevision({ ...target, status: 'ready', approvalError: t('agentRun.revisionSaveFailed') })
         return
       }
       if (!isFlowCurrent(scope)) return
@@ -375,15 +380,15 @@ export function usePlanApproval({
           approved.prompt,
           `${approved.id}:v${approved.version}`,
         )
-      } catch (err: any) {
-        logger.warn('usePlanApproval', `agentPlanSeed IPC failed: ${err?.message}`)
-        await recover(err?.message || "Preparazione del piano per l'agente non riuscita. Riprova.")
+      } catch (err: unknown) {
+        logger.warn('usePlanApproval', `agentPlanSeed IPC failed: ${errorMessage(err)}`)
+        await recover(errorMessage(err))
         return
       }
 
       if (!isFlowCurrent(scope)) return
       if (!seeded) {
-        await recover("Preparazione del piano per l'agente non riuscita. Riprova.")
+        await recover(t('agentRun.planSeedFailed'))
         return
       }
 
@@ -420,8 +425,8 @@ export function usePlanApproval({
         if (active.activeSessionId !== context.activeSessionId || active.workspacePath !== context.workspacePath) return false
         replacePlanRevision(revision)
         return true
-      } catch (err: any) {
-        logger.warn('usePlanApproval', `Could not persist plan review ${revision.id}: ${err?.message}`)
+      } catch (err: unknown) {
+        logger.warn('usePlanApproval', `Could not persist plan review ${revision.id}: ${errorMessage(err)}`)
         return false
       } finally {
         const active = activeContextRef.current
@@ -468,7 +473,7 @@ export function usePlanApproval({
         activeOperationRef.current = scope
         setIsAnalyzingInterview(true)
         try {
-          const modelToUse = targetModel || settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
+          const modelToUse = resolveConfiguredModel('coding', settings, targetModel)
           trackOperation(scope.identity.runId)
           const interviewRes = await window.electronAPI.agentPlanInterview(prompt, modelToUse, settings, scope.workspacePath, previousDecisions, scope.identity)
           if (!isFlowCurrent(scope)) return null
@@ -493,7 +498,7 @@ export function usePlanApproval({
               createdAt: new Date().toISOString(),
               baseStepOffset: currentStep,
               errorPhase: 'interview',
-              errorMessage: interviewRes.error || 'Intervista preliminare non completata',
+              errorMessage: interviewRes.error || t('agentRun.interviewIncomplete'),
             }
             updateCurrentSessionPlans((prev) => [...prev, failedPlan])
             setActivePlanIndex(planHistoryRef.current.length)
@@ -529,9 +534,9 @@ export function usePlanApproval({
             soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
             return null
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           if (!isFlowCurrent(scope)) return null
-          logger.warn('usePlanApproval', `agentPlanInterview failed: ${err?.message}`)
+          logger.warn('usePlanApproval', `agentPlanInterview failed: ${errorMessage(err)}`)
           setIsAnalyzingInterview(false)
           const failedPlan: AgentPlan = {
             formatVersion: 2,
@@ -549,7 +554,7 @@ export function usePlanApproval({
             createdAt: new Date().toISOString(),
             baseStepOffset: currentStep,
             errorPhase: 'interview',
-            errorMessage: err?.message || 'Intervista preliminare non disponibile',
+            errorMessage: errorMessage(err),
           }
           updateCurrentSessionPlans((prev) => [...prev, failedPlan])
           setActivePlanIndex(planHistoryRef.current.length)

@@ -10,6 +10,7 @@ import { redactSecrets } from '../../logRedactor'
 import { MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
 import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/agent/codingAgentDebugPolicy'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export interface AiDebugBundleOptions {
   sessionId: string
@@ -55,8 +56,8 @@ export class AiDebugBundleService {
         } else if (gitStatusLines.length > 0) {
           gitDiffBlock = `${gitStatusLines.length} changed path(s); names and diff omitted by metadata-only logging.`
         }
-      } catch (err: any) {
-        gitDiffBlock = `Git inspection error: ${err.message}`
+      } catch (err: unknown) {
+        gitDiffBlock = `Git inspection error: ${errorMessage(err)}`
       }
     }
 

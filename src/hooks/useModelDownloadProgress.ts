@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { translate } from '../i18n/I18nContext'
 
 export interface ModelDownloadState {
   isDownloading: boolean
@@ -49,7 +50,7 @@ export function processPullProgressEvent(data: any): ModelDownloadState {
       percent: 100,
       mbCompleted: total > 0 ? (total / (1024 * 1024)).toFixed(0) : '0',
       mbTotal: total > 0 ? (total / (1024 * 1024)).toFixed(0) : '0',
-      status: 'Completato con successo',
+      status: translate('services.downloadCompleted'),
       lastCompletedModel: data.modelName,
       error: null,
     }

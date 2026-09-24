@@ -24,7 +24,7 @@ import { AppSettings, DiagnosticsData } from '../../types'
 import { PromptConfigurationModal } from '../settings/PromptConfigurationModalLazy'
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { InplaceTranslationPanel } from './InplaceTranslationPanel'
-import { useDocumentTranslation, LANGUAGES } from '../../hooks/useTranslation'
+import { useDocumentTranslation, useInplaceTranslation, useSharedTranslationState, LANGUAGES } from '../../hooks/useTranslation'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
 import { useResizablePanel } from '../../hooks/useResizablePanel'
@@ -41,7 +41,11 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
   ({ settings, diagnostics, onUpdateSettings, isActive = true }) => {
     const { t } = useTranslation()
     const [activeTool, setActiveTool] = useState<'markdown' | 'inplace'>('markdown')
-    const tr = useDocumentTranslation(settings, diagnostics)
+    // Both translators share one language pair and run one job at a time; the in-place job state
+    // lives here, not in its panel, so switching tabs never drops its progress or the task lock.
+    const sharedTranslation = useSharedTranslationState()
+    const tr = useDocumentTranslation(settings, diagnostics, sharedTranslation)
+    const inp = useInplaceTranslation(settings, diagnostics, sharedTranslation)
     const toast = useToast()
     const [copiedTranslation, setCopiedTranslation] = useState(false)
     const initialLeftWidth = typeof window !== 'undefined' ? Math.max(250, Math.min(Math.round(window.innerWidth * 0.45), 900)) : 450
@@ -78,7 +82,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                 })
               }}
               icon={Languages}
-              featureLabel="Traduzione Documenti"
+              featureLabel={t('uiShell.translationFeature')}
             />
 
             {/* System Prompt Customization Trigger */}
@@ -122,7 +126,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                   <button
                     type="button"
                     onClick={() => tr.handleStartTranslation()}
-                    disabled={!tr.selectedDoc}
+                    disabled={!tr.selectedDoc || tr.otherJobRunning}
                     aria-label={t('translation.startTranslation')}
                     className="px-4 py-2 bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-2 shadow-lg shadow-sky-950/40 cursor-pointer"
                   >
@@ -163,7 +167,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <FileCheck2 className="w-3.5 h-3.5" />
+              {inp.isTranslating ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <FileCheck2 className="w-3.5 h-3.5" />}
               <span>{t('translation.tabInplaceLayout')}</span>
             </button>
           </div>
@@ -174,7 +178,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
         </div>
 
         {activeTool === 'inplace' ? (
-          <InplaceTranslationPanel settings={settings} diagnostics={diagnostics} onUpdateSettings={onUpdateSettings} />
+          <InplaceTranslationPanel inp={inp} onUpdateSettings={onUpdateSettings} />
         ) : (
           <>
             {/* Active Translation Progress Bar Banner */}
@@ -504,7 +508,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                     height="100%"
                     theme={ONLYRAG_MONACO_THEME_NAME}
                     beforeMount={defineOnlyRagMonacoTheme}
-                    original={tr.selectedDoc?.extractedMarkdown || ''}
+                    original={tr.selectedDocMarkdown ?? ''}
                     modified={tr.translatedMarkdown}
                     language="markdown"
                     options={getStandardMonacoOptions({
@@ -532,7 +536,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                           theme={ONLYRAG_MONACO_THEME_NAME}
                           beforeMount={defineOnlyRagMonacoTheme}
                           language="markdown"
-                          value={tr.selectedDoc?.extractedMarkdown || ''}
+                          value={tr.selectedDocMarkdown ?? ''}
                           onMount={tr.handleLeftEditorDidMount}
                           options={getStandardMonacoOptions({
                             readOnly: true,

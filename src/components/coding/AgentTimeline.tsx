@@ -85,7 +85,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
           type="button"
           onClick={onScrollToBottom}
           className="sticky bottom-2 ml-auto z-20 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 text-cyan-300 border border-cyan-500/30 font-semibold text-xs shadow-xl flex items-center gap-1.5 transition-all focus-ring active:scale-95 cursor-pointer backdrop-blur-sm"
-          aria-label="Scorri fino in fondo"
+          aria-label={t('uiShell.scrollToBottom')}
         >
           <ArrowDown className="w-3.5 h-3.5" />
           <span>In fondo</span>

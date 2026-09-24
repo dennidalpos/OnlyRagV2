@@ -1,6 +1,7 @@
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import type { GuestOsInfo, OllamaModelMetrics } from '../../../shared/types'
 import { supportsNativeToolCalling } from '../../../shared/domain/agent/ollamaToolCallingCapability'
+import { noConfiguredModelMessage } from '../../../shared/domain/settings/configuredModel'
 import { validateWorkspaceRealpath } from '../infrastructure/filesystem/workspaceRealpathGuard'
 
 const MIN_AGENT_CONTEXT_TOKENS = 4096
@@ -62,7 +63,11 @@ export function evaluateAgentCodingPreflight(input: AgentCodingPreflightInput): 
       id: 'model',
       passed: modelInstalled,
       blocking: true,
-      detail: modelInstalled ? `Installed model: ${input.codingModel}.` : `Configured model is not installed: ${input.codingModel}.`,
+      detail: modelInstalled
+        ? `Installed model: ${input.codingModel}.`
+        : input.codingModel
+          ? `Configured model is not installed: ${input.codingModel}.`
+          : noConfiguredModelMessage('coding'),
     },
     {
       id: 'qualification',

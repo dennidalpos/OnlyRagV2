@@ -3,6 +3,7 @@ import { Check, Pencil, Save, X } from 'lucide-react'
 import type { AgentCapabilityProfile, AgentPlan, PlanMilestone } from '../../types'
 import { resolveAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
 import { AgentCapabilityProfileControls } from './AgentCapabilityProfileControls'
+import { useTranslation, type TranslationKey } from '../../i18n'
 
 interface PlanReviewCardProps {
   plan: AgentPlan
@@ -35,14 +36,14 @@ export function preparePlanReviewRevision(
   objective: string,
   milestones: PlanMilestone[],
   capabilityProfile: AgentCapabilityProfile = resolveAgentCapabilityProfile(plan.capabilityProfile),
-): { revision?: AgentPlan; error?: string } {
+): { revision?: AgentPlan; error?: TranslationKey } {
   const cleanObjective = objective.trim()
   if (!cleanObjective || milestones.some((milestone) => !milestone.title.trim())) {
-    return { error: 'Risultato e interventi non possono essere vuoti.' }
+    return { error: 'planReview.emptyFields' }
   }
   const paths = milestones.flatMap((milestone) => milestone.filePaths || [])
   if (paths.some(invalidFilePath)) {
-    return { error: 'I file devono usare percorsi relativi al workspace, senza segmenti "..".' }
+    return { error: 'planReview.invalidPaths' }
   }
   return {
     revision: {
@@ -59,6 +60,7 @@ export function preparePlanReviewRevision(
 }
 
 export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled = false, onSave }) => {
+  const { t } = useTranslation()
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [objective, setObjective] = useState(plan.objective)
@@ -96,7 +98,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
       capabilityProfile,
     )
     if (!prepared.revision) {
-      setError(prepared.error || 'Revisione non valida.')
+      setError(t(prepared.error || 'planReview.invalidRevision'))
       return
     }
     if (!onSave) return
@@ -106,14 +108,14 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
     const saved = await onSave(prepared.revision)
     setIsSaving(false)
     if (saved) setIsEditing(false)
-    else setError('Salvataggio non riuscito. Il piano non è stato modificato.')
+    else setError(t('planReview.saveFailed'))
   }
 
   return (
-    <section className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3 shadow-sm" aria-label="Revisione piano">
+    <section className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3 shadow-sm" aria-label={t('planReview.ariaLabel')}>
       <div className="flex items-center justify-between gap-2">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">Risultato e decisioni</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">{t('planReview.outcomeAndDecisions')}</div>
           {!isEditing && <p className="mt-1 text-xs text-slate-100 font-semibold">{plan.objective}</p>}
         </div>
         {onSave && !isEditing && plan.status === 'ready' && (
@@ -123,7 +125,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
             disabled={disabled}
             className="px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:text-cyan-300 disabled:opacity-40 text-[10px] font-semibold flex items-center gap-1.5 focus-ring"
           >
-            <Pencil className="w-3 h-3" /> Modifica risultato, file, check e permessi
+            <Pencil className="w-3 h-3" /> {t('planReview.edit')}
           </button>
         )}
       </div>
@@ -131,7 +133,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
       {!isEditing && (confirmed.length > 0 || assumptions.length > 0) && (
         <div className="grid gap-2 md:grid-cols-2">
           <div className="rounded-xl bg-emerald-950/20 border border-emerald-800/40 p-2">
-            <div className="text-[10px] font-bold text-emerald-300 uppercase">Decisioni confermate</div>
+            <div className="text-[10px] font-bold text-emerald-300 uppercase">{t('planReview.confirmedDecisions')}</div>
             {confirmed.length > 0 ? (
               confirmed.map((decision) => (
                 <div key={decision.id} className="mt-1 text-[11px] text-slate-200 flex gap-1.5">
@@ -139,11 +141,11 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
                 </div>
               ))
             ) : (
-              <p className="mt-1 text-[11px] text-slate-500">Nessuna decisione esplicita.</p>
+              <p className="mt-1 text-[11px] text-slate-500">{t('planReview.noExplicitDecisions')}</p>
             )}
           </div>
           <div className="rounded-xl bg-amber-950/20 border border-amber-800/40 p-2">
-            <div className="text-[10px] font-bold text-amber-300 uppercase">Assunzioni</div>
+            <div className="text-[10px] font-bold text-amber-300 uppercase">{t('planReview.assumptions')}</div>
             {assumptions.length > 0 ? (
               assumptions.map((decision) => (
                 <p key={decision.id} className="mt-1 text-[11px] text-slate-200">
@@ -151,7 +153,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
                 </p>
               ))
             ) : (
-              <p className="mt-1 text-[11px] text-slate-500">Nessuna assunzione aggiuntiva.</p>
+              <p className="mt-1 text-[11px] text-slate-500">{t('planReview.noAssumptions')}</p>
             )}
           </div>
         </div>
@@ -160,7 +162,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
       {isEditing && (
         <div className="space-y-3">
           <label className="block text-[10px] font-bold text-slate-300 uppercase">
-            Risultato atteso
+            {t('planReview.expectedOutcome')}
             <textarea
               value={objective}
               onChange={(event) => setObjective(event.target.value)}
@@ -171,7 +173,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
           {milestones.map((milestone, index) => (
             <div key={milestone.id} className="p-2 rounded-xl border border-slate-800 bg-slate-950/60 grid gap-2">
               <label className="text-[10px] font-bold text-slate-400 uppercase">
-                Intervento {index + 1}
+                {t('planReview.intervention', { index: index + 1 })}
                 <input
                   value={milestone.title}
                   onChange={(event) =>
@@ -182,7 +184,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
                 />
               </label>
               <label className="text-[10px] font-bold text-slate-400 uppercase">
-                File, separati da virgola
+                {t('planReview.filesCommaSeparated')}
                 <input
                   value={filePathInputs[index] || ''}
                   onChange={(event) => setFilePathInputs((current) => current.map((value, itemIndex) => (itemIndex === index ? event.target.value : value)))}
@@ -191,7 +193,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
                 />
               </label>
               <label className="text-[10px] font-bold text-slate-400 uppercase">
-                Check
+                {t('planReview.check')}
                 <input
                   value={milestone.verificationCommand || ''}
                   onChange={(event) =>
@@ -200,7 +202,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
                     )
                   }
                   disabled={isSaving}
-                  placeholder="es. npm run typecheck"
+                  placeholder={t('planReview.checkPlaceholder')}
                   className="mt-1 w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-100 normal-case font-mono"
                 />
               </label>
@@ -219,7 +221,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
               disabled={isSaving}
               className="px-3 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-300 flex items-center gap-1.5 disabled:opacity-40"
             >
-              <X className="w-3 h-3" /> Annulla
+              <X className="w-3 h-3" /> {t('common.cancel')}
             </button>
             <button
               type="button"
@@ -227,7 +229,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
               disabled={isSaving || disabled}
               className="px-3 py-1.5 rounded-lg bg-cyan-600 text-slate-950 text-xs font-bold flex items-center gap-1.5 disabled:opacity-40"
             >
-              <Save className="w-3 h-3" /> {isSaving ? 'Salvataggio...' : 'Salva revisione'}
+              <Save className="w-3 h-3" /> {isSaving ? t('planReview.saving') : t('planReview.saveRevision')}
             </button>
           </div>
         </div>

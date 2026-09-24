@@ -175,40 +175,71 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
     ]
 
 
+# Documents ingested with fallback embeddings carry status "indexed_fallback" (see ingest_service.doc_status).
+LISTABLE_STATUSES = {"indexed", "indexed_fallback"}
+
+# The list carries metadata only: the extracted Markdown of every document made each refresh (window
+# focus, tab change) ship the whole corpus to the renderer. GET /documents/{doc_id} returns it on demand.
+DOCUMENT_SUMMARY_COLUMNS = ["id", "filename", "file_path", "file_size", "num_pages", "num_chunks", "status", "ingested_at", "file_type"]
+
+
+def _document_summary(r: Dict[str, Any], status_val: str) -> Dict[str, Any]:
+    return {
+        "id": str(r.get("id", "")),
+        "filename": str(r.get("filename", "")),
+        "file_path": str(r.get("file_path", "")),
+        "file_size": int(r.get("file_size", 0)),
+        "num_pages": int(r.get("num_pages", 1)),
+        "num_chunks": int(r.get("num_chunks", 0)),
+        "status": status_val,
+        "ingested_at": str(r.get("ingested_at", "")),
+        "file_type": str(r.get("file_type", "text")),
+        "used_fallback_embeddings": status_val == "indexed_fallback",
+    }
+
+
+def _read_document_summary_rows(tbl: Any) -> List[Dict[str, Any]]:
+    try:
+        return tbl.search().select(DOCUMENT_SUMMARY_COLUMNS).limit(max(1, tbl.count_rows())).to_list()
+    except Exception:
+        pass
+    try:
+        return tbl.to_arrow().to_pylist()
+    except Exception:
+        return tbl.to_pandas().to_dict(orient="records")
+
+
 def list_stored_documents() -> List[Dict[str, Any]]:
-    """Returns a list of all indexed documents stored in LanceDB."""
+    """Returns the metadata of every listable document stored in LanceDB, without its Markdown."""
     try:
         if DOCS_TABLE_NAME not in get_existing_tables():
             return []
         tbl = lance_db.open_table(DOCS_TABLE_NAME)
-        try:
-            records = tbl.to_arrow().to_pylist()
-        except Exception:
-            df = tbl.to_pandas()
-            records = df.to_dict(orient="records")
-        # Documents ingested with fallback embeddings carry status "indexed_fallback" (see ingest_service.doc_status).
-        listable_statuses = {"indexed", "indexed_fallback"}
         clean_records: List[Dict[str, Any]] = []
-        for r in records:
+        for r in _read_document_summary_rows(tbl):
             status_val = str(r.get("status", "indexed")).lower()
-            if status_val in listable_statuses:
-                clean_records.append({
-                    "id": str(r.get("id", "")),
-                    "filename": str(r.get("filename", "")),
-                    "file_path": str(r.get("file_path", "")),
-                    "file_size": int(r.get("file_size", 0)),
-                    "num_pages": int(r.get("num_pages", 1)),
-                    "num_chunks": int(r.get("num_chunks", 0)),
-                    "extracted_markdown": str(r.get("extracted_markdown", "")),
-                    "status": status_val,
-                    "ingested_at": str(r.get("ingested_at", "")),
-                    "file_type": str(r.get("file_type", "text")),
-                    "used_fallback_embeddings": status_val == "indexed_fallback"
-                })
+            if status_val in LISTABLE_STATUSES:
+                clean_records.append(_document_summary(r, status_val))
         return clean_records
     except Exception as e:
         logger.error(f"Error listing documents from LanceDB: {e}")
         return []
+
+
+def get_stored_document(doc_id: str) -> Optional[Dict[str, Any]]:
+    """Returns one listable document with its extracted Markdown, or None when it does not exist."""
+    safe_id = validate_doc_id(doc_id)
+    if DOCS_TABLE_NAME not in get_existing_tables():
+        return None
+    tbl = lance_db.open_table(DOCS_TABLE_NAME)
+    records = tbl.search().where(f'id = "{safe_id}"', prefilter=True).limit(1).to_list()
+    if not records:
+        return None
+    record = records[0]
+    status_val = str(record.get("status", "indexed")).lower()
+    if status_val not in LISTABLE_STATUSES:
+        return None
+    return {**_document_summary(record, status_val), "extracted_markdown": str(record.get("extracted_markdown", ""))}
 
 
 def delete_stored_document(doc_id: str) -> Dict[str, str]:

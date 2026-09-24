@@ -5,6 +5,7 @@ import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../constants/promptConfig'
 import { evaluateDomainIntent } from '../services/domainRouter'
 import { useIngestedDocuments } from './useIngestedDocuments'
+import { loadDocumentMarkdown } from '../services/documentMarkdown'
 import { resolveChatContextBudget, resolveChatThreadCount, resolvePromptCharBudget } from '../services/chatContextBudget'
 import { compactChatHistory } from '../services/chatContextCompactor'
 import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
@@ -14,6 +15,8 @@ import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwarePr
 import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 import { useOllamaGenerationState } from './useOllamaGenerationState'
 import { resolveOllamaThinkingPreference } from '../../shared/domain/agent/ollamaThinkingPolicy'
+import { noConfiguredModelMessage, resolveConfiguredModel } from '../../shared/domain/settings/configuredModel'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 const STORAGE_KEY_CONVERSATIONS = 'onlyrag_chat_conversations'
 const STORAGE_KEY_ACTIVE_ID = 'onlyrag_chat_active_id'
@@ -62,7 +65,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const hardwareFacts = useMemo(() => extractHardwareFacts(diagnostics), [diagnostics])
   const hardwareDefault = useMemo(() => resolveMaxContextTokens('Auto', hardwareFacts), [hardwareFacts])
   const { metrics: modelMetrics } = useOllamaModelMetrics(settings.ollamaHost)
-  const selectedModel = settings.chatModel || settings.defaultModel || 'llama3.2'
+  const selectedModel = resolveConfiguredModel('chat', settings)
   const contextBudget = useMemo(
     () =>
       resolveChatContextBudget(
@@ -277,8 +280,8 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     if (operationId && window.electronAPI?.cancelOllamaStream) {
       try {
         await window.electronAPI.cancelOllamaStream(operationId)
-      } catch (err: any) {
-        logger.warn('ChatView', `Failed stopping Ollama stream: ${err.message}`)
+      } catch (err: unknown) {
+        logger.warn('ChatView', `Failed stopping Ollama stream: ${errorMessage(err)}`)
       }
     }
     activeStreamIdRef.current = null
@@ -390,8 +393,8 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
             vectorContextText = includedBlocks.join('\n\n---\n\n')
             citationSources = includedSources
           }
-        } catch (err: any) {
-          logger.warn('ChatView', `Vector search non-blocking notice: ${err.message}`)
+        } catch (err: unknown) {
+          logger.warn('ChatView', `Vector search non-blocking notice: ${errorMessage(err)}`)
         }
       }
 
@@ -401,9 +404,10 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       }
 
       const activeDocs = documents.filter((d) => selectedDocIds.has(d.id))
-      const directDocsText = activeDocs
-        .map((d) => {
-          const full = d.extractedMarkdown || ''
+      // The document list carries metadata only; the text of each selected document is loaded here.
+      const activeDocTexts = await Promise.all(activeDocs.map(async (d) => ({ d, full: (await loadDocumentMarkdown(d)) ?? '' })))
+      const directDocsText = activeDocTexts
+        .map(({ d, full }) => {
           const body = full.slice(0, budget.perDocumentPreviewChars)
           // Say which of the two this actually is.
           return body.length === full.length
@@ -419,6 +423,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       const boundedContext = [boundedVectorContext, boundedDirectDocs].filter(Boolean).join('\n\n=== ADDITIONAL CONTEXT ===\n\n')
 
       const modelToUse = routingResult.modelName
+      if (!modelToUse) throw new Error(noConfiguredModelMessage('chat'))
       const effectiveSystemPrompt = getEffectivePrompt('chat', settings).prompt
 
       const now = new Date()

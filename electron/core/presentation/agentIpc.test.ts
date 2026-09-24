@@ -247,6 +247,37 @@ describe('agent IPC session-state facade', () => {
     )
   })
 
+  it('parses the previous plan completely: unknown keys are stripped and malformed plans rejected', async () => {
+    const handler = handlers.get('agent:plan-generate')!
+    const basePlan = {
+      formatVersion: 2,
+      id: 'plan-1',
+      version: 1,
+      prompt: 'Build app',
+      objective: 'Build app',
+      status: 'ready',
+      createdAt: '2026-09-23T00:00:00.000Z',
+      milestones: [{ id: 'm-1', title: 'Build', status: 'verified', injected: 'x' }],
+      injected: { nested: true },
+    }
+
+    await handler(trustedEvent, 'Build app', 'model', {}, basePlan, '/repo', [])
+    const forwarded = vi.mocked(planGenerationAppService.generatePlanText).mock.calls[0][0].previousPlan as unknown as Record<string, unknown>
+    expect(forwarded).not.toHaveProperty('injected')
+    expect(forwarded.milestones).toEqual([{ id: 'm-1', title: 'Build', status: 'verified' }])
+    // A legacy plan without list fields gets empty lists instead of undefined reads.
+    expect(forwarded).toMatchObject({ decisions: [], retainedEvidence: [], supersededWork: [] })
+
+    for (const malformed of [
+      { ...basePlan, milestones: [{ id: 'm-1', title: 'Build', status: 'done' }] },
+      { ...basePlan, retainedEvidence: [{ interventionId: 'm-1' }] },
+      { ...basePlan, status: 'unknown' },
+      { ...basePlan, formatVersion: 1 },
+    ]) {
+      expect(() => handler(trustedEvent, 'Build app', 'model', {}, malformed, '/repo', [])).toThrow('Invalid IPC payload')
+    }
+  })
+
   it('forwards the current question set when enriching answers', async () => {
     const answers = [{ questionId: 'q1', questionText: 'Storage?', selectedOption: 'SQLite', provenance: 'explicit' }]
     const questions = [{ id: 'q1', question: 'Storage?', rationale: 'Changes persistence.', options: ['SQLite', 'JSON'], recommendedIndex: 0 }]

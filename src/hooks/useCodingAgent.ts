@@ -11,6 +11,8 @@ import { useCodingAgentAttachments } from './codingAgent/useCodingAgentAttachmen
 import { useCodingAgentTerminal } from './codingAgent/useCodingAgentTerminal'
 import { useCodingAgentExecution } from './codingAgent/useCodingAgentExecution'
 import { useActiveSessionPlans, useCodingAgentSession } from './codingAgent/useCodingAgentSession'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import { useTranslation } from '../i18n'
 
 export type { QueuedPrompt }
 
@@ -19,6 +21,7 @@ export type { QueuedPrompt }
  * execution and session hooks. Each concern lives in its own hook under hooks/codingAgent/.
  */
 export function useCodingAgent(settings?: AppSettings) {
+  const { t } = useTranslation()
   const actionLog = useAgentActionLog()
   const { addActionLog } = actionLog
 
@@ -49,21 +52,21 @@ export function useCodingAgent(settings?: AppSettings) {
     if (!isStandaloneMode || !workspacePath || !window.electronAPI?.openPath) return
     try {
       await window.electronAPI.openPath(workspacePath)
-    } catch (err: any) {
-      addActionLog('info', `Impossibile aprire il workspace scratch: ${err?.message || String(err)}`)
+    } catch (err: unknown) {
+      addActionLog('info', t('agentRun.scratchOpenFailed', { message: errorMessage(err) }))
     }
   }, [addActionLog, isStandaloneMode, workspacePath])
 
   const handleExportStandaloneWorkspace = useCallback(async () => {
     const api = window.electronAPI
     if (!isStandaloneMode || !api?.exportStandaloneScratchWorkspace || !api.openDirectoryDialog) return
-    const destination = await api.openDirectoryDialog({ title: 'Esporta il workspace scratch' })
+    const destination = await api.openDirectoryDialog({ title: t('agentRun.scratchExportTitle') })
     if (!destination) return
     const result = await api.exportStandaloneScratchWorkspace(destination)
     if (result.success && result.path) {
-      addActionLog('info', `Workspace scratch esportato in ${result.path}`)
+      addActionLog('info', t('agentRun.scratchExported', { path: result.path }))
     } else {
-      addActionLog('info', `Esportazione workspace scratch non riuscita: ${result.error || 'errore sconosciuto'}`)
+      addActionLog('info', t('agentRun.scratchExportFailed', { message: result.error || t('agentRun.unknownError') }))
     }
   }, [addActionLog, isStandaloneMode])
 
@@ -72,7 +75,7 @@ export function useCodingAgent(settings?: AppSettings) {
     if (!isStandaloneMode || !workspacePath || !api?.clearStandaloneScratchWorkspace) return
     const result = await api.clearStandaloneScratchWorkspace()
     if (!result.success) {
-      addActionLog('info', `Pulizia workspace scratch non riuscita: ${result.error || 'errore sconosciuto'}`)
+      addActionLog('info', t('agentRun.scratchClearFailed', { message: result.error || t('agentRun.unknownError') }))
       return
     }
     purgeFileReferences(workspacePath)

@@ -1,4 +1,5 @@
 import Mustache from 'mustache'
+import { errorMessage } from '../errors/errorMessage'
 
 /** Mustache-backed rendering for system-prompt templates. */
 
@@ -24,8 +25,8 @@ export class TemplateSyntaxError extends Error {
 export function renderPromptTemplate(template: string, variables: Record<string, unknown> = {}, partials: Record<string, string> = {}): string {
   try {
     return Mustache.render(template, variables, partials, RENDER_CONFIG)
-  } catch (err: any) {
-    throw new TemplateSyntaxError(err?.message || 'Invalid template syntax')
+  } catch (err: unknown) {
+    throw new TemplateSyntaxError(errorMessage(err) || 'Invalid template syntax')
   }
 }
 
@@ -34,8 +35,8 @@ export function collectTemplateTokens(template: string): TemplateToken[] {
   let ast: unknown[]
   try {
     ast = Mustache.parse(template)
-  } catch (err: any) {
-    throw new TemplateSyntaxError(err?.message || 'Invalid template syntax')
+  } catch (err: unknown) {
+    throw new TemplateSyntaxError(errorMessage(err) || 'Invalid template syntax')
   }
 
   const counts = new Map<string, TemplateToken>()

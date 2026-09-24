@@ -3,6 +3,7 @@ import { DiagnosticsData, AppSettings } from '../types'
 import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { notifyDocumentsChanged } from './useIngestedDocuments'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 export const DIAGNOSTICS_STARTUP_RETRY_MS = 1000
 
@@ -47,8 +48,8 @@ export function useDiagnostics(
         }
       }
       return data
-    } catch (err: any) {
-      logger.error('useDiagnostics', `Scan failed: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('useDiagnostics', `Scan failed: ${errorMessage(err)}`)
       return null
     } finally {
       setIsScanning(false)

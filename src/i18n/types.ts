@@ -20,6 +20,8 @@ export interface TranslationSchema {
     search: string
     status: string
     loading: string
+    documentLoadFailed: string
+    noModelConfigured: string
     download: string
     ready: string
     error: string
@@ -62,6 +64,9 @@ export interface TranslationSchema {
     moduleNameTranslation: string
     crossModuleTaskBlocked: string
     systemPrompt: string
+    loadingInterface: string
+    inProgress: string
+    modelReady: string
   }
   navigation: {
     ingestion: string
@@ -111,6 +116,15 @@ export interface TranslationSchema {
     citationCopied: string
     copyMsg: string
     msgCopied: string
+    userLabel: string
+    assistantLabel: string
+    sourcesTitle: string
+    sourcesFromDocument: string
+    sourcesFromDocuments: string
+    excerptLabel: string
+    scrollToBottom: string
+    scrollToBottomShort: string
+    mentionTitle: string
     inputPlaceholder: string
     toolsButton: string
     toolsTitle: string
@@ -381,6 +395,10 @@ export interface TranslationSchema {
     inplacePhaseTranslatingRuns: string
     inplaceSuccess: string
     inplaceError: string
+    inplaceCancelBtn: string
+    inplaceCancelling: string
+    inplaceCancelled: string
+    otherJobRunning: string
     inplaceNoCompatibleDocs: string
     inplacePreserveNotice: string
     inplaceResetDir: string
@@ -439,6 +457,24 @@ export interface TranslationSchema {
     ocrCpuOnlyTooltip: string
     ocrGpuPresentUnused: string
     ocrGpuPresentUnusedTooltip: string
+    stepCompleted: string
+    pipelineCompleted: string
+    stepPreprocessing: string
+    stepExtracting: string
+    stepEmbedding: string
+    categoryText: string
+    categoryPdf: string
+    categoryImage: string
+    categoryWord: string
+    categoryTabular: string
+    categorySource: string
+    selectFileTitle: string
+    supportedDocuments: string
+    allFiles: string
+    saveSuccess: string
+    saveFailed: string
+    cancelledByUser: string
+    failedUnknown: string
   }
   diagnostics: {
     title: string
@@ -841,5 +877,454 @@ export interface TranslationSchema {
     envContextLenHighRationale: string
     envHostDesc: string
     envHostRationale: string
+  }
+  workspaceExplorer: {
+    addProjectFolder: string
+    scratchTitle: string
+    scratchSubtitle: string
+    activeChats: string
+    renameChat: string
+    deleteSessionHint: string
+    revealScratch: string
+    exportScratch: string
+    clearScratchHint: string
+    inUse: string
+    openRootFolder: string
+    renameDisplayName: string
+    removeProjectHint: string
+    renameSession: string
+    projectFiles: string
+    reloadFileTree: string
+    filterFiles: string
+    removeFromContext: string
+    scratchInitializing: string
+    noProjectFolder: string
+  }
+  agentRun: {
+    noActiveConversation: string
+    unknownError: string
+    startFailed: string
+    identityMismatchPrompt: string
+    identityMismatchLog: string
+    queued: string
+    executionFailed: string
+    cancelling: string
+    cancelledByUser: string
+    scratchOpenFailed: string
+    scratchExportTitle: string
+    scratchExported: string
+    scratchExportFailed: string
+    scratchClearFailed: string
+    planningIncomplete: string
+    planningServiceUnavailable: string
+    planningNoExecutablePlan: string
+    revisionSaveFailed: string
+    planSeedFailed: string
+    interviewIncomplete: string
+  }
+  planPanel: {
+    schedulerQueued: string
+    schedulerRunning: string
+    schedulerCancelling: string
+    schedulerFailed: string
+    analyzingTitle: string
+    analyzingDescription: string
+    generatingTitle: string
+    generatingDescription: string
+    noPlanTitle: string
+    noPlanDescription: string
+    interviewIncomplete: string
+    planningIncomplete: string
+    retryKeepingRequest: string
+    userRequest: string
+    copyPrompt: string
+    rejectPlan: string
+    approving: string
+    runApprovedPlan: string
+    approveAndRun: string
+  }
+  systemDiagnostics: {
+    title: string
+    subtitle: string
+    copyBundleHint: string
+    bundleCopied: string
+    copyForAgent: string
+    tabToolchain: string
+    tabTelemetry: string
+    tabSlmLogs: string
+    hardwareHost: string
+    hardwareProfile: string
+    activeModel: string
+    devToolchain: string
+    fileOperations: string
+    fileOperationsHint: string
+    shellCommands: string
+    shellCommandsHint: string
+    reads: string
+    readsHint: string
+    totalSteps: string
+    running: string
+    lastActivity: string
+    contextResources: string
+    openFiles: string
+    pinnedFiles: string
+    attachedDocs: string
+  }
+  codingWorkspace: {
+    binaryFile: string
+    refreshGit: string
+    notGitRepo: string
+    notGitRepoDescription: string
+    initGit: string
+    noUncommittedChanges: string
+    noActiveDiff: string
+    noActiveDiffDescription: string
+    diffAriaLabel: string
+    rawGitOutput: string
+    hideExplorer: string
+    showExplorer: string
+    workspaceFolder: string
+    unpinFile: string
+    detachDocument: string
+    contextBudget: string
+    contextBudgetCompacted: string
+    contextBudgetPending: string
+    compactContext: string
+    fileReadError: string
+  }
+  agentTimeline: {
+    copyReport: string
+    copied: string
+    copy: string
+    collapse: string
+    expand: string
+    collapseDiagnostic: string
+    expandDiagnostic: string
+    openTerminal: string
+    terminal: string
+    collapseLog: string
+    expandLog: string
+    openFileNamed: string
+    openInEditor: string
+    openNamedInEditor: string
+    view: string
+    viewGitDiff: string
+    viewDiffOf: string
+    collapseCommand: string
+    expandCommand: string
+    collapseSearch: string
+    expandSearch: string
+    reasoningStep: string
+    agentReasoning: string
+    agentReasoningPending: string
+  }
+  slmDiagnostics: {
+    generatedAt: string
+    statistics: string
+    scannedFiles: string
+    scannedLines: string
+    totalAnomalies: string
+    criticalErrors: string
+    overallStatus: string
+    statusCritical: string
+    statusWarning: string
+    statusClean: string
+    summary: string
+    anomalyDetails: string
+    noAnomaliesReport: string
+    line: string
+    suggestion: string
+    scannedLogFiles: string
+    copyReportHint: string
+    copied: string
+    copyReport: string
+    analysisSummary: string
+    severityFilters: string
+    all: string
+    filterPlaceholder: string
+    filterActive: string
+    noMatches: string
+    allClean: string
+    filesCount: string
+  }
+  modelBadges: {
+    verified: string
+    compatible: string
+    unsupported: string
+    unknown: string
+    compatibleTooltip: string
+    unsupportedTooltip: string
+    unknownTooltip: string
+    verifiedEvidence: string
+    trainedContext: string
+    parameters: string
+    quantization: string
+    nativeTools: string
+    noNativeTools: string
+  }
+  planReview: {
+    emptyFields: string
+    invalidPaths: string
+    invalidRevision: string
+    saveFailed: string
+    ariaLabel: string
+    outcomeAndDecisions: string
+    edit: string
+    confirmedDecisions: string
+    noExplicitDecisions: string
+    assumptions: string
+    noAssumptions: string
+    expectedOutcome: string
+    intervention: string
+    filesCommaSeparated: string
+    check: string
+    checkPlaceholder: string
+    saving: string
+    saveRevision: string
+  }
+  ollamaServer: {
+    connected: string
+    unreachable: string
+    title: string
+    subtitle: string
+    localTitle: string
+    localDescription: string
+    remoteTitle: string
+    remoteDescription: string
+    hostLabel: string
+    hostPlaceholder: string
+    remoteHint: string
+    testing: string
+    testConnection: string
+    scanTitle: string
+    analyzing: string
+    scan: string
+    scanning: string
+    scanIntro: string
+    firstScan: string
+    panelTitle: string
+  }
+  codingPanels: {
+    planHeader: string
+    previousVersion: string
+    nextVersion: string
+    toggleView: string
+    extendedDoc: string
+    checklist: string
+    awaitingApproval: string
+    statusError: string
+    statusCancelled: string
+    selectAllHunks: string
+    selectNoHunks: string
+    artifactNew: string
+    artifactSave: string
+    artifactDelete: string
+    artifacts: string
+    artifactName: string
+    artifactKind: string
+    artifactContent: string
+    folderLabel: string
+    fileLabel: string
+    folderContent: string
+    emptyFolder: string
+    unpinHint: string
+    pinHint: string
+    unpinNamed: string
+    pinNamed: string
+    terminalPlaceholder: string
+  }
+  planInterview: {
+    title: string
+    instructions: string
+    recommended: string
+    freeAnswer: string
+    freeAnswerPlaceholder: string
+    acceptAll: string
+    confirmAndGenerate: string
+    runPermissions: string
+    fileChanges: string
+    terminalCommands: string
+    network: string
+    networkBlocked: string
+    networkLocal: string
+    networkApproved: string
+    stepBudget: string
+    unlimited: string
+    noFiles: string
+    selectProjectFolder: string
+  }
+  errorBoundary: {
+    title: string
+    description: string
+    copyDetailsLabel: string
+    copyDetails: string
+    copied: string
+    reloadLabel: string
+    reload: string
+  }
+  uiShell: {
+    notificationsRegion: string
+    closeNotification: string
+    selectModel: string
+    modelListLabel: string
+    selectLocalModel: string
+    noOllamaModels: string
+    selectCodingModel: string
+    translationFeature: string
+    fallbackVectorsHint: string
+    skillsDiscoveryOn: string
+    skillsDiscoveryOff: string
+    previewTab: string
+    changesTabTitle: string
+    changesTab: string
+    planTabTitle: string
+    planTab: string
+    terminalTabTitle: string
+    terminalTab: string
+    diagnosticsTabTitle: string
+    diagnosticsTab: string
+    toolchainStatus: string
+    toolchainStatusHint: string
+    details: string
+    modelNotInstalled: string
+    modelInUse: string
+    modelOnDisk: string
+    unloadModelHint: string
+    unloadModel: string
+    modelReady: string
+    uploadingSequentially: string
+    fallbackVectorsTitle: string
+    fallbackVectorsDescription: string
+    wizardStep1: string
+    wizardStep2: string
+    wizardStep3: string
+    wizardTab1: string
+    wizardTab1Desc: string
+    wizardTab2: string
+    wizardTab2Desc: string
+    wizardTab3: string
+    wizardTab3Desc: string
+    scrollToBottom: string
+    artifactsNeedWorkspace: string
+    noArtifacts: string
+    openSkillHub: string
+    backgroundCommand: string
+    run: string
+    computingDiff: string
+    noDiff: string
+    hunkLabel: string
+    cancelling: string
+    copyLogSnippet: string
+    logAnalysisError: string
+    noReport: string
+    noLogFiles: string
+    openFolder: string
+    attachFolder: string
+    newSession: string
+    modelLabel: string
+    codingModelDescription: string
+    codingModelTitle: string
+    refreshModels: string
+    cancelDownload: string
+    downloadError: string
+    allModelsInstalled: string
+    newShort: string
+    collapse: string
+    details2: string
+    actionGitStatus: string
+    promptQueued: string
+  }
+  errors: {
+    unexpected: string
+    ollamaTitle: string
+    ollamaMessage: string
+    ollamaRemediation: string
+    memoryTitle: string
+    memoryMessage: string
+    memoryRemediation: string
+    securityTitle: string
+    securityMessage: string
+    securityRemediation: string
+    notFoundTitle: string
+    notFoundMessage: string
+    notFoundRemediation: string
+    permissionTitle: string
+    permissionMessage: string
+    permissionRemediation: string
+    busyTitle: string
+    busyMessage: string
+    busyRemediation: string
+    vectorTitle: string
+    vectorRemediation: string
+    networkTitle: string
+    networkRemediation: string
+  }
+  wizardModels: {
+    intro: string
+    sectionCoding: string
+    codingModel: string
+    selectCoding: string
+    sectionChat: string
+    chatModel: string
+    chatTag: string
+    selectChat: string
+    translationModel: string
+    translationTag: string
+    selectTranslation: string
+    sectionVision: string
+    visionModel: string
+    visionTag: string
+    selectVision: string
+    embeddingModel: string
+    embeddingTag: string
+    selectEmbedding: string
+    sectionDomains: string
+    medicalModel: string
+    selectMedical: string
+    legalModel: string
+    legalTag: string
+    selectLegal: string
+    useChatModel: string
+    summaryTranslation: string
+    summaryEmbedding: string
+    summaryMedical: string
+    summaryLegal: string
+    checkingDisk: string
+    skipModel: string
+    retry: string
+    continueWithoutDownload: string
+  }
+  services: {
+    vramHigh: string
+    vramInsufficient: string
+    ramInsufficient: string
+    envScriptHeader: string
+    envScriptRunAs: string
+    envScriptRestart: string
+    envScriptPersist: string
+    electronApiUnavailable: string
+    addProjectFolder: string
+    modelUnloaded: string
+    modelUnloadFailed: string
+    otherModelUpdating: string
+    downloadCompleted: string
+    actionTypecheck: string
+    actionUnitTests: string
+    actionBuild: string
+    actionCargoCheck: string
+    actionRustTests: string
+    actionPythonTests: string
+    actionGoTests: string
+  }
+  ingestionSteps: {
+    start: string
+    pdf_pages: string
+    page_ocr: string
+    page_text: string
+    page_text_tables: string
+    structured: string
+    chunking: string
+    embedding: string
+    done: string
   }
 }

@@ -5,6 +5,7 @@ import { consumeNdjsonChunk } from './ndjsonStreamParser'
 import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
 import { resolveOllamaUrl, requestOllama, type OllamaUrl } from './ollamaTransport'
 import { DEFAULT_OLLAMA_HOST, normalizeOllamaHost } from '../../../../shared/domain/ollamaHost'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export type { OllamaModelMetrics }
 
@@ -89,8 +90,8 @@ export class OllamaHttpClient {
                   }))
                 : []
               resolve({ success: true, models })
-            } catch (err: any) {
-              resolve({ success: false, models: [], error: err.message })
+            } catch (err: unknown) {
+              resolve({ success: false, models: [], error: errorMessage(err) })
             }
           })
         },
@@ -140,8 +141,8 @@ export class OllamaHttpClient {
               } else {
                 resolve([])
               }
-            } catch (err: any) {
-              logger.log('WARN', 'OllamaClient', `Failed parsing /api/tags JSON: ${err.message}`)
+            } catch (err: unknown) {
+              logger.log('WARN', 'OllamaClient', `Failed parsing /api/tags JSON: ${errorMessage(err)}`)
               resolve([])
             }
           })
@@ -406,8 +407,8 @@ export class OllamaHttpClient {
       logger.log('INFO', 'OllamaClient', 'User requested cancellation of active Ollama model pull.')
       try {
         this.activePullReq.destroy()
-      } catch (err: any) {
-        logger.log('WARN', 'OllamaClient', `Error destroying active Ollama pull stream: ${err.message}`)
+      } catch (err: unknown) {
+        logger.log('WARN', 'OllamaClient', `Error destroying active Ollama pull stream: ${errorMessage(err)}`)
       }
       this.activePullReq = null
     }
@@ -474,8 +475,8 @@ export class OllamaHttpClient {
                 const parsed = JSON.parse(buffer)
                 if (parsed.error) parsedError = parsed.error
                 if (parsed.status) lastStatus = parsed.status
-              } catch (err: any) {
-                logger.log('DEBUG', 'OllamaClient', `Trailing pull buffer was not complete JSON: ${err?.message}`)
+              } catch (err: unknown) {
+                logger.log('DEBUG', 'OllamaClient', `Trailing pull buffer was not complete JSON: ${errorMessage(err)}`)
               }
             }
 
@@ -584,9 +585,11 @@ export class OllamaHttpClient {
     urlOpts: OllamaUrl,
     setActiveCancel: (cancel: () => void) => void,
   ): Promise<{ success: boolean; error?: string }> {
+    // An empty model is a caller that found none configured; guessing one would pull or fail on a model the user never chose.
+    if (!model?.trim()) return Promise.resolve({ success: false, error: 'No model is configured for this generation. Choose one in Settings.' })
     return new Promise((resolve) => {
       const postData = JSON.stringify({
-        model: model || 'llama3.2',
+        model,
         prompt,
         stream: true,
         think: customOptions?.think === true,
@@ -766,8 +769,8 @@ export class OllamaHttpClient {
                 return
               }
               finish({ status: 'complete', content, ...telemetry })
-            } catch (err: any) {
-              finish({ status: 'transport_error', content: '', error: `Invalid Ollama response: ${err.message}` })
+            } catch (err: unknown) {
+              finish({ status: 'transport_error', content: '', error: `Invalid Ollama response: ${errorMessage(err)}` })
             }
           })
         },

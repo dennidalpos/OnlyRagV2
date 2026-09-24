@@ -29,6 +29,16 @@ describe('Agent Coding preflight', () => {
     }
   })
 
+  it('says that no model is configured instead of naming a guessed one', () => {
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-preflight-'))
+    try {
+      const model = runPreflight(workspacePath, { codingModel: '' }).checks.find((check) => check.id === 'model')
+      expect(model).toMatchObject({ passed: false, blocking: true, detail: expect.stringMatching(/No coding model is configured/) })
+    } finally {
+      fs.rmSync(workspacePath, { recursive: true, force: true })
+    }
+  })
+
   it('blocks an unreachable runtime, an absent model, and insufficient context', () => {
     const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-preflight-'))
     try {

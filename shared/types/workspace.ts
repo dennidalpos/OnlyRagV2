@@ -44,6 +44,7 @@ export type AgentGuardId =
   | 'fs_oscillation'
   | 'verification_fix_cycles'
   | 'step_budget'
+  | 'tool_policy'
 
 /** `advise` nudges the model, `force_advance` abandons the active milestone, `stop` ends the run. */
 export type AgentGuardAction = 'advise' | 'force_advance' | 'stop'

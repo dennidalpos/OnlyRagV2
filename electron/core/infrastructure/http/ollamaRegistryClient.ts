@@ -2,6 +2,7 @@ import https from 'node:https'
 import crypto from 'node:crypto'
 import { logger } from '../logging/logger'
 import { parseModelTag, type ParsedModelTarget } from '../../domain/ollama/modelUpdateChecker'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 5 })
 
@@ -40,8 +41,8 @@ export class OllamaRegistryClient {
       let url: URL
       try {
         url = new URL(path, this.registryBaseUrl)
-      } catch (err: any) {
-        return resolve({ success: false, error: `Invalid registry URL: ${err.message}` })
+      } catch (err: unknown) {
+        return resolve({ success: false, error: `Invalid registry URL: ${errorMessage(err)}` })
       }
 
       const req = https.request(
@@ -88,12 +89,12 @@ export class OllamaRegistryClient {
                 statusCode: 200,
                 digest: resolvedDigest,
               })
-            } catch (err: any) {
-              logger.log('WARN', 'OllamaRegistryClient', `Failed computing manifest digest for ${target.model}: ${err.message}`)
+            } catch (err: unknown) {
+              logger.log('WARN', 'OllamaRegistryClient', `Failed computing manifest digest for ${target.model}: ${errorMessage(err)}`)
               resolve({
                 success: false,
                 statusCode: 200,
-                error: err.message,
+                error: errorMessage(err),
               })
             }
           })

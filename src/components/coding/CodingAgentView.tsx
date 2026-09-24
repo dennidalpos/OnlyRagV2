@@ -25,6 +25,7 @@ import { ArtifactPreviewPanel } from './ArtifactPreviewPanel'
 import type { AgentMode } from '../../types'
 import { logger } from '../../lib/logger'
 import { shouldAutomaticallyPlanCodingTask } from '../../../shared/domain/agent/automaticPlanningPolicy'
+import { resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
 
 export type { AgentMode }
 
@@ -86,7 +87,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
       rejectInstall: rejectSkillInstall,
     } = useSkillInstallApproval(settings, c.activeRunIdentity)
 
-    const activeModelName = c.isExecuting && c.currentLiveModel ? c.currentLiveModel : settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
+    const activeModelName = c.isExecuting && c.currentLiveModel ? c.currentLiveModel : resolveConfiguredModel('coding', settings)
 
     const hasPendingUnconsolidatedMilestones = useMemo(() => {
       if (c.isExecuting) return false

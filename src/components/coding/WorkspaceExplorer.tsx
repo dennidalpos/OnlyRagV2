@@ -141,8 +141,8 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
           <button
             type="button"
             onClick={onAddProject}
-            title="Aggiungi Cartella Progetto"
-            aria-label="Aggiungi Cartella Progetto"
+            title={t('workspaceExplorer.addProjectFolder')}
+            aria-label={t('workspaceExplorer.addProjectFolder')}
             className="p-1 hover:bg-slate-800 text-cyan-400 hover:text-cyan-300 rounded-lg transition-colors focus-ring flex items-center gap-1 cursor-pointer"
           >
             <FolderPlus className="w-3.5 h-3.5" />
@@ -173,7 +173,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
               onClick={onAddProject}
               className="text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
             >
-              <Plus className="w-2.5 h-2.5" /> Apri Cartella
+              <Plus className="w-2.5 h-2.5" /> {t('uiShell.openFolder')}
             </button>
           </div>
 
@@ -206,8 +206,10 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                   <MessageSquare className="w-3.5 h-3.5" />
                 </div>
                 <div className="truncate min-w-0">
-                  <div className={`font-bold text-[11px] truncate ${isStandalone ? 'text-indigo-200' : 'text-slate-300'}`}>Workspace Scratch</div>
-                  <div className="text-[9px] text-slate-400 truncate">Persistente, senza cartella progetto</div>
+                  <div className={`font-bold text-[11px] truncate ${isStandalone ? 'text-indigo-200' : 'text-slate-300'}`}>
+                    {t('workspaceExplorer.scratchTitle')}
+                  </div>
+                  <div className="text-[9px] text-slate-400 truncate">{t('workspaceExplorer.scratchSubtitle')}</div>
                 </div>
               </div>
               {isStandalone && (
@@ -221,7 +223,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
             {isStandalone && (
               <div className="px-2.5 pb-2.5 pt-1 space-y-1.5 border-t border-indigo-900/40">
                 <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-1">
-                  <span>Chat Attive</span>
+                  <span>{t('workspaceExplorer.activeChats')}</span>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -283,14 +285,14 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                               <button
                                 type="button"
                                 onClick={(e) => handleStartRenameSession(session, e)}
-                                title="Rinomina chat"
+                                title={t('workspaceExplorer.renameChat')}
                                 className="p-0.5 text-slate-400 hover:text-cyan-300 rounded"
                               >
                                 <Edit2 className="w-3 h-3" />
                               </button>
                               <InlineDestructiveConfirm
                                 itemLabel={session.title}
-                                hint="Elimina la sessione dell'app"
+                                hint={t('workspaceExplorer.deleteSessionHint')}
                                 iconClassName="w-3 h-3"
                                 className="!p-0.5 text-slate-400 hover:text-rose-400"
                                 onConfirm={() => onDeleteSession(session.id)}
@@ -311,7 +313,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                       onRevealStandaloneWorkspace()
                     }}
                     className="py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[9px] font-semibold rounded-lg flex items-center justify-center gap-1 cursor-pointer"
-                    title="Mostra il workspace scratch in Esplora file"
+                    title={t('workspaceExplorer.revealScratch')}
                   >
                     <FolderOpen className="w-3 h-3" /> Mostra
                   </button>
@@ -322,14 +324,14 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                       onExportStandaloneWorkspace()
                     }}
                     className="py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[9px] font-semibold rounded-lg flex items-center justify-center gap-1 cursor-pointer"
-                    title="Esporta una copia del workspace scratch"
+                    title={t('workspaceExplorer.exportScratch')}
                   >
                     <Download className="w-3 h-3" /> Esporta
                   </button>
                   <InlineDestructiveConfirm
                     itemLabel="workspace scratch"
                     actionLabel="Svuota"
-                    hint="Rimuove tutti i file dal workspace scratch persistente"
+                    hint={t('workspaceExplorer.clearScratchHint')}
                     className="justify-center border border-slate-700 rounded-lg"
                     iconClassName="w-3 h-3"
                     onConfirm={onClearStandaloneWorkspace}
@@ -342,7 +344,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                     onClick={onAddProject}
                     className="w-full py-1 bg-indigo-950/60 hover:bg-indigo-900/80 border border-indigo-800/60 text-indigo-300 text-[10px] font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                   >
-                    <FolderPlus className="w-3 h-3" /> Collega a una cartella di lavoro...
+                    <FolderPlus className="w-3 h-3" /> {t('uiShell.attachFolder')}
                   </button>
                 </div>
               </div>
@@ -412,7 +414,9 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                           <div className={`font-bold text-[11px] truncate flex items-center gap-1.5 ${isProjActive ? 'text-cyan-200' : 'text-slate-200'}`}>
                             <span>{proj.name}</span>
                             {isProjActive && (
-                              <span className="px-1 py-0.2 rounded text-[8px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">In Uso</span>
+                              <span className="px-1 py-0.2 rounded text-[8px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                                {t('workspaceExplorer.inUse')}
+                              </span>
                             )}
                           </div>
                           <div className="text-[9px] font-mono text-slate-400 truncate" title={proj.path}>
@@ -432,7 +436,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                           e.stopPropagation()
                           onOpenProjectPath(proj.path)
                         }}
-                        title="Apri cartella root in Esplora Risorse"
+                        title={t('workspaceExplorer.openRootFolder')}
                         className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition-colors focus-ring"
                       >
                         <ExternalLink className="w-3 h-3" />
@@ -441,14 +445,14 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                     <button
                       type="button"
                       onClick={(e) => handleStartRenameProject(proj, e)}
-                      title="Rinomina nome visualizzato"
+                      title={t('workspaceExplorer.renameDisplayName')}
                       className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition-colors focus-ring"
                     >
                       <Edit2 className="w-3 h-3" />
                     </button>
                     <InlineDestructiveConfirm
                       itemLabel={proj.name}
-                      hint="Rimuove solo cronologia e riferimenti app. I file su disco non vengono toccati."
+                      hint={t('workspaceExplorer.removeProjectHint')}
                       iconClassName="w-3 h-3"
                       className="!p-1 text-slate-400 hover:text-rose-400"
                       onConfirm={() => onRemoveProject(proj.path)}
@@ -469,7 +473,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                         }}
                         className="text-cyan-400 hover:text-cyan-300 flex items-center gap-0.5 font-bold cursor-pointer"
                       >
-                        <Plus className="w-3 h-3" /> Nuova Sessione
+                        <Plus className="w-3 h-3" /> {t('uiShell.newSession')}
                       </button>
                     </div>
 
@@ -522,14 +526,14 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                                   <button
                                     type="button"
                                     onClick={(e) => handleStartRenameSession(session, e)}
-                                    title="Rinomina sessione"
+                                    title={t('workspaceExplorer.renameSession')}
                                     className="p-0.5 text-slate-400 hover:text-cyan-300 rounded"
                                   >
                                     <Edit2 className="w-3 h-3" />
                                   </button>
                                   <InlineDestructiveConfirm
                                     itemLabel={session.title}
-                                    hint="Elimina la sessione dell'app"
+                                    hint={t('workspaceExplorer.deleteSessionHint')}
                                     iconClassName="w-3 h-3"
                                     className="!p-0.5 text-slate-400 hover:text-rose-400"
                                     onConfirm={() => onDeleteSession(session.id)}
@@ -558,13 +562,13 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
             >
               {filesSectionExpanded ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
               <FolderOpen className="w-3 h-3 text-cyan-400" />
-              <span>File Progetto ({files.length})</span>
+              <span>{t('workspaceExplorer.projectFiles', { count: files.length })}</span>
             </button>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 type="button"
                 onClick={onRefreshFiles}
-                title="Ricarica albero file da disco"
+                title={t('workspaceExplorer.reloadFileTree')}
                 className="p-1 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded transition-colors focus-ring"
               >
                 <RefreshCw className="w-3 h-3" />
@@ -582,7 +586,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                     type="text"
                     value={searchFilter}
                     onChange={(e) => setSearchFilter(e.target.value)}
-                    placeholder="Filtra file nel progetto..."
+                    placeholder={t('workspaceExplorer.filterFiles')}
                     className="w-full bg-transparent text-[11px] text-slate-200 placeholder:text-slate-500 outline-none font-mono"
                   />
                   {searchFilter && (
@@ -622,7 +626,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                               e.stopPropagation()
                               onTogglePinFile(file)
                             }}
-                            title="Rimuovi dal contesto"
+                            title={t('workspaceExplorer.removeFromContext')}
                             className="p-0.5 text-slate-400 hover:text-rose-400"
                           >
                             <PinOff className="w-2.5 h-2.5" />
@@ -638,7 +642,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
               <div className="px-1.5">
                 {!activeProjectPath ? (
                   <div className="p-3 text-center text-[11px] text-slate-500 space-y-2 bg-slate-900/30 rounded-xl border border-slate-800/60">
-                    <p>{isStandalone ? 'Inizializzazione del workspace scratch…' : 'Nessuna cartella di progetto collegata.'}</p>
+                    <p>{isStandalone ? t('workspaceExplorer.scratchInitializing') : t('workspaceExplorer.noProjectFolder')}</p>
                     <button
                       type="button"
                       onClick={onAddProject}

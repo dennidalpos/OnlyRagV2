@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { logger } from '../infrastructure/logging/logger'
 import { DiagnosticsAppService } from './diagnosticsAppService'
 
@@ -22,5 +22,17 @@ describe('DiagnosticsAppService', () => {
 
     expect(service.getLogs()).toEqual([])
     expect(service.getLogFilePath()).toEqual(logger.getLogFilePath())
+  })
+})
+
+describe('DiagnosticsAppService.runDiagnostics', () => {
+  it('reports the Sidecar health it just checked through the hardware probe port', async () => {
+    const sidecar = { status: 'online' as const, version: '2.5.0' }
+    const report = { timestamp: 'now' }
+    const runFullDiagnostics = vi.fn(async () => report as never)
+    const service = new DiagnosticsAppService({ openPath: vi.fn() }, { runFullDiagnostics }, async () => sidecar)
+
+    await expect(service.runDiagnostics('http://127.0.0.1:11434')).resolves.toBe(report)
+    expect(runFullDiagnostics).toHaveBeenCalledWith(sidecar, 'http://127.0.0.1:11434')
   })
 })

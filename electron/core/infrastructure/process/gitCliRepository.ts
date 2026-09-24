@@ -17,6 +17,11 @@ export interface GitCommitPreview {
 }
 
 /** Git CLI wrapper with argv-based commits and read-only inspection commands. */
+/** A commit is approved by the hash of its full diff, so the diff must fit in memory whole. */
+const GIT_DIFF_MAX_BUFFER = 64 * 1024 * 1024
+/** Tool output is truncated anyway; a larger diff overflows with its first part kept (ENOBUFS). */
+const GIT_RUN_MAX_BUFFER = 8 * 1024 * 1024
+
 export class GitCliRepository {
   private normalizeOwnedPaths(cwd: string, ownedPaths: readonly string[]): string[] {
     const root = path.resolve(cwd)
@@ -54,6 +59,7 @@ export class GitCliRepository {
       const diffText = execFileSync('git', ['diff', '--cached', '--binary', '--no-ext-diff', '--', ...paths], {
         cwd,
         env,
+        maxBuffer: GIT_DIFF_MAX_BUFFER,
         encoding: 'utf-8',
         timeout: 15000,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -74,6 +80,7 @@ export class GitCliRepository {
     execFileSync('git', ['add', '--', ...preview.paths], { cwd, encoding: 'utf-8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] })
     const stagedDiff = execFileSync('git', ['diff', '--cached', '--binary', '--no-ext-diff', '--', ...preview.paths], {
       cwd,
+      maxBuffer: GIT_DIFF_MAX_BUFFER,
       encoding: 'utf-8',
       timeout: 15000,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -200,7 +207,7 @@ export class GitCliRepository {
 
   /** Runs git with an argument vector (no shell), e.g. run(cwd, ['status', '--short'], 10000). */
   run(cwd: string, args: readonly string[], timeoutMs: number): string {
-    return execFileSync('git', [...args], { cwd, encoding: 'utf-8', timeout: timeoutMs, stdio: ['pipe', 'pipe', 'pipe'] })
+    return execFileSync('git', [...args], { cwd, encoding: 'utf-8', timeout: timeoutMs, maxBuffer: GIT_RUN_MAX_BUFFER, stdio: ['pipe', 'pipe', 'pipe'] })
   }
 }
 

@@ -11,6 +11,7 @@ import { safeAtomicWrite } from './safeAtomicFileWriter'
 import type { AgentExecutionPhase } from '../../domain/agent/agentExecutionPhase'
 import type { RecoveryFailureState } from '../../domain/agent/recoveryBudget'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../../domain/agent/ollamaSessionRuntime'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export type AgentSessionTerminationReason =
   | 'finish'
@@ -81,8 +82,8 @@ export class AgentSessionStateRepository {
         try {
           fs.mkdirSync(stateDir, { recursive: true })
           this.migrateLegacyStateFiles(workspacePath, stateDir)
-        } catch (err: any) {
-          logger.log('WARN', 'AgentSessionStateRepo', `Could not create .onlyrag/sessions dir in workspace: ${err.message}`)
+        } catch (err: unknown) {
+          logger.log('WARN', 'AgentSessionStateRepo', `Could not create .onlyrag/sessions dir in workspace: ${errorMessage(err)}`)
         }
       }
       if (fs.existsSync(stateDir)) return stateDir
@@ -92,8 +93,8 @@ export class AgentSessionStateRepository {
     if (!fs.existsSync(fallbackDir)) {
       try {
         fs.mkdirSync(fallbackDir, { recursive: true })
-      } catch (err: any) {
-        logger.log('WARN', 'AgentSessionStateRepo', `Could not create fallback session dir: ${err.message}`)
+      } catch (err: unknown) {
+        logger.log('WARN', 'AgentSessionStateRepo', `Could not create fallback session dir: ${errorMessage(err)}`)
       }
     }
     return fallbackDir
@@ -109,8 +110,8 @@ export class AgentSessionStateRepository {
           fs.renameSync(path.join(legacyDir, entry.name), path.join(newStateDir, entry.name))
         }
       }
-    } catch (err: any) {
-      logger.log('WARN', 'AgentSessionStateRepo', `Legacy state migration skipped: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Legacy state migration skipped: ${errorMessage(err)}`)
     }
   }
 
@@ -125,8 +126,8 @@ export class AgentSessionStateRepository {
     try {
       const payload = JSON.stringify(state, null, 2)
       return await safeAtomicWrite(filePath, payload)
-    } catch (err: any) {
-      logger.log('WARN', 'AgentSessionStateRepo', `Failed saving session state for ${state.sessionId}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Failed saving session state for ${state.sessionId}: ${errorMessage(err)}`)
       return false
     }
   }
@@ -143,8 +144,8 @@ export class AgentSessionStateRepository {
       const trackerPath = path.join(assistantDir, 'SESSION_TRACKER.md')
       const markdown = tracker.compileTrackerMarkdown()
       return await safeAtomicWrite(trackerPath, markdown)
-    } catch (err: any) {
-      logger.log('WARN', 'AgentSessionStateRepo', `Failed saving SESSION_TRACKER.md: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Failed saving SESSION_TRACKER.md: ${errorMessage(err)}`)
       return false
     }
   }
@@ -155,8 +156,8 @@ export class AgentSessionStateRepository {
       const trackerPath = path.join(workspacePath, '.onlyrag', 'assistant', 'SESSION_TRACKER.md')
       if (!fs.existsSync(trackerPath)) return null
       return fs.readFileSync(trackerPath, 'utf-8')
-    } catch (err: any) {
-      logger.log('WARN', 'AgentSessionStateRepo', `Failed reading SESSION_TRACKER.md: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Failed reading SESSION_TRACKER.md: ${errorMessage(err)}`)
       return null
     }
   }
@@ -168,8 +169,8 @@ export class AgentSessionStateRepository {
       if (fs.existsSync(legacyPath)) {
         await fs.promises.rename(legacyPath, path.join(newAssistantDir, 'SESSION_TRACKER.md'))
       }
-    } catch (err: any) {
-      logger.log('WARN', 'AgentSessionStateRepo', `Legacy tracker migration skipped: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Legacy tracker migration skipped: ${errorMessage(err)}`)
     }
   }
 
@@ -184,8 +185,8 @@ export class AgentSessionStateRepository {
       }
       const raw = await fs.promises.readFile(filePath, 'utf-8')
       return normalizePersistedMode(JSON.parse(raw))
-    } catch (err: any) {
-      logger.log('WARN', 'AgentSessionStateRepo', `Failed loading session state for ${sessionId}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Failed loading session state for ${sessionId}: ${errorMessage(err)}`)
       return null
     }
   }
@@ -237,8 +238,8 @@ export class AgentSessionStateRepository {
         await fs.promises.unlink(fallbackPath)
       }
       return true
-    } catch (err: any) {
-      logger.log('WARN', 'AgentSessionStateRepo', `Failed clearing session state for ${sessionId}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Failed clearing session state for ${sessionId}: ${errorMessage(err)}`)
       return false
     }
   }
@@ -253,16 +254,16 @@ export class AgentSessionStateRepository {
             if (file.startsWith('.agent_state_') && file.endsWith('.json')) {
               try {
                 await fs.promises.unlink(path.join(dir, file))
-              } catch (unlinkErr: any) {
-                logger.log('WARN', 'AgentSessionStateRepo', `Failed deleting state file ${file}: ${unlinkErr.message}`)
+              } catch (unlinkErr: unknown) {
+                logger.log('WARN', 'AgentSessionStateRepo', `Failed deleting state file ${file}: ${errorMessage(unlinkErr)}`)
               }
             }
           }
         }
       }
       return true
-    } catch (err: any) {
-      logger.log('WARN', 'AgentSessionStateRepo', `Failed clearing all session states: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Failed clearing all session states: ${errorMessage(err)}`)
       return false
     }
   }

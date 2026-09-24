@@ -65,6 +65,7 @@ export interface LogEntry {
   category: string
 }
 
+/** Metadata of an indexed document, as listed by `ingest:list`. */
 export interface IngestedDocument {
   id: string
   filename: string
@@ -72,11 +73,15 @@ export interface IngestedDocument {
   fileSize: number
   numPages: number
   numChunks: number
-  extractedMarkdown: string
   status: 'processing' | 'indexed' | 'indexed_fallback' | 'error'
   ingestedAt: string
   fileType: 'pdf' | 'image' | 'docx' | 'text'
   usedFallbackEmbeddings?: boolean
+}
+
+/** A document with its extracted Markdown: `ingest:get`, ingestion, update and translation results. */
+export interface IngestedDocumentContent extends IngestedDocument {
+  extractedMarkdown: string
 }
 
 export interface VectorSearchResult {
@@ -491,7 +496,10 @@ export interface IngestionStreamProgressPayload {
   taskId: string
   type: 'progress' | 'done'
   percent: number
+  /** English fallback text; the renderer shows `step_code` (with `step_params`) translated when it knows the code. */
   step: string
+  step_code?: string
+  step_params?: Record<string, string | number>
   pipeline?: string
   page?: number
   total_pages?: number
@@ -502,7 +510,9 @@ export interface IngestionStreamProgressPayload {
 }
 
 export interface TranslateProgressPayload {
-  type: 'start' | 'progress' | 'done' | 'error'
+  /** Main's id for the running job; `task:cancel` with it stops the job. */
+  taskId?: string
+  type: 'start' | 'progress' | 'done' | 'error' | 'cancelled'
   doc_id?: string
   filename?: string
   page?: number
@@ -611,8 +621,8 @@ export interface IElectronAPI {
     numCtx?: number,
     taskId?: string,
     normalizationThink?: boolean,
-  ) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
-  updateIngestedDocument: (docId: string, markdownContent: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
+  ) => Promise<{ success: boolean; data?: IngestedDocumentContent; error?: string }>
+  updateIngestedDocument: (docId: string, markdownContent: string) => Promise<{ success: boolean; data?: IngestedDocumentContent; error?: string }>
   translateDocumentInplace: (
     docId: string,
     sourceLang: string,
@@ -621,9 +631,10 @@ export interface IElectronAPI {
     targetDir?: string,
     numCtx?: number,
     think?: boolean,
-  ) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
+  ) => Promise<{ success: boolean; data?: IngestedDocumentContent; error?: string }>
   getDocumentPagePreview: (docId: string, pageNumber: number) => Promise<PagePreviewData | null>
   getIngestedDocuments: () => Promise<IngestedDocument[]>
+  getIngestedDocument: (docId: string) => Promise<IngestedDocumentContent | null>
   deleteIngestedDocument: (docId: string) => Promise<{ success: boolean; error?: string }>
   searchVectorDb: (query: string, topK?: number, docIds?: string[]) => Promise<VectorSearchResult[]>
   exportDocument: (markdownContent: string, format: string, outputFolder?: string) => Promise<{ success: boolean; message?: string; error?: string }>

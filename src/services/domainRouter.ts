@@ -1,4 +1,5 @@
 import type { AppSettings } from '../types'
+import { resolveConfiguredModel } from '../../shared/domain/settings/configuredModel'
 
 export type ChatDomainIntent = 'general' | 'medical' | 'legal'
 
@@ -331,7 +332,7 @@ const CHITCHAT_PATTERNS: RegExp[] = [
  */
 export function evaluateDomainIntent(query: string, settings: AppSettings, _availableModels?: string[]): DomainRoutingResult {
   const cleanQuery = (query || '').trim()
-  const defaultModel = settings.chatModel || settings.defaultModel || 'llama3.2'
+  const defaultModel = resolveConfiguredModel('chat', settings)
 
   if (!cleanQuery) {
     return {

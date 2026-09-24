@@ -5,6 +5,7 @@ import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AppSettings } from '../../../shared/types'
 import { getDefaultAppSettings } from '../domain/settings/appSettingsDomain'
 import { standaloneScratchWorkspace } from '../infrastructure/filesystem/standaloneScratchWorkspace'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 /** Resolves the effective workspace directory for a run: 1. */
 export function resolveWorkspacePath(
@@ -16,8 +17,8 @@ export function resolveWorkspacePath(
     if (!documentIoRepository.exists(rawPath)) {
       try {
         documentIoRepository.ensureDirectory(rawPath)
-      } catch (err: any) {
-        logger.log('WARN', 'AgentOrchestratorApp', `Could not create workspace directory '${rawPath}': ${err.message}`)
+      } catch (err: unknown) {
+        logger.log('WARN', 'AgentOrchestratorApp', `Could not create workspace directory '${rawPath}': ${errorMessage(err)}`)
       }
     }
     if (documentIoRepository.exists(rawPath)) {
@@ -29,8 +30,8 @@ export function resolveWorkspacePath(
   if (payload.isStandaloneMode) {
     try {
       return scratchWorkspace.getPath()
-    } catch (err: any) {
-      logger.log('WARN', 'AgentOrchestratorApp', `Could not create the standalone scratch workspace: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentOrchestratorApp', `Could not create the standalone scratch workspace: ${errorMessage(err)}`)
       return null
     }
   }
@@ -40,15 +41,12 @@ export function resolveWorkspacePath(
 
 /**
  * Fallback settings used only when the caller (renderer) didn't supply any. Derived from the
- * canonical defaults so the fallback is fail-closed: no terminal, no file writes, offline-strict.
+ * canonical defaults so the fallback is fail-closed: no terminal, no file writes, offline-strict,
+ * and no model (the preflight reports it instead of guessing one that may not be installed).
  */
 export function buildDefaultAgentSettings(): AppSettings {
   return {
     ...getDefaultAppSettings(),
-    defaultModel: 'llama3.2',
-    codingModel: 'llama3.2',
-    translationModel: 'llama3.2',
-    visionModel: 'llama3.2-vision',
     embeddingModel: 'nomic-embed-text',
     customPromptOverrides: {},
   }
@@ -70,8 +68,8 @@ export function buildPinnedFilesContextBlock(payload: Pick<AgentTaskPayload, 'pi
       if (!content && f.path && documentIoRepository.exists(f.path)) {
         try {
           content = documentIoRepository.readText(f.path)
-        } catch (err: any) {
-          logger.log('WARN', 'AgentOrchestratorApp', `Could not read pinned file ${f.path}: ${err.message}`)
+        } catch (err: unknown) {
+          logger.log('WARN', 'AgentOrchestratorApp', `Could not read pinned file ${f.path}: ${errorMessage(err)}`)
         }
       }
       return `[EXPLICIT REFERENCED FILE: ${f.name} (${f.path})]\n\`\`\`\n${(content || '').slice(0, 12000)}\n\`\`\``

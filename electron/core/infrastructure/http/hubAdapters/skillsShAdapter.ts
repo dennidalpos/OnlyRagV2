@@ -1,5 +1,5 @@
 import { HubSkillItem, SkillHubSource, SkillCategory } from '../../../domain/skills/skillTypes'
-import { ISkillHubAdapter } from './hubAdapterInterface'
+import type { ISkillHubAdapter } from '../../../domain/ports/skillHubAdapterPort'
 import { logger } from '../../logging/logger'
 
 export const SKILLS_SH_FEATURED_SKILLS: Record<

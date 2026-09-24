@@ -1,7 +1,8 @@
 import { HubSkillItem, SkillHubSource, SkillCategory } from '../../../domain/skills/skillTypes'
-import { ISkillHubAdapter } from './hubAdapterInterface'
+import type { ISkillHubAdapter } from '../../../domain/ports/skillHubAdapterPort'
 import { webClient } from '../webClient'
 import { logger } from '../../logging/logger'
+import { errorMessage } from '../../../../../shared/domain/errors/errorMessage'
 
 export const ANTHROPIC_KNOWN_SKILLS: Record<string, { description: string; category: SkillCategory; triggers: string[]; tags: string[] }> = {
   pdf: {
@@ -191,8 +192,8 @@ export class AnthropicSkillsAdapter implements ISkillHubAdapter {
           // fallback to known skills
         }
       }
-    } catch (err: any) {
-      logger.log('WARN', 'AnthropicAdapter', `GitHub API contents lookup failed: ${err.message}. Using verified catalog.`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AnthropicAdapter', `GitHub API contents lookup failed: ${errorMessage(err)}. Using verified catalog.`)
     }
 
     const items: HubSkillItem[] = []

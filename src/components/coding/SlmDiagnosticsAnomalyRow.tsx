@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { AlertTriangle, AlertCircle, ShieldAlert, FileSearch, Lightbulb, ChevronDown, ChevronRight, Copy, Check } from 'lucide-react'
 import type { SlmAnomalyRecord } from '../../types'
+import { useTranslation } from '../../i18n'
 
 type Severity = 'CRITICAL' | 'ERROR' | 'WARNING'
 
@@ -31,6 +32,7 @@ interface AnomalyRowProps {
 }
 
 export const SlmDiagnosticsAnomalyRow: React.FC<AnomalyRowProps> = ({ anomaly, index }) => {
+  const { t } = useTranslation()
   const { badge, icon } = getSeverityStyles(anomaly.severity)
   const shortFile = anomaly.log_file.replace(/^.*[/\\]/, '')
   const [isExpanded, setIsExpanded] = useState<boolean>(false)
@@ -85,7 +87,7 @@ export const SlmDiagnosticsAnomalyRow: React.FC<AnomalyRowProps> = ({ anomaly, i
             onClick={() => setIsExpanded(!isExpanded)}
             className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
           >
-            <span>{isExpanded ? 'Comprimi' : 'Dettagli'}</span>
+            <span>{isExpanded ? t('uiShell.collapse') : t('uiShell.details2')}</span>
             {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           </button>
         )}
@@ -105,9 +107,9 @@ export const SlmDiagnosticsAnomalyRow: React.FC<AnomalyRowProps> = ({ anomaly, i
           <button
             type="button"
             onClick={handleCopySnippet}
-            aria-label="Copia snippet di log"
+            aria-label={t('uiShell.copyLogSnippet')}
             className="absolute top-1.5 right-1.5 p-1 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-ring cursor-pointer"
-            title="Copia snippet di log"
+            title={t('uiShell.copyLogSnippet')}
           >
             {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
           </button>

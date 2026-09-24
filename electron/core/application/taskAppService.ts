@@ -1,9 +1,5 @@
 import { taskRunner } from '../infrastructure/process/taskRunner'
-
-export interface TaskRunnerPort {
-  cancelTask(taskId: string): { success: boolean; message: string }
-  cancelAllTasks(): void
-}
+import type { TaskRunnerPort } from '../domain/ports/taskRunnerPort'
 
 export class TaskAppService {
   constructor(private readonly runner: TaskRunnerPort = taskRunner) {}

@@ -84,7 +84,7 @@ describe('PlanReviewCard', () => {
       },
     ])
 
-    expect(prepared.error).toContain('percorsi relativi')
+    expect(prepared.error).toBe('planReview.invalidPaths')
     expect(prepared.revision).toBeUndefined()
   })
 

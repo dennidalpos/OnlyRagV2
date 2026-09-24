@@ -2,6 +2,7 @@ import * as ts from 'typescript'
 import * as path from 'node:path'
 import levenshtein from 'fast-levenshtein'
 import { scriptKindForPath } from './sourceScriptKind'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export interface ASTValidationResult {
   isValid: boolean
@@ -100,8 +101,8 @@ export function validateAST(filePath: string, content: string): ASTValidationRes
       try {
         JSON.parse(content)
         return { isValid: true }
-      } catch (err: any) {
-        return { isValid: false, syntaxError: `JSON Syntax Error: ${err.message}` }
+      } catch (err: unknown) {
+        return { isValid: false, syntaxError: `JSON Syntax Error: ${errorMessage(err)}` }
       }
     }
 

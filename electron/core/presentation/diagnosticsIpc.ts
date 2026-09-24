@@ -1,14 +1,11 @@
 import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { type LogLevel } from '../infrastructure/logging/logger'
-import { runFullDiagnostics } from '../../diagnostics'
 import { diagnosticsAppService } from '../application/diagnosticsAppService'
-import { sidecarAppService } from '../application/sidecarAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 
 export function registerDiagnosticsIpcHandlers() {
   ipcMain.handle('diagnostics:run', async (_, host?: string) => {
-    const sidecarState = await sidecarAppService.checkHealth()
-    return await runFullDiagnostics(sidecarState, host)
+    return diagnosticsAppService.runDiagnostics(host)
   })
 
   ipcMain.handle('diagnostics:get-logs', async () => {

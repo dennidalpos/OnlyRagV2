@@ -4,6 +4,8 @@ import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../constants/promptConfig'
 import { useIngestedDocuments } from './useIngestedDocuments'
+import { useDocumentMarkdown } from './useDocumentMarkdown'
+import { loadDocumentMarkdown } from '../services/documentMarkdown'
 import { useTranslation as useI18n } from '../i18n'
 import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from '../services/globalTaskLock'
 import { normalizeError } from '../lib/errors/errorNormalizer'
@@ -13,6 +15,8 @@ import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwarePr
 import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 import { useOllamaGenerationState } from './useOllamaGenerationState'
 import { resolveOllamaThinkingPreference } from '../../shared/domain/agent/ollamaThinkingPolicy'
+import { resolveConfiguredModel } from '../../shared/domain/settings/configuredModel'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 export const LANGUAGES = ['English', 'Italian', 'German', 'French', 'Spanish', 'Portuguese', 'Russian', 'Chinese', 'Japanese']
 
@@ -77,6 +81,26 @@ export function extractPageMarkdown(fullMarkdown: string, pageNumber: number): s
 
 const isLayoutTranslatable = (doc: IngestedDocument) => doc.fileType === 'pdf' || doc.fileType === 'docx'
 
+export type TranslationJobKind = 'markdown' | 'inplace'
+
+/** State both translators of one view share: the language pair and which of them is running. */
+export interface SharedTranslationState {
+  sourceLang: string
+  setSourceLang: (lang: string) => void
+  targetLang: string
+  setTargetLang: (lang: string) => void
+  activeJob: TranslationJobKind | null
+  setActiveJob: (job: TranslationJobKind | null) => void
+}
+
+/** Owned by the view that mounts both translators, so one job at a time runs across its tabs. */
+export function useSharedTranslationState(): SharedTranslationState {
+  const [sourceLang, setSourceLang] = useState('Italian')
+  const [targetLang, setTargetLang] = useState('English')
+  const [activeJob, setActiveJob] = useState<TranslationJobKind | null>(null)
+  return { sourceLang, setSourceLang, targetLang, setTargetLang, activeJob, setActiveJob }
+}
+
 /**
  * State shared by the Markdown and the layout-preserving translators: document selection, language pair,
  * the cross-module task lock, and the model/context/thinking options resolved from settings.
@@ -84,15 +108,25 @@ const isLayoutTranslatable = (doc: IngestedDocument) => doc.fileType === 'pdf' |
 function useTranslationBase(
   settings: AppSettings | undefined,
   diagnostics: DiagnosticsData | null | undefined,
+  jobKind: TranslationJobKind,
   acceptsDocument?: (doc: IngestedDocument) => boolean,
+  sharedState?: SharedTranslationState,
 ) {
   const { t } = useI18n()
   const { metrics: modelMetrics } = useOllamaModelMetrics(settings?.ollamaHost)
   const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics || null))
   const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
-  const [sourceLang, setSourceLang] = useState('Italian')
-  const [targetLang, setTargetLang] = useState('English')
+  const ownState = useSharedTranslationState()
+  const { sourceLang, setSourceLang, targetLang, setTargetLang, activeJob, setActiveJob } = sharedState ?? ownState
   const [isTranslating, setIsTranslating] = useState(false)
+  /** The other translator of the same view is running: both use the same 'translation' lock key. */
+  const otherJobRunning = activeJob !== null && activeJob !== jobKind
+
+  useEffect(() => {
+    if (!isTranslating) return
+    setActiveJob(jobKind)
+    return () => setActiveJob(null)
+  }, [isTranslating, jobKind, setActiveJob])
 
   // Mirrors isTranslating into the cross-module task lock so the coding agent/ingestion module can block starting their own task while a translation is mid-flight (see globalTaskLock.ts).
   useEffect(() => {
@@ -117,6 +151,7 @@ function useTranslationBase(
 
   /** Message explaining why another module's running task blocks translation, or null when translation may start. */
   const crossModuleBlockMessage = (): string | null => {
+    if (otherJobRunning) return t('translation.otherJobRunning')
     const busyModule = peekGlobalTaskLock()
     if (!busyModule || busyModule === 'translation') return null
     return t('common.crossModuleTaskBlocked', { module: t(busyModule === 'coding' ? 'common.moduleNameCoding' : 'common.moduleNameIngestion') })
@@ -124,7 +159,7 @@ function useTranslationBase(
 
   /** Model, context window and thinking flag for the configured translation model; null when no model is configured. */
   const resolveGenerationOptions = (): { model: string; numCtx: number; think: boolean } | null => {
-    const model = settings?.translationModel || settings?.defaultModel
+    const model = resolveConfiguredModel('translation', settings)
     if (!model) return null
     return {
       model,
@@ -147,13 +182,15 @@ function useTranslationBase(
     isTranslating,
     setIsTranslating,
     crossModuleBlockMessage,
+    otherJobRunning,
     resolveGenerationOptions,
   }
 }
 
-export function useDocumentTranslation(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
-  const base = useTranslationBase(settings, diagnostics)
+export function useDocumentTranslation(settings?: AppSettings, diagnostics?: DiagnosticsData | null, sharedState?: SharedTranslationState) {
+  const base = useTranslationBase(settings, diagnostics, 'markdown', undefined, sharedState)
   const { t, selectedDoc, sourceLang, targetLang, isTranslating, setIsTranslating, setSelectedDoc } = base
+  const { markdown: selectedDocMarkdown } = useDocumentMarkdown(selectedDoc)
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [translatedMarkdown, setTranslatedMarkdown] = useState('')
   const [isTranslationComplete, setIsTranslationComplete] = useState(false)
@@ -222,8 +259,8 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     if (operationId && window.electronAPI?.cancelOllamaStream) {
       try {
         await window.electronAPI.cancelOllamaStream(operationId)
-      } catch (err: any) {
-        logger.warn('useTranslation', `Error cancelling Ollama stream: ${err.message}`)
+      } catch (err: unknown) {
+        logger.warn('useTranslation', `Error cancelling Ollama stream: ${errorMessage(err)}`)
       }
     }
     activeStreamIdRef.current = null
@@ -250,6 +287,12 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
       return
     }
 
+    const fullMarkdown = selectedDocMarkdown ?? (await loadDocumentMarkdown(selectedDoc))
+    if (fullMarkdown === null) {
+      showTranslationError(t('common.documentLoadFailed'))
+      return
+    }
+
     abortTranslationRef.current = false
     setIsTranslating(true)
     setIsTranslationComplete(false)
@@ -257,10 +300,7 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     setCurrentChunkIndex(0)
 
     try {
-      const sourceMarkdown =
-        pageViewMode === 'page' && selectedDoc.numPages > 1
-          ? extractPageMarkdown(selectedDoc.extractedMarkdown || '', currentPage)
-          : selectedDoc.extractedMarkdown || ''
+      const sourceMarkdown = pageViewMode === 'page' && selectedDoc.numPages > 1 ? extractPageMarkdown(fullMarkdown, currentPage) : fullMarkdown
 
       const chunks = splitMarkdownForTranslation(sourceMarkdown)
       setTotalChunks(chunks.length)
@@ -367,6 +407,7 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     setIsPromptModalOpen,
     documents: base.documents,
     selectedDoc,
+    selectedDocMarkdown,
     setSelectedDoc,
     sourceLang,
     setSourceLang: base.setSourceLang,
@@ -375,6 +416,7 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     translatedMarkdown,
     setTranslatedMarkdown,
     isTranslating,
+    otherJobRunning: base.otherJobRunning,
     isTranslationComplete,
     generationState,
     currentChunkIndex,
@@ -401,16 +443,26 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
   }
 }
 
-export function useInplaceTranslation(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
-  const base = useTranslationBase(settings, diagnostics, isLayoutTranslatable)
+/**
+ * Layout-preserving translation. Its state must outlive the panel that shows it: the view mounts
+ * this hook once, so switching to the Markdown tab keeps the job's progress and the 'translation'
+ * task lock for as long as the sidecar job runs.
+ */
+export function useInplaceTranslation(settings?: AppSettings, diagnostics?: DiagnosticsData | null, sharedState?: SharedTranslationState) {
+  const base = useTranslationBase(settings, diagnostics, 'inplace', isLayoutTranslatable, sharedState)
   const { t, selectedDoc, sourceLang, targetLang, isTranslating, setIsTranslating } = base
   const [targetDir, setTargetDir] = useState<string>(settings?.translationOutputFolder || '')
   const [translateProgress, setTranslateProgress] = useState<TranslateProgressPayload | null>(null)
   const [status, setStatus] = useState<{ success: boolean; message: string; filename?: string } | null>(null)
+  const [isCancelling, setIsCancelling] = useState(false)
+  // Main assigns the task id and reports it on every progress event of the running job.
+  const activeTaskIdRef = useRef<string | null>(null)
+  const cancelRequestedRef = useRef(false)
 
   // Listen to live streaming translation progress from Electron / sidecar
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onTranslateProgress?.((payload) => {
+      if (payload.taskId) activeTaskIdRef.current = payload.taskId
       setTranslateProgress(payload)
     })
     return () => {
@@ -449,24 +501,32 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
       setStatus({ success: false, message: t('translation.inplaceTargetDirRequired') })
       return
     }
+    const generation = base.resolveGenerationOptions()
+    if (!generation) {
+      setStatus({ success: false, message: t('translation.noModelConfigured') })
+      return
+    }
 
     setIsTranslating(true)
     setStatus(null)
     setTranslateProgress(null)
+    activeTaskIdRef.current = null
+    cancelRequestedRef.current = false
 
     try {
-      const generation = base.resolveGenerationOptions()
       const res = await apiService.translateDocumentInplace(
         docToTranslate.id,
         sourceLang,
         targetLang,
-        generation?.model,
+        generation.model,
         targetDir,
-        generation?.numCtx,
-        generation?.think ?? false,
+        generation.numCtx,
+        generation.think,
       )
 
-      if (res.success && res.data) {
+      if (cancelRequestedRef.current && !(res.success && res.data)) {
+        setStatus({ success: false, message: t('translation.inplaceCancelled') })
+      } else if (res.success && res.data) {
         setStatus({
           success: true,
           message: t('translation.inplaceSuccess', { filename: res.data.filename }),
@@ -486,8 +546,19 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
         message: t('translation.inplaceError', { message: normalized.message }),
       })
     } finally {
+      activeTaskIdRef.current = null
+      setIsCancelling(false)
       setIsTranslating(false)
     }
+  }
+
+  /** Asks Main to cancel the running job; the sidecar stops between pages and writes no output file. */
+  const handleCancelInplaceTranslation = async () => {
+    const taskId = activeTaskIdRef.current
+    if (!taskId || !window.electronAPI?.cancelTask) return
+    cancelRequestedRef.current = true
+    setIsCancelling(true)
+    await window.electronAPI.cancelTask(taskId)
   }
 
   return {
@@ -501,11 +572,17 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
     targetDir,
     setTargetDir,
     isTranslating,
+    otherJobRunning: base.otherJobRunning,
     translateProgress,
     status,
     setStatus,
     handleSwapLanguages: base.handleSwapLanguages,
     handleSelectTargetDir,
     handleStartInplaceTranslation,
+    isCancelling,
+    canCancel: isTranslating && Boolean(translateProgress?.taskId),
+    handleCancelInplaceTranslation,
   }
 }
+
+export type InplaceTranslationState = ReturnType<typeof useInplaceTranslation>

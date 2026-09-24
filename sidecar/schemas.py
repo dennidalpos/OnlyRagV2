@@ -1,5 +1,5 @@
 from typing import Any, Dict, Literal, Optional, List
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 NON_BLANK = r".*\S.*"
 MODEL_NAME = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
@@ -33,18 +33,21 @@ class HealthResponse(BaseModel):
     python_version: str
 
 
-class DocumentRecord(BaseModel):
+class DocumentSummary(BaseModel):
     id: str
     filename: str
     file_path: str
     file_size: int = Field(..., ge=0)
     num_pages: int = Field(..., ge=0)
     num_chunks: int = Field(..., ge=0)
-    extracted_markdown: str
     status: Literal["indexed", "indexed_fallback"]
     ingested_at: str
     file_type: str
     used_fallback_embeddings: bool
+
+
+class DocumentRecord(DocumentSummary):
+    extracted_markdown: str
 
 
 class DeleteResponse(BaseModel):
@@ -84,6 +87,13 @@ class IngestPathRequest(StrictRequest):
     max_excel_sheets: Optional[int] = Field(default=None, ge=1, le=1_000)
     embedding_model: Optional[str] = MODEL_NAME
 
+    @model_validator(mode="after")
+    def require_normalization_model(self):
+        # No fallback model: a guessed name may not be installed and would fail every page silently.
+        if self.normalize_with_llm and not self.normalization_model:
+            raise ValueError("normalization_model is required when normalize_with_llm is true")
+        return self
+
 class UpdateDocumentRequest(StrictRequest):
     markdown_content: str = Field(..., min_length=1, max_length=10_000_000)
     embedding_model: Optional[str] = MODEL_NAME
@@ -92,7 +102,8 @@ class UpdateDocumentRequest(StrictRequest):
 class TranslateInplaceRequest(StrictRequest):
     source_lang: str = Field(..., min_length=1, max_length=100, pattern=NON_BLANK)
     target_lang: str = Field(..., min_length=1, max_length=100, pattern=NON_BLANK)
-    model: Optional[str] = MODEL_NAME
+    # Required: the translator never guesses a model that may not be installed.
+    model: str = Field(..., min_length=1, max_length=200, pattern=NON_BLANK)
     target_dir: Optional[str] = PATH_VALUE
     num_ctx: Optional[int] = Field(default=None, ge=4096, le=131072)
     think: Optional[bool] = False

@@ -1,5 +1,5 @@
 import { HubSkillItem, SkillHubSource } from '../../../domain/skills/skillTypes'
-import { ISkillHubAdapter } from './hubAdapterInterface'
+import type { ISkillHubAdapter } from '../../../domain/ports/skillHubAdapterPort'
 
 export const CURATED_CORE_SKILLS: HubSkillItem[] = [
   {

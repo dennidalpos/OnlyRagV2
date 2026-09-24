@@ -3,6 +3,7 @@ import { GitBranch, RefreshCw, CheckCircle2, FileCode } from 'lucide-react'
 import stripAnsi from 'strip-ansi'
 import { parseUnifiedDiff, summarizeDiff, type DiffFileChange } from '../../../shared/domain/agent/diffEngine'
 import { DiffLinesView, ChangeCounts } from './DiffLinesView'
+import { useTranslation } from '../../i18n'
 
 interface GitDiffPanelProps {
   gitStatusLines: string[]
@@ -21,6 +22,7 @@ const STATUS_BADGE: Record<DiffFileChange['status'], { label: string; className:
 }
 
 const DiffFileCard: React.FC<{ file: DiffFileChange }> = ({ file }) => {
+  const { t } = useTranslation()
   const badge = STATUS_BADGE[file.status]
 
   return (
@@ -39,7 +41,7 @@ const DiffFileCard: React.FC<{ file: DiffFileChange }> = ({ file }) => {
       </div>
 
       {file.isBinary ? (
-        <div className="px-3 py-2 text-[11px] text-slate-400 italic">File binario — diff non visualizzabile.</div>
+        <div className="px-3 py-2 text-[11px] text-slate-400 italic">{t('codingWorkspace.binaryFile')}</div>
       ) : (
         <div className="overflow-x-auto">
           {file.hunks.map((hunk, hunkIdx) => (
@@ -55,6 +57,7 @@ const DiffFileCard: React.FC<{ file: DiffFileChange }> = ({ file }) => {
 }
 
 export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({ gitStatusLines, gitDiffText, isFetchingGit, isGitRepo = true, onRefreshGit, onInitGit }) => {
+  const { t } = useTranslation()
   const cleanStatusLines = useMemo(() => {
     return gitStatusLines
       .map((str) => stripAnsi(str).trim())
@@ -103,7 +106,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({ gitStatusLines, gitD
         <button
           type="button"
           onClick={onRefreshGit}
-          aria-label="Aggiorna stato Git e visualizzazione diff"
+          aria-label={t('codingWorkspace.refreshGit')}
           disabled={isFetchingGit}
           className="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 font-mono transition-all focus-ring active:scale-95 cursor-pointer"
         >
@@ -116,10 +119,8 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({ gitStatusLines, gitD
           <div className="p-3 rounded-2xl bg-amber-950/30 border border-amber-800/50 text-amber-400">
             <GitBranch className="w-8 h-8 opacity-80" />
           </div>
-          <div className="font-bold text-slate-200 text-sm">Non è un repository Git</div>
-          <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
-            La cartella del progetto corrente non contiene una repository Git (<code>.git</code> non trovato). Inizializza Git per tracciare le modifiche.
-          </p>
+          <div className="font-bold text-slate-200 text-sm">{t('codingWorkspace.notGitRepo')}</div>
+          <p className="text-xs text-slate-400 max-w-sm leading-relaxed">{t('codingWorkspace.notGitRepoDescription')}</p>
           {onInitGit && (
             <button
               type="button"
@@ -127,7 +128,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({ gitStatusLines, gitD
               disabled={isFetchingGit}
               className="mt-2 px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg transition-all focus-ring active:scale-95 cursor-pointer disabled:opacity-50"
             >
-              Inizializza Git Repository
+              {t('codingWorkspace.initGit')}
             </button>
           )}
         </div>
@@ -148,7 +149,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({ gitStatusLines, gitD
               )}
             </div>
             {isWorkingTreeClean ? (
-              <div className="text-slate-400 italic text-[11px] py-1">Nessuna modifica non committata rilevata nel workspace.</div>
+              <div className="text-slate-400 italic text-[11px] py-1">{t('codingWorkspace.noUncommittedChanges')}</div>
             ) : (
               cleanStatusLines.map((line, idx) => {
                 const isModified = line.startsWith(' M') || line.startsWith('M ')
@@ -179,17 +180,11 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({ gitStatusLines, gitD
             {!cleanDiffText ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2 text-slate-400">
                 <FileCode className="w-8 h-8 text-cyan-500/30" />
-                <div className="font-semibold text-slate-400 text-xs">Nessun Diff Attivo</div>
-                <p className="text-[11px] max-w-xs text-slate-400">
-                  I file modificati dall'AI Coding Agent o dall'editor appariranno qui sotto forma di diff unificato.
-                </p>
+                <div className="font-semibold text-slate-400 text-xs">{t('codingWorkspace.noActiveDiff')}</div>
+                <p className="text-[11px] max-w-xs text-slate-400">{t('codingWorkspace.noActiveDiffDescription')}</p>
               </div>
             ) : parsedFiles.length > 0 ? (
-              <div
-                tabIndex={0}
-                aria-label="Diff colorato per file, righe aggiunte in verde e rimosse in rosso"
-                className="h-full overflow-auto space-y-3 focus-ring rounded-xl"
-              >
+              <div tabIndex={0} aria-label={t('codingWorkspace.diffAriaLabel')} className="h-full overflow-auto space-y-3 focus-ring rounded-xl">
                 {parsedFiles.map((file, idx) => (
                   <DiffFileCard key={`${file.displayPath}-${idx}`} file={file} />
                 ))}
@@ -199,7 +194,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({ gitStatusLines, gitD
               // rather than silently rendering nothing.
               <pre
                 tabIndex={0}
-                aria-label="Output git non riconosciuto come diff unificato"
+                aria-label={t('codingWorkspace.rawGitOutput')}
                 className="h-full w-full bg-slate-950 text-slate-200 font-mono text-xs p-4 overflow-auto rounded-xl border border-slate-800 whitespace-pre leading-relaxed focus-ring"
               >
                 {cleanDiffText}

@@ -37,8 +37,11 @@ import {
 import { supportsNativeToolCallingByFamily } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 import { ONLYRAG_MONACO_THEME_NAME, defineOnlyRagMonacoTheme, getStandardMonacoOptions } from '../../lib/monacoTheme'
 import { estimateTokenCount } from '../../lib/tokenEstimate'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { useTranslation } from '../../i18n'
 import type { TranslationKey } from '../../i18n'
+
+const TOKEN_COUNT_DEBOUNCE_MS = 250
 
 export interface PromptConfigurationModalProps {
   isOpen: boolean
@@ -149,8 +152,11 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
 
   const isDirty = selectedNode ? draft !== resolveNodeTemplate(selectedNodeId, settings).template : false
 
+  // Tokenizing the whole draft on every keystroke made typing lag on long templates.
+  const tokenSource = useDebouncedValue(draft, TOKEN_COUNT_DEBOUNCE_MS)
+  const draftTokens = useMemo(() => estimateTokenCount(tokenSource), [tokenSource])
   const tokenLabel = t('promptConfig.tokenCount', {
-    tokens: estimateTokenCount(draft),
+    tokens: draftTokens,
     chars: draft.length,
   })
 

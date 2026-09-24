@@ -2,7 +2,7 @@ import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import { logger } from '../infrastructure/logging/logger'
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
 import { handleUpdatePlanTool } from './agentOrchestratorPlanTool'
-import { runToolGates } from './agentOrchestratorToolGates'
+import { recordToolPolicyDenial, runToolGates } from './agentOrchestratorToolGates'
 import { applyVersionedReadEvidence, runToolResultProcessing } from './agentOrchestratorToolResultProcessor'
 import { interpretTurnResponse } from './agentOrchestratorResponseInterpreter'
 import { collectTurnContext, requestTurnProposal } from './agentOrchestratorTurnDispatch'
@@ -19,6 +19,7 @@ import { evaluateAgentCodingPreflight } from './agentCodingPreflight'
 import { workspaceAppService } from './workspaceAppService'
 import { ollamaAppService } from './ollamaAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export type { AgentSession }
 
@@ -42,8 +43,8 @@ function cleanupSession(session: AgentSession) {
   if (session.activeCancelHandle) {
     try {
       session.activeCancelHandle()
-    } catch (err: any) {
-      logger.log('WARN', 'AgentOrchestrator', `Failed cancelling active stream during cleanup: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentOrchestrator', `Failed cancelling active stream during cleanup: ${errorMessage(err)}`)
     }
     session.activeCancelHandle = null
   }
@@ -54,8 +55,8 @@ function cleanupSession(session: AgentSession) {
       } else {
         session.activeChildProcess.kill('SIGKILL')
       }
-    } catch (err: any) {
-      logger.log('WARN', 'AgentOrchestrator', `Failed terminating child process during cleanup: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentOrchestrator', `Failed terminating child process during cleanup: ${errorMessage(err)}`)
     }
     session.activeChildProcess = null
   }
@@ -65,14 +66,14 @@ function cleanupSession(session: AgentSession) {
     const rollback = agentToolExecutorService.rollbackJournal()
     rollbackRestoredFiles = rollback.restoredCount
     rollbackErrors.push(...rollback.errors)
-  } catch (err: any) {
-    rollbackErrors.push(err?.message || String(err))
-    logger.log('WARN', 'AgentOrchestrator', `Failed rolling back journal during cleanup: ${err?.message}`)
+  } catch (err: unknown) {
+    rollbackErrors.push(errorMessage(err) || String(err))
+    logger.log('WARN', 'AgentOrchestrator', `Failed rolling back journal during cleanup: ${errorMessage(err)}`)
   }
   try {
     session.workspaceTransaction?.dispose()
-  } catch (err: any) {
-    logger.log('WARN', 'AgentOrchestrator', `Failed discarding isolated workspace during cleanup: ${err?.message}`)
+  } catch (err: unknown) {
+    logger.log('WARN', 'AgentOrchestrator', `Failed discarding isolated workspace during cleanup: ${errorMessage(err)}`)
   }
   if (session.rendererEvents?.isAvailable()) {
     const nonRollbackEffects = [...(session.nonRollbackEffects || []), ...rollbackErrors.map((error) => `rollback_workspace: ${error}`)]
@@ -451,6 +452,13 @@ export async function runAgentOrchestratorLoop(
     if (gateResult.outcome === 'denied') {
       if (settings.enableCodingAgentDebugLog && gateResult.feedback) {
         codingAgentLogger.logToolResult(sessionId, stepCountBox.value, parsedTool.tool, gateResult.feedback)
+      }
+      if (gateResult.policyDenial) {
+        const policyStop = await recordToolPolicyDenial(responseInterpreterState, stepCountBox.value, closeApplicationRun)
+        if (policyStop) {
+          setExecutionPhase('outcome')
+          return policyStop
+        }
       }
       setExecutionPhase('collect_context')
       continue

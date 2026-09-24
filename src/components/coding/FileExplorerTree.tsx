@@ -17,6 +17,8 @@ import {
 import { WorkspaceFile } from '../../types'
 import { apiService } from '../../services/api'
 import { logger } from '../../lib/logger'
+import { useTranslation } from '../../i18n'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 interface FileTreeNodeProps {
   item: WorkspaceFile
@@ -58,6 +60,7 @@ const getFileIcon = (fileName: string, isPinned: boolean) => {
 }
 
 export const FileTreeNode: React.FC<FileTreeNodeProps> = ({ item, level, selectedFilePath, pinnedPaths, searchFilter = '', onOpenFile, onTogglePinFile }) => {
+  const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [children, setChildren] = useState<WorkspaceFile[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(false)
@@ -84,8 +87,8 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({ item, level, selecte
         try {
           const subFiles = await apiService.listWorkspaceFiles(item.path)
           setChildren(subFiles)
-        } catch (err: any) {
-          logger.error('FileTree', `Failed to expand folder: ${err.message}`)
+        } catch (err: unknown) {
+          logger.error('FileTree', `Failed to expand folder: ${errorMessage(err)}`)
         } finally {
           setIsLoading(false)
         }
@@ -109,7 +112,7 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({ item, level, selecte
         tabIndex={0}
         aria-expanded={item.isDir ? isOpen : undefined}
         aria-selected={isSelected}
-        aria-label={`${item.isDir ? 'Cartella' : 'File'} ${item.name}`}
+        aria-label={t(item.isDir ? 'codingPanels.folderLabel' : 'codingPanels.fileLabel', { name: item.name })}
         onClick={handleToggle}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -167,8 +170,8 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({ item, level, selecte
             <button
               type="button"
               onClick={handlePinClick}
-              title={isPinned ? 'Rimuovi dal contesto agente (Unpin)' : 'Includi nel contesto agente (Pin)'}
-              aria-label={isPinned ? `Rimuovi ${item.name} dal contesto` : `Includi ${item.name} nel contesto`}
+              title={isPinned ? t('codingPanels.unpinHint') : t('codingPanels.pinHint')}
+              aria-label={t(isPinned ? 'codingPanels.unpinNamed' : 'codingPanels.pinNamed', { name: item.name })}
               className={`p-1 rounded-md transition-colors focus-ring cursor-pointer ${
                 isPinned ? 'text-cyan-300 bg-cyan-950 hover:bg-cyan-900 border border-cyan-800/60' : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800'
               }`}
@@ -181,10 +184,14 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({ item, level, selecte
 
       {/* Directory Children with vertical guide line */}
       {item.isDir && isOpen && (
-        <div role="group" aria-label={`Contenuto cartella ${item.name}`} className="relative ml-3 pl-1 border-l border-slate-800/80 space-y-0.5 mt-0.5">
+        <div
+          role="group"
+          aria-label={t('codingPanels.folderContent', { name: item.name })}
+          className="relative ml-3 pl-1 border-l border-slate-800/80 space-y-0.5 mt-0.5"
+        >
           {children.length === 0 && !isLoading ? (
             <div style={{ paddingLeft: `${Math.max(8, (level + 1) * 16 + 8)}px` }} className="py-1 text-[10px] text-slate-500 italic font-mono">
-              (cartella vuota)
+              {t('codingPanels.emptyFolder')}
             </div>
           ) : (
             children.map((child) => (

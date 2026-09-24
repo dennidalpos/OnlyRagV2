@@ -9,6 +9,7 @@ import { ollamaHttpClient } from '../infrastructure/http/ollamaHttpClient'
 import { SkillDefinition, HubSkillItem, SkillHubSource, CustomHubInput, SkillSaveInput } from '../domain/skills/skillTypes'
 import { logger } from '../infrastructure/logging/logger'
 import type { SkillInstallCandidate } from './skillInstallApprovalService'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 /** Options driving the contextual skill router and the hub auto-install policy. */
 export interface SkillMatchingOptions {
@@ -60,9 +61,9 @@ export class SkillAppService {
     try {
       const source = await customHubRepository.addSource(input)
       return { success: true, source }
-    } catch (err: any) {
-      logger.log('ERROR', 'SkillAppService', `Failed adding custom hub: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SkillAppService', `Failed adding custom hub: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -70,9 +71,9 @@ export class SkillAppService {
     try {
       const success = await customHubRepository.removeSource(sourceId)
       return { success }
-    } catch (err: any) {
-      logger.log('ERROR', 'SkillAppService', `Failed removing custom hub: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SkillAppService', `Failed removing custom hub: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -105,8 +106,8 @@ export class SkillAppService {
       let skills: HubSkillItem[] = []
       try {
         skills = await skillHubClient.fetchSkillsFromSource(source, forceRefresh)
-      } catch (err: any) {
-        logger.log('WARN', 'SkillAppService', `Hub source '${source.name}' skipped during discovery: ${err.message}`)
+      } catch (err: unknown) {
+        logger.log('WARN', 'SkillAppService', `Hub source '${source.name}' skipped during discovery: ${errorMessage(err)}`)
         continue
       }
 
@@ -373,14 +374,14 @@ export class SkillAppService {
               }
             }
           }
-        } catch (hubErr: any) {
-          logger.log('WARN', 'SkillAppService', `Hub auto-discovery check skipped: ${hubErr.message}`)
+        } catch (hubErr: unknown) {
+          logger.log('WARN', 'SkillAppService', `Hub auto-discovery check skipped: ${errorMessage(hubErr)}`)
         }
       }
 
       return matched
-    } catch (err: any) {
-      logger.log('WARN', 'SkillAppService', `Error matching skills: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'SkillAppService', `Error matching skills: ${errorMessage(err)}`)
       return []
     }
   }
@@ -397,8 +398,8 @@ export class SkillAppService {
 
       logger.log('INFO', 'SkillAppService', `Injected ${matched.length} contextual skill(s): ${matched.map((s) => s.name).join(', ')}`)
       return compileSkillsContextBlock(matched)
-    } catch (err: any) {
-      logger.log('WARN', 'SkillAppService', `Error getting context skills: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'SkillAppService', `Error getting context skills: ${errorMessage(err)}`)
       return ''
     }
   }

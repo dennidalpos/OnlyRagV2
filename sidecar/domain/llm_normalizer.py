@@ -21,7 +21,7 @@ def should_normalize_page_with_llm(page_text: str) -> bool:
 def normalize_page_markdown_with_llm(
     page_text: str,
     page_num: int = 1,
-    model: str = "llama3.2",
+    model: Optional[str] = None,
     timeout_seconds: float = 25.0,
     ollama_url: Optional[str] = None,
     think: bool = False
@@ -33,6 +33,10 @@ def normalize_page_markdown_with_llm(
     on timeout, network error, or empty response.
     """
     if not should_normalize_page_with_llm(page_text):
+        return sanitize_extracted_text(page_text)
+    if not model:
+        # IngestPathRequest rejects normalization without a model; never guess one here.
+        logger.warning("LLM normalization skipped for page %s: no normalization model configured.", page_num)
         return sanitize_extracted_text(page_text)
 
     endpoint = f"{ollama_url or OLLAMA_BASE_URL}/api/generate"

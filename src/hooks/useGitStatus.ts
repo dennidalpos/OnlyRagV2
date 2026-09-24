@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 /**
  * Git working-tree status and unified diff of the active workspace, read through
@@ -24,10 +25,10 @@ export function useGitStatus(workspacePath: string | null) {
         setGitStatusLines([])
         setGitDiffText('')
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsGitRepo(false)
       setGitStatusLines([])
-      setGitDiffText(`Git error: ${err.message || String(err)}`)
+      setGitDiffText(`Git error: ${errorMessage(err) || String(err)}`)
     } finally {
       setIsFetchingGit(false)
     }

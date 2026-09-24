@@ -1,5 +1,6 @@
 import { DiagnosticsData, RunningModelDetails } from '../types'
 import type { TranslationKey } from '../i18n'
+import { translate } from '../i18n/I18nContext'
 import {
   calculateRealUsableVram,
   calculateUsableSystemRamGB,
@@ -179,7 +180,7 @@ export function assessModelHardwareCompatibility(
         footprintGB,
         safeVramBudgetGB,
         compatibilityStatus: 'tight_vram',
-        warning: 'Uso VRAM elevato: possibile rallentamento o swap con contesti lunghi.',
+        warning: translate('services.vramHigh'),
       }
     } else {
       return {
@@ -187,7 +188,7 @@ export function assessModelHardwareCompatibility(
         footprintGB,
         safeVramBudgetGB,
         compatibilityStatus: 'exceeds_vram',
-        warning: 'VRAM insufficiente: rischio elevato di Out-Of-Memory (OOM).',
+        warning: translate('services.vramInsufficient'),
       }
     }
   }
@@ -206,7 +207,7 @@ export function assessModelHardwareCompatibility(
     footprintGB,
     safeVramBudgetGB: 0,
     compatibilityStatus: 'exceeds_vram',
-    warning: 'RAM di sistema insufficiente per eseguire questo modello su CPU.',
+    warning: translate('services.ramInsufficient'),
   }
 }
 
@@ -499,19 +500,19 @@ function buildMemoryResidencyVars(ctx: EnvTuningContext, t: EnvTranslator): Olla
 /** Renders the copy-paste setup scripts for the resolved variable set. */
 function buildEnvScripts(profileTier: HardwareProfileTier, variables: OllamaEnvVarRecommendation[]): { powershellScript: string; bashScript: string } {
   const psLines = [
-    `# === Configurazione Variabili OS per Ollama (${profileTier.toUpperCase()}) ===`,
-    `# Esegui in PowerShell come Utente o Amministratore:`,
+    translate('services.envScriptHeader', { tier: profileTier.toUpperCase() }),
+    translate('services.envScriptRunAs'),
     ...variables.map((v) => `[System.Environment]::SetEnvironmentVariable('${v.name}', '${v.value}', 'User')`),
     ``,
-    `# Riavvia il servizio/app Ollama per applicare:`,
+    translate('services.envScriptRestart'),
     `Stop-Process -Name "ollama*" -Force -ErrorAction SilentlyContinue`,
     `Start-Process -FilePath "$env:LOCALAPPDATA\\Programs\\Ollama\\ollama app.exe"`,
   ]
 
   const bashLines = [
-    `# === Configurazione Variabili OS per Ollama (${profileTier.toUpperCase()}) ===`,
+    translate('services.envScriptHeader', { tier: profileTier.toUpperCase() }),
     ...variables.map((v) => `export ${v.name}="${v.value}"`),
-    `# Aggiungi a ~/.bashrc o ~/.zshrc per renderle persistenti`,
+    translate('services.envScriptPersist'),
   ]
 
   return { powershellScript: psLines.join('\n'), bashScript: bashLines.join('\n') }

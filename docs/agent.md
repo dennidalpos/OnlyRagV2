@@ -57,6 +57,7 @@ complexity check -> [interview -> plan] -> collect_context -> propose_action
 | Blocco di loop | 2 avvisi, poi un blocco su due sposta la milestone attiva (`force_advance`) | a 20 blocchi senza budget di step: `stagnation_abort` |
 | Domanda vaga in AUTO | 2 reindirizzamenti, condivisi con i blocchi di loop | poi chiusura `ask_redirect` |
 | Step eseguiti senza modifiche effettive | 12 | chiusura `no_mutation` |
+| Chiamata negata dalla policy del turno (tool non esposto dalla fase o lettura di versione richiesta) | registrata come guard `tool_policy` e contata come step senza modifiche | con gli step precedenti: chiusura `no_mutation` |
 
 Il budget di trasporto Ollama e il gate di verifica (`verification_fix_cycles`, 3 giri) restano separati. Ogni scatto viene registrato come `{ guard, action: advise | force_advance | stop, step }` (`AgentGuardId` in `shared/types`): compare nella diagnostica di sessione, in `evidence.guardEvents` dell'evento `agent:done` e nello stato persistito (`guardEvents`, `terminationGuard`), che distingue le cause raccolte sotto `terminationReason: 'circuit_breaker'`. Una chiusura causata da un guard di stop (`request.guard`) è sempre `blocked`, anche senza piano operativo o verifica fallita: il lavoro è stato interrotto, quindi non viene riportato né proposto per la pubblicazione come una conclusione onesta.
 

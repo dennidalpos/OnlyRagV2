@@ -96,27 +96,24 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
       {/* Intro Banner */}
       <div className="p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/30 flex items-center gap-2.5 text-xs text-cyan-200">
         <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
-        <span>
-          Configurazione della suite di modelli funzionali raccomandati per il tuo profilo hardware. Ciascun modello lavora in modo dedicato senza swapping
-          continuo di memoria.
-        </span>
+        <span>{t('wizardModels.intro')}</span>
       </div>
 
       {/* 1. AI Coding Agent Studio */}
       <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-100 border-b border-slate-800/80 pb-2">
           <Code className="w-4 h-4 text-cyan-400" />
-          <span>1. AI Coding Agent Studio (Sviluppo Software)</span>
+          <span>{t('wizardModels.sectionCoding')}</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Workhorse Coding Model */}
           <div className="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-cyan-300">Modello di Sviluppo Principale</span>
+              <span className="font-bold text-cyan-300">{t('wizardModels.codingModel')}</span>
               <span className="text-[10px] text-cyan-400 font-mono">Workhorse</span>
             </div>
-            <ModelSelect ariaLabel="Seleziona Modello Coding Principale" value={selectedCoding} onChange={(e) => onChangeCoding(e.target.value)}>
+            <ModelSelect ariaLabel={t('wizardModels.selectCoding')} value={selectedCoding} onChange={(e) => onChangeCoding(e.target.value)}>
               {buildOptions(selectedCoding, modelOptions.coding, recommendedModels.coding).map((m) => renderOption(m))}
             </ModelSelect>
           </div>
@@ -127,17 +124,17 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
       <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-100 border-b border-slate-800/80 pb-2">
           <MessageSquare className="w-4 h-4 text-purple-400" />
-          <span>2. RAG Chat &amp; Traduzione Documenti</span>
+          <span>{t('wizardModels.sectionChat')}</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Chat Model */}
           <div className="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-purple-300">Modello RAG Chat</span>
-              <span className="text-[10px] text-purple-400 font-mono">Conversazione</span>
+              <span className="font-bold text-purple-300">{t('wizardModels.chatModel')}</span>
+              <span className="text-[10px] text-purple-400 font-mono">{t('wizardModels.chatTag')}</span>
             </div>
-            <ModelSelect ariaLabel="Seleziona Modello RAG Chat" value={selectedChat} onChange={(e) => onChangeChat(e.target.value)}>
+            <ModelSelect ariaLabel={t('wizardModels.selectChat')} value={selectedChat} onChange={(e) => onChangeChat(e.target.value)}>
               {buildOptions(selectedChat, modelOptions.chat, recommendedModels.chat).map((m) => renderOption(m))}
             </ModelSelect>
           </div>
@@ -145,10 +142,10 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
           {/* Translation Model */}
           <div className="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-sky-300">Modello Traduzione</span>
-              <span className="text-[10px] text-sky-400 font-mono">Localizzazione</span>
+              <span className="font-bold text-sky-300">{t('wizardModels.translationModel')}</span>
+              <span className="text-[10px] text-sky-400 font-mono">{t('wizardModels.translationTag')}</span>
             </div>
-            <ModelSelect ariaLabel="Seleziona Modello Traduzione" value={selectedTranslation} onChange={(e) => onChangeTranslation(e.target.value)}>
+            <ModelSelect ariaLabel={t('wizardModels.selectTranslation')} value={selectedTranslation} onChange={(e) => onChangeTranslation(e.target.value)}>
               {buildOptions(selectedTranslation, modelOptions.translation, recommendedModels.translation).map((m) => renderOption(m))}
             </ModelSelect>
           </div>
@@ -159,17 +156,17 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
       <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-100 border-b border-slate-800/80 pb-2">
           <Eye className="w-4 h-4 text-amber-400" />
-          <span>3. Visione &amp; Ricerca Vettoriale</span>
+          <span>{t('wizardModels.sectionVision')}</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Vision Model */}
           <div className="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-amber-300">Vision &amp; OCR Multimodale</span>
-              <span className="text-[10px] text-amber-400 font-mono">Immagini / PDF</span>
+              <span className="font-bold text-amber-300">{t('wizardModels.visionModel')}</span>
+              <span className="text-[10px] text-amber-400 font-mono">{t('wizardModels.visionTag')}</span>
             </div>
-            <ModelSelect ariaLabel="Seleziona Modello Visione" value={selectedVision} onChange={(e) => onChangeVision(e.target.value)}>
+            <ModelSelect ariaLabel={t('wizardModels.selectVision')} value={selectedVision} onChange={(e) => onChangeVision(e.target.value)}>
               {buildOptions(selectedVision, modelOptions.vision, recommendedModels.vision).map((m) => renderOption(m))}
             </ModelSelect>
           </div>
@@ -177,10 +174,10 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
           {/* Embedding Model */}
           <div className="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-purple-300">Embedding Vettoriale (LanceDB)</span>
-              <span className="text-[10px] text-purple-400 font-mono">Semantica</span>
+              <span className="font-bold text-purple-300">{t('wizardModels.embeddingModel')}</span>
+              <span className="text-[10px] text-purple-400 font-mono">{t('wizardModels.embeddingTag')}</span>
             </div>
-            <ModelSelect ariaLabel="Seleziona Modello Embedding" value={selectedEmbedding} onChange={(e) => onChangeEmbedding(e.target.value)}>
+            <ModelSelect ariaLabel={t('wizardModels.selectEmbedding')} value={selectedEmbedding} onChange={(e) => onChangeEmbedding(e.target.value)}>
               {buildOptions(selectedEmbedding, modelOptions.embedding, recommendedModels.embedding).map((m) => renderOption(m))}
             </ModelSelect>
           </div>
@@ -191,18 +188,22 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
       <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-100 border-b border-slate-800/80 pb-2">
           <Activity className="w-4 h-4 text-rose-400" />
-          <span>4. Domini Specialistici (Opzionale)</span>
+          <span>{t('wizardModels.sectionDomains')}</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Medical Model */}
           <div className="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-rose-300">Dominio Medico / Clinico</span>
+              <span className="font-bold text-rose-300">{t('wizardModels.medicalModel')}</span>
               <span className="text-[10px] text-rose-400 font-mono">Healthcare</span>
             </div>
-            <ModelSelect ariaLabel="Seleziona Modello Medico" value={selectedMedical || ''} onChange={(e) => onChangeMedical(e.target.value || undefined)}>
-              <option value="">(Usa Modello RAG Chat)</option>
+            <ModelSelect
+              ariaLabel={t('wizardModels.selectMedical')}
+              value={selectedMedical || ''}
+              onChange={(e) => onChangeMedical(e.target.value || undefined)}
+            >
+              <option value="">{t('wizardModels.useChatModel')}</option>
               {buildOptions(selectedMedical, modelOptions.medical, '').map((m) => renderOption(m))}
             </ModelSelect>
           </div>
@@ -210,11 +211,11 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
           {/* Legal Model */}
           <div className="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-amber-300">Dominio Legale / Giuridico</span>
-              <span className="text-[10px] text-amber-400 font-mono">Normativa</span>
+              <span className="font-bold text-amber-300">{t('wizardModels.legalModel')}</span>
+              <span className="text-[10px] text-amber-400 font-mono">{t('wizardModels.legalTag')}</span>
             </div>
-            <ModelSelect ariaLabel="Seleziona Modello Legale" value={selectedLegal || ''} onChange={(e) => onChangeLegal(e.target.value || undefined)}>
-              <option value="">(Usa Modello RAG Chat)</option>
+            <ModelSelect ariaLabel={t('wizardModels.selectLegal')} value={selectedLegal || ''} onChange={(e) => onChangeLegal(e.target.value || undefined)}>
+              <option value="">{t('wizardModels.useChatModel')}</option>
               {buildOptions(selectedLegal, modelOptions.legal, '').map((m) => renderOption(m))}
             </ModelSelect>
           </div>

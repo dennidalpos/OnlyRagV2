@@ -18,9 +18,9 @@ export function consumeNdjsonChunk(
     try {
       const parsed = JSON.parse(trimmed)
       onParsed(parsed)
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (onWarning) {
-        onWarning(err, trimmed)
+        onWarning(err instanceof Error ? err : new Error(String(err)), trimmed)
       }
     }
   }

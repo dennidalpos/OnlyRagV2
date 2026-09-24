@@ -182,7 +182,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                   <button
                     type="button"
                     onClick={() => onTogglePinFile(file)}
-                    aria-label={`Rimuovi ${file.name} dal contesto`}
+                    aria-label={t('codingWorkspace.unpinFile', { name: file.name })}
                     className="hover:text-rose-400 p-0.5 transition-colors cursor-pointer focus-ring rounded"
                   >
                     <X className="w-2.5 h-2.5" />
@@ -202,7 +202,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 <button
                   type="button"
                   onClick={() => onToggleAttachDoc(doc.id)}
-                  aria-label={`Rimuovi allegato ${doc.filename}`}
+                  aria-label={t('codingWorkspace.detachDocument', { name: doc.filename })}
                   className="hover:text-rose-400 p-0.5 transition-colors cursor-pointer focus-ring rounded"
                 >
                   <X className="w-2.5 h-2.5" />
@@ -297,8 +297,8 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               className={`flex items-center gap-1 ${isContextHeavy ? 'text-amber-300 font-bold' : 'text-slate-400'}`}
               title={
                 contextBudget
-                  ? `${estimatedTurnTokens}/${maxContextLimit} token prompt · finestra ${contextBudget.contextWindowTokens} · risposta ${contextBudget.outputReserveTokens}${contextBudget.wasCompacted ? ' · compattato' : ''}`
-                  : 'Il budget apparirà dopo la prima composizione del prompt nel backend'
+                  ? `${t('codingWorkspace.contextBudget', { tokens: estimatedTurnTokens, limit: maxContextLimit, window: contextBudget.contextWindowTokens, reserve: contextBudget.outputReserveTokens })}${contextBudget.wasCompacted ? t('codingWorkspace.contextBudgetCompacted') : ''}`
+                  : t('codingWorkspace.contextBudgetPending')
               }
             >
               <span>Ctx: {contextBudget ? `${contextPercent}%` : '—'}</span>
@@ -306,8 +306,8 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 <button
                   type="button"
                   onClick={onCompactContext}
-                  title="Compatta il contesto della sessione"
-                  aria-label="Compatta il contesto della sessione"
+                  title={t('codingWorkspace.compactContext')}
+                  aria-label={t('codingWorkspace.compactContext')}
                   className="p-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700/60 hover:bg-amber-900 cursor-pointer focus-ring"
                 >
                   <Minimize2 className="w-2.5 h-2.5" />

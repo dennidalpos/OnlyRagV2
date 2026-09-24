@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sidecar.config import ALLOWED_ORIGINS, SIDECAR_AUTH_HEADER, SIDECAR_AUTH_TOKEN, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
 from sidecar.schemas import (
     IngestResponse, IngestPathRequest, SearchRequest, SearchResult, HealthResponse,
-    DocumentRecord, DeleteResponse, ExportResponse, SuccessResponse,
+    DocumentRecord, DocumentSummary, DeleteResponse, ExportResponse, SuccessResponse,
     TaskCancelResponse,
     ExportRequest, UpdateDocumentRequest, PagePreviewResponse,
     LogDiagnosticQuery, LogDiagnosticReportSchema, AnomalyRecordSchema,
@@ -43,7 +43,7 @@ from sidecar.domain.translator import (
     translate_document_stream,
     UnsupportedDocumentTypeError
 )
-from sidecar.services.search_service import perform_vector_search, list_stored_documents, delete_stored_document
+from sidecar.services.search_service import perform_vector_search, list_stored_documents, get_stored_document, delete_stored_document
 from sidecar.services.prompt_history_service import index_prompt_history, search_prompt_history, remove_prompt_history
 from sidecar.services.vocab_service import background_vocab_sync_startup
 from sidecar.infrastructure.embeddings import DEFAULT_EMBEDDING_MODEL, FALLBACK_EMBEDDING_MODEL
@@ -67,7 +67,7 @@ async def lifespan(app_instance: FastAPI):
         task.cancel()
     logger.info("FastAPI Sidecar shutting down.")
 
-app = FastAPI(title="OnlyRag V2 Python Sidecar Engine", version="2.4.0", lifespan=lifespan)
+app = FastAPI(title="OnlyRag V2 Python Sidecar Engine", version="2.5.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -123,7 +123,7 @@ def health_check():
     return {
         "status": "online",
         "engine": "FastAPI Python Sidecar + LanceDB OCR Engine V2",
-        "version": "2.4.0",
+        "version": "2.5.0",
         "vector_db": "LanceDB Embedded",
         "gpu": gpu_info,
         "ocr": ocr_info,
@@ -185,7 +185,7 @@ async def translate_document_inplace_stream_endpoint(doc_id: str, req: Translate
             record,
             req.source_lang,
             req.target_lang,
-            model=req.model or "llama3.2",
+            model=req.model,
             target_dir=req.target_dir,
             num_ctx=req.num_ctx,
             think=bool(req.think),
@@ -205,9 +205,19 @@ async def get_page_preview(doc_id: str, page_num: int):
         logger.error(f"Error rendering page preview: {e}")
         raise
 
-@app.get("/documents", response_model=List[DocumentRecord])
+@app.get("/documents", response_model=List[DocumentSummary])
 async def list_documents():
     return await asyncio.to_thread(list_stored_documents)
+
+@app.get("/documents/{doc_id}", response_model=DocumentRecord)
+async def get_document(doc_id: str):
+    try:
+        document = await asyncio.to_thread(get_stored_document, doc_id)
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
+    if document is None:
+        raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
+    return document
 
 @app.delete("/documents/{doc_id}", response_model=DeleteResponse)
 async def delete_document(doc_id: str):

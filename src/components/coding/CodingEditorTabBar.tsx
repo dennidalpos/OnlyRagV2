@@ -51,7 +51,7 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
             aria-selected={activeTab === 'artifacts'}
             onClick={() => onSelectTab('artifacts')}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer shadow-sm ${activeTab === 'artifacts' ? 'bg-slate-900 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'}`}
-            title="Live Preview artefatti"
+            title={t('uiShell.previewTab')}
           >
             <Eye className={`w-3.5 h-3.5 ${activeTab === 'artifacts' ? 'text-cyan-400' : 'text-slate-400'}`} />
             <span>Preview</span>
@@ -67,10 +67,10 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
                 ? 'bg-slate-900 text-indigo-300 border border-indigo-500/40 shadow-indigo-950/30'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
             }`}
-            title="Modifiche Git Diff"
+            title={t('uiShell.changesTabTitle')}
           >
             <GitBranch className={`w-3.5 h-3.5 ${activeTab === 'git_diff' ? 'text-indigo-400' : 'text-slate-400'}`} />
-            <span>Modifiche</span>
+            <span>{t('uiShell.changesTab')}</span>
             {changedFilesCount > 0 && (
               <span className="px-1.5 py-0.2 rounded-full bg-indigo-500/20 text-indigo-300 font-mono text-[9px] font-bold border border-indigo-500/30">
                 {changedFilesCount}
@@ -88,10 +88,10 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
                 ? 'bg-slate-900 text-amber-300 border border-amber-500/40 shadow-amber-950/30'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
             }`}
-            title="Piano di Lavoro"
+            title={t('uiShell.planTabTitle')}
           >
             <FileText className={`w-3.5 h-3.5 ${activeTab === 'plan' ? 'text-amber-400' : 'text-slate-400'}`} />
-            <span>Piano</span>
+            <span>{t('uiShell.planTab')}</span>
             {planIsReady && <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-0.5 -right-0.5" />}
             {planIsInProgress && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />}
           </button>
@@ -123,10 +123,10 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
                     ? 'bg-slate-900 text-cyan-300 border-cyan-500/40'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border-transparent'
                 }`}
-                title="Terminale PowerShell"
+                title={t('uiShell.terminalTabTitle')}
               >
                 <Terminal className="w-3.5 h-3.5" />
-                <span>Terminale</span>
+                <span>{t('uiShell.terminalTab')}</span>
               </button>
               <button
                 type="button"
@@ -138,10 +138,10 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
                     ? 'bg-slate-900 text-amber-300 border-amber-500/40'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border-transparent'
                 }`}
-                title="Diagnostica e Anomaly Log SLM"
+                title={t('uiShell.diagnosticsTabTitle')}
               >
                 <ScanLine className="w-3.5 h-3.5" />
-                <span>Diagnostica Log</span>
+                <span>{t('uiShell.diagnosticsTab')}</span>
               </button>
             </>
           )}

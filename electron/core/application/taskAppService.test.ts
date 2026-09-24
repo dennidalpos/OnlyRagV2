@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { TaskAppService, type TaskRunnerPort } from './taskAppService'
+import { TaskAppService } from './taskAppService'
+import type { TaskRunnerPort } from '../domain/ports/taskRunnerPort'
 
 describe('TaskAppService', () => {
   it('delegates task cancellation and preserves the runner result', () => {

@@ -3,6 +3,7 @@ import crypto from 'node:crypto'
 import { logger } from '../logging/logger'
 import { normalizePowerShellCommand } from './taskRunner'
 import { detectInteractivePrompt } from '../../domain/agent/shellStreamGuard'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export interface ShellExecutionOutput {
   stdout: string
@@ -54,8 +55,8 @@ export class PersistentPowerShellSession {
       this.proc.on('error', (err) => {
         logger.log('ERROR', 'PersistentPowerShell', `Underlying shell process error: ${err.message}`)
       })
-    } catch (err: any) {
-      logger.log('ERROR', 'PersistentPowerShell', `Failed initializing PowerShell process: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('ERROR', 'PersistentPowerShell', `Failed initializing PowerShell process: ${errorMessage(err)}`)
     }
   }
 
@@ -257,8 +258,8 @@ export class PersistentPowerShellSession {
 
       logger.log('INFO', 'PersistentPowerShell', 'Environment PATH refreshed after toolchain installation.')
       return true
-    } catch (err: any) {
-      logger.log('WARN', 'PersistentPowerShell', `Could not refresh PATH: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'PersistentPowerShell', `Could not refresh PATH: ${errorMessage(err)}`)
       return false
     }
   }

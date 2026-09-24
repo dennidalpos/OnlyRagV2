@@ -10,6 +10,7 @@ import {
   ExecutedPromptOutcome,
 } from '../types'
 import { logger } from '../lib/logger'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 const LEGACY_SESSIONS_STORAGE_KEY = 'onlyrag_coding_sessions_v2'
 /** Coalesces the burst of per-log mutations a running agent produces into one write per session. */
@@ -60,8 +61,8 @@ async function migrateLegacySessions(): Promise<void> {
     localStorage.removeItem(LEGACY_SESSIONS_STORAGE_KEY)
     localStorage.setItem(MIGRATION_FLAG_KEY, 'done')
     logger.info('useSessionHistory', `Migrated ${res?.migrated ?? 0} legacy coding session(s) to the filesystem store.`)
-  } catch (err: any) {
-    logger.warn('useSessionHistory', `Legacy session migration failed, will retry on next launch: ${err?.message}`)
+  } catch (err: unknown) {
+    logger.warn('useSessionHistory', `Legacy session migration failed, will retry on next launch: ${errorMessage(err)}`)
   }
 }
 
@@ -95,8 +96,8 @@ export function useSessionHistory(workspacePath: string | null) {
           setSessions(sessionsRef.current)
         }
         return saved
-      } catch (err: any) {
-        logger.warn('useSessionHistory', `Could not persist session ${session.id}: ${err?.message}`)
+      } catch (err: unknown) {
+        logger.warn('useSessionHistory', `Could not persist session ${session.id}: ${errorMessage(err)}`)
         return null
       }
     })
@@ -160,8 +161,8 @@ export function useSessionHistory(workspacePath: string | null) {
       if (window.electronAPI?.listCodingSessions) {
         try {
           stored = (await window.electronAPI.listCodingSessions(workspacePath)) || []
-        } catch (err: any) {
-          logger.warn('useSessionHistory', `Could not load session history: ${err?.message}`)
+        } catch (err: unknown) {
+          logger.warn('useSessionHistory', `Could not load session history: ${errorMessage(err)}`)
         }
       }
       if (cancelled) return
@@ -218,8 +219,8 @@ export function useSessionHistory(workspacePath: string | null) {
       if (window.electronAPI?.deleteCodingSession) {
         try {
           await window.electronAPI.deleteCodingSession(sessionId, workspacePath)
-        } catch (err: any) {
-          logger.warn('useSessionHistory', `Could not delete session ${sessionId}: ${err?.message}`)
+        } catch (err: unknown) {
+          logger.warn('useSessionHistory', `Could not delete session ${sessionId}: ${errorMessage(err)}`)
         }
       }
 
@@ -251,8 +252,8 @@ export function useSessionHistory(workspacePath: string | null) {
     if (window.electronAPI?.clearCodingSessions) {
       try {
         await window.electronAPI.clearCodingSessions(workspacePath)
-      } catch (err: any) {
-        logger.warn('useSessionHistory', `Could not clear session history: ${err?.message}`)
+      } catch (err: unknown) {
+        logger.warn('useSessionHistory', `Could not clear session history: ${errorMessage(err)}`)
       }
     }
     const fresh = createEmptySession(workspacePath)

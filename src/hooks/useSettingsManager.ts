@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { DiagnosticsData, AppSettings } from '../types'
 import type { PromptNodeId } from '../constants/promptConfig'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import { translate } from '../i18n/I18nContext'
 
 export function useSettingsManager(
   diagnostics: DiagnosticsData | null,
@@ -27,8 +29,8 @@ export function useSettingsManager(
       } else {
         setPullMessage(`Failed to pull model: ${res.error || 'Unknown error'}`)
       }
-    } catch (err: any) {
-      setPullMessage(`Error: ${err.message}`)
+    } catch (err: unknown) {
+      setPullMessage(`Error: ${errorMessage(err)}`)
     } finally {
       setIsPulling(false)
     }
@@ -50,10 +52,10 @@ export function useSettingsManager(
     if (!window.electronAPI?.unloadModel) return
     const res = await window.electronAPI.unloadModel(modelName, settings.ollamaHost)
     if (res?.success) {
-      setPullMessage(`Modello ${modelName} scaricato dalla memoria.`)
+      setPullMessage(translate('services.modelUnloaded', { model: modelName }))
       onRefreshDiagnostics()
     } else {
-      setPullMessage(`Errore scaricamento memoria per ${modelName}: ${res?.error || 'Errore sconosciuto'}`)
+      setPullMessage(translate('services.modelUnloadFailed', { model: modelName, message: res?.error || translate('agentRun.unknownError') }))
     }
   }
 

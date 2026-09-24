@@ -7,6 +7,7 @@ import { OnlyRagLogo } from './OnlyRagLogo'
 import { GithubIcon } from './GithubIcon'
 import { logger } from '../../lib/logger'
 import { APP_AUTHOR, APP_REPOSITORY_SLUG, APP_REPOSITORY_URL, APP_VERSION } from '../../constants/appMetadata'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export interface AboutModalProps {
   isOpen: boolean
@@ -358,8 +359,8 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
       await navigator.clipboard.writeText(repoUrl)
       setCopiedUrl(true)
       setTimeout(() => setCopiedUrl(false), 2000)
-    } catch (err: any) {
-      logger.warn('AboutModal', `Failed copying repo url to clipboard: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.warn('AboutModal', `Failed copying repo url to clipboard: ${errorMessage(err)}`)
     }
   }
 

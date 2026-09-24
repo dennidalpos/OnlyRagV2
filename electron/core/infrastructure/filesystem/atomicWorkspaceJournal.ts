@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { logger } from '../logging/logger'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export interface FileBackupEntry {
   originalContent: string | null // null if file was newly created during the session
@@ -57,8 +58,8 @@ export class AtomicWorkspaceJournal {
       } else {
         map.set(resolved, { originalContent: null, modifiedTimestamp: Date.now() })
       }
-    } catch (err: any) {
-      logger.log('WARN', 'AtomicWorkspaceJournal', `Could not snapshot ${resolved}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AtomicWorkspaceJournal', `Could not snapshot ${resolved}: ${errorMessage(err)}`)
     }
   }
 
@@ -91,8 +92,8 @@ export class AtomicWorkspaceJournal {
           fs.writeFileSync(filePath, entry.originalContent, 'utf-8')
         }
         restoredCount++
-      } catch (err: any) {
-        const errMsg = `Failed restoring ${filePath}: ${err.message}`
+      } catch (err: unknown) {
+        const errMsg = `Failed restoring ${filePath}: ${errorMessage(err)}`
         logger.log('ERROR', 'AtomicWorkspaceJournal', errMsg)
         errors.push(errMsg)
       }

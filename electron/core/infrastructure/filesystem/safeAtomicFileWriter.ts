@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { errorCode } from '../../../../shared/domain/errors/errorMessage'
 
 /** Per-path sequential write queue to prevent concurrent in-process write-write collisions. */
 const fileWriteQueues = new Map<string, Promise<unknown>>()
@@ -38,9 +39,9 @@ export async function safeAtomicWrite(filePath: string, content: string | Buffer
         try {
           await fs.promises.rename(tempPath, normalizedPath)
           renamed = true
-        } catch (err: any) {
+        } catch (err: unknown) {
           attempts++
-          if (RETRY_ERRORS.has(err?.code) && attempts < maxAttempts) {
+          if (RETRY_ERRORS.has(errorCode(err) || '') && attempts < maxAttempts) {
             await delay(15 * Math.pow(2, attempts - 1))
           } else {
             // If rename fails persistently on Windows, try copyFile fallback

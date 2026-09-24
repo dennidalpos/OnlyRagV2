@@ -5,6 +5,7 @@ import yaml from 'js-yaml'
 import { app } from 'electron'
 import { logger } from '../logging/logger'
 import { SkillDefinition, SkillMetadata, SkillOriginType } from '../../domain/skills/skillTypes'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export function calculateSkillChecksum(content: string): string {
   const normalized = content.replace(/\r\n/g, '\n').trim()
@@ -69,8 +70,8 @@ export function parseSkillFrontmatter(rawContent: string): { metadata: SkillMeta
     }
 
     return { metadata, body }
-  } catch (err: any) {
-    logger.log('WARN', 'SkillRepo', `Failed parsing skill frontmatter with js-yaml: ${err.message}`)
+  } catch (err: unknown) {
+    logger.log('WARN', 'SkillRepo', `Failed parsing skill frontmatter with js-yaml: ${errorMessage(err)}`)
     return {
       metadata: { name: 'custom-skill', description: 'Custom workspace skill' },
       body: rawContent.trim(),
@@ -144,8 +145,8 @@ export class SkillRepository {
           this.activeSkillIds = new Set(parsed.map((s) => String(s).toLowerCase()))
         }
       }
-    } catch (err: any) {
-      logger.log('WARN', 'SkillRepo', `Failed loading active skills state: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'SkillRepo', `Failed loading active skills state: ${errorMessage(err)}`)
     } finally {
       this.isLoaded = true
     }
@@ -156,8 +157,8 @@ export class SkillRepository {
       const p = this.getStateFilePath()
       fs.mkdirSync(path.dirname(p), { recursive: true })
       fs.writeFileSync(p, JSON.stringify(Array.from(this.activeSkillIds), null, 2), 'utf-8')
-    } catch (err: any) {
-      logger.log('WARN', 'SkillRepo', `Failed persisting active skills state: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'SkillRepo', `Failed persisting active skills state: ${errorMessage(err)}`)
     }
   }
 
@@ -253,13 +254,13 @@ export class SkillRepository {
 
               // Overwrite or set by normalized ID
               skillsMap.set(id.toLowerCase(), skillDef)
-            } catch (readErr: any) {
-              logger.log('WARN', 'SkillRepo', `Error reading skill file ${skillFilePath}: ${readErr.message}`)
+            } catch (readErr: unknown) {
+              logger.log('WARN', 'SkillRepo', `Error reading skill file ${skillFilePath}: ${errorMessage(readErr)}`)
             }
           }
         }
-      } catch (dirErr: any) {
-        logger.log('WARN', 'SkillRepo', `Failed scanning skills directory ${dir}: ${dirErr.message}`)
+      } catch (dirErr: unknown) {
+        logger.log('WARN', 'SkillRepo', `Failed scanning skills directory ${dir}: ${errorMessage(dirErr)}`)
       }
     }
 
@@ -310,9 +311,9 @@ export class SkillRepository {
       await fs.promises.writeFile(targetFile, finalSerialized, 'utf-8')
       logger.log('INFO', 'SkillRepo', `Saved skill '${cleanName}' to ${targetFile}`)
       return { success: true, filePath: targetFile }
-    } catch (err: any) {
-      logger.log('ERROR', 'SkillRepo', `Failed saving skill ${cleanName}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SkillRepo', `Failed saving skill ${cleanName}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -335,9 +336,9 @@ export class SkillRepository {
       this.setSkillActive(target.name, false)
       logger.log('INFO', 'SkillRepo', `Deleted skill '${skillId}'`)
       return { success: true }
-    } catch (err: any) {
-      logger.log('ERROR', 'SkillRepo', `Error deleting skill ${skillId}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SkillRepo', `Error deleting skill ${skillId}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 }

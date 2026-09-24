@@ -4,6 +4,8 @@ import { AppSettings } from '../../types'
 import { apiService } from '../../services/api'
 import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
 import { DEFAULT_OLLAMA_HOST } from '../../../shared/domain/ollamaHost'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { useTranslation } from '../../i18n'
 
 interface OllamaServerConfigProps {
   settings: AppSettings
@@ -12,6 +14,7 @@ interface OllamaServerConfigProps {
 }
 
 export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings, onUpdateSettings, onRefreshDiagnostics }) => {
+  const { t } = useTranslation()
   const currentMode = isRemoteOllamaMode(settings) ? 'remote' : 'local'
   const [remoteUrl, setRemoteUrl] = useState(
     settings.ollamaHost && settings.ollamaHost !== DEFAULT_OLLAMA_HOST ? settings.ollamaHost : 'http://192.168.1.100:11434',
@@ -54,20 +57,20 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
       if (res.success) {
         setTestResult({
           success: true,
-          message: `Connesso con successo al server Ollama (${res.modelsCount ?? 0} modelli rilevati)`,
+          message: t('ollamaServer.connected', { count: res.modelsCount ?? 0 }),
           modelsCount: res.modelsCount,
         })
         if (onRefreshDiagnostics) onRefreshDiagnostics()
       } else {
         setTestResult({
           success: false,
-          message: res.error || 'Impossibile raggiungere il server Ollama specificato',
+          message: res.error || t('ollamaServer.unreachable'),
         })
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestResult({
         success: false,
-        message: err.message || 'Errore di rete durante la verifica della connessione',
+        message: errorMessage(err),
       })
     } finally {
       setIsTesting(false)
@@ -82,8 +85,8 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
             <Server className="w-4.5 h-4.5 text-cyan-400" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">Server Ollama (Locale o Rete)</h2>
-            <p className="text-[11px] text-slate-400">Scegli se eseguire i modelli AI su questo computer o collegarti a un server in rete locale/remoto.</p>
+            <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">{t('ollamaServer.title')}</h2>
+            <p className="text-[11px] text-slate-400">{t('ollamaServer.subtitle')}</p>
           </div>
         </div>
       </div>
@@ -101,7 +104,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-100 flex items-center gap-2">
-              <HardDrive className="w-4 h-4 text-cyan-400" /> Sullo stesso PC (Locale)
+              <HardDrive className="w-4 h-4 text-cyan-400" /> {t('ollamaServer.localTitle')}
             </span>
             <span
               className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
@@ -111,10 +114,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
               {currentMode === 'local' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed">
-            Utilizza l'installazione locale di Ollama (<code className="font-mono text-cyan-300">http://127.0.0.1:11434</code>). Ideale per lavorare
-            completamente offline con la GPU/CPU del computer.
-          </p>
+          <p className="text-[11px] text-slate-400 leading-relaxed">{t('ollamaServer.localDescription', { host: 'http://127.0.0.1:11434' })}</p>
           <div className="text-[10px] font-mono text-cyan-400/80 pt-1">Endpoint: http://127.0.0.1:11434</div>
         </button>
 
@@ -130,7 +130,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-100 flex items-center gap-2">
-              <Wifi className="w-4 h-4 text-sky-400" /> Server in Rete Remoto
+              <Wifi className="w-4 h-4 text-sky-400" /> {t('ollamaServer.remoteTitle')}
             </span>
             <span
               className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
@@ -140,9 +140,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
               {currentMode === 'remote' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed">
-            Invia prompt, tool e indicizzazioni a un server Ollama condiviso o su workstation dedicata nella rete LAN/WiFi.
-          </p>
+          <p className="text-[11px] text-slate-400 leading-relaxed">{t('ollamaServer.remoteDescription')}</p>
           <div className="text-[10px] font-mono text-sky-400/80 pt-1">
             Endpoint: {settings.ollamaHost && settings.ollamaHost !== DEFAULT_OLLAMA_HOST ? settings.ollamaHost : remoteUrl}
           </div>
@@ -152,20 +150,17 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
       {/* Remote Host URL Input (visible when remote is active) */}
       {currentMode === 'remote' && (
         <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2 animate-in fade-in">
-          <label className="text-xs font-semibold text-slate-300 block">Indirizzo IP o Nome Host del Server Ollama:</label>
+          <label className="text-xs font-semibold text-slate-300 block">{t('ollamaServer.hostLabel')}</label>
           <div className="flex items-center gap-2">
             <input
               type="text"
               value={remoteUrl}
               onChange={(e) => handleRemoteUrlChange(e.target.value)}
-              placeholder="es. http://192.168.1.50:11434 oppure http://ai-server:11434"
+              placeholder={t('ollamaServer.hostPlaceholder')}
               className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus-ring"
             />
           </div>
-          <p className="text-[10px] text-slate-400">
-            Assicurati che sul server remoto Ollama sia avviato con <code className="text-cyan-300 font-mono">OLLAMA_HOST=0.0.0.0</code> e che la porta sia
-            accessibile.
-          </p>
+          <p className="text-[10px] text-slate-400">{t('ollamaServer.remoteHint', { env: 'OLLAMA_HOST=0.0.0.0' })}</p>
         </div>
       )}
 
@@ -178,7 +173,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
           className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-2 active:scale-95 cursor-pointer disabled:opacity-50"
         >
           {isTesting ? <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin" /> : <Radio className="w-3.5 h-3.5 text-cyan-400" />}
-          {isTesting ? 'Verifica in corso...' : 'Test Connessione Server'}
+          {isTesting ? t('ollamaServer.testing') : t('ollamaServer.testConnection')}
         </button>
 
         {testResult && (

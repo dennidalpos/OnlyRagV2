@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AppSettings, WorkspaceProject } from '../types'
 import { logger } from '../lib/logger'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import { translate } from '../i18n/I18nContext'
 
 const LAST_WORKSPACE_STORAGE_KEY = 'onlyrag_last_workspace'
 const LEGACY_PROJECTS_STORAGE_KEY = 'onlyrag_workspace_projects'
@@ -26,8 +28,8 @@ async function migrateLegacyProjects(): Promise<void> {
     localStorage.removeItem(LEGACY_PROJECTS_STORAGE_KEY)
     localStorage.setItem(MIGRATION_FLAG_KEY, 'done')
     logger.info('useWorkspaceProjects', `Migrated ${res?.migrated ?? 0} legacy project(s) to the main-process registry.`)
-  } catch (err: any) {
-    logger.warn('useWorkspaceProjects', `Legacy project migration failed, will retry on next launch: ${err?.message}`)
+  } catch (err: unknown) {
+    logger.warn('useWorkspaceProjects', `Legacy project migration failed, will retry on next launch: ${errorMessage(err)}`)
   }
 }
 
@@ -49,8 +51,8 @@ export function useWorkspaceProjects(settings?: AppSettings) {
       try {
         const list = await window.electronAPI.listProjects()
         if (!cancelled) setProjects(list)
-      } catch (err: any) {
-        logger.warn('useWorkspaceProjects', `Could not load project registry: ${err?.message}`)
+      } catch (err: unknown) {
+        logger.warn('useWorkspaceProjects', `Could not load project registry: ${errorMessage(err)}`)
       }
     }
     void loadProjects()
@@ -66,8 +68,8 @@ export function useWorkspaceProjects(settings?: AppSettings) {
       const result = await window.electronAPI.getStandaloneScratchWorkspace()
       setStandaloneWorkspacePath(result.path)
       return result.path
-    } catch (err: any) {
-      logger.warn('useWorkspaceProjects', `Could not initialize standalone scratch workspace: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.warn('useWorkspaceProjects', `Could not initialize standalone scratch workspace: ${errorMessage(err)}`)
       return null
     }
   }, [standaloneWorkspacePath])
@@ -89,8 +91,8 @@ export function useWorkspaceProjects(settings?: AppSettings) {
         })
         try {
           localStorage.removeItem(LAST_WORKSPACE_STORAGE_KEY)
-        } catch (err: any) {
-          logger.warn('useWorkspaceProjects', `Failed clearing last workspace: ${err?.message}`)
+        } catch (err: unknown) {
+          logger.warn('useWorkspaceProjects', `Failed clearing last workspace: ${errorMessage(err)}`)
         }
         return
       }
@@ -99,8 +101,8 @@ export function useWorkspaceProjects(settings?: AppSettings) {
       setWorkspacePath(cleanPath)
       try {
         localStorage.setItem(LAST_WORKSPACE_STORAGE_KEY, cleanPath)
-      } catch (err: any) {
-        logger.warn('useWorkspaceProjects', `Failed saving last workspace: ${err?.message}`)
+      } catch (err: unknown) {
+        logger.warn('useWorkspaceProjects', `Failed saving last workspace: ${errorMessage(err)}`)
       }
       setIsStandaloneMode(false)
 
@@ -126,8 +128,8 @@ export function useWorkspaceProjects(settings?: AppSettings) {
             const confirmed = entry
             setProjects((prev) => [confirmed, ...prev.filter((p) => p.path !== cleanPath)])
           }
-        } catch (err: any) {
-          logger.warn('useWorkspaceProjects', `Could not update project registry: ${err?.message}`)
+        } catch (err: unknown) {
+          logger.warn('useWorkspaceProjects', `Could not update project registry: ${errorMessage(err)}`)
         }
       })()
     },
@@ -137,7 +139,7 @@ export function useWorkspaceProjects(settings?: AppSettings) {
   const handleAddProject = useCallback(async () => {
     if (!window.electronAPI?.openDirectoryDialog) return
     const chosen = await window.electronAPI.openDirectoryDialog({
-      title: 'Aggiungi Cartella Progetto per Coding Agent Studio',
+      title: translate('services.addProjectFolder'),
     })
     if (chosen) handleSelectProject(chosen)
   }, [handleSelectProject])
@@ -149,8 +151,8 @@ export function useWorkspaceProjects(settings?: AppSettings) {
     if (window.electronAPI?.renameProject) {
       try {
         await window.electronAPI.renameProject(projectPath, cleanName)
-      } catch (err: any) {
-        logger.warn('useWorkspaceProjects', `Could not rename project in registry: ${err?.message}`)
+      } catch (err: unknown) {
+        logger.warn('useWorkspaceProjects', `Could not rename project in registry: ${errorMessage(err)}`)
       }
     }
   }, [])
@@ -160,8 +162,8 @@ export function useWorkspaceProjects(settings?: AppSettings) {
     if (window.electronAPI?.openPath) {
       try {
         await window.electronAPI.openPath(projectPath.trim())
-      } catch (err: any) {
-        logger.warn('useWorkspaceProjects', `Could not open project path: ${err?.message}`)
+      } catch (err: unknown) {
+        logger.warn('useWorkspaceProjects', `Could not open project path: ${errorMessage(err)}`)
       }
     }
   }, [])

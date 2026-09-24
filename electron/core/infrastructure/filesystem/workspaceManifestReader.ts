@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { WorkspaceManifest } from '../../domain/agent/projectVerificationResolver'
 import { logger } from '../logging/logger'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const EMPTY: WorkspaceManifest = { packageJson: null, hasFile: () => false }
 
@@ -16,8 +17,8 @@ export function readWorkspaceManifest(workspacePath: string | null | undefined):
     try {
       const parsed = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
       packageJson = parsed && typeof parsed === 'object' ? parsed : null
-    } catch (err: any) {
-      logger.log('WARN', 'WorkspaceManifest', `Unparseable package.json at ${pkgPath}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'WorkspaceManifest', `Unparseable package.json at ${pkgPath}: ${errorMessage(err)}`)
     }
   }
 

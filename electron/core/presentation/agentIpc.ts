@@ -12,7 +12,7 @@ import { aiDebugBundleService } from '../application/aiDebugBundleService'
 import { skillInstallApprovalService } from '../application/skillInstallApprovalService'
 import { logger } from '../infrastructure/logging/logger'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
-import { agentTaskRequestSchema, planMilestoneSchema } from '../domain/agent/agentTaskContract'
+import { agentPlanSchema, agentTaskRequestSchema, planMilestoneSchema } from '../domain/agent/agentTaskContract'
 import { sanitizeAppSettings } from '../domain/settings/appSettingsDomain'
 import type { AgentPlan, AgentRunIdentity, AppSettings, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
 
@@ -108,7 +108,8 @@ export function registerAgentIpcHandlers(rendererEvents: RendererEventSink) {
         prompt,
         model,
         settings: sanitizeAppSettings(settings),
-        previousPlan,
+        // secureIpcMain only validates; parsing here strips keys the plan contract does not declare.
+        previousPlan: previousPlan ? (agentPlanSchema.parse(previousPlan) as AgentPlan) : undefined,
         workspacePath,
         previousDecisions,
         operationId: identity?.runId,

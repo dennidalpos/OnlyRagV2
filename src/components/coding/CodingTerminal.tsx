@@ -204,7 +204,7 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
         {isExecuting && (
           <div className="flex items-center gap-2 text-cyan-400 font-semibold py-1.5 px-2 bg-cyan-950/30 rounded border border-cyan-800/40">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            <span>Esecuzione comando in background in corso...</span>
+            <span>{t('uiShell.backgroundCommand')}</span>
           </div>
         )}
       </div>
@@ -235,7 +235,7 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
           value={terminalInput}
           onChange={(e) => setTerminalInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Esegui comando PowerShell... (↑/↓ per cronologia comandi)"
+          placeholder={t('codingPanels.terminalPlaceholder')}
           className="flex-1 bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3.5 py-2 text-slate-100 placeholder:text-slate-500 outline-none font-mono text-xs focus-ring shadow-inner"
         />
         <button
@@ -246,7 +246,7 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
           className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 active:scale-95 focus-ring shadow-md shadow-cyan-950/40 cursor-pointer shrink-0"
         >
           <Play className="w-3 h-3 fill-current" />
-          <span>Esegui</span>
+          <span>{t('uiShell.run')}</span>
           <CornerDownLeft className="w-3 h-3 opacity-60 ml-0.5" />
         </button>
       </div>

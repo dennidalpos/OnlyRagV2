@@ -5,6 +5,7 @@ import os from 'node:os'
 import { spawn } from 'node:child_process'
 import stripAnsi from 'strip-ansi'
 import { logger } from '../logging/logger'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export type ActiveTaskType = 'ingestion' | 'translation' | 'ollama_stream' | 'export' | 'terminal_command'
 
@@ -88,9 +89,9 @@ export class TaskRunner {
       this.cleanupTemporaryResidue(task)
 
       return { success: true, message: `Task ${id} cancelled successfully and residues cleaned.` }
-    } catch (err: any) {
-      logger.log('ERROR', 'TaskRunner', `Error cancelling task ${id}: ${err.message}`)
-      return { success: false, message: `Error cancelling task: ${err.message}` }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'TaskRunner', `Error cancelling task ${id}: ${errorMessage(err)}`)
+      return { success: false, message: `Error cancelling task: ${errorMessage(err)}` }
     }
   }
 
@@ -99,8 +100,8 @@ export class TaskRunner {
     for (const [id, task] of this.activeTasksMap.entries()) {
       try {
         task.destroy()
-      } catch (destroyErr: any) {
-        logger.log('WARN', 'TaskRunner', `Failed destroying task ${id}: ${destroyErr.message}`)
+      } catch (destroyErr: unknown) {
+        logger.log('WARN', 'TaskRunner', `Failed destroying task ${id}: ${errorMessage(destroyErr)}`)
       } finally {
         this.cleanupTemporaryResidue(task)
         this.activeTasksMap.delete(id)
@@ -115,8 +116,8 @@ export class TaskRunner {
     try {
       fs.unlinkSync(residuePath)
       logger.log('INFO', 'TaskRunner', `Cleaned temporary residue: ${residuePath}`)
-    } catch (err: any) {
-      logger.log('WARN', 'TaskRunner', `Failed unlinking temporary residue for ${task.id}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'TaskRunner', `Failed unlinking temporary residue for ${task.id}: ${errorMessage(err)}`)
     }
   }
 
@@ -144,8 +145,8 @@ export class TaskRunner {
               }
             } catch {}
           }
-        } catch (err: any) {
-          logger.log('WARN', 'TaskRunner', `Error reading residual dir ${d}: ${err.message}`)
+        } catch (err: unknown) {
+          logger.log('WARN', 'TaskRunner', `Error reading residual dir ${d}: ${errorMessage(err)}`)
         }
       }
     }
@@ -315,13 +316,13 @@ export class TaskRunner {
                 error: exitCode !== 0 ? cleanOutput || `Exit code ${exitCode}` : undefined,
               })
             })
-          } catch (ptyErr: any) {
-            logger.log('WARN', 'TaskRunner', `node-pty spawn failed synchronously, delegating to child_process: ${ptyErr.message}`)
+          } catch (ptyErr: unknown) {
+            logger.log('WARN', 'TaskRunner', `node-pty spawn failed synchronously, delegating to child_process: ${errorMessage(ptyErr)}`)
             runWithChildProcess().then(resolve)
           }
         })
-      } catch (outerPtyErr: any) {
-        logger.log('WARN', 'TaskRunner', `node-pty outer failure: ${outerPtyErr.message}, falling back to child_process`)
+      } catch (outerPtyErr: unknown) {
+        logger.log('WARN', 'TaskRunner', `node-pty outer failure: ${errorMessage(outerPtyErr)}, falling back to child_process`)
         return runWithChildProcess()
       }
     }

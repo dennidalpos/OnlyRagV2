@@ -1,4 +1,5 @@
 import { logger } from '../logging/logger'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export interface PackageFacts {
   name: string
@@ -50,8 +51,8 @@ export class NpmRegistryClient {
       }
       cache.set(name, facts)
       return facts
-    } catch (err: any) {
-      logger.log('WARN', 'NpmRegistry', `Lookup failed for ${name}: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'NpmRegistry', `Lookup failed for ${name}: ${errorMessage(err)}`)
       return { name, exists: true }
     } finally {
       clearTimeout(timer)

@@ -2,6 +2,7 @@ import React from 'react'
 import { BadgeCheck, CircleDashed, HelpCircle, Ban, Wrench, Gauge, Layers, Boxes } from 'lucide-react'
 import type { OllamaModelMetrics } from '../../types'
 import { findVerificationEvidence, type ModelVerificationStatus } from '../../services/codingModelMatrix'
+import { useTranslation, type TranslationKey } from '../../i18n'
 
 /** The badges for one model. */
 
@@ -13,35 +14,33 @@ interface ModelBadgeStripProps {
   className?: string
 }
 
-const STATUS_STYLE: Record<ModelVerificationStatus, { label: string; className: string; Icon: typeof BadgeCheck }> = {
+const STATUS_STYLE: Record<ModelVerificationStatus, { label: TranslationKey; className: string; Icon: typeof BadgeCheck }> = {
   verified: {
-    label: 'Verificato',
+    label: 'modelBadges.verified',
     className: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
     Icon: BadgeCheck,
   },
   compatible: {
-    label: 'Compatibile',
+    label: 'modelBadges.compatible',
     className: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
     Icon: CircleDashed,
   },
   unsupported: {
-    label: 'Non supportato',
+    label: 'modelBadges.unsupported',
     className: 'bg-red-500/10 text-red-300 border-red-500/30',
     Icon: Ban,
   },
   unknown: {
-    label: 'Non testato',
+    label: 'modelBadges.unknown',
     className: 'bg-slate-700/30 text-slate-400 border-slate-600/40',
     Icon: HelpCircle,
   },
 }
 
-const STATUS_TOOLTIP: Record<ModelVerificationStatus, string> = {
-  verified: '',
-  compatible: "Dichiara le capacità che l'agente richiede ed è nel catalogo, ma non è mai stato eseguito contro le sonde live. Utilizzabile, non dimostrato.",
-  unsupported:
-    "Manca qualcosa che l'agente richiede — tipicamente il tool calling nativo, o è un modello di embedding senza superficie di chat. Selezionabile a tuo rischio.",
-  unknown: 'Tag non presente nel catalogo di questa app. Nessuna garanzia di funzionamento.',
+const STATUS_TOOLTIP: Record<Exclude<ModelVerificationStatus, 'verified'>, TranslationKey> = {
+  compatible: 'modelBadges.compatibleTooltip',
+  unsupported: 'modelBadges.unsupportedTooltip',
+  unknown: 'modelBadges.unknownTooltip',
 }
 
 function formatContext(tokens: number): string {
@@ -55,12 +54,17 @@ const Badge: React.FC<{ title?: string; className: string; children: React.React
 )
 
 export const ModelBadgeStrip: React.FC<ModelBadgeStripProps> = ({ modelName, status, metrics, className }) => {
+  const { t } = useTranslation()
   const style = STATUS_STYLE[status]
   const evidence = status === 'verified' ? findVerificationEvidence(modelName) : null
 
   // The verified tooltip IS the evidence. Anything less would make the badge a claim the user
   // has no way to check, which is the whole thing this badge was built not to be.
-  const statusTooltip = evidence ? `Testato il ${evidence.date} con: ${evidence.probes.join(', ')}.\n\n${evidence.outcome}` : STATUS_TOOLTIP[status]
+  const statusTooltip = evidence
+    ? `${t('modelBadges.verifiedEvidence', { date: evidence.date, probes: evidence.probes.join(', ') })}\n\n${evidence.outcome}`
+    : status === 'verified'
+      ? ''
+      : t(STATUS_TOOLTIP[status])
 
   const supportsTools = metrics?.capabilities?.includes('tools')
 
@@ -68,28 +72,25 @@ export const ModelBadgeStrip: React.FC<ModelBadgeStripProps> = ({ modelName, sta
     <div className={`flex flex-wrap items-center gap-1.5 ${className || ''}`}>
       <Badge title={statusTooltip} className={style.className}>
         <style.Icon className="w-3 h-3" />
-        {style.label}
+        {t(style.label)}
       </Badge>
 
       {metrics?.contextLength !== undefined && (
-        <Badge
-          title={`Contesto addestrato: ${metrics.contextLength} token. Ollama limita a questo valore qualunque num_ctx più alto, senza segnalarlo.`}
-          className="bg-slate-800/60 text-slate-300 border-slate-700"
-        >
+        <Badge title={t('modelBadges.trainedContext', { tokens: metrics.contextLength })} className="bg-slate-800/60 text-slate-300 border-slate-700">
           <Layers className="w-3 h-3" />
           {formatContext(metrics.contextLength)}
         </Badge>
       )}
 
       {metrics?.parameterSize && (
-        <Badge title="Parametri dichiarati dal modello" className="bg-slate-800/60 text-slate-300 border-slate-700">
+        <Badge title={t('modelBadges.parameters')} className="bg-slate-800/60 text-slate-300 border-slate-700">
           <Boxes className="w-3 h-3" />
           {metrics.parameterSize}
         </Badge>
       )}
 
       {metrics?.quantizationLevel && (
-        <Badge title="Livello di quantizzazione" className="bg-slate-800/60 text-slate-300 border-slate-700">
+        <Badge title={t('modelBadges.quantization')} className="bg-slate-800/60 text-slate-300 border-slate-700">
           <Gauge className="w-3 h-3" />
           {metrics.quantizationLevel}
         </Badge>
@@ -99,11 +100,7 @@ export const ModelBadgeStrip: React.FC<ModelBadgeStripProps> = ({ modelName, sta
           "not installed", which is not the same claim as "no tool calling". */}
       {metrics !== undefined && (
         <Badge
-          title={
-            supportsTools
-              ? "Tool calling nativo: l'agente usa il percorso strutturato di Ollama."
-              : "Nessun tool calling nativo: l'agente ripiega sul JSON in blocco recintato, misurabilmente più fragile sui modelli piccoli."
-          }
+          title={supportsTools ? t('modelBadges.nativeTools') : t('modelBadges.noNativeTools')}
           className={supportsTools ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}
         >
           <Wrench className="w-3 h-3" />

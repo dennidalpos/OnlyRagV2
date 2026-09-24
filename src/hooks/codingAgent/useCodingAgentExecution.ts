@@ -27,6 +27,10 @@ import { normalizeError } from '../../lib/errors/errorNormalizer'
 import { createAgentRunIdentity, matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import { resolveAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
 import type { AgentActionLogApi } from './useAgentActionLog'
+import { loadDocumentMarkdown } from '../../services/documentMarkdown'
+import { resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { useTranslation } from '../../i18n'
 
 const EMPTY_CHANGE_METRICS: AgentChangeMetrics = { filesTouched: 0, additions: 0, deletions: 0 }
 const FILE_MUTATION_APPROVAL_TYPES = new Set(['write_file', 'replace_chunk', 'multi_replace', 'delete_file'])
@@ -69,6 +73,7 @@ export function useCodingAgentExecution({
   context,
   appendTerminalLogs,
 }: UseCodingAgentExecutionOptions) {
+  const { t } = useTranslation()
   const { actionLogs, setActionLogs, addActionLog } = actionLog
   const [agentMode, setAgentMode] = useState<AgentMode>('guided')
   const [capabilityProfile, setCapabilityProfile] = useState<AgentCapabilityProfile>(() => resolveAgentCapabilityProfile(settings))
@@ -155,8 +160,8 @@ export function useCodingAgentExecution({
 
     const busyModule = peekGlobalTaskLock()
     if (busyModule && busyModule !== 'coding') {
-      const busyModuleName = busyModule === 'ingestion' ? 'Ingestione Documenti' : 'Traduzione'
-      addActionLog('info', `Impossibile avviare: ${busyModuleName} ha un task in corso. Attendi che finisca prima di procedere.`)
+      const busyModuleName = t(busyModule === 'ingestion' ? 'common.moduleNameIngestion' : 'common.moduleNameTranslation')
+      addActionLog('info', t('common.crossModuleTaskBlocked', { module: busyModuleName }))
       return
     }
 
@@ -171,7 +176,7 @@ export function useCodingAgentExecution({
     const runSessionId = session.activeSessionId || session.activeSession?.id || ''
     if (!runSessionId) {
       setIsExecuting(false)
-      addActionLog('info', 'Impossibile avviare: conversazione attiva non disponibile.')
+      addActionLog('info', t('agentRun.noActiveConversation'))
       return
     }
     const identity = createAgentRunIdentity({
@@ -187,17 +192,21 @@ export function useCodingAgentExecution({
 
     try {
       const { selectedFile, editorContent, loadedContentHash } = editor
-      const activeModel = settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
+      // '' when none is configured: the Main preflight blocks the run and says so.
+      const activeModel = resolveConfiguredModel('coding', settings)
       const activeFile =
         selectedFile && loadedContentHash ? { name: selectedFile.name, path: selectedFile.path, content: editorContent, versionHash: loadedContentHash } : null
 
-      const attachedDocs = context.ingestedDocs
-        .filter((d) => context.attachedDocIds.has(d.id))
-        .map((d) => ({
-          id: d.id,
-          filename: d.filename,
-          extractedMarkdown: d.extractedMarkdown || '',
-        }))
+      // The document list carries metadata only; attached documents are loaded on demand.
+      const attachedDocs = await Promise.all(
+        context.ingestedDocs
+          .filter((d) => context.attachedDocIds.has(d.id))
+          .map(async (d) => ({
+            id: d.id,
+            filename: d.filename,
+            extractedMarkdown: (await loadDocumentMarkdown(d)) ?? '',
+          })),
+      )
 
       const resolvedPinnedFiles = await Promise.all(
         Array.from(context.pinnedFiles.values()).map(async (f) => {
@@ -208,8 +217,8 @@ export function useCodingAgentExecution({
               if (res.success && res.content) {
                 content = res.content
               }
-            } catch (err: any) {
-              logger.warn('useCodingAgent', `Error reading pinned file ${f.path}: ${err?.message}`)
+            } catch (err: unknown) {
+              logger.warn('useCodingAgent', `Error reading pinned file ${f.path}: ${errorMessage(err)}`)
             }
           }
           return { name: f.name, path: f.path, content }
@@ -238,24 +247,24 @@ export function useCodingAgentExecution({
 
       if (!res?.success) {
         if (matchesAgentRunIdentity(activeRunIdentityRef.current, identity)) updateActiveRunIdentity(null)
-        const normalized = normalizeError(res?.error || 'Errore sconosciuto', 'Coding Agent')
+        const normalized = normalizeError(res?.error || t('agentRun.unknownError'), 'Coding Agent')
         closeRunningExecutedPrompt('failed', normalized.message)
         setIsExecuting(false)
-        addActionLog('info', `Errore avvio task: ${normalized.message}${normalized.remediation ? ` — ${normalized.remediation}` : ''}`)
+        addActionLog('info', t('agentRun.startFailed', { message: `${normalized.message}${normalized.remediation ? ` — ${normalized.remediation}` : ''}` }))
       } else if (res.runId !== identity.runId) {
         if (matchesAgentRunIdentity(activeRunIdentityRef.current, identity)) updateActiveRunIdentity(null)
-        closeRunningExecutedPrompt('failed', 'Identità run restituita da Main non valida.')
+        closeRunningExecutedPrompt('failed', t('agentRun.identityMismatchPrompt'))
         setIsExecuting(false)
-        addActionLog('info', 'Errore avvio task: l’identità restituita da Main non coincide con la richiesta.')
+        addActionLog('info', t('agentRun.identityMismatchLog'))
       } else if ((res.queuePosition || 0) > 0) {
-        addActionLog('info', `Task accettato: run ${res.runId}, posizione coda ${res.queuePosition}.`)
+        addActionLog('info', t('agentRun.queued', { runId: res.runId, position: res.queuePosition || 0 }))
       }
     } catch (err: unknown) {
       if (matchesAgentRunIdentity(activeRunIdentityRef.current, identity)) updateActiveRunIdentity(null)
       const normalized = normalizeError(err, 'Coding Agent')
       closeRunningExecutedPrompt('failed', normalized.message)
       setIsExecuting(false)
-      addActionLog('info', `Errore esecuzione: ${normalized.message}${normalized.remediation ? ` — ${normalized.remediation}` : ''}`)
+      addActionLog('info', t('agentRun.executionFailed', { message: `${normalized.message}${normalized.remediation ? ` — ${normalized.remediation}` : ''}` }))
     }
   }
 
@@ -446,9 +455,9 @@ export function useCodingAgentExecution({
 
   const handleCancelAgent = () => {
     const identity = activeRunIdentityRef.current
-    setCurrentStatusText('Annullamento in corso...')
+    setCurrentStatusText(t('agentRun.cancelling'))
     if (identity) window.electronAPI?.cancelAgentTask?.(identity)
-    addActionLog('info', "Esecuzione interrotta dall'utente.")
+    addActionLog('info', t('agentRun.cancelledByUser'))
   }
 
   const handleAgentExecute = async (overridePrompt?: string, overrideMode?: AgentMode, planRevisionId?: string, runProfile?: AgentCapabilityProfile) => {

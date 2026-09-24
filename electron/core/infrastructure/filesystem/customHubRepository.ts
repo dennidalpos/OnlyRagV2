@@ -3,6 +3,7 @@ import path from 'node:path'
 import { app } from 'electron'
 import { CustomHubInput, SkillHubSource } from '../../domain/skills/skillTypes'
 import { logger } from '../logging/logger'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export const BUILTIN_HUB_SOURCES: SkillHubSource[] = [
   {
@@ -60,8 +61,8 @@ export class CustomHubRepository {
         if (Array.isArray(parsed)) {
           customSources.push(...parsed)
         }
-      } catch (err: any) {
-        logger.log('WARN', 'CustomHubRepo', `Error reading custom hubs file: ${err.message}`)
+      } catch (err: unknown) {
+        logger.log('WARN', 'CustomHubRepo', `Error reading custom hubs file: ${errorMessage(err)}`)
       }
     }
 

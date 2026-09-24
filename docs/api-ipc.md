@@ -4,7 +4,7 @@ Il Preload espone le funzioni in [`electron/preload.ts`](../electron/preload.ts)
 
 [`secureIpcMain.ts`](../electron/core/presentation/secureIpcMain.ts) accetta richieste solo dalla frame principale della finestra attendibile e valida gli argomenti con uno schema per canale prima di invocare l'handler. I canali sconosciuti falliscono. `npm run quality:static` verifica che le registrazioni non usino direttamente `ipcMain` e che i canali registrati abbiano uno schema corrispondente.
 
-Il controllo statico verifica la presenza degli schemi, non la copertura di ogni campo. `agent:start-task` usa lo schema stretto [`agentTaskContract.ts`](../electron/core/domain/agent/agentTaskContract.ts), corrispondente al tipo condiviso `AgentTaskRequest`: campi sconosciuti, `sourceWorkspacePath` (riservato a Main), identità incompleta, profilo capability non valido e allegati malformati vengono rifiutati prima dell'handler. Le impostazioni ricevute da `agent:start-task`, `agent:plan-interview`, `agent:plan-generate` e `agent:export-ai-debug-bundle` passano da `sanitizeAppSettings`; `agent:plan-seed` rimuove le chiavi sconosciute delle milestone prima di salvarle. Gli oggetti `skills:get-hub-skill-content` e `skills:save-custom` validano tutti i campi letti dal servizio (`downloadUrl` deve essere un URL) e lasciano passare solo metadati di visualizzazione.
+Il controllo statico verifica la presenza degli schemi, non la copertura di ogni campo. `agent:start-task` usa lo schema stretto [`agentTaskContract.ts`](../electron/core/domain/agent/agentTaskContract.ts), corrispondente al tipo condiviso `AgentTaskRequest`: campi sconosciuti, `sourceWorkspacePath` (riservato a Main), identità incompleta, profilo capability non valido e allegati malformati vengono rifiutati prima dell'handler. Le impostazioni ricevute da `agent:start-task`, `agent:plan-interview`, `agent:plan-generate` e `agent:export-ai-debug-bundle` passano da `sanitizeAppSettings`; `agent:plan-seed` rimuove le chiavi sconosciute delle milestone prima di salvarle. `agent:plan-generate` valida il piano precedente con lo schema completo `agentPlanSchema` (stesso file) e l'handler lo riesegue per rimuovere le chiavi sconosciute; le liste assenti di un piano legacy diventano vuote. `projects:migrate-legacy` salva solo i campi dichiarati di `WorkspaceProject`. Gli oggetti `skills:get-hub-skill-content` e `skills:save-custom` validano tutti i campi letti dal servizio (`downloadUrl` deve essere un URL) e lasciano passare solo metadati di visualizzazione.
 
 ## Canali request/response
 
@@ -42,7 +42,7 @@ Le run Agent Coding di progetto non ricevono il path utente: Main sostituisce il
 
 `agent:start-task` restituisce `runId` e `queuePosition`; `agent:cancel-task` richiede quell'identità e non annulla altre run.
 
-`ingest:file` riceve un `taskId` generato dal Renderer. Il progresso porta lo stesso ID e `task:cancel` annulla solo quella ingestion.
+`ingest:list` restituisce solo i metadati dei documenti (`IngestedDocument`); `ingest:get` (docId) restituisce `IngestedDocumentContent` con `extractedMarkdown`, oppure `null` se il documento non esiste o il Sidecar non risponde. `ingest:file` riceve un `taskId` generato dal Renderer. Il progresso porta lo stesso ID e `task:cancel` annulla solo quella ingestion.
 
 `ollama:generate-stream` riceve `options.think` come booleano effettivo; `ingest:file` riceve `normalizationThink` e `ingest:translate-inplace` riceve `think`. Il valore predefinito nei trasporti è `false`.
 

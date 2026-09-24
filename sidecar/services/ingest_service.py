@@ -100,7 +100,9 @@ def process_and_index_document_generator(
         yield json.dumps({
             "type": "progress",
             "percent": 5,
-            "step": f"Avvio Fast-Router e pre-analisi file: {filename}...",
+            "step": f"Starting the fast router and file pre-analysis: {filename}...",
+            "step_code": "start",
+            "step_params": {"filename": filename},
             "pipeline": "Fast-Router Layout",
             "fileName": filename
         }) + "\n"
@@ -129,7 +131,9 @@ def process_and_index_document_generator(
                     yield json.dumps({
                         "type": "progress",
                         "percent": 10,
-                        "step": f"Rilevate {num_pages} pagine nel documento PDF. Inizio estrazione ad alta precisione...",
+                        "step": f"Found {num_pages} pages in the PDF. Starting high-precision extraction...",
+                        "step_code": "pdf_pages",
+                        "step_params": {"pages": num_pages},
                         "pipeline": "PDF Stream & Table Extraction",
                         "page": 1,
                         "total_pages": num_pages,
@@ -146,7 +150,6 @@ def process_and_index_document_generator(
                         struct_info = analyze_pdf_page_structure(page)
                         strategy = struct_info.get("strategy")
                         md_tables, _ = extract_tables_from_page(page)
-                        table_info = f" (trovate {len(md_tables)} tabelle)" if md_tables else ""
                         raw_text = page.get_text("text").strip()
                         used_ocr = strategy == PageRoutingStrategy.OCR_REQUIRED
 
@@ -160,7 +163,7 @@ def process_and_index_document_generator(
                             num_pages=num_pages
                         ))
                         page_render_meta[page_num] = {
-                            "table_info": table_info,
+                            "tables": len(md_tables),
                             "used_ocr": used_ocr,
                         }
 
@@ -169,17 +172,23 @@ def process_and_index_document_generator(
                         for result_page_num, page_content in executor.map(render_prepared_pdf_page, work_items):
                             raise_if_cancelled(task_id)
                             meta = page_render_meta[result_page_num]
+                            page_params = {"page": result_page_num, "total": num_pages, "engine": ocr_engine_label, "tables": meta["tables"]}
                             if meta["used_ocr"]:
-                                step_msg = f"Pagina {result_page_num}/{num_pages}: {ocr_engine_label} completato."
-                                pipeline_label = f"{ocr_engine_label} (Scansione)"
+                                step_code = "page_ocr"
+                                step_msg = f"Page {result_page_num}/{num_pages}: {ocr_engine_label} completed."
+                                pipeline_label = f"{ocr_engine_label} (Scan)"
                             else:
-                                step_msg = f"Pagina {result_page_num}/{num_pages}: Estrazione testo{meta['table_info']} completata."
+                                step_code = "page_text_tables" if meta["tables"] else "page_text"
+                                tables_note = f" ({meta['tables']} tables)" if meta["tables"] else ""
+                                step_msg = f"Page {result_page_num}/{num_pages}: text extraction{tables_note} completed."
                                 pipeline_label = "PDF Stream & Table Finder"
 
                             yield json.dumps({
                                 "type": "progress",
                                 "percent": int(10 + (result_page_num / num_pages) * 55),
                                 "step": step_msg,
+                                "step_code": step_code,
+                                "step_params": page_params,
                                 "pipeline": pipeline_label,
                                 "page": result_page_num,
                                 "total_pages": num_pages,
@@ -204,7 +213,9 @@ def process_and_index_document_generator(
             yield json.dumps({
                 "type": "progress",
                 "percent": 35,
-                "step": f"Estrazione contenuti strutturati per file {filename} ({category})...",
+                "step": f"Extracting structured content from {filename} ({category})...",
+                "step_code": "structured",
+                "step_params": {"filename": filename, "category": category},
                 "pipeline": "Structured Document Extractor",
                 "fileName": filename
             }) + "\n"
@@ -227,7 +238,8 @@ def process_and_index_document_generator(
         yield json.dumps({
             "type": "progress",
             "percent": 68,
-            "step": "Creazione dei chunk semantici header-aware...",
+            "step": "Creating header-aware semantic chunks...",
+            "step_code": "chunking",
             "pipeline": "Semantic Header Chunking",
             "fileName": filename
         }) + "\n"
@@ -241,7 +253,9 @@ def process_and_index_document_generator(
         yield json.dumps({
             "type": "progress",
             "percent": 70,
-            "step": f"Vettorizzazione di {total_chunks} chunk ({embedding_model})...",
+            "step": f"Embedding {total_chunks} chunks ({embedding_model})...",
+            "step_code": "embedding",
+            "step_params": {"chunks": total_chunks, "model": embedding_model},
             "pipeline": "LanceDB Embeddings",
             "fileName": filename
         }) + "\n"
@@ -303,8 +317,9 @@ def process_and_index_document_generator(
         yield json.dumps({
             "type": "done",
             "percent": 100,
-            "step": "Ingestione e indicizzazione completate con successo!",
-            "pipeline": "Completato",
+            "step": "Ingestion and indexing completed successfully!",
+            "step_code": "done",
+            "pipeline": "Completed",
             "fileName": filename,
             "data": final_payload
         }) + "\n"

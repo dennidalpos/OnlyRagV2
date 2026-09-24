@@ -1,4 +1,5 @@
 import { WorkspaceFile } from '../../types'
+import { translate } from '../../i18n/I18nContext'
 
 export interface WorkspaceQuickAction {
   id: string
@@ -27,20 +28,20 @@ export function resolveWorkspaceQuickActions(workspacePath?: string | null, file
         id: 'typecheck',
         label: 'npm run typecheck',
         command: 'npm run typecheck',
-        description: 'Verifica statica TypeScript',
+        description: translate('services.actionTypecheck'),
       })
     }
     actions.push({
       id: 'test',
       label: 'npm test',
       command: 'npm test',
-      description: 'Esegui test unitari',
+      description: translate('services.actionUnitTests'),
     })
     actions.push({
       id: 'build',
       label: 'npm run build',
       command: 'npm run build',
-      description: 'Compila progetto',
+      description: translate('services.actionBuild'),
     })
   }
 
@@ -50,13 +51,13 @@ export function resolveWorkspaceQuickActions(workspacePath?: string | null, file
       id: 'cargo-check',
       label: 'cargo check',
       command: 'cargo check',
-      description: 'Verifica compilazione Rust',
+      description: translate('services.actionCargoCheck'),
     })
     actions.push({
       id: 'cargo-test',
       label: 'cargo test',
       command: 'cargo test',
-      description: 'Esegui test Rust',
+      description: translate('services.actionRustTests'),
     })
   }
 
@@ -66,7 +67,7 @@ export function resolveWorkspaceQuickActions(workspacePath?: string | null, file
       id: 'pytest',
       label: 'pytest',
       command: 'pytest',
-      description: 'Esegui test Python',
+      description: translate('services.actionPythonTests'),
     })
   }
 
@@ -76,7 +77,7 @@ export function resolveWorkspaceQuickActions(workspacePath?: string | null, file
       id: 'go-test',
       label: 'go test ./...',
       command: 'go test ./...',
-      description: 'Esegui test Go',
+      description: translate('services.actionGoTests'),
     })
   }
 
@@ -85,7 +86,7 @@ export function resolveWorkspaceQuickActions(workspacePath?: string | null, file
     id: 'git-status',
     label: 'git status',
     command: 'git status',
-    description: 'Verifica stato Git',
+    description: translate('uiShell.actionGitStatus'),
   })
 
   return actions.slice(0, 4)

@@ -14,7 +14,7 @@ from sidecar.main import app  # noqa: E402
 
 
 def main() -> None:
-    output = ROOT / "sidecar" / "contracts" / "openapi-2.4.0.json"
+    output = ROOT / "sidecar" / "contracts" / "openapi-2.5.0.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         json.dumps(app.openapi(), indent=2, ensure_ascii=False, sort_keys=True) + "\n",

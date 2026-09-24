@@ -6,6 +6,7 @@ import { logger } from '../logging/logger'
 import { baselineSnapshotSchema, type BaselineSnapshot } from '../../domain/sessions/sessionBaselineContract'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 import { isPathWithinRoot } from '../../domain/agent/pathContainment'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const RECOVERY_DIR = '.session_recovery'
 
@@ -58,8 +59,8 @@ export class SessionCheckpointRepository {
         path.join(this.getStorageDir(parsed.data.workspaceRoot), `.session_checkpoint_${safeId(parsed.data.snapshotId)}.json`),
         JSON.stringify(parsed.data, null, 2),
       )
-    } catch (err: any) {
-      logger.log('WARN', 'SessionCheckpointRepo', `Failed saving checkpoint ${parsed.data.snapshotId}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'SessionCheckpointRepo', `Failed saving checkpoint ${parsed.data.snapshotId}: ${errorMessage(err)}`)
       return false
     }
   }
@@ -96,12 +97,12 @@ export class SessionCheckpointRepository {
             await fs.promises.writeFile(targetPath, content, 'utf-8')
           }
           result.restoredCount++
-        } catch (err: any) {
-          result.errors.push(`Failed restoring ${entry.relativePath}: ${err.message}`)
+        } catch (err: unknown) {
+          result.errors.push(`Failed restoring ${entry.relativePath}: ${errorMessage(err)}`)
         }
       }
-    } catch (err: any) {
-      result.errors.push(`Failed loading checkpoint ${snapshotId}: ${err.message}`)
+    } catch (err: unknown) {
+      result.errors.push(`Failed loading checkpoint ${snapshotId}: ${errorMessage(err)}`)
     }
 
     return result

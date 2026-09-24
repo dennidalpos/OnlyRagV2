@@ -1,3 +1,5 @@
+import type { ToolExecutionResult } from '../toolExecutionContracts'
+
 export interface GitCommitResult {
   success: boolean
   output: string
@@ -36,22 +38,38 @@ export function executeGitDiff(
   staged: boolean,
   pathCheck: SafePathCheck | null,
   run: GitRun,
-): import('../toolExecutionContracts').ToolExecutionResult {
+): ToolExecutionResult {
   if (targetPath && pathCheck && !pathCheck.safePath) {
     return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Git Diff Rejected: ${pathCheck.error}` }
   }
-  try {
-    const args = ['diff', ...(staged ? ['--staged'] : []), ...(pathCheck?.safePath ? ['--', pathCheck.safePath] : [])]
-    const stdout = run(cwd, args, 15000)
-    const truncated = stdout.trim().slice(0, 8000)
-    const outStr = stdout.trim()
-      ? `[GIT DIFF (${staged ? 'staged' : 'unstaged'}): ${targetPath || cwd}]\n\`\`\`diff\n${truncated}\n\`\`\`\n[END GIT DIFF]`
+  const args = ['diff', ...(staged ? ['--staged'] : []), ...(pathCheck?.safePath ? ['--', pathCheck.safePath] : [])]
+  const label = staged ? 'staged' : 'unstaged'
+  const render = (stdout: string, overflowed: boolean): ToolExecutionResult => {
+    const trimmed = stdout.trim()
+    const truncated = overflowed || trimmed.length > GIT_DIFF_HISTORY_CHARS
+    const outStr = trimmed
+      ? `[GIT DIFF (${label}): ${targetPath || cwd}]\n\`\`\`diff\n${trimmed.slice(0, GIT_DIFF_HISTORY_CHARS)}\n\`\`\`\n${truncated ? '[DIFF TRUNCATED: pass filePath to inspect one file]\n' : ''}[END GIT DIFF]`
       : `[GIT DIFF: ${targetPath || cwd}]\nNo differences detected.\n[END GIT DIFF]`
     return { outcome: 'success', outputForHistory: outStr, logMessage: `Git Diff completed for ${targetPath ? targetPath.split(/[\\/]/).pop() : 'workspace'}` }
+  }
+  try {
+    return render(run(cwd, args, 15000), false)
   } catch (error: unknown) {
+    // Only the first GIT_DIFF_HISTORY_CHARS reach the model, so a diff larger than the process
+    // buffer is still an answer: keep what was read and say it was cut.
+    const partial = bufferOverflowOutput(error)
+    if (partial !== undefined) return render(partial, true)
     const message = (error as { message?: string })?.message || 'Unknown git error'
     return { outcome: 'failure', outputForHistory: `Git Diff Error: ${message}`, logMessage: `Git Diff Error: ${message}` }
   }
+}
+
+const GIT_DIFF_HISTORY_CHARS = 8000
+
+function bufferOverflowOutput(error: unknown): string | undefined {
+  const failure = error as { code?: string; stdout?: { toString(): string } | string }
+  if (failure?.code !== 'ENOBUFS' || failure.stdout === undefined || failure.stdout === null) return undefined
+  return failure.stdout.toString()
 }
 
 /** Validates and translates the git commit operation while delegating execution to infrastructure. */

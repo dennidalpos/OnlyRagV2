@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { logger } from '../lib/logger'
 import type { AgentRunIdentity } from '../types'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 export interface PendingApprovalRequest extends AgentRunIdentity {
   sessionId: string
@@ -22,8 +23,8 @@ export function useAgentApprovals() {
       setPendingApproval(null)
       try {
         await window.electronAPI.respondToAgentApproval(current, approved, approvedHunks)
-      } catch (err: any) {
-        logger.error('useAgentApprovals', `Failed responding to agent approval: ${err?.message}`)
+      } catch (err: unknown) {
+        logger.error('useAgentApprovals', `Failed responding to agent approval: ${errorMessage(err)}`)
       }
     },
     [pendingApproval],

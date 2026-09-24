@@ -9,9 +9,10 @@ import { logger } from '../infrastructure/logging/logger'
 import { sidecarProcessManager } from '../infrastructure/process/sidecarProcessManager'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
-import { sidecarHttpClient } from '../infrastructure/http/sidecarHttpClient'
+import { sidecarHttpClient, type SidecarDocumentSummary } from '../infrastructure/http/sidecarHttpClient'
 import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
-import type { IngestedDocument, SlmLogDiagnosticReport } from '../../../shared/types'
+import type { IngestedDocument, IngestedDocumentContent, SlmLogDiagnosticReport } from '../../../shared/types'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export function normalizeIngestedFileType(fileType?: string, filename?: string): IngestedDocument['fileType'] {
   const rawType = (fileType || filename?.split('.').pop() || '').trim().toLowerCase().replace(/^\./, '')
@@ -19,6 +20,21 @@ export function normalizeIngestedFileType(fileType?: string, filename?: string):
   if (rawType === 'docx') return 'docx'
   if (['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tif', 'tiff', 'gif', 'image'].includes(rawType)) return 'image'
   return 'text'
+}
+
+function toIngestedDocument(item: SidecarDocumentSummary): IngestedDocument {
+  return {
+    id: item.id,
+    filename: item.filename,
+    filePath: item.file_path || item.filePath || item.filename,
+    fileSize: item.file_size,
+    numPages: item.num_pages,
+    numChunks: item.num_chunks,
+    status: item.status as IngestedDocument['status'],
+    ingestedAt: item.ingested_at,
+    fileType: normalizeIngestedFileType(item.file_type, item.filename),
+    usedFallbackEmbeddings: Boolean(item.used_fallback_embeddings),
+  }
 }
 
 export function getAnomalyRemediation(anomalyType: string): string {
@@ -142,9 +158,9 @@ export class SidecarAppService {
       }
 
       return { success: false, error: result.error || 'Ingestion failed' }
-    } catch (err: any) {
-      logger.log('ERROR', 'SidecarApp', `Unexpected ingestion exception: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SidecarApp', `Unexpected ingestion exception: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     } finally {
       taskRunner.unregisterActiveTask(effectiveTaskId)
     }
@@ -230,22 +246,17 @@ export class SidecarAppService {
     return sidecarHttpClient.getDocumentPagePreview(docId, pageNumber)
   }
 
-  async listIngestedDocuments(): Promise<any[] | null> {
+  /** Metadata of every indexed document; the Markdown is loaded per document by getIngestedDocument. */
+  async listIngestedDocuments(): Promise<IngestedDocument[] | null> {
     const list = await sidecarHttpClient.listDocuments()
     if (!list) return null
-    return list.map((item) => ({
-      id: item.id,
-      filename: item.filename,
-      filePath: item.file_path || item.filePath || item.filename,
-      fileSize: item.file_size,
-      numPages: item.num_pages,
-      numChunks: item.num_chunks,
-      extractedMarkdown: item.extracted_markdown,
-      status: item.status,
-      ingestedAt: item.ingested_at,
-      fileType: normalizeIngestedFileType(item.file_type, item.filename),
-      usedFallbackEmbeddings: Boolean(item.used_fallback_embeddings),
-    }))
+    return list.map(toIngestedDocument)
+  }
+
+  async getIngestedDocument(docId: string): Promise<IngestedDocumentContent | null> {
+    const record = await sidecarHttpClient.getDocument(docId)
+    if (!record) return null
+    return { ...toIngestedDocument(record), extractedMarkdown: record.extracted_markdown }
   }
 
   async deleteDocument(docId: string): Promise<{ success: boolean; error?: string }> {
@@ -374,9 +385,9 @@ export class SidecarAppService {
           error: sidecarRes.error || 'Impossibile completare la generazione del file PDF dal sidecar.',
         }
       }
-    } catch (err: any) {
-      logger.log('ERROR', 'SidecarApp', `Export exception: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SidecarApp', `Export exception: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -507,8 +518,8 @@ export class SidecarAppService {
             }
           }
         }
-      } catch (err: any) {
-        logger.log('WARN', 'SidecarApp', `Failed reading log file ${logPath}: ${err.message}`)
+      } catch (err: unknown) {
+        logger.log('WARN', 'SidecarApp', `Failed reading log file ${logPath}: ${errorMessage(err)}`)
       }
     }
 

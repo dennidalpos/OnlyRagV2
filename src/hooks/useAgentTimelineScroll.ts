@@ -99,7 +99,6 @@ export function useAgentTimelineScroll(
       scrollToBottom(false)
     }
     prevExecutingRef.current = isExecuting
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExecuting])
 
   // Continuous Autoscroll during action logs arrival and text streaming

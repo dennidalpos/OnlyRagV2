@@ -118,6 +118,23 @@ def test_export_empty_markdown_raises_400():
     response = client.post("/export", json=payload)
     assert response.status_code == 400
 
+def test_ingest_stream_progress_uses_locale_neutral_step_codes(tmp_path):
+    """Progress text is rendered by the UI in its own language from step_code/step_params."""
+    from sidecar.tests._stream import read_events
+
+    source = tmp_path / "notes.txt"
+    source.write_text("# Notes\n\nA short text document long enough to be chunked and indexed.", encoding="utf-8")
+    response = client.post("/ingest-path-stream", json={"file_path": str(source)})
+    events = read_events(response)
+    codes = [e.get("step_code") for e in events if e.get("type") in ("progress", "done")]
+
+    assert codes[0] == "start" and "structured" in codes and "chunking" in codes and "embedding" in codes and codes[-1] == "done"
+    embedding = next(e for e in events if e.get("step_code") == "embedding")
+    assert set(embedding["step_params"]) == {"chunks", "model"}
+    done = [e for e in events if e.get("type") == "done"][-1]
+    client.delete(f"/documents/{done['data']['id']}")
+
+
 def test_ingest_path_contract_rejects_invalid_limits_and_accepts_options(tmp_path):
     source = tmp_path / "document.pdf"
     source.write_bytes(b"not a real pdf")
@@ -162,6 +179,21 @@ def test_translation_contract_requires_bounded_non_blank_languages():
         "/documents/doc-1/translate-inplace-stream",
         json={"source_lang": "en", "target_lang": "x" * 101},
     ).status_code == 422
+
+def test_model_contracts_never_fall_back_to_a_guessed_model():
+    missing_translation_model = client.post(
+        "/documents/doc-1/translate-inplace-stream",
+        json={"source_lang": "en", "target_lang": "it"},
+    )
+    assert missing_translation_model.status_code == 422
+    assert missing_translation_model.json()["detail"][0]["loc"] == ["body", "model"]
+
+    missing_normalization_model = client.post(
+        "/ingest-path-stream",
+        json={"file_path": "C:/missing.txt", "normalize_with_llm": True},
+    )
+    assert missing_normalization_model.status_code == 422
+    assert "normalization_model is required" in str(missing_normalization_model.json()["detail"])
 
 def test_vector_search_endpoint():
     payload = {
@@ -781,7 +813,8 @@ def test_output_path_resolution(tmp_path):
 def test_translate_inplace_stream_endpoint_404():
     payload = {
         "source_lang": "Italian",
-        "target_lang": "English"
+        "target_lang": "English",
+        "model": "test-model",
     }
     response = client.post("/documents/non-existent-doc-9999/translate-inplace-stream", json=payload)
     # Validated before streaming starts, so the failure is a real HTTP status, not a 200 + error event.
@@ -846,6 +879,90 @@ def test_list_stored_documents_includes_fallback_embedded_documents(monkeypatch)
     assert by_id["doc-1"]["used_fallback_embeddings"] is False
     assert by_id["doc-2"]["status"] == "indexed_fallback"
     assert by_id["doc-2"]["used_fallback_embeddings"] is True
+    assert all("extracted_markdown" not in d for d in listed), "the list carries metadata only"
+
+
+def test_list_stored_documents_selects_metadata_columns_only(monkeypatch):
+    """The list must not read the Markdown column: it is refetched on every focus and tab change."""
+    import sidecar.services.search_service as search_service
+
+    selected_columns = []
+
+    class FakeQuery:
+        def select(self, columns):
+            selected_columns.extend(columns)
+            return self
+
+        def limit(self, n):
+            return self
+
+        def to_list(self):
+            return [{"id": "doc-1", "filename": "a.md", "status": "indexed"}]
+
+    class FakeTable:
+        def search(self):
+            return FakeQuery()
+
+        def count_rows(self):
+            return 1
+
+    class FakeDb:
+        def open_table(self, name):
+            return FakeTable()
+
+    monkeypatch.setattr(search_service, "get_existing_tables", lambda: [search_service.DOCS_TABLE_NAME])
+    monkeypatch.setattr(search_service, "lance_db", FakeDb())
+
+    listed = search_service.list_stored_documents()
+
+    assert [d["id"] for d in listed] == ["doc-1"]
+    assert "extracted_markdown" not in selected_columns
+
+
+def test_get_document_endpoint_returns_markdown_on_demand(monkeypatch):
+    from fastapi.testclient import TestClient
+    import sidecar.main as sidecar_main
+
+    stored = {
+        "doc-1": {"id": "doc-1", "filename": "a.md", "status": "indexed", "extracted_markdown": "# A", "num_pages": 1},
+        "doc-2": {"id": "doc-2", "filename": "b.md", "status": "failed", "extracted_markdown": "# B"},
+    }
+
+    class FakeQuery:
+        def __init__(self):
+            self.rows = []
+
+        def where(self, clause, prefilter=True):
+            doc_id = clause.split('"')[1]
+            self.rows = [stored[doc_id]] if doc_id in stored else []
+            return self
+
+        def limit(self, n):
+            return self
+
+        def to_list(self):
+            return self.rows
+
+    class FakeTable:
+        def search(self):
+            return FakeQuery()
+
+    class FakeDb:
+        def open_table(self, name):
+            return FakeTable()
+
+    import sidecar.services.search_service as search_service
+    monkeypatch.setattr(search_service, "get_existing_tables", lambda: [search_service.DOCS_TABLE_NAME])
+    monkeypatch.setattr(search_service, "lance_db", FakeDb())
+    client = TestClient(sidecar_main.app)
+
+    found = client.get("/documents/doc-1")
+    assert found.status_code == 200
+    assert found.json()["extracted_markdown"] == "# A"
+    assert found.json()["used_fallback_embeddings"] is False
+    assert client.get("/documents/doc-2").status_code == 404, "failed documents stay hidden"
+    assert client.get("/documents/missing").status_code == 404
+    assert client.get("/documents/bad%22id").status_code == 400
 
 # ---------------------------------------------------------------------------
 # Vision LLM OCR engine routing

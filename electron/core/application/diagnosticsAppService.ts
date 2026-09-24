@@ -1,10 +1,23 @@
 import path from 'node:path'
 import type { DesktopShellPort } from '../domain/ports/desktopShellPort'
+import type { HardwareProbePort } from '../domain/ports/hardwareProbePort'
+import type { DiagnosticsData } from '../../../shared/types'
 import { electronDesktopShell } from '../infrastructure/electron/electronDesktopShell'
+import { hardwareProbe } from '../infrastructure/diagnostics/hardwareProbe'
 import { logger, type LogEntry, type LogLevel } from '../infrastructure/logging/logger'
+import { sidecarAppService } from './sidecarAppService'
 
 export class DiagnosticsAppService {
-  constructor(private readonly desktop: Pick<DesktopShellPort, 'openPath'> = electronDesktopShell) {}
+  constructor(
+    private readonly desktop: Pick<DesktopShellPort, 'openPath'> = electronDesktopShell,
+    private readonly probe: Pick<HardwareProbePort, 'runFullDiagnostics'> = hardwareProbe,
+    private readonly checkSidecarHealth: () => Promise<DiagnosticsData['sidecar']> = () => sidecarAppService.checkHealth(),
+  ) {}
+
+  /** Full host report for `diagnostics:run`: Sidecar health first, then Ollama, GPU, memory and requirements. */
+  public async runDiagnostics(host?: string): Promise<DiagnosticsData> {
+    return this.probe.runFullDiagnostics(await this.checkSidecarHealth(), host)
+  }
 
   public getLogs(): LogEntry[] {
     return logger.getLogs()

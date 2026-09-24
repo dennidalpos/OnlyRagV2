@@ -6,6 +6,7 @@ import { contentVersion } from './fileContentVersion'
 import { scriptKindForPath } from '../../domain/agent/sourceScriptKind'
 import { isIgnoredPath, validatePathSafety as domainValidatePathSafety } from '../../domain/agent/contextFilter'
 import { MAX_FILE_READ_BYTES, MAX_PROJECT_MAP_DEPTH, MAX_SEARCH_FILE_BYTES, MAX_SEARCH_MATCHES } from '../../domain/agent/ioLimits'
+import { errorCode, errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null): string | null {
   const result = domainValidatePathSafety(filePath, workspaceRoot)
@@ -40,8 +41,8 @@ export class FileSystemRepository {
           try {
             const st = await fs.promises.stat(fullPath)
             sizeBytes = st.size
-          } catch (stErr: any) {
-            logger.log('WARN', 'WorkspaceRepo', `Could not stat file '${fullPath}': ${stErr.message}`)
+          } catch (stErr: unknown) {
+            logger.log('WARN', 'WorkspaceRepo', `Could not stat file '${fullPath}': ${errorMessage(stErr)}`)
           }
         }
         result.push({
@@ -53,8 +54,8 @@ export class FileSystemRepository {
       }
 
       return result
-    } catch (err: any) {
-      logger.log('ERROR', 'WorkspaceRepo', `Error listing files: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('ERROR', 'WorkspaceRepo', `Error listing files: ${errorMessage(err)}`)
       return []
     }
   }
@@ -94,9 +95,9 @@ export class FileSystemRepository {
       }
 
       return { success: true, content: rawContent, contentHash, totalLines }
-    } catch (err: any) {
-      logger.log('ERROR', 'WorkspaceRepo', `Error reading file '${filePath}': ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'WorkspaceRepo', `Error reading file '${filePath}': ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -116,9 +117,9 @@ export class FileSystemRepository {
       }
       logger.log('INFO', 'WorkspaceRepo', `Deleted: ${resolved}`)
       return { success: true }
-    } catch (err: any) {
-      logger.log('ERROR', 'WorkspaceRepo', `Failed to delete ${filePath}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'WorkspaceRepo', `Failed to delete ${filePath}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -131,9 +132,9 @@ export class FileSystemRepository {
       await fs.promises.writeFile(resolved, content, 'utf-8')
       logger.log('INFO', 'WorkspaceRepo', `Wrote to file: ${resolved}`)
       return { success: true }
-    } catch (err: any) {
-      logger.log('ERROR', 'WorkspaceRepo', `Failed to write file ${filePath}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'WorkspaceRepo', `Failed to write file ${filePath}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -179,13 +180,13 @@ export class FileSystemRepository {
       }
       logger.log('INFO', 'WorkspaceRepo', `Versioned write to file: ${resolved}`)
       return { success: true }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const currentContent = fs.existsSync(resolved) ? fs.readFileSync(resolved, 'utf-8') : undefined
       const currentContentHash = currentContent === undefined ? undefined : contentVersion(currentContent)
-      const conflict = err.code === 'EEXIST' || currentContentHash !== expectedContentHash
+      const conflict = errorCode(err) === 'EEXIST' || currentContentHash !== expectedContentHash
       return {
         success: false,
-        error: err.code === 'EEXIST' ? 'File was created concurrently' : err.message,
+        error: errorCode(err) === 'EEXIST' ? 'File was created concurrently' : errorMessage(err),
         currentContentHash,
         currentContent,
         conflict,
@@ -248,9 +249,9 @@ export class FileSystemRepository {
       await fs.promises.writeFile(resolved, existing, 'utf-8')
       logger.log('INFO', 'WorkspaceRepo', `Successfully applied ${replacedCount} chunk replacement(s) in: ${resolved}`)
       return { success: true, replacedCount }
-    } catch (err: any) {
-      logger.log('ERROR', 'WorkspaceRepo', `Failed replacing chunk(s) in ${filePath}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'WorkspaceRepo', `Failed replacing chunk(s) in ${filePath}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -300,8 +301,8 @@ export class FileSystemRepository {
         const flags = caseInsensitive ? 'i' : ''
         const regex = new RegExp(query, flags)
         matcher = (line: string) => regex.test(line)
-      } catch (regErr: any) {
-        logger.log('WARN', 'WorkspaceRepo', `Invalid regex pattern '${query}': ${regErr.message}`)
+      } catch (regErr: unknown) {
+        logger.log('WARN', 'WorkspaceRepo', `Invalid regex pattern '${query}': ${errorMessage(regErr)}`)
         return []
       }
     } else {
@@ -343,13 +344,13 @@ export class FileSystemRepository {
                   })
                 }
               }
-            } catch (readErr: any) {
-              logger.log('WARN', 'WorkspaceRepo', `Grep read failed on '${fullPath}': ${readErr.message}`)
+            } catch (readErr: unknown) {
+              logger.log('WARN', 'WorkspaceRepo', `Grep read failed on '${fullPath}': ${errorMessage(readErr)}`)
             }
           }
         }
-      } catch (dirErr: any) {
-        logger.log('WARN', 'WorkspaceRepo', `Grep search directory error on '${currentDir}': ${dirErr.message}`)
+      } catch (dirErr: unknown) {
+        logger.log('WARN', 'WorkspaceRepo', `Grep search directory error on '${currentDir}': ${errorMessage(dirErr)}`)
       }
     }
 
@@ -456,9 +457,9 @@ export class FileSystemRepository {
         symbols: filtered,
         totalCount: filtered.length,
       }
-    } catch (err: any) {
-      logger.log('ERROR', 'WorkspaceRepo', `Error extracting code symbols from '${filePath}': ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'WorkspaceRepo', `Error extracting code symbols from '${filePath}': ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 }

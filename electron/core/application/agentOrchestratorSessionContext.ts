@@ -19,6 +19,8 @@ import { applyAgentCapabilityProfile } from '../../../shared/domain/agent/agentC
 import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/agent/codingAgentDebugPolicy'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
+import { resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
@@ -55,8 +57,8 @@ export interface SessionContext {
 async function scanProjectMap(workspacePath: string): Promise<string> {
   try {
     return generateCompactRepoMap(workspacePath, 150)
-  } catch (err: any) {
-    logger.log('WARN', 'AgentOrchestratorApp', `Project map scan failed: ${err.message}`)
+  } catch (err: unknown) {
+    logger.log('WARN', 'AgentOrchestratorApp', `Project map scan failed: ${errorMessage(err)}`)
     return ''
   }
 }
@@ -83,7 +85,8 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   if (savedState?.ollamaRuntimeProfile) session.ollamaRuntimeProfile = savedState.ollamaRuntimeProfile
   session.ollamaGenerationTelemetry = savedState?.ollamaGenerationTelemetry || []
   session.lastVerification = savedState?.lastVerification
-  const requestedCodingModel = payload.activeModel || settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
+  // '' when no model is configured: the preflight then blocks the run with a clear message.
+  const requestedCodingModel = resolveConfiguredModel('coding', settings, payload.activeModel)
   const codingModel = session.ollamaRuntimeProfile?.model || findMatchingInstalledModel(requestedCodingModel, availableModels) || requestedCodingModel
   // One `/api/tags` read, both facts.
   const modelMetrics = await ollamaAppService.getModelMetrics(settings.ollamaHost)

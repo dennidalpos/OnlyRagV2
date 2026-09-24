@@ -9,7 +9,7 @@ Il processo Main è organizzato in quattro layer sotto [`electron/core/`](../ele
 | Domain | `electron/core/domain/` e `shared/domain/` | Regole pure, contratti e algoritmi. |
 | Infrastructure | `electron/core/infrastructure/` | HTTP, filesystem, PowerShell/PTY, processi e adapter Electron (`infrastructure/electron/`). |
 
-Application e Domain non importano `electron` né `node:fs`: usano le porte in [`domain/ports/`](../electron/core/domain/ports/) (`RendererEventSink` per gli eventi verso il Renderer, `DesktopShellPort` per shell e finestre di dialogo) e i repository di Infrastructure. Domain non importa layer esterni. [`check_layering.mjs`](../scripts/check_layering.mjs), eseguito da `npm run quality:static`, fa rispettare queste regole anche per `import()` dinamici e `require`.
+Application e Domain non importano `electron` né `node:fs`: usano le porte in [`domain/ports/`](../electron/core/domain/ports/) (`RendererEventSink` per gli eventi verso il Renderer, `DesktopShellPort` per shell e finestre di dialogo, `HardwareProbePort` per GPU, memoria, stato Ollama e report diagnostico, `TaskRunnerPort` per l'annullamento dei task, `ISkillHubAdapter` per i protocolli degli hub di skill) e i repository di Infrastructure. Domain non importa layer esterni. [`check_layering.mjs`](../scripts/check_layering.mjs), eseguito da `npm run quality:static`, fa rispettare queste regole anche per `import()` dinamici e `require`. Application raggiunge le sonde di [`electron/diagnostics.ts`](../electron/diagnostics.ts) solo tramite l'adapter [`hardwareProbe.ts`](../electron/core/infrastructure/diagnostics/hardwareProbe.ts); `diagnostics:run` passa da `diagnosticsAppService.runDiagnostics`.
 
 ## Avvio
 

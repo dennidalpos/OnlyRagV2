@@ -5,6 +5,7 @@ import { logger } from '../infrastructure/logging/logger'
 import { projectRegistryRepository } from '../infrastructure/filesystem/projectRegistryRepository'
 import { sessionHistoryAppService } from './sessionHistoryAppService'
 import { sidecarAppService } from './sidecarAppService'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 /**
  * Use cases for the main-process-owned project registry: the durable list of every project
@@ -34,15 +35,15 @@ export class ProjectRegistryAppService {
     // 1. Purge all sessions, runtime states, audit log records, and prompt history for this project
     try {
       await sessionHistoryAppService.clearSessions(projectPath)
-    } catch (err: any) {
-      logger.log('WARN', 'ProjectRegistryAppService', `Could not clear sessions for ${projectPath}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'ProjectRegistryAppService', `Could not clear sessions for ${projectPath}: ${errorMessage(err)}`)
     }
 
     // 2. Purge semantic prompt index in LanceDB
     try {
       await sidecarAppService.removePromptHistoryForProject(projectPath)
-    } catch (err: any) {
-      logger.log('WARN', 'ProjectRegistryAppService', `Could not purge prompt history for ${projectPath}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'ProjectRegistryAppService', `Could not purge prompt history for ${projectPath}: ${errorMessage(err)}`)
     }
 
     // 3. Remove from the global project registry store
@@ -58,8 +59,8 @@ export class ProjectRegistryAppService {
           await documentIoRepository.removeDirectory(onlyragDir)
           logger.log('INFO', 'ProjectRegistryAppService', `Purged internal .onlyrag metadata at ${onlyragDir}`)
         }
-      } catch (err: any) {
-        logger.log('WARN', 'ProjectRegistryAppService', `Could not purge .onlyrag directory: ${err.message}`)
+      } catch (err: unknown) {
+        logger.log('WARN', 'ProjectRegistryAppService', `Could not purge .onlyrag directory: ${errorMessage(err)}`)
       }
     }
 
@@ -72,9 +73,15 @@ export class ProjectRegistryAppService {
    */
   async migrateLegacyProjects(rawProjects: unknown): Promise<{ migrated: number }> {
     if (!Array.isArray(rawProjects) || rawProjects.length === 0) return { migrated: 0 }
-    const valid = rawProjects.filter(
-      (p): p is WorkspaceProject => !!p && typeof p.path === 'string' && p.path && typeof p.name === 'string' && typeof p.addedAt === 'string',
-    )
+    // Only the declared WorkspaceProject fields reach the registry: localStorage is renderer-controlled.
+    const valid: WorkspaceProject[] = rawProjects
+      .filter((p) => !!p && typeof p.path === 'string' && p.path && typeof p.name === 'string' && typeof p.addedAt === 'string')
+      .map((p) => ({
+        path: p.path,
+        name: p.name,
+        addedAt: p.addedAt,
+        ...(typeof p.lastOpenedAt === 'string' ? { lastOpenedAt: p.lastOpenedAt } : {}),
+      }))
     const migrated = await projectRegistryRepository.mergeLegacy(valid)
     logger.log('INFO', 'ProjectRegistryAppService', `Migrated ${migrated} legacy project(s) from localStorage to the main-process registry.`)
     return { migrated }

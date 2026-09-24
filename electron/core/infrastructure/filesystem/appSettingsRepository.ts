@@ -5,6 +5,7 @@ import { logger } from '../logging/logger'
 import type { AppSettings } from '../../../../shared/types'
 import { sanitizeAppSettings } from '../../domain/settings/appSettingsDomain'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const SETTINGS_FILE_NAME = 'settings.json'
 const SETTINGS_FORMAT_VERSION = 2
@@ -102,8 +103,8 @@ export class AppSettingsRepository {
     try {
       const payload = JSON.stringify({ version: SETTINGS_FORMAT_VERSION, settings: sanitized }, null, 2)
       return await safeAtomicWrite(filePath, payload)
-    } catch (err: any) {
-      logger.log('ERROR', 'AppSettingsRepo', `Failed writing settings to ${filePath}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('ERROR', 'AppSettingsRepo', `Failed writing settings to ${filePath}: ${errorMessage(err)}`)
       return false
     }
   }

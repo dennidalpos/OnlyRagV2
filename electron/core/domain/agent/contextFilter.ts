@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { isPathWithinRoot } from './pathContainment'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export const DEFAULT_IGNORED_DIRS = new Set([
   '.git',
@@ -204,7 +205,7 @@ export function validatePathSafety(filePath?: string | null, workspaceRoot?: str
     }
 
     return { safePath: resolvedPath }
-  } catch (err: any) {
-    return { safePath: null, error: `Path resolution failed: ${err.message}` }
+  } catch (err: unknown) {
+    return { safePath: null, error: `Path resolution failed: ${errorMessage(err)}` }
   }
 }

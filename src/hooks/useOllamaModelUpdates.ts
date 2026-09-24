@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { OllamaModelUpdateInfo } from '../types'
 import { getGlobalDownloadState, useModelDownloadProgress } from './useModelDownloadProgress'
 import { logger } from '../lib/logger'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import { translate } from '../i18n/I18nContext'
 
 interface ModelUpdatesState {
   updateAvailableMap: Record<string, boolean>
@@ -99,12 +101,12 @@ export function useOllamaModelUpdates(ollamaHost?: string, onRefreshDiagnostics?
           lastCheckedAt: Date.now(),
           error: null,
         })
-      } catch (err: any) {
-        logger.warn('useOllamaModelUpdates', `Failed checking model updates: ${err?.message}`)
+      } catch (err: unknown) {
+        logger.warn('useOllamaModelUpdates', `Failed checking model updates: ${errorMessage(err)}`)
         broadcastUpdates({
           ...globalUpdatesState,
           isCheckingUpdates: false,
-          error: err?.message || 'Update check failed',
+          error: errorMessage(err) || 'Update check failed',
         })
       } finally {
         isCheckingRef.current = false
@@ -123,7 +125,7 @@ export function useOllamaModelUpdates(ollamaHost?: string, onRefreshDiagnostics?
       if (currentDownload.isDownloading && currentDownload.modelName && currentDownload.modelName !== modelName) {
         return {
           success: false,
-          error: `Un altro modello (${currentDownload.modelName}) è attualmente in fase di aggiornamento. Attendi il completamento per evitare saturazione.`,
+          error: translate('services.otherModelUpdating', { model: currentDownload.modelName }),
         }
       }
 
@@ -143,8 +145,8 @@ export function useOllamaModelUpdates(ollamaHost?: string, onRefreshDiagnostics?
         } else {
           return { success: false, error: res.error || 'Update failed' }
         }
-      } catch (err: any) {
-        return { success: false, error: err.message || 'Error updating model' }
+      } catch (err: unknown) {
+        return { success: false, error: errorMessage(err) || 'Error updating model' }
       }
     },
     [ollamaHost, onRefreshDiagnostics],

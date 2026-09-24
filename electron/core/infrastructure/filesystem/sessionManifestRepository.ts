@@ -4,6 +4,7 @@ import path from 'node:path'
 import { logger } from '../logging/logger'
 import { sessionManifestSchema, type SessionManifest } from '../../domain/sessions/sessionBaselineContract'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const MANIFEST_FILE_PREFIX = '.session_manifest_'
 const MANIFEST_FILE_SUFFIX = '.json'
@@ -34,8 +35,8 @@ export class SessionManifestRepository {
     try {
       const filePath = this.getManifestPath(parsed.data.sessionId, parsed.data.workspaceRoot)
       return await safeAtomicWrite(filePath, JSON.stringify(parsed.data, null, 2))
-    } catch (err: any) {
-      logger.log('WARN', 'SessionManifestRepo', `Failed saving manifest for session ${parsed.data.sessionId}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'SessionManifestRepo', `Failed saving manifest for session ${parsed.data.sessionId}: ${errorMessage(err)}`)
       return false
     }
   }
@@ -51,8 +52,8 @@ export class SessionManifestRepository {
         return null
       }
       return parsed.data
-    } catch (err: any) {
-      logger.log('WARN', 'SessionManifestRepo', `Failed loading manifest for session ${sessionId}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'SessionManifestRepo', `Failed loading manifest for session ${sessionId}: ${errorMessage(err)}`)
       return null
     }
   }
@@ -62,8 +63,8 @@ export class SessionManifestRepository {
       const filePath = this.getManifestPath(sessionId, workspaceRoot)
       if (fs.existsSync(filePath)) await fs.promises.unlink(filePath)
       return true
-    } catch (err: any) {
-      logger.log('WARN', 'SessionManifestRepo', `Failed clearing manifest for session ${sessionId}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'SessionManifestRepo', `Failed clearing manifest for session ${sessionId}: ${errorMessage(err)}`)
       return false
     }
   }

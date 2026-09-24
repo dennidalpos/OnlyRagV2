@@ -8,6 +8,7 @@ import { isLoopbackTarget } from '../domain/agent/localOnlyPolicy'
 import { estimateModelWeightGB } from '../../../shared/domain/hardware/modelWeightEstimator'
 import type { AppSettings } from '../../../shared/types'
 import { isAllowedExternalUrl } from '../../navigationPolicy'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export interface DiskSpaceCheckResult {
   allowed: boolean
@@ -78,14 +79,14 @@ export class SystemAppService {
         freeGB,
         missingGB,
       }
-    } catch (err: any) {
-      logger.log('ERROR', 'SystemApp', `Disk space check failed: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SystemApp', `Disk space check failed: ${errorMessage(err)}`)
       return {
         allowed: false,
         requiredGB: 0,
         freeGB: 0,
         missingGB: 0,
-        error: err.message,
+        error: errorMessage(err),
       }
     }
   }

@@ -4,6 +4,7 @@ import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { nextRetryDelayMs, shouldReportFailure, DEFAULT_RETRY_POLICY } from '../lib/pollingRetryPolicy'
 import { createSingleFlight } from '../lib/singleFlight'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 // Every mounted consumer of this hook keeps its own copy of the list and its own callbacks, but they all read the same backend collection -- and a single documents-changed or focus event reaches all of them at once.
 const fetchDocumentsShared = createSingleFlight(() => apiService.getIngestedDocuments())
@@ -17,8 +18,8 @@ export const TAB_CHANGED_EVENT = 'onlyrag:tab-changed'
 export function notifyDocumentsChanged(): void {
   try {
     window.dispatchEvent(new CustomEvent(DOCUMENTS_CHANGED_EVENT))
-  } catch (err: any) {
-    logger.warn('useIngestedDocuments', `Failed to dispatch documents-changed event: ${err.message}`)
+  } catch (err: unknown) {
+    logger.warn('useIngestedDocuments', `Failed to dispatch documents-changed event: ${errorMessage(err)}`)
   }
 }
 
@@ -28,8 +29,8 @@ export function notifyDocumentsChanged(): void {
 export function notifyTabChanged(newTab: string): void {
   try {
     window.dispatchEvent(new CustomEvent(TAB_CHANGED_EVENT, { detail: { tab: newTab } }))
-  } catch (err: any) {
-    logger.warn('useIngestedDocuments', `Failed to dispatch tab-changed event: ${err.message}`)
+  } catch (err: unknown) {
+    logger.warn('useIngestedDocuments', `Failed to dispatch tab-changed event: ${errorMessage(err)}`)
   }
 }
 
@@ -100,8 +101,8 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
       if (onDocsUpdatedRef.current) {
         onDocsUpdatedRef.current(docs)
       }
-    } catch (err: any) {
-      reportFailure(err?.message || 'unknown error')
+    } catch (err: unknown) {
+      reportFailure(errorMessage(err) || 'unknown error')
     } finally {
       setIsLoading(false)
       isFetchingRef.current = false

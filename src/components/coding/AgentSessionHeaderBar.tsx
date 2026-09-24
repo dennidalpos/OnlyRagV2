@@ -39,8 +39,8 @@ export const AgentSessionHeaderBar: React.FC<AgentSessionHeaderBarProps> = ({
           <button
             type="button"
             onClick={onToggleWorkspaceSidebar}
-            title={showWorkspaceSidebar ? 'Nascondi Workspace Explorer' : `Apri Workspace Explorer (${filesCount} file)`}
-            aria-label={showWorkspaceSidebar ? 'Nascondi Workspace Explorer' : `Apri Workspace Explorer (${filesCount} file)`}
+            title={showWorkspaceSidebar ? t('codingWorkspace.hideExplorer') : t('codingWorkspace.showExplorer', { count: filesCount })}
+            aria-label={showWorkspaceSidebar ? t('codingWorkspace.hideExplorer') : t('codingWorkspace.showExplorer', { count: filesCount })}
             className={`p-1.5 rounded-lg border transition-all text-xs font-medium focus-ring cursor-pointer ${
               showWorkspaceSidebar
                 ? 'bg-slate-900 text-cyan-300 border-cyan-500/40 shadow-sm'
@@ -55,8 +55,8 @@ export const AgentSessionHeaderBar: React.FC<AgentSessionHeaderBarProps> = ({
           <button
             type="button"
             onClick={onSelectWorkspaceFolder}
-            title={`Cartella Workspace: ${workspacePath}`}
-            aria-label={`Cartella Workspace: ${workspacePath}`}
+            title={t('codingWorkspace.workspaceFolder', { path: workspacePath || '' })}
+            aria-label={t('codingWorkspace.workspaceFolder', { path: workspacePath || '' })}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/40 text-slate-200 hover:text-cyan-300 transition-all text-xs font-medium truncate focus-ring cursor-pointer shadow-sm"
           >
             <FolderOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />

@@ -9,6 +9,7 @@ import { logger } from '../logging/logger'
 import { validatePathSafety } from '../../domain/agent/contextFilter'
 import { MAX_DOWNLOAD_BYTES } from '../../domain/agent/ioLimits'
 import { isPrivateNetworkAddress, publicOnlyLookup } from './networkAddressPolicy'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const MAX_DOWNLOAD_REDIRECTS = 3
 const MAX_FETCH_REDIRECTS = 5
@@ -184,8 +185,8 @@ export class WebClient {
       }
 
       return { safeUrl: u }
-    } catch (err: any) {
-      return { safeUrl: null, error: `Invalid URL: ${err.message}` }
+    } catch (err: unknown) {
+      return { safeUrl: null, error: `Invalid URL: ${errorMessage(err)}` }
     }
   }
 
@@ -243,8 +244,8 @@ export class WebClient {
       }
 
       return { success: true, results }
-    } catch (err: any) {
-      return { success: false, results: [], error: err.message }
+    } catch (err: unknown) {
+      return { success: false, results: [], error: errorMessage(err) }
     }
   }
 
@@ -363,8 +364,8 @@ export class WebClient {
     return new Promise((resolve) => {
       try {
         fs.mkdirSync(path.dirname(safeDestPath), { recursive: true })
-      } catch (dirErr: any) {
-        return resolve({ success: false, error: `Failed creating directory: ${dirErr.message}` })
+      } catch (dirErr: unknown) {
+        return resolve({ success: false, error: `Failed creating directory: ${errorMessage(dirErr)}` })
       }
 
       const fileStream = fs.createWriteStream(safeDestPath)

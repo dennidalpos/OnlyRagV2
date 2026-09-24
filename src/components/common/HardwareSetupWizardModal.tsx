@@ -19,6 +19,7 @@ import { resolveAgentCapabilityProfile } from '../../../shared/domain/agent/agen
 import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
 import { buildSetupModelContextPreferences } from '../../../shared/domain/settings/setupModelContextPreferences'
 import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 interface HardwareSetupWizardModalProps {
   isOpen: boolean
@@ -301,13 +302,13 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           logger.error('HardwareWizard', `Failed pulling ${modelToPull}: ${errDetail}`)
           break
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (isCancelledRef.current) {
           hasError = true
           break
         }
         hasError = true
-        const errMsg = err?.message || t('hardwareWizard.unexpectedDownloadError')
+        const errMsg = errorMessage(err) || t('hardwareWizard.unexpectedDownloadError')
         setFailedModelIndex(i)
         setPullErrorDetail(t('hardwareWizard.unexpectedErrorForModel', { model: modelToPull, detail: errMsg }))
         setPullingStatusText(t('hardwareWizard.downloadErrorStatus', { model: modelToPull, detail: errMsg }))
@@ -419,9 +420,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               {t('hardwareWizard.title')} <span className="text-cyan-400">— Step {step} di 3</span>
             </h2>
             <p className="text-xs text-slate-400">
-              {step === 1 && 'Scansione profilo hardware e stato del runtime Ollama'}
-              {step === 2 && 'Selezione della suite di modelli raccomandata'}
-              {step === 3 && 'Riepilogo finale e download batch dei modelli mancanti'}
+              {step === 1 && t('uiShell.wizardStep1')}
+              {step === 2 && t('uiShell.wizardStep2')}
+              {step === 3 && t('uiShell.wizardStep3')}
             </p>
           </div>
         </div>
@@ -443,9 +444,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       <div className="bg-slate-950/90 border-b border-slate-800 px-4 py-2.5">
         <nav aria-label="Wizard Steps" className="grid grid-cols-3 gap-2">
           {[
-            { id: 1, label: '1. Scansione Hardware', icon: Cpu, desc: 'Rilevamento GPU e RAM' },
-            { id: 2, label: '2. Modelli Consigliati', icon: Sparkles, desc: 'Suite hardware consigliata' },
-            { id: 3, label: '3. Download & Avvio', icon: Download, desc: 'Riepilogo e Setup' },
+            { id: 1, label: t('uiShell.wizardTab1'), icon: Cpu, desc: t('uiShell.wizardTab1Desc') },
+            { id: 2, label: t('uiShell.wizardTab2'), icon: Sparkles, desc: t('uiShell.wizardTab2Desc') },
+            { id: 3, label: t('uiShell.wizardTab3'), icon: Download, desc: t('uiShell.wizardTab3Desc') },
           ].map((st) => {
             const isCurrent = step === st.id
             const isCompleted = step > st.id

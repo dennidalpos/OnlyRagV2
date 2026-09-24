@@ -1,5 +1,5 @@
 import { logger } from '../infrastructure/logging/logger'
-import { getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
+import { hardwareProbe } from '../infrastructure/diagnostics/hardwareProbe'
 import os from 'node:os'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import path from 'node:path'
@@ -22,11 +22,13 @@ import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTur
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import { resolveTurnToolPolicy, resolveVersionConflictTurnPolicy, type EditTargetState, type TurnToolPolicy } from '../domain/agent/turnToolPolicy'
 import { normalizeOllamaHost } from '../../../shared/domain/ollamaHost'
+import { resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 /** Resolves the coding model and hardware-tuned runtime options for the turn. */
 export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
-  const cachedGpu = getCachedGpuInfo()
-  const memInfo = getMemoryInfo()
+  const cachedGpu = hardwareProbe.getCachedGpuInfo()
+  const memInfo = hardwareProbe.getMemoryInfo()
   const hardwareFacts = ctx.hardwareFacts ?? {
     hasGpu: cachedGpu?.hasNvidiaGpu,
     vramTotalMB: cachedGpu?.vramTotalMB,
@@ -34,7 +36,8 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
     cpuCount: os.cpus()?.length,
   }
 
-  const candidateCoding = ctx.codingModel || ctx.settings.codingModel || ctx.settings.defaultModel || 'qwen2.5-coder:7b'
+  // The preflight already refused a run without a configured model.
+  const candidateCoding = resolveConfiguredModel('coding', ctx.settings, ctx.codingModel)
   const targetModel = findMatchingInstalledModel(candidateCoding, ctx.availableModels) || candidateCoding
 
   // Native tool-calling routing: when the primary model is detected as tool-calling capable (see ollamaToolCallingCapability.ts), route via POST /api/chat with the structured tool catalog instead of relying solely on the prompt-engineered JSON convention.
@@ -247,8 +250,8 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
       if (trackerContent) {
         debtTrackerBlock = SessionDebtTracker.parseTrackerMarkdown(trackerContent).compilePromptBlock()
       }
-    } catch (err: any) {
-      logger.log('WARN', 'AgentOrchestratorAppService', `Failed reading SESSION_TRACKER.md: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentOrchestratorAppService', `Failed reading SESSION_TRACKER.md: ${errorMessage(err)}`)
     }
   }
   const effectiveAttachedContext = policy.includeAttachedRag ? [debtTrackerBlock, ctx.attachedContext].filter(Boolean).join('\n\n') : ''

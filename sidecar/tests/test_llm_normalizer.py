@@ -40,7 +40,7 @@ def test_normalizer_sends_thinking_separately_from_content():
     mock_resp.__enter__.return_value = mock_resp
 
     with patch("urllib.request.urlopen", return_value=mock_resp) as urlopen:
-        assert normalize_page_markdown_with_llm(raw_ocr, think=True) == "Clean content"
+        assert normalize_page_markdown_with_llm(raw_ocr, model="llama3.2", think=True) == "Clean content"
         request = urlopen.call_args.args[0]
         assert __import__("json").loads(request.data)["think"] is True
 
@@ -69,3 +69,10 @@ def test_extract_document_markdown_normalize_with_llm_enabled(tmp_path):
     with patch("sidecar.domain.llm_normalizer.normalize_page_markdown_with_llm", return_value="Normalized Content") as mock_norm:
         md, num_pages = extract_document_markdown("sample.txt", b"", str(txt_file), normalize_with_llm=True)
         assert num_pages == 1
+
+def test_normalizer_without_a_model_never_calls_ollama():
+    raw_ocr = "Contratto Telepass con testo abbastanza lungo da essere normalizzato dal modello locale."
+    with patch("urllib.request.urlopen") as urlopen:
+        assert "Contratto Telepass" in normalize_page_markdown_with_llm(raw_ocr, page_num=1, model=None)
+        urlopen.assert_not_called()
+

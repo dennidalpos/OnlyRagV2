@@ -15,9 +15,12 @@ vi.mock('./useIngestedDocuments', () => ({
 vi.mock('./useOllamaModelMetrics', () => ({ useOllamaModelMetrics: () => ({ metrics: {} }) }))
 
 import { useDocumentTranslation, useInplaceTranslation } from './useTranslation'
+import { clearDocumentMarkdownCache } from '../services/documentMarkdown'
 
-const markdownDoc = { id: 'md-1', filename: 'notes.md', fileType: 'md', extractedMarkdown: '# Notes\n\nCiao', numPages: 1 } as unknown as IngestedDocument
-const pdfDoc = { id: 'pdf-1', filename: 'report.pdf', fileType: 'pdf', extractedMarkdown: '# Report', numPages: 1 } as unknown as IngestedDocument
+// The list carries metadata only; the Markdown comes from getIngestedDocument on demand.
+const markdownDoc = { id: 'md-1', filename: 'notes.md', fileType: 'md', numPages: 1, ingestedAt: 't1' } as unknown as IngestedDocument
+const pdfDoc = { id: 'pdf-1', filename: 'report.pdf', fileType: 'pdf', numPages: 1, ingestedAt: 't1' } as unknown as IngestedDocument
+const storedMarkdown: Record<string, string> = { 'md-1': '# Notes\n\nCiao', 'pdf-1': '# Report' }
 
 describe('translation hooks', () => {
   let container: HTMLDivElement
@@ -25,6 +28,9 @@ describe('translation hooks', () => {
   let documentTranslation: ReturnType<typeof useDocumentTranslation>
   let inplaceTranslation: ReturnType<typeof useInplaceTranslation>
   const generateOllamaStream = vi.fn()
+  const getIngestedDocument = vi.fn(async (docId: string) =>
+    docId in storedMarkdown ? { ...documentsStore.documents.find((doc) => doc.id === docId), extractedMarkdown: storedMarkdown[docId] } : null,
+  )
 
   function Harness({ settings }: { settings: AppSettings }) {
     documentTranslation = useDocumentTranslation(settings)
@@ -47,7 +53,9 @@ describe('translation hooks', () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     documentsStore.documents = [markdownDoc, pdfDoc]
     generateOllamaStream.mockReset()
-    ;(window as unknown as { electronAPI: unknown }).electronAPI = { generateOllamaStream }
+    getIngestedDocument.mockClear()
+    clearDocumentMarkdownCache()
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = { generateOllamaStream, getIngestedDocument }
     container = document.createElement('div')
     root = createRoot(container)
   })
@@ -98,7 +106,20 @@ describe('translation hooks', () => {
       undefined,
       expect.any(String),
     )
+    expect(generateOllamaStream.mock.calls[0][1]).toContain('Ciao')
+    expect(documentTranslation.selectedDocMarkdown).toBe('# Notes\n\nCiao')
     expect(documentTranslation.isTranslationComplete).toBe(true)
     expect(documentTranslation.translatedMarkdown).toBe('Hello')
+  })
+
+  it('reports a document whose Markdown cannot be loaded instead of translating an empty text', async () => {
+    getIngestedDocument.mockResolvedValueOnce(null).mockResolvedValueOnce(null)
+    await render({ translationModel: 'translator:latest' })
+
+    await act(async () => documentTranslation.handleStartTranslation())
+
+    expect(generateOllamaStream).not.toHaveBeenCalled()
+    expect(documentTranslation.translationError).toMatch(/Could not load the document content/)
+    expect(documentTranslation.isTranslating).toBe(false)
   })
 })

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { logger } from '../logging/logger'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export class SystemStorageRepository {
   getOllamaStoragePath(): string {
@@ -31,8 +32,8 @@ export class SystemStorageRepository {
         const totalBytes = stats.blocks * stats.bsize
         return { freeBytes, totalBytes }
       }
-    } catch (err: any) {
-      logger.log('WARN', 'SystemStorageRepo', `fs.statfsSync failed for ${dir}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'SystemStorageRepo', `fs.statfsSync failed for ${dir}: ${errorMessage(err)}`)
     }
     return null
   }

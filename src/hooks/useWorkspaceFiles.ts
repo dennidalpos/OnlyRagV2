@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { WorkspaceFile } from '../types'
 import { logger } from '../lib/logger'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import { useTranslation } from '../i18n'
 
 const EMPTY_EDITOR_PLACEHOLDER = '// Select a workspace file on the left to edit and inspect code.'
 
@@ -23,6 +25,7 @@ export interface EditorSaveConflict {
 
 /** File tree, open tabs, Monaco editor buffer and pinned context files of the active workspace. */
 export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotice, onPathPurged }: UseWorkspaceFilesOptions) {
+  const { t } = useTranslation()
   const [files, setFiles] = useState<WorkspaceFile[]>([])
   const [openFiles, setOpenFiles] = useState<WorkspaceFile[]>([])
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | null>(null)
@@ -57,43 +60,46 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
       if (!window.electronAPI) return
       try {
         setFiles(await window.electronAPI.listWorkspaceFiles(targetPath))
-      } catch (err: any) {
-        logger.warn('useWorkspaceFiles', `Error loading workspace files: ${err?.message}`)
+      } catch (err: unknown) {
+        logger.warn('useWorkspaceFiles', `Error loading workspace files: ${errorMessage(err)}`)
       }
     },
     [resetWorkspaceFiles],
   )
 
-  const handleOpenFile = useCallback(async (file: WorkspaceFile) => {
-    if (file.isDir) return
-    const requestedPath = file.path
-    latestRequestedPathRef.current = requestedPath
-    setSelectedFile(file)
-    setOpenFiles((prev) => (prev.some((f) => f.path === file.path) ? prev : [...prev, file]))
-    if (!window.electronAPI) return
+  const handleOpenFile = useCallback(
+    async (file: WorkspaceFile) => {
+      if (file.isDir) return
+      const requestedPath = file.path
+      latestRequestedPathRef.current = requestedPath
+      setSelectedFile(file)
+      setOpenFiles((prev) => (prev.some((f) => f.path === file.path) ? prev : [...prev, file]))
+      if (!window.electronAPI) return
 
-    try {
-      const res = await window.electronAPI.readWorkspaceFile(file.path)
-      if (latestRequestedPathRef.current !== requestedPath) return
+      try {
+        const res = await window.electronAPI.readWorkspaceFile(file.path)
+        if (latestRequestedPathRef.current !== requestedPath) return
 
-      if (res.success && res.content !== undefined) {
-        setEditorContent(res.content)
-        setOriginalContent(res.content)
-        setIsSaved(true)
-        setLoadedContentHash(res.contentHash)
-        setSaveConflict(null)
-      } else if (res.error) {
-        setEditorContent(`// Errore durante la lettura del file: ${res.error}`)
+        if (res.success && res.content !== undefined) {
+          setEditorContent(res.content)
+          setOriginalContent(res.content)
+          setIsSaved(true)
+          setLoadedContentHash(res.contentHash)
+          setSaveConflict(null)
+        } else if (res.error) {
+          setEditorContent(t('codingWorkspace.fileReadError', { message: res.error }))
+          setOriginalContent('')
+          setLoadedContentHash(undefined)
+          setSaveConflict(null)
+        }
+      } catch (err: unknown) {
+        if (latestRequestedPathRef.current !== requestedPath) return
+        setEditorContent(t('codingWorkspace.fileReadError', { message: errorMessage(err) }))
         setOriginalContent('')
-        setLoadedContentHash(undefined)
-        setSaveConflict(null)
       }
-    } catch (err: any) {
-      if (latestRequestedPathRef.current !== requestedPath) return
-      setEditorContent(`// Errore lettura file: ${err.message}`)
-      setOriginalContent('')
-    }
-  }, [])
+    },
+    [t],
+  )
 
   const handleCloseFile = useCallback(
     (fileToClose: WorkspaceFile, e?: React.MouseEvent) => {

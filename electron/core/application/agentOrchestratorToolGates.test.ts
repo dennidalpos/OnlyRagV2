@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runToolGates } from './agentOrchestratorToolGates'
+import { recordToolPolicyDenial, runToolGates } from './agentOrchestratorToolGates'
+import { AgentProgressPolicy, PROGRESS_BUDGET } from '../domain/agent/agentProgressPolicy'
+import type { AgentGuardEvent } from '../../../shared/types'
 
 describe('runToolGates network-approved policy', () => {
   it('rejects a tool omitted from the current phase before approval or execution', async () => {
@@ -17,7 +19,7 @@ describe('runToolGates network-approved policy', () => {
       allowedToolsForTurn: ['read_file'],
     })
 
-    expect(result).toMatchObject({ outcome: 'denied', feedback: expect.stringContaining('[TURN TOOL POLICY DENIED]') })
+    expect(result).toMatchObject({ outcome: 'denied', policyDenial: 'turn_policy', feedback: expect.stringContaining('[TURN TOOL POLICY DENIED]') })
     expect(requestApproval).not.toHaveBeenCalled()
     expect(recordStep).toHaveBeenCalledOnce()
   })
@@ -153,5 +155,24 @@ describe('runToolGates version refresh', () => {
       parsedTool: { tool: 'read_file', parameters: { filePath: 'src/App.tsx' } },
     })
     expect(result.outcome).toBe('allowed')
+  })
+})
+
+describe('turn policy denials', () => {
+  it('record a tool_policy guard and stop on the no-mutation budget instead of the step budget', async () => {
+    const state = { guardEvents: [] as AgentGuardEvent[], progress: new AgentProgressPolicy() }
+    const closeApplicationRun = vi.fn(async () => ({
+      outcome: 'closed' as const,
+      result: { success: false, summary: 'stopped', completionStatus: 'blocked' as const },
+    }))
+
+    for (let step = 1; step < PROGRESS_BUDGET.stepsWithoutMutation; step++) {
+      expect(await recordToolPolicyDenial(state, step, closeApplicationRun)).toBeNull()
+    }
+    const result = await recordToolPolicyDenial(state, PROGRESS_BUDGET.stepsWithoutMutation, closeApplicationRun)
+
+    expect(result).toMatchObject({ completionStatus: 'blocked' })
+    expect(closeApplicationRun).toHaveBeenCalledWith(expect.objectContaining({ trigger: 'guard_stop', guard: 'no_mutation' }))
+    expect(state.guardEvents.every((event) => event.guard === 'tool_policy' && event.action === 'advise')).toBe(true)
   })
 })

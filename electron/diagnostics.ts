@@ -5,6 +5,7 @@ import http from 'node:http'
 import { exec } from 'node:child_process'
 import { logger, type LogEntry } from './core/infrastructure/logging/logger'
 import { DEFAULT_OLLAMA_HOST } from '../shared/domain/ollamaHost'
+import { errorMessage } from '../shared/domain/errors/errorMessage'
 
 export { sanitizeLogMessage } from './logRedactor'
 
@@ -145,8 +146,8 @@ function fetchJsonEndpoint(urlStr: string, timeoutMs = 4500): Promise<any> {
         if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
           try {
             resolve(JSON.parse(data))
-          } catch (e: any) {
-            reject(new Error(`JSON parse error: ${e.message}`))
+          } catch (e: unknown) {
+            reject(new Error(`JSON parse error: ${errorMessage(e)}`))
           }
         } else {
           reject(new Error(`HTTP ${res.statusCode}`))
@@ -314,11 +315,11 @@ export async function detectNvidiaGpu(): Promise<DiagnosticsData['gpu']> {
           cachedGpuTimestamp = now
           resolve(res)
         })
-      } catch (e: any) {
-        logger.log('ERROR', 'GPU', `Failed parsing nvidia-smi output: ${e.message}`)
+      } catch (e: unknown) {
+        logger.log('ERROR', 'GPU', `Failed parsing nvidia-smi output: ${errorMessage(e)}`)
         const res: DiagnosticsData['gpu'] = {
           hasNvidiaGpu: false,
-          error: e.message,
+          error: errorMessage(e),
         }
         cachedGpuResult = res
         cachedGpuTimestamp = now

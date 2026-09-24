@@ -206,9 +206,7 @@ export const PromptComposerToolsMenu: React.FC<PromptComposerToolsMenuProps> = (
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-400 leading-tight">
-                  {autoInstallHubSkills === 'prompt'
-                    ? 'Propone le skill utili durante i task e richiede conferma prima di installarle.'
-                    : 'Auto-discovery delle skill disattivato.'}
+                  {autoInstallHubSkills === 'prompt' ? t('uiShell.skillsDiscoveryOn') : t('uiShell.skillsDiscoveryOff')}
                 </p>
               </div>
             )}

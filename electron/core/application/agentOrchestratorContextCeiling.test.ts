@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../infrastructure/logging/logger', () => ({ logger: { log: vi.fn() } }))
-vi.mock('../../diagnostics', () => ({
-  getCachedGpuInfo: () => ({ hasNvidiaGpu: true, vramTotalMB: 24576 }),
-  getMemoryInfo: () => ({ totalRAMGB: 32 }),
+vi.mock('../infrastructure/diagnostics/hardwareProbe', () => ({
+  hardwareProbe: {
+    getCachedGpuInfo: () => ({ hasNvidiaGpu: true, vramTotalMB: 24576 }),
+    getMemoryInfo: () => ({ totalRAMGB: 32 }),
+  },
 }))
 
 import { selectModelForTurn, freezeContextWindow } from './agentOrchestratorPromptAssembly'

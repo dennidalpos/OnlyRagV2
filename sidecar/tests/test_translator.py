@@ -240,7 +240,7 @@ def test_translate_docx_end_to_end(tmp_path, monkeypatch):
 
         res = client.post(
             f"/documents/{doc_id}/translate-inplace-stream",
-            json={"source_lang": "English", "target_lang": "Italian"},
+            json={"source_lang": "English", "target_lang": "Italian", "model": "test-model"},
         )
         data = done_payload(res)
         assert data["status"] == "translated"
@@ -420,7 +420,7 @@ def test_translate_pdf_end_to_end(tmp_path, monkeypatch):
 
         res = client.post(
             f"/documents/{doc_id}/translate-inplace-stream",
-            json={"source_lang": "English", "target_lang": "Italian"},
+            json={"source_lang": "English", "target_lang": "Italian", "model": "test-model"},
         )
         data = done_payload(res)
         assert data["status"] == "translated"
@@ -468,7 +468,7 @@ def test_translate_pdf_clips_overflow_without_crashing(tmp_path, monkeypatch):
 
         res = client.post(
             f"/documents/{doc_id}/translate-inplace-stream",
-            json={"source_lang": "English", "target_lang": "Italian"},
+            json={"source_lang": "English", "target_lang": "Italian", "model": "test-model"},
         )
         data = done_payload(res)
 
@@ -497,7 +497,7 @@ def test_translate_stream_rejects_unsupported_file_type(tmp_path):
 
         res = client.post(
             f"/documents/{doc_id}/translate-inplace-stream",
-            json={"source_lang": "English", "target_lang": "Italian"},
+            json={"source_lang": "English", "target_lang": "Italian", "model": "test-model"},
         )
         assert res.status_code == 400
     finally:
@@ -508,7 +508,7 @@ def test_translate_stream_rejects_unsupported_file_type(tmp_path):
 def test_translate_stream_returns_404_for_missing_document():
     res = client.post(
         "/documents/nonexistent-doc-id-xyz/translate-inplace-stream",
-        json={"source_lang": "English", "target_lang": "Italian"},
+        json={"source_lang": "English", "target_lang": "Italian", "model": "test-model"},
     )
     assert res.status_code == 404
 
@@ -616,7 +616,7 @@ def test_translate_pdf_end_to_end_japanese(tmp_path, monkeypatch):
 
         res = client.post(
             f"/documents/{doc_id}/translate-inplace-stream",
-            json={"source_lang": "English", "target_lang": "Japanese"},
+            json={"source_lang": "English", "target_lang": "Japanese", "model": "test-model"},
         )
         data = done_payload(res)
         assert data["status"] == "translated"
@@ -666,6 +666,7 @@ def test_translate_inplace_with_backup_and_target_dir(monkeypatch, tmp_path):
             json={
                 "source_lang": "English",
                 "target_lang": "Spanish",
+                "model": "test-model",
                 "target_dir": str(out_dir),
             },
         )
@@ -730,6 +731,7 @@ def test_translate_scanned_pdf_inplace_with_ocr_fallback(monkeypatch, tmp_path):
             json={
                 "source_lang": "Italian",
                 "target_lang": "English",
+                "model": "test-model",
             },
         )
         data = done_payload(res)
@@ -853,7 +855,7 @@ def test_translate_stream_stops_cooperatively_when_its_task_is_cancelled(tmp_pat
         doc_id = ingest_path(client, path)["id"]
         res = client.post(
             f"/documents/{doc_id}/translate-inplace-stream",
-            json={"source_lang": "English", "target_lang": "Italian", "task_id": "translate-cancel-test"},
+            json={"source_lang": "English", "target_lang": "Italian", "model": "test-model", "task_id": "translate-cancel-test"},
         )
         events = read_events(res)
 

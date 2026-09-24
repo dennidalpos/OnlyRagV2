@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { PromptHistorySearchResult } from '../types'
 import { logger } from '../lib/logger'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 /** Owns the cross-project prompt history search modal's query/results state. */
 export function usePromptHistorySearch() {
@@ -19,9 +20,9 @@ export function usePromptHistorySearch() {
       const res = await window.electronAPI.searchPromptHistory(trimmed, 15)
       setResults(res || [])
       setHasSearched(true)
-    } catch (err: any) {
-      logger.warn('usePromptHistorySearch', `Search failed: ${err?.message}`)
-      setError(err?.message || 'Search failed')
+    } catch (err: unknown) {
+      logger.warn('usePromptHistorySearch', `Search failed: ${errorMessage(err)}`)
+      setError(errorMessage(err) || 'Search failed')
       setResults([])
     } finally {
       setIsSearching(false)

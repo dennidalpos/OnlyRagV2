@@ -1,7 +1,8 @@
 import { HubSkillItem, SkillHubSource, SkillCategory } from '../../../domain/skills/skillTypes'
-import { ISkillHubAdapter } from './hubAdapterInterface'
+import type { ISkillHubAdapter } from '../../../domain/ports/skillHubAdapterPort'
 import { webClient } from '../webClient'
 import { logger } from '../../logging/logger'
+import { errorMessage } from '../../../../../shared/domain/errors/errorMessage'
 
 function normalizeCategory(raw?: string): SkillCategory {
   const clean = (raw || '').toLowerCase().trim()
@@ -108,8 +109,8 @@ export class JsonCatalogAdapter implements ISkillHubAdapter {
       }
 
       return normalized
-    } catch (err: any) {
-      logger.log('ERROR', 'JsonCatalogAdapter', `Error parsing JSON catalog for ${source.name}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('ERROR', 'JsonCatalogAdapter', `Error parsing JSON catalog for ${source.name}: ${errorMessage(err)}`)
       return []
     }
   }

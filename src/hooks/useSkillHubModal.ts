@@ -3,6 +3,7 @@ import { SkillDefinition, HubSkillItem, SkillHubSource, CustomHubInput, SkillSav
 import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { useTranslation } from '../i18n'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 export const ALL_SKILL_SOURCES = '__all__'
 
@@ -39,8 +40,8 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
           ? await apiService.listHubSkillsAcrossSources(workspacePath || undefined)
           : await apiService.listHubSkillsBySource(activeSourceId, workspacePath || undefined)
       setHubSkills(hub)
-    } catch (err: any) {
-      logger.error('SkillHubModal', `Error loading skills/sources: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('SkillHubModal', `Error loading skills/sources: ${errorMessage(err)}`)
     } finally {
       setIsLoading(false)
     }
@@ -51,7 +52,6 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
       loadSourcesAndSkills()
       setActionMessage(null)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, workspacePath])
 
   // ESC Key Listener for Accessibility
@@ -77,8 +77,8 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
           ? await apiService.listHubSkillsAcrossSources(workspacePath || undefined, forceRefresh)
           : await apiService.listHubSkillsBySource(newSourceId, workspacePath || undefined, forceRefresh)
       setHubSkills(hub)
-    } catch (err: any) {
-      logger.error('SkillHubModal', `Error changing source: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('SkillHubModal', `Error changing source: ${errorMessage(err)}`)
     } finally {
       setIsLoading(false)
     }
@@ -95,8 +95,8 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
             ? await apiService.listHubSkillsAcrossSources(workspacePath || undefined)
             : await apiService.listHubSkillsBySource(selectedSourceId, workspacePath || undefined)
         setHubSkills(hub)
-      } catch (err: any) {
-        logger.error('SkillHubModal', `Error fetching hub skills on tab switch: ${err.message}`)
+      } catch (err: unknown) {
+        logger.error('SkillHubModal', `Error fetching hub skills on tab switch: ${errorMessage(err)}`)
       } finally {
         setIsLoading(false)
       }
@@ -126,8 +126,8 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
       } else {
         setActionMessage({ type: 'error', text: res.error || t('common.error') })
       }
-    } catch (err: any) {
-      setActionMessage({ type: 'error', text: err?.message || t('common.error') })
+    } catch (err: unknown) {
+      setActionMessage({ type: 'error', text: errorMessage(err) || t('common.error') })
     } finally {
       setInstallingSkillId(null)
     }

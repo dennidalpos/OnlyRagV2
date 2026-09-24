@@ -70,7 +70,9 @@ describe('agentOrchestratorSessionSetup', () => {
 
   it('should build default agent settings properly', () => {
     const settings = buildDefaultAgentSettings()
-    expect(settings.defaultModel).toBe('llama3.2')
+    // No guessed model: the preflight reports a missing one instead of pulling a model nobody chose.
+    expect(settings.defaultModel).toBe('')
+    expect(settings.codingModel || '').toBe('')
     // Fail-closed: a payload without settings must not unlock the terminal or file writes.
     expect(settings.allowFileModifications).toBe(false)
     expect(settings.allowTerminalExecution).toBe(false)

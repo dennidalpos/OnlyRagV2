@@ -5,6 +5,8 @@
 
 import stripAnsi from 'strip-ansi'
 import { AppError, ErrorCategory, getCategoryTitle, NormalizedError } from './appError'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { translate } from '../../i18n/I18nContext'
 
 export { AppError, ErrorCategory, type NormalizedError }
 
@@ -32,7 +34,7 @@ export function normalizeError(err: unknown, context?: string): NormalizedError 
   return {
     category: classified.category,
     title: classified.title || getCategoryTitle(classified.category),
-    message: `${prefix}${classified.message || cleanMessage || 'Si è verificato un errore imprevisto.'}`,
+    message: `${prefix}${classified.message || cleanMessage || translate('errors.unexpected')}`,
     remediation: classified.remediation,
     technicalDetails: technicalDetails || classified.technicalDetails,
     isFatal: classified.isFatal ?? false,
@@ -66,28 +68,7 @@ export function isFatalError(err: unknown): boolean {
  * Extracts raw error message from various error formats
  */
 function extractRawErrorMessage(err: unknown): string {
-  if (!err) {
-    return 'Unknown error'
-  }
-  if (typeof err === 'string') {
-    return err
-  }
-  if (err instanceof Error) {
-    return err.message
-  }
-  if (typeof err === 'object') {
-    const record = err as Record<string, unknown>
-    if (typeof record.message === 'string') return record.message
-    if (typeof record.error === 'string') return record.error
-    if (typeof record.detail === 'string') return record.detail
-    if (typeof record.statusText === 'string') return record.statusText
-    try {
-      return JSON.stringify(err)
-    } catch {
-      return String(err)
-    }
-  }
-  return String(err)
+  return errorMessage(err)
 }
 
 /**
@@ -127,9 +108,9 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
   ) {
     return {
       category: ErrorCategory.AI_OLLAMA,
-      title: 'Ollama Server Non Raggiungibile',
-      message: 'Impossibile connettersi al server Ollama locale (porta 11434).',
-      remediation: 'Assicurati che Ollama sia installato e avviato in locale.',
+      title: translate('errors.ollamaTitle'),
+      message: translate('errors.ollamaMessage'),
+      remediation: translate('errors.ollamaRemediation'),
       isFatal: false,
     }
   }
@@ -144,9 +125,9 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
   ) {
     return {
       category: ErrorCategory.SYSTEM_RESOURCES,
-      title: 'Memoria VRAM / RAM Esaurita',
-      message: 'Risorse di memoria insufficienti per completare l’elaborazione del modello.',
-      remediation: 'Riduci la finestra di contesto o seleziona un modello con tier di complessità inferiore.',
+      title: translate('errors.memoryTitle'),
+      message: translate('errors.memoryMessage'),
+      remediation: translate('errors.memoryRemediation'),
       isFatal: false,
     }
   }
@@ -162,9 +143,9 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
   ) {
     return {
       category: ErrorCategory.AGENT_POLICY,
-      title: 'Blocco di Sicurezza Agente',
-      message: message || 'Comando o percorso bloccato per criteri di sicurezza.',
-      remediation: 'L’operazione viola le policy di sandboxing e sicurezza del workspace.',
+      title: translate('errors.securityTitle'),
+      message: message || translate('errors.securityMessage'),
+      remediation: translate('errors.securityRemediation'),
       isFatal: false,
     }
   }
@@ -173,9 +154,9 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
   if (lower.includes('enoent') || lower.includes('no such file or directory')) {
     return {
       category: ErrorCategory.WORKSPACE_IO,
-      title: 'File o Cartella Non Trovata',
-      message: 'Il percorso specificato non esiste nel workspace.',
-      remediation: 'Verifica che il file o la directory esista e non sia stata rimossa.',
+      title: translate('errors.notFoundTitle'),
+      message: translate('errors.notFoundMessage'),
+      remediation: translate('errors.notFoundRemediation'),
       code: 'ENOENT',
     }
   }
@@ -183,9 +164,9 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
   if (lower.includes('eacces') || lower.includes('eperm') || lower.includes('permission denied')) {
     return {
       category: ErrorCategory.WORKSPACE_IO,
-      title: 'Permesso Negato',
-      message: 'Permessi insufficienti per accedere al file o alla risorsa.',
-      remediation: 'Verifica i permessi di lettura/scrittura nel filesystem del sistema operativo.',
+      title: translate('errors.permissionTitle'),
+      message: translate('errors.permissionMessage'),
+      remediation: translate('errors.permissionRemediation'),
       code: 'EACCES',
     }
   }
@@ -193,9 +174,9 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
   if (lower.includes('ebusy') || lower.includes('resource busy or locked')) {
     return {
       category: ErrorCategory.WORKSPACE_IO,
-      title: 'Risorsa Bloccata',
-      message: 'Il file è utilizzato o bloccato da un altro processo.',
-      remediation: 'Chiudi eventuali editor o processi concorrenti che tengono il file aperto.',
+      title: translate('errors.busyTitle'),
+      message: translate('errors.busyMessage'),
+      remediation: translate('errors.busyRemediation'),
       code: 'EBUSY',
     }
   }
@@ -210,9 +191,9 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
   ) {
     return {
       category: ErrorCategory.VECTOR_DB,
-      title: 'Errore Database Vettoriale LanceDB',
+      title: translate('errors.vectorTitle'),
       message: message,
-      remediation: 'Verifica che il sidecar Python sia attivo e riavvialo se necessario dal pannello Diagnostica.',
+      remediation: translate('errors.vectorRemediation'),
     }
   }
 
@@ -226,9 +207,9 @@ function classifyError(message: string, rawErr: unknown): ClassifiedError {
   ) {
     return {
       category: ErrorCategory.NETWORK_HTTP,
-      title: 'Errore di Rete / Connessione',
+      title: translate('errors.networkTitle'),
       message: message,
-      remediation: 'Verifica la connessione di rete e lo stato del server di destinazione.',
+      remediation: translate('errors.networkRemediation'),
     }
   }
 

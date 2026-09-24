@@ -60,7 +60,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
 
   const renderEmptyOption = () => (
     <option value="" disabled>
-      {models.length > 0 ? '-- Seleziona un modello locale --' : '-- Nessun modello disponibile in Ollama --'}
+      {models.length > 0 ? t('uiShell.selectLocalModel') : t('uiShell.noOllamaModels')}
     </option>
   )
 
@@ -75,7 +75,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">1. AI Coding Agent Studio</h2>
-              <p className="text-[11px] text-slate-400">Configurazione del modello di sviluppo principale.</p>
+              <p className="text-[11px] text-slate-400">{t('uiShell.codingModelDescription')}</p>
             </div>
           </div>
         </div>
@@ -85,12 +85,12 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
           <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
-                <Code className="w-4 h-4 text-cyan-400" /> Modello di Sviluppo Principale (Workhorse)
+                <Code className="w-4 h-4 text-cyan-400" /> {t('uiShell.codingModelTitle')}
               </span>
               <span className="text-[10px] text-cyan-400 font-mono font-bold">Primario</span>
             </div>
             <ModelSelect
-              ariaLabel="Seleziona Modello Coding Principale"
+              ariaLabel={t('uiShell.selectCodingModel')}
               value={codingModel}
               onChange={(e) => {
                 onUpdateSettings({

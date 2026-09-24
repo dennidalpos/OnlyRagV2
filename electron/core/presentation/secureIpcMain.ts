@@ -10,7 +10,7 @@ import {
 } from '../domain/sidecarContract'
 import { promptHistoryIndexPayloadSchema, promptHistorySearchPayloadSchema } from '../domain/promptHistoryContract'
 import { artifactsSavePayloadSchema } from '../domain/artifactContract'
-import { agentTaskRequestSchema, planMilestoneSchema } from '../domain/agent/agentTaskContract'
+import { agentPlanSchema, agentTaskRequestSchema, planMilestoneSchema } from '../domain/agent/agentTaskContract'
 
 let mainWindow: (() => BrowserWindow | null) | null = null
 export function setTrustedIpcWindowProvider(provider: () => BrowserWindow | null): void {
@@ -82,7 +82,6 @@ const customSkill = z
     isModified: z.boolean().optional(),
   })
   .passthrough()
-const plan = z.object({ formatVersion: z.literal(2), id: short, version: z.number().int().nonnegative(), prompt: string, objective: string }).passthrough()
 const debugBundle = z.object({
   sessionId: short,
   workspacePath: optionalPath,
@@ -197,7 +196,7 @@ const payloadSchemas: Record<string, z.ZodType> = {
     string,
     optionalString,
     settings,
-    plan.optional(),
+    agentPlanSchema.optional(),
     optionalPath,
     z.array(interviewAnswer).max(50).optional(),
     identity.optional(),
@@ -247,6 +246,7 @@ const payloadSchemas: Record<string, z.ZodType> = {
   ]),
   'ingest:page-preview': z.tuple([sidecarPagePreviewPayloadSchema.shape.docId, sidecarPagePreviewPayloadSchema.shape.pageNumber]),
   'ingest:list': emptyArgs,
+  'ingest:get': z.tuple([sidecarUpdateDocumentPayloadSchema.shape.docId]),
   'ingest:delete': z.tuple([sidecarUpdateDocumentPayloadSchema.shape.docId]),
   'ingest:search': z.tuple([sidecarSearch.query, sidecarSearch.topK, sidecarSearch.docIds]),
   'ingest:export': z.tuple([sidecarExport.markdownContent, sidecarExport.format, sidecarExport.outputFolder]),

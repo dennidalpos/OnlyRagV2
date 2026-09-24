@@ -5,6 +5,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import { spawn, exec } from 'node:child_process'
 import { logger } from '../logging/logger'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export class OllamaInstallerRepository {
   installOrLaunch(): Promise<{ success: boolean; message?: string; error?: string }> {
@@ -20,8 +21,8 @@ export class OllamaInstallerRepository {
           const p = spawn(exePath, ['serve'], { detached: true, stdio: 'ignore' })
           p.unref()
           return Promise.resolve({ success: true, message: 'Ollama launched.' })
-        } catch (err: any) {
-          logger.log('WARN', 'OllamaInstallerRepo', `Failed launching ${exePath}: ${err.message}`)
+        } catch (err: unknown) {
+          logger.log('WARN', 'OllamaInstallerRepo', `Failed launching ${exePath}: ${errorMessage(err)}`)
         }
       }
     }
@@ -36,8 +37,8 @@ export class OllamaInstallerRepository {
       const cleanupAndFail = (errMsg: string) => {
         try {
           if (fs.existsSync(tempInstallerPath)) fs.unlinkSync(tempInstallerPath)
-        } catch (unlinkErr: any) {
-          logger.log('WARN', 'OllamaInstallerRepo', `Failed unlinking temp installer on error: ${unlinkErr.message}`)
+        } catch (unlinkErr: unknown) {
+          logger.log('WARN', 'OllamaInstallerRepo', `Failed unlinking temp installer on error: ${errorMessage(unlinkErr)}`)
         }
         logger.log('ERROR', 'OllamaInstallerRepo', `Installer download failed: ${errMsg}`)
         resolve({ success: false, error: errMsg })
@@ -64,8 +65,8 @@ export class OllamaInstallerRepository {
               if (err) logger.log('WARN', 'OllamaInstallerRepo', `Installer closed: ${err.message}`)
               try {
                 if (fs.existsSync(tempInstallerPath)) fs.unlinkSync(tempInstallerPath)
-              } catch (cleanErr: any) {
-                logger.log('WARN', 'OllamaInstallerRepo', `Failed unlinking temp installer after exec: ${cleanErr.message}`)
+              } catch (cleanErr: unknown) {
+                logger.log('WARN', 'OllamaInstallerRepo', `Failed unlinking temp installer after exec: ${errorMessage(cleanErr)}`)
               }
             })
             resolve({ success: true, message: 'Installer launched.' })

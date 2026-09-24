@@ -4,6 +4,7 @@ import { Search, X, AlertTriangle, Sparkles, Copy, Check, SlidersHorizontal, Dat
 import { apiService } from '../../services/api'
 import { VectorSearchResult } from '../../types'
 import { useTranslation } from '../../i18n'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 interface VectorSearchModalProps {
   isOpen: boolean
@@ -31,8 +32,8 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({ isOpen, on
       const res = await apiService.searchVectorDb(query.trim(), topK)
       setResults(res || [])
       setHasSearched(true)
-    } catch (err: any) {
-      setError(err?.message || t('common.error'))
+    } catch (err: unknown) {
+      setError(errorMessage(err) || t('common.error'))
       setResults([])
     } finally {
       setIsSearching(false)

@@ -20,10 +20,40 @@ const appDefines = {
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import electron from 'vite-plugin-electron/simple'
+import type { Plugin } from 'vite'
+
+/**
+ * Monaco languages the renderer actually opens (markdown everywhere, the coding editor's
+ * getLanguageFromExtension set). Every other language definition and every language service
+ * except JSON resolves to an empty module, so the build no longer ships the 6.9 MB TypeScript
+ * worker (nor the CSS/HTML workers); TypeScript, CSS and HTML keep Monarch syntax highlighting.
+ */
+const MONACO_LANGUAGES = new Set(['markdown', 'typescript', 'javascript', 'css', 'html', 'python'])
+const MONACO_LANGUAGE_SERVICES = new Set(['json'])
+const MONACO_DISABLED_MODULE = '\0onlyrag-monaco-disabled'
+
+function monacoLanguageSubset(): Plugin {
+  return {
+    name: 'onlyrag-monaco-language-subset',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (!importer?.replace(/\\/g, '/').includes('/monaco-editor/')) return null
+      const definition = source.match(/languages\/definitions\/([\w-]+)\/register\.js$/)
+      if (definition && !MONACO_LANGUAGES.has(definition[1])) return MONACO_DISABLED_MODULE
+      const feature = source.match(/languages\/features\/([\w-]+)\/register\.js$/)
+      if (feature && !MONACO_LANGUAGE_SERVICES.has(feature[1])) return MONACO_DISABLED_MODULE
+      return null
+    },
+    load(id) {
+      return id === MONACO_DISABLED_MODULE ? 'export {}' : null
+    },
+  }
+}
 
 export default defineConfig({
   define: appDefines,
   plugins: [
+    monacoLanguageSubset(),
     react(),
     tailwindcss(),
     electron({

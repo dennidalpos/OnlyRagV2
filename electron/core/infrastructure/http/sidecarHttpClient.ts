@@ -2,6 +2,7 @@ import http from 'node:http'
 import { logger } from '../logging/logger'
 import type { SlmLogDiagnosticReport } from '../../../../shared/types'
 import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export interface SidecarIngestStreamPayload {
   file_path: string
@@ -25,7 +26,8 @@ export interface SidecarTranslateStreamPayload {
   task_id: string
 }
 
-export interface SidecarDocumentRecord {
+/** One entry of GET /documents: metadata only, the Markdown is loaded with GET /documents/{id}. */
+export interface SidecarDocumentSummary {
   id: string
   filename: string
   file_path?: string
@@ -33,11 +35,14 @@ export interface SidecarDocumentRecord {
   file_size: number
   num_pages: number
   num_chunks: number
-  extracted_markdown: string
   status: string
   ingested_at: string
   file_type?: string
   used_fallback_embeddings?: boolean
+}
+
+export interface SidecarDocumentRecord extends SidecarDocumentSummary {
+  extracted_markdown: string
 }
 
 export interface SidecarPagePreviewResult {
@@ -199,9 +204,9 @@ export class SidecarHttpClient {
       if (streamError) return { success: false, error: streamError }
       logger.log('WARN', 'SidecarClient', `${label} stream ended without a done event`)
       return { success: false, error: `${label} stream terminated without completion confirmation` }
-    } catch (err: any) {
-      logger.log('ERROR', 'SidecarClient', `${label} HTTP error: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SidecarClient', `${label} HTTP error: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -224,8 +229,8 @@ export class SidecarHttpClient {
       let data: ReturnType<typeof parseSidecarHealthResponse> = null
       try {
         data = parseSidecarHealthResponse(JSON.parse(res.body))
-      } catch (err: any) {
-        logger.log('WARN', 'SidecarClient', `Failed to parse /health JSON response: ${err.message}`)
+      } catch (err: unknown) {
+        logger.log('WARN', 'SidecarClient', `Failed to parse /health JSON response: ${errorMessage(err)}`)
       }
       if (!data) return { status: 'offline', error: 'Malformed /health response' }
       return {
@@ -235,8 +240,8 @@ export class SidecarHttpClient {
         documentsCount: data.documents_count,
         chunksCount: data.chunks_count,
       }
-    } catch (err: any) {
-      return { status: 'offline', error: err.message }
+    } catch (err: unknown) {
+      return { status: 'offline', error: errorMessage(err) }
     }
   }
 
@@ -305,13 +310,19 @@ export class SidecarHttpClient {
   }
 
   /** Lists all indexed documents; null when unreachable, so callers can tell a network failure from an empty library. */
-  async listDocuments(): Promise<SidecarDocumentRecord[] | null> {
-    const result = await this.requestJson<SidecarDocumentRecord[]>('GET', '/documents', undefined, 5000)
+  async listDocuments(): Promise<SidecarDocumentSummary[] | null> {
+    const result = await this.requestJson<SidecarDocumentSummary[]>('GET', '/documents', undefined, 5000)
     if (result.success) return result.data
     if (!result.error.includes('ECONNREFUSED')) {
       logger.log('WARN', 'SidecarClient', `Failed requesting /documents: ${result.error}`)
     }
     return null
+  }
+
+  /** One document with its extracted Markdown; null when it does not exist or the sidecar is unreachable. */
+  async getDocument(docId: string): Promise<SidecarDocumentRecord | null> {
+    const result = await this.requestJson<SidecarDocumentRecord>('GET', `/documents/${encodeURIComponent(docId)}`, undefined, 10_000)
+    return result.success ? result.data : null
   }
 
   /** Deletes a document and all its embedded chunks from LanceDB. */
@@ -325,10 +336,10 @@ export class SidecarHttpClient {
       })
       if (res.status === 200) return { success: true }
       return { success: false, error: parseDetail(res.body) || `Il Sidecar ha rifiutato l'eliminazione (HTTP ${res.status || 'sconosciuto'}).` }
-    } catch (err: any) {
-      logger.log('ERROR', 'SidecarClient', `Failed deleting document ${docId}: ${err.message}`)
-      const timedOut = err.message.startsWith('Eliminazione scaduta')
-      return { success: false, error: timedOut ? err.message : `Sidecar non raggiungibile: ${err.message}` }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SidecarClient', `Failed deleting document ${docId}: ${errorMessage(err)}`)
+      const timedOut = errorMessage(err).startsWith('Eliminazione scaduta')
+      return { success: false, error: timedOut ? errorMessage(err) : `Sidecar non raggiungibile: ${errorMessage(err)}` }
     }
   }
 
@@ -360,9 +371,9 @@ export class SidecarHttpClient {
     let res: SendResult
     try {
       res = await this.send({ method, path: urlPath, body, timeoutMs })
-    } catch (err: any) {
-      logger.log('ERROR', 'SidecarClient', `${urlPath} request failed: ${err.message}`)
-      return { success: false, error: err.message.includes('timed out') ? err.message : `Sidecar connection error: ${err.message}` }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SidecarClient', `${urlPath} request failed: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err).includes('timed out') ? errorMessage(err) : `Sidecar connection error: ${errorMessage(err)}` }
     }
     if (res.status < 200 || res.status >= 300) {
       const detail = errorDetail(res.status, res.body, `HTTP ${res.status}`)
@@ -371,9 +382,9 @@ export class SidecarHttpClient {
     }
     try {
       return { success: true, data: JSON.parse(res.body) as T }
-    } catch (err: any) {
-      logger.log('ERROR', 'SidecarClient', `JSON parse error on ${urlPath}: ${err.message}`)
-      return { success: false, error: `Response parse error: ${err.message}` }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SidecarClient', `JSON parse error on ${urlPath}: ${errorMessage(err)}`)
+      return { success: false, error: `Response parse error: ${errorMessage(err)}` }
     }
   }
 

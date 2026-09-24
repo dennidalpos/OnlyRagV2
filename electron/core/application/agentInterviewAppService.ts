@@ -2,7 +2,7 @@ import os from 'node:os'
 import { CODING_MODEL_KEEP_ALIVE, HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import { logger } from '../infrastructure/logging/logger'
-import { getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
+import { hardwareProbe } from '../infrastructure/diagnostics/hardwareProbe'
 import type { AppSettings, InterviewAnalysisResult, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
 import { composeInterviewDecisionPrompt } from '../../../shared/domain/agent/interviewDecisionContext'
 import { explicitAlternativeInterviewFallback } from '../../../shared/domain/agent/planInterviewPolicy'
@@ -13,6 +13,8 @@ import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 import { ollamaAppService } from './ollamaAppService'
 import { resolveOllamaThinkingPreference } from '../../../shared/domain/agent/ollamaThinkingPolicy'
+import { noConfiguredModelMessage, resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export type { InterviewAnalysisResult, UserInterviewAnswer } from '../../../shared/types'
 
@@ -47,9 +49,10 @@ export class AgentInterviewAppService {
     previousDecisions: readonly UserInterviewAnswer[] = [],
     operationId?: string,
   ): Promise<InterviewAnalysisResult> {
-    const modelToUse = model || settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
-    const cachedGpu = getCachedGpuInfo()
-    const memInfo = getMemoryInfo()
+    const modelToUse = resolveConfiguredModel('coding', settings, model)
+    if (!modelToUse) return { status: 'error', hasQuestions: false, questions: [], error: noConfiguredModelMessage('coding') }
+    const cachedGpu = hardwareProbe.getCachedGpuInfo()
+    const memInfo = hardwareProbe.getMemoryInfo()
     const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
       hasGpu: cachedGpu?.hasNvidiaGpu,
       vramTotalMB: cachedGpu?.vramTotalMB,
@@ -126,9 +129,9 @@ export class AgentInterviewAppService {
         questions: unresolvedQuestions as InterviewQuestion[],
         rawResponse: response.content,
       }
-    } catch (parseErr: any) {
-      logger.log('WARN', 'AgentInterviewAppService', `Failed to parse interview response: ${parseErr.message}`)
-      return { status: 'error', hasQuestions: false, questions: [], error: parseErr.message }
+    } catch (parseErr: unknown) {
+      logger.log('WARN', 'AgentInterviewAppService', `Failed to parse interview response: ${errorMessage(parseErr)}`)
+      return { status: 'error', hasQuestions: false, questions: [], error: errorMessage(parseErr) }
     }
   }
 

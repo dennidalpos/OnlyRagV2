@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { logger } from '../logging/logger'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 /** Unvalidated filesystem primitives for callers with resolved paths. */
 export class DocumentIoRepository {
@@ -80,14 +81,14 @@ export class DocumentIoRepository {
       fs.writeFileSync(tmpPath, content, 'utf-8')
       fs.renameSync(tmpPath, targetPath)
       return { success: true }
-    } catch (err: any) {
+    } catch (err: unknown) {
       try {
         fs.unlinkSync(tmpPath)
       } catch {
         /* best-effort cleanup, tmpPath may not exist */
       }
-      logger.log('ERROR', 'DocumentIoRepo', `Failed writing text file '${targetPath}': ${err.message}`)
-      return { success: false, error: err.message }
+      logger.log('ERROR', 'DocumentIoRepo', `Failed writing text file '${targetPath}': ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -98,14 +99,14 @@ export class DocumentIoRepository {
       fs.writeFileSync(tmpPath, buffer)
       fs.renameSync(tmpPath, targetPath)
       return { success: true }
-    } catch (err: any) {
+    } catch (err: unknown) {
       try {
         fs.unlinkSync(tmpPath)
       } catch {
         /* best-effort cleanup, tmpPath may not exist */
       }
-      logger.log('ERROR', 'DocumentIoRepo', `Failed writing binary file '${targetPath}': ${err.message}`)
-      return { success: false, error: err.message }
+      logger.log('ERROR', 'DocumentIoRepo', `Failed writing binary file '${targetPath}': ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 }

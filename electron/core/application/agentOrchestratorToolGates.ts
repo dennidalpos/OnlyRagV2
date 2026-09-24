@@ -1,4 +1,9 @@
 import type { AgentToolCall, SupportedToolName } from '../domain/agent/agentTypes'
+import type { AgentTaskResult } from '../domain/agent/agentTypes'
+import type { AgentGuardEvent } from '../../../shared/types'
+import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
+import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
+import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
 import type { AgentExecutionMode } from '../../../shared/types'
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
@@ -31,7 +36,12 @@ export interface ToolGateContext {
 }
 
 export type ToolGateResult =
-  | { outcome: 'denied'; feedback?: string }
+  | {
+      outcome: 'denied'
+      feedback?: string
+      /** Set when the application's turn policy (not the user) refused the call: it spends a step without progress. */
+      policyDenial?: 'turn_policy' | 'version_recovery'
+    }
   | {
       outcome: 'allowed'
       toolCallForExecution: AgentToolCall
@@ -188,7 +198,7 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
       feedback,
     )
     ctx.emitLog('info', `🧰 Tool blocked by current phase: ${ctx.parsedTool.tool}`)
-    return { outcome: 'denied', feedback }
+    return { outcome: 'denied', feedback, policyDenial: 'turn_policy' }
   }
 
   if (ctx.requiredReadPath) {
@@ -201,7 +211,7 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
         feedback,
       )
       ctx.emitLog('info', `🔒 Lettura versione richiesta: ${ctx.requiredReadPath}`)
-      return { outcome: 'denied', feedback }
+      return { outcome: 'denied', feedback, policyDenial: 'version_recovery' }
     }
   }
 
@@ -248,4 +258,21 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
   }
 
   return { outcome: 'allowed', toolCallForExecution, policyConsent, commandApprovalGranted }
+}
+
+/**
+ * A call refused by the turn policy is a step without progress: it is recorded as a `tool_policy`
+ * guard and spends the same no-mutation budget as an executed read, so a model that keeps calling
+ * a blocked tool stops on `no_mutation` instead of burning the whole step budget.
+ */
+export async function recordToolPolicyDenial(
+  state: { guardEvents: AgentGuardEvent[]; progress: AgentProgressPolicy },
+  stepCount: number,
+  closeApplicationRun: (request: ApplicationClosureRequest) => Promise<ApplicationClosureOutcome>,
+): Promise<AgentTaskResult | null> {
+  recordGuardEvent(state.guardEvents, 'tool_policy', 'advise', stepCount)
+  const stop = state.progress.onStepExecuted(false)
+  if (!stop) return null
+  const closure = await closeApplicationRun({ trigger: 'guard_stop', guard: stop.guard, reason: stop.reason })
+  return closure.outcome === 'closed' ? closure.result : null
 }

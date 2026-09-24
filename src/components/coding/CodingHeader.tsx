@@ -102,13 +102,13 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         <button
           type="button"
           onClick={onOpenSkillHubModal}
-          aria-label={activeSkills.length > 0 ? `${t('coding.activeSkillsTitle')}: ${activeSkills.join(', ')}` : 'Apri Skill Hub & Marketplace'}
+          aria-label={activeSkills.length > 0 ? `${t('coding.activeSkillsTitle')}: ${activeSkills.join(', ')}` : t('uiShell.openSkillHub')}
           className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-sans font-bold border transition-all focus-ring cursor-pointer shadow-sm ${
             activeSkills.length > 0
               ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300 hover:bg-cyan-900/60'
               : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-slate-200'
           }`}
-          title={activeSkills.length > 0 ? `${t('coding.activeSkillsTitle')} ${activeSkills.join(', ')}` : 'Apri Skill Hub & Marketplace'}
+          title={activeSkills.length > 0 ? `${t('coding.activeSkillsTitle')} ${activeSkills.join(', ')}` : t('uiShell.openSkillHub')}
         >
           <Sparkles className={`w-3 h-3 ${activeSkills.length > 0 ? 'text-cyan-400' : 'text-slate-400'}`} />
           <span>Skills</span>
@@ -124,8 +124,8 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
           <button
             type="button"
             onClick={() => setIsSystemPopoverOpen(!isSystemPopoverOpen)}
-            aria-label="Stato Toolchain Host"
-            title="Stato Toolchain Host (Git, Node, Python, Ollama)"
+            aria-label={t('uiShell.toolchainStatus')}
+            title={t('uiShell.toolchainStatusHint')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-colors focus-ring ${
               allCoreToolsAvailable
                 ? 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-100/10 hover:border-slate-700'
@@ -145,7 +145,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
                   <Cpu className="w-3.5 h-3.5 text-cyan-400" /> Toolchain di Sistema
                 </span>
                 <button type="button" onClick={onOpenDiagnosticsModal} className="text-[10px] text-cyan-400 hover:underline cursor-pointer">
-                  Dettagli
+                  {t('uiShell.details')}
                 </button>
               </div>
 

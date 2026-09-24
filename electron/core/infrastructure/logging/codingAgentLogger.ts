@@ -5,6 +5,7 @@ import { logger } from './logger'
 import { sanitizeLogMessage } from '../../../logRedactor'
 import { AgentRunMetrics } from '../../domain/agent/agentRunMetrics'
 import { createHash } from 'node:crypto'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 /** Below this, eliding a shared prefix costs more in explanation than it saves. */
 const MIN_ELIDABLE_PREFIX_CHARS = 400
@@ -24,7 +25,7 @@ export class CodingAgentLogger {
     if (!fs.existsSync(logDir)) {
       try {
         fs.mkdirSync(logDir, { recursive: true })
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed creating log directory for coding agent audit:', err)
       }
     }
@@ -69,8 +70,8 @@ export class CodingAgentLogger {
           .filter((entry) => entry.includes(`Session: ${sessionId}`) || entry.includes(`Session ID: ${sessionId}`))
       })
       return entries.join('\n================================================================================\n').trim()
-    } catch (err: any) {
-      logger.log('WARN', 'CodingAgentLogger', `Failed reading audit log for session ${sessionId}: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'CodingAgentLogger', `Failed reading audit log for session ${sessionId}: ${errorMessage(err)}`)
       return ''
     }
   }
@@ -88,8 +89,8 @@ export class CodingAgentLogger {
       this.previousPromptBySession.clear()
       this.payloadCaptureBySession.clear()
       return true
-    } catch (err: any) {
-      logger.log('WARN', 'CodingAgentLogger', `Failed clearing audit log: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'CodingAgentLogger', `Failed clearing audit log: ${errorMessage(err)}`)
       return false
     }
   }
@@ -110,8 +111,8 @@ export class CodingAgentLogger {
         fs.writeFileSync(filePath, cleaned, 'utf-8')
       }
       return true
-    } catch (err: any) {
-      logger.log('WARN', 'CodingAgentLogger', `Failed removing session ${sessionId} from audit log: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'CodingAgentLogger', `Failed removing session ${sessionId} from audit log: ${errorMessage(err)}`)
       return false
     }
   }
@@ -136,7 +137,7 @@ export class CodingAgentLogger {
           fs.writeFileSync(this.logFilePath, '', 'utf-8')
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('CodingAgentLogger rotation failed:', err)
     }
   }
@@ -157,8 +158,8 @@ export class CodingAgentLogger {
         const match = entry.match(/^coding_agent_audit\.(\d+)\.log$/)
         if (match && Number(match[1]) >= this.maxRetainedFiles) fs.unlinkSync(path.join(logDir, entry))
       }
-    } catch (err: any) {
-      logger.log('WARN', 'CodingAgentLogger', `Failed cleaning retained audit logs: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'CodingAgentLogger', `Failed cleaning retained audit logs: ${errorMessage(err)}`)
     }
   }
 
@@ -168,8 +169,8 @@ export class CodingAgentLogger {
       const timestamp = new Date().toISOString()
       const formatted = `\n================================================================================\n[${timestamp}] ${sanitizeLogMessage(sectionHeader)}\n================================================================================\n${sanitizeLogMessage(bodyContent).trim()}\n`
       fs.appendFileSync(this.logFilePath, formatted, 'utf-8')
-    } catch (err: any) {
-      logger.log('WARN', 'CodingAgentLogger', `Failed writing agent audit log: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'CodingAgentLogger', `Failed writing agent audit log: ${errorMessage(err)}`)
     }
   }
 

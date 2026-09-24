@@ -5,6 +5,7 @@ import { logger } from '../logging/logger'
 import type { WorkspaceProject } from '../../../../shared/types'
 import { upsertProject, touchProject, sortProjectsByRecency, mergeProjects, renameProjectInList } from '../../domain/workspace/projectRegistryDomain'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const REGISTRY_FILE_NAME = 'project_registry.json'
 const STORE_VERSION = 1
@@ -38,8 +39,8 @@ export class ProjectRegistryRepository {
       const parsed = JSON.parse(raw) as ProjectRegistryStore
       if (!parsed || !Array.isArray(parsed.projects)) return []
       return parsed.projects.filter((p) => p && typeof p.path === 'string' && p.path && typeof p.name === 'string')
-    } catch (err: any) {
-      logger.log('WARN', 'ProjectRegistryRepo', `Failed reading project registry at ${filePath}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'ProjectRegistryRepo', `Failed reading project registry at ${filePath}: ${errorMessage(err)}`)
       return []
     }
   }
@@ -49,8 +50,8 @@ export class ProjectRegistryRepository {
     try {
       const payload: ProjectRegistryStore = { version: STORE_VERSION, projects }
       return await safeAtomicWrite(filePath, JSON.stringify(payload, null, 2))
-    } catch (err: any) {
-      logger.log('WARN', 'ProjectRegistryRepo', `Failed writing project registry at ${filePath}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'ProjectRegistryRepo', `Failed writing project registry at ${filePath}: ${errorMessage(err)}`)
       return false
     }
   }

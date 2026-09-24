@@ -10,6 +10,7 @@ import { normalizeOllamaHost } from '../../../../shared/domain/ollamaHost'
 import { appSettingsRepository } from '../filesystem/appSettingsRepository'
 import { sidecarHttpClient } from '../http/sidecarHttpClient'
 import { matchesSidecarOwnership, parseListeningPidFromNetstat, type SidecarOwnershipMarker } from './orphanPortReclaim'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
@@ -134,8 +135,8 @@ export class SidecarProcessManager {
               ocr: data.ocr as { provider: string; host_has_gpu: boolean },
             }
             resolve(true)
-          } catch (err: any) {
-            logger.log('WARN', 'Sidecar', `Invalid JSON response from /health: ${err.message}`)
+          } catch (err: unknown) {
+            logger.log('WARN', 'Sidecar', `Invalid JSON response from /health: ${errorMessage(err)}`)
             finishOffline('Malformed /health response')
           }
         })
@@ -499,8 +500,8 @@ export class SidecarProcessManager {
         } else {
           sidecarProcess.kill('SIGKILL')
         }
-      } catch (err: any) {
-        logger.log('WARN', 'Sidecar', `Error stopping sidecar process: ${err.message}`)
+      } catch (err: unknown) {
+        logger.log('WARN', 'Sidecar', `Error stopping sidecar process: ${errorMessage(err)}`)
       }
       sidecarProcess = null
       this.state = { status: 'offline' }

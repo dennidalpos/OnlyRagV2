@@ -50,6 +50,7 @@ const api: IElectronAPI = {
     ipcRenderer.invoke('ingest:translate-inplace', docId, sourceLang, targetLang, model, targetDir, numCtx, think),
   getDocumentPagePreview: (docId: string, pageNumber: number) => ipcRenderer.invoke('ingest:page-preview', docId, pageNumber),
   getIngestedDocuments: () => ipcRenderer.invoke('ingest:list'),
+  getIngestedDocument: (docId: string) => ipcRenderer.invoke('ingest:get', docId),
   deleteIngestedDocument: (docId: string) => ipcRenderer.invoke('ingest:delete', docId),
   searchVectorDb: (query: string, topK?: number, docIds?: string[]) => ipcRenderer.invoke('ingest:search', query, topK, docIds),
   exportDocument: (markdownContent: string, format: string, outputFolder?: string) =>

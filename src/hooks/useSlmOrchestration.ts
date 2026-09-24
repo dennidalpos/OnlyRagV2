@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import type { SlmLogDiagnosticReport } from '../types'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Public hook types
@@ -57,8 +58,8 @@ export function useSlmOrchestration(): UseSlmOrchestrationReturn {
         }
       }
       return report
-    } catch (err: any) {
-      const msg = err?.message ?? 'Unknown log analysis error'
+    } catch (err: unknown) {
+      const msg = errorMessage(err) ?? 'Unknown log analysis error'
       if (mountedRef.current) {
         setAnalyzeLogsError(msg)
       }

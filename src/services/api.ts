@@ -2,6 +2,7 @@ import {
   DiagnosticsData,
   LogEntry,
   IngestedDocument,
+  IngestedDocumentContent,
   VectorSearchResult,
   WorkspaceFile,
   SkillDefinition,
@@ -11,6 +12,8 @@ import {
   SkillSaveInput,
 } from '../types'
 import { logger } from '../lib/logger'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import { translate } from '../i18n/I18nContext'
 
 /**
  * Centralized Type-Safe API Service Abstraction for OnlyRag V2
@@ -21,8 +24,8 @@ export const apiService = {
     if (!window.electronAPI) return null
     try {
       return await window.electronAPI.runDiagnostics(host)
-    } catch (err: any) {
-      logger.error('ApiService:Diagnostics', `Failed to run system diagnostics: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Diagnostics', `Failed to run system diagnostics: ${errorMessage(err)}`)
       return null
     }
   },
@@ -31,8 +34,8 @@ export const apiService = {
     if (!window.electronAPI) return []
     try {
       return await window.electronAPI.getLogs()
-    } catch (err: any) {
-      logger.error('ApiService:Logs', `Failed to fetch logs: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Logs', `Failed to fetch logs: ${errorMessage(err)}`)
       return []
     }
   },
@@ -41,8 +44,8 @@ export const apiService = {
     if (!window.electronAPI) return false
     try {
       return await window.electronAPI.clearLogs()
-    } catch (err: any) {
-      logger.error('ApiService:Logs', `Failed to clear logs: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Logs', `Failed to clear logs: ${errorMessage(err)}`)
       return false
     }
   },
@@ -51,9 +54,9 @@ export const apiService = {
     if (!window.electronAPI?.openLogsFolder) return { success: false, error: 'Electron API unavailable' }
     try {
       return await window.electronAPI.openLogsFolder()
-    } catch (err: any) {
-      logger.error('ApiService:Logs', `Failed to open logs folder: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Logs', `Failed to open logs folder: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -63,8 +66,19 @@ export const apiService = {
     try {
       const docs = await window.electronAPI.getIngestedDocuments()
       return Array.isArray(docs) ? docs : null
-    } catch (err: any) {
-      logger.error('ApiService:Ingestion', `Failed to fetch ingested documents: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Ingestion', `Failed to fetch ingested documents: ${errorMessage(err)}`)
+      return null
+    }
+  },
+
+  /** One document with its Markdown; the list carries metadata only. Null when it is missing or unreachable. */
+  async getIngestedDocument(docId: string): Promise<IngestedDocumentContent | null> {
+    if (!window.electronAPI?.getIngestedDocument) return null
+    try {
+      return (await window.electronAPI.getIngestedDocument(docId)) || null
+    } catch (err: unknown) {
+      logger.error('ApiService:Ingestion', `Failed to load document ${docId}: ${errorMessage(err)}`)
       return null
     }
   },
@@ -78,7 +92,7 @@ export const apiService = {
     numCtx?: number,
     taskId?: string,
     normalizationThink?: boolean,
-  ): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
+  ): Promise<{ success: boolean; data?: IngestedDocumentContent; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       logger.info(
@@ -101,13 +115,13 @@ export const apiService = {
         window.dispatchEvent(new CustomEvent('onlyrag:documents-changed'))
       }
       return res
-    } catch (err: any) {
-      logger.error('ApiService:Ingestion', `Exception during file ingestion: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Ingestion', `Exception during file ingestion: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
-  async updateIngestedDocument(docId: string, markdownContent: string): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
+  async updateIngestedDocument(docId: string, markdownContent: string): Promise<{ success: boolean; data?: IngestedDocumentContent; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       logger.info('ApiService:Ingestion', `Updating ingested document ${docId}`)
@@ -118,9 +132,9 @@ export const apiService = {
         window.dispatchEvent(new CustomEvent('onlyrag:documents-changed'))
       }
       return res
-    } catch (err: any) {
-      logger.error('ApiService:Ingestion', `Exception updating document ${docId}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Ingestion', `Exception updating document ${docId}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -132,7 +146,7 @@ export const apiService = {
     targetDir?: string,
     numCtx?: number,
     think?: boolean,
-  ): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
+  ): Promise<{ success: boolean; data?: IngestedDocumentContent; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       logger.info('ApiService:Ingestion', `Translating document in place ${docId} (${sourceLang} -> ${targetLang})`)
@@ -143,9 +157,9 @@ export const apiService = {
         window.dispatchEvent(new CustomEvent('onlyrag:documents-changed'))
       }
       return res
-    } catch (err: any) {
-      logger.error('ApiService:Ingestion', `Exception translating document ${docId} in place: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Ingestion', `Exception translating document ${docId} in place: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -153,14 +167,14 @@ export const apiService = {
     if (!window.electronAPI?.getDocumentPagePreview) return null
     try {
       return await window.electronAPI.getDocumentPagePreview(docId, pageNumber)
-    } catch (err: any) {
-      logger.warn('ApiService:Ingestion', `Failed getting page preview for ${docId}, p.${pageNumber}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.warn('ApiService:Ingestion', `Failed getting page preview for ${docId}, p.${pageNumber}: ${errorMessage(err)}`)
       return null
     }
   },
 
   async deleteIngestedDocument(docId: string): Promise<{ success: boolean; error?: string }> {
-    if (!window.electronAPI) return { success: false, error: 'API Electron non disponibile.' }
+    if (!window.electronAPI) return { success: false, error: translate('services.electronApiUnavailable') }
     try {
       logger.info('ApiService:Ingestion', `Deleting document ${docId} from LanceDB`)
       const res = await window.electronAPI.deleteIngestedDocument(docId)
@@ -168,9 +182,9 @@ export const apiService = {
         window.dispatchEvent(new CustomEvent('onlyrag:documents-changed'))
       }
       return res
-    } catch (err: any) {
-      logger.error('ApiService:Ingestion', `Failed deleting document ${docId}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Ingestion', `Failed deleting document ${docId}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -184,9 +198,9 @@ export const apiService = {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       return await window.electronAPI.exportDocument(markdownContent, format, outputFolder)
-    } catch (err: any) {
-      logger.error('ApiService:Export', `Export failed for format ${format}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Export', `Export failed for format ${format}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -194,8 +208,8 @@ export const apiService = {
     if (!window.electronAPI) return []
     try {
       return await window.electronAPI.listWorkspaceFiles(dirPath)
-    } catch (err: any) {
-      logger.error('ApiService:Workspace', `Failed listing files for ${dirPath || 'root'}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Workspace', `Failed listing files for ${dirPath || 'root'}: ${errorMessage(err)}`)
       return []
     }
   },
@@ -204,9 +218,9 @@ export const apiService = {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       return await window.electronAPI.readWorkspaceFile(filePath)
-    } catch (err: any) {
-      logger.error('ApiService:Workspace', `Failed reading file ${filePath}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Workspace', `Failed reading file ${filePath}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -220,9 +234,9 @@ export const apiService = {
     try {
       logger.info('ApiService:Workspace', `Writing file content to ${filePath}`)
       return await window.electronAPI.writeWorkspaceFile(filePath, content, expectedContentHash, workspaceRoot)
-    } catch (err: any) {
-      logger.error('ApiService:Workspace', `Failed writing file ${filePath}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Workspace', `Failed writing file ${filePath}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -231,9 +245,9 @@ export const apiService = {
     try {
       logger.info('ApiService:PowerShell', `Executing command: ${command} in ${cwd || 'default'}`)
       return await window.electronAPI.executePowerShellCommand(command, cwd)
-    } catch (err: any) {
-      logger.error('ApiService:PowerShell', `PowerShell command execution error: ${err.message}`)
-      return { success: false, output: '', error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:PowerShell', `PowerShell command execution error: ${errorMessage(err)}`)
+      return { success: false, output: '', error: errorMessage(err) }
     }
   },
 
@@ -242,9 +256,9 @@ export const apiService = {
     try {
       logger.info('ApiService:Workspace', `Replacing chunk in file: ${filePath}`)
       return await window.electronAPI.replaceWorkspaceFileChunk(filePath, targetContent, replacementContent)
-    } catch (err: any) {
-      logger.error('ApiService:Workspace', `Failed replacing chunk in ${filePath}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Workspace', `Failed replacing chunk in ${filePath}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -252,8 +266,8 @@ export const apiService = {
     if (!window.electronAPI) return []
     try {
       return await window.electronAPI.grepWorkspaceFiles(dirPath, query, isRegex, caseInsensitive)
-    } catch (err: any) {
-      logger.error('ApiService:Grep', `Grep search error: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Grep', `Grep search error: ${errorMessage(err)}`)
       return []
     }
   },
@@ -262,8 +276,8 @@ export const apiService = {
     if (!window.electronAPI) return null
     try {
       return await window.electronAPI.inspectGuestOsEnvironment()
-    } catch (err: any) {
-      logger.error('ApiService:GuestOs', `Failed inspecting guest OS: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:GuestOs', `Failed inspecting guest OS: ${errorMessage(err)}`)
       return null
     }
   },
@@ -272,8 +286,8 @@ export const apiService = {
     if (!window.electronAPI) return null
     try {
       return await window.electronAPI.parseAgentToolCall(rawText)
-    } catch (err: any) {
-      logger.warn('ApiService:ToolParser', `IPC Tool Call Parse error: ${err.message}`)
+    } catch (err: unknown) {
+      logger.warn('ApiService:ToolParser', `IPC Tool Call Parse error: ${errorMessage(err)}`)
       return null
     }
   },
@@ -282,8 +296,8 @@ export const apiService = {
     if (!window.electronAPI?.openFileDialog) return []
     try {
       return await window.electronAPI.openFileDialog(options)
-    } catch (err: any) {
-      logger.error('ApiService:Dialog', `Open file dialog error: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Dialog', `Open file dialog error: ${errorMessage(err)}`)
       return []
     }
   },
@@ -292,8 +306,8 @@ export const apiService = {
     if (!window.electronAPI?.openDirectoryDialog) return null
     try {
       return await window.electronAPI.openDirectoryDialog(options)
-    } catch (err: any) {
-      logger.error('ApiService:Dialog', `Open directory dialog error: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Dialog', `Open directory dialog error: ${errorMessage(err)}`)
       return null
     }
   },
@@ -303,9 +317,9 @@ export const apiService = {
     try {
       logger.info('ApiService:Web', `Initiating web search for "${query}"`)
       return await window.electronAPI.searchWeb(query, maxResults)
-    } catch (err: any) {
-      logger.error('ApiService:Web', `Web search failed for "${query}": ${err.message}`)
-      return { success: false, results: [], error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Web', `Web search failed for "${query}": ${errorMessage(err)}`)
+      return { success: false, results: [], error: errorMessage(err) }
     }
   },
 
@@ -314,9 +328,9 @@ export const apiService = {
     try {
       logger.info('ApiService:Web', `Fetching web content from "${url}"`)
       return await window.electronAPI.fetchWebContent(url, maxChars)
-    } catch (err: any) {
-      logger.error('ApiService:Web', `Fetch web content failed for "${url}": ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Web', `Fetch web content failed for "${url}": ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -325,9 +339,9 @@ export const apiService = {
     try {
       logger.info('ApiService:Web', `Downloading file from "${url}" to "${targetFilePath}"`)
       return await window.electronAPI.downloadFile(url, targetFilePath)
-    } catch (err: any) {
-      logger.error('ApiService:Web', `Download file failed for "${url}": ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Web', `Download file failed for "${url}": ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -335,8 +349,8 @@ export const apiService = {
     if (!window.electronAPI?.listInstalledSkills) return []
     try {
       return await window.electronAPI.listInstalledSkills(workspaceRoot)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed listing installed skills: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed listing installed skills: ${errorMessage(err)}`)
       return []
     }
   },
@@ -345,8 +359,8 @@ export const apiService = {
     if (!window.electronAPI?.listHubSources) return []
     try {
       return await window.electronAPI.listHubSources()
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed listing hub sources: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed listing hub sources: ${errorMessage(err)}`)
       return []
     }
   },
@@ -355,9 +369,9 @@ export const apiService = {
     if (!window.electronAPI?.addCustomHubSource) return { success: false, error: 'Electron API unavailable' }
     try {
       return await window.electronAPI.addCustomHubSource(input)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed adding custom hub: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed adding custom hub: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -365,9 +379,9 @@ export const apiService = {
     if (!window.electronAPI?.removeCustomHubSource) return { success: false, error: 'Electron API unavailable' }
     try {
       return await window.electronAPI.removeCustomHubSource(sourceId)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed removing custom hub: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed removing custom hub: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -375,8 +389,8 @@ export const apiService = {
     if (!window.electronAPI?.listHubSkillsBySource) return []
     try {
       return await window.electronAPI.listHubSkillsBySource(sourceId, workspaceRoot, forceRefresh)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed listing skills for hub ${sourceId}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed listing skills for hub ${sourceId}: ${errorMessage(err)}`)
       return []
     }
   },
@@ -385,8 +399,8 @@ export const apiService = {
     if (!window.electronAPI?.listHubSkillsAcrossSources) return []
     try {
       return await window.electronAPI.listHubSkillsAcrossSources(workspaceRoot, forceRefresh)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed listing skills across hubs: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed listing skills across hubs: ${errorMessage(err)}`)
       return []
     }
   },
@@ -395,9 +409,9 @@ export const apiService = {
     if (!window.electronAPI?.getHubSkillContent) return { success: false, error: 'IPC unavailable' }
     try {
       return await window.electronAPI.getHubSkillContent(item)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed fetching skill content for ${item.name}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed fetching skill content for ${item.name}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -405,8 +419,8 @@ export const apiService = {
     if (!window.electronAPI?.toggleSkillActive) return false
     try {
       return await window.electronAPI.toggleSkillActive(skillId, isActive)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed toggling skill ${skillId}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed toggling skill ${skillId}: ${errorMessage(err)}`)
       return false
     }
   },
@@ -419,9 +433,9 @@ export const apiService = {
     if (!window.electronAPI?.installSkillFromHub) return { success: false, error: 'Electron API unavailable' }
     try {
       return await window.electronAPI.installSkillFromHub(hubSkillId, workspaceRoot, hubSourceId)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed installing hub skill ${hubSkillId}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed installing hub skill ${hubSkillId}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -429,9 +443,9 @@ export const apiService = {
     if (!window.electronAPI?.installSkillFromUrl) return { success: false, error: 'Electron API unavailable' }
     try {
       return await window.electronAPI.installSkillFromUrl(url, workspaceRoot, customName)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed installing skill from URL ${url}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed installing skill from URL ${url}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -439,9 +453,9 @@ export const apiService = {
     if (!window.electronAPI?.saveCustomSkill) return { success: false, error: 'Electron API unavailable' }
     try {
       return await window.electronAPI.saveCustomSkill(input, workspaceRoot)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed saving custom skill: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed saving custom skill: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -449,9 +463,9 @@ export const apiService = {
     if (!window.electronAPI?.resetSkillToOriginal) return { success: false, error: 'Electron API unavailable' }
     try {
       return await window.electronAPI.resetSkillToOriginal(skillId, workspaceRoot)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed resetting skill ${skillId}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed resetting skill ${skillId}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
@@ -459,22 +473,22 @@ export const apiService = {
     if (!window.electronAPI?.uninstallSkill) return { success: false, error: 'Electron API unavailable' }
     try {
       return await window.electronAPI.uninstallSkill(skillId, workspaceRoot)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed uninstalling skill ${skillId}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Skills', `Failed uninstalling skill ${skillId}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 
   async testOllamaConnection(host?: string): Promise<{ success: boolean; version?: string; modelsCount?: number; error?: string }> {
     if (!window.electronAPI?.testOllamaConnection) {
-      return { success: false, error: 'Electron API non disponibile' }
+      return { success: false, error: translate('services.electronApiUnavailable') }
     }
     try {
       logger.info('ApiService:Ollama', `Testing connection to Ollama host: ${host || 'default'}`)
       return await window.electronAPI.testOllamaConnection(host)
-    } catch (err: any) {
-      logger.error('ApiService:Ollama', `Failed testing connection to Ollama: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.error('ApiService:Ollama', `Failed testing connection to Ollama: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   },
 }

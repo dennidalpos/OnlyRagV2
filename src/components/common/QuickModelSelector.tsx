@@ -72,8 +72,8 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
         onClick={() => setIsOpen(!isOpen)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        aria-label={`${featureLabel}: ${currentModel || 'Seleziona'}`}
-        title={`${featureLabel}: ${currentModel || 'Seleziona'}${isCurrentModelUpdating ? ` • (${t('settings.updating')})` : ''}`}
+        aria-label={`${featureLabel}: ${currentModel || t('uiShell.selectModel')}`}
+        title={`${featureLabel}: ${currentModel || t('uiShell.selectModel')}${isCurrentModelUpdating ? ` • (${t('settings.updating')})` : ''}`}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-mono font-semibold border transition-all focus-ring shadow-sm ${
           isCurrentModelUpdating
             ? 'bg-amber-950/70 border-amber-500/60 text-amber-200 ring-1 ring-amber-500/50 animate-pulse'
@@ -85,7 +85,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
         ) : (
           <IconComponent className="w-3.5 h-3.5 shrink-0 text-current opacity-90" />
         )}
-        <span className="truncate max-w-[140px] font-bold">{currentModel || 'Seleziona'}</span>
+        <span className="truncate max-w-[140px] font-bold">{currentModel || t('uiShell.selectModel')}</span>
 
         {/* Status indicator dot */}
         <span
@@ -102,7 +102,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
       {isOpen && (
         <div
           role="listbox"
-          aria-label={`Lista modelli ${featureLabel}`}
+          aria-label={t('uiShell.modelListLabel', { feature: featureLabel })}
           className="absolute right-0 mt-1.5 w-72 max-w-[calc(100vw-2rem)] rounded-xl bg-slate-950 border border-slate-800 shadow-2xl shadow-black/80 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-800/60 overflow-hidden"
         >
           {/* Header */}

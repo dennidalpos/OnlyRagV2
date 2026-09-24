@@ -1,8 +1,9 @@
 import { HubSkillItem, SkillHubSource } from '../../../domain/skills/skillTypes'
-import { ISkillHubAdapter } from './hubAdapterInterface'
+import type { ISkillHubAdapter } from '../../../domain/ports/skillHubAdapterPort'
 import { webClient } from '../webClient'
 import { parseSkillFrontmatter } from '../../filesystem/skillRepository'
 import { logger } from '../../logging/logger'
+import { errorMessage } from '../../../../../shared/domain/errors/errorMessage'
 
 export class GitHubRawAdapter implements ISkillHubAdapter {
   canHandle(source: SkillHubSource): boolean {
@@ -48,8 +49,8 @@ export class GitHubRawAdapter implements ISkillHubAdapter {
       }
 
       return []
-    } catch (err: any) {
-      logger.log('ERROR', 'GitHubRawAdapter', `Error fetching GitHub raw skill: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('ERROR', 'GitHubRawAdapter', `Error fetching GitHub raw skill: ${errorMessage(err)}`)
       return []
     }
   }

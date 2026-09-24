@@ -221,10 +221,10 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
                 type="button"
                 onClick={handleCopy}
                 className="p-0.5 px-2 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-700/60 text-[10px] text-emerald-200 flex items-center gap-1 font-mono transition-all active:scale-95 cursor-pointer"
-                title="Copia Report"
+                title={t('agentTimeline.copyReport')}
               >
                 {isCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                <span>{isCopied ? 'Copiato' : 'Copia'}</span>
+                <span>{isCopied ? t('agentTimeline.copied') : t('agentTimeline.copy')}</span>
               </button>
             </div>
           </div>
@@ -255,7 +255,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
                   type="button"
                   onClick={() => onToggleExpand(log.id)}
                   className="p-0.5 rounded text-slate-400 hover:text-slate-200 focus-ring"
-                  aria-label={isExpanded ? 'Comprimi dettaglio diagnostico' : 'Espandi dettaglio diagnostico'}
+                  aria-label={isExpanded ? t('agentTimeline.collapseDiagnostic') : t('agentTimeline.expandDiagnostic')}
                 >
                   {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                 </button>
@@ -296,10 +296,10 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
                   type="button"
                   onClick={() => onOpenRightTab('terminal')}
                   className="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[10px] text-slate-300 hover:text-cyan-300 border border-slate-700/80 transition-colors focus-ring cursor-pointer"
-                  title="Apri Terminale"
-                  aria-label="Apri Terminale"
+                  title={t('agentTimeline.openTerminal')}
+                  aria-label={t('agentTimeline.openTerminal')}
                 >
-                  Terminale
+                  {t('agentTimeline.terminal')}
                 </button>
               )}
               {log.detail && (
@@ -307,8 +307,8 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
                   type="button"
                   onClick={() => onToggleExpand(log.id)}
                   className="text-slate-400 hover:text-slate-200 p-0.5 rounded focus-ring cursor-pointer"
-                  title={isExpanded ? 'Comprimi' : 'Espandi'}
-                  aria-label={isExpanded ? 'Comprimi dettaglio log' : 'Espandi dettaglio log'}
+                  title={isExpanded ? t('agentTimeline.collapse') : t('agentTimeline.expand')}
+                  aria-label={isExpanded ? t('agentTimeline.collapseLog') : t('agentTimeline.expandLog')}
                 >
                   {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                 </button>
@@ -355,7 +355,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
                 }}
                 className="font-bold text-slate-200 hover:text-cyan-300 transition-colors focus-ring cursor-pointer rounded truncate"
                 title={targetPath}
-                aria-label={`Apri file ${fileName}`}
+                aria-label={t('agentTimeline.openFileNamed', { name: fileName })}
               >
                 {fileName}
               </button>
@@ -368,18 +368,18 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
                   if (onOpenRightTab) onOpenRightTab('editor')
                 }}
                 className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors focus-ring cursor-pointer"
-                title="Apri file in Monaco Editor"
-                aria-label={`Apri ${fileName} nell'editor`}
+                title={t('agentTimeline.openInEditor')}
+                aria-label={t('agentTimeline.openNamedInEditor', { name: fileName })}
               >
-                Visualizza
+                {t('agentTimeline.view')}
               </button>
               {onOpenRightTab && (
                 <button
                   type="button"
                   onClick={() => onOpenRightTab('git_diff')}
                   className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-emerald-400 hover:text-emerald-300 transition-colors focus-ring cursor-pointer"
-                  title="Visualizza Git Diff"
-                  aria-label={`Visualizza diff di ${fileName}`}
+                  title={t('agentTimeline.viewGitDiff')}
+                  aria-label={t('agentTimeline.viewDiffOf', { name: fileName })}
                 >
                   Diff
                 </button>
@@ -389,8 +389,8 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
                   type="button"
                   onClick={() => onToggleExpand(log.id)}
                   className="text-slate-400 hover:text-slate-200 p-0.5 rounded focus-ring cursor-pointer"
-                  title={isExpanded ? 'Comprimi' : 'Espandi'}
-                  aria-label={isExpanded ? 'Comprimi dettaglio log' : 'Espandi dettaglio log'}
+                  title={isExpanded ? t('agentTimeline.collapse') : t('agentTimeline.expand')}
+                  aria-label={isExpanded ? t('agentTimeline.collapseLog') : t('agentTimeline.expandLog')}
                 >
                   {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                 </button>
@@ -426,10 +426,10 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
                   type="button"
                   onClick={() => onOpenRightTab('terminal')}
                   className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors focus-ring cursor-pointer"
-                  title="Apri Terminale"
-                  aria-label="Apri Terminale"
+                  title={t('agentTimeline.openTerminal')}
+                  aria-label={t('agentTimeline.openTerminal')}
                 >
-                  Terminale
+                  {t('agentTimeline.terminal')}
                 </button>
               )}
               {log.detail && (
@@ -437,8 +437,8 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
                   type="button"
                   onClick={() => onToggleExpand(log.id)}
                   className="text-slate-400 hover:text-slate-200 p-0.5 rounded focus-ring cursor-pointer"
-                  title={isExpanded ? 'Comprimi' : 'Espandi'}
-                  aria-label={isExpanded ? 'Comprimi output comando' : 'Espandi output comando'}
+                  title={isExpanded ? t('agentTimeline.collapse') : t('agentTimeline.expand')}
+                  aria-label={isExpanded ? t('agentTimeline.collapseCommand') : t('agentTimeline.expandCommand')}
                 >
                   {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                 </button>
@@ -475,8 +475,8 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
                 type="button"
                 onClick={() => onToggleExpand(log.id)}
                 className="text-slate-400 hover:text-slate-200 p-0.5 rounded focus-ring cursor-pointer shrink-0"
-                title={isExpanded ? 'Comprimi' : 'Espandi'}
-                aria-label={isExpanded ? 'Comprimi dettaglio ricerca' : 'Espandi dettaglio ricerca'}
+                title={isExpanded ? t('agentTimeline.collapse') : t('agentTimeline.expand')}
+                aria-label={isExpanded ? t('agentTimeline.collapseSearch') : t('agentTimeline.expandSearch')}
               >
                 {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
@@ -511,7 +511,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
                 type="button"
                 onClick={() => onToggleExpand(log.id)}
                 className="text-slate-400 hover:text-slate-200 p-0.5 rounded cursor-pointer shrink-0"
-                title={isExpanded ? 'Comprimi' : 'Espandi'}
+                title={isExpanded ? t('agentTimeline.collapse') : t('agentTimeline.expand')}
               >
                 {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
@@ -542,7 +542,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
           role={isInteractive ? 'button' : undefined}
           tabIndex={isInteractive ? 0 : undefined}
           aria-expanded={isInteractive ? isExpanded : undefined}
-          aria-label={isInteractive ? `Passo di ragionamento: ${firstLine || 'Ragionamento agente'}` : undefined}
+          aria-label={isInteractive ? t('agentTimeline.reasoningStep', { text: firstLine || t('agentTimeline.agentReasoning') }) : undefined}
           onKeyDown={(e) => {
             if (isInteractive && (e.key === 'Enter' || e.key === ' ')) {
               e.preventDefault()
@@ -558,7 +558,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
             <Bot className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
             <span className="text-[10px] font-mono text-cyan-400 font-bold uppercase shrink-0">Passo</span>
             <span className="text-[11px] text-slate-200 truncate font-medium max-w-sm" title={log.message}>
-              {firstLine || 'Ragionamento agente...'}
+              {firstLine || t('agentTimeline.agentReasoningPending')}
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">

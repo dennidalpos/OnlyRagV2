@@ -5,6 +5,7 @@ import { logger } from '../logging/logger'
 import type { CodingSession } from '../../../../shared/types'
 import { normalizeSession, sortSessionsByRecency, upsertSession } from '../../domain/sessions/sessionHistoryDomain'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const HISTORY_FILE_NAME = 'session_history.json'
 const STORE_VERSION = 1
@@ -48,8 +49,8 @@ export class SessionHistoryRepository {
         try {
           fs.mkdirSync(stateDir, { recursive: true })
           this.migrateLegacyHistoryFile(workspacePath, stateDir)
-        } catch (err: any) {
-          logger.log('WARN', 'SessionHistoryRepo', `Could not create .onlyrag/sessions dir in workspace: ${err.message}`)
+        } catch (err: unknown) {
+          logger.log('WARN', 'SessionHistoryRepo', `Could not create .onlyrag/sessions dir in workspace: ${errorMessage(err)}`)
         }
       }
       if (fs.existsSync(stateDir)) return stateDir
@@ -59,8 +60,8 @@ export class SessionHistoryRepository {
     if (!fs.existsSync(fallbackDir)) {
       try {
         fs.mkdirSync(fallbackDir, { recursive: true })
-      } catch (err: any) {
-        logger.log('WARN', 'SessionHistoryRepo', `Could not create fallback history dir: ${err.message}`)
+      } catch (err: unknown) {
+        logger.log('WARN', 'SessionHistoryRepo', `Could not create fallback history dir: ${errorMessage(err)}`)
       }
     }
     return fallbackDir
@@ -76,8 +77,8 @@ export class SessionHistoryRepository {
       if (fs.existsSync(legacyPath)) {
         fs.renameSync(legacyPath, path.join(newStateDir, HISTORY_FILE_NAME))
       }
-    } catch (err: any) {
-      logger.log('WARN', 'SessionHistoryRepo', `Legacy history migration skipped: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'SessionHistoryRepo', `Legacy history migration skipped: ${errorMessage(err)}`)
     }
   }
 
@@ -99,8 +100,8 @@ export class SessionHistoryRepository {
       const parsed = JSON.parse(raw) as SessionHistoryStore
       if (!parsed || !Array.isArray(parsed.sessions)) return []
       return parsed.sessions.map((session) => normalizeSession(session)).filter((session): session is CodingSession => session !== null)
-    } catch (err: any) {
-      logger.log('WARN', 'SessionHistoryRepo', `Failed reading session history at ${filePath}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'SessionHistoryRepo', `Failed reading session history at ${filePath}: ${errorMessage(err)}`)
       return []
     }
   }
@@ -110,8 +111,8 @@ export class SessionHistoryRepository {
     try {
       const payload: SessionHistoryStore = { version: STORE_VERSION, sessions }
       return await safeAtomicWrite(filePath, JSON.stringify(payload, null, 2))
-    } catch (err: any) {
-      logger.log('WARN', 'SessionHistoryRepo', `Failed writing session history at ${filePath}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'SessionHistoryRepo', `Failed writing session history at ${filePath}: ${errorMessage(err)}`)
       return false
     }
   }

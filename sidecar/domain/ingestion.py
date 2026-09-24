@@ -204,11 +204,10 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
     sanitized = sanitize_extracted_text(page_content)
 
     if work_item.get("normalize_with_llm"):
-        norm_model = work_item.get("normalization_model") or "llama3.2"
         sanitized = normalize_page_markdown_with_llm(
             sanitized,
             page_num=page_num,
-            model=norm_model,
+            model=work_item.get("normalization_model"),
             think=bool(work_item.get("normalization_think")),
         )
 
@@ -416,11 +415,10 @@ def extract_document_markdown(
         )
         sanitized_ocr = sanitize_extracted_text(ocr_text)
         if normalize_with_llm and sanitized_ocr:
-            norm_model = normalization_model or "llama3.2"
             sanitized_ocr = normalize_page_markdown_with_llm(
                 sanitized_ocr,
                 page_num=1,
-                model=norm_model,
+                model=normalization_model,
                 think=normalization_think,
             )
         if sanitized_ocr:

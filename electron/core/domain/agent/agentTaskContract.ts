@@ -72,3 +72,53 @@ export const planMilestoneSchema = z.object({
   fileEvidence: z.record(z.string().max(4096), z.string().max(256)).optional(),
   notes: text.optional(),
 })
+
+export const userInterviewAnswerSchema = z.object({
+  questionId: short,
+  questionText: text,
+  selectedOption: text,
+  isCustom: z.boolean().optional(),
+  provenance: z.enum(['explicit', 'accepted_recommendation', 'unconfirmed_assumption']).optional(),
+})
+
+/**
+ * Complete `AgentPlan` as the renderer sends it back for a revision (`agent:plan-generate`).
+ * Unknown keys are stripped; list fields a legacy plan may lack default to empty, because plan
+ * generation reads `milestones` and `retainedEvidence` directly.
+ */
+export const agentPlanSchema = z.object({
+  formatVersion: z.literal(2),
+  id: short,
+  version: z.number().int().nonnegative(),
+  prompt: text,
+  originalPrompt: text.optional(),
+  interviewAnswers: z.array(userInterviewAnswerSchema).max(50).optional(),
+  objective: text,
+  decisions: z
+    .array(
+      z.object({
+        id: short,
+        statement: text,
+        source: z.enum(['explicit_user', 'accepted_recommendation', 'assumption']),
+        rationale: text.optional(),
+      }),
+    )
+    .max(200)
+    .default([]),
+  retainedEvidence: z
+    .array(z.object({ interventionId: short, summary: text, verificationReferences: z.array(text).max(100).default([]) }))
+    .max(200)
+    .default([]),
+  supersededWork: z
+    .array(z.object({ interventionId: short, reason: text }))
+    .max(200)
+    .default([]),
+  status: z.enum(['idle', 'generating', 'ready', 'approved', 'rejected', 'error', 'cancelled']),
+  errorPhase: z.enum(['interview', 'planning']).optional(),
+  errorMessage: text.optional(),
+  createdAt: short,
+  baseStepOffset: z.number().int().nonnegative().optional(),
+  milestones: z.array(planMilestoneSchema).max(100).default([]),
+  approvalError: text.optional(),
+  capabilityProfile: capabilityProfileSchema.optional(),
+})

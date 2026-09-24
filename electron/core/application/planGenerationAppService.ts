@@ -6,8 +6,9 @@ import { compilePlanMilestones } from '../../../shared/domain/agent/planCompilat
 import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { collectProjectPlanningFacts } from './projectPlanningFacts'
 import { logger } from '../infrastructure/logging/logger'
-import { getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
+import { hardwareProbe } from '../infrastructure/diagnostics/hardwareProbe'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import { noConfiguredModelMessage, resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
 import type { AgentPlan, AppSettings, PlanDecision, PlanEvidence, PlanGenerationResult, UserInterviewAnswer } from '../../../shared/types'
 import {
   planningPhaseResponseSchema,
@@ -20,6 +21,7 @@ import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/con
 import { resolveOllamaThinkingPreference } from '../../../shared/domain/agent/ollamaThinkingPolicy'
 import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/agent/codingAgentDebugPolicy'
 import { ollamaAppService } from './ollamaAppService'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 const PLAN_SYSTEM_PROMPT = `Create a short, sequential coding plan in the requested JSON shape.
 Use one intervention for a small fix and normally three to five for medium work; never exceed fifteen.
@@ -142,9 +144,21 @@ function sanitizeVerificationCommands(
 
 export class PlanGenerationAppService {
   async generatePlanText(req: PlanGenerationRequest): Promise<PlanGenerationResult> {
-    const model = req.model || req.settings.codingModel || req.settings.defaultModel || 'qwen2.5-coder:7b'
-    const cachedGpu = getCachedGpuInfo()
-    const memInfo = getMemoryInfo()
+    const model = resolveConfiguredModel('coding', req.settings, req.model)
+    if (!model) {
+      const previous = req.previousPlan
+      return {
+        status: 'error',
+        objective: previous?.objective || '',
+        decisions: [],
+        retainedEvidence: [],
+        milestones: [],
+        supersededWork: [],
+        error: noConfiguredModelMessage('coding'),
+      }
+    }
+    const cachedGpu = hardwareProbe.getCachedGpuInfo()
+    const memInfo = hardwareProbe.getMemoryInfo()
     const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
       hasGpu: cachedGpu?.hasNvidiaGpu,
       vramTotalMB: cachedGpu?.vramTotalMB,
@@ -207,8 +221,8 @@ export class PlanGenerationAppService {
       } else {
         generationError = response.error
       }
-    } catch (error: any) {
-      generationError = error.message || 'Plan generation failed'
+    } catch (error: unknown) {
+      generationError = errorMessage(error) || 'Plan generation failed'
     }
 
     if (generationError) logger.log('WARN', 'PlanGenerationAppService', `Plan generation failed: ${generationError}`)

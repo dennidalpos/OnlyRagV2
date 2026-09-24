@@ -1,5 +1,5 @@
 import { HubSkillItem, SkillHubSource } from '../../domain/skills/skillTypes'
-import { ISkillHubAdapter } from './hubAdapters/hubAdapterInterface'
+import type { ISkillHubAdapter } from '../../domain/ports/skillHubAdapterPort'
 import { CuratedHubAdapter } from './hubAdapters/curatedHubAdapter'
 import { AnthropicSkillsAdapter } from './hubAdapters/anthropicSkillsAdapter'
 import { LobeHubAdapter } from './hubAdapters/lobeHubAdapter'
@@ -8,6 +8,7 @@ import { JsonCatalogAdapter } from './hubAdapters/jsonCatalogAdapter'
 import { GitHubRawAdapter } from './hubAdapters/githubRawAdapter'
 import { webClient } from './webClient'
 import { logger } from '../logging/logger'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 interface CachedCatalogEntry {
   timestamp: number
@@ -61,8 +62,8 @@ export class SkillHubClient {
             fetchedSkills = skills
             break
           }
-        } catch (err: any) {
-          logger.log('WARN', 'SkillHubClient', `Adapter failed for ${source.name}: ${err.message}`)
+        } catch (err: unknown) {
+          logger.log('WARN', 'SkillHubClient', `Adapter failed for ${source.name}: ${errorMessage(err)}`)
         }
       }
     }
@@ -111,9 +112,9 @@ export class SkillHubClient {
       }
 
       return { success: true, content: res.content }
-    } catch (err: any) {
-      logger.log('ERROR', 'SkillHubClient', `Exception fetching skill from ${url}: ${err.message}`)
-      return { success: false, error: err.message }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SkillHubClient', `Exception fetching skill from ${url}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
     }
   }
 }

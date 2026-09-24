@@ -87,6 +87,10 @@ export function registerSidecarIpcHandlers() {
     return sidecarAppService.listIngestedDocuments()
   })
 
+  ipcMain.handle('ingest:get', async (_, docId: string) => {
+    return sidecarAppService.getIngestedDocument(docId)
+  })
+
   ipcMain.handle('ingest:delete', async (_, docId: string) => {
     return sidecarAppService.deleteDocument(docId)
   })

@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { logger } from '../logging/logger'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 /** Declaration files above this are re-export barrels or bundled monsters; neither repays reading further. */
 const MAX_DECLARATION_BYTES = 512 * 1024
@@ -73,8 +74,8 @@ export function readPackageExports(workspacePath: string, packageName: string): 
     if (fs.statSync(entryPoint).size > MAX_DECLARATION_BYTES) return []
 
     return extractExportedNames(fs.readFileSync(entryPoint, 'utf-8')).slice(0, MAX_NAMES)
-  } catch (err: any) {
-    logger.log('WARN', 'PackageExportScanner', `Could not read exports of ${packageName}: ${err.message}`)
+  } catch (err: unknown) {
+    logger.log('WARN', 'PackageExportScanner', `Could not read exports of ${packageName}: ${errorMessage(err)}`)
     return []
   }
 }
@@ -99,8 +100,8 @@ export function readLocalModuleExports(workspacePath: string, importingFile: str
     const names = extractExportedNames(source)
     if (/\bexport\s+default\b/.test(source)) names.unshift('default')
     return names.slice(0, MAX_NAMES)
-  } catch (err: any) {
-    logger.log('WARN', 'PackageExportScanner', `Could not read local exports for ${specifier}: ${err.message}`)
+  } catch (err: unknown) {
+    logger.log('WARN', 'PackageExportScanner', `Could not read local exports for ${specifier}: ${errorMessage(err)}`)
     return []
   }
 }

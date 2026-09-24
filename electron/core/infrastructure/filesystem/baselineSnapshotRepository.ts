@@ -4,6 +4,7 @@ import path from 'node:path'
 import { logger } from '../logging/logger'
 import { baselineSnapshotSchema, type BaselineSnapshot } from '../../domain/sessions/sessionBaselineContract'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const SNAPSHOT_FILE_PREFIX = '.baseline_snapshot_'
 const SNAPSHOT_FILE_SUFFIX = '.json'
@@ -34,8 +35,8 @@ export class BaselineSnapshotRepository {
     try {
       const filePath = this.getSnapshotPath(parsed.data.snapshotId, parsed.data.workspaceRoot)
       return await safeAtomicWrite(filePath, JSON.stringify(parsed.data, null, 2))
-    } catch (err: any) {
-      logger.log('WARN', 'BaselineSnapshotRepo', `Failed saving snapshot ${parsed.data.snapshotId}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'BaselineSnapshotRepo', `Failed saving snapshot ${parsed.data.snapshotId}: ${errorMessage(err)}`)
       return false
     }
   }
@@ -51,8 +52,8 @@ export class BaselineSnapshotRepository {
         return null
       }
       return parsed.data
-    } catch (err: any) {
-      logger.log('WARN', 'BaselineSnapshotRepo', `Failed loading snapshot ${snapshotId}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'BaselineSnapshotRepo', `Failed loading snapshot ${snapshotId}: ${errorMessage(err)}`)
       return null
     }
   }
@@ -62,8 +63,8 @@ export class BaselineSnapshotRepository {
       const filePath = this.getSnapshotPath(snapshotId, workspaceRoot)
       if (fs.existsSync(filePath)) await fs.promises.unlink(filePath)
       return true
-    } catch (err: any) {
-      logger.log('WARN', 'BaselineSnapshotRepo', `Failed clearing snapshot ${snapshotId}: ${err.message}`)
+    } catch (err: unknown) {
+      logger.log('WARN', 'BaselineSnapshotRepo', `Failed clearing snapshot ${snapshotId}: ${errorMessage(err)}`)
       return false
     }
   }

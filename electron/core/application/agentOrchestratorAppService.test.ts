@@ -21,6 +21,9 @@ import type { AppSettings } from '../../../shared/types'
 // The production fallback is fail-closed; these loop tests exercise tool execution, so they opt in.
 const TOOL_ENABLED_SETTINGS: AppSettings = {
   ...buildDefaultAgentSettings(),
+  // The fallback settings configure no model; these tests run on an installed one.
+  defaultModel: 'llama3.2',
+  codingModel: 'llama3.2',
   allowTerminalExecution: true,
   allowFileModifications: true,
   capabilityPolicyMode: undefined,

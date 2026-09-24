@@ -1,10 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   MessageSquare,
-  Bot,
-  User,
   FileText,
-  Copy,
   Check,
   RefreshCw,
   RotateCcw,
@@ -28,10 +25,12 @@ import { AppSettings, DiagnosticsData } from '../../types'
 import { PromptConfigurationModal } from '../settings/PromptConfigurationModalLazy'
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { useChatEngine } from '../../hooks/useChatEngine'
+import { ChatMessageItem } from './ChatMessageItem'
 import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
 import { useResizablePanel } from '../../hooks/useResizablePanel'
+import { resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
 
 interface ChatViewProps {
   settings: AppSettings
@@ -46,7 +45,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
     const c = useChatEngine(settings, diagnostics)
     const toast = useToast()
     const downloadProgress = useModelDownloadProgress()
-    const activeChatModel = settings.chatModel || settings.defaultModel || 'llama3.2'
+    const activeChatModel = resolveConfiguredModel('chat', settings)
     const isCurrentChatModelUpdating = downloadProgress.isDownloading && downloadProgress.modelName === activeChatModel
     const {
       width: sidebarWidth,
@@ -59,7 +58,22 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
     const inputRef = useRef<HTMLInputElement>(null)
     const [showToolsMenu, setShowToolsMenu] = useState(false)
     const [showResetConfirm, setShowResetConfirm] = useState(false)
-    const [copiedCitationIdx, setCopiedCitationIdx] = useState<string | null>(null)
+    const [copiedCitation, setCopiedCitation] = useState<{ msgId: string; index: number } | null>(null)
+    // Stable handlers keep the memoized ChatMessageItem rows from re-rendering on every stream flush.
+    const copyContextRef = useRef({ c, toast, t })
+    copyContextRef.current = { c, toast, t }
+    const handleCopyMessage = useCallback((msgId: string, text: string) => {
+      const { c: engine, toast: notify, t: translate } = copyContextRef.current
+      engine.handleCopyMessage(msgId, text)
+      notify.info(translate('chat.msgCopied'))
+    }, [])
+    const handleCopyCitation = useCallback((msgId: string, index: number, snippet: string) => {
+      const { toast: notify, t: translate } = copyContextRef.current
+      navigator.clipboard.writeText(snippet)
+      setCopiedCitation({ msgId, index })
+      notify.info(translate('chat.citationCopied'))
+      setTimeout(() => setCopiedCitation(null), 2000)
+    }, [])
     const [sidebarTab, setSidebarTab] = useState<'context' | 'history'>('context')
     const [editingConvId, setEditingConvId] = useState<string | null>(null)
     const [editingTitle, setEditingTitle] = useState('')
@@ -296,7 +310,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                     title={t('chat.newChat')}
                   >
                     <Plus className="w-3 h-3" />
-                    <span>Nuova</span>
+                    <span>{t('uiShell.newShort')}</span>
                   </button>
                 </div>
 
@@ -454,10 +468,10 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                   type="button"
                   onClick={() => c.scrollToBottom(true)}
                   className="sticky top-2 ml-auto z-20 px-3 py-1.5 rounded-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs shadow-xl flex items-center gap-1.5 transition-all active:scale-95"
-                  aria-label="Scorri fino in fondo"
+                  aria-label={t('chat.scrollToBottom')}
                 >
                   <ArrowDown className="w-3.5 h-3.5" />
-                  <span>In fondo</span>
+                  <span>{t('chat.scrollToBottomShort')}</span>
                 </button>
               )}
               {c.messages.length === 0 ? (
@@ -487,126 +501,16 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                   </div>
                 </div>
               ) : (
-                c.messages.map((msg) => {
-                  const isUser = msg.sender === 'user'
-                  const isCopied = c.copiedMsgId === msg.id
-
-                  return (
-                    <div key={msg.id} className={`flex gap-3 max-w-4xl ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}>
-                      {/* Avatar Icon */}
-                      <div
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
-                          isUser ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300' : 'bg-slate-900 border-slate-800 text-slate-400'
-                        }`}
-                      >
-                        {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4 text-cyan-400" />}
-                      </div>
-
-                      {/* Message Bubble */}
-                      <div className={`space-y-2 max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
-                        <div
-                          className={`p-4 rounded-2xl text-xs leading-relaxed border select-text ${
-                            isUser
-                              ? 'bg-cyan-950/80 border-cyan-800/80 text-cyan-100 rounded-tr-sm shadow-md shadow-cyan-950/30'
-                              : 'bg-slate-900/90 border-slate-800 text-slate-200 rounded-tl-sm shadow-md shadow-slate-950/40'
-                          }`}
-                        >
-                          {/* Message Header (Timestamp & Copy) */}
-                          <div className="flex items-center justify-between gap-4 mb-2 pb-1.5 border-b border-slate-800/60 text-[10px] text-slate-400">
-                            <span className="font-semibold uppercase tracking-wider">
-                              {isUser ? 'Tu' : 'Assistente AI RAG'} • {msg.timestamp}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                c.handleCopyMessage(msg.id, msg.text)
-                                toast.info(t('chat.msgCopied'))
-                              }}
-                              className="p-1 hover:text-slate-200 rounded transition-colors focus-ring cursor-pointer"
-                              title={t('chat.copyMsg')}
-                              aria-label={t('chat.copyMsg')}
-                            >
-                              {isCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                            </button>
-                          </div>
-
-                          {/* Message Text / Streaming State */}
-                          {msg.text ? (
-                            <div className="whitespace-pre-wrap font-sans text-slate-200 selection:bg-cyan-500/30 selection:text-cyan-100">{msg.text}</div>
-                          ) : (
-                            <div className="flex items-center gap-2 text-cyan-400 animate-pulse py-1">
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              <span className="text-[11px] font-medium">{t('chat.generating')}</span>
-                            </div>
-                          )}
-
-                          {/* Citations and Source Verification Cards */}
-                          {msg.sources &&
-                            msg.sources.length > 0 &&
-                            (() => {
-                              const uniqueDocNames = Array.from(new Set(msg.sources.map((s) => s.docName || 'Documento')))
-                              const uniqueDocsCount = uniqueDocNames.length
-                              const chunksCount = msg.sources.length
-                              const headerLabel =
-                                uniqueDocsCount === 1
-                                  ? `${chunksCount} ${chunksCount === 1 ? 'estratto rilevante' : 'estratti rilevanti'} da "${uniqueDocNames[0]}"`
-                                  : `${chunksCount} estratti da ${uniqueDocsCount} documenti`
-
-                              return (
-                                <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-2">
-                                  <div className="text-[11px] font-bold text-cyan-300 flex items-center justify-between">
-                                    <div className="flex items-center gap-1.5">
-                                      <Sparkles className="w-3 h-3 text-cyan-400" />
-                                      <span>Fonti &amp; Citazioni ({headerLabel})</span>
-                                    </div>
-                                  </div>
-                                  <div className="grid grid-cols-1 gap-1.5">
-                                    {msg.sources.map((src, idx) => (
-                                      <div key={idx} className="p-2 bg-slate-950/70 border border-slate-800/80 rounded-xl space-y-1">
-                                        <div className="flex items-center justify-between text-[10px]">
-                                          <div className="flex items-center gap-1.5 truncate max-w-[280px]">
-                                            <span className="px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-800/60 text-cyan-300 font-mono text-[9px] font-bold">
-                                              Estratto {idx + 1}
-                                            </span>
-                                            <span className="font-semibold text-slate-300 truncate">{src.docName}</span>
-                                            {src.sectionHeader && <span className="text-slate-400 text-[9px] truncate">({src.sectionHeader})</span>}
-                                          </div>
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-cyan-400 font-mono text-[9px] px-1.5 py-0.2 bg-cyan-950/80 border border-cyan-800/50 rounded-full">
-                                              {t('chat.relevance')}: {(src.score * 100).toFixed(0)}%
-                                            </span>
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                navigator.clipboard.writeText(src.snippet)
-                                                setCopiedCitationIdx(`${msg.id}-${idx}`)
-                                                toast.info(t('chat.citationCopied'))
-                                                setTimeout(() => setCopiedCitationIdx(null), 2000)
-                                              }}
-                                              className="p-0.5 text-slate-400 hover:text-slate-200 transition-colors focus-ring rounded cursor-pointer"
-                                              title={t('chat.copyCitation')}
-                                              aria-label={t('chat.copyCitation')}
-                                            >
-                                              {copiedCitationIdx === `${msg.id}-${idx}` ? (
-                                                <Check className="w-2.5 h-2.5 text-emerald-400" />
-                                              ) : (
-                                                <Copy className="w-2.5 h-2.5" />
-                                              )}
-                                            </button>
-                                          </div>
-                                        </div>
-                                        <p className="text-[10px] text-slate-400 font-sans italic line-clamp-2 leading-relaxed">"{src.snippet}"</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )
-                            })()}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })
+                c.messages.map((msg) => (
+                  <ChatMessageItem
+                    key={msg.id}
+                    msg={msg}
+                    isCopied={c.copiedMsgId === msg.id}
+                    copiedCitationIndex={copiedCitation?.msgId === msg.id ? copiedCitation.index : null}
+                    onCopyMessage={handleCopyMessage}
+                    onCopyCitation={handleCopyCitation}
+                  />
+                ))
               )}
               <div ref={c.chatBottomRef} />
             </div>
@@ -615,12 +519,12 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
             {c.showMentions && c.filteredMentions.length > 0 && (
               <div
                 role="listbox"
-                aria-label="Document mentions"
+                aria-label={t('chat.mentionTitle')}
                 className="absolute bottom-20 left-6 z-30 w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden font-sans animate-in fade-in"
               >
                 <div className="p-2 border-b border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                   <FileText className="w-3 h-3 text-cyan-400" />
-                  <span>Collega Contesto Documento (@)</span>
+                  <span>{t('chat.mentionTitle')}</span>
                 </div>
                 <div className="max-h-48 overflow-y-auto p-1 space-y-1">
                   {c.filteredMentions.map((doc) => (
@@ -823,7 +727,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                       )}
                       <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 bg-slate-900/80 border border-slate-800 rounded-xl text-[10px] font-mono text-slate-300">
                         <Sparkles className="w-3 h-3 text-cyan-400" />
-                        <span className="truncate max-w-[90px]">{settings.chatModel || settings.defaultModel || 'llama3.2'}</span>
+                        <span className="truncate max-w-[90px]">{activeChatModel || t('common.noModelConfigured')}</span>
                       </div>
 
                       {/* Send or Stop Generation Button */}

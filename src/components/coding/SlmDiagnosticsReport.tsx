@@ -3,12 +3,15 @@ import { AlertTriangle, Info, ShieldAlert, FileSearch, FileJson, CheckCircle2, S
 import type { SlmLogDiagnosticReport } from '../../types'
 import { SlmDiagnosticsStatCard } from './SlmDiagnosticsStatCard'
 import { SlmDiagnosticsAnomalyRow } from './SlmDiagnosticsAnomalyRow'
+import { useTranslation } from '../../i18n'
 
 interface SlmDiagnosticsReportProps {
   lastReport: SlmLogDiagnosticReport
 }
 
 export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ lastReport }) => {
+  const { t, language } = useTranslation()
+  const locale = language === 'en' ? 'en-US' : 'it-IT'
   const [severityFilter, setSeverityFilter] = useState<'ALL' | 'CRITICAL' | 'ERROR' | 'WARNING'>('ALL')
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [isCopied, setIsCopied] = useState<boolean>(false)
@@ -38,38 +41,38 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
     try {
       const mdLines: string[] = [
         `# SLM Diagnostics Report — OnlyRag V2`,
-        `Data Generazione: ${new Date().toLocaleString('it-IT')}`,
+        t('slmDiagnostics.generatedAt', { date: new Date().toLocaleString(locale) }),
         ``,
-        `## 📊 Statistiche`,
-        `- **File Scansionati**: ${lastReport.scanned_files.length}`,
-        `- **Righe Analizzate**: ${lastReport.total_lines_scanned.toLocaleString('it-IT')}`,
-        `- **Anomalie Totali**: ${lastReport.anomalies.length}`,
-        `- **Critiche / Errori**: ${criticalCount} / ${errorCount}`,
-        `- **Stato Generale**: ${lastReport.has_critical ? 'CRITICO' : lastReport.anomalies.length > 0 ? 'ATTENZIONE' : 'PULITO'}`,
+        `## ${t('slmDiagnostics.statistics')}`,
+        `- **${t('slmDiagnostics.scannedFiles')}**: ${lastReport.scanned_files.length}`,
+        `- **${t('slmDiagnostics.scannedLines')}**: ${lastReport.total_lines_scanned.toLocaleString(locale)}`,
+        `- **${t('slmDiagnostics.totalAnomalies')}**: ${lastReport.anomalies.length}`,
+        `- **${t('slmDiagnostics.criticalErrors')}**: ${criticalCount} / ${errorCount}`,
+        `- **${t('slmDiagnostics.overallStatus')}**: ${lastReport.has_critical ? t('slmDiagnostics.statusCritical') : lastReport.anomalies.length > 0 ? t('slmDiagnostics.statusWarning') : t('slmDiagnostics.statusClean')}`,
         ``,
-        `## 📝 Riepilogo`,
+        `## ${t('slmDiagnostics.summary')}`,
         lastReport.summary,
         ``,
-        `## 🚨 Dettaglio Anomalie (${lastReport.anomalies.length})`,
+        `## ${t('slmDiagnostics.anomalyDetails', { count: lastReport.anomalies.length })}`,
       ]
 
       if (lastReport.anomalies.length === 0) {
-        mdLines.push(`_Nessuna anomalia rilevata nei log._`)
+        mdLines.push(t('slmDiagnostics.noAnomaliesReport'))
       } else {
         lastReport.anomalies.forEach((a, idx) => {
           mdLines.push(`### ${idx + 1}. [${a.severity}] ${a.anomaly_type} (x${a.count})`)
-          mdLines.push(`- **File**: \`${a.log_file}\` (Riga: ${a.line_number})`)
+          mdLines.push(`- **File**: \`${a.log_file}\` (${t('slmDiagnostics.line')}: ${a.line_number})`)
           if (a.snippet) {
             mdLines.push(`- **Snippet**: \`${a.snippet}\``)
           }
           if (a.remediation) {
-            mdLines.push(`- **Suggerimento**: ${a.remediation}`)
+            mdLines.push(`- **${t('slmDiagnostics.suggestion')}**: ${a.remediation}`)
           }
           mdLines.push(``)
         })
       }
 
-      mdLines.push(`## 📁 File di Log Scansionati`)
+      mdLines.push(`## 📁 ${t('slmDiagnostics.scannedLogFiles')}`)
       lastReport.scanned_files.forEach((f) => mdLines.push(`- \`${f}\``))
 
       await navigator.clipboard.writeText(mdLines.join('\n'))
@@ -85,25 +88,25 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
       {/* ── Summary stat row ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <SlmDiagnosticsStatCard
-          label="File Scansionati"
+          label={t('slmDiagnostics.scannedFiles')}
           value={lastReport.scanned_files.length}
           color="text-slate-300"
           icon={<FileSearch className="w-4 h-4" />}
         />
         <SlmDiagnosticsStatCard
-          label="Righe Analizzate"
-          value={lastReport.total_lines_scanned.toLocaleString('it-IT')}
+          label={t('slmDiagnostics.scannedLines')}
+          value={lastReport.total_lines_scanned.toLocaleString(locale)}
           color="text-slate-300"
           icon={<ScanLine className="w-4 h-4" />}
         />
         <SlmDiagnosticsStatCard
-          label="Anomalie Totali"
+          label={t('slmDiagnostics.totalAnomalies')}
           value={lastReport.anomalies.length}
           color={lastReport.anomalies.length > 0 ? 'text-amber-300' : 'text-emerald-300'}
           icon={<AlertTriangle className="w-4 h-4" />}
         />
         <SlmDiagnosticsStatCard
-          label="Critici / Errori"
+          label={t('slmDiagnostics.criticalErrors')}
           value={`${criticalCount} / ${errorCount}`}
           color={criticalCount > 0 ? 'text-red-300' : errorCount > 0 ? 'text-amber-300' : 'text-emerald-300'}
           icon={<ShieldAlert className="w-4 h-4" />}
@@ -129,7 +132,7 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
             <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
           )}
           <div className="space-y-0.5 min-w-0">
-            <div className="text-xs font-bold text-slate-200">Riepilogo Analisi Diagnostica</div>
+            <div className="text-xs font-bold text-slate-200">{t('slmDiagnostics.analysisSummary')}</div>
             <div className="text-[11px] font-mono text-slate-300 leading-relaxed break-words">{lastReport.summary}</div>
           </div>
         </div>
@@ -138,17 +141,17 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
           type="button"
           onClick={handleCopyMarkdownReport}
           className="px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-slate-100 text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-sm active:scale-95"
-          title="Copia report diagnostico completo in Markdown"
+          title={t('slmDiagnostics.copyReportHint')}
         >
           {isCopied ? (
             <>
               <Check className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-emerald-400 font-semibold">Copiato!</span>
+              <span className="text-emerald-400 font-semibold">{t('slmDiagnostics.copied')}</span>
             </>
           ) : (
             <>
               <Copy className="w-3.5 h-3.5 text-slate-400" />
-              <span>Copia Report MD</span>
+              <span>{t('slmDiagnostics.copyReport')}</span>
             </>
           )}
         </button>
@@ -159,7 +162,7 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
         <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/90 space-y-3">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
             {/* Filter Pills */}
-            <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Filtri per severity">
+            <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label={t('slmDiagnostics.severityFilters')}>
               <button
                 type="button"
                 onClick={() => setSeverityFilter('ALL')}
@@ -169,7 +172,7 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
                     : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200'
                 }`}
               >
-                Tutti ({lastReport.anomalies.length})
+                {t('slmDiagnostics.all', { count: lastReport.anomalies.length })}
               </button>
 
               {criticalCount > 0 && (
@@ -222,7 +225,7 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filtra anomalie o file..."
+                placeholder={t('slmDiagnostics.filterPlaceholder')}
                 className="w-full pl-8 pr-3 py-1 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono text-slate-200 placeholder-slate-500 focus-ring"
               />
             </div>
@@ -240,7 +243,9 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
                 Anomalie Visualizzate ({filteredAnomalies.length} di {lastReport.anomalies.length})
               </span>
             </div>
-            {filteredAnomalies.length < lastReport.anomalies.length && <span className="text-[10px] text-cyan-400 font-mono">Filtro attivo</span>}
+            {filteredAnomalies.length < lastReport.anomalies.length && (
+              <span className="text-[10px] text-cyan-400 font-mono">{t('slmDiagnostics.filterActive')}</span>
+            )}
           </div>
 
           {filteredAnomalies.map((anomaly, i) => (
@@ -250,14 +255,14 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
           {filteredAnomalies.length === 0 && (
             <div className="p-6 rounded-xl bg-slate-950/80 border border-slate-800 text-center text-xs font-mono text-slate-400 space-y-1">
               <Filter className="w-5 h-5 text-slate-600 mx-auto" />
-              <div>Nessuna anomalia corrisponde ai criteri di ricerca selezionati.</div>
+              <div>{t('slmDiagnostics.noMatches')}</div>
             </div>
           )}
         </div>
       ) : (
         <div className="flex items-center justify-center gap-2.5 py-8 text-emerald-400 font-mono text-sm bg-emerald-950/20 border border-emerald-800/40 rounded-2xl animate-in fade-in">
           <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-          <span>Nessuna anomalia rilevata — tutti i log di sistema sono puliti</span>
+          <span>{t('slmDiagnostics.allClean')}</span>
         </div>
       )}
 
@@ -266,9 +271,9 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
         <div className="flex items-center justify-between pb-2 border-b border-slate-800/80 text-xs font-bold text-slate-200">
           <div className="flex items-center gap-2">
             <FileJson className="w-4 h-4 text-cyan-400" />
-            <span>File di Log Scansionati</span>
+            <span>{t('slmDiagnostics.scannedLogFiles')}</span>
           </div>
-          <span className="text-[10px] font-mono text-slate-400">{lastReport.scanned_files.length} file</span>
+          <span className="text-[10px] font-mono text-slate-400">{t('slmDiagnostics.filesCount', { count: lastReport.scanned_files.length })}</span>
         </div>
         <div className="space-y-1.5 max-h-36 overflow-y-auto">
           {lastReport.scanned_files.map((filePath) => (
@@ -281,9 +286,7 @@ export const SlmDiagnosticsReport: React.FC<SlmDiagnosticsReportProps> = ({ last
               <span className="truncate">{filePath}</span>
             </div>
           ))}
-          {lastReport.scanned_files.length === 0 && (
-            <div className="text-[11px] text-slate-400 font-mono italic">Nessun file di log trovato nei percorsi scansionati.</div>
-          )}
+          {lastReport.scanned_files.length === 0 && <div className="text-[11px] text-slate-400 font-mono italic">{t('uiShell.noLogFiles')}</div>}
         </div>
       </div>
     </div>

@@ -47,6 +47,27 @@ describe('git inspection tools', () => {
     expect(run).toHaveBeenCalledWith('workspace', ['diff', '--staged', '--', 'workspace/app.ts'], 15000)
   })
 
+  it('keeps the first part of a diff that overflows the process buffer and says it was cut', () => {
+    const run = vi.fn(() => {
+      throw Object.assign(new Error('spawnSync git ENOBUFS'), { code: 'ENOBUFS', stdout: `diff --git a/big.ts b/big.ts\n${'+x\n'.repeat(5000)}` })
+    })
+    const result = executeGitDiff('workspace', undefined, false, null, run)
+    expect(result.outcome).toBe('success')
+    expect(result.outputForHistory).toContain('diff --git a/big.ts b/big.ts')
+    expect(result.outputForHistory).toContain('[DIFF TRUNCATED')
+    expect(result.outputForHistory.length).toBeLessThan(8500)
+  })
+
+  it('still reports other git failures', () => {
+    const run = vi.fn(() => {
+      throw Object.assign(new Error('not a git repository'), { code: 128 })
+    })
+    expect(executeGitDiff('workspace', undefined, false, null, run)).toMatchObject({
+      outcome: 'failure',
+      outputForHistory: 'Git Diff Error: not a git repository',
+    })
+  })
+
   it('passes shell metacharacters in a path as one literal argument', () => {
     const run = vi.fn(() => '')
     const hostile = 'workspace/a" & calc & ".ts'

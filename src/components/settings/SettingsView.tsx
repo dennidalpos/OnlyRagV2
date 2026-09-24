@@ -422,7 +422,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                     onClick={onRefreshDiagnostics}
                     className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold hover:underline cursor-pointer"
                   >
-                    <Zap className="w-3 h-3" /> Aggiorna Stato Modelli
+                    <Zap className="w-3 h-3" /> {t('uiShell.refreshModels')}
                   </button>
                 </div>
               </div>
@@ -472,15 +472,15 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                               </span>
                             ) : !isInstalled ? (
                               <span className="px-2 py-0.5 rounded-full text-[9px] font-mono text-amber-300 bg-amber-950/60 border border-amber-700/60 shrink-0">
-                                Non installato
+                                {t('uiShell.modelNotInstalled')}
                               </span>
                             ) : usedByModules.length > 0 ? (
                               <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 shrink-0">
-                                In uso
+                                {t('uiShell.modelInUse')}
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded-full text-[9px] font-mono text-slate-400 bg-slate-950 border border-slate-800 shrink-0">
-                                Su Disco
+                                {t('uiShell.modelOnDisk')}
                               </span>
                             )}
                           </div>
@@ -608,13 +608,13 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                             <button
                               type="button"
                               onClick={() => s.handleUnloadModel(modelName)}
-                              title="Scarica il modello dalla memoria VRAM/RAM"
+                              title={t('uiShell.unloadModelHint')}
                               className="px-2.5 py-1 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/50 text-amber-300 text-[10px] font-semibold rounded-lg transition-all focus-ring flex items-center gap-1 cursor-pointer"
                             >
-                              <PowerOff className="w-3 h-3" /> Scarica RAM
+                              <PowerOff className="w-3 h-3" /> {t('uiShell.unloadModel')}
                             </button>
                           ) : isInstalled ? (
-                            <span className="text-[10px] text-slate-400 font-mono">Modello pronto</span>
+                            <span className="text-[10px] text-slate-400 font-mono">{t('uiShell.modelReady')}</span>
                           ) : (
                             <span className="text-[10px] text-amber-300 font-mono">Usa il campo sopra per scaricarlo</span>
                           )}

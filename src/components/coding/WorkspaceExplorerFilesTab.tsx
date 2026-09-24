@@ -1,6 +1,7 @@
 import React from 'react'
 import { WorkspaceFile } from '../../types'
 import { FileTreeNode } from './FileExplorerTree'
+import { useTranslation } from '../../i18n'
 
 interface WorkspaceExplorerFilesTabProps {
   files: WorkspaceFile[]
@@ -21,16 +22,17 @@ export const WorkspaceExplorerFilesTab: React.FC<WorkspaceExplorerFilesTabProps>
   onTogglePinFile,
   onAddProject,
 }) => {
+  const { t } = useTranslation()
   if (files.length === 0) {
     return (
       <div className="p-4 text-center space-y-2 text-slate-400 text-xs font-sans">
-        <p>Nessun file aperto o cartella non selezionata.</p>
+        <p>{t('planInterview.noFiles')}</p>
         <button
           type="button"
           onClick={onAddProject}
           className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/40 text-slate-200 hover:text-cyan-300 font-semibold text-xs rounded-xl transition-all shadow-sm focus-ring cursor-pointer"
         >
-          Seleziona Cartella Progetto
+          {t('planInterview.selectProjectFolder')}
         </button>
       </div>
     )

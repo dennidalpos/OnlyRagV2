@@ -76,7 +76,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
           </div>
 
           <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center">
-            <span className="text-sky-300 font-medium">🌐 Traduzione:</span>
+            <span className="text-sky-300 font-medium">{t('wizardModels.summaryTranslation')}</span>
             <span className="font-mono text-slate-200 font-semibold">{selectedTranslation || t('common.none')}</span>
           </div>
 
@@ -86,20 +86,20 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
           </div>
 
           <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center">
-            <span className="text-purple-300 font-medium">🧠 Embedding Vettoriale:</span>
+            <span className="text-purple-300 font-medium">{t('wizardModels.summaryEmbedding')}</span>
             <span className="font-mono text-slate-200 font-semibold">{selectedEmbedding || t('common.none')}</span>
           </div>
 
           {selectedMedical && (
             <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center">
-              <span className="text-rose-300 font-medium">🏥 Clinico / Medico:</span>
+              <span className="text-rose-300 font-medium">{t('wizardModels.summaryMedical')}</span>
               <span className="font-mono text-slate-200 font-semibold">{selectedMedical}</span>
             </div>
           )}
 
           {selectedLegal && (
             <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center">
-              <span className="text-amber-300 font-medium">⚖️ Legale / Normativo:</span>
+              <span className="text-amber-300 font-medium">{t('wizardModels.summaryLegal')}</span>
               <span className="font-mono text-slate-200 font-semibold">{selectedLegal}</span>
             </div>
           )}
@@ -144,7 +144,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
           {isCheckingDisk ? (
             <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
               <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-              <span>Verifica spazio su disco in corso...</span>
+              <span>{t('wizardModels.checkingDisk')}</span>
             </div>
           ) : diskCheck && !diskCheck.allowed ? (
             <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800 text-xs text-rose-300 space-y-1">
@@ -175,7 +175,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
                     onClick={onSkipCurrentPull}
                     className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-colors"
                   >
-                    Salta questo modello
+                    {t('wizardModels.skipModel')}
                   </button>
                 )}
                 <button
@@ -183,7 +183,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
                   onClick={onCancelPull}
                   className="px-2.5 py-1 bg-rose-950 hover:bg-rose-900 border border-rose-700 text-rose-200 text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors"
                 >
-                  <StopCircle className="w-3.5 h-3.5" /> Annulla download
+                  <StopCircle className="w-3.5 h-3.5" /> {t('uiShell.cancelDownload')}
                 </button>
               </div>
             </div>
@@ -193,7 +193,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
           {pullErrorDetail && (
             <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-700 text-xs text-rose-200 space-y-2">
               <div className="flex items-center gap-1.5 font-bold">
-                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" /> Errore durante il download
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" /> {t('uiShell.downloadError')}
               </div>
               <p className="font-mono text-[11px] text-rose-300">{pullErrorDetail}</p>
               <div className="flex items-center gap-2 pt-1">
@@ -203,7 +203,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
                     onClick={onRetryPull}
                     className="px-3 py-1 bg-rose-900 hover:bg-rose-800 text-rose-100 text-xs font-bold rounded-lg transition-colors"
                   >
-                    Riprova
+                    {t('wizardModels.retry')}
                   </button>
                 )}
                 {onFinishWithoutMissing && (
@@ -212,7 +212,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
                     onClick={onFinishWithoutMissing}
                     className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-colors"
                   >
-                    Continua senza scaricare
+                    {t('wizardModels.continueWithoutDownload')}
                   </button>
                 )}
               </div>
@@ -223,7 +223,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
         <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-800/80 text-xs text-emerald-300 flex items-center gap-2.5">
           <Check className="w-5 h-5 text-emerald-400 shrink-0" />
           <div>
-            <div className="font-bold">Tutti i modelli sono già installati e pronti!</div>
+            <div className="font-bold">{t('uiShell.allModelsInstalled')}</div>
             <div className="text-[11px] text-emerald-400/80">Puoi completare la configurazione e iniziare subito a utilizzare OnlyRag.</div>
           </div>
         </div>

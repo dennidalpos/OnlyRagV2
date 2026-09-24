@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { GuestOsInfo } from '../types'
 import { logger } from '../lib/logger'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 /** Host facts and dev toolchain inventory reported by `workspace:inspect-guest-os`. */
 export function useGuestOsDiagnostics() {
@@ -12,8 +13,8 @@ export function useGuestOsDiagnostics() {
     setIsInspectingOs(true)
     try {
       setGuestOsInfo(await window.electronAPI.inspectGuestOsEnvironment())
-    } catch (err: any) {
-      logger.warn('useGuestOsDiagnostics', `Failed inspecting guest OS: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.warn('useGuestOsDiagnostics', `Failed inspecting guest OS: ${errorMessage(err)}`)
     } finally {
       setIsInspectingOs(false)
     }

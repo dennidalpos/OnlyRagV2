@@ -1,10 +1,11 @@
-import { checkOllamaStatus } from '../../diagnostics'
+import { hardwareProbe } from '../infrastructure/diagnostics/hardwareProbe'
 import type { OllamaGenerationOptions } from '../../../shared/types'
 import { ollamaHttpClient, type OllamaModelMetrics, type OllamaStructuredRequest, type OllamaStructuredResponse } from '../infrastructure/http/ollamaHttpClient'
 import { normalizeOllamaHost } from '../../../shared/domain/ollamaHost'
 export type { OllamaModelMetrics, OllamaStructuredRequest, OllamaStructuredResponse }
 import { ollamaInstallerRepository } from '../infrastructure/process/ollamaInstallerRepository'
 import { ollamaModelUpdateAppService, type ModelUpdateCheckResult } from './ollamaModelUpdateAppService'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 export type { ModelUpdateCheckResult }
 
 export class OllamaAppService {
@@ -62,7 +63,7 @@ export class OllamaAppService {
 
   async getInstalledModels(host?: string): Promise<string[]> {
     try {
-      const status = await checkOllamaStatus(normalizeOllamaHost(host))
+      const status = await hardwareProbe.checkOllamaStatus(normalizeOllamaHost(host))
       return status.models || []
     } catch {
       return []
@@ -112,7 +113,7 @@ export class OllamaAppService {
   async testConnection(host?: string): Promise<{ success: boolean; version?: string; modelsCount?: number; error?: string }> {
     const targetHost = normalizeOllamaHost(host)
     try {
-      const status = await checkOllamaStatus(targetHost)
+      const status = await hardwareProbe.checkOllamaStatus(targetHost)
       if (status.status === 'online') {
         return {
           success: true,
@@ -123,10 +124,10 @@ export class OllamaAppService {
         success: false,
         error: status.error || 'Server Ollama non raggiungibile',
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         success: false,
-        error: err.message || 'Errore durante la connessione al server Ollama',
+        error: errorMessage(err) || 'Errore durante la connessione al server Ollama',
       }
     }
   }

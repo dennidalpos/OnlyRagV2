@@ -39,6 +39,7 @@
         "noUnusedVariables": "off"
       },
       "suspicious": {
+        "noExplicitAny": "warn",
         "noDuplicateCase": "error",
         "noDuplicateObjectKeys": "error",
         "noFallthroughSwitchClause": "error"

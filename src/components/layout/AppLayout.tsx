@@ -20,20 +20,24 @@ import { notifyTabChanged } from '../../hooks/useIngestedDocuments'
 import { useTranslation, Language } from '../../i18n'
 import { logger } from '../../lib/logger'
 import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export type NavTab = 'ingestion' | 'chat' | 'translation' | 'coding' | 'settings'
 
 /** Shown only while a view chunk is being fetched for the first time. */
-const ViewChunkFallback: React.FC = () => (
-  <div
-    role="status"
-    aria-live="polite"
-    className="h-full w-full flex flex-col items-center justify-center text-slate-400 text-xs font-sans gap-3 animate-in fade-in duration-150"
-  >
-    <div className="w-6 h-6 rounded-full border-2 border-cyan-500/80 border-t-transparent animate-spin shadow-sm shadow-cyan-950" />
-    <span className="font-medium text-slate-300">Caricamento interfaccia...</span>
-  </div>
-)
+const ViewChunkFallback: React.FC = () => {
+  const { t } = useTranslation()
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="h-full w-full flex flex-col items-center justify-center text-slate-400 text-xs font-sans gap-3 animate-in fade-in duration-150"
+    >
+      <div className="w-6 h-6 rounded-full border-2 border-cyan-500/80 border-t-transparent animate-spin shadow-sm shadow-cyan-950" />
+      <span className="font-medium text-slate-300">{t('common.loadingInterface')}</span>
+    </div>
+  )
+}
 
 export const AppLayout: React.FC = () => {
   const { t, language, setLanguage } = useTranslation()
@@ -43,8 +47,8 @@ export const AppLayout: React.FC = () => {
       if (savedTab && ['ingestion', 'chat', 'translation', 'coding', 'settings'].includes(savedTab)) {
         return savedTab
       }
-    } catch (err: any) {
-      logger.warn('AppLayout', `Failed reading active tab from localStorage: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.warn('AppLayout', `Failed reading active tab from localStorage: ${errorMessage(err)}`)
     }
     return 'ingestion'
   })
@@ -175,8 +179,8 @@ export const AppLayout: React.FC = () => {
     setActiveTab(tab)
     try {
       localStorage.setItem('onlyrag_active_tab', tab)
-    } catch (err: any) {
-      logger.warn('AppLayout', `Failed saving active tab to localStorage: ${err?.message}`)
+    } catch (err: unknown) {
+      logger.warn('AppLayout', `Failed saving active tab to localStorage: ${errorMessage(err)}`)
     }
     notifyTabChanged(tab)
   }
@@ -591,8 +595,8 @@ export const AppLayout: React.FC = () => {
                 </p>
                 <p className="text-[11px] text-slate-400 truncate">
                   {isModelDownloading
-                    ? `${downloadPercent}% • ${downloadMbCompleted} / ${downloadMbTotal} MB (${downloadStatus || 'in corso'})`
-                    : "Modello pronto all'uso"}
+                    ? `${downloadPercent}% • ${downloadMbCompleted} / ${downloadMbTotal} MB (${downloadStatus || t('common.inProgress')})`
+                    : t('common.modelReady')}
                 </p>
               </div>
             </div>

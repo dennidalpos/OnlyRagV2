@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Modal } from '../common/Modal'
 import { DiagnosticsData, LogEntry } from '../../types'
 import { apiService } from '../../services/api'
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { SystemRamBreakdown } from '../common/SystemRamBreakdown'
+import { isSameLogSnapshot, logEntryKeys } from './logStream'
 
 interface DiagnosticsDrawerProps {
   isOpen: boolean
@@ -43,28 +44,25 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({ isOpen, on
   const [isRestartingSidecar, setIsRestartingSidecar] = useState<boolean>(false)
   const consoleBottomRef = useRef<HTMLDivElement | null>(null)
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setIsRefreshingLogs(true)
     try {
       const fetchedLogs = await apiService.getLogs()
-      let pathStr = ''
-      if (window.electronAPI?.getLogFilePath) {
-        pathStr = await window.electronAPI.getLogFilePath()
-      }
-      setLogs(fetchedLogs)
-      setLogPath(pathStr)
+      // An unchanged buffer keeps the same array, so the console neither re-renders nor re-scrolls.
+      setLogs((current) => (isSameLogSnapshot(current, fetchedLogs) ? current : fetchedLogs))
     } finally {
       setIsRefreshingLogs(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
-    if (isOpen) {
-      fetchLogs()
-      const interval = setInterval(fetchLogs, 2500)
-      return () => clearInterval(interval)
-    }
-  }, [isOpen])
+    if (!isOpen) return
+    // The log file path does not change while the app runs: read it once per opening, not per poll.
+    window.electronAPI?.getLogFilePath?.().then(setLogPath, () => {})
+    fetchLogs()
+    const interval = setInterval(fetchLogs, 2500)
+    return () => clearInterval(interval)
+  }, [isOpen, fetchLogs])
 
   useEffect(() => {
     if (autoScroll && consoleBottomRef.current) {
@@ -95,13 +93,18 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({ isOpen, on
   const errorCount = logs.filter((l) => l.level === 'ERROR').length
   const warnCount = logs.filter((l) => l.level === 'WARN').length
 
-  const filteredLogs = logs.filter((log) => {
-    const matchesLevel = selectedLevel === 'ALL' || log.level === selectedLevel
-    const matchesCategory = selectedCategory === 'ALL' || log.category === selectedCategory
-    const matchesSearch =
-      !searchQuery || log.message.toLowerCase().includes(searchQuery.toLowerCase()) || log.category.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesLevel && matchesCategory && matchesSearch
-  })
+  const filteredLogs = useMemo(
+    () =>
+      logs.filter((log) => {
+        const matchesLevel = selectedLevel === 'ALL' || log.level === selectedLevel
+        const matchesCategory = selectedCategory === 'ALL' || log.category === selectedCategory
+        const matchesSearch =
+          !searchQuery || log.message.toLowerCase().includes(searchQuery.toLowerCase()) || log.category.toLowerCase().includes(searchQuery.toLowerCase())
+        return matchesLevel && matchesCategory && matchesSearch
+      }),
+    [logs, selectedLevel, selectedCategory, searchQuery],
+  )
+  const filteredLogKeys = useMemo(() => logEntryKeys(filteredLogs), [filteredLogs])
 
   const generateReportMarkdown = (): string => {
     if (!diagnostics) return 'No diagnostics data available.'
@@ -423,7 +426,7 @@ ${logs
           <div className="text-center py-16 text-slate-500 font-sans text-xs">{t('common.none')}</div>
         ) : (
           filteredLogs.map((log, index) => (
-            <div key={index} className="flex items-start gap-2 py-1 px-2 hover:bg-slate-900/60 rounded-lg transition-colors leading-relaxed">
+            <div key={filteredLogKeys[index]} className="flex items-start gap-2 py-1 px-2 hover:bg-slate-900/60 rounded-lg transition-colors leading-relaxed">
               <span className="text-slate-500 shrink-0 text-[10px] font-mono select-none">
                 {!isNaN(Date.parse(log.timestamp)) ? new Date(log.timestamp).toLocaleTimeString() : log.timestamp || '—'}
               </span>

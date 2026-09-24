@@ -7,6 +7,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const coreRoot = path.join(root, 'electron', 'core')
 const forbiddenPlatformModules = new Set(['electron', 'fs', 'node:fs', 'fs/promises', 'node:fs/promises'])
 const domainForbiddenLayers = ['application', 'infrastructure', 'presentation'].map((layer) => path.join(coreRoot, layer) + path.sep)
+// Host probes reach Application through HardwareProbePort (infrastructure/diagnostics/hardwareProbe.ts).
+const applicationForbiddenModules = [path.join(root, 'electron', 'diagnostics')]
 const offenders = []
 
 function moduleSpecifiers(source) {
@@ -40,6 +42,11 @@ function checkLayer(layer) {
       for (const specifier of moduleSpecifiers(source)) {
         if (forbiddenPlatformModules.has(specifier)) {
           offenders.push(`${relativeFile}: imports '${specifier}' (use a port in domain/ports or a repository in infrastructure)`)
+        } else if (layer === 'application' && specifier.startsWith('.')) {
+          const resolved = path.resolve(path.dirname(fullPath), specifier).replace(/\.ts$/, '')
+          if (applicationForbiddenModules.includes(resolved)) {
+            offenders.push(`${relativeFile}: imports '${specifier}' directly (use HardwareProbePort from domain/ports)`)
+          }
         } else if (layer === 'domain' && specifier.startsWith('.')) {
           const resolved = path.resolve(path.dirname(fullPath), specifier)
           if (domainForbiddenLayers.some((forbidden) => resolved.startsWith(forbidden))) {
@@ -60,4 +67,6 @@ if (offenders.length > 0) {
   for (const offender of offenders) console.error(`  - ${offender}`)
   process.exit(1)
 }
-console.log('Layering guard: application and domain use no Electron or filesystem modules; domain imports no outer layer.')
+console.log(
+  'Layering guard: application and domain use no Electron or filesystem modules; application reaches host probes only through HardwareProbePort; domain imports no outer layer.',
+)

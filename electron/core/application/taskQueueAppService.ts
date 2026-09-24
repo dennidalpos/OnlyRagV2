@@ -11,6 +11,7 @@ import { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposabl
 import { standaloneScratchWorkspace } from '../infrastructure/filesystem/standaloneScratchWorkspace'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import path from 'node:path'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export interface QueuedAgentTask {
   id: string
@@ -171,10 +172,10 @@ export class TaskQueueAppService {
       const result = await runAgentOrchestratorLoop(executionPayload, rendererEvents, id, transaction)
       this.queue.markCompleted(id)
       resolve(result)
-    } catch (err: any) {
-      this.queue.markFailed(id, err.message)
-      logger.log('ERROR', 'TaskQueueAppService', `Task execution [${id}] failed: ${err.message}`)
-      resolve({ success: false, summary: `Execution error: ${err.message}`, error: err.message })
+    } catch (err: unknown) {
+      this.queue.markFailed(id, errorMessage(err))
+      logger.log('ERROR', 'TaskQueueAppService', `Task execution [${id}] failed: ${errorMessage(err)}`)
+      resolve({ success: false, summary: `Execution error: ${errorMessage(err)}`, error: errorMessage(err) })
     } finally {
       transaction?.dispose()
     }

@@ -4,9 +4,11 @@ import os from 'node:os'
 import path from 'node:path'
 
 vi.mock('../infrastructure/logging/logger', () => ({ logger: { log: vi.fn() } }))
-vi.mock('../../diagnostics', () => ({
-  getCachedGpuInfo: () => ({ hasNvidiaGpu: false }),
-  getMemoryInfo: () => ({ totalRAMGB: 16 }),
+vi.mock('../infrastructure/diagnostics/hardwareProbe', () => ({
+  hardwareProbe: {
+    getCachedGpuInfo: () => ({ hasNvidiaGpu: false }),
+    getMemoryInfo: () => ({ totalRAMGB: 16 }),
+  },
 }))
 
 import { buildCurrentOperationContext, readTurnFileContext, resolveTurnFileTargets } from './agentOrchestratorPromptAssembly'

@@ -43,7 +43,7 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     return getDefaultAppSettings()
   }
 
-  const raw = input as Record<string, any>
+  const raw = input as Record<string, unknown>
   const defaults = getDefaultAppSettings()
 
   // Legacy Plan countdown preferences are intentionally not migrated. Plan review now always

@@ -1,3 +1,4 @@
+import type { UntrustedJson } from '../../../../shared/types'
 import type { AgentCompletionEvidence, AgentCompletionStatus, AgentRunIdentity, AgentTaskRequest } from '../../../../shared/types'
 
 export type { ActiveFileContext, AgentMode } from '../../../../shared/types'
@@ -120,7 +121,7 @@ export interface AgentToolCall {
     milestoneId?: string
     status?: string
     notes?: string
-    [key: string]: any
+    [key: string]: UntrustedJson
   }
   explanation?: string
 }

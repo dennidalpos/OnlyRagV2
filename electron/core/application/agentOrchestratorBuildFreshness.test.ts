@@ -99,7 +99,7 @@ describe('build freshness — a write that changed nothing is not a mutation', (
       episodicCompactor: { recordStep: () => {} },
       executionGuard: new TransactionalExecutionGuard(tempDir),
       loopDetector: new AgentActionLoopDetector(2),
-      recoveryState: { guardEvents: [], progress: new AgentProgressPolicy() },
+      recoveryState: { guardEvents: [], progress: new AgentProgressPolicy(), versionEvidence: {} },
       sessionId: 'session-build-freshness',
       isSessionActive: () => false,
       targetWindow: null,

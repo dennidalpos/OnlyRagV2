@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Code, Sparkles, Cpu, CheckCircle2, AlertCircle, Wrench, Sliders } from 'lucide-react'
-import { AppSettings } from '../../types'
+import { AppSettings, type GuestOsInfo } from '../../types'
+
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { useTranslation } from '../../i18n'
 
 interface CodingHeaderProps {
-  guestOsInfo: any
+  guestOsInfo: GuestOsInfo | null
   settings?: AppSettings
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
   activeSkills?: string[]
@@ -47,13 +48,10 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
     }
   }, [isSystemPopoverOpen])
 
-  const hasGit = guestOsInfo?.tools?.git ?? guestOsInfo?.hasGit
-  const hasNode = guestOsInfo?.tools?.node ?? guestOsInfo?.hasNode
-  const hasPy = guestOsInfo?.tools?.python ?? guestOsInfo?.hasPython
-  const hasOllama = guestOsInfo?.tools?.ollama ?? guestOsInfo?.hasOllama
-  const hasDocker = guestOsInfo?.tools?.docker
-  const hasUv = guestOsInfo?.tools?.uv
-  const hasBun = guestOsInfo?.tools?.bun
+  const hasGit = guestOsInfo?.tools.git
+  const hasNode = guestOsInfo?.tools.node
+  const hasPy = guestOsInfo?.tools.python
+  const hasOllama = guestOsInfo?.tools.ollama
 
   const allCoreToolsAvailable = hasGit !== false && hasNode !== false && hasOllama !== false
 
@@ -166,24 +164,6 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
                   <span className="text-slate-400">Ollama</span>
                   <span className={`text-[10px] font-bold ${hasOllama ? 'text-emerald-400' : 'text-rose-400'}`}>{hasOllama ? 'OK' : 'Mancante'}</span>
                 </div>
-                {hasDocker !== undefined && (
-                  <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded-lg border border-slate-800">
-                    <span className="text-slate-400">Docker</span>
-                    <span className={`text-[10px] font-bold ${hasDocker ? 'text-emerald-400' : 'text-slate-500'}`}>{hasDocker ? 'OK' : 'N/A'}</span>
-                  </div>
-                )}
-                {hasUv !== undefined && (
-                  <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded-lg border border-slate-800">
-                    <span className="text-slate-400">Uv</span>
-                    <span className={`text-[10px] font-bold ${hasUv ? 'text-emerald-400' : 'text-slate-500'}`}>{hasUv ? 'OK' : 'N/A'}</span>
-                  </div>
-                )}
-                {hasBun !== undefined && (
-                  <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded-lg border border-slate-800">
-                    <span className="text-slate-400">Bun</span>
-                    <span className={`text-[10px] font-bold ${hasBun ? 'text-emerald-400' : 'text-slate-500'}`}>{hasBun ? 'OK' : 'N/A'}</span>
-                  </div>
-                )}
               </div>
             </div>
           )}

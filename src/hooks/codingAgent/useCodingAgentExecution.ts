@@ -388,7 +388,7 @@ export function useCodingAgentExecution({
       setContextBudget(data)
     })
 
-    const unsubApproval = window.electronAPI.onAgentApprovalRequest?.((req: any) => {
+    const unsubApproval = window.electronAPI.onAgentApprovalRequest?.((req) => {
       if (!matchesAgentRunIdentity(activeRunIdentityRef.current, req)) return
       setPendingApproval(req)
       if (req) {

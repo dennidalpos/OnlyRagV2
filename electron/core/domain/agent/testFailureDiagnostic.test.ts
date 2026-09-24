@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTestFailureDirective, extractFailingTest } from './testFailureDiagnostic'
+import { buildTestFailureDirective, extractFailingTest, isTestFilePath, renderedTextFragment } from './testFailureDiagnostic'
 import { buildDiagnosticFixDirective, diagnosticFixTargetFile } from './compilerDiagnosticDirective'
 
 /** The Jest output of the full-task run of 2026-09-24 (run 6), ANSI colours included. */
@@ -74,5 +74,200 @@ describe('a test file that never loaded is not an assertion failure', () => {
     expect(directive).toContain('[THE TEST FILE DID NOT LOAD — "src/App.test.jsx" line 4]')
     expect(directive).toContain("The runner stopped at: import App from '../App';")
     expect(directive).not.toContain('ASSERTION')
+  })
+})
+
+describe('load failures carry the exact fix when it is computable', () => {
+  const UNRESOLVED = [
+    '> vitest run',
+    ' ❯ src/App.test.jsx (0 test)',
+    '⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯',
+    ' FAIL  src/App.test.jsx [ src/App.test.jsx ]',
+    'Error: Failed to resolve import "../App" from "src/App.test.jsx". Does the file exist?',
+    ' ❯ src/App.test.jsx:4:1',
+    "      4| import App from '../App';",
+    '       | ^',
+  ].join('\n')
+
+  /** Full task run 12 of 2026-09-24: vitest without globals, the frame pointing at `describe(`. */
+  const MISSING_GLOBAL = [
+    '> vitest run',
+    ' ❯ src/App.test.jsx (0 test)',
+    '⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯',
+    ' FAIL  src/App.test.jsx [ src/App.test.jsx ]',
+    'ReferenceError: describe is not defined',
+    ' ❯ src/App.test.jsx:7:1',
+    "      7| describe('Project Dashboard Task', () => {",
+    '       | ^',
+  ].join('\n')
+
+  it('names the specifier that resolves and the exact replacement line', () => {
+    const resolves = (_file: string, specifier: string) => specifier === './App'
+    const directive = buildTestFailureDirective(extractFailingTest(UNRESOLVED)!, resolves)
+
+    expect(directive).toContain('"../App" does not resolve from "src/App.test.jsx"; "./App" does')
+    expect(directive).toContain(`replaced by exactly: import App from './App';`)
+  })
+
+  it('keeps the generic advice when no nearby module resolves', () => {
+    const directive = buildTestFailureDirective(extractFailingTest(UNRESOLVED)!, () => false)
+
+    expect(directive).toContain('almost always an import that does not resolve')
+  })
+
+  it('orders the vitest import for describe/it/expect instead of blaming an import', () => {
+    const failing = extractFailingTest(MISSING_GLOBAL)!
+    const directive = buildTestFailureDirective(failing)
+
+    expect(failing).toMatchObject({ kind: 'load', missingGlobal: 'describe', runner: 'vitest' })
+    expect(directive).toContain(`exact first line added: import { describe, it, expect } from 'vitest'`)
+    expect(directive).not.toContain('almost always an import')
+  })
+
+  it('reads the global from the code frame when the message was lost', () => {
+    const failing = extractFailingTest(MISSING_GLOBAL.replace('ReferenceError: describe is not defined', 'ReferenceError: [details redacted]'))
+
+    expect(failing?.missingGlobal).toBe('describe')
+  })
+
+  it('is wired into the compiler diagnostic directive with the local module resolver', () => {
+    const directive = buildDiagnosticFixDirective(UNRESOLVED, undefined, (_file, specifier) => (specifier === './App' ? ['default'] : []))!
+
+    expect(directive).toContain(`import App from './App';`)
+  })
+})
+
+describe('a test file with no test in it', () => {
+  /** Full task run 13 of 2026-09-24: `const testApp = () => { expect(...) }; export default testApp`. */
+  const NO_TEST = [
+    '> vitest run',
+    ' ❯ src/App.test.jsx (0 test)',
+    '⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯',
+    ' FAIL  src/App.test.jsx [ src/App.test.jsx ]',
+    'Error: No test suite found in file D:/work/src/App.test.jsx',
+  ].join('\n')
+
+  it('orders the assertions wrapped in it() instead of blaming an import', () => {
+    const failing = extractFailingTest(NO_TEST)!
+    const directive = buildTestFailureDirective(failing)
+
+    expect(failing).toMatchObject({ kind: 'load', declaresNoTest: true })
+    expect(failing.unresolvedImport).toBeUndefined()
+    expect(directive).toContain("it('renders the app', () => { ... })")
+    expect(directive).toContain("import { describe, it, expect } from 'vitest'")
+    expect(directive).not.toContain('almost always an import')
+  })
+})
+
+describe('an assertion failure carries the corrected assertion', () => {
+  /** Full task run 14 of 2026-09-24 (react-scripts/Jest), colours stripped. */
+  const JEST_ASSERTION = [
+    '> react-scripts test',
+    'FAIL src/App.test.jsx',
+    '  App Component',
+    '    × renders correctly (10 ms)',
+    '  ● App Component › renders correctly',
+    '    expect(received).toContain(expected) // indexOf',
+    '    Expected substring: "<div class=\\"bg-white\\">"',
+    '    Received string:    "<div class=\\"flex h-screen\\"><aside class=\\"bg-gray-800\\"><h1>Project Dashboard</h1><nav></nav></aside></div>"',
+    '    >  9 |     expect(html).toContain(\'<div class="bg-white">\');',
+    '      at Object.<anonymous> (src/App.test.jsx:9:18)',
+  ].join('\n')
+
+  it('finds visible text in the rendered output', () => {
+    expect(renderedTextFragment('"<div class=\\"x\\"><h1>Project Dashboard</h1></div>"')).toBe('Project Dashboard')
+    expect(renderedTextFragment('"<div></div>"')).toBeNull()
+    expect(renderedTextFragment(null)).toBeNull()
+  })
+
+  it('states the exact replacement for the failing line', () => {
+    const failing = extractFailingTest(JEST_ASSERTION)!
+    const directive = buildTestFailureDirective(failing)
+
+    expect(failing).toMatchObject({ kind: 'assertion', loadLine: { line: 9 } })
+    expect(directive).toContain('line 9]')
+    expect(directive).toContain(`(and any comment after it) replaced by exactly: expect(html).toContain('Project Dashboard');`)
+  })
+
+  it('suggests an assertion on rendered text when the failing line is not a toContain', () => {
+    const directive = buildTestFailureDirective({
+      file: 'src/App.test.jsx',
+      kind: 'assertion',
+      loadLine: { line: 9, source: 'expect(html).toBe(expected);' },
+      expected: '"x"',
+      received: '"<main><p>Tasks</p></main>"',
+    })
+
+    expect(directive).toContain(`e.g. expect(html).toContain('Tasks')`)
+  })
+})
+
+describe('a name the running test never imported', () => {
+  /** Full task run 19 of 2026-09-24: the test ran, and threw before its assertion. */
+  const RUNNING_REFERENCE_ERROR = [
+    '> vitest run',
+    ' ❯ src/App.test.jsx (1 test | 1 failed) 5ms',
+    ' FAIL  src/App.test.jsx > App > renders correctly',
+    'ReferenceError: renderToString is not defined',
+    ' ❯ src/App.test.jsx:7:18',
+    '      7|     const html = renderToString(<App />);',
+  ].join('\n')
+
+  it('orders the exact import instead of an assertion rewrite', () => {
+    const failing = extractFailingTest(RUNNING_REFERENCE_ERROR)!
+    const directive = buildTestFailureDirective(failing)
+
+    expect(failing).toMatchObject({ kind: 'assertion', undefinedName: 'renderToString' })
+    expect(directive).toContain(`this exact line added after the other imports: import { renderToString } from 'react-dom/server'`)
+    expect(directive).not.toContain('ASSERTION FAILED')
+  })
+
+  it('names the missing import generically for an unknown name', () => {
+    const directive = buildTestFailureDirective(extractFailingTest(RUNNING_REFERENCE_ERROR.replace(/renderToString is/, 'formatTask is'))!)
+
+    expect(directive).toContain('the import that provides "formatTask" added at the top')
+  })
+})
+
+describe('isTestFilePath', () => {
+  it('recognises test and spec files only', () => {
+    expect(isTestFilePath('src/App.test.jsx')).toBe(true)
+    expect(isTestFilePath('src\\api.spec.ts')).toBe(true)
+    expect(isTestFilePath('src/App.jsx')).toBe(false)
+    expect(isTestFilePath('src/testing/App.jsx')).toBe(false)
+    expect(isTestFilePath(undefined)).toBe(false)
+  })
+})
+
+describe('a code frame cut short by the runner', () => {
+  it('drops the trailing comment from the line it orders replaced', () => {
+    const directive = buildTestFailureDirective({
+      file: 'src/App.test.jsx',
+      kind: 'assertion',
+      loadLine: { line: 10, source: `expect(html).toContain('<div class="bg-white">'); // Example asser…` },
+      expected: '"<div class="bg-white">"',
+      received: '"<div><h1>Project Dashboard Task</h1></div>"',
+    })
+
+    expect(directive).toContain(
+      `the line "expect(html).toContain('<div class="bg-white">');" (and any comment after it) replaced by exactly: expect(html).toContain('Project Dashboard Task');`,
+    )
+  })
+})
+
+describe('a test global missing inside a test that ran', () => {
+  it('orders the vitest import, not an assertion rewrite', () => {
+    const output = [
+      '> vitest run',
+      ' ❯ src/App.test.jsx (1 test | 1 failed) 5ms',
+      ' FAIL  src/App.test.jsx > App > renders',
+      'ReferenceError: expect is not defined',
+      ' ❯ src/App.test.jsx:8:5',
+      "      8|     expect(html).toContain('Tasks');",
+    ].join('\n')
+    const directive = buildTestFailureDirective(extractFailingTest(output)!)
+
+    expect(directive).toContain(`import { describe, it, expect } from 'vitest'`)
+    expect(directive).not.toContain('ASSERTION FAILED')
   })
 })

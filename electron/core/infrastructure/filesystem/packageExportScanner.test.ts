@@ -3,7 +3,14 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { readLocalModuleExports, readPackageExports, extractExportedNames } from './packageExportScanner'
+import {
+  readLocalModuleExports,
+  readPackageExports,
+  extractExportedNames,
+  packageHasStyleEntry,
+  toWorkspaceRelativePath,
+  isBinaryInstalled,
+} from './packageExportScanner'
 
 /** Measured 2026-08-25T19:59, session live-full-task, steps 42-43. */
 
@@ -108,5 +115,47 @@ describe('readLocalModuleExports', () => {
 
   it('does not resolve a relative specifier outside the workspace', () => {
     expect(readLocalModuleExports(tempDir, 'src/App.tsx', '../../outside')).toEqual([])
+  })
+})
+
+describe('packageHasStyleEntry / toWorkspaceRelativePath', () => {
+  it('reads the style field and the exports "." style condition', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-style-entry-'))
+    try {
+      const write = (name: string, manifest: object) => {
+        fs.mkdirSync(path.join(root, 'node_modules', name), { recursive: true })
+        fs.writeFileSync(path.join(root, 'node_modules', name, 'package.json'), JSON.stringify(manifest))
+      }
+      write('tw4', { exports: { '.': { style: './index.css', import: './dist/lib.mjs' } } })
+      write('styled', { style: 'dist/styles.css' })
+      write('plain', { main: 'index.js' })
+
+      expect(packageHasStyleEntry(root, 'tw4')).toBe(true)
+      expect(packageHasStyleEntry(root, 'styled')).toBe(true)
+      expect(packageHasStyleEntry(root, 'plain')).toBe(false)
+      expect(packageHasStyleEntry(root, 'missing')).toBe(false)
+      expect(toWorkspaceRelativePath(root, path.join(root, 'src', 'index.css'))).toBe('src/index.css')
+      expect(toWorkspaceRelativePath(root, 'src/index.css')).toBe('src/index.css')
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('isBinaryInstalled', () => {
+  it('finds node_modules/.bin entries, with or without the Windows shim', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-bin-'))
+    try {
+      fs.mkdirSync(path.join(root, 'node_modules', '.bin'), { recursive: true })
+      fs.writeFileSync(path.join(root, 'node_modules', '.bin', 'vite'), '')
+      fs.writeFileSync(path.join(root, 'node_modules', '.bin', 'tsc.cmd'), '')
+
+      expect(isBinaryInstalled(root, 'vite')).toBe(true)
+      expect(isBinaryInstalled(root, 'tsc')).toBe(true)
+      expect(isBinaryInstalled(root, 'react-scripts')).toBe(false)
+      expect(isBinaryInstalled(root, '../vite')).toBe(false)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
   })
 })

@@ -129,7 +129,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isGeneratingRef = useRef<boolean>(false)
   const activeStreamIdRef = useRef<string | null>(null)
-  const streamThrottleTimer = useRef<any>(null)
+  const streamThrottleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [autoScroll, setAutoScroll] = useState<boolean>(true)
   const [isScrolledUp, setIsScrolledUp] = useState<boolean>(false)
   const autoScrollRef = useRef<boolean>(true)
@@ -370,7 +370,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           const searchResults = await apiService.searchVectorDb(userText, budget.vectorTopK, scopedDocIds)
 
           if (Array.isArray(searchResults) && searchResults.length > 0) {
-            const validResults = searchResults.filter((res: any) => res && res.text)
+            const validResults = searchResults.filter((res) => res && res.text)
             const includedBlocks: string[] = []
             const includedSources: CitationSource[] = []
             let usedChars = 0

@@ -96,7 +96,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
         versionConflictReadPath: responseInterpreterState.pendingVersionConflictReadPath,
         verificationFixCycles: responseInterpreterState.verificationFixCycles,
       },
-      versionedReadEvidence: responseInterpreterState.versionedReadEvidence,
+      versionEvidence: { ...responseInterpreterState.versionEvidence },
       guardEvents: [...responseInterpreterState.guardEvents],
       ...(terminationReason ? { terminationGuard: [...responseInterpreterState.guardEvents].reverse().find((event) => event.action === 'stop')?.guard } : {}),
       ollamaRuntimeProfile: session.ollamaRuntimeProfile,

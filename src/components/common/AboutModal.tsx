@@ -516,7 +516,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 <div className="pt-1.5 flex items-center justify-between border-t border-slate-900/80">
-                  <span className="text-[10px] text-slate-500 font-medium capitalize">{t(`about.categories.${item.category}` as any)}</span>
+                  <span className="text-[10px] text-slate-500 font-medium capitalize">{t(`about.categories.${item.category}` as TranslationKey)}</span>
                   <button
                     type="button"
                     onClick={() => handleOpenExternal(item.url)}

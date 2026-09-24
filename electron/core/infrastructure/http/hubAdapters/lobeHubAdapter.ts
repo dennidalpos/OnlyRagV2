@@ -1,3 +1,4 @@
+import type { UntrustedJson } from '../../../../../shared/types'
 import { HubSkillItem, SkillHubSource, SkillCategory } from '../../../domain/skills/skillTypes'
 import type { ISkillHubAdapter } from '../../../domain/ports/skillHubAdapterPort'
 import { webClient } from '../webClient'
@@ -15,7 +16,7 @@ function mapLobeCategory(category?: string): SkillCategory {
   return 'architecture'
 }
 
-function generateLobeSkillContent(item: any): string {
+function generateLobeSkillContent(item: UntrustedJson): string {
   const name = item.meta?.title || item.identifier || 'lobehub-tool'
   const desc = item.meta?.description || 'LobeHub Community Skill & Tool'
   const identifier = item.identifier || name
@@ -64,7 +65,7 @@ export class LobeHubAdapter implements ISkillHubAdapter {
         throw new Error(res.error || 'Failed to fetch LobeHub index')
       }
 
-      let parsed: any
+      let parsed: UntrustedJson
       try {
         parsed = JSON.parse(res.content)
       } catch {
@@ -84,7 +85,7 @@ export class LobeHubAdapter implements ISkillHubAdapter {
         const title = (p.meta?.title || p.title || identifier).toString()
         const desc = (p.meta?.description || p.description || `LobeHub Skill for ${title}`).toString()
         const category = mapLobeCategory(p.meta?.category || p.category)
-        const tags = Array.isArray(p.meta?.tags) ? p.meta.tags.map((t: any) => String(t).toLowerCase()) : ['lobehub']
+        const tags = Array.isArray(p.meta?.tags) ? p.meta.tags.map((t: unknown) => String(t).toLowerCase()) : ['lobehub']
         const triggers = [identifier.toLowerCase(), ...tags]
 
         items.push({

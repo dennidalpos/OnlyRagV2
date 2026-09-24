@@ -41,7 +41,31 @@ export function extractExecutedPromptsFromLogs(sessionId: string, logs: AgentAct
 
 const PLAN_STATUSES: AgentPlan['status'][] = ['idle', 'generating', 'ready', 'approved', 'rejected', 'error', 'cancelled']
 
-function normalizePlan(raw: any, fallbackTimestamp: string): AgentPlan | null {
+/** A persisted JSON object read back from disk: every field is unknown until narrowed. */
+type RawRecord = Record<string, unknown>
+
+function asRecord(value: unknown): RawRecord | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as RawRecord) : null
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+
+function finiteOr<T>(value: unknown, fallback: T): number | T {
+  return Number.isFinite(value) ? Number(value) : fallback
+}
+
+function stringsOf(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
+  return allowed.includes(value as T) ? (value as T) : undefined
+}
+
+function normalizePlan(value: unknown, fallbackTimestamp: string): AgentPlan | null {
+  const raw = asRecord(value)
   if (
     !raw ||
     raw.formatVersion !== 2 ||
@@ -56,131 +80,132 @@ function normalizePlan(raw: any, fallbackTimestamp: string): AgentPlan | null {
   return {
     formatVersion: 2,
     id: raw.id,
-    version: Number.isFinite(raw.version) ? Number(raw.version) : 1,
-    prompt: typeof raw.prompt === 'string' ? raw.prompt : '',
-    originalPrompt: typeof raw.originalPrompt === 'string' ? raw.originalPrompt : undefined,
-    interviewAnswers: Array.isArray(raw.interviewAnswers) ? raw.interviewAnswers : undefined,
+    version: finiteOr(raw.version, 1),
+    prompt: optionalString(raw.prompt) ?? '',
+    originalPrompt: optionalString(raw.originalPrompt),
+    interviewAnswers: Array.isArray(raw.interviewAnswers) ? (raw.interviewAnswers as AgentPlan['interviewAnswers']) : undefined,
     objective: raw.objective,
-    decisions: raw.decisions,
-    retainedEvidence: raw.retainedEvidence,
-    supersededWork: raw.supersededWork,
-    status: PLAN_STATUSES.includes(raw.status) ? raw.status : 'ready',
-    errorPhase: raw.errorPhase === 'interview' || raw.errorPhase === 'planning' ? raw.errorPhase : undefined,
-    errorMessage: typeof raw.errorMessage === 'string' ? raw.errorMessage : undefined,
+    // Nested plan content is written by this application and passed through as persisted.
+    decisions: raw.decisions as AgentPlan['decisions'],
+    retainedEvidence: raw.retainedEvidence as AgentPlan['retainedEvidence'],
+    supersededWork: raw.supersededWork as AgentPlan['supersededWork'],
+    status: oneOf(raw.status, PLAN_STATUSES) ?? 'ready',
+    errorPhase: oneOf(raw.errorPhase, ['interview', 'planning'] as const),
+    errorMessage: optionalString(raw.errorMessage),
     createdAt: toIsoTimestamp(raw.createdAt, fallbackTimestamp),
-    baseStepOffset: Number.isFinite(raw.baseStepOffset) ? Number(raw.baseStepOffset) : undefined,
-    milestones: raw.milestones,
-    approvalError: typeof raw.approvalError === 'string' ? raw.approvalError : undefined,
+    baseStepOffset: finiteOr(raw.baseStepOffset, undefined),
+    milestones: raw.milestones as AgentPlan['milestones'],
+    approvalError: optionalString(raw.approvalError),
   }
 }
 
-function normalizeExecutedPrompt(raw: any, sessionId: string, fallbackTimestamp: string): ExecutedPrompt | null {
+type PromptEvidence = NonNullable<ExecutedPrompt['evidence']>
+
+function normalizePromptEvidence(value: unknown, fallbackTimestamp: string): PromptEvidence | undefined {
+  const raw = asRecord(value)
+  const cancellationStatus = oneOf(raw?.cancellationStatus, ['not_cancelled', 'rolled_back', 'residual_effects'] as const)
+  if (!raw || !cancellationStatus) return undefined
+  const verification = asRecord(raw.verification)
+  const verificationStatus = oneOf(verification?.status, ['verified', 'failed', 'unavailable'] as const)
+  return {
+    changedFiles: stringsOf(raw.changedFiles),
+    verification:
+      verification && verificationStatus && typeof verification.checkedAt === 'string'
+        ? {
+            status: verificationStatus,
+            checkedAt: toIsoTimestamp(verification.checkedAt, fallbackTimestamp),
+            command: optionalString(verification.command),
+            evidenceLevel: oneOf(verification.evidenceLevel, ['structural', 'behavioral'] as const),
+            detail: optionalString(verification.detail),
+          }
+        : undefined,
+    cancellationStatus,
+    rollbackRestoredFiles: Number.isFinite(raw.rollbackRestoredFiles) ? Math.max(0, Number(raw.rollbackRestoredFiles)) : undefined,
+    nonRollbackEffects: stringsOf(raw.nonRollbackEffects),
+  }
+}
+
+function normalizeExecutedPrompt(value: unknown, sessionId: string, fallbackTimestamp: string): ExecutedPrompt | null {
+  const raw = asRecord(value)
   if (!raw || typeof raw.prompt !== 'string') return null
-  const completionStatuses = ['verified', 'unverifiable', 'blocked', 'cancelled']
-  const cancellationStatuses = ['not_cancelled', 'rolled_back', 'residual_effects']
-  const verificationStatuses = ['verified', 'failed', 'unavailable']
-  const evidenceLevels = ['structural', 'behavioral']
-  const verification = raw.evidence?.verification
-  const evidence =
-    raw.evidence && cancellationStatuses.includes(raw.evidence.cancellationStatus)
-      ? {
-          changedFiles: Array.isArray(raw.evidence.changedFiles)
-            ? raw.evidence.changedFiles.filter((value: unknown): value is string => typeof value === 'string')
-            : [],
-          verification:
-            verification && verificationStatuses.includes(verification.status) && typeof verification.checkedAt === 'string'
-              ? {
-                  status: verification.status,
-                  checkedAt: toIsoTimestamp(verification.checkedAt, fallbackTimestamp),
-                  command: typeof verification.command === 'string' ? verification.command : undefined,
-                  evidenceLevel: evidenceLevels.includes(verification.evidenceLevel) ? verification.evidenceLevel : undefined,
-                  detail: typeof verification.detail === 'string' ? verification.detail : undefined,
-                }
-              : undefined,
-          cancellationStatus: raw.evidence.cancellationStatus,
-          rollbackRestoredFiles: Number.isFinite(raw.evidence.rollbackRestoredFiles) ? Math.max(0, Number(raw.evidence.rollbackRestoredFiles)) : undefined,
-          nonRollbackEffects: Array.isArray(raw.evidence.nonRollbackEffects)
-            ? raw.evidence.nonRollbackEffects.filter((value: unknown): value is string => typeof value === 'string')
-            : [],
-        }
-      : undefined
+  const agentMode = oneOf(raw.agentMode, ['ask', 'guided', 'auto'] as const) ?? (raw.agentMode === 'agent' ? 'auto' : 'guided')
   return {
     id: typeof raw.id === 'string' && raw.id ? raw.id : `${sessionId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     sessionId,
     prompt: raw.prompt,
     startedAt: toIsoTimestamp(raw.startedAt, fallbackTimestamp),
     completedAt: raw.completedAt ? toIsoTimestamp(raw.completedAt, fallbackTimestamp) : undefined,
-    agentMode:
-      raw.agentMode === 'ask' || raw.agentMode === 'guided' || raw.agentMode === 'auto' ? raw.agentMode : raw.agentMode === 'agent' ? 'auto' : 'guided',
-    outcome: ['running', 'success', 'failed', 'cancelled'].includes(raw.outcome) ? raw.outcome : 'unknown',
-    totalSteps: Number.isFinite(raw.totalSteps) ? Number(raw.totalSteps) : 0,
-    filesTouched: Number.isFinite(raw.filesTouched) ? Number(raw.filesTouched) : 0,
-    additions: Number.isFinite(raw.additions) ? Number(raw.additions) : 0,
-    deletions: Number.isFinite(raw.deletions) ? Number(raw.deletions) : 0,
-    summary: typeof raw.summary === 'string' ? raw.summary : undefined,
-    completionStatus: completionStatuses.includes(raw.completionStatus) ? raw.completionStatus : undefined,
-    evidence,
+    agentMode,
+    outcome: oneOf(raw.outcome, ['running', 'success', 'failed', 'cancelled'] as const) ?? 'unknown',
+    totalSteps: finiteOr(raw.totalSteps, 0),
+    filesTouched: finiteOr(raw.filesTouched, 0),
+    additions: finiteOr(raw.additions, 0),
+    deletions: finiteOr(raw.deletions, 0),
+    summary: optionalString(raw.summary),
+    completionStatus: oneOf(raw.completionStatus, ['verified', 'unverifiable', 'blocked', 'cancelled'] as const),
+    evidence: normalizePromptEvidence(raw.evidence, fallbackTimestamp),
   }
 }
 
+function normalizeContextBudget(value: unknown): CodingSession['contextBudget'] {
+  const raw = asRecord(value)
+  return raw && typeof raw.model === 'string' && Number.isFinite(raw.promptTokens) && Number.isFinite(raw.promptBudgetTokens)
+    ? (raw as unknown as CodingSession['contextBudget'])
+    : undefined
+}
+
 /** Normalizes any persisted or migrated record into a valid CodingSession: ISO 8601 timestamps, an always-present executedPrompts list (rebuilt from the action log when the record predates the entity) and a title derived from the first executed prompt when the us */
-export function normalizeSession(raw: any): CodingSession | null {
+export function normalizeSession(value: unknown): CodingSession | null {
+  const raw = asRecord(value)
   if (!raw || typeof raw.id !== 'string' || !raw.id) return null
+  const sessionId = raw.id
 
   const fallbackTimestamp = new Date().toISOString()
   const createdAt = toIsoTimestamp(raw.createdAt, fallbackTimestamp)
   const updatedAt = toIsoTimestamp(raw.updatedAt, createdAt)
   const actionLogs: AgentActionLog[] = Array.isArray(raw.actionLogs)
     ? raw.actionLogs
-        .filter((log: any) => log && typeof log.message === 'string')
-        .map((log: any) => ({ ...log, timestamp: toIsoTimestamp(log.timestamp, createdAt) }))
+        .map(asRecord)
+        .filter((log): log is RawRecord => log !== null && typeof log.message === 'string')
+        .map((log) => ({ ...(log as unknown as AgentActionLog), timestamp: toIsoTimestamp(log.timestamp, createdAt) }))
     : []
 
   const executedPrompts =
     Array.isArray(raw.executedPrompts) && raw.executedPrompts.length > 0
-      ? raw.executedPrompts.map((p: any) => normalizeExecutedPrompt(p, raw.id, createdAt)).filter((p: ExecutedPrompt | null): p is ExecutedPrompt => p !== null)
-      : extractExecutedPromptsFromLogs(raw.id, actionLogs, createdAt)
+      ? raw.executedPrompts.map((p) => normalizeExecutedPrompt(p, sessionId, createdAt)).filter((p): p is ExecutedPrompt => p !== null)
+      : extractExecutedPromptsFromLogs(sessionId, actionLogs, createdAt)
 
   const plans = Array.isArray(raw.plans)
-    ? raw.plans.map((plan: any) => normalizePlan(plan, createdAt)).filter((plan: AgentPlan | null): plan is AgentPlan => plan !== null)
+    ? raw.plans.map((plan) => normalizePlan(plan, createdAt)).filter((plan): plan is AgentPlan => plan !== null)
     : undefined
 
   const promptQueue = Array.isArray(raw.promptQueue)
     ? raw.promptQueue
-        .filter((item: any) => item && typeof item.prompt === 'string')
-        .map((item: any) => ({
-          id: typeof item.id === 'string' ? item.id : `${raw.id}-queued-${Math.random().toString(36).slice(2, 8)}`,
+        .map(asRecord)
+        .filter((item): item is RawRecord & { prompt: string } => item !== null && typeof item.prompt === 'string')
+        .map((item) => ({
+          id: typeof item.id === 'string' ? item.id : `${sessionId}-queued-${Math.random().toString(36).slice(2, 8)}`,
           prompt: item.prompt,
           createdAt: toIsoTimestamp(item.createdAt, createdAt),
         }))
     : []
 
-  const hasCustomTitle =
-    typeof raw.title === 'string' &&
-    raw.title.trim().length > 0 &&
-    raw.title !== 'Nuova Sessione' &&
-    raw.title !== 'New Session' &&
-    !raw.title.startsWith('Session ')
+  const title = typeof raw.title === 'string' ? raw.title : ''
+  const hasCustomTitle = title.trim().length > 0 && title !== 'Nuova Sessione' && title !== 'New Session' && !title.startsWith('Session ')
 
   return {
-    id: raw.id,
+    id: sessionId,
     workspacePath: typeof raw.workspacePath === 'string' && raw.workspacePath ? raw.workspacePath : null,
-    title: hasCustomTitle ? raw.title.trim() : executedPrompts.length > 0 ? deriveSessionTitle(executedPrompts[0].prompt) : 'Nuova Sessione',
+    title: hasCustomTitle ? title.trim() : executedPrompts.length > 0 ? deriveSessionTitle(executedPrompts[0].prompt) : 'Nuova Sessione',
     createdAt,
     updatedAt,
     actionLogs,
     executedPrompts,
     plans,
     promptQueue,
-    pinnedFilePaths: Array.isArray(raw.pinnedFilePaths) ? raw.pinnedFilePaths.filter((p: any) => typeof p === 'string') : undefined,
+    pinnedFilePaths: Array.isArray(raw.pinnedFilePaths) ? stringsOf(raw.pinnedFilePaths) : undefined,
     forceContextCompaction: raw.forceContextCompaction === true,
-    contextBudget:
-      raw.contextBudget &&
-      typeof raw.contextBudget.model === 'string' &&
-      Number.isFinite(raw.contextBudget.promptTokens) &&
-      Number.isFinite(raw.contextBudget.promptBudgetTokens)
-        ? raw.contextBudget
-        : undefined,
+    contextBudget: normalizeContextBudget(raw.contextBudget),
   }
 }
 

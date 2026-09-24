@@ -23,7 +23,7 @@ const profile: ProjectProfile = {
       manifestFiles: ['package.json'],
       lockfiles: [],
       toolchain: { languages: ['typescript'], packageManagers: ['npm'], testFrameworks: ['vitest'], buildTools: [], declaredScripts: ['test'] },
-      verificationCommands: [{ kind: 'test', command: 'npm run test', coverage: 'whole-project', source: 'package.json script "test"' }],
+      verificationCommands: [{ kind: 'test', command: 'npm run test', coverage: 'entry-reachable', source: 'package.json script "test"' }],
     },
   ],
 }

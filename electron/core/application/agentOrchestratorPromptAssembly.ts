@@ -24,6 +24,8 @@ import { resolveTurnToolPolicy, resolveVersionConflictTurnPolicy, type EditTarge
 import { normalizeOllamaHost } from '../../../shared/domain/ollamaHost'
 import { resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { recordFileVersion } from '../domain/agent/fileVersionEvidence'
+import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 
 /** Resolves the coding model and hardware-tuned runtime options for the turn. */
 export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
@@ -131,6 +133,10 @@ export function readTurnFileContext(ctx: TurnDispatchContext, targets: readonly 
       if (!content.trim()) continue
       const role = index === 0 ? 'PRIMARY EDIT FILE' : 'SUPPORT FRAGMENT'
       const cap = index === 0 ? PRIMARY_FILE_CHAR_CAP : SUPPORT_FILE_CHAR_CAP
+      // The prompt carries the whole file, so the model has seen this exact version and may edit it
+      // without a read_file round trip; a truncated body is not the whole file.
+      const evidence = ctx.responseInterpreterState?.versionEvidence
+      if (evidence && content.length <= cap) recordFileVersion(evidence, relativePath, contentVersion(content))
       blocks.push(`--- ${role}: ${relativePath} (${reason}) ---\n${boundedFileContent(content, cap)}`)
     } catch {
       // The model can request missing context through read_file.
@@ -163,6 +169,34 @@ function resolveEditTargetState(ctx: TurnDispatchContext, targets: readonly stri
   return documentIoRepository.exists(target) ? 'existing' : 'missing'
 }
 
+/** Tools whose success changes the workspace or re-checks it: a failure before one of them is history. */
+const STATE_CHANGING_TOOLS = new Set([
+  'write_file',
+  'replace_file_content',
+  'multi_replace_file_content',
+  'delete_file',
+  'move_file',
+  'copy_file',
+  'create_directory',
+  'download_file',
+  'run_command',
+  'run_tests',
+])
+
+/**
+ * The latest failure the workspace has not moved past. Live full task run 18 of 2026-09-24: a
+ * loop block from step 33 carried an old "MUST run npm run build" order, the build then passed at
+ * step 36, and "Last useful error" kept showing that order next to the arbiter's "MUST run npm
+ * test" until no_mutation stopped the run at step 40 after four more builds.
+ */
+export function latestUnresolvedFailure<T extends { tool: string; isFailure?: boolean }>(logs: readonly T[]): T | undefined {
+  for (const entry of [...logs].reverse()) {
+    if (entry.isFailure) return entry
+    if (STATE_CHANGING_TOOLS.has(entry.tool)) return undefined
+  }
+  return undefined
+}
+
 /** Builds the fresh, bounded facts needed for only the current operation. */
 export function buildCurrentOperationContext(
   ctx: TurnDispatchContext,
@@ -171,7 +205,7 @@ export function buildCurrentOperationContext(
   targets: readonly string[],
 ): string {
   const milestone = ctx.goalPlanner.getActiveMilestone()
-  const latestFailure = [...ctx.episodicCompactor.getRecentFullLogs()].reverse().find((entry) => entry.isFailure)
+  const latestFailure = latestUnresolvedFailure(ctx.episodicCompactor.getRecentFullLogs())
   const constraints = [
     `mode=${ctx.fsmMode.getMode()}`,
     `workspace=${ctx.workspacePath || 'standalone'}`,

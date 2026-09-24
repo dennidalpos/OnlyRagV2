@@ -195,7 +195,7 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({ isOpen, on
               <span className="font-mono text-[10px] text-slate-400">{t('vectorSearch.score')}</span>
             </div>
 
-            {results.map((r: any, idx: number) => {
+            {results.map((r, idx) => {
               const score = r.score !== undefined ? Number(r.score) : 0
               return (
                 <div key={idx} className="p-4 bg-slate-900/80 rounded-xl border border-slate-800 hover:border-cyan-500/40 transition-all space-y-2.5 shadow-md">

@@ -1,3 +1,12 @@
+/**
+ * A value parsed from JSON this application does not control: a model's tool-call arguments, a
+ * skill hub catalog, an Ollama NDJSON chunk. Its shape is checked where it is consumed
+ * (toolSchemaValidator for tool arguments), so it stays open-ended at the boundary. Everywhere
+ * else noExplicitAny is an error outside test files (biome.json).
+ */
+// biome-ignore lint/suspicious/noExplicitAny: untrusted JSON is narrowed by its consumer, not here.
+export type UntrustedJson = any
+
 export interface SystemRequirementsCheck {
   isOsSupported: boolean
   hasMinRam: boolean
@@ -200,7 +209,7 @@ export interface AgentActionLog extends Partial<AgentRunIdentity> {
     passedCount?: number
     failedCount?: number
   }
-  meta?: Record<string, any>
+  meta?: Record<string, unknown>
 }
 
 import type { AgentCompletionEvidence, AgentCompletionStatus, ExecutedPrompt, ExecutedPromptOutcome, QueuedPromptRecord, WorkspaceProject } from './workspace'
@@ -375,8 +384,27 @@ export interface AgentToolCall {
     | 'inspect_os_env'
     | 'ask'
     | 'finish'
-  parameters: Record<string, any>
+  parameters: Record<string, UntrustedJson>
   explanation?: string
+}
+
+/** An agent action waiting for the user's approval, as Main sends it on `agent:approval-request`. */
+export interface AgentApprovalRequest extends AgentRunIdentity {
+  sessionId: string
+  type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit'
+  target: string
+  contentOrCmd: string
+  replacement?: string
+  replacements?: { targetContent: string; replacementContent: string }[]
+  parameters?: Record<string, UntrustedJson>
+}
+
+/** One progress event of `ollama pull`, as Main forwards it on the pull progress channel. */
+export interface OllamaPullProgressEvent {
+  modelName: string
+  status: string
+  completed?: number
+  total?: number
 }
 
 export interface CodingSession {
@@ -725,7 +753,7 @@ export interface IElectronAPI {
   onAgentStreamToken?: (callback: (data: AgentRunIdentity & { step: number; chunk: string }) => void) => () => void
   onAgentStreamThought?: (callback: (data: AgentRunIdentity & { step: number; chunk: string }) => void) => () => void
   onAgentDone: (callback: (res: AgentDoneResult & AgentRunIdentity) => void) => () => void
-  onAgentApprovalRequest: (callback: (req: AgentRunIdentity & { sessionId: string; type: string; target: string }) => void) => () => void
+  onAgentApprovalRequest: (callback: (req: AgentApprovalRequest) => void) => () => void
   onAgentSkillsMatched?: (callback: (data: AgentRunIdentity & { skills: string[] }) => void) => () => void
   /** Skill Hub 'prompt' policy: subscribe to the auto-install confirmation requests. */
   onAgentSkillInstallRequest?: (callback: (req: SkillInstallApprovalRequest) => void) => () => void
@@ -753,7 +781,7 @@ export interface IElectronAPI {
   saveCustomSkill: (input: SkillSaveInput, workspaceRoot?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
   resetSkillToOriginal: (skillId: string, workspaceRoot?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
   uninstallSkill: (skillId: string, workspaceRoot?: string) => Promise<{ success: boolean; error?: string }>
-  onOllamaPullProgress?: (callback: (data: { modelName: string; status: string; completed?: number; total?: number }) => void) => () => void
+  onOllamaPullProgress?: (callback: (data: OllamaPullProgressEvent) => void) => () => void
   getRunningModels: (host?: string) => Promise<{ success: boolean; models: RunningModelInfo[]; error?: string }>
   unloadModel: (modelName: string, host?: string) => Promise<{ success: boolean; error?: string }>
   /** SLM Agent Studio: trigger log anomaly diagnostics scan and return structured report. */

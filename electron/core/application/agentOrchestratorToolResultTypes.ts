@@ -5,6 +5,7 @@ import type { ClassifiedToolExecutionResult } from './agentToolExecutorService'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
+import type { FileVersionEvidence } from '../domain/agent/fileVersionEvidence'
 import type { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { AgentTaskResult } from '../domain/agent/agentTypes'
@@ -45,7 +46,7 @@ export interface ToolResultProcessingContext {
     guardEvents: AgentGuardEvent[]
     progress: AgentProgressPolicy
     pendingVersionConflictReadPath?: string
-    versionedReadEvidence?: { filePath: string; contentHash: string }
+    versionEvidence: FileVersionEvidence
   }
   isSessionActive: () => boolean
   rendererEvents: RendererEventSink | null

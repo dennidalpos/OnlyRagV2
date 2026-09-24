@@ -47,8 +47,14 @@ const TERMINATING_SUBCOMMANDS = new Set(['build', 'generate', 'export'])
 /** Typecheckers that read the project's own file set rather than an import graph. */
 const WHOLE_PROJECT_CHECKERS = /(^|[\s&|;/\\])(tsc|vue-tsc|svelte-check|astro\s+check)([\s&|;]|$)/
 
-/** How much of the project a declared script actually examines. */
+/**
+ * How much of the project a declared script actually examines. A test runner collects its test
+ * files from config but examines only the code those files import, so it is entry-reachable like
+ * a bundler: counting it as whole-project made `npm run test` outrank `npm run build`, and live
+ * full task run 15 of 2026-09-24 closed 'verified' without the build ever running.
+ */
 export function coverageOfScript(kind: VerificationKind, scriptBody: string): VerificationCoverage {
+  if (kind === 'test') return 'entry-reachable'
   if (kind !== 'build') return 'whole-project'
   return WHOLE_PROJECT_CHECKERS.test(scriptBody || '') ? 'whole-project' : 'entry-reachable'
 }

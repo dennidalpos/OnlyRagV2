@@ -13,6 +13,7 @@ import { shellCommandHasEgress } from '../domain/agent/offlineStrictPolicy'
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import type { ApprovalResponse } from './agentOrchestratorTypes'
 import path from 'node:path'
+import { parseShellFileRead } from '../domain/agent/shellFileRead'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -199,6 +200,20 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
       // when qwen2.5-coder:7b kept proposing writes (full-task run 7, 2026-09-24).
       ctx.emitLog('info', `🔄 Lettura versione eseguita dall'applicazione: ${ctx.requiredReadPath} (proposto: ${ctx.parsedTool.tool}).`)
       return { outcome: 'allowed', toolCallForExecution: { tool: 'read_file', parameters: { filePath: ctx.requiredReadPath } } }
+    }
+  }
+
+  // A shell command that only prints one workspace file runs as read_file: same text, plus the
+  // [FILE VERSION] a later overwrite needs, and no command approval for a read (shellFileRead.ts).
+  const shellRead = ctx.parsedTool.tool === 'run_command' ? parseShellFileRead(String(ctx.parsedTool.parameters.command || '')) : null
+  const shellReadAllowed = !ctx.allowedToolsForTurn || ctx.allowedToolsForTurn.includes('run_command') || ctx.allowedToolsForTurn.includes('read_file')
+  if (shellRead && ctx.workspacePath && shellReadAllowed) {
+    const root = path.resolve(ctx.workspacePath)
+    const absolute = path.resolve(root, shellRead)
+    if (absolute.startsWith(`${root}${path.sep}`)) {
+      const filePath = path.relative(root, absolute).replace(/\\/g, '/')
+      ctx.emitLog('info', `📖 Lettura shell eseguita come read_file: ${filePath} (proposto: ${String(ctx.parsedTool.parameters.command)}).`)
+      return { outcome: 'allowed', toolCallForExecution: { tool: 'read_file', parameters: { filePath } } }
     }
   }
 

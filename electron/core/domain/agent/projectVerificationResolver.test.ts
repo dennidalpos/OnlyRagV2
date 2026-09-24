@@ -92,10 +92,13 @@ describe('verification coverage', () => {
     expect(coverageOfScript('build', 'node scripts/buildtsconfig.js && vite build')).toBe('entry-reachable')
   })
 
-  it('treats typecheck, test and lint as whole-project: their file set comes from config', () => {
+  it('treats typecheck and lint as whole-project: their file set comes from config', () => {
     expect(coverageOfScript('typecheck', 'tsc --noEmit')).toBe('whole-project')
-    expect(coverageOfScript('test', 'vitest run')).toBe('whole-project')
     expect(coverageOfScript('lint', 'eslint .')).toBe('whole-project')
+  })
+
+  it('treats a test run as entry-reachable: it examines only what the test files import', () => {
+    expect(coverageOfScript('test', 'vitest run')).toBe('entry-reachable')
   })
 })
 
@@ -131,6 +134,11 @@ describe('resolvePrimaryVerificationCommand — coverage decides before kind', (
 
     expect(primary?.command).toBe('npx tsc --noEmit')
     expect(primary?.coverage).toBe('whole-project')
+  })
+
+  it('keeps the build ahead of the test script, which cannot prove the project builds', () => {
+    expect(resolvePrimaryVerificationCommand(manifestOf({ build: 'vite build', test: 'vitest run' }))?.command).toBe('npm run build')
+    expect(resolvePrimaryVerificationCommand(manifestOf({ test: 'vitest run' }))?.command).toBe('npm run test')
   })
 
   it('still returns null for a project that declares no check at all', () => {

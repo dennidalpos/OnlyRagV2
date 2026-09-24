@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { X, Cpu, Wrench, ScanLine, Activity, CheckCircle2, AlertCircle, Terminal, FileCode, Folder, Layers, Check, Loader2, Sparkles } from 'lucide-react'
-import { AppSettings, AgentActionLog } from '../../types'
+import { AppSettings, AgentActionLog, type GuestOsInfo } from '../../types'
 import { formatClockTime } from '../../lib/timeFormat'
 import { logger } from '../../lib/logger'
 import { SlmDiagnosticsPanel } from './SlmDiagnosticsPanel'
@@ -10,7 +10,7 @@ import { useTranslation } from '../../i18n'
 interface SystemDiagnosticsModalProps {
   isOpen: boolean
   onClose: () => void
-  guestOsInfo: any
+  guestOsInfo: GuestOsInfo | null
   settings?: AppSettings
   actionLogs?: AgentActionLog[]
   isExecuting?: boolean
@@ -73,13 +73,10 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
 
   if (!isOpen) return null
 
-  const hasGit = guestOsInfo?.tools?.git ?? guestOsInfo?.hasGit
-  const hasNode = guestOsInfo?.tools?.node ?? guestOsInfo?.hasNode
-  const hasPy = guestOsInfo?.tools?.python ?? guestOsInfo?.hasPython
-  const hasOllama = guestOsInfo?.tools?.ollama ?? guestOsInfo?.hasOllama
-  const hasDocker = guestOsInfo?.tools?.docker
-  const hasUv = guestOsInfo?.tools?.uv
-  const hasBun = guestOsInfo?.tools?.bun
+  const hasGit = guestOsInfo?.tools.git
+  const hasNode = guestOsInfo?.tools.node
+  const hasPy = guestOsInfo?.tools.python
+  const hasOllama = guestOsInfo?.tools.ollama
 
   const agentLogs = actionLogs.filter((log) => !log.message.startsWith('User Prompt: '))
   const totalSteps = agentLogs.length
@@ -250,27 +247,6 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                     {hasOllama ? 'OK' : 'OFF'}
                   </span>
                 </div>
-
-                {hasDocker !== undefined && (
-                  <div className="flex items-center justify-between p-2 bg-slate-900/80 rounded-xl border border-slate-800">
-                    <span className="text-slate-400">Docker</span>
-                    <span className={`text-[10px] font-bold ${hasDocker ? 'text-emerald-400' : 'text-slate-500'}`}>{hasDocker ? 'OK' : 'N/A'}</span>
-                  </div>
-                )}
-
-                {hasUv !== undefined && (
-                  <div className="flex items-center justify-between p-2 bg-slate-900/80 rounded-xl border border-slate-800">
-                    <span className="text-slate-400">UV</span>
-                    <span className={`text-[10px] font-bold ${hasUv ? 'text-emerald-400' : 'text-slate-500'}`}>{hasUv ? 'OK' : 'N/A'}</span>
-                  </div>
-                )}
-
-                {hasBun !== undefined && (
-                  <div className="flex items-center justify-between p-2 bg-slate-900/80 rounded-xl border border-slate-800">
-                    <span className="text-slate-400">Bun</span>
-                    <span className={`text-[10px] font-bold ${hasBun ? 'text-emerald-400' : 'text-slate-500'}`}>{hasBun ? 'OK' : 'N/A'}</span>
-                  </div>
-                )}
               </div>
             </div>
           </div>

@@ -20,7 +20,7 @@ Run from repository root in PowerShell. The fast suite, static checks, typecheck
 | Cold-start network E2E | `npm run test:e2e:cold-start` (Main and Renderer first launch) |
 | Settings bootstrap E2E | `npm run test:e2e:settings-bootstrap` |
 | Bundle and viewport E2E | `npm run test:e2e:bundle-ux` (1024×700 and 1400×900) |
-| Static quality | `npm run quality:static` (Biome lint errors, format-check of every file, IPC and layering guards; `npx biome lint` lists the `noExplicitAny` warnings) |
+| Static quality | `npm run quality:static` (Biome lint errors, format-check of every file, IPC and layering guards; `noExplicitAny` is an error in every non-test file and a warning in tests; `npx biome lint` lists those warnings) |
 | Installer | `npm run package:win` (output in `release/`; Vite owns and empties `dist/`) |
 | Full audit | `powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast` |
 | Targeted Vitest | `npx vitest run <path>` |

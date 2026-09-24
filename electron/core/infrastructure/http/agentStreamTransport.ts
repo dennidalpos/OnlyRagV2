@@ -224,7 +224,7 @@ export class AgentStreamTransport {
         },
       )
 
-      req.on('error', (err: any) => {
+      req.on('error', (err: NodeJS.ErrnoException) => {
         cleanupTimers()
         if (err.code === 'ECONNREFUSED') {
           reject(new Error(`Ollama service is not reachable at ${normalizeOllamaHost(ollamaEndpoint)}. Please ensure Ollama is running.`))
@@ -382,7 +382,7 @@ export class AgentStreamTransport {
         },
       )
 
-      req.on('error', (err: any) => {
+      req.on('error', (err: NodeJS.ErrnoException) => {
         cleanupTimers()
         if (err.code === 'ECONNREFUSED') {
           reject(new Error(`Ollama service is not reachable at ${normalizeOllamaHost(ollamaEndpoint)}. Please ensure Ollama is running.`))

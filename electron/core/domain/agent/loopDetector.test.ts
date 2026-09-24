@@ -358,3 +358,41 @@ describe('AgentActionLoopDetector Unit Tests', () => {
     })
   })
 })
+
+describe('cycle detection keys edits by content', () => {
+  const build: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm run build' } }
+  const write = (content: string): AgentToolCall => ({ tool: 'write_file', parameters: { filePath: 'src/index.css', content } })
+
+  it('lets a different fix follow each failed build', () => {
+    const detector = new AgentActionLoopDetector(2)
+    for (const call of [write('a'), build, write('b'), build, write('c')]) {
+      expect(detector.recordAndDetectCycle(call.tool, call.parameters).isOscillating).toBe(false)
+    }
+  })
+
+  it('still catches the same fix and the same build alternating', () => {
+    const detector = new AgentActionLoopDetector(2)
+    const results = [write('a'), build, write('a'), build].map((call) => detector.recordAndDetectCycle(call.tool, call.parameters))
+    expect(results.at(-1)?.isOscillating).toBe(true)
+  })
+})
+
+describe('same-file edit streaks end at a check', () => {
+  const edit = (content: string): AgentToolCall => ({ tool: 'write_file', parameters: { filePath: 'package.json', content } })
+  const build: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm run build' } }
+
+  it('blocks a fourth unverified edit of one file', () => {
+    const detector = new AgentActionLoopDetector(2)
+    const results = ['a', 'b', 'c', 'd'].map((content) => detector.recordAndCheck(edit(content)))
+    expect(results.at(-1)).toMatchObject({ isLooping: true, pattern: 'same_file_edits' })
+  })
+
+  it('lets corrections resume once a check has run', () => {
+    const detector = new AgentActionLoopDetector(2)
+    for (const content of ['a', 'b', 'c']) detector.recordAndCheck(edit(content))
+    detector.recordAndCheck(build)
+    detector.recordOutcome(build, false)
+
+    expect(detector.recordAndCheck(edit('d')).isLooping).toBe(false)
+  })
+})

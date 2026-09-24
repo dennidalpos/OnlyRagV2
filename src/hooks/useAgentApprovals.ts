@@ -1,23 +1,15 @@
 import { useState, useCallback } from 'react'
 import { logger } from '../lib/logger'
-import type { AgentRunIdentity } from '../types'
+import type { AgentApprovalRequest } from '../types'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
-export interface PendingApprovalRequest extends AgentRunIdentity {
-  sessionId: string
-  type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit'
-  target: string
-  contentOrCmd: string
-  replacement?: string
-  replacements?: { targetContent: string; replacementContent: string }[]
-  parameters?: Record<string, any>
-}
+export type PendingApprovalRequest = AgentApprovalRequest
 
 export function useAgentApprovals() {
   const [pendingApproval, setPendingApproval] = useState<PendingApprovalRequest | null>(null)
 
   const handleApprove = useCallback(
-    async (approved: boolean, approvedHunks?: any) => {
+    async (approved: boolean, approvedHunks?: number[]) => {
       if (!pendingApproval || !window.electronAPI?.respondToAgentApproval) return
       const current = pendingApproval
       setPendingApproval(null)

@@ -1,3 +1,4 @@
+import type { ChildProcess } from 'node:child_process'
 import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import type { ObservedToolCallingProtocol } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 import type { AgentCompletionStatus, AgentRunIdentity, AgentVerificationEvidence } from '../../../shared/types'
@@ -17,7 +18,7 @@ export interface AgentSession {
   abortController?: AbortController
   rendererEvents: RendererEventSink | null
   activeCancelHandle?: (() => void) | null
-  activeChildProcess?: any | null
+  activeChildProcess?: ChildProcess | null
   /** Global session watchdog. Cleared on every exit path so it can never outlive its own run. */
   timeoutHandle?: NodeJS.Timeout | null
   /** Ollama `context` continuation cache (AGT1): the token array + the exact stable/history baseline it corresponds to, so the next turn can detect whether a tail-append delta can be sent instead of the full prompt. */

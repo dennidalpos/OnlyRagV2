@@ -9,11 +9,17 @@ const context = vi.hoisted(() => ({ userData: '' }))
 vi.mock('electron', () => ({ app: { getPath: () => context.userData, isPackaged: false } }))
 
 import { SidecarProcessManager } from '../../electron/core/infrastructure/process/sidecarProcessManager'
+import type { SidecarOwnershipMarker } from '../../electron/core/infrastructure/process/orphanPortReclaim'
 
 const root = process.platform === 'win32' ? fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-sidecar-ownership-')) : ''
 context.userData = root
 const children: ChildProcess[] = []
 const manager = new SidecarProcessManager()
+/** The private ownership checks this scenario drives directly against real processes. */
+const ownership = manager as unknown as {
+  readProcessIdentity(pid: number | undefined): Promise<SidecarOwnershipMarker | null>
+  reclaimOrphanSidecarPort(): Promise<boolean>
+}
 const markerPath = path.join(root, 'sidecar-ownership.json')
 
 async function waitForPort(timeoutMs: number): Promise<void> {
@@ -61,17 +67,17 @@ describe.skipIf(process.platform !== 'win32')('Windows Sidecar ownership integra
     const child = spawn(process.execPath, ['-e', serverScript], { windowsHide: true, stdio: 'ignore' })
     children.push(child)
     await waitForPort(10_000)
-    const identity = await (manager as any).readProcessIdentity(child.pid)
+    const identity = await ownership.readProcessIdentity(child.pid)
     expect(identity?.pid).toBe(child.pid)
 
-    expect(await (manager as any).reclaimOrphanSidecarPort()).toBe(false)
+    expect(await ownership.reclaimOrphanSidecarPort()).toBe(false)
     expect(child.exitCode).toBeNull()
     fs.writeFileSync(markerPath, JSON.stringify({ ...identity, startedAt: '2000-01-01T00:00:00.000Z' }))
-    expect(await (manager as any).reclaimOrphanSidecarPort()).toBe(false)
+    expect(await ownership.reclaimOrphanSidecarPort()).toBe(false)
     expect(child.exitCode).toBeNull()
 
     fs.writeFileSync(markerPath, JSON.stringify(identity))
-    expect(await (manager as any).reclaimOrphanSidecarPort()).toBe(true)
+    expect(await ownership.reclaimOrphanSidecarPort()).toBe(true)
   })
 
   it('reclaims a packaged sidecar.exe only with its exact process identity', async () => {
@@ -85,10 +91,10 @@ describe.skipIf(process.platform !== 'win32')('Windows Sidecar ownership integra
     })
     children.push(child)
     await waitForPort(60_000)
-    const identity = await (manager as any).readProcessIdentity(child.pid)
+    const identity = await ownership.readProcessIdentity(child.pid)
     expect(identity?.pid).toBe(child.pid)
     expect(identity?.executablePath.toLowerCase()).toBe(exe.toLowerCase())
     fs.writeFileSync(markerPath, JSON.stringify(identity))
-    expect(await (manager as any).reclaimOrphanSidecarPort()).toBe(true)
+    expect(await ownership.reclaimOrphanSidecarPort()).toBe(true)
   })
 })

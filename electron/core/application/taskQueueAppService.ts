@@ -18,7 +18,7 @@ export interface QueuedAgentTask {
   payload: AgentTaskPayload
   rendererEvents: RendererEventSink
   resolve: (result: AgentTaskResult) => void
-  reject: (err: any) => void
+  reject: (err: unknown) => void
 }
 
 /** Agent tasks run strictly one at a time. */

@@ -83,12 +83,12 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children, initialLan
   const t = useCallback(
     (key: TranslationKey, params?: Record<string, string | number>): string => {
       const keys = key.split('.')
-      let current: any = dict
-      let fallback: any = dictionaries.it
+      let current: unknown = dict
+      let fallback: unknown = dictionaries.it
 
       for (const k of keys) {
         if (current && typeof current === 'object' && k in current) {
-          current = current[k]
+          current = (current as Record<string, unknown>)[k]
         } else {
           current = undefined
           break
@@ -99,7 +99,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children, initialLan
       if (current === undefined || typeof current !== 'string') {
         for (const k of keys) {
           if (fallback && typeof fallback === 'object' && k in fallback) {
-            fallback = fallback[k]
+            fallback = (fallback as Record<string, unknown>)[k]
           } else {
             fallback = undefined
             break
@@ -143,10 +143,10 @@ export const useTranslation = (): I18nContextType => {
       setLanguage: () => {},
       t: (key: TranslationKey, params?: Record<string, string | number>) => {
         const keys = key.split('.')
-        let current: any = it
+        let current: unknown = it
         for (const k of keys) {
           if (current && typeof current === 'object' && k in current) {
-            current = current[k]
+            current = (current as Record<string, unknown>)[k]
           } else {
             return key
           }

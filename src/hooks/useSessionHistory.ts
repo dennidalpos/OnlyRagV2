@@ -398,8 +398,8 @@ export function useSessionHistory(workspacePath: string | null) {
               startedAt: completed.startedAt,
               completedAt: completed.completedAt,
             })
-            .catch((err: any) => {
-              logger.warn('useSessionHistory', `Could not index prompt history entry ${completed.id}: ${err?.message}`)
+            .catch((err: unknown) => {
+              logger.warn('useSessionHistory', `Could not index prompt history entry ${completed.id}: ${errorMessage(err)}`)
             })
         }
 

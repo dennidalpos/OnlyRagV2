@@ -1,3 +1,4 @@
+import type { editor } from 'monaco-editor'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { IngestedDocument, AppSettings, DiagnosticsData, IngestionStreamProgressPayload } from '../types'
 import { apiService } from '../services/api'
@@ -215,7 +216,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
 
   const [exportStatus, setExportStatus] = useState<{ active: boolean; message: string; isError?: boolean } | null>(null)
   const leftPaneRef = useRef<HTMLDivElement>(null)
-  const editorRef = useRef<any>(null)
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const isSyncingScrollRef = useRef<boolean>(false)
   const scrollRafRef = useRef<number | null>(null)
 
@@ -303,15 +304,15 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     })
   }
 
-  const handleEditorDidMount = (editor: any) => {
-    editorRef.current = editor
-    editor.onDidScrollChange((e: any) => {
+  const handleEditorDidMount = (mounted: editor.IStandaloneCodeEditor) => {
+    editorRef.current = mounted
+    mounted.onDidScrollChange((e) => {
       if (!syncScroll || isSyncingScrollRef.current || !leftPaneRef.current) return
       if (!e.scrollTopChanged) return
 
       isSyncingScrollRef.current = true
-      const editorScrollHeight = editor.getScrollHeight()
-      const editorLayout = editor.getLayoutInfo()
+      const editorScrollHeight = mounted.getScrollHeight()
+      const editorLayout = mounted.getLayoutInfo()
       const editorClientHeight = editorLayout ? editorLayout.height : 0
       const maxEditorScroll = editorScrollHeight - editorClientHeight
 

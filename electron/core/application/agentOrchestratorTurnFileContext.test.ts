@@ -11,9 +11,10 @@ vi.mock('../infrastructure/diagnostics/hardwareProbe', () => ({
   },
 }))
 
-import { buildCurrentOperationContext, readTurnFileContext, resolveTurnFileTargets } from './agentOrchestratorPromptAssembly'
+import { buildCurrentOperationContext, latestUnresolvedFailure, readTurnFileContext, resolveTurnFileTargets } from './agentOrchestratorPromptAssembly'
 import type { TurnDispatchContext } from './agentOrchestratorTurnDispatchTypes'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
+import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 
 /** The measurement behind this file: across four independent full-task runs in logs/coding_agent_audit.log the model issued 74 `write_file` calls and called `read_file` exactly zero times — and `replace_file_content` zero times as well. */
 
@@ -47,6 +48,20 @@ describe('readTurnFileContext', () => {
     expect(block).toContain('because')
     // The instruction rides with the data: a wholesale replace is what produced 208-byte stubs.
     expect(block).toContain('DO NOT REPLACE IT WITH A SHORTER FILE')
+  })
+
+  it('lets the model edit a file the prompt showed whole without a read_file round trip', () => {
+    fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true })
+    const app = 'export default function App() { return <main /> }\n'
+    fs.writeFileSync(path.join(tempDir, 'src', 'App.jsx'), app)
+    fs.writeFileSync(path.join(tempDir, 'src', 'Big.jsx'), `export const big = '${'x'.repeat(13000)}'\n`)
+    const ctx = { ...ctxWith(), responseInterpreterState: { versionEvidence: {} } } as unknown as TurnDispatchContext
+
+    readTurnFileContext(ctx, ['src/App.jsx'], 'because')
+    // Truncated in the prompt, so the model has not seen this version whole.
+    readTurnFileContext(ctx, ['src/Big.jsx'], 'because')
+
+    expect(ctx.responseInterpreterState.versionEvidence).toEqual({ 'src/app.jsx': contentVersion(app) })
   })
 
   it('is silent when the file does not exist yet', () => {
@@ -109,6 +124,19 @@ describe('buildCurrentOperationContext', () => {
     expect(block).toContain('Relevant paths: src/app.ts')
     expect(block).toContain('latest error')
     expect(block).not.toContain('old error')
+  })
+})
+
+describe('latestUnresolvedFailure', () => {
+  it('drops a failure the workspace has moved past', () => {
+    const blocked = { step: 33, tool: 'run_command', isFailure: true }
+    expect(latestUnresolvedFailure([blocked, { step: 36, tool: 'run_command' }])).toBeUndefined()
+    expect(latestUnresolvedFailure([blocked, { step: 36, tool: 'write_file' }])).toBeUndefined()
+  })
+
+  it('keeps it across reads, which change nothing', () => {
+    const failed = { step: 5, tool: 'run_command', isFailure: true }
+    expect(latestUnresolvedFailure([failed, { step: 6, tool: 'read_file' }])).toBe(failed)
   })
 })
 

@@ -40,7 +40,7 @@ describe('handleLoopDetection — successful vs failed repeats', () => {
       compiledHistoryBlock: '',
       flags: { hasFileMutations: true, hasVerifiedBuild: false },
       surfacedDodReasons: new Set<string>(),
-      state: { progress: new AgentProgressPolicy(), verificationFixCycles: 0, guardEvents: [] },
+      state: { progress: new AgentProgressPolicy(), verificationFixCycles: 0, guardEvents: [], versionEvidence: {} },
       episodicCompactor: new EpisodicMemoryCompactor(6),
       goalPlanner,
       executionGuard: new TransactionalExecutionGuard(process.cwd()),

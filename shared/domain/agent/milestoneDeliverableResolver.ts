@@ -124,3 +124,28 @@ export function isDeliverableOfMilestone(milestone: string | MilestoneDeliverabl
 
   return resolveDeclaredFilePaths(milestone).some((deliverable) => normalisedMutation === deliverable || normalisedMutation.endsWith(`/${deliverable}`))
 }
+
+/** Script-module extensions a bundler resolves from the same extensionless import (`./App`). */
+const SCRIPT_MODULE_EXTENSION = /\.(?:[cm]?[jt]sx?)$/i
+
+/**
+ * Declared deliverables `writtenPath` delivers under another script extension: the plan named
+ * `src/App.js`, the model wrote `src/App.jsx`, and `import App from './App'` resolves either. Live
+ * full task run 11 of 2026-09-24: m-6 and m-9 named `src/App.js` while the scaffold's entry
+ * imported `src/App.jsx`; every focus turn targeted the missing `.js` path, so the prompt never
+ * showed the real file and the milestones could never be satisfied. Same directory and stem only;
+ * `App.test.jsx` is not an alias of `App.js`.
+ */
+export function findModuleExtensionAliases(declaredPaths: readonly string[], writtenPath: string): string[] {
+  const written = writtenPath.replace(/\\/g, '/').replace(/^\.\//, '')
+  if (!SCRIPT_MODULE_EXTENSION.test(written)) return []
+  const writtenStem = written.replace(SCRIPT_MODULE_EXTENSION, '').toLowerCase()
+  return declaredPaths.filter((declared) => {
+    const normalized = declared.replace(/\\/g, '/').replace(/^\.\//, '')
+    return (
+      SCRIPT_MODULE_EXTENSION.test(normalized) &&
+      normalized.toLowerCase() !== written.toLowerCase() &&
+      normalized.replace(SCRIPT_MODULE_EXTENSION, '').toLowerCase() === writtenStem
+    )
+  })
+}

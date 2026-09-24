@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
+  extractCssSyntaxFailure,
+  extractMissingScriptProgram,
+  extractUnresolvedBundlerImport,
+  extractUnresolvedCssImport,
   buildDiagnosticFixDirective,
   buildDeferredDiagnosticNote,
   extractExportMismatch,
@@ -486,5 +490,150 @@ describe('JSX in a .js file', () => {
   it('stays out of every other failure', () => {
     expect(extractJsxInScriptFile(TSC_OUTPUT)).toBeNull()
     expect(diagnosticFixRequiredTools(TSC_OUTPUT)).toEqual([])
+  })
+})
+
+describe('an unresolvable stylesheet @import', () => {
+  /** Full task run 16 of 2026-09-24 (vite 8), colours stripped. */
+  const VITE_CSS = [
+    '> vite build',
+    'transforming...',
+    'Unable to resolve `@import "tailwindcss/tailwind.min.css"` from D:/live/ws/src',
+    '✗ Build failed in 527ms',
+    'error during build:',
+    '[plugin vite:css] D:/live/ws/src/index.css',
+  ].join('\n')
+  const facts = {
+    toWorkspaceRelative: (filePath: string) => filePath.replace('D:/live/ws/', ''),
+    packageHasStyleEntry: (pkg: string) => pkg === 'tailwindcss',
+  }
+
+  it('names the stylesheet, the specifier and the package', () => {
+    expect(extractUnresolvedCssImport(VITE_CSS)).toEqual({
+      file: 'D:/live/ws/src/index.css',
+      specifier: 'tailwindcss/tailwind.min.css',
+      packageName: 'tailwindcss',
+    })
+    expect(extractUnresolvedCssImport('Unable to resolve `@import "./theme.css"` from src\nsrc/styles/main.css')?.packageName).toBeNull()
+  })
+
+  it('orders the bare package import when the package ships a stylesheet entry', () => {
+    const directive = buildDiagnosticFixDirective(VITE_CSS, undefined, undefined, facts)!
+
+    expect(directive).toContain('[CSS @import DOES NOT RESOLVE — "src/index.css"]')
+    expect(directive).toContain('replaced by exactly: @import "tailwindcss";')
+    expect(diagnosticFixTargetFile(VITE_CSS, facts)).toBe('src/index.css')
+  })
+
+  it('orders the line removed when nothing installed can take its place', () => {
+    const directive = buildDiagnosticFixDirective(VITE_CSS, undefined, undefined, { toWorkspaceRelative: facts.toWorkspaceRelative })!
+
+    expect(directive).toContain('@import "tailwindcss/tailwind.min.css"; removed')
+  })
+})
+
+describe('a relative import the bundler could not resolve', () => {
+  /** Full task run 20 of 2026-09-24 (vite 8 / rolldown), colours stripped. */
+  const ROLLDOWN = [
+    '> vite build',
+    '✗ Build failed in 102ms',
+    'error during build:',
+    "[UNRESOLVED_IMPORT] Could not resolve './tailwind.css' in src/App.jsx",
+    '   ╭─[ src/App.jsx:2:8 ]',
+    ' 2 │ import "./tailwind.css";',
+  ].join('\n')
+
+  it('names the importer and the specifier', () => {
+    expect(extractUnresolvedBundlerImport(ROLLDOWN)).toEqual({ importer: 'src/App.jsx', specifier: './tailwind.css' })
+    expect(extractUnresolvedBundlerImport('Failed to resolve import "./Button" from "src/App.jsx". Does the file exist?')).toEqual({
+      importer: 'src/App.jsx',
+      specifier: './Button',
+    })
+  })
+
+  it('leaves a test file that did not load to the test diagnostic', () => {
+    expect(extractUnresolvedBundlerImport('Failed to resolve import "../App" from "src/App.test.jsx". Does the file exist?')).toBeNull()
+  })
+
+  it('orders a missing stylesheet import removed from the importer', () => {
+    const directive = buildDiagnosticFixDirective(ROLLDOWN, undefined, undefined, { fileExists: () => false })!
+
+    expect(directive).toContain('MUST be "write_file" on "src/App.jsx": the same complete file without the line that imports "./tailwind.css"')
+    expect(diagnosticFixTargetFile(ROLLDOWN, { fileExists: () => false })).toBe('src/App.jsx')
+  })
+
+  it('redirects the import when the same file exists nearby', () => {
+    const facts = { fileExists: (p: string) => p === 'src/styles/tailwind.css' }
+    const directive = buildDiagnosticFixDirective(ROLLDOWN, undefined, undefined, facts)!
+
+    expect(directive).toContain('"./tailwind.css" changed to "./styles/tailwind.css", which exists')
+  })
+
+  it('orders a missing module created', () => {
+    const output = 'Failed to resolve import "./Button" from "src/App.jsx". Does the file exist?'
+    const directive = buildDiagnosticFixDirective(output, undefined, undefined, { fileExists: () => false })!
+
+    expect(directive).toContain('MUST be "write_file" on "src/Button.jsx", creating that file')
+    expect(diagnosticFixTargetFile(output, { fileExists: () => false })).toBe('src/Button.jsx')
+  })
+})
+
+describe('an npm script whose program is not installed', () => {
+  /** Full task run 23 of 2026-09-24, Italian cmd.exe. */
+  const CMD_IT = [
+    '> project-dashboard-task@1.0.0 build',
+    '> react-scripts build',
+    '',
+    "'react-scripts' non è riconosciuto come comando interno o esterno,",
+    ' un programma eseguibile o un file batch.',
+  ].join('\n')
+
+  it('reads the script, its body and the missing program in cmd.exe and POSIX spellings', () => {
+    expect(extractMissingScriptProgram(CMD_IT)).toEqual({ script: 'build', body: 'react-scripts build', program: 'react-scripts' })
+    expect(extractMissingScriptProgram("> app@1.0.0 build\n> tsc -b\n\n'tsc' is not recognized as an internal or external command,")?.program).toBe('tsc')
+    expect(extractMissingScriptProgram('> app@1.0.0 test\n> vitest run\n\nsh: 1: vitest: not found')?.program).toBe('vitest')
+  })
+
+  it('points the script at the installed Vite', () => {
+    const facts = { binaryInstalled: (name: string) => name === 'vite' }
+    const directive = buildDiagnosticFixDirective(CMD_IT, undefined, undefined, facts)!
+
+    expect(directive).toContain('the "build" script changed to exactly "vite build"')
+    expect(diagnosticFixTargetFile(CMD_IT, facts)).toBe('package.json')
+    expect(diagnosticFixRequiredTools(CMD_IT, facts)).toEqual([])
+  })
+
+  it('orders the program installed when nothing can stand in for it', () => {
+    const output = "> app@1.0.0 build\n> tsc -b\n\n'tsc' is not recognized as an internal or external command,"
+    const directive = buildDiagnosticFixDirective(output, undefined, undefined, { binaryInstalled: () => false })!
+
+    expect(directive).toContain('MUST be "run_command" with the command: npm install --save-dev typescript')
+    expect(diagnosticFixTargetFile(output, { binaryInstalled: () => false })).toBeNull()
+    expect(diagnosticFixRequiredTools(output, { binaryInstalled: () => false })).toEqual(['run_command'])
+  })
+})
+
+describe('a stylesheet PostCSS cannot parse', () => {
+  const POSTCSS = [
+    '> vite build',
+    '✗ Build failed in 325ms',
+    'error during build:',
+    '[plugin vite:css] D:/live/ws/src/index.css',
+    'CssSyntaxError: [postcss] D:/live/ws/src/index.css:3:1: Unknown word',
+    '    at Input.error (node_modules/postcss/lib/input.js:106:16)',
+  ].join('\n')
+  const facts = { toWorkspaceRelative: (filePath: string) => filePath.replace('D:/live/ws/', '') }
+
+  it('names the stylesheet, the line and the reason', () => {
+    expect(extractCssSyntaxFailure(POSTCSS)).toEqual({ file: 'D:/live/ws/src/index.css', line: 3, reason: 'Unknown word' })
+    expect(extractCssSyntaxFailure('[plugin vite:css] src/theme.css\nCssSyntaxError: something')?.file).toBe('src/theme.css')
+  })
+
+  it('orders the stylesheet rewritten as valid CSS', () => {
+    const directive = buildDiagnosticFixDirective(POSTCSS, undefined, undefined, facts)!
+
+    expect(directive).toContain('[STYLESHEET SYNTAX ERROR — "src/index.css" line 3]')
+    expect(directive).toContain('MUST be "write_file" on "src/index.css"')
+    expect(diagnosticFixTargetFile(POSTCSS, facts)).toBe('src/index.css')
   })
 })

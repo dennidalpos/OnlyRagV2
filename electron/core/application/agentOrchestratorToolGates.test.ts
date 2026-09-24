@@ -185,3 +185,35 @@ describe('turn policy denials', () => {
     expect(state.guardEvents.every((event) => event.guard === 'tool_policy' && event.action === 'advise')).toBe(true)
   })
 })
+
+describe('runToolGates shell reads', () => {
+  const baseCtx = (command: string, allowedToolsForTurn: string[] | undefined) => ({
+    parsedTool: { tool: 'run_command' as const, parameters: { command } },
+    agentMode: 'auto' as const,
+    fsmMode: { isToolAllowed: vi.fn(() => true) } as any,
+    workspacePath: 'D:/work/app',
+    stepCount: 16,
+    episodicCompactor: { recordStep: vi.fn() } as any,
+    emitLog: vi.fn(),
+    requestApproval: vi.fn(),
+    allowedToolsForTurn: allowedToolsForTurn as any,
+  })
+
+  it('runs a single-file shell read as read_file, even where only read_file is exposed', async () => {
+    expect(await runToolGates(baseCtx("sed -n '1,200p' package.json", ['run_command']))).toEqual({
+      outcome: 'allowed',
+      toolCallForExecution: { tool: 'read_file', parameters: { filePath: 'package.json' } },
+    })
+    expect(await runToolGates(baseCtx('cat src/App.tsx', ['read_file']))).toMatchObject({
+      toolCallForExecution: { tool: 'read_file', parameters: { filePath: 'src/App.tsx' } },
+    })
+  })
+
+  it('keeps the turn policy for a read the phase does not allow, and ignores files outside the workspace', async () => {
+    expect(await runToolGates(baseCtx('cat src/App.tsx', ['write_file']))).toMatchObject({ outcome: 'denied', policyDenial: 'turn_policy' })
+    expect(await runToolGates(baseCtx('cat ../secrets.txt', ['run_command']))).toMatchObject({
+      outcome: 'allowed',
+      toolCallForExecution: { tool: 'run_command' },
+    })
+  })
+})

@@ -587,7 +587,7 @@ export function usePlanApproval({
         pending.prompt,
         validation.answers,
         window.electronAPI?.agentPlanEnrichPrompt,
-        (err: any) => logger.warn('usePlanApproval', `agentPlanEnrichPrompt failed: ${err?.message || String(err)}`),
+        (err: unknown) => logger.warn('usePlanApproval', `agentPlanEnrichPrompt failed: ${errorMessage(err)}`),
         pending.questions,
       )
       if (!isFlowCurrent(pending.scope)) return null

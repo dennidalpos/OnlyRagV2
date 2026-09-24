@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   extractDeliverablePaths,
+  findModuleExtensionAliases,
   isDeliverableOfMilestone,
   isPlaceholderContent,
   resolveMilestoneDeliverableStatus,
@@ -179,5 +180,18 @@ describe('resolveMilestoneDeliverableStatus — placeholder deliverables', () =>
   it('leaves large files alone when the probe supplies no content to inspect', () => {
     const probe: DeliverableProbe = () => ({ exists: true, contentLength: 8192 })
     expect(resolveMilestoneDeliverableStatus('Create src/App.tsx', probe)).toBe('satisfied')
+  })
+})
+
+describe('findModuleExtensionAliases', () => {
+  it('matches the same module under another script extension', () => {
+    expect(findModuleExtensionAliases(['src/App.js', 'src/App.test.jsx', 'index.html'], 'src/App.jsx')).toEqual(['src/App.js'])
+    expect(findModuleExtensionAliases(['./src/main.ts'], 'src\\main.tsx')).toEqual(['./src/main.ts'])
+  })
+
+  it('ignores other directories, other stems and non-script files', () => {
+    expect(findModuleExtensionAliases(['lib/App.js', 'src/Apps.js', 'src/App.css'], 'src/App.jsx')).toEqual([])
+    expect(findModuleExtensionAliases(['src/App.js'], 'src/App.css')).toEqual([])
+    expect(findModuleExtensionAliases(['src/App.jsx'], 'src/App.jsx')).toEqual([])
   })
 })

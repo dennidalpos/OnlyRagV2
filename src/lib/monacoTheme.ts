@@ -1,3 +1,5 @@
+import type { Monaco } from '@monaco-editor/react'
+import type { editor } from 'monaco-editor'
 import * as monaco from 'monaco-editor'
 import { loader } from '@monaco-editor/react'
 
@@ -33,7 +35,7 @@ export const ONLYRAG_MONACO_COLORS = {
  * Registers the official `onlyrag-dark` Monaco theme on the monaco instance.
  * Safe to call multiple times (idempotent).
  */
-export function defineOnlyRagMonacoTheme(monaco: any): void {
+export function defineOnlyRagMonacoTheme(monaco: Monaco | null | undefined): void {
   if (!monaco || !monaco.editor) return
   try {
     monaco.editor.defineTheme(ONLYRAG_MONACO_THEME_NAME, {
@@ -55,7 +57,9 @@ export function defineOnlyRagMonacoTheme(monaco: any): void {
   }
 }
 
-export interface MonacoOptionsConfig {
+/** The shorthand options below, plus any other Monaco editor or diff-editor option passed through as is. */
+export interface MonacoOptionsConfig
+  extends Omit<editor.IDiffEditorConstructionOptions, 'wordWrap' | 'readOnly' | 'minimap' | 'lineNumbers' | 'fontSize' | 'lineHeight' | 'renderSideBySide'> {
   wordWrap?: boolean
   readOnly?: boolean
   minimap?: boolean
@@ -63,7 +67,6 @@ export interface MonacoOptionsConfig {
   fontSize?: number
   lineHeight?: number
   renderSideBySide?: boolean
-  [key: string]: any
 }
 
 /**

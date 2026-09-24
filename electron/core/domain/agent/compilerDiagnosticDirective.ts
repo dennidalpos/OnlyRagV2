@@ -1,6 +1,8 @@
 import type { SupportedToolName } from './agentTypes'
 import { buildTestFailureDirective, extractFailingTest } from './testFailureDiagnostic'
 
+const ANSI_SEQUENCE = /\u001b\[[0-9;]*m/g
+
 export interface CompilerDiagnostic {
   file: string
   line: number
@@ -239,15 +241,267 @@ export function extractJsxInScriptFile(output: string): JsxInScriptFile | null {
   return null
 }
 
+/** Facts about the workspace a directive may need, injected because this module is pure domain. */
+export interface DiagnosticWorkspaceFacts {
+  /** True when the installed package declares a stylesheet entry (`style`, or `exports["."].style`). */
+  packageHasStyleEntry?: (packageName: string) => boolean
+  /** The workspace-relative form of a path the tool printed absolute. */
+  toWorkspaceRelative?: (filePath: string) => string
+  /** Whether a workspace-relative file exists. */
+  fileExists?: (workspaceRelativePath: string) => boolean
+  /** Whether an installed package provides this command (`node_modules/.bin/<name>`). */
+  binaryInstalled?: (name: string) => boolean
+}
+
+export interface MissingScriptProgram {
+  /** The npm script that ran, e.g. `build`. */
+  script: string
+  /** Its body as npm echoed it, e.g. `react-scripts build`. */
+  body: string
+  /** The program the shell could not find, e.g. `react-scripts`. */
+  program: string
+}
+
+/** cmd.exe (English and Italian) and POSIX shells reporting a program that is not on PATH. */
+const PROGRAM_NOT_FOUND: RegExp[] = [
+  /^['"]?([\w@./-]+?)['"]? (?:is not recognized as an internal or external command|non [^\s]{1,3} riconosciuto come comando interno o esterno)/m,
+  /^(?:sh|bash|zsh)(?:: line \d+)?: (?:\d+: )?([\w@./-]+): (?:command )?not found/m,
+]
+/** npm's echo of the script it runs: `> name@version script` then `> body`. */
+const NPM_SCRIPT_ECHO = /^> \S+@\S+ ([\w:-]+)\r?\n> (.+)$/m
+/** Bundler CLIs a declared Vite can stand in for, with the Vite command for each script role. */
+const VITE_REPLACEABLE = new Set(['react-scripts', 'webpack', 'webpack-cli', 'parcel'])
+/** Commands whose package has another name. */
+const PROGRAM_PACKAGES: Record<string, string> = { tsc: 'typescript', 'webpack-cli': 'webpack-cli', vite: 'vite', 'react-scripts': 'react-scripts' }
+
+/**
+ * An npm script whose program is not installed. Live full task run 23 of 2026-09-24: the build
+ * script ran `react-scripts build` in a Vite project that never installed react-scripts; under the
+ * generic auto-healing text the model rewrote package.json until the edit-loop guard blocked it.
+ */
+export function extractMissingScriptProgram(output: string): MissingScriptProgram | null {
+  const text = (output || '').replace(ANSI_SEQUENCE, '')
+  const echo = NPM_SCRIPT_ECHO.exec(text)
+  if (!echo) return null
+  for (const pattern of PROGRAM_NOT_FOUND) {
+    const program = pattern.exec(text)?.[1]
+    if (program && echo[2].trim().split(/\s+/)[0] === program) return { script: echo[1], body: echo[2].trim(), program }
+  }
+  return null
+}
+
+function viteScriptFor(script: string): string {
+  return /^(?:dev|start|serve)$/.test(script) ? 'vite' : script === 'preview' ? 'vite preview' : 'vite build'
+}
+
+function buildMissingScriptProgramDirective(missing: MissingScriptProgram, facts: DiagnosticWorkspaceFacts): string {
+  const header = [
+    `[THE SCRIPT'S PROGRAM IS NOT INSTALLED — "${missing.program}"]`,
+    `"npm run ${missing.script}" runs "${missing.body}", but no installed package provides the "${missing.program}" command. Rewriting source files cannot fix this.`,
+    'Directives:',
+  ]
+  if (VITE_REPLACEABLE.has(missing.program) && facts.binaryInstalled?.('vite')) {
+    return [
+      ...header,
+      `1. Your next tool call MUST be "write_file" on "package.json": the same complete file with the "${missing.script}" script changed to exactly "${viteScriptFor(missing.script)}". Vite is installed and this project is laid out for it; keep every other line.`,
+      `2. Then run "npm run ${missing.script}" again.`,
+    ].join('\n')
+  }
+  return [
+    ...header,
+    `1. Your next tool call MUST be "run_command" with the command: npm install --save-dev ${PROGRAM_PACKAGES[missing.program] ?? missing.program}`,
+    `2. Then run "npm run ${missing.script}" again.`,
+  ].join('\n')
+}
+
+export interface UnresolvedBundlerImport {
+  /** Workspace-relative file holding the import. */
+  importer: string
+  /** The relative specifier as written, e.g. `./tailwind.css`. */
+  specifier: string
+}
+
+/** Rolldown (Vite 8) and Vite's import analysis, which report a relative import without a tsc code. */
+const BUNDLER_UNRESOLVED: RegExp[] = [
+  /Could not resolve ['"](\.{1,2}\/[^'"]+)['"] in (\S+?)(?::\d+(?::\d+)?)?\s*$/m,
+  /Failed to resolve import ["'](\.{1,2}\/[^"']+)["'] from ["']([^"']+)["']/,
+]
+const TEST_SOURCE = /\.(?:test|spec)\.[cm]?[jt]sx?$/i
+const STYLESHEET = /\.(?:css|pcss|scss|sass|less)$/i
+
+/**
+ * A relative import the bundler could not resolve in a source file. Live full task run 20 of
+ * 2026-09-24: `import "./tailwind.css"` in src/App.jsx failed the build five times under the
+ * generic auto-healing text while the model kept rewriting src/index.css.
+ */
+export function extractUnresolvedBundlerImport(output: string): UnresolvedBundlerImport | null {
+  const text = (output || '').replace(ANSI_SEQUENCE, '')
+  for (const pattern of BUNDLER_UNRESOLVED) {
+    const match = pattern.exec(text)
+    if (!match) continue
+    const importer = match[2].replace(/\\/g, '/').replace(/^\.\//, '')
+    // A test file that does not load is testFailureDiagnostic's to explain.
+    if (TEST_SOURCE.test(importer) || IN_DEPENDENCY.test(importer)) return null
+    return { importer, specifier: match[1] }
+  }
+  return null
+}
+
+/** Nearby specifiers that may be what the import meant: the same file name here, one folder up, or in a styles folder. */
+function nearbySpecifiers(specifier: string): string[] {
+  const name = specifier.split('/').pop() || ''
+  return [`./${name}`, `../${name}`, `./styles/${name}`, `../styles/${name}`].filter((candidate) => candidate !== specifier)
+}
+
+function unresolvedBundlerImportFix(
+  unresolved: UnresolvedBundlerImport,
+  facts: DiagnosticWorkspaceFacts,
+): { kind: 'redirect'; specifier: string } | { kind: 'remove' } | { kind: 'create'; path: string } {
+  const exists = facts.fileExists
+  const redirect = exists
+    ? nearbySpecifiers(unresolved.specifier).find((candidate) => exists(resolveRelativeImportPath(unresolved.importer, candidate)))
+    : undefined
+  if (redirect) return { kind: 'redirect', specifier: redirect }
+  // A stylesheet import binds nothing, so dropping it cannot break the code that follows.
+  if (STYLESHEET.test(unresolved.specifier)) return { kind: 'remove' }
+  return { kind: 'create', path: resolveRelativeImportPath(unresolved.importer, unresolved.specifier) }
+}
+
+function buildUnresolvedBundlerImportDirective(unresolved: UnresolvedBundlerImport, facts: DiagnosticWorkspaceFacts): string {
+  const fix = unresolvedBundlerImportFix(unresolved, facts)
+  const header = [
+    `[THE IMPORTED FILE DOES NOT EXIST — "${unresolved.importer}" imports "${unresolved.specifier}"]`,
+    `The bundler resolved "${unresolved.specifier}" from the folder of "${unresolved.importer}" and found nothing there.`,
+    'Directives:',
+  ]
+  if (fix.kind === 'redirect') {
+    return [
+      ...header,
+      `1. Your next tool call MUST be "write_file" on "${unresolved.importer}": the same complete file with "${unresolved.specifier}" changed to "${fix.specifier}", which exists.`,
+      '2. Then run the build again.',
+    ].join('\n')
+  }
+  if (fix.kind === 'remove') {
+    return [
+      ...header,
+      `1. Your next tool call MUST be "write_file" on "${unresolved.importer}": the same complete file without the line that imports "${unresolved.specifier}". A stylesheet import binds nothing, so no other line changes; the project's styles are already imported by its entry.`,
+      '2. Do NOT edit any other stylesheet for this error. Then run the build again.',
+    ].join('\n')
+  }
+  return [
+    ...header,
+    `1. Your next tool call MUST be "write_file" on "${fix.path}", creating that file with the exports "${unresolved.importer}" imports from "${unresolved.specifier}".`,
+    '2. Then run the build again.',
+  ].join('\n')
+}
+
+export interface UnresolvedCssImport {
+  /** The stylesheet holding the import, as the bundler printed it. */
+  file: string
+  /** The specifier as written, e.g. `tailwindcss/tailwind.min.css`. */
+  specifier: string
+  /** The package the specifier points into, or null for a relative one. */
+  packageName: string | null
+}
+
+const CSS_IMPORT_UNRESOLVED = /Unable to resolve `@import\s+["']([^"']+)["']`/
+const CSS_PLUGIN_FILE = /\[plugin (?:vite:css|postcss[\w:-]*)\]\s+(\S+\.(?:css|pcss|postcss|scss|sass|less))\b/
+const CSS_FILE_REFERENCE = /([^\s\[\]()'"`]+\.(?:css|pcss|postcss|scss|sass|less))(?![\w])/
+
+function packageNameOf(specifier: string): string | null {
+  if (specifier.startsWith('.') || specifier.startsWith('/')) return null
+  const parts = specifier.split('/')
+  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
+}
+
+/**
+ * A stylesheet `@import` the bundler could not resolve. Live full task run 16 of 2026-09-24:
+ * `@import "tailwindcss/tailwind.min.css"` in src/index.css failed the build and no directive
+ * named the file, so the model tried to reinstall Tailwind and invented a typecheck script.
+ */
+export function extractUnresolvedCssImport(output: string): UnresolvedCssImport | null {
+  const specifier = CSS_IMPORT_UNRESOLVED.exec(output || '')?.[1]
+  if (!specifier) return null
+  const file = (CSS_PLUGIN_FILE.exec(output)?.[1] ?? CSS_FILE_REFERENCE.exec(output.slice(output.indexOf(specifier) + specifier.length))?.[1])?.replace(
+    /\\/g,
+    '/',
+  )
+  if (!file) return null
+  return { file, specifier, packageName: packageNameOf(specifier) }
+}
+
+export interface CssSyntaxFailure {
+  /** The stylesheet PostCSS could not parse, as the bundler printed it. */
+  file: string
+  line?: number
+  /** PostCSS's reason, e.g. `Unknown word`. */
+  reason?: string
+}
+
+const CSS_SYNTAX_ERROR = /CssSyntaxError:\s*(?:\[postcss\]\s*)?(?:(\S+?\.(?:css|pcss|scss|sass|less)):(\d+):\d+:\s*)?(.*)$/m
+
+/**
+ * A stylesheet PostCSS could not parse. Live full task run 25 of 2026-09-24: a CssSyntaxError under
+ * `[plugin vite:css]` got the generic auto-healing text, and the build was re-run unchanged six times.
+ */
+export function extractCssSyntaxFailure(output: string): CssSyntaxFailure | null {
+  const text = (output || '').replace(ANSI_SEQUENCE, '')
+  const match = CSS_SYNTAX_ERROR.exec(text)
+  if (!match) return null
+  const file = (match[1] ?? CSS_PLUGIN_FILE.exec(text)?.[1])?.replace(/\\/g, '/')
+  if (!file) return null
+  const reason = match[3]?.trim()
+  return { file, ...(match[2] ? { line: Number(match[2]) } : {}), ...(reason ? { reason } : {}) }
+}
+
+function buildCssSyntaxDirective(failure: CssSyntaxFailure, facts: DiagnosticWorkspaceFacts): string {
+  const file = facts.toWorkspaceRelative ? facts.toWorkspaceRelative(failure.file) : failure.file
+  return [
+    `[STYLESHEET SYNTAX ERROR — "${file}"${failure.line ? ` line ${failure.line}` : ''}]`,
+    `PostCSS could not parse "${file}"${failure.reason ? `: ${failure.reason}` : ''}. A stylesheet holds only CSS rules and at-rules; JavaScript, JSX or an import statement written for a script is not CSS.`,
+    'Directives:',
+    `1. Your next tool call MUST be "write_file" on "${file}": the complete file as valid CSS${failure.line ? `, with line ${failure.line} corrected or removed` : ''}.`,
+    '2. Then run the build again.',
+  ].join('\n')
+}
+
+function buildUnresolvedCssImportDirective(cssImport: UnresolvedCssImport, facts: DiagnosticWorkspaceFacts): string {
+  const file = facts.toWorkspaceRelative ? facts.toWorkspaceRelative(cssImport.file) : cssImport.file
+  const importLine = `@import "${cssImport.specifier}";`
+  const packageEntry = cssImport.packageName && cssImport.packageName !== cssImport.specifier && facts.packageHasStyleEntry?.(cssImport.packageName)
+  const fix = packageEntry ? `the line ${importLine} replaced by exactly: @import "${cssImport.packageName}";` : `the line ${importLine} removed`
+  return [
+    `[CSS @import DOES NOT RESOLVE — "${file}"]`,
+    `${importLine} names a file that exists neither in the project nor in node_modules${packageEntry ? `; the installed "${cssImport.packageName}" package declares its own stylesheet entry, imported by its bare name` : ''}. Reinstalling a package cannot create a path the package does not ship.`,
+    `Directives:`,
+    `1. Your next tool call MUST be "write_file" on "${file}": the same complete file with ${fix}. Keep every other line.`,
+    `2. Then run the build again.`,
+  ].join('\n')
+}
+
 /** Tools beyond the file edit that the directive built from this output orders. */
-export function diagnosticFixRequiredTools(output: string): SupportedToolName[] {
-  return extractJsxInScriptFile(output) ? ['move_file'] : []
+export function diagnosticFixRequiredTools(output: string, facts: DiagnosticWorkspaceFacts = {}): SupportedToolName[] {
+  if (extractJsxInScriptFile(output)) return ['move_file']
+  const missingProgram = extractMissingScriptProgram(output)
+  if (missingProgram && !(VITE_REPLACEABLE.has(missingProgram.program) && facts.binaryInstalled?.('vite'))) return ['run_command']
+  return []
 }
 
 /** The file the directive built from this output will order written, or null when it orders a command instead. */
-export function diagnosticFixTargetFile(output: string): string | null {
+export function diagnosticFixTargetFile(output: string, facts: DiagnosticWorkspaceFacts = {}): string | null {
   if (extractSuggestedCommand(output)) return null
   if (extractJsxInScriptFile(output)) return null
+  const missingProgram = extractMissingScriptProgram(output)
+  if (missingProgram) return VITE_REPLACEABLE.has(missingProgram.program) && facts.binaryInstalled?.('vite') ? 'package.json' : null
+  const cssImport = extractUnresolvedCssImport(output)
+  if (cssImport) return facts.toWorkspaceRelative ? facts.toWorkspaceRelative(cssImport.file) : cssImport.file
+  const cssSyntax = extractCssSyntaxFailure(output)
+  if (cssSyntax) return facts.toWorkspaceRelative ? facts.toWorkspaceRelative(cssSyntax.file) : cssSyntax.file
+  const bundlerImport = extractUnresolvedBundlerImport(output)
+  if (bundlerImport) {
+    const fix = unresolvedBundlerImportFix(bundlerImport, facts)
+    return fix.kind === 'create' ? fix.path : bundlerImport.importer
+  }
 
   const mismatch = extractExportMismatch(output)
   if (mismatch) {
@@ -270,7 +524,17 @@ export function buildDiagnosticFixDirective(
   resolvePackageExports: (packageName: string) => string[] = () => [],
   /** Export names from a relative module, injected to keep filesystem access out of domain. */
   resolveLocalModuleExports: (importingFile: string, specifier: string) => string[] = () => [],
+  facts: DiagnosticWorkspaceFacts = {},
 ): string | null {
+  const missingProgram = extractMissingScriptProgram(output)
+  if (missingProgram) return buildMissingScriptProgramDirective(missingProgram, facts)
+  const cssImport = extractUnresolvedCssImport(output)
+  if (cssImport) return buildUnresolvedCssImportDirective(cssImport, facts)
+  const cssSyntax = extractCssSyntaxFailure(output)
+  if (cssSyntax) return buildCssSyntaxDirective(cssSyntax, facts)
+  const bundlerImport = extractUnresolvedBundlerImport(output)
+  if (bundlerImport) return buildUnresolvedBundlerImportDirective(bundlerImport, facts)
+
   const jsxInScript = extractJsxInScriptFile(output)
   if (jsxInScript) {
     return [
@@ -287,7 +551,9 @@ export function buildDiagnosticFixDirective(
   if (all.length === 0) {
     // No compiler error: a test that ran and failed its assertion is the other diagnosable case.
     const failingTest = extractFailingTest(output)
-    return failingTest ? buildTestFailureDirective(failingTest) : null
+    return failingTest
+      ? buildTestFailureDirective(failingTest, (importingFile, specifier) => resolveLocalModuleExports(importingFile, specifier).length > 0)
+      : null
   }
 
   // Errors inside an installed package are never the project's code, and telling the model to rewrite one sends it editing a dependency.

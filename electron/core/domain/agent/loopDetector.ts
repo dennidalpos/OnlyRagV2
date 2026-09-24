@@ -1,3 +1,4 @@
+import type { UntrustedJson } from '../../../../shared/types'
 import crypto from 'node:crypto'
 import type { AgentToolCall } from './agentTypes'
 
@@ -66,6 +67,8 @@ function accumulate(previous: SignatureOutcomeRecord | undefined, succeeded: boo
  * Fingerprints agent tool invocations and tracks target-level semantic patterns
  * to detect and prevent infinite loops, oscillation traps, and redundant read loops.
  */
+const EDIT_TOOLS = new Set(['write_file', 'replace_file_content', 'multi_replace_file_content'])
+
 export class AgentActionLoopDetector {
   private signatureHistory: string[] = []
   private targetHistory: TargetActionRecord[] = []
@@ -257,7 +260,11 @@ export class AgentActionLoopDetector {
 
     // 2.
     if (target && ['replace_file_content', 'multi_replace_file_content', 'write_file'].includes(toolCall.tool)) {
-      const recentTargets = this.targetHistory.slice(-6)
+      // Edits "without verification" end at the last check: counted across it, a build run between
+      // two corrections kept the window full of package.json edits and blocked every later
+      // correction for 25 steps (live full task run 23 of 2026-09-24).
+      const lastCheck = this.targetHistory.map((rec) => CHECK_TOOLS.has(rec.tool)).lastIndexOf(true)
+      const recentTargets = this.targetHistory.slice(lastCheck + 1).slice(-6)
       const sameFileEdits = recentTargets.filter(
         (rec) => rec.target === target && ['replace_file_content', 'multi_replace_file_content', 'write_file'].includes(rec.tool),
       ).length
@@ -305,9 +312,13 @@ export class AgentActionLoopDetector {
   /**
    * Detects multi-step cycle oscillations (e.g. A -> B -> A -> B or A -> B -> C -> A -> B -> C).
    */
-  public recordAndDetectCycle(toolName: string, params: Record<string, any>): CycleDetectionResult {
+  public recordAndDetectCycle(toolName: string, params: Record<string, UntrustedJson>): CycleDetectionResult {
     const target = params.filePath || params.command || params.targetContent || params.url || ''
-    const actionKey = `${toolName}:${target}`
+    // An edit is keyed by what it writes too: "fix, build, different fix, build" is a correction in
+    // progress, not an oscillation. Keyed by path alone, live full task run 21 of 2026-09-24 had the
+    // one correct stylesheet rewrite blocked as a cycle three times. Identical edits still match.
+    const contentKey = EDIT_TOOLS.has(toolName) ? `:${crypto.createHash('sha256').update(JSON.stringify(params)).digest('hex').slice(0, 16)}` : ''
+    const actionKey = `${toolName}:${target}${contentKey}`
     this.actionSequence.push(actionKey)
 
     if (this.actionSequence.length > this.maxHistoryLength) {

@@ -10,6 +10,8 @@ import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from '.
 import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recoveryStopDiagnostic } from '../domain/agent/recoveryBudget'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { redactSecrets } from '../../logRedactor'
+import { findModuleExtensionAliases, resolveDeclaredFilePaths } from '../../../shared/domain/agent/milestoneDeliverableResolver'
+import { fileVersionEvidenceKey, forgetFileVersion, knownFileVersion, recordFileVersion } from '../domain/agent/fileVersionEvidence'
 
 export type { ToolResultMutableFlags, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
@@ -40,15 +42,33 @@ export function terminalOutcomeFor(toolRes: ClassifiedToolExecutionResult): Extr
 type VersionRecoveryUpdate = { changed: boolean; conflictPath?: string }
 
 function sameFilePath(left: string, right: string): boolean {
-  const normalize = (value: string) => value.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase()
-  return normalize(left) === normalize(right)
+  return fileVersionEvidenceKey(left) === fileVersionEvidenceKey(right)
 }
 
-export function updateVersionConflictRecovery(ctx: Pick<ToolResultProcessingContext, 'toolRes' | 'parsedTool' | 'recoveryState'>): VersionRecoveryUpdate {
+const VERSIONED_EDIT_TOOLS = new Set(['write_file', 'replace_file_content', 'multi_replace_file_content'])
+
+/** The version an edit the agent just made left on disk: the agent authored that content. */
+function versionAfterOwnEdit(workspacePath: string | null | undefined, filePath: string): string | undefined {
+  if (!workspacePath) return undefined
+  try {
+    const root = path.resolve(workspacePath)
+    const absolute = path.resolve(root, filePath)
+    if (absolute !== root && !absolute.startsWith(`${root}${path.sep}`)) return undefined
+    return contentVersion(documentIoRepository.readText(absolute))
+  } catch {
+    return undefined
+  }
+}
+
+export function updateVersionConflictRecovery(
+  ctx: Pick<ToolResultProcessingContext, 'toolRes' | 'parsedTool' | 'recoveryState'> & { workspacePath?: string | null },
+): VersionRecoveryUpdate {
+  ctx.recoveryState.versionEvidence ??= {}
+  const evidence = ctx.recoveryState.versionEvidence
   const conflict = ctx.toolRes.outputForHistory.match(/\[FILE VERSION CONFLICT:\s*([^\]\r\n]+)\]/)
   if (ctx.toolRes.outcome !== 'success' && conflict) {
     const conflictPath = conflict[1].trim()
-    ctx.recoveryState.versionedReadEvidence = undefined
+    forgetFileVersion(evidence, conflictPath)
     const missingNewFile = ctx.parsedTool.tool === 'write_file' && /\nCurrent:\s*missing(?:\r?\n|$)/i.test(ctx.toolRes.outputForHistory)
     if (missingNewFile) {
       ctx.recoveryState.pendingVersionConflictReadPath = undefined
@@ -57,39 +77,42 @@ export function updateVersionConflictRecovery(ctx: Pick<ToolResultProcessingCont
     ctx.recoveryState.pendingVersionConflictReadPath = conflictPath
     return { changed: true, conflictPath }
   }
-  if (ctx.toolRes.outcome === 'success' && ctx.parsedTool.tool === 'read_file') {
-    const filePath = String(ctx.parsedTool.parameters.filePath || '')
+  if (ctx.toolRes.outcome !== 'success') return { changed: false }
+
+  const filePath = String(ctx.parsedTool.parameters.filePath || '')
+  if (!filePath) return { changed: false }
+  if (ctx.parsedTool.tool === 'read_file') {
     const version = ctx.toolRes.outputForHistory.match(/\[FILE VERSION:\s*(sha256:[a-f0-9]+)\]/i)?.[1]
-    if (!filePath || !version) return { changed: false }
-    ctx.recoveryState.versionedReadEvidence = { filePath, contentHash: version }
+    if (!version) return { changed: false }
+    recordFileVersion(evidence, filePath, version)
     if (ctx.recoveryState.pendingVersionConflictReadPath && sameFilePath(filePath, ctx.recoveryState.pendingVersionConflictReadPath)) {
       ctx.recoveryState.pendingVersionConflictReadPath = undefined
       ctx.recoveryState.progress.clearExecutionFailures()
     }
     return { changed: true }
   }
+  if (VERSIONED_EDIT_TOOLS.has(ctx.parsedTool.tool)) {
+    const version = versionAfterOwnEdit(ctx.workspacePath, filePath)
+    if (!version) return { changed: false }
+    recordFileVersion(evidence, filePath, version)
+    return { changed: true }
+  }
   return { changed: false }
 }
 
-const VERSIONED_EDIT_TOOLS = new Set(['write_file', 'replace_file_content', 'multi_replace_file_content'])
-
+/** Attaches the version the agent last saw of the edited file, unless the call carries its own. */
 export function applyVersionedReadEvidence(
   toolCall: AgentToolCall,
-  state: Pick<ToolResultProcessingContext['recoveryState'], 'versionedReadEvidence'>,
+  state: Pick<ToolResultProcessingContext['recoveryState'], 'versionEvidence'>,
 ): { toolCall: AgentToolCall; consumed: boolean } {
-  const evidence = state.versionedReadEvidence
-  if (!evidence || !VERSIONED_EDIT_TOOLS.has(toolCall.tool)) return { toolCall, consumed: false }
-
-  state.versionedReadEvidence = undefined
-  const filePath = String(toolCall.parameters.filePath || '')
-  if (!sameFilePath(filePath, evidence.filePath) || toolCall.parameters.expectedContentHash) {
-    return { toolCall, consumed: true }
-  }
+  if (!VERSIONED_EDIT_TOOLS.has(toolCall.tool) || toolCall.parameters.expectedContentHash) return { toolCall, consumed: false }
+  const known = knownFileVersion(state.versionEvidence, String(toolCall.parameters.filePath || ''))
+  if (!known) return { toolCall, consumed: false }
   return {
     consumed: true,
     toolCall: {
       ...toolCall,
-      parameters: { ...toolCall.parameters, expectedContentHash: evidence.contentHash },
+      parameters: { ...toolCall.parameters, expectedContentHash: known },
     },
   }
 }
@@ -203,6 +226,26 @@ function remapPlanAfterMove(ctx: ToolResultProcessingContext, isToolFailure: boo
   return ctx.goalPlanner.remapFilePath(source, target)
 }
 
+/** Points milestones that named `src/App.js` at the `src/App.jsx` the agent actually wrote, when the
+ *  named file does not exist (see findModuleExtensionAliases). Runs before the mutation is matched
+ *  against milestone deliverables, so this very write counts as their evidence. */
+function remapPlanAfterAliasWrite(ctx: ToolResultProcessingContext, isToolFailure: boolean): Array<{ from: string; to: string; milestones: string[] }> {
+  if (isToolFailure || !VERSIONED_EDIT_TOOLS.has(ctx.parsedTool.tool) || !ctx.workspacePath) return []
+  const root = path.resolve(ctx.workspacePath)
+  const absolute = path.resolve(root, String(ctx.parsedTool.parameters.filePath || ''))
+  const written = path.relative(root, absolute).replace(/\\/g, '/')
+  if (!written || written.startsWith('..') || path.isAbsolute(written)) return []
+
+  const declared = [...new Set(ctx.goalPlanner.getMilestones().flatMap((milestone) => resolveDeclaredFilePaths(milestone)))]
+  const remaps: Array<{ from: string; to: string; milestones: string[] }> = []
+  for (const alias of findModuleExtensionAliases(declared, written)) {
+    if (documentIoRepository.exists(path.resolve(root, alias))) continue
+    const milestones = ctx.goalPlanner.remapFilePath(alias, written)
+    if (milestones.length > 0) remaps.push({ from: alias, to: written, milestones })
+  }
+  return remaps
+}
+
 /** Post-processes a tool execution result: change-metrics IPC, stagnation circuit breaker (which may end the session), episodic recording, mutation/verification bookkeeping (see agentOrchestratorCircuitBreakerAndVerification.ts), and the final tool-result log lin */
 export async function runToolResultProcessing(ctx: ToolResultProcessingContext): Promise<ToolResultProcessingOutcome> {
   const { toolRes, parsedTool } = ctx
@@ -278,6 +321,19 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     distilledOutput,
   )
   if (versionRecovery.changed) await ctx.persistCurrentState()
+
+  for (const remap of remapPlanAfterAliasWrite(ctx, isToolFailure)) {
+    ctx.emitLog(
+      'info',
+      `Piano aggiornato: ${remap.milestones.join(', ')} puntavano a "${remap.from}", che non esiste; ora puntano a "${remap.to}".`,
+      undefined,
+      {
+        category: 'system_alert',
+        toolName: parsedTool.tool,
+        target: targetParam,
+      },
+    )
+  }
 
   if (isMutating && !isToolFailure) {
     await recordMutationSideEffects(ctx, targetParam)

@@ -1,6 +1,6 @@
 export type TaskStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed'
 
-export interface TaskQueueItem<T = any> {
+export interface TaskQueueItem<T = unknown> {
   id: string
   type: string
   payload: T
@@ -11,7 +11,7 @@ export interface TaskQueueItem<T = any> {
   error?: string
 }
 
-export class TaskQueueDomain<T = any> {
+export class TaskQueueDomain<T = unknown> {
   private queuedTasks: TaskQueueItem<T>[] = []
   private runningTasks: Map<string, TaskQueueItem<T>> = new Map()
 

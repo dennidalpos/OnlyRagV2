@@ -1,3 +1,4 @@
+import type { UntrustedJson } from '../../../../shared/types'
 import type { AgentToolCall, SupportedToolName, AgentToolReplacementChunk } from './agentTypes'
 import { findToolSchema } from './ollamaToolSchemaCatalog'
 
@@ -185,9 +186,9 @@ export function normalizeToolName(rawName?: string): SupportedToolName | null {
 /**
  * Normalizes raw parameter dictionary, mapping alias keys to canonical names.
  */
-export function normalizeToolParams(raw: Record<string, any>): Record<string, any> {
+export function normalizeToolParams(raw: Record<string, UntrustedJson>): Record<string, UntrustedJson> {
   if (!raw || typeof raw !== 'object') return {}
-  const p: Record<string, any> = { ...raw }
+  const p: Record<string, UntrustedJson> = { ...raw }
 
   // 1. Path aliases
   if (!p.filePath) {

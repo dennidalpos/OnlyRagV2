@@ -303,7 +303,7 @@ export class SidecarAppService {
 
   searchPromptHistory(query: string, topK: number = 10, projectPaths?: string[]): Promise<PromptHistorySearchResult[]> {
     if (typeof query !== 'string' || !query.trim()) return Promise.resolve([])
-    const payload: Record<string, any> = { query, top_k: topK }
+    const payload: { query: string; top_k: number; project_paths?: string[] } = { query, top_k: topK }
     if (projectPaths && projectPaths.length > 0) payload.project_paths = projectPaths
     return sidecarHttpClient.postJson<PromptHistorySearchResult[]>('/history/search', payload, 4000, [])
   }

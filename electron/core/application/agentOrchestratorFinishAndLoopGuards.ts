@@ -72,12 +72,12 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
 }
 
 /** Moves the plan's focus off the milestone the model is stuck on and onto the next one, returning the directive that tells the model what changed. */
-function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: string | undefined): string | null {
+function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: string | undefined, loopTool: string): string | null {
   const stuckMilestone = ctx.goalPlanner.getActiveMilestone()
   if (!stuckMilestone || isCompletionMilestoneTitle(stuckMilestone)) return null
 
   const loopBlocks = ctx.state.progress.consecutiveLoopBlocks
-  ctx.goalPlanner.updateMilestone(stuckMilestone.id, 'failed', abandonedMilestoneNote(loopBlocks, loopTarget || 'target'))
+  ctx.goalPlanner.updateMilestone(stuckMilestone.id, 'failed', abandonedMilestoneNote(loopBlocks, loopTarget || loopTool))
 
   // The next milestone may legitimately need to touch the same file the model was just
   // blocked on, so the detector's memory of that target is cleared along with the focus.
@@ -254,7 +254,7 @@ ${planDirective.blockDirective}`
     : `\n[CRITICAL ESCAPE STRATEGY]: You MUST run a verification command via run_command or read a different file to break out of this loop.`
 
   const escapeAction = loopDecision.escape
-  const planAdvanceDirective = escapeAction === 'force_milestone_advance' ? forceMilestoneAdvance(ctx, loopTarget) : null
+  const planAdvanceDirective = escapeAction === 'force_milestone_advance' ? forceMilestoneAdvance(ctx, loopTarget, parsedTool.tool) : null
   const loopGuard = guardForLoopPattern(loopCheck.pattern)
   recordGuardEvent(ctx.state.guardEvents, loopGuard, 'advise', ctx.stepCount)
   if (planAdvanceDirective) recordGuardEvent(ctx.state.guardEvents, loopGuard, 'force_advance', ctx.stepCount)

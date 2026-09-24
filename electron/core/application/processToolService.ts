@@ -26,7 +26,7 @@ import { npmResolutionDirectiveFor } from '../domain/agent/npmResolutionConflict
 import { buildVersionNotFoundDirective, parseVersionNotFound } from '../domain/agent/npmVersionNotFound'
 import { buildVersionRealityDirective, declaredDependencies, findVersionReality } from '../domain/agent/dependencyVersionReality'
 import { buildModuleResolutionDirective, classifyModuleDiagnostic, unresolvedPackages } from '../domain/agent/moduleResolutionDiagnostic'
-import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote } from '../domain/agent/compilerDiagnosticDirective'
+import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote, type DiagnosticWorkspaceFacts } from '../domain/agent/compilerDiagnosticDirective'
 
 export interface RunCommandExecution {
   command: string
@@ -323,8 +323,11 @@ export class ProcessToolService {
     specificDirectiveFired: boolean,
     readPackageExports: (packageName: string) => string[],
     readLocalModuleExports: (importingFile: string, specifier: string) => string[],
+    workspaceFacts: DiagnosticWorkspaceFacts = {},
   ): { deferredDiagnosticNote: string; healingTail: string } {
-    const diagnosticDirective = specificDirectiveFired ? null : buildDiagnosticFixDirective(rawOutput, readPackageExports, readLocalModuleExports)
+    const diagnosticDirective = specificDirectiveFired
+      ? null
+      : buildDiagnosticFixDirective(rawOutput, readPackageExports, readLocalModuleExports, workspaceFacts)
     const deferredDiagnosticNote = specificDirectiveFired ? buildDeferredDiagnosticNote(rawOutput) || '' : ''
     const healingTail = specificDirectiveFired
       ? 'DO NOT ask the user vague clarification questions: carry out the directive above.'

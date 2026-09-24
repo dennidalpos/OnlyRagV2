@@ -1,3 +1,4 @@
+import type { UntrustedJson } from '../shared/types'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -135,7 +136,7 @@ function getLocalManifestModels(): string[] {
   return models
 }
 
-function fetchJsonEndpoint(urlStr: string, timeoutMs = 4500): Promise<any> {
+function fetchJsonEndpoint(urlStr: string, timeoutMs = 4500): Promise<UntrustedJson> {
   return new Promise((resolve, reject) => {
     const req = http.get(urlStr, { timeout: timeoutMs }, (res) => {
       let data = ''

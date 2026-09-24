@@ -21,4 +21,4 @@ Versioni e vincoli sono nei manifest [`package.json`](../package.json), [`sideca
 
 ## Controlli
 
-`npm run quality:static` (errori di lint Biome, format-check Biome di ogni file incluso da `biome.json`, guard IPC e di layering; gli avvisi `noExplicitAny` si leggono con `npx biome lint`; i `catch` usano `unknown` con [`errorMessage`](../shared/domain/errors/errorMessage.ts)), `npm run audit:deadcode` e `npm run audit:cycles` coprono qualità, export orfani e dipendenze circolari. I log passano da [`logRedactor.ts`](../electron/logRedactor.ts).
+`npm run quality:static` (errori di lint Biome, format-check Biome di ogni file incluso da `biome.json`, guard IPC e di layering; `noExplicitAny` è un errore in ogni file non di test (override in `biome.json`; il JSON non fidato ai confini usa l'alias documentato `UntrustedJson` di `shared/types`) e un avviso altrove, letto con `npx biome lint`; i `catch` usano `unknown` con [`errorMessage`](../shared/domain/errors/errorMessage.ts)), `npm run audit:deadcode` e `npm run audit:cycles` coprono qualità, export orfani e dipendenze circolari. I log passano da [`logRedactor.ts`](../electron/logRedactor.ts).

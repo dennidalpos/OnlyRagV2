@@ -1,3 +1,4 @@
+import type { UntrustedJson } from '../../../../../shared/types'
 import { HubSkillItem, SkillHubSource, SkillCategory } from '../../../domain/skills/skillTypes'
 import type { ISkillHubAdapter } from '../../../domain/ports/skillHubAdapterPort'
 import { webClient } from '../webClient'
@@ -27,7 +28,7 @@ function normalizeCategory(raw?: string): SkillCategory {
   return 'architecture'
 }
 
-function parseArrayField(field: any): string[] {
+function parseArrayField(field: unknown): string[] {
   if (Array.isArray(field)) {
     return field.map((f) => String(f).trim().toLowerCase()).filter(Boolean)
   }
@@ -55,7 +56,7 @@ export class JsonCatalogAdapter implements ISkillHubAdapter {
       }
 
       // Try to parse JSON from fetched content
-      let rawJson: any
+      let rawJson: UntrustedJson
       try {
         rawJson = JSON.parse(res.content)
       } catch {

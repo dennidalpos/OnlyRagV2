@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { translate } from '../i18n/I18nContext'
+import type { OllamaPullProgressEvent } from '../types'
 
 export interface ModelDownloadState {
   isDownloading: boolean
@@ -36,7 +37,7 @@ export function getGlobalDownloadState(): ModelDownloadState {
   return globalDownloadState
 }
 
-export function processPullProgressEvent(data: any): ModelDownloadState {
+export function processPullProgressEvent(data: OllamaPullProgressEvent | null | undefined): ModelDownloadState {
   if (!data || !data.modelName) return globalDownloadState
 
   const total = data.total || 0
@@ -107,7 +108,7 @@ function ensureGlobalListener() {
   if (typeof window === 'undefined' || !window.electronAPI?.onOllamaPullProgress) return
 
   isGlobalListenerAttached = true
-  window.electronAPI.onOllamaPullProgress((data: any) => {
+  window.electronAPI.onOllamaPullProgress((data) => {
     processPullProgressEvent(data)
   })
 }

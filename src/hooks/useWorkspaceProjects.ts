@@ -171,8 +171,8 @@ export function useWorkspaceProjects(settings?: AppSettings) {
   const handleRemoveProject = useCallback(
     (pathStr: string) => {
       if (window.electronAPI?.removeProjectFromRegistry) {
-        window.electronAPI.removeProjectFromRegistry(pathStr).catch((err: any) => {
-          logger.warn('useWorkspaceProjects', `Could not remove project from registry: ${err?.message}`)
+        window.electronAPI.removeProjectFromRegistry(pathStr).catch((err: unknown) => {
+          logger.warn('useWorkspaceProjects', `Could not remove project from registry: ${errorMessage(err)}`)
         })
       }
 

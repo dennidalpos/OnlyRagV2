@@ -56,7 +56,7 @@ describe('project profile discovery', () => {
     })
     expect(discoverProjectProfile(root).projects[0].verificationCommands).toEqual([
       { kind: 'build', command: 'npm run build', coverage: 'entry-reachable', source: 'package.json script "build"' },
-      { kind: 'test', command: 'npm run test', coverage: 'whole-project', source: 'package.json script "test"' },
+      { kind: 'test', command: 'npm run test', coverage: 'entry-reachable', source: 'package.json script "test"' },
     ])
   })
 
@@ -92,7 +92,7 @@ describe('project profile discovery', () => {
       { kind: 'build', command: 'npm run build', coverage: 'entry-reachable', source: 'package.json script "build"' },
     ])
     expect(projects.find((project) => project.relativePath === 'api')?.verificationCommands).toEqual([
-      { kind: 'test', command: 'npm run test', coverage: 'whole-project', source: 'package.json script "test"' },
+      { kind: 'test', command: 'npm run test', coverage: 'entry-reachable', source: 'package.json script "test"' },
     ])
   })
 

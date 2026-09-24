@@ -58,6 +58,9 @@ export interface SavedAgentSessionState {
     versionConflictReadPath?: string
     verificationFixCycles?: number
   }
+  /** Per-file content versions the agent may edit against (normalized path -> sha256). */
+  versionEvidence?: Record<string, string>
+  /** Single read hash saved by sessions before versionEvidence; read on restore only. */
   versionedReadEvidence?: { filePath: string; contentHash: string }
   /** Guard firings of the run, oldest first (bounded by MAX_GUARD_EVENTS). */
   guardEvents?: AgentGuardEvent[]
@@ -68,10 +71,11 @@ export interface SavedAgentSessionState {
   lastVerification?: AgentVerificationEvidence
 }
 
-function normalizePersistedMode(raw: any): SavedAgentSessionState {
-  const mode = raw?.agentMode
+function normalizePersistedMode(raw: unknown): SavedAgentSessionState {
+  const record = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const mode = record.agentMode
   const agentMode: AgentMode = mode === 'ask' || mode === 'guided' || mode === 'auto' ? mode : mode === 'agent' ? 'auto' : 'guided'
-  return { ...raw, agentMode } as SavedAgentSessionState
+  return { ...record, agentMode } as SavedAgentSessionState
 }
 
 export class AgentSessionStateRepository {

@@ -29,11 +29,18 @@ import { scanUndeclaredImports } from '../infrastructure/filesystem/undeclaredIm
 import { extractRequestedPackages, packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { isVerificationFailing } from '../domain/agent/verificationAttemptTracker'
 import { isProjectTestCommand, isUsableTestScript } from '../domain/agent/behaviorTestDirective'
+import { isTestFilePath } from '../domain/agent/testFailureDiagnostic'
 import { extractPackageImportStatements } from '../domain/agent/importDeclarationGate'
 import { pendingManifestDirective } from '../domain/agent/dependencyVersionReality'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import { buildDiagnosticFixDirective, diagnosticFixRequiredTools, diagnosticFixTargetFile } from '../domain/agent/compilerDiagnosticDirective'
-import { readLocalModuleExports, readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
+import {
+  isBinaryInstalled,
+  packageHasStyleEntry,
+  readLocalModuleExports,
+  readPackageExports,
+  toWorkspaceRelativePath,
+} from '../infrastructure/filesystem/packageExportScanner'
 import { checkHtmlEntrypoint, CONVENTIONAL_ENTRY_PATHS } from '../domain/agent/entrypointIntegrity'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
@@ -191,9 +198,20 @@ function invalidateVerifiedBuild(ctx: ToolResultProcessingContext) {
   ctx.flags.hasVerifiedBuild = false
 }
 
+/**
+ * Whether writing `targetParam` can change what the project's primary check examined. A bundler
+ * build follows the import graph from the app entry, which never reaches a test file: live full
+ * task run 19 of 2026-09-24 rebuilt after each of five smoke-test fixes, a step each time.
+ */
+function mutationStalesVerifiedBuild(ctx: ToolResultProcessingContext, targetParam: string | undefined): boolean {
+  if (!isTestFilePath(targetParam) || !ctx.workspacePath) return true
+  const primary = resolvePrimaryProfileVerificationTargets(discoverProjectProfile(ctx.workspacePath))[0]
+  return !primary || primary.kind !== 'build' || primary.coverage !== 'entry-reachable'
+}
+
 export async function recordMutationSideEffects(ctx: ToolResultProcessingContext, targetParam: string | undefined) {
   ctx.flags.hasFileMutations = true
-  invalidateVerifiedBuild(ctx)
+  if (mutationStalesVerifiedBuild(ctx, targetParam)) invalidateVerifiedBuild(ctx)
   // Checkpoint immediately after a successful file mutation, independent of the periodic PERSIST_EVERY_N_STEPS cadence, so a crash right after a write never loses track of what was actually changed on disk.
   await ctx.persistCurrentState()
   if (targetParam) {
@@ -338,11 +356,18 @@ export function resolvePlanDirectiveForTurn(
   const failureOutputOf = (command: string) =>
     lastFailureOutputOf(command) ?? (isProjectTestCommand(command) ? (lastFailureOutputOf('npm test') ?? lastFailureOutputOf('npm run test')) : null)
   const lastVerificationFailureOutput = verification ? failureOutputOf(verification.command) : null
+  const workspaceFacts = {
+    packageHasStyleEntry: (pkg: string) => packageHasStyleEntry(workspacePath, pkg),
+    toWorkspaceRelative: (filePath: string) => toWorkspaceRelativePath(workspacePath, filePath),
+    fileExists: (relativePath: string) => probe(relativePath).exists,
+    binaryInstalled: (name: string) => isBinaryInstalled(workspacePath, name),
+  }
   const diagnose = (output: string) =>
     buildDiagnosticFixDirective(
       output,
       (pkg) => readPackageExports(workspacePath, pkg),
       (importingFile, specifier) => readLocalModuleExports(workspacePath, importingFile, specifier),
+      workspaceFacts,
     )
   const behaviorFailureOutput = failureOutputOf('npm test')
 
@@ -369,14 +394,14 @@ export function resolvePlanDirectiveForTurn(
     verificationCommand: verification,
     verificationFailing: isVerificationFailing(episodes, verification?.command),
     verificationFailureDirective: lastVerificationFailureOutput ? diagnose(lastVerificationFailureOutput) : null,
-    verificationFailureTargetFile: lastVerificationFailureOutput ? diagnosticFixTargetFile(lastVerificationFailureOutput) : null,
-    verificationFailureTools: lastVerificationFailureOutput ? diagnosticFixRequiredTools(lastVerificationFailureOutput) : [],
+    verificationFailureTargetFile: lastVerificationFailureOutput ? diagnosticFixTargetFile(lastVerificationFailureOutput, workspaceFacts) : null,
+    verificationFailureTools: lastVerificationFailureOutput ? diagnosticFixRequiredTools(lastVerificationFailureOutput, workspaceFacts) : [],
     disconnectedEntrypoint: resolveDisconnectedEntrypoint(workspacePath, probe),
     packageTestScript: manifest.packageJson ? (manifest.packageJson.scripts?.test ?? null) : undefined,
     declaredPackages: declared,
     behaviorVerificationFailing: isBehaviorTestFailing(episodes),
     behaviorFailureDirective: behaviorFailureOutput ? diagnose(behaviorFailureOutput) : null,
-    behaviorFailureTargetFile: behaviorFailureOutput ? diagnosticFixTargetFile(behaviorFailureOutput) : null,
+    behaviorFailureTargetFile: behaviorFailureOutput ? diagnosticFixTargetFile(behaviorFailureOutput, workspaceFacts) : null,
   })
 }
 

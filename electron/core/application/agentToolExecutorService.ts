@@ -22,7 +22,13 @@ import { declaredDependencies, findVersionReality, buildVersionRealityDirective 
 import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
 import { extractRequestedPackages } from '../domain/agent/installCommandParser'
 import { evaluateFileImportIntegrity } from '../domain/agent/importDeclarationGate'
-import { readLocalModuleExports, readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
+import {
+  isBinaryInstalled,
+  packageHasStyleEntry,
+  readLocalModuleExports,
+  readPackageExports,
+  toWorkspaceRelativePath,
+} from '../infrastructure/filesystem/packageExportScanner'
 import { computeLineDiff, countDiffLines } from '../../../shared/domain/agent/diffEngine'
 import { reconcileApprovedHunks } from '../domain/agent/tools/fs/hunkApproval'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
@@ -583,6 +589,14 @@ export class AgentToolExecutorService {
             specificDirectiveFired,
             (packageName) => (workspacePath ? readPackageExports(workspacePath, packageName) : []),
             (importingFile, specifier) => (workspacePath ? readLocalModuleExports(workspacePath, importingFile, specifier) : []),
+            workspacePath
+              ? {
+                  packageHasStyleEntry: (packageName) => packageHasStyleEntry(workspacePath, packageName),
+                  toWorkspaceRelative: (filePath) => toWorkspaceRelativePath(workspacePath, filePath),
+                  fileExists: (relativePath) => agentToolFileRepository.getFileInfo(path.resolve(workspacePath, relativePath)) !== null,
+                  binaryInstalled: (name) => isBinaryInstalled(workspacePath, name),
+                }
+              : {},
           )
           return this.processToolService.buildAutoHealingFailureResult(
             cmd,

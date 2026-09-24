@@ -317,7 +317,7 @@ export class WebClient {
         },
       )
 
-      req.on('error', (err: any) => {
+      req.on('error', (err: NodeJS.ErrnoException) => {
         logger.log('WARN', 'WebClient', `Network error fetching ${urlStr}: ${err.message}`)
         resolve({ success: false, error: err.message })
       })

@@ -11,6 +11,7 @@ import type { AgentLogEntry } from '../domain/agent/agentTypes'
 import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
 import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
+import type { FileVersionEvidence } from '../domain/agent/fileVersionEvidence'
 
 export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
@@ -20,8 +21,8 @@ export interface ResponseInterpreterState {
   progress: AgentProgressPolicy
   /** Existing file that must be read before another edit is accepted. */
   pendingVersionConflictReadPath?: string
-  /** Latest read hash, consumed by the next edit of that file. */
-  versionedReadEvidence?: { filePath: string; contentHash: string }
+  /** Last content version the agent saw per file (read, full prompt injection or its own edit); see fileVersionEvidence.ts. */
+  versionEvidence: FileVersionEvidence
   /** Rounds of "verification failed, fix it and try again" already spent on this session. */
   verificationFixCycles: number
   /** Every guard firing of this run (bounded), persisted and reported in the completion evidence. */

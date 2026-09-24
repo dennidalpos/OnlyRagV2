@@ -61,6 +61,7 @@ describe('application-owned agent closure', () => {
         progress: new AgentProgressPolicy(),
         verificationFixCycles: 0,
         guardEvents: [],
+        versionEvidence: {},
       },
       goalPlanner,
       episodicCompactor,

@@ -18,7 +18,7 @@ export function parseSkillFrontmatter(rawContent: string): { metadata: SkillMeta
   }
 
   try {
-    let data: Record<string, any> = {}
+    let data: Record<string, unknown> = {}
     let body = rawContent.trim()
 
     const frontmatterMatch = rawContent.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
@@ -27,12 +27,12 @@ export function parseSkillFrontmatter(rawContent: string): { metadata: SkillMeta
       body = frontmatterMatch[2].trim()
       const loaded = yaml.load(yamlStr)
       if (loaded && typeof loaded === 'object') {
-        data = loaded as Record<string, any>
+        data = loaded as Record<string, unknown>
       }
     }
 
     // Helper to safely parse string array or comma-separated string
-    const toStringArray = (val: any): string[] => {
+    const toStringArray = (val: unknown): string[] => {
       if (Array.isArray(val)) {
         return val.map((v) => String(v).trim().toLowerCase()).filter(Boolean)
       }

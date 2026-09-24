@@ -1,3 +1,4 @@
+import type { UntrustedJson } from '../../../../shared/types'
 /**
  * Shared utility for robust newline-delimited JSON (NDJSON) streaming parser across Ollama HTTP clients.
  */
@@ -5,7 +6,7 @@
 export function consumeNdjsonChunk(
   currentBuffer: string,
   chunk: string | Buffer,
-  onParsed: (parsed: any) => void,
+  onParsed: (parsed: UntrustedJson) => void,
   onWarning?: (err: Error, line: string) => void,
 ): string {
   const combined = currentBuffer + (typeof chunk === 'string' ? chunk : chunk.toString('utf-8'))

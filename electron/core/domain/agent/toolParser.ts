@@ -1,3 +1,4 @@
+import type { UntrustedJson } from '../../../../shared/types'
 import { jsonrepair } from 'jsonrepair'
 import type { AgentToolCall } from './agentTypes'
 import { validateAndSanitize, normalizeToolName } from './toolSchemaValidator'
@@ -13,7 +14,7 @@ export interface ToolCallRejection {
 /** Notified for every candidate the validator refused. See parseAgentToolCall. */
 export type ToolCallRejectionSink = (rejection: ToolCallRejection) => void
 
-function sanitizeAndParseJson(raw: string): any {
+function sanitizeAndParseJson(raw: string): UntrustedJson {
   if (!raw || !raw.trim()) return null
 
   // Fast path for valid JSON.
@@ -130,7 +131,7 @@ function extractToolCallFromText(cleanText: string, onRejection?: ToolCallReject
     const toolName = normalizeToolName(rawToolName)
     if (!toolName) continue
 
-    const rawParams: Record<string, any> = {
+    const rawParams: Record<string, UntrustedJson> = {
       ...parsed,
       ...(parsed.parameters || parsed.arguments || parsed.args || parsed.params || {}),
     }

@@ -62,6 +62,34 @@ export function extractExportedNames(declarationSource: string): string[] {
   return found
 }
 
+/** True when the installed package declares a stylesheet entry, so `@import "<package>"` resolves. */
+export function packageHasStyleEntry(workspacePath: string, packageName: string): boolean {
+  if (!workspacePath || !packageName || packageName.startsWith('.')) return false
+  try {
+    const manifestPath = path.join(workspacePath, 'node_modules', ...packageName.split('/'), 'package.json')
+    if (!fs.existsSync(manifestPath)) return false
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+    const rootExport = manifest.exports?.['.']
+    return typeof manifest.style === 'string' || (typeof rootExport === 'object' && rootExport !== null && 'style' in rootExport)
+  } catch {
+    return false
+  }
+}
+
+/** True when an installed package provides the `name` command (`node_modules/.bin/<name>`, `.cmd` on Windows). */
+export function isBinaryInstalled(workspacePath: string, name: string): boolean {
+  if (!workspacePath || !name || /[\\/]/.test(name)) return false
+  const bin = path.join(workspacePath, 'node_modules', '.bin', name)
+  return fs.existsSync(bin) || fs.existsSync(`${bin}.cmd`)
+}
+
+/** The workspace-relative form of `filePath` when it lies inside the workspace, else `filePath` unchanged. */
+export function toWorkspaceRelativePath(workspacePath: string, filePath: string): string {
+  if (!workspacePath || !path.isAbsolute(filePath)) return filePath
+  const relative = path.relative(path.resolve(workspacePath), path.resolve(filePath))
+  return relative && !relative.startsWith('..') && !path.isAbsolute(relative) ? relative.replace(/\\/g, '/') : filePath
+}
+
 /** What `packageName` exports inside this workspace, or an empty array when it cannot be read. */
 export function readPackageExports(workspacePath: string, packageName: string): string[] {
   if (!workspacePath || !packageName || packageName.startsWith('.')) return []

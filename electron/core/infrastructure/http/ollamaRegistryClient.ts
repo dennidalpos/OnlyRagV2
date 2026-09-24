@@ -101,7 +101,7 @@ export class OllamaRegistryClient {
         },
       )
 
-      req.on('error', (err: any) => {
+      req.on('error', (err: NodeJS.ErrnoException) => {
         logger.log('WARN', 'OllamaRegistryClient', `Network error querying registry for ${target.model}: ${err.message}`)
         resolve({
           success: false,

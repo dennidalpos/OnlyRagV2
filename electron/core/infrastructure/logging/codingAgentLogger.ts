@@ -1,3 +1,4 @@
+import type { UntrustedJson } from '../../../../shared/types'
 import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
@@ -283,7 +284,7 @@ ${rawResponse}
     this.writeEntry(`[STEP ${step} - LLM RESPONSE] Session: ${sessionId}`, content)
   }
 
-  public logToolCall(sessionId: string, step: number, tool: string, parameters: Record<string, any>, explanation?: string): void {
+  public logToolCall(sessionId: string, step: number, tool: string, parameters: Record<string, UntrustedJson>, explanation?: string): void {
     this.metricsFor(sessionId).recordToolCall()
     const content = this.includesPayload(sessionId)
       ? `Session ID: ${sessionId} | Step: ${step}

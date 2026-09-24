@@ -2,6 +2,7 @@ import React from 'react'
 import { Modal } from '../common/Modal'
 import { AlertTriangle, Check, X, FileCode } from 'lucide-react'
 import { useTranslation } from '../../i18n'
+import type { UntrustedJson } from '../../types'
 import { computeLineDiff, countDiffLines, groupDiffIntoHunks, type DiffLine, type DiffHunkGroup } from '../../../shared/domain/agent/diffEngine'
 import { projectPendingChange, type PendingMutationType } from '../../../shared/domain/agent/pendingChangeProjection'
 import { DiffLinesView, ChangeCounts } from './DiffLinesView'
@@ -13,7 +14,7 @@ interface PendingApproval {
   contentOrCmd: string
   replacement?: string
   replacements?: { targetContent: string; replacementContent: string }[]
-  parameters?: Record<string, any>
+  parameters?: Record<string, UntrustedJson>
 }
 
 interface PendingApprovalModalProps {

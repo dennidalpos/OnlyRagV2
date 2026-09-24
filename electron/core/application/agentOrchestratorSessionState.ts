@@ -9,6 +9,7 @@ import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor
 import { GoalDecompositionPlanner, type PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
+import { restoreFileVersionEvidence } from '../domain/agent/fileVersionEvidence'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import type { SavedAgentSessionState } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
@@ -142,6 +143,7 @@ export async function initializeSessionState(params: SessionStateParams): Promis
     progress: new AgentProgressPolicy(),
     verificationFixCycles: 0,
     guardEvents: [],
+    versionEvidence: {},
   }
   const surfacedDodReasons = new Set<string>()
   const loopDetector = new AgentActionLoopDetector(2)
@@ -157,7 +159,7 @@ export async function initializeSessionState(params: SessionStateParams): Promis
       executionFailure: executionState.recoveryFailures?.execution,
     })
     responseInterpreterState.pendingVersionConflictReadPath = executionState.recoveryFailures?.versionConflictReadPath
-    responseInterpreterState.versionedReadEvidence = executionState.versionedReadEvidence
+    responseInterpreterState.versionEvidence = restoreFileVersionEvidence(executionState.versionEvidence, executionState.versionedReadEvidence)
     responseInterpreterState.verificationFixCycles = executionState.recoveryFailures?.verificationFixCycles || 0
     responseInterpreterState.guardEvents = [...(executionState.guardEvents || [])]
     stepCountBox.value = executionState.stepCount || 0

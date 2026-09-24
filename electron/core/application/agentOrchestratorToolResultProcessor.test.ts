@@ -72,7 +72,7 @@ describe('file version recovery', () => {
   })
 
   it('requires a read after conflict and clears it only after a successful read', () => {
-    const recoveryState: any = { progress: new AgentProgressPolicy() }
+    const recoveryState: any = { progress: new AgentProgressPolicy(), versionEvidence: { 'src/app.tsx': 'sha256:stale' } }
     recoveryState.progress.onExecutionFailure('write_file:src/App.tsx:conflict')
     expect(
       updateVersionConflictRecovery({
@@ -82,6 +82,7 @@ describe('file version recovery', () => {
       }),
     ).toEqual({ changed: true, conflictPath: 'src/App.tsx' })
     expect(recoveryState.pendingVersionConflictReadPath).toBe('src/App.tsx')
+    expect(recoveryState.versionEvidence).toEqual({})
 
     updateVersionConflictRecovery({
       toolRes: {
@@ -104,12 +105,13 @@ describe('file version recovery', () => {
       recoveryState,
     })
     expect(recoveryState.pendingVersionConflictReadPath).toBeUndefined()
-    expect(recoveryState.versionedReadEvidence.filePath).toBe('src/App.tsx')
+    expect(recoveryState.versionEvidence['src/app.tsx']).toBe('sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+    expect(recoveryState.versionEvidence['src/other.tsx']).toBe('sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
     expect(recoveryState.progress.executionFailuresSpent).toBe(0)
   })
 
   it('does not require an impossible read before creating an absent file', () => {
-    const recoveryState: any = { pendingVersionConflictReadPath: 'src/Old.tsx' }
+    const recoveryState: any = { pendingVersionConflictReadPath: 'src/Old.tsx', versionEvidence: {} }
     expect(
       updateVersionConflictRecovery({
         toolRes: {
@@ -122,30 +124,27 @@ describe('file version recovery', () => {
       }),
     ).toEqual({ changed: true })
     expect(recoveryState.pendingVersionConflictReadPath).toBeUndefined()
-    expect(recoveryState.versionedReadEvidence).toBeUndefined()
+    expect(recoveryState.versionEvidence).toEqual({})
   })
 
-  it('applies read evidence once and still rejects an external modification', () => {
+  it('applies the last seen version to every later edit and still rejects an external modification', () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-version-recovery-'))
     try {
       const filePath = path.join(tempDir, 'App.tsx')
       fs.writeFileSync(filePath, 'export const value = 1\n')
-      const state = {
-        versionedReadEvidence: {
-          filePath: 'App.tsx',
-          contentHash: contentVersion('export const value = 1\n'),
-        },
-      }
-      const applied = applyVersionedReadEvidence(
-        {
-          tool: 'write_file',
-          parameters: { filePath: 'App.tsx', content: 'export const value = 2\n' },
-        },
-        state,
-      )
+      const state = { versionEvidence: { 'app.tsx': contentVersion('export const value = 1\n') } }
+      const edit = { tool: 'write_file' as const, parameters: { filePath: 'App.tsx', content: 'export const value = 2\n' } }
 
+      const applied = applyVersionedReadEvidence(edit, state)
       expect(applied.toolCall.parameters.expectedContentHash).toBe(contentVersion('export const value = 1\n'))
-      expect(state.versionedReadEvidence).toBeUndefined()
+      // Not consumed: a proposal the gate later refuses must not cost the model its read.
+      expect(applyVersionedReadEvidence(edit, state).toolCall.parameters.expectedContentHash).toBe(contentVersion('export const value = 1\n'))
+      // An explicit hash from the model wins, and an unseen file gets none.
+      expect(
+        applyVersionedReadEvidence({ ...edit, parameters: { ...edit.parameters, expectedContentHash: 'sha256:own' } }, state).toolCall.parameters
+          .expectedContentHash,
+      ).toBe('sha256:own')
+      expect(applyVersionedReadEvidence({ ...edit, parameters: { ...edit.parameters, filePath: 'Other.tsx' } }, state).consumed).toBe(false)
 
       fs.writeFileSync(filePath, 'export const userValue = 3\n')
       const result = new FileSystemRepository().writeFileVersioned(
@@ -156,6 +155,30 @@ describe('file version recovery', () => {
       )
       expect(result.success).toBe(false)
       expect(fs.readFileSync(filePath, 'utf-8')).toBe('export const userValue = 3\n')
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('records the version its own successful edit left on disk, so the next edit of that file needs no read', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-own-edit-version-'))
+    try {
+      fs.mkdirSync(path.join(tempDir, 'src'))
+      fs.writeFileSync(path.join(tempDir, 'src', 'App.jsx'), 'export default function App() { return null }\n')
+      const recoveryState: any = { progress: new AgentProgressPolicy(), versionEvidence: {} }
+
+      expect(
+        updateVersionConflictRecovery({
+          toolRes: { outcome: 'success', outputForHistory: 'Successfully wrote file src/App.jsx (updated existing file)', logMessage: 'Updated' },
+          parsedTool: { tool: 'write_file', parameters: { filePath: 'src/App.jsx' } },
+          recoveryState,
+          workspacePath: tempDir,
+        }),
+      ).toEqual({ changed: true })
+      expect(recoveryState.versionEvidence['src/app.jsx']).toBe(contentVersion('export default function App() { return null }\n'))
+
+      const next = applyVersionedReadEvidence({ tool: 'write_file', parameters: { filePath: 'src\\App.jsx', content: 'x' } }, recoveryState)
+      expect(next.toolCall.parameters.expectedContentHash).toBe(contentVersion('export default function App() { return null }\n'))
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true })
     }
@@ -249,7 +272,7 @@ describe('plan follows a successful move_file', () => {
       episodicCompactor: { recordStep: () => {} },
       executionGuard: new TransactionalExecutionGuard(workspace),
       loopDetector: new AgentActionLoopDetector(2),
-      recoveryState: { guardEvents: [], progress: new AgentProgressPolicy() },
+      recoveryState: { guardEvents: [], progress: new AgentProgressPolicy(), versionEvidence: {} },
       sessionId: 'session-move-remap',
       isSessionActive: () => false,
       rendererEvents: null,
@@ -278,6 +301,74 @@ describe('plan follows a successful move_file', () => {
 
       expect(await processMove(workspace, planner, 'success')).toBeGreaterThan(0)
       expect(planner.getMilestones()[0].filePaths).toEqual(['src/App.jsx'])
+    } finally {
+      fs.rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('plan follows a write under another script extension', () => {
+  async function processWrite(workspace: string, planner: GoalDecompositionPlanner, filePath: string) {
+    const logs: string[] = []
+    await runToolResultProcessing({
+      parsedTool: { tool: 'write_file', parameters: { filePath, content: 'export default function App() { return null }' } },
+      toolRes: { outcome: 'success', outputForHistory: `Successfully wrote file ${filePath} (created new file)`, logMessage: 'Created new file' },
+      toolStartedAtMs: Date.now(),
+      stepCount: 6,
+      workspacePath: workspace,
+      flags: { hasFileMutations: false, hasVerifiedBuild: false },
+      sessionChangedFiles: new Map(),
+      goalPlanner: planner,
+      episodicCompactor: { recordStep: () => {}, getEpisodes: () => [], getRecentFullLogs: () => [] },
+      executionGuard: new TransactionalExecutionGuard(workspace),
+      loopDetector: new AgentActionLoopDetector(2),
+      recoveryState: { guardEvents: [], progress: new AgentProgressPolicy(), versionEvidence: {} },
+      sessionId: 'session-alias-remap',
+      isSessionActive: () => false,
+      rendererEvents: null,
+      persistCurrentState: async () => {},
+      emitLog: (_type: string, message: string) => logs.push(message),
+      emitDone: () => {},
+      finalizeSession: () => {},
+      closeApplicationRun: async () => ({ outcome: 'continue' }),
+      settings: { enableCodingAgentDebugLog: false },
+    } as unknown as ToolResultProcessingContext)
+    return logs
+  }
+
+  it('points milestones naming a missing src/App.js at the src/App.jsx the agent wrote', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-alias-remap-'))
+    try {
+      fs.mkdirSync(path.join(workspace, 'src'))
+      fs.writeFileSync(path.join(workspace, 'src', 'App.jsx'), 'export default function App() { return null }')
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan([
+        { id: 'm-6', title: 'Create a basic layout', status: 'pending', filePaths: ['src/App.js'] },
+        { id: 'm-9', title: 'Implement navigation', status: 'pending', filePaths: ['src/App.js'] },
+        { id: 'm-10', title: 'Smoke test', status: 'pending', filePaths: ['src/App.test.jsx'] },
+      ])
+
+      const logs = await processWrite(workspace, planner, 'src/App.jsx')
+
+      expect(planner.getMilestones().map((m) => m.filePaths)).toEqual([['src/App.jsx'], ['src/App.jsx'], ['src/App.test.jsx']])
+      expect(logs.some((line) => line.includes('m-6, m-9') && line.includes('src/App.jsx'))).toBe(true)
+    } finally {
+      fs.rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves the plan alone when the named file exists too', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-alias-keep-'))
+    try {
+      fs.mkdirSync(path.join(workspace, 'src'))
+      fs.writeFileSync(path.join(workspace, 'src', 'App.js'), 'export default function App() { return null }')
+      fs.writeFileSync(path.join(workspace, 'src', 'App.jsx'), 'export default function App() { return null }')
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan([{ id: 'm-6', title: 'Create a basic layout', status: 'pending', filePaths: ['src/App.js'] }])
+
+      await processWrite(workspace, planner, 'src/App.jsx')
+
+      expect(planner.getMilestones()[0].filePaths).toEqual(['src/App.js'])
     } finally {
       fs.rmSync(workspace, { recursive: true, force: true })
     }

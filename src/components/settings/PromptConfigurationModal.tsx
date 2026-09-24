@@ -1,3 +1,4 @@
+import type { editor } from 'monaco-editor'
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import Editor from '@monaco-editor/react'
 import {
@@ -110,7 +111,7 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [editorTimedOut, setEditorTimedOut] = useState(false)
   const [isEditorMounted, setIsEditorMounted] = useState(false)
-  const editorRef = useRef<any>(null)
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const prevNodeIdRef = useRef<PromptNodeId>(initialNodeId)
 
   const selectedNode = findPromptNode(selectedNodeId)
@@ -231,8 +232,8 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
 
   const handleInsertVariable = (token: string) => {
     const editor = editorRef.current
-    if (editor) {
-      const selection = editor.getSelection()
+    const selection = editor?.getSelection()
+    if (editor && selection) {
       editor.executeEdits('insert-variable', [{ range: selection, text: token, forceMoveMarkers: true }])
       editor.focus()
       return

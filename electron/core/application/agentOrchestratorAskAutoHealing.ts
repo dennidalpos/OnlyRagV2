@@ -1,4 +1,5 @@
-import type { AgentToolCall, AgentTaskResult, AgentLogEntry } from '../domain/agent/agentTypes'
+import type { AgentToolCall, AgentTaskResult } from '../domain/agent/agentTypes'
+import type { EmitLog } from './agentOrchestratorTypes'
 import type { AgentExecutionMode, AgentGuardEvent, AppSettings } from '../../../shared/types'
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import { isVersionQuestion } from '../domain/agent/versionQuestion'
@@ -6,8 +7,6 @@ import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
-
-type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface AskToolContext {
   parsedTool: AgentToolCall

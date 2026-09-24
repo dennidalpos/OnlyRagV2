@@ -11,9 +11,7 @@ import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryComp
 import type { AgentTaskResult } from '../domain/agent/agentTypes'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
 
-import type { AgentLogEntry } from '../domain/agent/agentTypes'
-
-export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
+import type { EmitLog } from './agentOrchestratorTypes'
 
 /** The subset of the loop's mutable counters this step can flip. Mutated in place by design
  *  (same pattern as the AgentSession object) -- see agentOrchestratorAppService.ts's mutableFlags. */

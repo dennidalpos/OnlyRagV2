@@ -15,9 +15,8 @@ import type { ApprovalResponse } from './agentOrchestratorTypes'
 import path from 'node:path'
 import { parseShellFileRead } from '../domain/agent/shellFileRead'
 
-import type { AgentLogEntry } from '../domain/agent/agentTypes'
+import type { EmitLog } from './agentOrchestratorTypes'
 
-type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 type RequestApproval = (payload: Record<string, unknown>) => Promise<ApprovalResponse>
 
 export interface ToolGateContext {

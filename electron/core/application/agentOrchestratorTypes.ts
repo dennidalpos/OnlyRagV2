@@ -4,6 +4,9 @@ import type { ObservedToolCallingProtocol } from '../../../shared/domain/agent/o
 import type { AgentCompletionStatus, AgentRunIdentity, AgentVerificationEvidence } from '../../../shared/types'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
 import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
+import type { AgentLogEntry } from '../domain/agent/agentTypes'
+
+export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface ApprovalResponse {
   approved: boolean

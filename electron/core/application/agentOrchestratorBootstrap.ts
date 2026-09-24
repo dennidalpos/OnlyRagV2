@@ -13,7 +13,7 @@ import type { ResponseInterpreterState } from './agentOrchestratorResponseInterp
 import type { ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
 import type { AgentSession, ApprovalResponse } from './agentOrchestratorTypes'
 import type { AgentExecutionPhaseController } from '../domain/agent/agentExecutionPhase'
-import type { AgentLogEntry } from '../domain/agent/agentTypes'
+import type { EmitLog } from './agentOrchestratorTypes'
 import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { resolveSessionContext } from './agentOrchestratorSessionContext'
 import { initializeSessionState } from './agentOrchestratorSessionState'
@@ -21,8 +21,6 @@ import { buildSessionPersistence } from './agentOrchestratorSessionPersistence'
 import { armSessionWatchdog } from './agentOrchestratorSessionWatchdog'
 import { redactSecrets } from '../../logRedactor'
 import { mapAgentLocalizedStrings } from '../../../shared/domain/agent/agentMainText'
-
-export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface BootstrapParams {
   payload: AgentTaskPayload

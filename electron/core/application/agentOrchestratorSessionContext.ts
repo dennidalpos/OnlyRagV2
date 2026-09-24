@@ -19,11 +19,9 @@ import { validateRestoredOllamaRuntime } from '../domain/agent/ollamaSessionRunt
 import { applyAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
 import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/agent/codingAgentDebugPolicy'
 
-import type { AgentLogEntry } from '../domain/agent/agentTypes'
+import type { EmitLog } from './agentOrchestratorTypes'
 import { resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
-
-export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface SessionContextParams {
   payload: AgentTaskPayload

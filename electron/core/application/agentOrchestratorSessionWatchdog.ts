@@ -5,9 +5,7 @@ import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 
-import type { AgentLogEntry } from '../domain/agent/agentTypes'
-
-export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
+import type { EmitLog } from './agentOrchestratorTypes'
 
 export interface SessionWatchdogParams {
   session: AgentSession

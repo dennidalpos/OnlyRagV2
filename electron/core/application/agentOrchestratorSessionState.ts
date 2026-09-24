@@ -17,9 +17,7 @@ import { AgentExecutionPhaseController } from '../domain/agent/agentExecutionPha
 import { captureMilestoneFileEvidence, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import { resolveDeclaredFilePaths, resolveMilestoneDeliverableStatus } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 
-import type { AgentLogEntry } from '../domain/agent/agentTypes'
-
-export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
+import type { EmitLog } from './agentOrchestratorTypes'
 
 export interface SessionStateParams {
   payload: AgentTaskPayload

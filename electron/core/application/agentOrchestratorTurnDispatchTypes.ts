@@ -1,4 +1,5 @@
-import type { AgentTaskPayload, AgentTaskResult, AgentLogEntry } from '../domain/agent/agentTypes'
+import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
+import type { EmitLog } from './agentOrchestratorTypes'
 import type { AgentCompletionEvidence, AgentCompletionStatus, AgentExecutionMode, AppSettings, OllamaModelMetrics } from '../../../shared/types'
 import type { OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
@@ -13,8 +14,6 @@ import type { HardwareFacts } from '../../../shared/domain/hardware/hardwareProf
 import type { OllamaContextReuseDecision } from '../domain/agent/ollamaContextCacheManager'
 import type { TurnToolPolicy } from '../domain/agent/turnToolPolicy'
 import type { ResponseInterpreterState } from './agentOrchestratorResponseInterpreterTypes'
-
-export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface TurnDispatchContext {
   userTask: string

@@ -9,11 +9,10 @@ import { captureMilestoneFileEvidence, createWorkspaceDeliverableProbe } from '.
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import type { AgentToolCall, AgentLogEntry } from '../domain/agent/agentTypes'
+import type { AgentToolCall } from '../domain/agent/agentTypes'
+import type { EmitLog } from './agentOrchestratorTypes'
 import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { AppSettings } from '../../../shared/types'
-
-type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface UpdatePlanToolContext {
   parsedTool: AgentToolCall

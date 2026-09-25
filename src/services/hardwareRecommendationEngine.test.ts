@@ -1,18 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import {
   analyzeHardwareAndRecommend,
-  calculateRealUsableVram,
   calculateTotalModelFootprintGB,
   assessModelHardwareCompatibility,
   estimateKvCacheMemoryGB,
   estimateModelWeightGB,
-  getModelFamily,
   getModelApproxSize,
   isOllamaModelInstalled,
-  getRecommendedOllamaEnvVars,
   buildModelFitLookup,
 } from './hardwareRecommendationEngine'
 import { findMatchingInstalledModel } from '../../shared/domain/agent/modelTagMatcher'
+import { calculateRealUsableVram } from '../../shared/domain/hardware/hardwareProfileTiers'
 import {
   COMPACT_CODING_CATALOG,
   WORKHORSE_CODING_CATALOG,
@@ -356,13 +354,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recLaw?.modelName).toBe('mistral-small3.2:24b')
   })
 
-  it('should compute sizes and families correctly', () => {
-    expect(getModelFamily('adrienbrault/biomistral-7b:Q4_K_M')).toBe('biomistral')
-    expect(getModelFamily('qwen2.5-coder:7b')).toBe('qwen-coder')
-    expect(getModelFamily('llama3.2-vision:11b')).toBe('llama-vision')
-    expect(getModelFamily('deepseek-r1:14b')).toBe('deepseek-r1')
-    expect(getModelFamily('bge-m3:latest')).toBe('bge')
-
+  it('should compute approximate sizes correctly', () => {
     expect(getModelApproxSize('adrienbrault/biomistral-7b:Q4_K_M')).toBe('4.1 GB')
     expect(getModelApproxSize('qwen2.5-coder:7b')).toBe('4.7 GB')
     expect(getModelApproxSize('nomic-embed-text:latest')).toBe('274 MB')
@@ -409,31 +401,6 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(findMatchingInstalledModel('qwen2.5-coder:7b', installed)).toBe('qwen2.5-coder:7b-instruct-q4_k_m')
     // Loose substring base match (target base is a substring of the installed base)
     expect(findMatchingInstalledModel('qwen2.5', installed)).toBe('qwen2.5-coder:7b-instruct-q4_k_m')
-  })
-
-  it('should generate correct OS environment variables and scripts based on hardware', () => {
-    // 1. CPU-Only
-    const cpuDiag = createMockDiagnostics(false, 0, 8)
-    const cpuEnv = getRecommendedOllamaEnvVars(cpuDiag)
-    expect(cpuEnv.profileTier).toBe('legacy')
-    expect(cpuEnv.variables.find((v) => v.name === 'OLLAMA_FLASH_ATTENTION')?.value).toBe('0')
-    expect(cpuEnv.variables.find((v) => v.name === 'OLLAMA_NUM_PARALLEL')?.value).toBe('1')
-    expect(cpuEnv.powershellScript).toContain('[System.Environment]::SetEnvironmentVariable')
-
-    // 2. Midrange GPU (8GB)
-    const midDiag = createMockDiagnostics(true, 8192, 16, 'NVIDIA GeForce RTX 4060')
-    const midEnv = getRecommendedOllamaEnvVars(midDiag)
-    expect(midEnv.profileTier).toBe('midrange')
-    expect(midEnv.variables.find((v) => v.name === 'OLLAMA_FLASH_ATTENTION')?.value).toBe('1')
-    expect(midEnv.variables.find((v) => v.name === 'OLLAMA_KV_CACHE_TYPE')?.value).toBe('q8_0')
-    expect(midEnv.variables.find((v) => v.name === 'OLLAMA_NUM_PARALLEL')?.value).toBe('2')
-
-    // 3. Extreme Workstation (24GB+)
-    const extDiag = createMockDiagnostics(true, 24576, 64, 'NVIDIA GeForce RTX 4090')
-    const extEnv = getRecommendedOllamaEnvVars(extDiag)
-    expect(extEnv.profileTier).toBe('extreme')
-    expect(extEnv.variables.find((v) => v.name === 'OLLAMA_NUM_PARALLEL')?.value).toBe('4')
-    expect(extEnv.variables.find((v) => v.name === 'OLLAMA_MAX_LOADED_MODELS')?.value).toBe('3')
   })
 
   describe('recommendation/hardware coherence invariant', () => {
@@ -501,17 +468,6 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
       expect(estimateModelWeightGB('embeddinggemma:300m')).toBeCloseTo(0.61, 2)
     })
 
-    it('should assign the new tags to the correct family badge', () => {
-      expect(getModelFamily('qwen3-coder:30b')).toBe('qwen-coder')
-      expect(getModelFamily('qwen3:8b')).toBe('qwen')
-      expect(getModelFamily('qwen2.5vl:7b')).toBe('qwen-vl')
-      expect(getModelFamily('gpt-oss:20b')).toBe('gpt-oss')
-      expect(getModelFamily('granite3.3:8b')).toBe('granite')
-      expect(getModelFamily('granite-embedding:278m')).toBe('granite')
-      expect(getModelFamily('devstral:24b')).toBe('mistral')
-      expect(getModelFamily('gemma3:4b')).toBe('gemma')
-    })
-
     it('should keep every catalog entry priced consistently with its advertised size', () => {
       // Guards against a new catalog row silently falling through to the 4.5GB "unknown model" default: the size string shown in the wizard and the weight the VRAM budgeting math uses must describe the same model.
       const ALL_CATALOGS: RawModelCatalogEntry[] = [
@@ -540,55 +496,6 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
         const drift = Math.abs(priced - advertised) / advertised
         expect(drift, `${entry.modelName}: catalog says ${entry.sizeBytesApprox} but the weight table says ${priced} GB`).toBeLessThan(0.2)
       }
-    })
-  })
-
-  describe('Ollama OS parameters from full hardware facts', () => {
-    it('should not emit an inert KV-cache type on a CPU-only host where flash attention is off', () => {
-      const cpuEnv = getRecommendedOllamaEnvVars(createMockDiagnostics(false, 0, 8))
-      expect(cpuEnv.variables.find((v) => v.name === 'OLLAMA_FLASH_ATTENTION')?.value).toBe('0')
-      // OLLAMA_KV_CACHE_TYPE is only honoured by Ollama when flash attention is enabled.
-      expect(cpuEnv.variables.find((v) => v.name === 'OLLAMA_KV_CACHE_TYPE')).toBeUndefined()
-      expect(cpuEnv.variables.find((v) => v.name === 'OLLAMA_GPU_OVERHEAD')).toBeUndefined()
-
-      // Legacy GPU (e.g. 2GB VRAM) also sets flash attention to 0
-      const legacyGpuEnv = getRecommendedOllamaEnvVars(createMockDiagnostics(true, 2048, 8))
-      expect(legacyGpuEnv.profileTier).toBe('legacy')
-      expect(legacyGpuEnv.variables.find((v) => v.name === 'OLLAMA_FLASH_ATTENTION')?.value).toBe('0')
-    })
-
-    it('should clamp concurrency by physical core count, not by VRAM alone', () => {
-      // 24GB GPU but only 4 cores -> 1 concurrent slot (4 cores budgeted per slot).
-      const fewCores = createMockDiagnostics(true, 24576, 64)
-      fewCores.system.cpusCount = 4
-      expect(getRecommendedOllamaEnvVars(fewCores).variables.find((v) => v.name === 'OLLAMA_NUM_PARALLEL')?.value).toBe('1')
-
-      const manyCores = createMockDiagnostics(true, 24576, 64)
-      manyCores.system.cpusCount = 16
-      expect(getRecommendedOllamaEnvVars(manyCores).variables.find((v) => v.name === 'OLLAMA_NUM_PARALLEL')?.value).toBe('4')
-    })
-
-    it('should keep only one model resident when RAM cannot host a second hot model', () => {
-      const lowRamWorkstation = createMockDiagnostics(true, 24576, 16)
-      const env = getRecommendedOllamaEnvVars(lowRamWorkstation)
-      expect(env.profileTier).toBe('extreme')
-      expect(env.variables.find((v) => v.name === 'OLLAMA_MAX_LOADED_MODELS')?.value).toBe('2')
-    })
-
-    it('should pin the smallest default context window and shortest residency on minimum hardware', () => {
-      const minimal = createMockDiagnostics(false, 0, 8, 'CPU')
-      minimal.system.cpusCount = 4
-      const env = getRecommendedOllamaEnvVars(minimal)
-      expect(env.variables.find((v) => v.name === 'OLLAMA_CONTEXT_LENGTH')?.value).toBe('4096')
-      expect(env.variables.find((v) => v.name === 'OLLAMA_KEEP_ALIVE')?.value).toBe('5m')
-      expect(env.variables.find((v) => v.name === 'OLLAMA_MAX_LOADED_MODELS')?.value).toBe('1')
-    })
-
-    it('should reserve the same OS VRAM overhead Ollama plans around as the safe-budget formula', () => {
-      const env = getRecommendedOllamaEnvVars(createMockDiagnostics(true, 12288, 32))
-      const overhead = env.variables.find((v) => v.name === 'OLLAMA_GPU_OVERHEAD')
-      expect(overhead?.value).toBe(String(Math.round(1.5 * 1024 * 1024 * 1024)))
-      expect(env.variables.find((v) => v.name === 'OLLAMA_CONTEXT_LENGTH')?.value).toBe('16384')
     })
   })
 

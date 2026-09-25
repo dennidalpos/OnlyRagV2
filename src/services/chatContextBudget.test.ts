@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { resolveChatContextBudget, resolveChatThreadCount, resolvePromptCharBudget } from './chatContextBudget'
-import { calculateDynamicContextWindow } from '../../shared/domain/agent/contextWindowCalculator'
 
 describe('chatContextBudget', () => {
   const MINIMAL_HOST = { hasGpu: false, vramTotalMB: 0, systemRamGB: 8, cpuCount: 4 }
@@ -95,16 +94,7 @@ describe('chatContextBudget', () => {
       const promptTokens = Math.ceil(worstCaseChars / CHARS_PER_TOKEN)
       // A fully saturated turn must still leave room for the completion inside the cap.
       expect(promptTokens).toBeLessThan(budget.maxNumCtx)
-      expect(calculateDynamicContextWindow(worstCaseChars, budget.maxNumCtx)).toBeLessThanOrEqual(budget.maxNumCtx)
     }
-  })
-
-  it('should size num_ctx from the actual prompt rather than always allocating the cap', () => {
-    const budget = resolveChatContextBudget(EXTREME_HOST)
-    const shortTurn = calculateDynamicContextWindow(400, budget.maxNumCtx)
-    expect(shortTurn).toBeLessThan(budget.maxNumCtx)
-    // A trivial "ciao" on a 24GB workstation must not reserve a 32k KV cache.
-    expect(shortTurn).toBeLessThanOrEqual(4096)
   })
 
   it('should pin Ollama threads leaving one core for the UI, and stay silent when core count is unknown', () => {

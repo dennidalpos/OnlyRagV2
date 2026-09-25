@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getDefaultAppSettings, sanitizeAppSettings, mergeAppSettings, sanitizeModelThinkingPreferences } from './appSettingsDomain'
+import { getDefaultAppSettings, sanitizeAppSettings, sanitizeModelThinkingPreferences } from './appSettingsDomain'
 
 describe('AppSettingsDomain Unit Tests', () => {
   it('should return valid default settings', () => {
@@ -127,20 +127,6 @@ describe('AppSettingsDomain Unit Tests', () => {
       customPromptOverrides: { chat: 42 as unknown as string, translation: 'ok' },
     })
     expect(sanitized.customPromptOverrides).toEqual({ translation: 'ok' })
-  })
-
-  it('should merge partial updates cleanly onto current settings', () => {
-    const current = getDefaultAppSettings()
-    const updated = mergeAppSettings(current, {
-      codingModel: 'deepseek-r1:8b',
-      hasCompletedInitialSetup: true,
-      maxToolCallSteps: 0,
-    })
-
-    expect(updated.codingModel).toBe('deepseek-r1:8b')
-    expect(updated.hasCompletedInitialSetup).toBe(true)
-    expect(updated.language).toBe('it')
-    expect(updated.maxToolCallSteps).toBe(0)
   })
 
   it('sanitizes per-model context preferences with a 2048-token floor', () => {

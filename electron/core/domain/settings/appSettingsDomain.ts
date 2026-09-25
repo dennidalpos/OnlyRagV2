@@ -154,7 +154,3 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
 
   return sanitized
 }
-
-export function mergeAppSettings(current: AppSettings, updates: Partial<AppSettings>): AppSettings {
-  return sanitizeAppSettings({ ...current, ...updates })
-}

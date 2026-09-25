@@ -15,8 +15,6 @@ import { AgentSessionHeaderBar } from './AgentSessionHeaderBar'
 import { AgentTimeline } from './AgentTimeline'
 import { PromptComposer } from './PromptComposer'
 
-export { getStepModelName } from './agentLogMessageUtils'
-
 interface AgentActionLogPanelProps {
   actionLogs: AgentActionLog[]
   agentMode: AgentMode

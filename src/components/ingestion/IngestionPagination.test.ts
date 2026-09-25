@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest'
-import { DEFAULT_SKILL_HUB_URL } from '../coding/SkillHubModal'
 
 function parsePagesFromMarkdown(markdown: string) {
   const text = markdown.trim()
@@ -95,11 +94,5 @@ Simple text content without pages.`
     expect(pages).toHaveLength(1)
     expect(pages[0].pageNumber).toBe(1)
     expect(pages[0].content).toContain('Simple text content without pages.')
-  })
-
-  it('should have a trusted default SKILL_HUB_URL defined', () => {
-    expect(DEFAULT_SKILL_HUB_URL).toBeTruthy()
-    expect(DEFAULT_SKILL_HUB_URL.startsWith('https://raw.githubusercontent.com/')).toBe(true)
-    expect(DEFAULT_SKILL_HUB_URL.endsWith('SKILL.md')).toBe(true)
   })
 })

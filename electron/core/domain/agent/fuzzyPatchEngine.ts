@@ -1,6 +1,5 @@
 import * as ts from 'typescript'
 import * as path from 'node:path'
-import levenshtein from 'fast-levenshtein'
 import { scriptKindForPath } from './sourceScriptKind'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
@@ -9,85 +8,6 @@ export interface ASTValidationResult {
   syntaxError?: string
   line?: number
   character?: number
-}
-
-export interface FuzzyReplaceResult {
-  success: boolean
-  updatedContent?: string
-  error?: string
-  confidenceScore: number
-}
-
-/**
- * Normalizes line endings to LF to prevent Windows/Unix CRLF mismatch failures.
- */
-function normalizeLineEndings(text: string): string {
-  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-}
-
-/**
- * Calculates normalized Levenshtein similarity distance between two string chunks using fast-levenshtein.
- */
-function calculateSimilarity(a: string, b: string): number {
-  const s1 = a.trim()
-  const s2 = b.trim()
-  if (s1 === s2) return 1.0
-  if (s1.length === 0 || s2.length === 0) return 0.0
-
-  const distance = levenshtein.get(s1, s2)
-  const maxLength = Math.max(s1.length, s2.length)
-  return 1 - distance / maxLength
-}
-
-/**
- * Applies fuzzy chunk replacement with whitespace tolerance and sliding window matching.
- */
-export function applyFuzzyReplace(fileContent: string, targetContent: string, replacementContent: string, minSimilarityThreshold = 0.82): FuzzyReplaceResult {
-  const normalizedFile = normalizeLineEndings(fileContent)
-  const normalizedTarget = normalizeLineEndings(targetContent)
-  const normalizedReplacement = normalizeLineEndings(replacementContent)
-
-  // 1. Exact string match fast path
-  if (normalizedFile.includes(normalizedTarget)) {
-    const updated = normalizedFile.replace(normalizedTarget, normalizedReplacement)
-    return { success: true, updatedContent: updated, confidenceScore: 1.0 }
-  }
-
-  // 2. Sliding window line-matching for fuzzy whitespace/indentation drift
-  const fileLines = normalizedFile.split('\n')
-  const targetLines = normalizedTarget.split('\n')
-  const targetLineCount = targetLines.length
-
-  let bestMatchIndex = -1
-  let maxSimilarity = 0
-
-  for (let i = 0; i <= fileLines.length - targetLineCount; i++) {
-    const candidateChunk = fileLines.slice(i, i + targetLineCount).join('\n')
-    const similarity = calculateSimilarity(candidateChunk, normalizedTarget)
-
-    if (similarity > maxSimilarity) {
-      maxSimilarity = similarity
-      bestMatchIndex = i
-    }
-  }
-
-  if (maxSimilarity >= minSimilarityThreshold && bestMatchIndex !== -1) {
-    const beforeLines = fileLines.slice(0, bestMatchIndex)
-    const afterLines = fileLines.slice(bestMatchIndex + targetLineCount)
-    const updatedLines = [...beforeLines, normalizedReplacement, ...afterLines]
-
-    return {
-      success: true,
-      updatedContent: updatedLines.join('\n'),
-      confidenceScore: maxSimilarity,
-    }
-  }
-
-  return {
-    success: false,
-    confidenceScore: maxSimilarity,
-    error: `Fuzzy patch failed: Best match similarity was ${(maxSimilarity * 100).toFixed(1)}% (Required >= ${minSimilarityThreshold * 100}%). Verify target content snippet.`,
-  }
 }
 
 /**

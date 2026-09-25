@@ -9,22 +9,6 @@ const INTERACTIVE_PATTERNS = [
 ]
 
 /**
- * Inject mandatory non-interactive shell flags into environment.
- */
-export function getNonInteractiveEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return {
-    ...baseEnv,
-    CI: 'true',
-    PAGER: 'cat',
-    NPM_CONFIG_YES: 'true',
-    PIP_NO_INPUT: '1',
-    DEBIAN_FRONTEND: 'noninteractive',
-    GIT_TERMINAL_PROMPT: '0',
-    PYTHONUNBUFFERED: '1',
-  }
-}
-
-/**
  * Sanitizes Unix-style bash shell commands for execution on Windows PowerShell.
  * Converts bash brace expansions (e.g., mkdir -p src/{a,b}), touch, rm -rf, ls, and chained && commands.
  */

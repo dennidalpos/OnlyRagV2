@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  evaluateDomainIntent,
-  calculateCentroidSimilarity,
-  MEDICAL_CENTROID,
-  LEGAL_CENTROID,
-  MEDICAL_CENTROID_ROOTS,
-  LEGAL_CENTROID_ROOTS,
-} from './domainRouter'
+import { evaluateDomainIntent, calculateCentroidSimilarity, MEDICAL_CENTROID, LEGAL_CENTROID } from './domainRouter'
 import type { AppSettings } from '../types'
 
 describe('Domain & Intent Sub-Router Unit Tests', () => {
@@ -151,14 +144,6 @@ describe('Domain & Intent Sub-Router Unit Tests', () => {
       const genericQuery = 'cane gatto tavolo sedia automobile'
       expect(calculateCentroidSimilarity(genericQuery, MEDICAL_CENTROID)).toBe(0)
       expect(calculateCentroidSimilarity(genericQuery, LEGAL_CENTROID)).toBe(0)
-    })
-
-    it('should support legacy root array format', () => {
-      const medSim = calculateCentroidSimilarity('antibiotico posologia', MEDICAL_CENTROID_ROOTS)
-      expect(medSim).toBeGreaterThan(0)
-
-      const legalSim = calculateCentroidSimilarity('clausola risarcimento', LEGAL_CENTROID_ROOTS)
-      expect(legalSim).toBeGreaterThan(0)
     })
   })
 })

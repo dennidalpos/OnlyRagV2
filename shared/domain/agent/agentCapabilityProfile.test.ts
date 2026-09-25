@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_AGENT_CAPABILITY_PROFILE, resolveAgentCapabilityProfile } from './agentCapabilityProfile'
+import { DEFAULT_AGENT_STEP_BUDGET } from './agentStepBudget'
+import { resolveAgentCapabilityProfile } from './agentCapabilityProfile'
 
 describe('Agent capability profile', () => {
   it('uses a finite restrictive profile when settings are absent', () => {
-    expect(resolveAgentCapabilityProfile()).toEqual(DEFAULT_AGENT_CAPABILITY_PROFILE)
+    expect(resolveAgentCapabilityProfile()).toEqual({
+      allowFileModifications: false,
+      allowTerminalExecution: false,
+      capabilityPolicyMode: 'offline-strict',
+      maxToolCallSteps: DEFAULT_AGENT_STEP_BUDGET,
+    })
   })
 
   it('keeps explicit permissions and bounds the run budget', () => {

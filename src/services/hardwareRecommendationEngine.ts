@@ -1,12 +1,9 @@
 import { DiagnosticsData, RunningModelDetails } from '../types'
-import type { TranslationKey } from '../i18n'
 import { translate } from '../i18n/I18nContext'
 import {
   calculateRealUsableVram,
   calculateUsableSystemRamGB,
   classifyHardwareProfileTier,
-  isMinimalHardwareHost,
-  VRAM_OVERHEAD_OS_GB,
   type HardwareFacts,
   type HardwareProfileTier,
 } from '../../shared/domain/hardware/hardwareProfileTiers'
@@ -24,7 +21,6 @@ import {
   type RawModelCatalogEntry,
 } from '../../shared/domain/hardware/hardwareModelCatalog'
 
-export { calculateRealUsableVram } from '../../shared/domain/hardware/hardwareProfileTiers'
 export type { HardwareFacts } from '../../shared/domain/hardware/hardwareProfileTiers'
 export { estimateModelWeightGB }
 import { estimateModelWeightGB } from '../../shared/domain/hardware/modelWeightEstimator'
@@ -42,20 +38,6 @@ export interface ModelRecommendation {
   compatibilityWarning?: string
 }
 
-export interface OllamaEnvVarRecommendation {
-  name: string
-  value: string
-  description: string
-  rationale: string
-}
-
-export interface OllamaEnvConfig {
-  profileTier: HardwareProfileTier
-  variables: OllamaEnvVarRecommendation[]
-  powershellScript: string
-  bashScript: string
-}
-
 export interface HardwareRecommendations {
   profileTier: HardwareProfileTier
   profileName: string
@@ -70,36 +52,6 @@ export interface HardwareRecommendations {
   legalTierModels: ModelRecommendation[]
   visionTierModels: ModelRecommendation[]
   embeddingTierModels: ModelRecommendation[]
-}
-
-/** Derives model family badge from model name. */
-export function getModelFamily(modelName: string): string {
-  if (!modelName) return 'generic'
-  const lower = modelName.toLowerCase().trim()
-  if (lower.includes('biomistral')) return 'biomistral'
-  if (lower.includes('meditron')) return 'meditron'
-  if (lower.includes('qwen2.5vl') || lower.includes('qwen-vl') || lower.includes('qwen2vl')) return 'qwen-vl'
-  if (/qwen[\d.]*-coder/.test(lower) || lower.includes('qwen-coder')) return 'qwen-coder'
-  if (lower.includes('qwen')) return 'qwen'
-  if (lower.includes('llama3.2-vision') || lower.includes('llama-vision')) return 'llama-vision'
-  if (lower.includes('llama')) return 'llama'
-  if (lower.includes('deepseek-r1')) return 'deepseek-r1'
-  if (lower.includes('deepseek')) return 'deepseek'
-  if (lower.includes('mistral') || lower.includes('codestral') || lower.includes('devstral')) return 'mistral'
-  if (lower.includes('gpt-oss')) return 'gpt-oss'
-  if (lower.includes('granite')) return 'granite'
-  if (lower.includes('gemma')) return 'gemma'
-  if (lower.includes('phi')) return 'phi'
-  if (lower.includes('aya') || lower.includes('command')) return 'cohere'
-  if (lower.includes('llava')) return 'llava'
-  if (lower.includes('minicpm')) return 'minicpm'
-  if (lower.includes('moondream')) return 'moondream'
-  if (lower.includes('nomic')) return 'nomic'
-  if (lower.includes('bge')) return 'bge'
-  if (lower.includes('mxbai')) return 'mxbai'
-  if (lower.includes('snowflake')) return 'snowflake'
-  if (lower.includes('minilm')) return 'minilm'
-  return lower.split(':')[0].split('/')[0].split('-')[0] || 'generic'
 }
 
 /** Approximate memory/disk footprint string for model. */
@@ -352,186 +304,4 @@ function buildCodingModelCatalog(): RawModelCatalogEntry[] {
   }
 
   return order.map((name) => byName.get(name) as RawModelCatalogEntry)
-}
-
-/** Per-variable recommendation builders. */
-type EnvTranslator = (key: TranslationKey, params?: Record<string, string | number>) => string
-
-interface EnvTuningContext {
-  profileTier: HardwareProfileTier
-  isMinimal: boolean
-  hasGpu: boolean
-  cpuCount: number
-  systemRamGB: number
-}
-
-/** Flash Attention and KV-cache quantization are a *pair*: Ollama only honours OLLAMA_KV_CACHE_TYPE when flash attention is enabled. */
-function buildAttentionVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEnvVarRecommendation[] {
-  if (!ctx.hasGpu || ctx.profileTier === 'legacy') {
-    return [
-      {
-        name: 'OLLAMA_FLASH_ATTENTION',
-        value: '0',
-        description: t('ollamaEnvParams.envFlashOffDesc'),
-        rationale: t('ollamaEnvParams.envFlashOffRationale'),
-      },
-    ]
-  }
-
-  const kv =
-    ctx.profileTier === 'highend' || ctx.profileTier === 'extreme'
-      ? { value: 'f16', descKey: 'ollamaEnvParams.envKvHighDesc', ratKey: 'ollamaEnvParams.envKvHighRationale' }
-      : ctx.profileTier === 'midrange'
-        ? { value: 'q8_0', descKey: 'ollamaEnvParams.envKvMidDesc', ratKey: 'ollamaEnvParams.envKvMidRationale' }
-        : { value: 'q8_0', descKey: 'ollamaEnvParams.envKvLowDesc', ratKey: 'ollamaEnvParams.envKvLowRationale' }
-
-  return [
-    {
-      name: 'OLLAMA_FLASH_ATTENTION',
-      value: '1',
-      description: t('ollamaEnvParams.envFlashOnDesc'),
-      rationale: t('ollamaEnvParams.envFlashOnRationale'),
-    },
-    {
-      name: 'OLLAMA_KV_CACHE_TYPE',
-      value: kv.value,
-      description: t(kv.descKey as TranslationKey),
-      rationale: t(kv.ratKey as TranslationKey),
-    },
-    {
-      // Mirrors the app's own VRAM_OVERHEAD_OS_GB reserve so Ollama's layer-offload planner
-      // budgets the same display/compositor headroom calculateRealUsableVram assumes.
-      name: 'OLLAMA_GPU_OVERHEAD',
-      value: String(Math.round(VRAM_OVERHEAD_OS_GB * 1024 * 1024 * 1024)),
-      description: t('ollamaEnvParams.envGpuOverheadDesc', { gb: VRAM_OVERHEAD_OS_GB.toFixed(1) }),
-      rationale: t('ollamaEnvParams.envGpuOverheadRationale'),
-    },
-  ]
-}
-
-/** Concurrency is bounded by BOTH the memory tier and the physical core count: on a CPU-only host every parallel slot competes for the same cores, so extra parallelism is pure latency. */
-function buildConcurrencyVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEnvVarRecommendation[] {
-  const tierParallel = !ctx.hasGpu || ctx.profileTier === 'legacy' || ctx.profileTier === 'entry' ? 1 : ctx.profileTier === 'midrange' ? 2 : 4
-  const coreCap = ctx.cpuCount > 0 ? Math.max(1, Math.floor(ctx.cpuCount / 4)) : 1
-  const parallel = Math.min(tierParallel, coreCap)
-
-  const parallelKeys =
-    parallel <= 1
-      ? { descKey: 'ollamaEnvParams.envParallelLowDesc', ratKey: 'ollamaEnvParams.envParallelLowRationale' }
-      : parallel === 2
-        ? { descKey: 'ollamaEnvParams.envParallelMidDesc', ratKey: 'ollamaEnvParams.envParallelMidRationale' }
-        : { descKey: 'ollamaEnvParams.envParallelHighDesc', ratKey: 'ollamaEnvParams.envParallelHighRationale' }
-
-  // A second resident model only pays off when there is memory to keep it hot; low-RAM hosts
-  // must evict aggressively or the OS starts swapping the KV cache to disk.
-  const maxLoaded = ctx.profileTier === 'extreme' && ctx.systemRamGB >= 32 ? 3 : ctx.profileTier === 'highend' || ctx.profileTier === 'extreme' ? 2 : 1
-  const loadedKeys =
-    maxLoaded >= 3
-      ? { descKey: 'ollamaEnvParams.envMaxLoadedExtremeDesc', ratKey: 'ollamaEnvParams.envMaxLoadedExtremeRationale' }
-      : maxLoaded === 2
-        ? { descKey: 'ollamaEnvParams.envMaxLoadedHighDesc', ratKey: 'ollamaEnvParams.envMaxLoadedHighRationale' }
-        : { descKey: 'ollamaEnvParams.envMaxLoadedLowDesc', ratKey: 'ollamaEnvParams.envMaxLoadedLowRationale' }
-
-  return [
-    {
-      name: 'OLLAMA_NUM_PARALLEL',
-      value: String(parallel),
-      description: t(parallelKeys.descKey as TranslationKey),
-      rationale: t(parallelKeys.ratKey as TranslationKey),
-    },
-    {
-      name: 'OLLAMA_MAX_LOADED_MODELS',
-      value: String(maxLoaded),
-      description: t(loadedKeys.descKey as TranslationKey),
-      rationale: t(loadedKeys.ratKey as TranslationKey),
-    },
-  ]
-}
-
-/** Residency and default context length. */
-function buildMemoryResidencyVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEnvVarRecommendation[] {
-  const keepAlive =
-    ctx.isMinimal || ctx.profileTier === 'legacy'
-      ? { value: '5m', descKey: 'ollamaEnvParams.envKeepAliveLowDesc', ratKey: 'ollamaEnvParams.envKeepAliveLowRationale' }
-      : ctx.profileTier === 'entry' || ctx.profileTier === 'midrange'
-        ? { value: '30m', descKey: 'ollamaEnvParams.envKeepAliveMidDesc', ratKey: 'ollamaEnvParams.envKeepAliveMidRationale' }
-        : { value: '2h', descKey: 'ollamaEnvParams.envKeepAliveHighDesc', ratKey: 'ollamaEnvParams.envKeepAliveHighRationale' }
-
-  const contextLength = ctx.isMinimal
-    ? 4096
-    : ctx.profileTier === 'legacy' || ctx.profileTier === 'entry' || ctx.profileTier === 'midrange'
-      ? 8192
-      : ctx.profileTier === 'highend'
-        ? 16384
-        : 32768
-  const contextKeys =
-    contextLength <= 4096
-      ? { descKey: 'ollamaEnvParams.envContextLenLowDesc', ratKey: 'ollamaEnvParams.envContextLenLowRationale' }
-      : contextLength <= 8192
-        ? { descKey: 'ollamaEnvParams.envContextLenMidDesc', ratKey: 'ollamaEnvParams.envContextLenMidRationale' }
-        : { descKey: 'ollamaEnvParams.envContextLenHighDesc', ratKey: 'ollamaEnvParams.envContextLenHighRationale' }
-
-  return [
-    {
-      name: 'OLLAMA_KEEP_ALIVE',
-      value: keepAlive.value,
-      description: t(keepAlive.descKey as TranslationKey),
-      rationale: t(keepAlive.ratKey as TranslationKey),
-    },
-    {
-      name: 'OLLAMA_CONTEXT_LENGTH',
-      value: String(contextLength),
-      description: t(contextKeys.descKey as TranslationKey, { tokens: contextLength }),
-      rationale: t(contextKeys.ratKey as TranslationKey),
-    },
-  ]
-}
-
-/** Renders the copy-paste setup scripts for the resolved variable set. */
-function buildEnvScripts(profileTier: HardwareProfileTier, variables: OllamaEnvVarRecommendation[]): { powershellScript: string; bashScript: string } {
-  const psLines = [
-    translate('services.envScriptHeader', { tier: profileTier.toUpperCase() }),
-    translate('services.envScriptRunAs'),
-    ...variables.map((v) => `[System.Environment]::SetEnvironmentVariable('${v.name}', '${v.value}', 'User')`),
-    ``,
-    translate('services.envScriptRestart'),
-    `Stop-Process -Name "ollama*" -Force -ErrorAction SilentlyContinue`,
-    `Start-Process -FilePath "$env:LOCALAPPDATA\\Programs\\Ollama\\ollama app.exe"`,
-  ]
-
-  const bashLines = [
-    translate('services.envScriptHeader', { tier: profileTier.toUpperCase() }),
-    ...variables.map((v) => `export ${v.name}="${v.value}"`),
-    translate('services.envScriptPersist'),
-  ]
-
-  return { powershellScript: psLines.join('\n'), bashScript: bashLines.join('\n') }
-}
-
-/** Calculates optimal client OS environment variables and setup scripts for Ollama based on the FULL detected hardware picture - GPU VRAM, physical core count and system RAM - not VRAM alone: a 4-core / 8GB CPU-only laptop and a 32-core / 64GB CPU-only workstatio */
-export function getRecommendedOllamaEnvVars(diagnostics: DiagnosticsData | null, t: EnvTranslator = (key) => key): OllamaEnvConfig {
-  const facts = extractHardwareFacts(diagnostics)
-  const profileTier = classifyHardwareProfileTier(facts)
-
-  const ctx: EnvTuningContext = {
-    profileTier,
-    isMinimal: isMinimalHardwareHost(facts),
-    hasGpu: !!facts.hasGpu,
-    cpuCount: facts.cpuCount || 0,
-    systemRamGB: facts.systemRamGB || 8,
-  }
-
-  const variables: OllamaEnvVarRecommendation[] = [
-    ...buildAttentionVars(ctx, t),
-    ...buildConcurrencyVars(ctx, t),
-    ...buildMemoryResidencyVars(ctx, t),
-    {
-      name: 'OLLAMA_HOST',
-      value: '127.0.0.1:11434',
-      description: t('ollamaEnvParams.envHostDesc'),
-      rationale: t('ollamaEnvParams.envHostRationale'),
-    },
-  ]
-
-  return { profileTier, variables, ...buildEnvScripts(profileTier, variables) }
 }

@@ -12,17 +12,6 @@ export interface PendingChangeProposal {
   replacements?: Array<{ targetContent?: string; replacementContent?: string }>
 }
 
-/** True when the proposal's target text cannot be located, so the edit would not apply. */
-export function isProposalApplicable(proposal: PendingChangeProposal, before: string): boolean {
-  if (proposal.type === 'replace_chunk') {
-    return Boolean(proposal.targetContent) && before.includes(String(proposal.targetContent))
-  }
-  if (proposal.type === 'multi_replace') {
-    return (proposal.replacements || []).some((c) => c?.targetContent && before.includes(c.targetContent))
-  }
-  return true
-}
-
 /** The exact content the workspace file would hold once this proposal is executed. */
 export function projectPendingChange(proposal: PendingChangeProposal, before: string): string {
   const current = before ?? ''

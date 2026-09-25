@@ -1,5 +1,5 @@
 /**
- * Centralized Error Domain Types & AppError Definition for OnlyRag V2
+ * Error categories and the normalized error shape shown by the Renderer.
  */
 
 export enum ErrorCategory {
@@ -20,47 +20,6 @@ export interface NormalizedError {
   technicalDetails?: string
   isFatal?: boolean
   code?: string | number
-}
-
-export interface AppErrorOptions {
-  remediation?: string
-  technicalDetails?: string
-  isFatal?: boolean
-  code?: string | number
-  cause?: unknown
-}
-
-export class AppError extends Error {
-  public readonly category: ErrorCategory
-  public readonly remediation?: string
-  public readonly technicalDetails?: string
-  public readonly isFatal: boolean
-  public readonly code?: string | number
-
-  constructor(category: ErrorCategory, message: string, options: AppErrorOptions = {}) {
-    super(message, { cause: options.cause })
-    this.name = 'AppError'
-    this.category = category
-    this.remediation = options.remediation
-    this.technicalDetails = options.technicalDetails
-    this.isFatal = options.isFatal ?? false
-    this.code = options.code
-
-    // Restore prototype chain
-    Object.setPrototypeOf(this, new.target.prototype)
-  }
-
-  public toNormalized(): NormalizedError {
-    return {
-      category: this.category,
-      title: getCategoryTitle(this.category),
-      message: this.message,
-      remediation: this.remediation,
-      technicalDetails: this.technicalDetails,
-      isFatal: this.isFatal,
-      code: this.code,
-    }
-  }
 }
 
 export function getCategoryTitle(category: ErrorCategory): string {

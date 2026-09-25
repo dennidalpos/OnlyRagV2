@@ -1,4 +1,4 @@
-import type { DiagnosticsData, LogEntry, SystemRequirementsCheck, UntrustedJson } from '../shared/types'
+import type { DiagnosticsData, SystemRequirementsCheck, UntrustedJson } from '../shared/types'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -7,38 +7,6 @@ import { exec } from 'node:child_process'
 import { logger } from './core/infrastructure/logging/logger'
 import { DEFAULT_OLLAMA_HOST } from '../shared/domain/ollamaHost'
 import { errorMessage } from '../shared/domain/errors/errorMessage'
-
-export { sanitizeLogMessage } from './logRedactor'
-
-export function generateDiagnosticsReport(diagnostics: DiagnosticsData, recentLogs: LogEntry[] = []): string {
-  return `# OnlyRag V2 - System Diagnostics & Health Report
-Generated at: ${diagnostics.timestamp}
-
-## System Overview
-- **Platform:** ${diagnostics.system.platform} (${diagnostics.system.arch})
-- **CPU:** ${diagnostics.system.cpuModel} (${diagnostics.system.cpusCount} cores)
-- **Memory:** ${diagnostics.memory.usedRAMGB} GB / ${diagnostics.memory.totalRAMGB} GB (${diagnostics.memory.ramUsagePercent}% used)
-- **Status:** ${diagnostics.requirements.overallStatus.toUpperCase()}
-
-## Hardware & Acceleration
-- **NVIDIA GPU:** ${diagnostics.gpu.hasNvidiaGpu ? `${diagnostics.gpu.gpuName} (CUDA ${diagnostics.gpu.cudaVersion || 'N/A'}, Driver ${diagnostics.gpu.driverVersion || 'N/A'})` : 'None / CPU Only'}
-- **VRAM:** ${diagnostics.gpu.hasNvidiaGpu ? `${diagnostics.gpu.vramUsedMB || 0} / ${diagnostics.gpu.vramTotalMB || 0} MB` : 'N/A'}
-
-## Core Engines
-- **Ollama Core:** ${diagnostics.ollama.status.toUpperCase()} (${diagnostics.ollama.url})
-  - Installed Models (${diagnostics.ollama.modelsCount}): ${diagnostics.ollama.models.join(', ') || 'None'}
-- **Sidecar & LanceDB:** ${diagnostics.sidecar.status.toUpperCase()} ${diagnostics.sidecar.engine ? `(${diagnostics.sidecar.engine})` : ''}
-  - Indexed Documents: ${diagnostics.sidecar.documentsCount ?? 0} docs (${diagnostics.sidecar.chunksCount ?? 0} vector chunks)
-
-## Recent Diagnostic Logs (${recentLogs.length} entries)
-\`\`\`text
-${recentLogs
-  .slice(-150)
-  .map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${l.message}`)
-  .join('\n')}
-\`\`\`
-`
-}
 
 function getLocalManifestModels(): string[] {
   const possibleRoots: string[] = []

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   coverageOfScript,
   isTerminatingScript,
-  resolvePrimaryVerificationCommand,
+  pickPrimaryVerification,
   resolveVerificationCommands,
   type WorkspaceManifest,
 } from './projectVerificationResolver'
@@ -14,16 +14,18 @@ function manifest(scripts: Record<string, string> | null, files: string[] = []):
   }
 }
 
+const primaryOf = (m: WorkspaceManifest) => pickPrimaryVerification(resolveVerificationCommands(m))
+
 describe('resolveVerificationCommands', () => {
   it('offers nothing for a workspace with no manifest and no tsconfig', () => {
     expect(resolveVerificationCommands(manifest(null))).toEqual([])
-    expect(resolvePrimaryVerificationCommand(manifest(null))).toBeNull()
+    expect(primaryOf(manifest(null))).toBeNull()
   })
 
   it('puts build first: it is the only check that exercises the whole import graph', () => {
     const commands = resolveVerificationCommands(manifest({ lint: 'eslint .', test: 'vitest run', build: 'tsc && vite build' }))
     expect(commands.map((c) => c.kind)).toEqual(['build', 'test', 'lint'])
-    expect(resolvePrimaryVerificationCommand(manifest({ build: 'vite build' }))?.command).toBe('npm run build')
+    expect(primaryOf(manifest({ build: 'vite build' }))?.command).toBe('npm run build')
   })
 
   it('accepts the alternative spellings a generated project actually uses for typecheck', () => {
@@ -102,46 +104,46 @@ describe('verification coverage', () => {
   })
 })
 
-describe('resolvePrimaryVerificationCommand — coverage decides before kind', () => {
+describe('pickPrimaryVerification — coverage decides before kind', () => {
   const manifestOf = (scripts: Record<string, string>, files: string[] = []) => ({
     packageJson: { scripts },
     hasFile: (p: string) => files.includes(p),
   })
 
   it('prefers the typecheck over a build that only follows the entrypoint', () => {
-    const primary = resolvePrimaryVerificationCommand(manifestOf({ build: 'vite build', typecheck: 'tsc --noEmit' }))
+    const primary = primaryOf(manifestOf({ build: 'vite build', typecheck: 'tsc --noEmit' }))
 
     expect(primary?.command).toBe('npm run typecheck')
     expect(primary?.coverage).toBe('whole-project')
   })
 
   it('keeps the build first when the build itself typechecks the project', () => {
-    const primary = resolvePrimaryVerificationCommand(manifestOf({ build: 'tsc && vite build', typecheck: 'tsc --noEmit' }))
+    const primary = primaryOf(manifestOf({ build: 'tsc && vite build', typecheck: 'tsc --noEmit' }))
 
     expect(primary?.command).toBe('npm run build')
   })
 
   it('falls back to the reachable-only build when the project offers nothing better', () => {
     // A weak check beats none, and it is the one the project itself declares.
-    const primary = resolvePrimaryVerificationCommand(manifestOf({ build: 'vite build' }))
+    const primary = primaryOf(manifestOf({ build: 'vite build' }))
 
     expect(primary?.command).toBe('npm run build')
     expect(primary?.coverage).toBe('entry-reachable')
   })
 
   it('reaches the compiler through tsconfig when no script declares a typecheck', () => {
-    const primary = resolvePrimaryVerificationCommand(manifestOf({ build: 'vite build' }, ['tsconfig.json']))
+    const primary = primaryOf(manifestOf({ build: 'vite build' }, ['tsconfig.json']))
 
     expect(primary?.command).toBe('npx tsc --noEmit')
     expect(primary?.coverage).toBe('whole-project')
   })
 
   it('keeps the build ahead of the test script, which cannot prove the project builds', () => {
-    expect(resolvePrimaryVerificationCommand(manifestOf({ build: 'vite build', test: 'vitest run' }))?.command).toBe('npm run build')
-    expect(resolvePrimaryVerificationCommand(manifestOf({ test: 'vitest run' }))?.command).toBe('npm run test')
+    expect(primaryOf(manifestOf({ build: 'vite build', test: 'vitest run' }))?.command).toBe('npm run build')
+    expect(primaryOf(manifestOf({ test: 'vitest run' }))?.command).toBe('npm run test')
   })
 
   it('still returns null for a project that declares no check at all', () => {
-    expect(resolvePrimaryVerificationCommand(manifestOf({ dev: 'vite' }))).toBeNull()
+    expect(primaryOf(manifestOf({ dev: 'vite' }))).toBeNull()
   })
 })

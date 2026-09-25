@@ -1,10 +1,6 @@
 import { countTokens } from 'gpt-tokenizer'
 import { APPROX_CHARS_PER_TOKEN } from './charsPerToken'
 
-const STANDARD_CONTEXT_BUCKETS = [2048, 4096, 8192, 16384, 32768, 65536]
-const COMPLETION_HEADROOM_TOKENS = 2048
-const MIN_CONTEXT_TOKENS = 2048
-const DEFAULT_MAX_CONTEXT_TOKENS = 32768
 const MIN_CONTEXT_SAFETY_TOKENS = 256
 const CONTEXT_SAFETY_RATIO = 0.02
 
@@ -28,32 +24,4 @@ export function calculateAvailableOutputTokens(prompt: string, contextWindowToke
   const window = Math.max(1, Math.floor(contextWindowTokens))
   const safety = safetyTokens ?? Math.max(MIN_CONTEXT_SAFETY_TOKENS, Math.ceil(window * CONTEXT_SAFETY_RATIO))
   return Math.max(1, window - countPromptTokens(prompt) - safety)
-}
-
-export function calculateDynamicContextWindow(
-  promptOrChars: string | number,
-  hardwareMaxCtx?: number,
-  headroomTokens: number = COMPLETION_HEADROOM_TOKENS,
-): number {
-  const estimatedPromptTokens = countPromptTokens(promptOrChars)
-  const totalRequiredTokens = estimatedPromptTokens + headroomTokens
-
-  const maxAllowed = hardwareMaxCtx && hardwareMaxCtx >= MIN_CONTEXT_TOKENS ? hardwareMaxCtx : DEFAULT_MAX_CONTEXT_TOKENS
-
-  let chosenBucket = STANDARD_CONTEXT_BUCKETS[0]
-  for (const bucket of STANDARD_CONTEXT_BUCKETS) {
-    if (bucket >= totalRequiredTokens) {
-      chosenBucket = bucket
-      break
-    }
-    chosenBucket = bucket
-  }
-
-  // When the hardware tier allows >= 8192 and the prompt already needs significant tokens, pre-allocate 8192 directly to prevent a 4096 -> 8192 KV-cache invalidation on turn 2 as episodic history grows.
-  if (hardwareMaxCtx && hardwareMaxCtx >= 8192 && totalRequiredTokens >= 3000) {
-    chosenBucket = Math.max(chosenBucket, 8192)
-  }
-
-  // Clamp within [MIN_CONTEXT_TOKENS, maxAllowed]
-  return Math.max(MIN_CONTEXT_TOKENS, Math.min(chosenBucket, maxAllowed))
 }

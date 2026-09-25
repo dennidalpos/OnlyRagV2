@@ -1,19 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { getNonInteractiveEnv, sanitizePowerShellCommand, detectInteractivePrompt } from './shellStreamGuard'
+import { sanitizePowerShellCommand, detectInteractivePrompt } from './shellStreamGuard'
 
 describe('shellStreamGuard', () => {
-  it('should inject mandatory non-interactive env variables', () => {
-    const baseEnv = { PATH: '/usr/bin' }
-    const guardedEnv = getNonInteractiveEnv(baseEnv)
-
-    expect(guardedEnv.CI).toBe('true')
-    expect(guardedEnv.PAGER).toBe('cat')
-    expect(guardedEnv.NPM_CONFIG_YES).toBe('true')
-    expect(guardedEnv.PIP_NO_INPUT).toBe('1')
-    expect(guardedEnv.DEBIAN_FRONTEND).toBe('noninteractive')
-    expect(guardedEnv.PATH).toBe('/usr/bin')
-  })
-
   it('should sanitize bash brace expansion and unix flags for PowerShell execution', () => {
     const rawCmd = 'mkdir -p src/{package.json, index.html}'
     const sanitized = sanitizePowerShellCommand(rawCmd)

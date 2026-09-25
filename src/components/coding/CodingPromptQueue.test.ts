@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { QueuedPrompt } from '../../hooks/useCodingAgent'
-import { getStepModelName } from './AgentActionLogPanel'
+import { getStepModelName } from './agentLogMessageUtils'
 
 describe('Coding Agent Prompt Queue & Active Model Extraction Unit Tests', () => {
   it('should accurately extract active model name from step logs or fallback to default', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AgentRunMetrics, assertZeroFalseVerified } from './agentRunMetrics'
+import { AgentRunMetrics } from './agentRunMetrics'
 
 describe('AgentRunMetrics', () => {
   it('tracks tool, safety, recovery, verification and task outcome counters', () => {
@@ -33,14 +33,5 @@ describe('AgentRunMetrics', () => {
 
     expect(second.snapshot()).toMatchObject({ sessionId: 'run-b', toolCalls: 0, taskSuccess: null })
     expect(first.snapshot()).toMatchObject({ sessionId: 'run-a', toolCalls: 1, taskSuccess: true })
-  })
-
-  it('blocks the controlled fixture suite when any run reports false verification', () => {
-    const cleanRun = new AgentRunMetrics('clean-run')
-    expect(() => assertZeroFalseVerified([cleanRun.snapshot()])).not.toThrow()
-
-    const invalidRun = new AgentRunMetrics('invalid-run')
-    invalidRun.recordFalseVerified()
-    expect(() => assertZeroFalseVerified([cleanRun.snapshot(), invalidRun.snapshot()])).toThrow('False verification threshold exceeded in 1 run(s).')
   })
 })

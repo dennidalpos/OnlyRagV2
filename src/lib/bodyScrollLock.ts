@@ -20,7 +20,7 @@ export function releaseBodyScrollLock(): void {
   }
 }
 
-/** Number of locks currently held. Exposed for tests and diagnostics. */
+/** @internal Number of locks currently held; exposed for tests. */
 export function getBodyScrollLockCount(): number {
   return activeLockCount
 }

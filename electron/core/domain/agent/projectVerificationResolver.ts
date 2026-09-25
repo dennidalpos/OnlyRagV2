@@ -99,8 +99,7 @@ export function resolveVerificationCommands(manifest: WorkspaceManifest): Verifi
   return commands
 }
 
-/** Resolves primary verification command (prefers whole-project). */
-export function resolvePrimaryVerificationCommand(manifest: WorkspaceManifest): VerificationCommand | null {
-  const commands = resolveVerificationCommands(manifest)
+/** Picks the strongest check: the first whole-project command, else the first one offered. */
+export function pickPrimaryVerification<T extends Pick<VerificationCommand, 'coverage'>>(commands: readonly T[]): T | null {
   return commands.find((c) => c.coverage === 'whole-project') ?? commands[0] ?? null
 }

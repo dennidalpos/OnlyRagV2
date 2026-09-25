@@ -10,8 +10,6 @@ import { AddCustomHubModal } from './skills/AddCustomHubModal'
 import { useTranslation } from '../../i18n'
 import { useSkillHubModal } from '../../hooks/useSkillHubModal'
 
-export const DEFAULT_SKILL_HUB_URL = 'https://raw.githubusercontent.com/antigravity-community/skills/main/skills/clean-code/SKILL.md'
-
 interface SkillHubModalProps {
   isOpen: boolean
   onClose: () => void

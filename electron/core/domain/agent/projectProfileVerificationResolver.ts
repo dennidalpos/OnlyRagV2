@@ -1,4 +1,5 @@
 import type { ProjectProfile, ProjectProfileVerificationCommand } from './projectProfileContract'
+import { pickPrimaryVerification } from './projectVerificationResolver'
 
 export interface ProjectProfileVerificationTarget extends ProjectProfileVerificationCommand {
   projectId: string
@@ -21,7 +22,7 @@ export function resolveProfileVerificationTargets(profile: ProjectProfile): Proj
 /** Picks one strongest check per project, so a multi-project workspace is never checked at one root only. */
 export function resolvePrimaryProfileVerificationTargets(profile: ProjectProfile): ProjectProfileVerificationTarget[] {
   return profile.projects.flatMap((project) => {
-    const verification = project.verificationCommands.find((command) => command.coverage === 'whole-project') ?? project.verificationCommands[0]
+    const verification = pickPrimaryVerification(project.verificationCommands)
     if (!verification) return []
     return [
       {

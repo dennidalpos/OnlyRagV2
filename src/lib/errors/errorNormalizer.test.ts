@@ -1,24 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { normalizeError } from './errorNormalizer'
-import { AppError, ErrorCategory } from './appError'
+import { ErrorCategory } from './appError'
 
 describe('errorNormalizer & appError', () => {
-  it('normalizes an AppError directly without reclassification', () => {
-    const appErr = new AppError(ErrorCategory.VECTOR_DB, 'Custom vector failure', {
-      remediation: 'Restart the sidecar.',
-      isFatal: true,
-      code: 'VECTOR_ERR_42',
-    })
-
-    const normalized = normalizeError(appErr)
-    expect(normalized.category).toBe(ErrorCategory.VECTOR_DB)
-    expect(normalized.title).toBe('LanceDB Vector Store')
-    expect(normalized.message).toBe('Custom vector failure')
-    expect(normalized.remediation).toBe('Restart the sidecar.')
-    expect(normalized.isFatal).toBe(true)
-    expect(normalized.code).toBe('VECTOR_ERR_42')
-  })
-
   it('detects Ollama connection refused and attaches remediation', () => {
     const raw = new Error('fetch failed: connect ECONNREFUSED 127.0.0.1:11434')
     const normalized = normalizeError(raw)

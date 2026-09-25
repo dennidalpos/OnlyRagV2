@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { projectPendingChange, isProposalApplicable } from '../../../../shared/domain/agent/pendingChangeProjection'
+import { projectPendingChange } from '../../../../shared/domain/agent/pendingChangeProjection'
 import { computeLineDiff, countDiffLines } from '../../../../shared/domain/agent/diffEngine'
 
 describe('pendingChangeProjection', () => {
@@ -47,7 +47,6 @@ describe('pendingChangeProjection', () => {
     const proposal = { type: 'replace_chunk' as const, targetContent: 'nowhere', replacementContent: 'x' }
 
     expect(projectPendingChange(proposal, before)).toBe(before)
-    expect(isProposalApplicable(proposal, before)).toBe(false)
   })
 
   it('should treat a write to a not-yet-existing file as a pure addition', () => {

@@ -1,18 +1,14 @@
 /** Normalizes errors into typed NormalizedError objects. */
 
 import stripAnsi from 'strip-ansi'
-import { AppError, ErrorCategory, getCategoryTitle, NormalizedError } from './appError'
+import { ErrorCategory, getCategoryTitle, type NormalizedError } from './appError'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 import { translate } from '../../i18n/I18nContext'
 
-export { AppError, ErrorCategory, type NormalizedError }
+export type { NormalizedError }
 
 /** Normalizes errors or IPC rejections into a NormalizedError. */
 export function normalizeError(err: unknown, context?: string): NormalizedError {
-  if (err instanceof AppError) {
-    return err.toNormalized()
-  }
-
   const rawMessage = extractRawErrorMessage(err)
   const cleanMessage = stripAnsi(rawMessage).trim()
   const technicalDetails = extractTechnicalDetails(err)

@@ -11,14 +11,6 @@ export interface AgentRunMetricsSnapshot {
   falseVerified: number
 }
 
-/** Test/fixture quality gate: a run with any false verification is invalid. */
-export function assertZeroFalseVerified(runs: readonly AgentRunMetricsSnapshot[]): void {
-  const violations = runs.filter((run) => run.falseVerified > 0)
-  if (violations.length > 0) {
-    throw new Error(`False verification threshold exceeded in ${violations.length} run(s).`)
-  }
-}
-
 /** Mutable counters owned by exactly one agent run. No process-global counters are used. */
 export class AgentRunMetrics {
   private readonly counters: AgentRunMetricsSnapshot

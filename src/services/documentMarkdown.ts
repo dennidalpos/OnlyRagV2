@@ -68,6 +68,7 @@ export function loadDocumentMarkdown(doc: DocumentKey): Promise<string | null> {
   return request
 }
 
+/** @internal Resets the cache between tests. */
 export function clearDocumentMarkdownCache(): void {
   cache.clear()
   inFlight.clear()

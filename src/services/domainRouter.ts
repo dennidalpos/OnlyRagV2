@@ -216,12 +216,8 @@ export const LEGAL_CENTROID: DomainCentroidProfile = {
   weights: LEGAL_CENTROID_WEIGHTS,
 }
 
-// Legacy exports for backward compatibility
-export const MEDICAL_CENTROID_ROOTS = Object.keys(MEDICAL_CENTROID_WEIGHTS)
-export const LEGAL_CENTROID_ROOTS = Object.keys(LEGAL_CENTROID_WEIGHTS)
-
 /** Calculates centroid similarity between input tokens/query and a domain profile. */
-export function calculateCentroidSimilarity(input: string[] | string, centroid: DomainCentroidProfile | string[]): number {
+export function calculateCentroidSimilarity(input: string[] | string, centroid: DomainCentroidProfile): number {
   if (!input || (Array.isArray(input) && input.length === 0)) {
     return 0.0
   }
@@ -232,15 +228,7 @@ export function calculateCentroidSimilarity(input: string[] | string, centroid: 
   const tokens = queryText.split(/[\s,.;:!?()\[\]"'/\\-]+/).filter((t) => t.length >= 2)
   if (tokens.length === 0) return 0.0
 
-  let weightsMap: Record<string, number>
-  if (Array.isArray(centroid)) {
-    weightsMap = {}
-    for (const r of centroid) {
-      weightsMap[r] = 3.0
-    }
-  } else {
-    weightsMap = centroid.weights
-  }
+  const weightsMap = centroid.weights
 
   let totalMatchWeight = 0.0
   const matchedFeatures = new Set<string>()

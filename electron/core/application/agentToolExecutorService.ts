@@ -686,7 +686,7 @@ export class AgentToolExecutorService {
 
 export const agentToolExecutorService = new AgentToolExecutorService()
 
-/** Internals exposed for unit testing the command timeout policy. */
+/** @internal Internals exposed for unit testing the command timeout policy. */
 export const __testing = {
   resolveCommandTimeoutMs,
   isLongRunningCommand,

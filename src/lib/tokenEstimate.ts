@@ -9,12 +9,13 @@ const MAX_CACHE_CHARS = 2_000_000
 const tokenCountCache = new Map<string, number>()
 let cachedChars = 0
 
+/** @internal Resets the cache between tests. */
 export function clearTokenEstimateCache(): void {
   tokenCountCache.clear()
   cachedChars = 0
 }
 
-/** Entries and characters currently held; exposed for the cache-bound tests. */
+/** @internal Entries and characters currently held; exposed for the cache-bound tests. */
 export function tokenEstimateCacheSize(): { entries: number; chars: number } {
   return { entries: tokenCountCache.size, chars: cachedChars }
 }

@@ -15,7 +15,7 @@ Run from repository root in PowerShell. On 2026-09-25 on Windows (Node 24, Ollam
 | --- | --- |
 | Fast suite | `npm run test:fast` (274 files, 2183 tests; 22 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
 | Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (133 tests) |
-| Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 4 guard scenarios) |
+| Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 9 guard scenarios) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |
 | Cold-start network E2E | `npm run test:e2e:cold-start` (Main and Renderer first launch) |
 | Settings bootstrap E2E | `npm run test:e2e:settings-bootstrap` |

@@ -501,7 +501,7 @@ try {
   for (let index = 1; index <= 14; index++) fs.writeFileSync(path.join(fixtureDir, `note-${index}.txt`), `note ${index}\n`, 'utf8')
   const describe = (scenario) => JSON.stringify({ events: scenario.guardEvents, logs: scenario.logs })
 
-  console.log('[guard 1/4] prose-only replies while work is open')
+  console.log('[guard 1/9] prose-only replies while work is open')
   const silence = await runGuardScenario('silence', [
     { type: 'prose', content: 'I will think about it.' },
     { type: 'prose', content: 'Still thinking.' },
@@ -512,7 +512,7 @@ try {
   assert.equal(silence.done.completionStatus, 'blocked')
   assert.equal(silence.guardEvents.filter((event) => event.guard === 'model_silence' && event.action === 'advise').length, 2)
 
-  console.log('[guard 2/4] the same rejected tool call')
+  console.log('[guard 2/9] the same rejected tool call')
   const escapingWrite = writeCall('../outside-scratch.txt', 'escape')
   const rejected = await runGuardScenario('rejected-tool', [escapingWrite, escapingWrite, escapingWrite])
   assert.equal(rejected.done.success, false)
@@ -520,7 +520,7 @@ try {
   assert.equal(rejected.done.completionStatus, 'blocked')
   assert(!fs.existsSync(path.join(path.dirname(scratchPath), 'outside-scratch.txt')))
 
-  console.log('[guard 3/4] the same successful write repeated')
+  console.log('[guard 3/9] the same successful write repeated')
   const sameWrite = writeCall('guard-fixtures/repeated.txt', 'same content\n')
   const repeated = await runGuardScenario(
     'repeated-write',
@@ -537,7 +537,7 @@ try {
   assert.deepEqual(repeated.stop, ['step_budget'], describe(repeated))
   assert.equal(repeated.done.completionStatus, 'blocked')
 
-  console.log('[guard 4/4] writes that change nothing')
+  console.log('[guard 4/9] writes that change nothing')
   const unchangedWrites = Array.from({ length: 14 }, (_, index) => writeCall(`guard-fixtures/note-${index + 1}.txt`, `note ${index + 1}\n`))
   const unchanged = await runGuardScenario('no-mutation', unchangedWrites, {
     capabilityProfile: { allowTerminalExecution: true, allowFileModifications: true, capabilityPolicyMode: 'network-approved', maxToolCallSteps: 30 },
@@ -546,7 +546,77 @@ try {
   assert.deepEqual(unchanged.stop, ['no_mutation'], describe(unchanged))
   assert.equal(unchanged.done.completionStatus, 'blocked')
 
-  console.log('[PASS] 8 Electron Agent Coding reliability scenarios and 4 guard scenarios passed.')
+  // The five guards below never fired in the 67 live snapshots of 2026-09-25; each is kept and
+  // driven here by the deterministic model instead (AGENT-GUARD-GROWTH-01).
+  const unlimitedSteps = { allowTerminalExecution: true, allowFileModifications: true, capabilityPolicyMode: 'network-approved', maxToolCallSteps: 0 }
+  const roomySteps = { ...unlimitedSteps, maxToolCallSteps: 30 }
+  const finishCall = { type: 'tool', name: 'finish', arguments: { summary: 'Done.' } }
+  const advisesOf = (scenario, guard) => scenario.guardEvents.filter((event) => event.guard === guard && event.action === 'advise').length
+
+  console.log('[guard 5/9] reads of the same file in slices')
+  const readSlice = (startLine) => ({ type: 'tool', name: 'read_file', arguments: { filePath: 'guard-fixtures/note-1.txt', startLine, endLine: startLine } })
+  const reads = await runGuardScenario('same-target-reads', [readSlice(1), readSlice(2), readSlice(3), readSlice(4), readSlice(5)], {
+    capabilityProfile: roomySteps,
+  })
+  assert(advisesOf(reads, 'loop_same_target_reads') >= 1, describe(reads))
+  assert.equal(reads.done.success, false)
+
+  console.log('[guard 6/9] structured tools passed to run_command')
+  const shellTool = (file) => ({ type: 'tool', name: 'run_command', arguments: { command: `read_file guard-fixtures/${file}` } })
+  const confusion = await runGuardScenario('shell-tool-confusion', [shellTool('note-2.txt'), shellTool('note-3.txt'), shellTool('note-4.txt')], {
+    capabilityProfile: roomySteps,
+  })
+  assert(advisesOf(confusion, 'shell_tool_confusion') >= 1, describe(confusion))
+  assert.equal(confusion.done.success, false)
+
+  console.log('[guard 7/9] a file written back to earlier contents')
+  // Two files alternate so neither the same-file edit count nor the exact-repeat check blocks a write first.
+  const oscillation = await runGuardScenario(
+    'fs-oscillation',
+    [
+      writeCall('guard-fixtures/toggle.txt', 'A\n'),
+      writeCall('guard-fixtures/side.txt', 'x1\n'),
+      writeCall('guard-fixtures/toggle.txt', 'B\n'),
+      writeCall('guard-fixtures/side.txt', 'x2\n'),
+      writeCall('guard-fixtures/toggle.txt', 'A\n'),
+      writeCall('guard-fixtures/side.txt', 'x3\n'),
+      writeCall('guard-fixtures/toggle.txt', 'B\n'),
+      writeCall('guard-fixtures/side.txt', 'x4\n'),
+      writeCall('guard-fixtures/toggle.txt', 'A\n'),
+      finishCall,
+    ],
+    { capabilityProfile: roomySteps },
+  )
+  assert(advisesOf(oscillation, 'fs_oscillation') >= 1, describe(oscillation))
+
+  console.log('[guard 8/9] a loop with no step budget')
+  const stuckWrite = writeCall('guard-fixtures/stuck.txt', 'stuck\n')
+  const stagnation = await runGuardScenario(
+    'stagnation-abort',
+    Array.from({ length: 40 }, () => stuckWrite),
+    { capabilityProfile: unlimitedSteps },
+  )
+  assert.equal(stagnation.done.success, false)
+  assert.deepEqual(stagnation.stop, ['stagnation_abort'], describe(stagnation))
+  assert.equal(stagnation.done.completionStatus, 'blocked')
+
+  console.log('[guard 9/9] a project check that keeps failing at finish')
+  // Last on purpose: the failing test script stays in the shared scratch workspace.
+  fs.writeFileSync(
+    path.join(scratchPath, 'package.json'),
+    JSON.stringify({ name: 'guard-fixture', private: true, scripts: { test: 'node -e "process.exit(1)"' } }),
+    'utf8',
+  )
+  const fixCycles = await runGuardScenario(
+    'verification-fix-cycles',
+    [writeCall('guard-fixtures/fix.txt', 'first\n'), finishCall, writeCall('guard-fixtures/fix.txt', 'second\n'), finishCall, finishCall, finishCall],
+    { capabilityProfile: roomySteps },
+  )
+  assert(advisesOf(fixCycles, 'verification_fix_cycles') >= 1, describe(fixCycles))
+  assert.equal(fixCycles.done.success, false)
+  assert.equal(fixCycles.done.completionStatus, 'blocked')
+
+  console.log('[PASS] 8 Electron Agent Coding reliability scenarios and 9 guard scenarios passed.')
 } finally {
   releasePendingResponses()
   if (application) await application.close().catch(() => {})

@@ -10,14 +10,9 @@ import { taskRunner } from '../infrastructure/process/taskRunner'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import { sidecarHttpClient, type SidecarDocumentRecord, type SidecarDocumentSummary } from '../infrastructure/http/sidecarHttpClient'
 import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
-import type {
-  IngestedDocument,
-  IngestedDocumentContent,
-  IngestionStreamProgressPayload,
-  PromptHistorySearchResult,
-  TranslateProgressPayload,
-  VectorSearchResult,
-} from '../../../shared/types'
+import type { IngestedDocument, IngestedDocumentContent, PromptHistorySearchResult, VectorSearchResult } from '../../../shared/types'
+import type { IpcEventContract } from '../../../shared/ipc/ipcContract'
+import { toIngestionProgressPayload, toTranslateProgressPayload } from '../domain/sidecarContract'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export function normalizeIngestedFileType(fileType?: string, filename?: string): IngestedDocument['fileType'] {
@@ -110,8 +105,7 @@ export class SidecarAppService {
           normalization_think: normalizationThink === true,
           embedding_model: await this.configuredEmbeddingModel(),
         },
-        // The Sidecar's NDJSON event is relayed as is: its shape is the payload the Renderer declares, not validated here.
-        (event) => this.rendererEvents.send('ingest:stream-progress', { ...event, taskId: effectiveTaskId } as IngestionStreamProgressPayload),
+        (event) => this.relayProgress('ingest:stream-progress', toIngestionProgressPayload(event, effectiveTaskId), event.type),
         (cancelFn) => {
           cancelRequest = cancelFn
           taskRunner.registerActiveTask(
@@ -170,7 +164,7 @@ export class SidecarAppService {
           think: think === true,
           task_id: taskId,
         },
-        (event) => this.rendererEvents.send('ingest:translate-progress', { ...event, taskId } as TranslateProgressPayload),
+        (event) => this.relayProgress('ingest:translate-progress', toTranslateProgressPayload(event, taskId), event.type),
         (cancel) => taskRunner.registerActiveTask(taskId, 'translation', cancel),
       )
     } finally {
@@ -208,6 +202,16 @@ export class SidecarAppService {
 
   searchVectorDb(query: string, topK: number = 5, docIds?: string[]): Promise<VectorSearchResult[]> {
     return sidecarHttpClient.searchVectorDb(query, topK, docIds)
+  }
+
+  /** Forwards a validated progress event; an event outside the declared shape is logged and not shown. */
+  private relayProgress<C extends 'ingest:stream-progress' | 'ingest:translate-progress'>(
+    channel: C,
+    payload: IpcEventContract[C] | null,
+    eventType: unknown,
+  ): void {
+    if (payload) this.rendererEvents.send(channel, payload)
+    else logger.log('WARN', 'SidecarApp', `Dropped a malformed Sidecar progress event on ${channel} (type: ${String(eventType)}).`)
   }
 
   /** Embedding model for new vectors; search reads each chunk's own model from the store. */

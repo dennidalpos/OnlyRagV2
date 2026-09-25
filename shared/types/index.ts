@@ -345,6 +345,8 @@ export interface GuestOsInfo {
 }
 
 /** An agent action waiting for the user's approval, as Main sends it on `agent:approval-request`. */
+export type AgentApprovalReason = 'workspace_mutation' | 'network_access' | 'external_installation' | 'guided_review'
+
 export interface AgentApprovalRequest extends AgentRunIdentity {
   sessionId: string
   type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit' | 'publish_workspace'
@@ -353,8 +355,8 @@ export interface AgentApprovalRequest extends AgentRunIdentity {
   replacement?: string
   replacements?: { targetContent: string; replacementContent: string }[]
   parameters?: Record<string, UntrustedJson>
-  /** Why one review covers the step (workspace mutation, network access, installation, Guided review). */
-  reasons?: string[]
+  /** Why this review is needed; one review can cover several reasons. */
+  reasons?: AgentApprovalReason[]
 }
 
 /** What an orchestrator step asks the user to approve; Main adds the run identity and session. */
@@ -479,12 +481,14 @@ export interface SkillSaveInput {
   isModified?: boolean
 }
 
+/** One ingestion progress event: the Sidecar's NDJSON event as Main validates it, without the document record. */
 export interface IngestionStreamProgressPayload {
   taskId: string
-  type: 'progress' | 'done'
-  percent: number
+  type: 'progress' | 'done' | 'error' | 'cancelled'
+  percent?: number
   /** English fallback text; the renderer shows `step_code` (with `step_params`) translated when it knows the code. */
-  step: string
+  step?: string
+  error?: string
   step_code?: string
   step_params?: Record<string, string | number>
   pipeline?: string
@@ -493,9 +497,9 @@ export interface IngestionStreamProgressPayload {
   fileName?: string
   ocrTechnology?: string
   modelName?: string
-  data?: IngestedDocument
 }
 
+/** One in-place translation progress event, validated by Main; the translated document comes back as the invoke result. */
 export interface TranslateProgressPayload {
   /** Main's id for the running job; `task:cancel` with it stops the job. */
   taskId?: string
@@ -508,7 +512,6 @@ export interface TranslateProgressPayload {
   phase?: 'extracting_blocks' | 'translating_blocks' | 'reconstructing_layout' | 'translating_runs'
   percent?: number
   error?: string
-  data?: IngestedDocument
 }
 
 export interface PagePreviewData {

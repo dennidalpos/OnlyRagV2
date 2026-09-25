@@ -2,7 +2,8 @@ import React from 'react'
 import { Modal } from '../common/Modal'
 import { AlertTriangle, Check, X, FileCode } from 'lucide-react'
 import { useTranslation } from '../../i18n'
-import type { AgentApprovalRequest } from '../../types'
+import type { AgentApprovalReason, AgentApprovalRequest } from '../../types'
+import type { TranslationKey } from '../../i18n'
 import { computeLineDiff, countDiffLines, groupDiffIntoHunks, type DiffLine, type DiffHunkGroup } from '../../../shared/domain/agent/diffEngine'
 import { projectPendingChange, type PendingMutationType } from '../../../shared/domain/agent/pendingChangeProjection'
 import { DiffLinesView, ChangeCounts } from './DiffLinesView'
@@ -12,6 +13,13 @@ interface PendingApprovalModalProps {
   /** Accepts all, or the selected hunk indices for a partial approval. */
   onApprove: (approvedHunkIndices?: number[]) => void
   onReject: () => void
+}
+
+const REASON_KEYS: Record<AgentApprovalReason, TranslationKey> = {
+  workspace_mutation: 'coding.approvalReasonWorkspaceMutation',
+  network_access: 'coding.approvalReasonNetworkAccess',
+  external_installation: 'coding.approvalReasonExternalInstallation',
+  guided_review: 'coding.approvalReasonGuidedReview',
 }
 
 /** The action types whose effect on a file can be shown as a before/after diff. */
@@ -145,6 +153,11 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({ pend
         <div className="text-slate-300 truncate">
           Target: <span className="text-slate-200 font-bold">{pendingApproval.target}</span>
         </div>
+        {pendingApproval.reasons && pendingApproval.reasons.length > 0 && (
+          <div className="text-slate-300" data-testid="approval-reasons">
+            {t('coding.approvalReasons')}: <span className="text-slate-200">{pendingApproval.reasons.map((reason) => t(REASON_KEYS[reason])).join(', ')}</span>
+          </div>
+        )}
 
         {isFileMutation ? (
           <div className="mt-2 rounded border border-slate-800 bg-slate-950 overflow-hidden">

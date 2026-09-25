@@ -1,6 +1,6 @@
 import type { AgentToolCall, SupportedToolName } from '../domain/agent/agentTypes'
 import type { AgentTaskResult } from '../domain/agent/agentTypes'
-import type { AgentApprovalPayload, AgentGuardEvent } from '../../../shared/types'
+import type { AgentApprovalPayload, AgentApprovalReason, AgentGuardEvent } from '../../../shared/types'
 import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
@@ -158,11 +158,11 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
     replacements: toolCall.parameters.replacements,
     parameters: toolCall.parameters,
     reasons: [
-      commandApprovalGranted && 'workspace mutation',
-      requiresNetwork && 'network access',
-      requiresInstall && 'external installation',
-      requiresGuided && 'Guided review',
-    ].filter((reason): reason is string => Boolean(reason)),
+      commandApprovalGranted && 'workspace_mutation',
+      requiresNetwork && 'network_access',
+      requiresInstall && 'external_installation',
+      requiresGuided && 'guided_review',
+    ].filter((reason): reason is AgentApprovalReason => Boolean(reason)),
   })
   if (!approval.approved) {
     const feedback = `[USER DENIED] L'utente ha rifiutato l'azione proposta (${toolCall.tool} su "${target}").`

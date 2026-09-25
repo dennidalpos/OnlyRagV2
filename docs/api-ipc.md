@@ -32,11 +32,11 @@ Registrazione: [`agentIpc.ts`](../electron/core/presentation/agentIpc.ts), [`wor
 
 ## Eventi Renderer
 
-Eventi `on` esposti: `agent:approval-request`, `agent:change-metrics`, `agent:context-budget`, `agent:done`, `agent:log`, `agent:skill-install-request`, `agent:skills-matched`, `agent:step-update`, `agent:stream-thought`, `agent:stream-token`, `ingest:stream-progress`, `ingest:translate-progress`, `ollama:pull-progress`, `workspace:file-deleted`, `workspace:file-version`; `ollama:chunk` e `ollama:done` li consuma solo `generateOllamaStream`. Gli eventi di progresso `ingest:*` sono l'evento NDJSON del Sidecar inoltrato da Main senza validazione.
+Eventi `on` esposti: `agent:approval-request`, `agent:change-metrics`, `agent:context-budget`, `agent:done`, `agent:log`, `agent:skill-install-request`, `agent:skills-matched`, `agent:step-update`, `agent:stream-thought`, `agent:stream-token`, `ingest:stream-progress`, `ingest:translate-progress`, `ollama:pull-progress`, `workspace:file-deleted`, `workspace:file-version`; `ollama:chunk` e `ollama:done` li consuma solo `generateOllamaStream`. Gli eventi di progresso `ingest:*` sono l'evento NDJSON del Sidecar validato da Main (`toIngestionProgressPayload`, `toTranslateProgressPayload` in [`sidecarContract.ts`](../electron/core/domain/sidecarContract.ts)): il record del documento dell'evento `done` non viene inoltrato (il documento arriva come risultato dell'invoke) e un evento fuori schema viene registrato come WARN e scartato. L'ingestion emette anche `error` e `cancelled`.
 
 I comandi di esecuzione Agent Coding e tutti gli eventi `agent:*` della run includono l'identità immutabile `{ runId, conversationId, planRevisionId, workspaceId }`. Risposte di annullamento e approvazione vengono accettate solo per la stessa identità. Una voce `agent:log` può portare il campo facoltativo `localized` (`{ message?, detail? }` con chiavi `agentMain.*` e parametri, vedi [`agentMainText.ts`](../shared/domain/agent/agentMainText.ts)); `message` e `detail` restano sempre presenti come testo italiano, e Main redige i segreti anche nei parametri.
 
-Nel flusso Agent Coding la richiesta di approvazione `git_commit` include `commitDiff` e i soli `commitPaths` attribuiti alla run.
+Nel flusso Agent Coding la richiesta di approvazione `git_commit` include `commitDiff` e i soli `commitPaths` attribuiti alla run. Una richiesta del gate dei tool porta `reasons` (`workspace_mutation`, `network_access`, `external_installation`, `guided_review`): un'unica revisione copre tutti i motivi, e il modale li mostra nella lingua dell'interfaccia.
 
 Il payload di `workspace:write-file` porta anche `workspaceRoot`: il salvataggio editor applica lo stesso controllo realpath delle mutazioni Agent Coding.
 

@@ -89,7 +89,7 @@ export function sidecarStepText(
     const translated = t(key, payload.step_params)
     if (translated !== key) return translated
   }
-  return payload.step
+  return payload.step || ''
 }
 
 export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {

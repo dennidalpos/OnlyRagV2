@@ -92,7 +92,7 @@ describe('runToolGates network-approved policy', () => {
     })
 
     expect(requestApproval).toHaveBeenCalledOnce()
-    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({ reasons: expect.arrayContaining(['network access', 'Guided review']) }))
+    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({ reasons: ['network_access', 'guided_review'] }))
     expect(result).toMatchObject({ outcome: 'allowed', policyConsent: { requested: true, granted: true } })
   })
 })

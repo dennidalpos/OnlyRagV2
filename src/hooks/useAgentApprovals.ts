@@ -14,7 +14,7 @@ export function useAgentApprovals() {
       const current = pendingApproval
       setPendingApproval(null)
       try {
-        await window.electronAPI.respondToAgentApproval(current, approved, approvedHunks)
+        await window.electronAPI.respondToAgentApproval({ identity: current, approved, approvedHunkIndices: approvedHunks })
       } catch (err: unknown) {
         logger.error('useAgentApprovals', `Failed responding to agent approval: ${errorMessage(err)}`)
       }

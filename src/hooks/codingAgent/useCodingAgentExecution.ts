@@ -213,7 +213,7 @@ export function useCodingAgentExecution({
           let content = selectedFile && selectedFile.path === f.path ? editorContent : ''
           if (!content && window.electronAPI?.readWorkspaceFile) {
             try {
-              const res = await window.electronAPI.readWorkspaceFile(f.path)
+              const res = await window.electronAPI.readWorkspaceFile({ filePath: f.path })
               if (res.success && res.content) {
                 content = res.content
               }
@@ -377,7 +377,7 @@ export function useCodingAgentExecution({
           const revisionIndex = prev.findIndex((plan) => `${plan.id}:v${plan.version}` === data.planRevisionId)
           if (revisionIndex < 0) return prev
           const copy = [...prev]
-          copy[revisionIndex] = { ...copy[revisionIndex], milestones }
+          copy[revisionIndex] = { ...copy[revisionIndex], milestones: [...milestones] }
           return copy
         })
       }
@@ -481,7 +481,7 @@ export function useCodingAgentExecution({
     clearPendingApproval()
     const partialNote = approvedHunkIndices ? ` (${approvedHunkIndices.length} hunk selezionati)` : ''
     addActionLog('tool_call', `User approved ${current.type}: ${current.target}${partialNote}`)
-    await window.electronAPI.respondToAgentApproval(current, true, approvedHunkIndices)
+    await window.electronAPI.respondToAgentApproval({ identity: current, approved: true, approvedHunkIndices })
     const { selectedFile, handleOpenFile } = editor
     if (FILE_MUTATION_APPROVAL_TYPES.has(current.type) && selectedFile && selectedFile.path === current.target) {
       setTimeout(() => handleOpenFile(selectedFile), 400)
@@ -493,7 +493,7 @@ export function useCodingAgentExecution({
     const current = pendingApproval
     clearPendingApproval()
     addActionLog('info', `User rejected ${current.type}: ${current.target}`)
-    await window.electronAPI?.respondToAgentApproval?.(current, false)
+    await window.electronAPI?.respondToAgentApproval?.({ identity: current, approved: false })
   }
 
   const compactContext = useCallback(async () => {

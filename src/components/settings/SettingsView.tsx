@@ -109,7 +109,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
       const fetchRunning = async () => {
         if (!window.electronAPI?.getRunningModels) return
         try {
-          const res = await window.electronAPI.getRunningModels(settings.ollamaHost)
+          const res = await window.electronAPI.getRunningModels({ host: settings.ollamaHost })
           if (!cancelled && res?.success && Array.isArray(res.models)) {
             setRunningModels(res.models)
           }

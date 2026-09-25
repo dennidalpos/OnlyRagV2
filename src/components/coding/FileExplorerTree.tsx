@@ -85,7 +85,7 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({ item, level, selecte
       if (children.length === 0) {
         setIsLoading(true)
         try {
-          const subFiles = await electronApi().listWorkspaceFiles(item.path)
+          const subFiles = await electronApi().listWorkspaceFiles({ dirPath: item.path })
           setChildren(subFiles)
         } catch (err: unknown) {
           logger.error('FileTree', `Failed to expand folder: ${errorMessage(err)}`)

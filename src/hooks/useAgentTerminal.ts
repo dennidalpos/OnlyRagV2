@@ -80,7 +80,7 @@ export function useAgentTerminal({ workspacePath, onCommandNotice }: UseAgentTer
       appendTerminalLogs(`PS> ${cmd} (Executing... timeout: ${timeoutMs / 1000}s)`)
       if (!cmdToRun) setTerminalInput('')
 
-      const res = await window.electronAPI.executePowerShellCommand(cmd, workspacePath || undefined, timeoutMs)
+      const res = await window.electronAPI.executePowerShellCommand({ command: cmd, cwd: workspacePath || undefined, timeoutMs })
       const outStr = res.output || ''
       appendTerminalLogs(outStr, '')
 

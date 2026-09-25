@@ -2,7 +2,7 @@
 
 Documentazione tecnica breve, verificata contro il codice. I contratti prevalgono sulle descrizioni:
 
-- IPC: [`../electron/preload.ts`](../electron/preload.ts), handler in [`../electron/core/presentation/`](../electron/core/presentation/) e tipi in [`../shared/types/index.ts`](../shared/types/index.ts).
+- IPC: contratto in [`../shared/ipc/ipcContract.ts`](../shared/ipc/ipcContract.ts), Preload in [`../electron/preload.ts`](../electron/preload.ts), handler in [`../electron/core/presentation/`](../electron/core/presentation/).
 - REST: [`../sidecar/main.py`](../sidecar/main.py), schemi in [`../sidecar/schemas.py`](../sidecar/schemas.py) e OpenAPI in [`../sidecar/contracts/openapi-2.5.0.json`](../sidecar/contracts/openapi-2.5.0.json).
 - Comandi: [`../package.json`](../package.json).
 

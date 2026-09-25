@@ -3,31 +3,27 @@ import { systemAppService } from '../application/systemAppService'
 import { taskAppService } from '../application/taskAppService'
 
 export function registerSystemIpcHandlers() {
-  ipcMain.handle('dialog:open-file', async (_event: unknown, options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => {
+  ipcMain.handle('dialog:open-file', async (_event, options) => {
     return systemAppService.openFileDialog(options)
   })
 
-  ipcMain.handle('dialog:open-directory', async (_event: unknown, options?: { title?: string }) => {
+  ipcMain.handle('dialog:open-directory', async (_event, options) => {
     return systemAppService.openDirectoryDialog(options)
   })
 
-  ipcMain.handle('system:check-disk-space', async (_, models: string[]) => {
-    return systemAppService.validateModelDownloadSpace(models || [])
+  ipcMain.handle('system:check-disk-space', async (_, { models }) => {
+    return systemAppService.validateModelDownloadSpace(models)
   })
 
-  ipcMain.handle('system:open-external', async (_, url: string) => {
+  ipcMain.handle('system:open-external', async (_, { url }) => {
     return systemAppService.openExternal(url)
   })
 
-  ipcMain.handle('system:open-path', async (_, targetPath: string) => {
+  ipcMain.handle('system:open-path', async (_, { targetPath }) => {
     return systemAppService.openPath(targetPath)
   })
 
-  ipcMain.handle('task:cancel', async (_, taskId?: string) => {
-    if (taskId) {
-      return taskAppService.cancelTask(taskId)
-    } else {
-      return taskAppService.cancelAllTasks()
-    }
+  ipcMain.handle('task:cancel', async (_, payload) => {
+    return payload?.taskId ? taskAppService.cancelTask(payload.taskId) : taskAppService.cancelAllTasks()
   })
 }

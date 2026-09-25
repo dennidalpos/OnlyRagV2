@@ -6,7 +6,7 @@ const optionalPositiveInt = z.number().int().min(1).optional()
 
 export const workspaceListFilesPayloadSchema = z
   .object({
-    targetPath: nonBlankPath.optional(),
+    dirPath: nonBlankPath.optional(),
   })
   .strict()
 
@@ -30,49 +30,10 @@ export const workspaceWriteFilePayloadSchema = z
   })
   .strict()
 
-export const workspaceReplaceChunkPayloadSchema = z
-  .object({
-    filePath: nonBlankPath,
-    targetContent: z.string(),
-    replacementContent: z.string(),
-  })
-  .strict()
-
-export const workspaceGrepSearchPayloadSchema = z
-  .object({
-    dirPath: nonBlankPath,
-    query: nonBlankText,
-    isRegex: z.boolean().optional(),
-    caseInsensitive: z.boolean().optional(),
-  })
-  .strict()
-
-export const workspaceSearchWebPayloadSchema = z
-  .object({
-    query: nonBlankText,
-    maxResults: optionalPositiveInt,
-  })
-  .strict()
-
-export const workspaceFetchWebPayloadSchema = z
-  .object({
-    url: nonBlankPath,
-    maxChars: optionalPositiveInt,
-  })
-  .strict()
-
-export const workspaceDownloadFilePayloadSchema = z
-  .object({
-    url: nonBlankPath,
-    targetFilePath: nonBlankPath,
-    workspaceRoot: nonBlankPath.optional(),
-  })
-  .strict()
-
 export const workspaceExecutePowerShellPayloadSchema = z
   .object({
     command: nonBlankText,
-    targetCwd: nonBlankPath.optional(),
+    cwd: nonBlankPath.optional(),
     timeoutMs: z.number().int().min(1).max(900_000).optional(),
   })
   .strict()

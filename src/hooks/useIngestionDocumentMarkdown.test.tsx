@@ -27,7 +27,7 @@ describe('useIngestion loads the selected document on demand', () => {
   let ingestion: ReturnType<typeof useIngestion>
   const pending = new Map<string, (markdown: string) => void>()
   const getIngestedDocument = vi.fn(
-    (docId: string) =>
+    ({ docId }: { docId: string }) =>
       new Promise((resolve) => {
         pending.set(docId, (markdown) => resolve({ ...documentsStore.documents.find((doc) => doc.id === docId), extractedMarkdown: markdown }))
       }),

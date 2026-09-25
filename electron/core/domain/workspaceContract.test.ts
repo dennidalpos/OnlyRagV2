@@ -3,7 +3,6 @@ import {
   workspaceExecutePowerShellPayloadSchema,
   workspaceListFilesPayloadSchema,
   workspaceReadFilePayloadSchema,
-  workspaceSearchWebPayloadSchema,
   workspaceWriteFilePayloadSchema,
 } from './workspaceContract'
 
@@ -19,13 +18,11 @@ describe('workspace IPC contracts', () => {
   it('rejects blank paths, non-positive line numbers, and unknown fields', () => {
     expect(() => workspaceReadFilePayloadSchema.parse({ filePath: ' ', startLine: 1 })).toThrow()
     expect(() => workspaceReadFilePayloadSchema.parse({ filePath: 'a.ts', startLine: 0 })).toThrow()
-    expect(() => workspaceListFilesPayloadSchema.parse({ targetPath: 'src', extra: true })).toThrow()
+    expect(() => workspaceListFilesPayloadSchema.parse({ dirPath: 'src', extra: true })).toThrow()
     expect(() => workspaceWriteFilePayloadSchema.parse({ filePath: 'a.ts', content: 'x', expectedContentHash: 'stale' })).toThrow()
   })
 
-  it('bounds essential web and shell inputs', () => {
-    expect(workspaceSearchWebPayloadSchema.parse({ query: 'react', maxResults: 8 })).toEqual({ query: 'react', maxResults: 8 })
-    expect(() => workspaceSearchWebPayloadSchema.parse({ query: ' ' })).toThrow()
+  it('bounds shell inputs', () => {
     expect(() => workspaceExecutePowerShellPayloadSchema.parse({ command: 'Get-ChildItem', timeoutMs: 900_001 })).toThrow()
   })
 })

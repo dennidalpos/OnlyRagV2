@@ -285,7 +285,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     const operationId = activeStreamIdRef.current
     if (operationId && window.electronAPI?.cancelOllamaStream) {
       try {
-        await window.electronAPI.cancelOllamaStream(operationId)
+        await window.electronAPI.cancelOllamaStream({ operationId })
       } catch (err: unknown) {
         logger.warn('ChatView', `Failed stopping Ollama stream: ${errorMessage(err)}`)
       }
@@ -311,7 +311,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         streamThrottleTimer.current = null
       }
       if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
-        window.electronAPI.cancelOllamaStream(activeStreamIdRef.current).catch(() => {})
+        window.electronAPI.cancelOllamaStream({ operationId: activeStreamIdRef.current }).catch(() => {})
       }
     }
   }, [])
@@ -373,7 +373,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       // Retrieval runs ONLY when documents are explicitly selected and the query is non-chitchat
       if (hasSelectedDocs && routingResult.requiresRetrieval) {
         try {
-          const searchResults = await electronApi().searchVectorDb(userText, budget.vectorTopK, scopedDocIds)
+          const searchResults = await electronApi().searchVectorDb({ query: userText, topK: budget.vectorTopK, docIds: scopedDocIds })
 
           if (Array.isArray(searchResults) && searchResults.length > 0) {
             const validResults = searchResults.filter((res) => res && res.text)
@@ -498,20 +498,22 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           logger.info('ChatEngine', `Context budget [${budget.profileTier}${budget.isMinimal ? '/minimal' : ''}]: selected num_ctx ${budget.maxNumCtx}`)
 
           const result = await window.electronAPI.generateOllamaStream(
-            modelToUse,
-            finalPrompt,
+            {
+              model: modelToUse,
+              prompt: finalPrompt,
+              options: {
+                num_ctx: budget.maxNumCtx,
+                num_thread: resolveChatThreadCount(hardwareFacts.cpuCount),
+                keep_alive: budget.keepAlive,
+                think: resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics).think,
+              },
+              host: settings.ollamaHost,
+              operationId,
+            },
             (chunk: string) => {
               accumulated += chunk
               pendingChunk = true
             },
-            {
-              num_ctx: budget.maxNumCtx,
-              num_thread: resolveChatThreadCount(hardwareFacts.cpuCount),
-              keep_alive: budget.keepAlive,
-              think: resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics).think,
-            },
-            settings.ollamaHost,
-            operationId,
           )
           if (!result.success) throw new Error(result.error || 'Ollama generation failed.')
           if (!accumulated.trim()) throw new Error('Ollama returned an empty response.')
@@ -559,7 +561,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const loadConversation = useCallback(
     (id: string) => {
       if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
-        window.electronAPI.cancelOllamaStream(activeStreamIdRef.current).catch(() => {})
+        window.electronAPI.cancelOllamaStream({ operationId: activeStreamIdRef.current }).catch(() => {})
       }
       setIsGenerating(false)
       isGeneratingRef.current = false
@@ -593,7 +595,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       streamThrottleTimer.current = null
     }
     if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
-      window.electronAPI.cancelOllamaStream(activeStreamIdRef.current).catch(() => {})
+      window.electronAPI.cancelOllamaStream({ operationId: activeStreamIdRef.current }).catch(() => {})
     }
     setIsGenerating(false)
     isGeneratingRef.current = false
@@ -629,7 +631,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           streamThrottleTimer.current = null
         }
         if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
-          window.electronAPI.cancelOllamaStream(activeStreamIdRef.current).catch(() => {})
+          window.electronAPI.cancelOllamaStream({ operationId: activeStreamIdRef.current }).catch(() => {})
         }
         setIsGenerating(false)
         isGeneratingRef.current = false

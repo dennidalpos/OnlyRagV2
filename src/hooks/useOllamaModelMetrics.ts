@@ -16,7 +16,7 @@ export function useOllamaModelMetrics(host?: string, isActive = true) {
         return
       }
       try {
-        const result = await window.electronAPI.getOllamaModelMetrics(host)
+        const result = await window.electronAPI.getOllamaModelMetrics({ host })
         if (!cancelled) setMetrics(result || {})
       } catch {
         if (!cancelled) setMetrics({})

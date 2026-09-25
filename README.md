@@ -13,7 +13,7 @@ Local Windows desktop workspace for document ingestion, RAG chat, translation an
 
 ## Documentation
 
-The concise technical guides are organized by scope in [`docs/README.md`](./docs/README.md). Code is authoritative for IPC ([`electron/preload.ts`](./electron/preload.ts)), REST ([`sidecar/main.py`](./sidecar/main.py)) and shared types ([`shared/types/index.ts`](./shared/types/index.ts)).
+The concise technical guides are organized by scope in [`docs/README.md`](./docs/README.md). Code is authoritative for IPC ([`shared/ipc/ipcContract.ts`](./shared/ipc/ipcContract.ts)), REST ([`sidecar/main.py`](./sidecar/main.py)) and shared types ([`shared/types/index.ts`](./shared/types/index.ts)).
 
 ## Quick start
 

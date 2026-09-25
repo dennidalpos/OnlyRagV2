@@ -28,7 +28,7 @@ describe('translation hooks', () => {
   let documentTranslation: ReturnType<typeof useDocumentTranslation>
   let inplaceTranslation: ReturnType<typeof useInplaceTranslation>
   const generateOllamaStream = vi.fn()
-  const getIngestedDocument = vi.fn(async (docId: string) =>
+  const getIngestedDocument = vi.fn(async ({ docId }: { docId: string }) =>
     docId in storedMarkdown ? { ...documentsStore.documents.find((doc) => doc.id === docId), extractedMarkdown: storedMarkdown[docId] } : null,
   )
 
@@ -90,7 +90,7 @@ describe('translation hooks', () => {
   })
 
   it('translates with the configured translation model', async () => {
-    generateOllamaStream.mockImplementation(async (_model: string, _prompt: string, onChunk: (chunk: string) => void) => {
+    generateOllamaStream.mockImplementation(async (_request: unknown, onChunk: (chunk: string) => void) => {
       onChunk('Hello')
       return { success: true }
     })
@@ -99,14 +99,15 @@ describe('translation hooks', () => {
     await act(async () => documentTranslation.handleStartTranslation())
 
     expect(generateOllamaStream).toHaveBeenCalledWith(
-      'translator:latest',
-      expect.any(String),
+      {
+        model: 'translator:latest',
+        prompt: expect.stringContaining('Ciao'),
+        options: expect.objectContaining({ think: false }),
+        host: undefined,
+        operationId: expect.any(String),
+      },
       expect.any(Function),
-      expect.objectContaining({ think: false }),
-      undefined,
-      expect.any(String),
     )
-    expect(generateOllamaStream.mock.calls[0][1]).toContain('Ciao')
     expect(documentTranslation.selectedDocMarkdown).toBe('# Notes\n\nCiao')
     expect(documentTranslation.isTranslationComplete).toBe(true)
     expect(documentTranslation.translatedMarkdown).toBe('Hello')

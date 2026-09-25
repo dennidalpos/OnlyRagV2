@@ -9,8 +9,15 @@ import {
   sidecarUpdateDocumentPayloadSchema,
 } from '../domain/sidecarContract'
 import { promptHistoryIndexPayloadSchema, promptHistorySearchPayloadSchema } from '../domain/promptHistoryContract'
-import { artifactsSavePayloadSchema } from '../domain/artifactContract'
+import {
+  workspaceExecutePowerShellPayloadSchema,
+  workspaceListFilesPayloadSchema,
+  workspaceReadFilePayloadSchema,
+  workspaceWriteFilePayloadSchema,
+} from '../domain/workspaceContract'
+import { artifactsDeletePayloadSchema, artifactsGetPayloadSchema, artifactsListPayloadSchema, artifactsSavePayloadSchema } from '../domain/artifactContract'
 import { agentPlanSchema, agentTaskRequestSchema, planMilestoneSchema } from '../domain/agent/agentTaskContract'
+import type { IpcInvokeChannel, IpcReceivedPayload, IpcResult, IpcSendChannel, IpcSendContract } from '../../../shared/ipc/ipcContract'
 
 let mainWindow: (() => BrowserWindow | null) | null = null
 export function setTrustedIpcWindowProvider(provider: () => BrowserWindow | null): void {
@@ -30,7 +37,6 @@ const optionalString = string.optional()
 const optionalBoolean = z.boolean().optional()
 const optionalNumber = z.number().finite().optional()
 const jsonValue = z.union([z.json(), z.undefined()])
-const emptyArgs = z.tuple([])
 const identity = z.object({ runId: short, conversationId: short, planRevisionId: short, workspaceId: short })
 const settings = z
   .object({
@@ -115,173 +121,170 @@ const interviewQuestion = z.object({
   options: z.array(string).max(20),
   recommendedIndex: z.number().int().nonnegative(),
 })
-const sidecarIngest = sidecarIngestFilePayloadSchema.shape
-const sidecarTranslate = sidecarTranslatePayloadSchema.shape
-const sidecarSearch = sidecarSearchPayloadSchema.shape
-const sidecarExport = sidecarExportPayloadSchema.shape
+const obj = <T extends z.ZodRawShape>(shape: T) => z.object(shape).strict()
+const host = obj({ host: optionalString }).optional()
+const modelOnHost = obj({ modelName: short, host: optionalString })
+const workspaceRootOnly = obj({ workspaceRoot: optionalPath }).optional()
+const workspacePathOnly = obj({ workspacePath: optionalPath }).optional()
+const skillInWorkspace = obj({ skillId: short, workspaceRoot: optionalPath })
+const docId = obj({ docId: sidecarUpdateDocumentPayloadSchema.shape.docId })
 
-const payloadSchemas: Record<string, z.ZodType> = {
-  'settings:get': emptyArgs,
-  'settings:save': z.tuple([settings]),
-  'sidecar:restart': emptyArgs,
-  'dialog:open-file': z.tuple([
-    z
-      .object({
-        title: string.optional(),
-        filters: z
-          .array(z.object({ name: short, extensions: z.array(short).max(30) }))
-          .max(30)
-          .optional(),
-      })
+/** One schema per channel of the contract (`null`: the channel takes no payload); the compiler rejects a missing channel. */
+const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null> = {
+  'settings:get': null,
+  'settings:save': settings,
+  'sidecar:restart': null,
+  'dialog:open-file': obj({
+    title: string.optional(),
+    filters: z
+      .array(z.object({ name: short, extensions: z.array(short).max(30) }))
+      .max(30)
       .optional(),
-  ]),
-  'dialog:open-directory': z.tuple([z.object({ title: string.optional() }).optional()]),
-  'system:open-external': z.tuple([z.url()]),
-  'system:open-path': z.tuple([path]),
-  'system:check-disk-space': z.tuple([z.array(short).max(100)]),
-  'task:cancel': z.tuple([optionalString]),
-  'workspace:get-standalone-scratch': emptyArgs,
-  'workspace:clear-standalone-scratch': emptyArgs,
-  'workspace:inspect-guest-os': emptyArgs,
-  'workspace:export-standalone-scratch': z.tuple([path]),
-  'workspace:list-files': z.tuple([optionalPath]),
-  'workspace:read-file': z.tuple([path, optionalNumber, optionalNumber]),
-  'workspace:write-file': z.tuple([path, string, optionalString, optionalPath]),
-  'workspace:replace-chunk': z.tuple([path, string, string]),
-  'workspace:grep-search': z.tuple([path, string, optionalBoolean, optionalBoolean]),
-  'workspace:search-web': z.tuple([string, optionalNumber]),
-  'workspace:fetch-web': z.tuple([z.url(), optionalNumber]),
-  'workspace:download-file': z.tuple([z.url(), path, optionalPath]),
-  'workspace:get-git-status-and-diff': z.tuple([optionalPath]),
-  'workspace:init-git': z.tuple([optionalPath]),
-  'workspace:execute-powershell': z.tuple([string, optionalPath, optionalNumber]),
-  'projects:register': z.tuple([path, optionalString]),
-  'projects:list': emptyArgs,
-  'projects:touch': z.tuple([path]),
-  'projects:rename': z.tuple([path, short]),
-  'projects:remove': z.tuple([path]),
-  'projects:migrate-legacy': z.tuple([jsonValue]),
-  'sessions:list': z.tuple([optionalPath]),
-  'sessions:save': z.tuple([session]),
-  'sessions:delete': z.tuple([short, optionalPath]),
-  'sessions:clear': z.tuple([optionalPath]),
-  'sessions:migrate-legacy': z.tuple([jsonValue]),
-  'artifacts:list': z.tuple([path]),
-  'artifacts:get': z.tuple([path, short]),
-  'artifacts:save': z.tuple([path, artifactsSavePayloadSchema.shape.input]),
-  'artifacts:delete': z.tuple([path, short]),
-  'skills:list-sources': emptyArgs,
-  'skills:list-installed': z.tuple([optionalPath]),
-  'skills:add-custom-source': z.tuple([customHub]),
-  'skills:remove-custom-source': z.tuple([short]),
-  'skills:list-hub-by-source': z.tuple([short, optionalPath, optionalBoolean]),
-  'skills:list-hub-all': z.tuple([optionalPath, optionalBoolean]),
-  'skills:get-hub-skill-content': z.tuple([hubSkill]),
-  'skills:toggle-active': z.tuple([short, z.boolean()]),
-  'skills:install-from-hub': z.tuple([short, optionalPath, optionalString]),
-  'skills:install-from-url': z.tuple([z.url(), optionalPath, optionalString]),
-  'skills:save-custom': z.tuple([customSkill, optionalPath]),
-  'skills:reset-original': z.tuple([short, optionalPath]),
-  'skills:uninstall': z.tuple([short, optionalPath]),
-  'agent:start-task': z.tuple([agentTaskRequestSchema]),
-  'agent:cancel-task': z.tuple([identity]),
-  'agent:approval-response': z.tuple([identity, z.boolean(), z.array(z.number().int().nonnegative()).optional()]),
-  'agent:compact-context': z.tuple([identity]),
-  'agent:get-queue-status': emptyArgs,
-  'agent:parse-tool-call': z.tuple([string]),
-  'agent:logs-analyze': z.tuple([z.array(path).optional()]),
-  'agent:plan-interview': z.tuple([string, optionalString, settings, optionalPath, z.array(interviewAnswer).max(50).optional(), identity.optional()]),
-  'agent:plan-enrich-prompt': z.tuple([string, z.array(interviewAnswer).max(50), z.array(interviewQuestion).max(50)]),
-  'agent:plan-generate': z.tuple([
-    string,
-    optionalString,
+  }).optional(),
+  'dialog:open-directory': obj({ title: string.optional() }).optional(),
+  'system:open-external': obj({ url: z.url() }),
+  'system:open-path': obj({ targetPath: path }),
+  'system:check-disk-space': obj({ models: z.array(short).max(100) }),
+  'task:cancel': obj({ taskId: optionalString }).optional(),
+  'workspace:get-standalone-scratch': null,
+  'workspace:clear-standalone-scratch': null,
+  'workspace:inspect-guest-os': null,
+  'workspace:export-standalone-scratch': obj({ destinationDirectory: path }),
+  'workspace:list-files': workspaceListFilesPayloadSchema.optional(),
+  'workspace:read-file': workspaceReadFilePayloadSchema,
+  'workspace:write-file': workspaceWriteFilePayloadSchema,
+  'workspace:get-git-status-and-diff': obj({ workspaceRoot: path.optional() }).optional(),
+  'workspace:init-git': obj({ workspaceRoot: path.optional() }).optional(),
+  'workspace:execute-powershell': workspaceExecutePowerShellPayloadSchema,
+  'projects:register': obj({ projectPath: path, name: optionalString }),
+  'projects:list': null,
+  'projects:touch': obj({ projectPath: path }),
+  'projects:rename': obj({ projectPath: path, name: short }),
+  'projects:remove': obj({ projectPath: path }),
+  'projects:migrate-legacy': obj({ projects: jsonValue }),
+  'sessions:list': workspacePathOnly,
+  'sessions:save': session,
+  'sessions:delete': obj({ sessionId: short, workspacePath: optionalPath }),
+  'sessions:clear': workspacePathOnly,
+  'sessions:migrate-legacy': obj({ sessions: jsonValue }),
+  'artifacts:list': artifactsListPayloadSchema,
+  'artifacts:get': artifactsGetPayloadSchema,
+  'artifacts:save': artifactsSavePayloadSchema,
+  'artifacts:delete': artifactsDeletePayloadSchema,
+  'skills:list-sources': null,
+  'skills:list-installed': workspaceRootOnly,
+  'skills:add-custom-source': customHub,
+  'skills:remove-custom-source': obj({ sourceId: short }),
+  'skills:list-hub-by-source': obj({ sourceId: short, workspaceRoot: optionalPath, forceRefresh: optionalBoolean }),
+  'skills:list-hub-all': obj({ workspaceRoot: optionalPath, forceRefresh: optionalBoolean }).optional(),
+  'skills:get-hub-skill-content': hubSkill,
+  'skills:toggle-active': obj({ skillId: short, isActive: z.boolean() }),
+  'skills:install-from-hub': obj({ hubSkillId: short, workspaceRoot: optionalPath, hubSourceId: optionalString }),
+  'skills:install-from-url': obj({ url: z.url(), workspaceRoot: optionalPath, customName: optionalString }),
+  'skills:save-custom': obj({ input: customSkill, workspaceRoot: optionalPath }),
+  'skills:reset-original': skillInWorkspace,
+  'skills:uninstall': skillInWorkspace,
+  'agent:start-task': agentTaskRequestSchema,
+  'agent:cancel-task': identity,
+  'agent:approval-response': obj({ identity, approved: z.boolean(), approvedHunkIndices: z.array(z.number().int().nonnegative()).optional() }),
+  'agent:compact-context': identity,
+  'agent:get-queue-status': null,
+  'agent:logs-analyze': obj({ extraPaths: z.array(path).optional() }).optional(),
+  'agent:plan-interview': obj({
+    prompt: string,
+    model: optionalString,
     settings,
-    agentPlanSchema.optional(),
-    optionalPath,
-    z.array(interviewAnswer).max(50).optional(),
-    identity.optional(),
-  ]),
-  'agent:plan-cancel': z.tuple([identity]),
-  'agent:get-plan-state': z.tuple([short, optionalPath, optionalString]),
-  'agent:plan-seed': z.tuple([short, optionalPath, z.array(planMilestoneSchema).max(100), optionalString, optionalString]),
-  'agent:export-ai-debug-bundle': z.tuple([debugBundle]),
-  'diagnostics:get-logs': emptyArgs,
-  'diagnostics:clear-logs': emptyArgs,
-  'diagnostics:clear-agent-audit-log': emptyArgs,
-  'diagnostics:get-log-filepath': emptyArgs,
-  'diagnostics:open-logs-folder': emptyArgs,
-  'diagnostics:run': z.tuple([optionalString]),
-  'diagnostics:log-telemetry': z.tuple([short, short, string]),
-  'ollama:install-or-launch': emptyArgs,
-  'ollama:cancel-pull': emptyArgs,
-  'ollama:get-generation-status': emptyArgs,
-  'ollama:pull-model': z.tuple([short, optionalString]),
-  'ollama:delete-model': z.tuple([short, optionalString]),
-  'ollama:cancel-stream': z.tuple([short]),
-  'ollama:generate-stream': z.tuple([short, string, generationOptions, optionalString, optionalString]),
-  'ollama:get-model-metrics': z.tuple([optionalString]),
-  'ollama:get-running-models': z.tuple([optionalString]),
-  'ollama:unload-model': z.tuple([short, optionalString]),
-  'ollama:test-connection': z.tuple([optionalString]),
-  'ollama:check-model-updates': z.tuple([optionalString]),
-  'ingest:file': z.tuple([
-    sidecarIngest.filePath,
-    sidecarIngest.visionModel,
-    sidecarIngest.visionPrompt,
-    sidecarIngest.normalizeWithLlm,
-    sidecarIngest.normalizationModel,
-    sidecarIngest.numCtx,
-    sidecarIngest.taskId,
-    sidecarIngest.normalizationThink,
-  ]),
-  'ingest:update': z.tuple([sidecarUpdateDocumentPayloadSchema.shape.docId, sidecarUpdateDocumentPayloadSchema.shape.markdownContent]),
-  'ingest:translate-inplace': z.tuple([
-    sidecarTranslate.docId,
-    sidecarTranslate.sourceLang,
-    sidecarTranslate.targetLang,
-    sidecarTranslate.model,
-    sidecarTranslate.targetDir,
-    sidecarTranslate.numCtx,
-    sidecarTranslate.think,
-  ]),
-  'ingest:page-preview': z.tuple([sidecarPagePreviewPayloadSchema.shape.docId, sidecarPagePreviewPayloadSchema.shape.pageNumber]),
-  'ingest:list': emptyArgs,
-  'ingest:get': z.tuple([sidecarUpdateDocumentPayloadSchema.shape.docId]),
-  'ingest:delete': z.tuple([sidecarUpdateDocumentPayloadSchema.shape.docId]),
-  'ingest:search': z.tuple([sidecarSearch.query, sidecarSearch.topK, sidecarSearch.docIds]),
-  'ingest:export': z.tuple([sidecarExport.markdownContent, sidecarExport.format, sidecarExport.outputFolder]),
-  'history:index': z.tuple([promptHistoryIndexPayloadSchema]),
-  'history:search': z.tuple([
-    promptHistorySearchPayloadSchema.shape.query,
-    promptHistorySearchPayloadSchema.shape.topK,
-    promptHistorySearchPayloadSchema.shape.projectPaths,
-  ]),
-  'agent:skill-install-response': z.tuple([identity.extend({ requestId: short, approved: z.boolean() })]),
+    workspacePath: optionalPath,
+    previousDecisions: z.array(interviewAnswer).max(50).optional(),
+    identity: identity.optional(),
+  }),
+  'agent:plan-enrich-prompt': obj({ prompt: string, answers: z.array(interviewAnswer).max(50), questions: z.array(interviewQuestion).max(50) }),
+  'agent:plan-generate': obj({
+    prompt: string,
+    model: optionalString,
+    settings,
+    previousPlan: agentPlanSchema.optional(),
+    workspacePath: optionalPath,
+    previousDecisions: z.array(interviewAnswer).max(50).optional(),
+    identity: identity.optional(),
+  }),
+  'agent:plan-cancel': identity,
+  'agent:get-plan-state': obj({ sessionId: short, workspacePath: optionalPath, planRevisionId: optionalString }),
+  'agent:plan-seed': obj({
+    sessionId: short,
+    workspacePath: path.nullable(),
+    planMilestones: z.array(planMilestoneSchema).max(100),
+    userTask: optionalString,
+    planRevisionId: optionalString,
+  }),
+  'agent:export-ai-debug-bundle': debugBundle,
+  'agent:skill-install-response': identity.extend({ requestId: short, approved: z.boolean() }),
+  'diagnostics:get-logs': null,
+  'diagnostics:clear-logs': null,
+  'diagnostics:clear-agent-audit-log': null,
+  'diagnostics:get-log-filepath': null,
+  'diagnostics:open-logs-folder': null,
+  'diagnostics:run': host,
+  'diagnostics:log-telemetry': obj({ level: short, category: short, message: string }),
+  'ollama:install-or-launch': null,
+  'ollama:cancel-pull': null,
+  'ollama:get-generation-status': null,
+  'ollama:pull-model': modelOnHost,
+  'ollama:delete-model': modelOnHost,
+  'ollama:cancel-stream': obj({ operationId: short }),
+  'ollama:generate-stream': obj({ model: short, prompt: string, options: generationOptions, host: optionalString, operationId: short }),
+  'ollama:get-model-metrics': host,
+  'ollama:get-running-models': host,
+  'ollama:unload-model': modelOnHost,
+  'ollama:test-connection': host,
+  'ollama:check-model-updates': host,
+  'ingest:file': sidecarIngestFilePayloadSchema,
+  'ingest:update': sidecarUpdateDocumentPayloadSchema,
+  'ingest:translate-inplace': sidecarTranslatePayloadSchema,
+  'ingest:page-preview': sidecarPagePreviewPayloadSchema,
+  'ingest:list': null,
+  'ingest:get': docId,
+  'ingest:delete': docId,
+  'ingest:search': sidecarSearchPayloadSchema,
+  'ingest:export': sidecarExportPayloadSchema,
+  'history:index': promptHistoryIndexPayloadSchema,
+  'history:search': promptHistorySearchPayloadSchema,
 }
 
-export function validateIpcPayload(channel: string, args: unknown[]): void {
-  const schema = payloadSchemas[channel]
-  if (!schema) throw new Error(`Missing IPC payload schema for ${channel}`)
-  if (!schema.safeParse(args).success) throw new Error(`Invalid IPC payload for ${channel}`)
+/** Checks the arguments of one message (none, or a single payload) and returns the parsed payload. */
+export function validateIpcPayload(channel: string, args: unknown[]): unknown {
+  if (!Object.hasOwn(payloadSchemas, channel)) throw new Error(`Missing IPC payload schema for ${channel}`)
+  const schema = payloadSchemas[channel as keyof typeof payloadSchemas]
+  const [payload] = args
+  if (args.length > 1) throw new Error(`Invalid IPC payload for ${channel}`)
+  if (!schema) {
+    if (payload !== undefined) throw new Error(`Invalid IPC payload for ${channel}`)
+    return undefined
+  }
+  const result = schema.safeParse(payload)
+  if (!result.success) throw new Error(`Invalid IPC payload for ${channel}`)
+  return result.data
 }
+
+type InvokeListener<C extends IpcInvokeChannel> = (event: IpcMainInvokeEvent, payload: IpcReceivedPayload<C>) => IpcResult<C> | Promise<IpcResult<C>>
 
 export const secureIpcMain = {
-  handle(channel: string, listener: Parameters<typeof ipcMain.handle>[1]): void {
+  handle<C extends IpcInvokeChannel>(channel: C, listener: InvokeListener<C>): void {
     ipcMain.handle(channel, (event, ...args) => {
       if (!isTrustedIpcSender(event)) throw new Error(`Untrusted IPC sender: ${channel}`)
-      validateIpcPayload(channel, args)
-      return listener(event, ...args)
+      return listener(event, validateIpcPayload(channel, args) as IpcReceivedPayload<C>)
     })
   },
-  on(channel: string, listener: Parameters<typeof ipcMain.on>[1]): void {
+  on<C extends IpcSendChannel>(channel: C, listener: (event: IpcMainEvent, payload: IpcSendContract[C]) => void): void {
     ipcMain.on(channel, (event, ...args) => {
       if (!isTrustedIpcSender(event)) return
+      let payload: unknown
       try {
-        validateIpcPayload(channel, args)
+        payload = validateIpcPayload(channel, args)
       } catch {
         return
       }
-      listener(event, ...args)
+      listener(event, payload as IpcSendContract[C])
     })
   },
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parsePromptHistoryIndexPayload, parsePromptHistorySearchPayload } from './promptHistoryContract'
+import { promptHistoryIndexPayloadSchema, promptHistorySearchPayloadSchema } from './promptHistoryContract'
 
 const validPayload = {
   id: 'prompt-1',
@@ -12,23 +12,23 @@ const validPayload = {
 
 describe('prompt history IPC contract', () => {
   it('accepts the canonical renderer payload', () => {
-    expect(parsePromptHistoryIndexPayload(validPayload)).toEqual(validPayload)
+    expect(promptHistoryIndexPayloadSchema.parse(validPayload)).toEqual(validPayload)
   })
 
   it('rejects incomplete or unsafe-sized payloads before the sidecar call', () => {
-    expect(() => parsePromptHistoryIndexPayload({ ...validPayload, prompt: '' })).toThrow()
-    expect(() => parsePromptHistoryIndexPayload({ ...validPayload, outcome: 'done' })).toThrow()
-    expect(() => parsePromptHistoryIndexPayload({ ...validPayload, prompt: 'x'.repeat(100_001) })).toThrow()
+    expect(() => promptHistoryIndexPayloadSchema.parse({ ...validPayload, prompt: '' })).toThrow()
+    expect(() => promptHistoryIndexPayloadSchema.parse({ ...validPayload, outcome: 'done' })).toThrow()
+    expect(() => promptHistoryIndexPayloadSchema.parse({ ...validPayload, prompt: 'x'.repeat(100_001) })).toThrow()
   })
 
   it('validates search bounds and optional project filters', () => {
-    expect(parsePromptHistorySearchPayload('  button  ', 10, ['D:/workspace'])).toEqual({
+    expect(promptHistorySearchPayloadSchema.parse({ query: '  button  ', topK: 10, projectPaths: ['D:/workspace'] })).toEqual({
       query: 'button',
       topK: 10,
       projectPaths: ['D:/workspace'],
     })
-    expect(() => parsePromptHistorySearchPayload('button', 0, undefined)).toThrow()
-    expect(() => parsePromptHistorySearchPayload('button', 101, undefined)).toThrow()
-    expect(() => parsePromptHistorySearchPayload(' ', undefined, undefined)).toThrow()
+    expect(() => promptHistorySearchPayloadSchema.parse({ query: 'button', topK: 0 })).toThrow()
+    expect(() => promptHistorySearchPayloadSchema.parse({ query: 'button', topK: 101 })).toThrow()
+    expect(() => promptHistorySearchPayloadSchema.parse({ query: ' ' })).toThrow()
   })
 })

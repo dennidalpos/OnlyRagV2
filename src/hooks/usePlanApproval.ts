@@ -17,7 +17,7 @@ export type { AgentPlan } from '../types'
 export async function resolveInterviewPrompt(
   originalPrompt: string,
   answers: UserInterviewAnswer[],
-  enrichPrompt: ((prompt: string, interviewAnswers: UserInterviewAnswer[], questions: InterviewQuestion[]) => Promise<string>) | undefined,
+  enrichPrompt: ((payload: { prompt: string; answers: UserInterviewAnswer[]; questions: InterviewQuestion[] }) => Promise<string>) | undefined,
   onEnrichmentFailure: (reason: unknown) => void,
   questions: InterviewQuestion[] = [],
 ): Promise<string> {
@@ -25,7 +25,7 @@ export async function resolveInterviewPrompt(
   if (!enrichPrompt || answers.length === 0) return losslessPrompt
 
   try {
-    const enriched = await enrichPrompt(originalPrompt, answers, questions)
+    const enriched = await enrichPrompt({ prompt: originalPrompt, answers, questions })
     const preservesInputs =
       typeof enriched === 'string' && enriched.includes(originalPrompt) && answers.every((answer) => enriched.includes(answer.selectedOption))
     if (preservesInputs) return enriched
@@ -212,15 +212,15 @@ export function usePlanApproval({
           try {
             logger.info('usePlanApproval', `Dispatching plan generation (prompt length: ${prompt.length}).`)
             trackOperation(scope.identity.runId)
-            const genRes = await window.electronAPI.agentPlanGenerate(
+            const genRes = await window.electronAPI.agentPlanGenerate({
               prompt,
-              modelToUse,
+              model: modelToUse,
               settings,
-              lastApprovedPlan,
-              scope.workspacePath,
+              previousPlan: lastApprovedPlan,
+              workspacePath: scope.workspacePath,
               previousDecisions,
-              scope.identity,
-            )
+              identity: scope.identity,
+            })
             if (!isFlowCurrent(scope)) return null
             generatedPlan = genRes
             if (genRes?.status === 'error') generationError = genRes.error || t('agentRun.planningIncomplete')
@@ -373,13 +373,13 @@ export function usePlanApproval({
 
       let seeded = false
       try {
-        seeded = await window.electronAPI.agentPlanSeed(
-          activeSessionId,
-          workspacePath ?? null,
-          approved.milestones!,
-          approved.prompt,
-          `${approved.id}:v${approved.version}`,
-        )
+        seeded = await window.electronAPI.agentPlanSeed({
+          sessionId: activeSessionId,
+          workspacePath: workspacePath ?? null,
+          planMilestones: approved.milestones!,
+          userTask: approved.prompt,
+          planRevisionId: `${approved.id}:v${approved.version}`,
+        })
       } catch (err: unknown) {
         logger.warn('usePlanApproval', `agentPlanSeed IPC failed: ${errorMessage(err)}`)
         await recover(errorMessage(err))
@@ -475,7 +475,14 @@ export function usePlanApproval({
         try {
           const modelToUse = resolveConfiguredModel('coding', settings, targetModel)
           trackOperation(scope.identity.runId)
-          const interviewRes = await window.electronAPI.agentPlanInterview(prompt, modelToUse, settings, scope.workspacePath, previousDecisions, scope.identity)
+          const interviewRes = await window.electronAPI.agentPlanInterview({
+            prompt,
+            model: modelToUse,
+            settings,
+            workspacePath: scope.workspacePath,
+            previousDecisions,
+            identity: scope.identity,
+          })
           if (!isFlowCurrent(scope)) return null
           if (activeOperationRef.current?.token === scope.token) activeOperationRef.current = null
           setIsAnalyzingInterview(false)

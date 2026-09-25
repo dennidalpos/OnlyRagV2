@@ -16,7 +16,7 @@ export function useGitStatus(workspacePath: string | null) {
     setIsFetchingGit(true)
     try {
       if (window.electronAPI.getGitStatusAndDiff) {
-        const res = await window.electronAPI.getGitStatusAndDiff(workspacePath || undefined)
+        const res = await window.electronAPI.getGitStatusAndDiff({ workspaceRoot: workspacePath || undefined })
         setIsGitRepo(res.isGitRepo)
         setGitStatusLines(res.statusLines || [])
         setGitDiffText(res.diffText || '')
@@ -38,7 +38,7 @@ export function useGitStatus(workspacePath: string | null) {
     if (!window.electronAPI?.initGitRepository) return
     setIsFetchingGit(true)
     try {
-      await window.electronAPI.initGitRepository(workspacePath || undefined)
+      await window.electronAPI.initGitRepository({ workspaceRoot: workspacePath || undefined })
       await fetchGitStatusAndDiff()
     } finally {
       setIsFetchingGit(false)

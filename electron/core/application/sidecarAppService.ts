@@ -8,9 +8,16 @@ import { logger } from '../infrastructure/logging/logger'
 import { sidecarProcessManager } from '../infrastructure/process/sidecarProcessManager'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
-import { sidecarHttpClient, type SidecarDocumentSummary } from '../infrastructure/http/sidecarHttpClient'
+import { sidecarHttpClient, type SidecarDocumentRecord, type SidecarDocumentSummary } from '../infrastructure/http/sidecarHttpClient'
 import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
-import type { IngestedDocument, IngestedDocumentContent, PromptHistorySearchResult, VectorSearchResult } from '../../../shared/types'
+import type {
+  IngestedDocument,
+  IngestedDocumentContent,
+  IngestionStreamProgressPayload,
+  PromptHistorySearchResult,
+  TranslateProgressPayload,
+  VectorSearchResult,
+} from '../../../shared/types'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export function normalizeIngestedFileType(fileType?: string, filename?: string): IngestedDocument['fileType'] {
@@ -34,6 +41,10 @@ function toIngestedDocument(item: SidecarDocumentSummary): IngestedDocument {
     fileType: normalizeIngestedFileType(item.file_type, item.filename),
     usedFallbackEmbeddings: Boolean(item.used_fallback_embeddings),
   }
+}
+
+function toIngestedDocumentContent(record: SidecarDocumentRecord): IngestedDocumentContent {
+  return { ...toIngestedDocument(record), extractedMarkdown: record.extracted_markdown }
 }
 
 export class SidecarAppService {
@@ -99,7 +110,8 @@ export class SidecarAppService {
           normalization_think: normalizationThink === true,
           embedding_model: await this.configuredEmbeddingModel(),
         },
-        (event) => this.rendererEvents.send('ingest:stream-progress', { ...event, taskId: effectiveTaskId }),
+        // The Sidecar's NDJSON event is relayed as is: its shape is the payload the Renderer declares, not validated here.
+        (event) => this.rendererEvents.send('ingest:stream-progress', { ...event, taskId: effectiveTaskId } as IngestionStreamProgressPayload),
         (cancelFn) => {
           cancelRequest = cancelFn
           taskRunner.registerActiveTask(
@@ -114,24 +126,8 @@ export class SidecarAppService {
       )
 
       if (result.success && result.data) {
-        const filename = path.basename(resolvedPath)
-        const finalResult = result.data
-        return {
-          success: true,
-          data: {
-            id: finalResult.id,
-            filename: finalResult.filename || filename,
-            filePath: resolvedPath,
-            fileSize: finalResult.file_size,
-            numPages: finalResult.num_pages,
-            numChunks: finalResult.num_chunks,
-            extractedMarkdown: finalResult.extracted_markdown,
-            status: finalResult.status,
-            ingestedAt: finalResult.ingested_at,
-            fileType: normalizeIngestedFileType(finalResult.file_type, finalResult.filename || filename),
-            usedFallbackEmbeddings: Boolean(finalResult.used_fallback_embeddings),
-          },
-        }
+        const filename = result.data.filename || path.basename(resolvedPath)
+        return { success: true, data: { ...toIngestedDocumentContent({ ...result.data, filename }), filePath: resolvedPath } }
       }
 
       return { success: false, error: result.error || 'Ingestion failed' }
@@ -150,22 +146,7 @@ export class SidecarAppService {
     logger.log('INFO', 'SidecarApp', `Updating document: ${docId}`)
     const result = await sidecarHttpClient.updateDocument(docId, markdownContent, await this.configuredEmbeddingModel())
     if (result.success && result.data) {
-      const data = result.data
-      return {
-        success: true,
-        data: {
-          id: data.id,
-          filename: data.filename,
-          fileSize: data.file_size,
-          numPages: data.num_pages,
-          numChunks: data.num_chunks,
-          extractedMarkdown: data.extracted_markdown,
-          status: data.status,
-          ingestedAt: data.ingested_at,
-          fileType: normalizeIngestedFileType(data.file_type, data.filename),
-          usedFallbackEmbeddings: Boolean(data.used_fallback_embeddings),
-        },
-      }
+      return { success: true, data: toIngestedDocumentContent(result.data) }
     }
     return { success: false, error: result.error || 'Failed to update document' }
   }
@@ -189,7 +170,7 @@ export class SidecarAppService {
           think: think === true,
           task_id: taskId,
         },
-        (event) => this.rendererEvents.send('ingest:translate-progress', { ...event, taskId }),
+        (event) => this.rendererEvents.send('ingest:translate-progress', { ...event, taskId } as TranslateProgressPayload),
         (cancel) => taskRunner.registerActiveTask(taskId, 'translation', cancel),
       )
     } finally {
@@ -197,22 +178,7 @@ export class SidecarAppService {
     }
 
     if (result.success && result.data) {
-      const finalResult = result.data
-      return {
-        success: true,
-        data: {
-          id: finalResult.id,
-          filename: finalResult.filename,
-          filePath: finalResult.filePath,
-          fileSize: finalResult.file_size,
-          numPages: finalResult.num_pages,
-          numChunks: finalResult.num_chunks,
-          extractedMarkdown: finalResult.extracted_markdown,
-          status: finalResult.status,
-          ingestedAt: finalResult.ingested_at,
-          fileType: normalizeIngestedFileType(finalResult.file_type, finalResult.filename),
-        },
-      }
+      return { success: true, data: toIngestedDocumentContent(result.data) }
     }
 
     return { success: false, error: result.error || 'Translation failed' }
@@ -232,8 +198,7 @@ export class SidecarAppService {
 
   async getIngestedDocument(docId: string): Promise<IngestedDocumentContent | null> {
     const record = await sidecarHttpClient.getDocument(docId)
-    if (!record) return null
-    return { ...toIngestedDocument(record), extractedMarkdown: record.extracted_markdown }
+    return record ? toIngestedDocumentContent(record) : null
   }
 
   async deleteDocument(docId: string): Promise<{ success: boolean; error?: string }> {

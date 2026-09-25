@@ -51,7 +51,13 @@ describe('ollama IPC stream facade', () => {
       onDone()
       return { success: true }
     })
-    await handlers.get('ollama:generate-stream')?.(trustedEvent, 'model', 'prompt', {}, 'http://host:11434', 'stream-1')
+    await handlers.get('ollama:generate-stream')?.(trustedEvent, {
+      model: 'model',
+      prompt: 'prompt',
+      options: {},
+      host: 'http://host:11434',
+      operationId: 'stream-1',
+    })
 
     expect(send).toHaveBeenNthCalledWith(1, 'ollama:chunk', { operationId: 'stream-1', chunk: 'hello' })
     expect(send).toHaveBeenNthCalledWith(2, 'ollama:done', { operationId: 'stream-1' })

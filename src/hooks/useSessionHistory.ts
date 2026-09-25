@@ -58,7 +58,7 @@ async function migrateLegacySessions(): Promise<void> {
 
   try {
     const parsed = JSON.parse(raw)
-    const res = await window.electronAPI.migrateLegacyCodingSessions(parsed)
+    const res = await window.electronAPI.migrateLegacyCodingSessions({ sessions: parsed })
     localStorage.removeItem(LEGACY_SESSIONS_STORAGE_KEY)
     localStorage.setItem(MIGRATION_FLAG_KEY, 'done')
     logger.info('useSessionHistory', `Migrated ${res?.migrated ?? 0} legacy coding session(s) to the filesystem store.`)
@@ -161,7 +161,7 @@ export function useSessionHistory(workspacePath: string | null) {
       let stored: CodingSession[] = []
       if (window.electronAPI?.listCodingSessions) {
         try {
-          stored = (await window.electronAPI.listCodingSessions(workspacePath)) || []
+          stored = (await window.electronAPI.listCodingSessions({ workspacePath })) || []
         } catch (err: unknown) {
           logger.warn('useSessionHistory', `Could not load session history: ${errorMessage(err)}`)
         }
@@ -219,7 +219,7 @@ export function useSessionHistory(workspacePath: string | null) {
       await flushPendingWrites()
       if (window.electronAPI?.deleteCodingSession) {
         try {
-          await window.electronAPI.deleteCodingSession(sessionId, workspacePath)
+          await window.electronAPI.deleteCodingSession({ sessionId, workspacePath })
         } catch (err: unknown) {
           logger.warn('useSessionHistory', `Could not delete session ${sessionId}: ${errorMessage(err)}`)
         }
@@ -252,7 +252,7 @@ export function useSessionHistory(workspacePath: string | null) {
     await flushPendingWrites()
     if (window.electronAPI?.clearCodingSessions) {
       try {
-        await window.electronAPI.clearCodingSessions(workspacePath)
+        await window.electronAPI.clearCodingSessions({ workspacePath })
       } catch (err: unknown) {
         logger.warn('useSessionHistory', `Could not clear session history: ${errorMessage(err)}`)
       }

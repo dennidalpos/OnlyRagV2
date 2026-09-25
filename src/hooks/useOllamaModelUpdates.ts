@@ -80,7 +80,7 @@ export function useOllamaModelUpdates(ollamaHost?: string, onRefreshDiagnostics?
 
       try {
         logger.info('useOllamaModelUpdates', 'Checking model updates on user request...')
-        const results = await window.electronAPI.checkOllamaModelUpdates(customHost || ollamaHost)
+        const results = await window.electronAPI.checkOllamaModelUpdates({ host: customHost || ollamaHost })
 
         const availableMap: Record<string, boolean> = {}
         const infoMap: Record<string, OllamaModelUpdateInfo> = {}
@@ -135,7 +135,7 @@ export function useOllamaModelUpdates(ollamaHost?: string, onRefreshDiagnostics?
 
       try {
         logger.info('useOllamaModelUpdates', `Starting controlled update for model: ${modelName}`)
-        const res = await window.electronAPI.pullOllamaModel(modelName, ollamaHost)
+        const res = await window.electronAPI.pullOllamaModel({ modelName, host: ollamaHost })
         if (res.success) {
           clearModelUpdateAvailable(modelName)
           if (onRefreshDiagnostics) {

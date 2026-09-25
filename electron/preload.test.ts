@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { IElectronAPI } from '../shared/types'
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { IPC_EVENT_METHODS, IPC_INVOKE_METHODS, type IElectronAPI, type UnmappedIpcChannels } from '../shared/ipc/ipcContract'
 
 const electronMock = vi.hoisted(() => ({
   api: null as IElectronAPI | null,
@@ -49,8 +49,16 @@ describe('preload Ollama stream isolation', () => {
     const firstDone = vi.fn()
     const secondDone = vi.fn()
 
-    const first = electronMock.api!.generateOllamaStream('model', 'one', (chunk) => firstChunks.push(chunk), {}, undefined, 'stream-1', firstDone)
-    const second = electronMock.api!.generateOllamaStream('model', 'two', (chunk) => secondChunks.push(chunk), {}, undefined, 'stream-2', secondDone)
+    const first = electronMock.api!.generateOllamaStream(
+      { model: 'model', prompt: 'one', operationId: 'stream-1' },
+      (chunk) => firstChunks.push(chunk),
+      firstDone,
+    )
+    const second = electronMock.api!.generateOllamaStream(
+      { model: 'model', prompt: 'two', operationId: 'stream-2' },
+      (chunk) => secondChunks.push(chunk),
+      secondDone,
+    )
 
     emit('ollama:chunk', { operationId: 'stream-2', chunk: 'two' })
     emit('ollama:chunk', { operationId: 'stream-1', chunk: 'one' })
@@ -70,7 +78,7 @@ describe('preload Ollama stream isolation', () => {
   it('returns Main stream failures without converting them to success', async () => {
     electronMock.invoke.mockResolvedValue({ success: false, error: 'connection lost' })
 
-    await expect(electronMock.api!.generateOllamaStream('model', 'prompt', () => {}, {}, undefined, 'stream-failed')).resolves.toEqual({
+    await expect(electronMock.api!.generateOllamaStream({ model: 'model', prompt: 'prompt', operationId: 'stream-failed' }, () => {})).resolves.toEqual({
       success: false,
       error: 'connection lost',
     })
@@ -99,5 +107,27 @@ describe('preload Ollama stream isolation', () => {
     electronMock.invoke.mockResolvedValue(true)
     await expect(electronMock.api!.clearCodingAgentAuditLog!()).resolves.toBe(true)
     expect(electronMock.invoke).toHaveBeenCalledWith('diagnostics:clear-agent-audit-log')
+  })
+
+  it('sends one object payload per invoke and names the stream operation it generates', async () => {
+    electronMock.invoke.mockResolvedValue({ success: true })
+    await electronMock.api!.ingestFile({ filePath: 'C:/docs/a.pdf', numCtx: 8192, taskId: 'task-1' })
+    expect(electronMock.invoke).toHaveBeenLastCalledWith('ingest:file', { filePath: 'C:/docs/a.pdf', numCtx: 8192, taskId: 'task-1' })
+
+    await electronMock.api!.generateOllamaStream({ model: 'model', prompt: 'prompt' }, () => {})
+    expect(electronMock.invoke).toHaveBeenLastCalledWith('ollama:generate-stream', {
+      model: 'model',
+      prompt: 'prompt',
+      operationId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    })
+  })
+
+  it('exposes every contract method', () => {
+    // Checked by the compiler: a channel declared in the contract without a method fails the typecheck.
+    expectTypeOf<UnmappedIpcChannels['invoke']>().toEqualTypeOf<never>()
+    expectTypeOf<UnmappedIpcChannels['event']>().toEqualTypeOf<never>()
+    for (const method of [...Object.keys(IPC_INVOKE_METHODS), ...Object.keys(IPC_EVENT_METHODS), 'generateOllamaStream', 'respondAgentSkillInstall']) {
+      expect(typeof electronMock.api![method as keyof IElectronAPI], method).toBe('function')
+    }
   })
 })

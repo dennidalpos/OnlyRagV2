@@ -1,4 +1,4 @@
-import type { AgentCompletionEvidence, AgentCompletionStatus, AgentVerificationEvidence, AppSettings } from '../../../shared/types'
+import type { AgentApprovalPayload, AgentCompletionEvidence, AgentCompletionStatus, AgentVerificationEvidence, AppSettings } from '../../../shared/types'
 import { isCompletionMilestoneTitle, type GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { decideVerificationGate } from '../domain/agent/verificationGatePolicy'
@@ -51,7 +51,7 @@ export interface ApplicationClosureContext {
   lastVerification?: AgentVerificationEvidence
   recordVerificationEvidence?: (evidence: AgentVerificationEvidence) => void
   nonRollbackEffects?: readonly string[]
-  requestApproval?: (approvalPayload: Record<string, unknown>) => Promise<ApprovalResponse>
+  requestApproval?: (approvalPayload: AgentApprovalPayload) => Promise<ApprovalResponse>
   workspaceTransaction?: DisposableAgentWorkspace
   signal?: AbortSignal
 }

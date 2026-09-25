@@ -6,23 +6,23 @@ export function registerProjectRegistryIpcHandlers() {
     return projectRegistryAppService.listProjects()
   })
 
-  ipcMain.handle('projects:register', async (_event: unknown, projectPath: string, name?: string) => {
+  ipcMain.handle('projects:register', async (_event, { projectPath, name }) => {
     return projectRegistryAppService.registerProject(projectPath, name)
   })
 
-  ipcMain.handle('projects:touch', async (_event: unknown, projectPath: string) => {
+  ipcMain.handle('projects:touch', async (_event, { projectPath }) => {
     return projectRegistryAppService.touchProject(projectPath)
   })
 
-  ipcMain.handle('projects:rename', async (_event: unknown, projectPath: string, name: string) => {
+  ipcMain.handle('projects:rename', async (_event, { projectPath, name }) => {
     return projectRegistryAppService.renameProject(projectPath, name)
   })
 
-  ipcMain.handle('projects:remove', async (_event: unknown, projectPath: string) => {
+  ipcMain.handle('projects:remove', async (_event, { projectPath }) => {
     return projectRegistryAppService.removeProject(projectPath)
   })
 
-  ipcMain.handle('projects:migrate-legacy', async (_event: unknown, rawProjects: unknown) => {
-    return projectRegistryAppService.migrateLegacyProjects(rawProjects)
+  ipcMain.handle('projects:migrate-legacy', async (_event, { projects }) => {
+    return projectRegistryAppService.migrateLegacyProjects(projects)
   })
 }

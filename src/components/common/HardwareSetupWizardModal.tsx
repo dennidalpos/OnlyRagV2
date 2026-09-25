@@ -198,7 +198,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     if (step === 3 && missingModels.length > 0 && window.electronAPI?.checkDiskSpace) {
       setIsCheckingDisk(true)
       window.electronAPI
-        .checkDiskSpace(missingModels)
+        .checkDiskSpace({ models: missingModels })
         .then((res) => {
           setDiskCheck(res)
           setIsCheckingDisk(false)
@@ -286,7 +286,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       setPullProgressPercent(0)
 
       try {
-        const res = await window.electronAPI.pullOllamaModel(modelToPull, settings.ollamaHost)
+        const res = await window.electronAPI.pullOllamaModel({ modelName: modelToPull, host: settings.ollamaHost })
         if (isCancelledRef.current) {
           hasError = true
           break

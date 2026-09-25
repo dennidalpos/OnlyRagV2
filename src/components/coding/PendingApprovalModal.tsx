@@ -2,30 +2,20 @@ import React from 'react'
 import { Modal } from '../common/Modal'
 import { AlertTriangle, Check, X, FileCode } from 'lucide-react'
 import { useTranslation } from '../../i18n'
-import type { UntrustedJson } from '../../types'
+import type { AgentApprovalRequest } from '../../types'
 import { computeLineDiff, countDiffLines, groupDiffIntoHunks, type DiffLine, type DiffHunkGroup } from '../../../shared/domain/agent/diffEngine'
 import { projectPendingChange, type PendingMutationType } from '../../../shared/domain/agent/pendingChangeProjection'
 import { DiffLinesView, ChangeCounts } from './DiffLinesView'
 
-interface PendingApproval {
-  sessionId: string
-  type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit'
-  target: string
-  contentOrCmd: string
-  replacement?: string
-  replacements?: { targetContent: string; replacementContent: string }[]
-  parameters?: Record<string, UntrustedJson>
-}
-
 interface PendingApprovalModalProps {
-  pendingApproval: PendingApproval | null
+  pendingApproval: AgentApprovalRequest | null
   /** Accepts all, or the selected hunk indices for a partial approval. */
   onApprove: (approvedHunkIndices?: number[]) => void
   onReject: () => void
 }
 
 /** The action types whose effect on a file can be shown as a before/after diff. */
-const FILE_MUTATION_TYPES: PendingApproval['type'][] = ['write_file', 'replace_chunk', 'multi_replace', 'delete_file']
+const FILE_MUTATION_TYPES: AgentApprovalRequest['type'][] = ['write_file', 'replace_chunk', 'multi_replace', 'delete_file']
 
 export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({ pendingApproval, onApprove, onReject }) => {
   const { t } = useTranslation()

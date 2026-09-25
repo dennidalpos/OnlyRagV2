@@ -50,7 +50,7 @@ export function useSlmOrchestration(): UseSlmOrchestrationReturn {
     setAnalyzeLogsError(null)
 
     try {
-      const report = await window.electronAPI.agentLogsAnalyze!(extraPaths)
+      const report = await window.electronAPI.agentLogsAnalyze({ extraPaths })
       if (mountedRef.current) {
         setLastReport(report)
       }

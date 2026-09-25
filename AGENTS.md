@@ -29,7 +29,7 @@ Run from repository root in PowerShell. On 2026-09-25 on Windows: `npm run docs:
 
 ## Architecture
 
-- `src/` (Renderer) and `electron/` (Main) import shared code only from `shared/`.
+- `src/` (Renderer) and `electron/` (Main) import shared code only from `shared/`. Every IPC channel is declared once in `shared/ipc/ipcContract.ts` (one object payload or none); the preload, `secureIpcMain.handle` and `IElectronAPI` derive from it.
 - Main layers: `electron/core/{presentation,application,domain,infrastructure}`. Domain is pure; ports live in `domain/ports/`, adapters in Infrastructure (Electron adapters in `infrastructure/electron/`). Application and Domain never import `electron` or `node:fs`; `scripts/check_layering.mjs` (run by `npm run quality:static`) enforces it. Application may import Infrastructure adapters directly; add a port only for an enforced boundary or a second implementation.
 - The Main logger is `electron/core/infrastructure/logging/logger.ts`; `electron/diagnostics.ts` only holds hardware/Ollama probes; Application reaches them through `HardwareProbePort` (adapter `electron/core/infrastructure/diagnostics/hardwareProbe.ts`), enforced by `scripts/check_layering.mjs`.
 - `electron/core/infrastructure/http/sidecarHttpClient.ts` centralizes HTTP I/O to `:8000` and sends the per-launch `X-OnlyRag-Token` that `sidecarProcessManager` passes to the Sidecar; only `/health` is exempt.

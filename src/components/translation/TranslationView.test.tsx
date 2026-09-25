@@ -81,7 +81,7 @@ describe('TranslationView in-place job lifecycle', () => {
     await click(tab(/Layout-Preserving/))
     expect(container.textContent).toContain('40')
     await click(button(/^Cancel$/))
-    expect(cancelTask).toHaveBeenCalledWith('translate-1')
+    expect(cancelTask).toHaveBeenCalledWith({ taskId: 'translate-1' })
 
     await act(async () => finishTranslation({ success: false, error: 'socket hang up' }))
     expect(container.textContent).toContain('Translation cancelled')

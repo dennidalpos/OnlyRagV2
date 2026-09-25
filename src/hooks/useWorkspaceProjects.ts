@@ -24,7 +24,7 @@ async function migrateLegacyProjects(): Promise<void> {
 
   try {
     const parsed = JSON.parse(raw)
-    const res = await window.electronAPI.migrateLegacyProjects(parsed)
+    const res = await window.electronAPI.migrateLegacyProjects({ projects: parsed })
     localStorage.removeItem(LEGACY_PROJECTS_STORAGE_KEY)
     localStorage.setItem(MIGRATION_FLAG_KEY, 'done')
     logger.info('useWorkspaceProjects', `Migrated ${res?.migrated ?? 0} legacy project(s) to the main-process registry.`)
@@ -120,9 +120,9 @@ export function useWorkspaceProjects(settings?: AppSettings) {
       void (async () => {
         if (!window.electronAPI?.touchProject) return
         try {
-          let entry = await window.electronAPI.touchProject(cleanPath)
+          let entry = await window.electronAPI.touchProject({ projectPath: cleanPath })
           if (!entry && window.electronAPI.registerProject) {
-            entry = await window.electronAPI.registerProject(cleanPath)
+            entry = await window.electronAPI.registerProject({ projectPath: cleanPath })
           }
           if (entry) {
             const confirmed = entry
@@ -150,7 +150,7 @@ export function useWorkspaceProjects(settings?: AppSettings) {
     setProjects((prev) => prev.map((p) => (p.path === projectPath ? { ...p, name: cleanName } : p)))
     if (window.electronAPI?.renameProject) {
       try {
-        await window.electronAPI.renameProject(projectPath, cleanName)
+        await window.electronAPI.renameProject({ projectPath, name: cleanName })
       } catch (err: unknown) {
         logger.warn('useWorkspaceProjects', `Could not rename project in registry: ${errorMessage(err)}`)
       }
@@ -161,7 +161,7 @@ export function useWorkspaceProjects(settings?: AppSettings) {
     if (!projectPath || !projectPath.trim()) return
     if (window.electronAPI?.openPath) {
       try {
-        await window.electronAPI.openPath(projectPath.trim())
+        await window.electronAPI.openPath({ targetPath: projectPath.trim() })
       } catch (err: unknown) {
         logger.warn('useWorkspaceProjects', `Could not open project path: ${errorMessage(err)}`)
       }
@@ -171,7 +171,7 @@ export function useWorkspaceProjects(settings?: AppSettings) {
   const handleRemoveProject = useCallback(
     (pathStr: string) => {
       if (window.electronAPI?.removeProjectFromRegistry) {
-        window.electronAPI.removeProjectFromRegistry(pathStr).catch((err: unknown) => {
+        window.electronAPI.removeProjectFromRegistry({ projectPath: pathStr }).catch((err: unknown) => {
           logger.warn('useWorkspaceProjects', `Could not remove project from registry: ${errorMessage(err)}`)
         })
       }

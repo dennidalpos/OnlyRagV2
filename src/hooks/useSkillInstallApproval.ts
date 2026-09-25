@@ -23,7 +23,7 @@ export function useSkillInstallApproval(settings?: AppSettings, activeRunIdentit
   const respond = useCallback(
     (requestId: string, approved: boolean) => {
       const request = pendingRequests.find((candidate) => candidate.requestId === requestId)
-      if (request) window.electronAPI?.respondAgentSkillInstall?.(requestId, approved, request)
+      if (request) window.electronAPI?.respondAgentSkillInstall?.({ ...request, requestId, approved })
       setPendingRequests((prev) => prev.filter((req) => req.requestId !== requestId))
     },
     [pendingRequests],

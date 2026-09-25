@@ -80,12 +80,12 @@ export class WorkspaceAppService {
     return webClient.fetchWebContent(url, maxChars)
   }
 
-  async downloadFile(url: string, targetFilePath: string, workspaceRoot?: string) {
-    const policyError = await this.networkPolicyError('download_file', 'download', url, workspaceRoot)
+  async downloadFile(url: string, targetFilePath: string) {
+    const policyError = await this.networkPolicyError('download_file', 'download', url)
     if (policyError) {
       return { success: false, error: policyError }
     }
-    return webClient.downloadFile(url, targetFilePath, workspaceRoot)
+    return webClient.downloadFile(url, targetFilePath)
   }
 
   private async networkPolicyError(toolName: string, operation: 'connect' | 'download', target: string, workspaceRoot?: string): Promise<string | null> {

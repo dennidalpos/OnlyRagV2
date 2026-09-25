@@ -29,7 +29,7 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({ isOpen, on
     setIsSearching(true)
     setError(null)
     try {
-      const res = await electronApi().searchVectorDb(query.trim(), topK)
+      const res = await electronApi().searchVectorDb({ query: query.trim(), topK })
       setResults(res || [])
       setHasSearched(true)
     } catch (err: unknown) {

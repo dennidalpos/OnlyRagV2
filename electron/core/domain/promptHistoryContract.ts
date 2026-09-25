@@ -18,14 +18,3 @@ export const promptHistorySearchPayloadSchema = z.object({
   topK: z.number().int().min(1).max(100).optional(),
   projectPaths: z.array(z.string().trim().min(1).max(4096)).max(100).optional(),
 })
-
-export type PromptHistoryIndexPayload = z.infer<typeof promptHistoryIndexPayloadSchema>
-export type PromptHistorySearchPayload = z.infer<typeof promptHistorySearchPayloadSchema>
-
-export function parsePromptHistoryIndexPayload(payload: unknown): PromptHistoryIndexPayload {
-  return promptHistoryIndexPayloadSchema.parse(payload)
-}
-
-export function parsePromptHistorySearchPayload(query: unknown, topK: unknown, projectPaths: unknown): PromptHistorySearchPayload {
-  return promptHistorySearchPayloadSchema.parse({ query, topK, projectPaths })
-}

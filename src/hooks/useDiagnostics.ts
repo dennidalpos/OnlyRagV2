@@ -25,7 +25,7 @@ export function useDiagnostics(
   const runDiagnosticsScan = useCallback(async () => {
     setIsScanning(true)
     try {
-      const data = await electronApi().runDiagnostics(settings.ollamaHost)
+      const data = await electronApi().runDiagnostics({ host: settings.ollamaHost })
       if (data) {
         setDiagnostics(data)
 

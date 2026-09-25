@@ -262,7 +262,7 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     const operationId = activeStreamIdRef.current
     if (operationId && window.electronAPI?.cancelOllamaStream) {
       try {
-        await window.electronAPI.cancelOllamaStream(operationId)
+        await window.electronAPI.cancelOllamaStream({ operationId })
       } catch (err: unknown) {
         logger.warn('useTranslation', `Error cancelling Ollama stream: ${errorMessage(err)}`)
       }
@@ -335,17 +335,13 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
           trackOperation(operationId)
           try {
             const result = await window.electronAPI.generateOllamaStream(
-              generation.model,
-              prompt,
+              { model: generation.model, prompt, options: { num_ctx: generation.numCtx, think: generation.think }, host: settings?.ollamaHost, operationId },
               (c) => {
                 if (abortTranslationRef.current) return
                 currentChunkTranslation += c
                 const livePreview = accumulatedResults + (accumulatedResults ? '\n\n' : '') + currentChunkTranslation
                 setTranslatedMarkdown(livePreview)
               },
-              { num_ctx: generation.numCtx, think: generation.think },
-              settings?.ollamaHost,
-              operationId,
             )
             if (!result.success) throw new Error(result.error || 'Ollama translation failed.')
             if (!currentChunkTranslation.trim()) throw new Error('Ollama returned an empty translation.')
@@ -377,7 +373,7 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     if (!isTranslationComplete || !translatedMarkdown.trim()) return
     setExportMessage(t('translation.exportPreparing', { format: format.toUpperCase() }))
     try {
-      const res = await electronApi().exportDocument(translatedMarkdown, format, settings?.translationOutputFolder)
+      const res = await electronApi().exportDocument({ markdownContent: translatedMarkdown, format, outputFolder: settings?.translationOutputFolder })
       if (res.success) {
         setExportMessage(res.message || t('translation.exportSuccess', { format: format.toUpperCase() }))
       } else {
@@ -394,7 +390,7 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
   const handleResetTranslation = () => {
     abortTranslationRef.current = true
     if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
-      window.electronAPI.cancelOllamaStream(activeStreamIdRef.current).catch(() => {})
+      window.electronAPI.cancelOllamaStream({ operationId: activeStreamIdRef.current }).catch(() => {})
     }
     setIsTranslating(false)
     setIsTranslationComplete(false)
@@ -518,15 +514,15 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
     cancelRequestedRef.current = false
 
     try {
-      const res = await electronApi().translateDocumentInplace(
-        docToTranslate.id,
+      const res = await electronApi().translateDocumentInplace({
+        docId: docToTranslate.id,
         sourceLang,
         targetLang,
-        generation.model,
+        model: generation.model,
         targetDir,
-        generation.numCtx,
-        generation.think,
-      )
+        numCtx: generation.numCtx,
+        think: generation.think,
+      })
 
       if (cancelRequestedRef.current && !(res.success && res.data)) {
         setStatus({ success: false, message: t('translation.inplaceCancelled') })
@@ -563,7 +559,7 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
     if (!taskId || !window.electronAPI?.cancelTask) return
     cancelRequestedRef.current = true
     setIsCancelling(true)
-    await window.electronAPI.cancelTask(taskId)
+    await window.electronAPI.cancelTask({ taskId })
   }
 
   return {

@@ -33,7 +33,7 @@ export const ArtifactPreviewPanel: React.FC<ArtifactPreviewPanelProps> = ({ work
 
   const loadArtifacts = useCallback(async () => {
     if (!workspacePath || !window.electronAPI?.listArtifacts) return
-    const next = await window.electronAPI.listArtifacts(workspacePath)
+    const next = await window.electronAPI.listArtifacts({ workspacePath })
     setArtifacts(next)
     if (selectedId && next.some((artifact) => artifact.id === selectedId)) return
     const first = next[0]
@@ -67,7 +67,7 @@ export const ArtifactPreviewPanel: React.FC<ArtifactPreviewPanelProps> = ({ work
     if (!workspacePath || !window.electronAPI?.saveArtifact || !name.trim()) return
     setIsSaving(true)
     try {
-      const saved = await window.electronAPI.saveArtifact(workspacePath, { id: selectedId || undefined, name, kind, content: draft })
+      const saved = await window.electronAPI.saveArtifact({ workspacePath, input: { id: selectedId || undefined, name, kind, content: draft } })
       setArtifacts((current) => [saved, ...current.filter((artifact) => artifact.id !== saved.id)].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
       setSelectedId(saved.id)
     } finally {
@@ -77,7 +77,7 @@ export const ArtifactPreviewPanel: React.FC<ArtifactPreviewPanelProps> = ({ work
 
   const remove = async () => {
     if (!workspacePath || !selectedId || !window.electronAPI?.deleteArtifact) return
-    if (!(await window.electronAPI.deleteArtifact(workspacePath, selectedId))) return
+    if (!(await window.electronAPI.deleteArtifact({ workspacePath, artifactId: selectedId }))) return
     setArtifacts((current) => current.filter((artifact) => artifact.id !== selectedId))
     createArtifact()
   }

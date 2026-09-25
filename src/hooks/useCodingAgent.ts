@@ -51,7 +51,7 @@ export function useCodingAgent(settings?: AppSettings) {
   const handleRevealStandaloneWorkspace = useCallback(async () => {
     if (!isStandaloneMode || !workspacePath || !window.electronAPI?.openPath) return
     try {
-      await window.electronAPI.openPath(workspacePath)
+      await window.electronAPI.openPath({ targetPath: workspacePath })
     } catch (err: unknown) {
       addActionLog('info', t('agentRun.scratchOpenFailed', { message: errorMessage(err) }))
     }
@@ -62,7 +62,7 @@ export function useCodingAgent(settings?: AppSettings) {
     if (!isStandaloneMode || !api?.exportStandaloneScratchWorkspace || !api.openDirectoryDialog) return
     const destination = await api.openDirectoryDialog({ title: t('agentRun.scratchExportTitle') })
     if (!destination) return
-    const result = await api.exportStandaloneScratchWorkspace(destination)
+    const result = await api.exportStandaloneScratchWorkspace({ destinationDirectory: destination })
     if (result.success && result.path) {
       addActionLog('info', t('agentRun.scratchExported', { path: result.path }))
     } else {

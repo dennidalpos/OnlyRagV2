@@ -366,7 +366,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
 
   const handleOpenExternal = (url: string) => {
     if (window.electronAPI?.openExternalUrl) {
-      window.electronAPI.openExternalUrl(url)
+      window.electronAPI.openExternalUrl({ url })
     } else {
       window.open(url, '_blank', 'noopener,noreferrer')
     }

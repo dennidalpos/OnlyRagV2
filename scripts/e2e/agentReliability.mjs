@@ -190,8 +190,12 @@ async function launchApplication() {
   return { application, page }
 }
 
-async function api(page, method, ...args) {
-  return page.evaluate(({ methodName, parameters }) => window.electronAPI[methodName](...parameters), { methodName: method, parameters: args })
+/** Calls one `window.electronAPI` method with its single object payload (or none). */
+async function api(page, method, payload) {
+  return page.evaluate(({ methodName, argument }) => (argument === undefined ? window.electronAPI[methodName]() : window.electronAPI[methodName](argument)), {
+    methodName: method,
+    argument: payload,
+  })
 }
 
 async function waitForStep(page, runId, statusText) {
@@ -265,8 +269,8 @@ try {
   ;({ application, page } = await launchApplication())
 
   console.log('[1/8] project and session switching')
-  await api(page, 'registerProject', workspaceRoot, 'Workspace One')
-  await api(page, 'registerProject', secondWorkspace, 'Workspace Two')
+  await api(page, 'registerProject', { projectPath: workspaceRoot, name: 'Workspace One' })
+  await api(page, 'registerProject', { projectPath: secondWorkspace, name: 'Workspace Two' })
   const now = new Date().toISOString()
   await api(page, 'saveCodingSession', {
     id: 'session-one',
@@ -287,24 +291,29 @@ try {
     executedPrompts: [],
   })
   assert.deepEqual(
-    (await api(page, 'listCodingSessions', workspaceRoot)).map((entry) => entry.id),
+    (await api(page, 'listCodingSessions', { workspacePath: workspaceRoot })).map((entry) => entry.id),
     ['session-one'],
   )
   assert.deepEqual(
-    (await api(page, 'listCodingSessions', secondWorkspace)).map((entry) => entry.id),
+    (await api(page, 'listCodingSessions', { workspacePath: secondWorkspace })).map((entry) => entry.id),
     ['session-two'],
   )
-  assert.equal((await api(page, 'touchProject', workspaceRoot)).path, workspaceRoot)
-  assert.equal((await api(page, 'touchProject', secondWorkspace)).path, secondWorkspace)
+  assert.equal((await api(page, 'touchProject', { projectPath: workspaceRoot })).path, workspaceRoot)
+  assert.equal((await api(page, 'touchProject', { projectPath: secondWorkspace })).path, secondWorkspace)
 
   console.log('[2/8] stale saves, spaced paths, and symlink escapes')
   const spacedFile = path.join(workspaceRoot, 'folder with spaces', 'note file.txt')
   fs.mkdirSync(path.dirname(spacedFile), { recursive: true })
   fs.writeFileSync(spacedFile, 'version one', 'utf8')
-  const read = await api(page, 'readWorkspaceFile', spacedFile)
+  const read = await api(page, 'readWorkspaceFile', { filePath: spacedFile })
   assert.equal(read.success, true)
   fs.writeFileSync(spacedFile, 'external version', 'utf8')
-  const stale = await api(page, 'writeWorkspaceFile', spacedFile, 'stale editor version', read.contentHash, workspaceRoot)
+  const stale = await api(page, 'writeWorkspaceFile', {
+    filePath: spacedFile,
+    content: 'stale editor version',
+    expectedContentHash: read.contentHash,
+    workspaceRoot,
+  })
   assert.equal(stale.success, false)
   assert.equal(stale.conflict, true)
   assert.equal(fs.readFileSync(spacedFile, 'utf8'), 'external version')
@@ -312,7 +321,7 @@ try {
   const escape = path.join(workspaceRoot, 'escape-link')
   fs.mkdirSync(outside, { recursive: true })
   fs.symlinkSync(outside, escape, process.platform === 'win32' ? 'junction' : 'dir')
-  const escapedWrite = await api(page, 'writeWorkspaceFile', path.join(escape, 'blocked.txt'), 'blocked', undefined, workspaceRoot)
+  const escapedWrite = await api(page, 'writeWorkspaceFile', { filePath: path.join(escape, 'blocked.txt'), content: 'blocked', workspaceRoot })
   assert.equal(escapedWrite.success, false)
   assert.match(escapedWrite.error || '', /Symlink or junction escape blocked/i)
   assert.equal(fs.existsSync(path.join(outside, 'blocked.txt')), false)
@@ -320,9 +329,12 @@ try {
   console.log('[3/8] standalone artifacts')
   const scratchPath = (await api(page, 'getStandaloneScratchWorkspace')).path
   assert.equal(scratchPath, path.join(userData, 'agent-scratch'))
-  const artifact = await api(page, 'saveArtifact', scratchPath, { name: 'standalone-report', kind: 'markdown', content: '# Persisted artifact' })
-  assert.equal((await api(page, 'getArtifact', scratchPath, artifact.id)).content, '# Persisted artifact')
-  assert((await api(page, 'listArtifacts', scratchPath)).some((entry) => entry.id === artifact.id))
+  const artifact = await api(page, 'saveArtifact', {
+    workspacePath: scratchPath,
+    input: { name: 'standalone-report', kind: 'markdown', content: '# Persisted artifact' },
+  })
+  assert.equal((await api(page, 'getArtifact', { workspacePath: scratchPath, artifactId: artifact.id })).content, '# Persisted artifact')
+  assert((await api(page, 'listArtifacts', { workspacePath: scratchPath })).some((entry) => entry.id === artifact.id))
 
   console.log('[4/8] missing-model preflight')
   const missingIdentity = identity('missing-model')
@@ -406,14 +418,14 @@ try {
   execFileSync('git', ['add', 'tracked.txt'], { cwd: gitWorkspace })
   execFileSync('git', ['commit', '-m', 'baseline'], { cwd: gitWorkspace, stdio: 'ignore' })
   fs.writeFileSync(path.join(gitWorkspace, 'tracked.txt'), 'user dirty change\n', 'utf8')
-  const beforeStatus = await api(page, 'getGitStatusAndDiff', gitWorkspace)
+  const beforeStatus = await api(page, 'getGitStatusAndDiff', { workspaceRoot: gitWorkspace })
   serverState.chatBehaviors.push({ type: 'prose', content: 'The source workspace remains unchanged.' })
   const dirtyIdentity = identity('dirty-git', gitWorkspace)
   await startTask(page, dirtyIdentity, { workspacePath: gitWorkspace })
   const dirtyDone = await waitForDone(page, dirtyIdentity.runId)
   assert.equal(dirtyDone.success, true)
   await waitForQueueIdle(page)
-  const afterStatus = await api(page, 'getGitStatusAndDiff', gitWorkspace)
+  const afterStatus = await api(page, 'getGitStatusAndDiff', { workspaceRoot: gitWorkspace })
   assert.deepEqual(afterStatus.statusLines, beforeStatus.statusLines)
   assert.equal(fs.readFileSync(path.join(gitWorkspace, 'tracked.txt'), 'utf8'), 'user dirty change\n')
 
@@ -435,7 +447,11 @@ try {
   page = undefined
   releasePendingResponses()
   ;({ application, page } = await launchApplication())
-  const persisted = await api(page, 'agentGetPlanState', crashIdentity.conversationId, scratchPath, crashIdentity.planRevisionId)
+  const persisted = await api(page, 'agentGetPlanState', {
+    sessionId: crashIdentity.conversationId,
+    workspacePath: scratchPath,
+    planRevisionId: crashIdentity.planRevisionId,
+  })
   assert(persisted)
   assert.equal(persisted.status, 'IN_PROGRESS')
   assert(persisted.stepCount >= 1)

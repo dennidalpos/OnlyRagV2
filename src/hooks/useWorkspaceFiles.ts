@@ -59,7 +59,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
       }
       if (!window.electronAPI) return
       try {
-        setFiles(await window.electronAPI.listWorkspaceFiles(targetPath))
+        setFiles(await window.electronAPI.listWorkspaceFiles({ dirPath: targetPath }))
       } catch (err: unknown) {
         logger.warn('useWorkspaceFiles', `Error loading workspace files: ${errorMessage(err)}`)
       }
@@ -77,7 +77,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
       if (!window.electronAPI) return
 
       try {
-        const res = await window.electronAPI.readWorkspaceFile(file.path)
+        const res = await window.electronAPI.readWorkspaceFile({ filePath: file.path })
         if (latestRequestedPathRef.current !== requestedPath) return
 
         if (res.success && res.content !== undefined) {
@@ -124,7 +124,12 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
 
   const handleSaveFile = useCallback(async () => {
     if (!selectedFile || !window.electronAPI) return
-    const res = await window.electronAPI.writeWorkspaceFile(selectedFile.path, editorContent, loadedContentHash, workspacePath || undefined)
+    const res = await window.electronAPI.writeWorkspaceFile({
+      filePath: selectedFile.path,
+      content: editorContent,
+      expectedContentHash: loadedContentHash,
+      workspaceRoot: workspacePath || undefined,
+    })
     if (res.success) {
       setOriginalContent(editorContent)
       setIsSaved(true)
@@ -164,12 +169,12 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
 
   const handleOverwriteConflict = useCallback(async () => {
     if (!saveConflict || !window.electronAPI) return
-    const res = await window.electronAPI.writeWorkspaceFile(
-      saveConflict.filePath,
-      saveConflict.localContent,
-      saveConflict.diskContentHash,
-      workspacePath || undefined,
-    )
+    const res = await window.electronAPI.writeWorkspaceFile({
+      filePath: saveConflict.filePath,
+      content: saveConflict.localContent,
+      expectedContentHash: saveConflict.diskContentHash,
+      workspaceRoot: workspacePath || undefined,
+    })
     if (res.success) {
       setEditorContent(saveConflict.localContent)
       setOriginalContent(saveConflict.localContent)
@@ -281,7 +286,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
       }
       if (!event.contentHash || event.contentHash === loadedContentHash) return
 
-      const result = await api.readWorkspaceFile(event.filePath)
+      const result = await api.readWorkspaceFile({ filePath: event.filePath })
       if (!result.success || result.content === undefined || !result.contentHash) return
       if (isSaved) {
         setEditorContent(result.content)

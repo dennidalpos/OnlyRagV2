@@ -11,7 +11,7 @@ describe('useWorkspaceFiles', () => {
   let workspace: ReturnType<typeof useWorkspaceFiles>
   const pendingReads = new Map<string, (content: string) => void>()
   const readWorkspaceFile = vi.fn(
-    (filePath: string) =>
+    ({ filePath }: { filePath: string }) =>
       new Promise((resolve) => {
         pendingReads.set(filePath, (content) => resolve({ success: true, content, contentHash: `hash:${content}` }))
       }),

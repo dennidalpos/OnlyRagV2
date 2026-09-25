@@ -1,6 +1,6 @@
 import type { AgentToolCall, SupportedToolName } from '../domain/agent/agentTypes'
 import type { AgentTaskResult } from '../domain/agent/agentTypes'
-import type { AgentGuardEvent } from '../../../shared/types'
+import type { AgentApprovalPayload, AgentGuardEvent } from '../../../shared/types'
 import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
@@ -17,7 +17,7 @@ import { parseShellFileRead } from '../domain/agent/shellFileRead'
 
 import type { EmitLog } from './agentOrchestratorTypes'
 
-type RequestApproval = (payload: Record<string, unknown>) => Promise<ApprovalResponse>
+type RequestApproval = (payload: AgentApprovalPayload) => Promise<ApprovalResponse>
 
 export interface ToolGateContext {
   parsedTool: AgentToolCall
@@ -98,7 +98,7 @@ async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | null
   return { ...parsedTool, parameters: commitParameters }
 }
 
-function approvalTypeForTool(tool: string): string {
+function approvalTypeForTool(tool: string): AgentApprovalPayload['type'] {
   if (tool === 'run_command' || tool === 'ensure_tool') return 'terminal_cmd'
   if (tool === 'download_file') return 'download_file'
   if (tool === 'delete_file') return 'delete_file'
@@ -162,7 +162,7 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
       requiresNetwork && 'network access',
       requiresInstall && 'external installation',
       requiresGuided && 'Guided review',
-    ].filter(Boolean),
+    ].filter((reason): reason is string => Boolean(reason)),
   })
   if (!approval.approved) {
     const feedback = `[USER DENIED] L'utente ha rifiutato l'azione proposta (${toolCall.tool} su "${target}").`

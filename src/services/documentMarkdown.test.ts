@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getIngestedDocument = vi.fn()
-vi.mock('./electronApi', () => ({ electronApi: () => ({ getIngestedDocument: (docId: string) => getIngestedDocument(docId) }) }))
+vi.mock('./electronApi', () => ({ electronApi: () => ({ getIngestedDocument: ({ docId }: { docId: string }) => getIngestedDocument(docId) }) }))
 
 import { clearDocumentMarkdownCache, loadDocumentMarkdown, peekDocumentMarkdown, primeDocumentMarkdown } from './documentMarkdown'
 

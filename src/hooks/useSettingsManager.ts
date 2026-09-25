@@ -21,7 +21,7 @@ export function useSettingsManager(
     setIsPulling(true)
     setPullMessage(`Pulling ${pullModelInput}...`)
     try {
-      const res = await window.electronAPI.pullOllamaModel(pullModelInput.trim(), settings.ollamaHost)
+      const res = await window.electronAPI.pullOllamaModel({ modelName: pullModelInput.trim(), host: settings.ollamaHost })
       if (res.success) {
         setPullMessage(`Successfully pulled ${pullModelInput}`)
         setPullModelInput('')
@@ -39,7 +39,7 @@ export function useSettingsManager(
   /** Confirmation belongs to the UI, not here: the caller asks in place (see InlineDestructiveConfirm), so this used to raise a SECOND, native prompt on top of the one the user had already answered. */
   const handleDeleteModel = async (modelName: string) => {
     if (!window.electronAPI) return
-    const res = await window.electronAPI.deleteOllamaModel(modelName, settings.ollamaHost)
+    const res = await window.electronAPI.deleteOllamaModel({ modelName, host: settings.ollamaHost })
     if (res.success) {
       setPullMessage(`Deleted ${modelName}`)
       onRefreshDiagnostics()
@@ -50,7 +50,7 @@ export function useSettingsManager(
 
   const handleUnloadModel = async (modelName: string) => {
     if (!window.electronAPI?.unloadModel) return
-    const res = await window.electronAPI.unloadModel(modelName, settings.ollamaHost)
+    const res = await window.electronAPI.unloadModel({ modelName, host: settings.ollamaHost })
     if (res?.success) {
       setPullMessage(translate('services.modelUnloaded', { model: modelName }))
       onRefreshDiagnostics()

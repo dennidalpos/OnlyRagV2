@@ -26,7 +26,7 @@ export const SourcePagePreview: React.FC<SourcePagePreviewProps> = ({ docId, pag
     const loadPreview = async () => {
       setIsLoading(true)
       try {
-        const previewData = await electronApi().getDocumentPagePreview(docId, pageNumber)
+        const previewData = await electronApi().getDocumentPagePreview({ docId, pageNumber })
         if (isMounted && previewData && previewData.imageBase64) {
           setImageBase64(previewData.imageBase64)
         } else if (isMounted) {

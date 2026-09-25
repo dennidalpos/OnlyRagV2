@@ -68,7 +68,7 @@ export async function runDocumentDeletion(
   id: string,
   onFailure: (message?: string) => void,
   onSuccess: () => void,
-  deleteDocument: (docId: string) => Promise<{ success: boolean; error?: string }> = (docId) => electronApi().deleteIngestedDocument(docId),
+  deleteDocument: (docId: string) => Promise<{ success: boolean; error?: string }> = (docId) => electronApi().deleteIngestedDocument({ docId }),
 ): Promise<boolean> {
   const result = await deleteDocument(id)
   if (!result.success) {
@@ -168,7 +168,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     const taskId = activeTaskIdRef.current
     if (!taskId) return
     if (window.electronAPI?.cancelTask) {
-      await window.electronAPI.cancelTask(taskId)
+      await window.electronAPI.cancelTask({ taskId })
     }
     activeTaskIdRef.current = null
     setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 })
@@ -335,7 +335,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     if (!selectedDoc || !markdownContent) return
     setExportStatus({ active: true, message: t('ingestion.exportPreparing', { format: format.toUpperCase() }) })
     try {
-      const res = await electronApi().exportDocument(markdownContent, format)
+      const res = await electronApi().exportDocument({ markdownContent, format })
       if (res.success) {
         setExportStatus({ active: false, message: res.message || t('ingestion.exportSuccess', { format: format.toUpperCase() }) })
       } else {
@@ -452,16 +452,15 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         percent: 55,
       }))
 
-      const res = await electronApi().ingestFile(
-        targetFilePath,
-        settings?.visionModel,
+      const res = await electronApi().ingestFile({
+        filePath: targetFilePath,
+        visionModel: settings?.visionModel,
         visionPrompt,
-        false,
-        undefined,
-        resolveModelContextLength(visionModelName, settings?.modelContextLengths, hardwareDefault, modelMetrics[visionModelName]?.contextLength),
+        normalizeWithLlm: false,
+        numCtx: resolveModelContextLength(visionModelName, settings?.modelContextLengths, hardwareDefault, modelMetrics[visionModelName]?.contextLength),
         taskId,
-        false,
-      )
+        normalizationThink: false,
+      })
 
       if (activeTaskIdRef.current !== taskId) return
 
@@ -543,7 +542,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     setSaveStatus(null)
 
     try {
-      const res = await electronApi().updateIngestedDocument(selectedDoc.id, markdownContent)
+      const res = await electronApi().updateIngestedDocument({ docId: selectedDoc.id, markdownContent })
       if (res.success && res.data) {
         primeDocumentMarkdown(res.data)
         editorSourceRef.current = { id: res.data.id, ingestedAt: res.data.ingestedAt, markdown: res.data.extractedMarkdown }

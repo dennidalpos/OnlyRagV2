@@ -24,7 +24,7 @@ class FrontendLogger {
     }
 
     if (window.electronAPI?.logTelemetry) {
-      window.electronAPI.logTelemetry(level, category, message).catch(() => {})
+      window.electronAPI.logTelemetry({ level, category, message }).catch(() => {})
     }
   }
 

@@ -53,7 +53,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
     setTestResult(null)
 
     try {
-      const res = await electronApi().testOllamaConnection(targetHost)
+      const res = await electronApi().testOllamaConnection({ host: targetHost })
       if (res.success) {
         setTestResult({
           success: true,

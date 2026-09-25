@@ -1,11 +1,10 @@
 import { secureIpcMain as ipcMain } from './secureIpcMain'
-import type { LogLevel } from '../../../shared/types'
 import { diagnosticsAppService } from '../application/diagnosticsAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 
 export function registerDiagnosticsIpcHandlers() {
-  ipcMain.handle('diagnostics:run', async (_, host?: string) => {
-    return diagnosticsAppService.runDiagnostics(host)
+  ipcMain.handle('diagnostics:run', async (_, payload) => {
+    return diagnosticsAppService.runDiagnostics(payload?.host)
   })
 
   ipcMain.handle('diagnostics:get-logs', async () => {
@@ -25,7 +24,7 @@ export function registerDiagnosticsIpcHandlers() {
     return diagnosticsAppService.getLogFilePath()
   })
 
-  ipcMain.handle('diagnostics:log-telemetry', async (_, level: LogLevel, category: string, message: string) => {
+  ipcMain.handle('diagnostics:log-telemetry', async (_, { level, category, message }) => {
     diagnosticsAppService.logTelemetry(level, category, message)
     return true
   })

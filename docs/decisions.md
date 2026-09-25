@@ -4,7 +4,7 @@ Solo vincoli non ovvi che devono restare coerenti con il codice.
 
 | Decisione | Motivo | Implementazione |
 | --- | --- | --- |
-| Main e Renderer comunicano solo via Preload/IPC. | Riduce la superficie privilegiata del Renderer. | `electron/preload.ts`, `electron/core/presentation/`, `shared/`. |
+| Main e Renderer comunicano solo via Preload/IPC, con un contratto unico tipizzato e payload a oggetto. | Riduce la superficie privilegiata del Renderer; preload, handler e tipi Renderer non possono divergere. | `shared/ipc/ipcContract.ts`, `electron/preload.ts`, `electron/core/presentation/`. |
 | Una sola generazione Ollama Main alla volta. | Evita interferenze e pressione concorrente su VRAM/RAM. | `ollamaGenerationScheduler.ts`. |
 | Il piano eseguibile è JSON strutturato; Markdown è derivato. | Evita perdita di decisioni e milestone durante il parsing. | `planGenerationAppService.ts`, `AgentPlan`. |
 | Agent Coding usa Ask, Guided e Auto con una sola azione Esegui. | Separa analisi read-only, revisione predefinita e autonomia locale; i task complessi pianificano automaticamente. | `AgentModeSelector.tsx`, `automaticPlanningPolicy.ts`, `agentRuntimeMode.ts`. |

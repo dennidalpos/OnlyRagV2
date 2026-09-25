@@ -52,7 +52,7 @@ export function loadDocumentMarkdown(doc: DocumentKey): Promise<string | null> {
   if (pending) return pending
 
   const request = Promise.resolve()
-    .then(() => electronApi().getIngestedDocument(doc.id))
+    .then(() => electronApi().getIngestedDocument({ docId: doc.id }))
     .then((loaded) => {
       if (!loaded) return null
       const markdown = loaded.extractedMarkdown || ''

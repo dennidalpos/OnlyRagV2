@@ -1,4 +1,4 @@
-import type { IElectronAPI } from '../types'
+import type { IElectronAPI } from '../../shared/ipc/ipcContract'
 import { translate } from '../i18n/I18nContext'
 import { logger } from '../lib/logger'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'

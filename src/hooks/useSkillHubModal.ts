@@ -28,7 +28,10 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   const loadSourcesAndSkills = async (sourceIdToUse?: string) => {
     setIsLoading(true)
     try {
-      const [installed, sourcesList] = await Promise.all([electronApi().listInstalledSkills(workspacePath || undefined), electronApi().listHubSources()])
+      const [installed, sourcesList] = await Promise.all([
+        electronApi().listInstalledSkills({ workspaceRoot: workspacePath || undefined }),
+        electronApi().listHubSources(),
+      ])
       setInstalledSkills(installed)
       setSources(sourcesList)
 
@@ -37,8 +40,8 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
 
       const hub =
         activeSourceId === ALL_SKILL_SOURCES
-          ? await electronApi().listHubSkillsAcrossSources(workspacePath || undefined)
-          : await electronApi().listHubSkillsBySource(activeSourceId, workspacePath || undefined)
+          ? await electronApi().listHubSkillsAcrossSources({ workspaceRoot: workspacePath || undefined })
+          : await electronApi().listHubSkillsBySource({ sourceId: activeSourceId, workspaceRoot: workspacePath || undefined })
       setHubSkills(hub)
     } catch (err: unknown) {
       logger.error('SkillHubModal', `Error loading skills/sources: ${errorMessage(err)}`)
@@ -74,8 +77,8 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
     try {
       const hub =
         newSourceId === ALL_SKILL_SOURCES
-          ? await electronApi().listHubSkillsAcrossSources(workspacePath || undefined, forceRefresh)
-          : await electronApi().listHubSkillsBySource(newSourceId, workspacePath || undefined, forceRefresh)
+          ? await electronApi().listHubSkillsAcrossSources({ workspaceRoot: workspacePath || undefined, forceRefresh })
+          : await electronApi().listHubSkillsBySource({ sourceId: newSourceId, workspaceRoot: workspacePath || undefined, forceRefresh })
       setHubSkills(hub)
     } catch (err: unknown) {
       logger.error('SkillHubModal', `Error changing source: ${errorMessage(err)}`)
@@ -92,8 +95,8 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
       try {
         const hub =
           selectedSourceId === ALL_SKILL_SOURCES
-            ? await electronApi().listHubSkillsAcrossSources(workspacePath || undefined)
-            : await electronApi().listHubSkillsBySource(selectedSourceId, workspacePath || undefined)
+            ? await electronApi().listHubSkillsAcrossSources({ workspaceRoot: workspacePath || undefined })
+            : await electronApi().listHubSkillsBySource({ sourceId: selectedSourceId, workspaceRoot: workspacePath || undefined })
         setHubSkills(hub)
       } catch (err: unknown) {
         logger.error('SkillHubModal', `Error fetching hub skills on tab switch: ${errorMessage(err)}`)
@@ -102,7 +105,7 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
       }
     } else {
       try {
-        setInstalledSkills(await electronApi().listInstalledSkills(workspacePath || undefined))
+        setInstalledSkills(await electronApi().listInstalledSkills({ workspaceRoot: workspacePath || undefined }))
       } catch (err: unknown) {
         logger.error('SkillHubModal', `Error fetching installed skills on tab switch: ${errorMessage(err)}`)
       }
@@ -111,7 +114,7 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
 
   const handleToggleActive = async (skillId: string, currentActive: boolean) => {
     try {
-      if (!(await electronApi().toggleSkillActive(skillId, !currentActive))) {
+      if (!(await electronApi().toggleSkillActive({ skillId, isActive: !currentActive }))) {
         setActionMessage({ type: 'error', text: t('common.error') })
         return
       }
@@ -125,13 +128,13 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
     setInstallingSkillId(hubSkillId)
     setActionMessage(null)
     try {
-      const res = await electronApi().installSkillFromHub(hubSkillId, workspacePath || undefined, selectedSourceId)
+      const res = await electronApi().installSkillFromHub({ hubSkillId, workspaceRoot: workspacePath || undefined, hubSourceId: selectedSourceId })
       if (res.success) {
         setActionMessage({ type: 'success', text: t('skills.msgInstalled', { name: hubSkillId }) })
         // Mark as installed in local hubSkills state immediately
         setHubSkills((prev) => prev.map((s) => (s.id === hubSkillId ? { ...s, isInstalled: true } : s)))
         // Refresh installed skills in background without triggering full-page loading or scroll reset
-        const installed = await electronApi().listInstalledSkills(workspacePath || undefined)
+        const installed = await electronApi().listInstalledSkills({ workspaceRoot: workspacePath || undefined })
         setInstalledSkills(installed)
       } else {
         setActionMessage({ type: 'error', text: res.error || t('common.error') })
@@ -160,7 +163,7 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   const handleInstallFromUrl = async (url: string, customName?: string) => {
     setActionMessage(null)
     await runSkillAction(
-      () => electronApi().installSkillFromUrl(url, workspacePath || undefined, customName),
+      () => electronApi().installSkillFromUrl({ url, workspaceRoot: workspacePath || undefined, customName }),
       async () => {
         setActionMessage({ type: 'success', text: t('skills.msgUrlImported') })
         await loadSourcesAndSkills(selectedSourceId)
@@ -171,7 +174,7 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
 
   const handleSaveCustomSkill = (input: SkillSaveInput) =>
     runSkillAction(
-      () => electronApi().saveCustomSkill(input, workspacePath || undefined),
+      () => electronApi().saveCustomSkill({ input, workspaceRoot: workspacePath || undefined }),
       async () => {
         setActionMessage({ type: 'success', text: t('skills.msgSaved', { name: input.name }) })
         setIsEditorOpen(false)
@@ -183,7 +186,7 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
 
   const handleResetSkill = (skillId: string) =>
     runSkillAction(
-      () => electronApi().resetSkillToOriginal(skillId, workspacePath || undefined),
+      () => electronApi().resetSkillToOriginal({ skillId, workspaceRoot: workspacePath || undefined }),
       async () => {
         setActionMessage({ type: 'success', text: t('skills.msgReset', { name: skillId }) })
         await loadSourcesAndSkills(selectedSourceId)
@@ -192,7 +195,7 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
 
   const handleDeleteSkill = (skillId: string) =>
     runSkillAction(
-      () => electronApi().uninstallSkill(skillId, workspacePath || undefined),
+      () => electronApi().uninstallSkill({ skillId, workspaceRoot: workspacePath || undefined }),
       async () => {
         setActionMessage({ type: 'success', text: t('skills.msgDeleted', { name: skillId }) })
         await loadSourcesAndSkills(selectedSourceId)
@@ -215,7 +218,7 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
 
   const handleRemoveCustomHub = (sourceId: string) =>
     runSkillAction(
-      () => electronApi().removeCustomHubSource(sourceId),
+      () => electronApi().removeCustomHubSource({ sourceId }),
       async () => {
         setActionMessage({ type: 'success', text: t('skills.msgHubRemoved') })
         await loadSourcesAndSkills(selectedSourceId === sourceId ? ALL_SKILL_SOURCES : selectedSourceId)

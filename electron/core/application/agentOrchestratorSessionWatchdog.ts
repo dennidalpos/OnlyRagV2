@@ -1,4 +1,4 @@
-import type { AgentCompletionEvidence, AgentCompletionStatus, AppSettings } from '../../../shared/types'
+import type { AgentApprovalPayload, AgentCompletionEvidence, AgentCompletionStatus, AppSettings } from '../../../shared/types'
 import type { AgentSession, ApprovalResponse } from './agentOrchestratorTypes'
 import { logger } from '../infrastructure/logging/logger'
 import { agentToolExecutorService } from './agentToolExecutorService'
@@ -24,7 +24,7 @@ export interface SessionWatchdog {
   clearSessionTimeout: () => void
   /** Single exit point for the loop: clears the session timeout and deregisters the session. */
   finalizeSession: () => void
-  requestApproval: (approvalPayload: Record<string, unknown>) => Promise<ApprovalResponse>
+  requestApproval: (approvalPayload: AgentApprovalPayload) => Promise<ApprovalResponse>
 }
 
 /** Arms the global session timeout (guarantees SESSION END is always written to the audit log even if the loop hangs) and builds the finalize/approval closures tied to it. */
@@ -66,7 +66,7 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
   }, SESSION_TIMEOUT_MS)
 
   /** Sends `agent:approval-request` and pauses the calling step in place until the renderer answers via the `agent:approval-response` IPC channel (see `respondToApproval` in agentOrchestratorAppService.ts), or until cancellation/timeout resolves it to `false`. */
-  const requestApproval = (approvalPayload: Record<string, unknown>): Promise<ApprovalResponse> => {
+  const requestApproval = (approvalPayload: AgentApprovalPayload): Promise<ApprovalResponse> => {
     return new Promise<ApprovalResponse>((resolve) => {
       if (!session.rendererEvents?.isAvailable()) {
         resolve({ approved: false })

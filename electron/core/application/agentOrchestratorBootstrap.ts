@@ -1,5 +1,12 @@
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
-import type { AgentCompletionEvidence, AgentCompletionStatus, AgentExecutionMode, AppSettings, OllamaModelMetrics } from '../../../shared/types'
+import type {
+  AgentApprovalPayload,
+  AgentCompletionEvidence,
+  AgentCompletionStatus,
+  AgentExecutionMode,
+  AppSettings,
+  OllamaModelMetrics,
+} from '../../../shared/types'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
@@ -74,7 +81,7 @@ export interface AgentSessionBootstrap {
   emitStepUpdate: (statusText?: string) => void
   persistCurrentState: (terminationReason?: AgentSessionTerminationReason, completionStatus?: AgentCompletionStatus) => Promise<void>
   buildSessionTracker: (summaryText?: string) => SessionDebtTracker
-  requestApproval: (approvalPayload: Record<string, unknown>) => Promise<ApprovalResponse>
+  requestApproval: (approvalPayload: AgentApprovalPayload) => Promise<ApprovalResponse>
   finalizeSession: () => void
   clearSessionTimeout: () => void
 }

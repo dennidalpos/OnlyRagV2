@@ -42,7 +42,15 @@ describe('sidecar IPC facade', () => {
 
   it('validates ingest payloads before forwarding normalized values', async () => {
     const handler = handlers.get('ingest:file')
-    await handler?.(trustedEvent, 'D:/docs/report.pdf', 'vision-model', 'Describe the page', true, 'normalizer', 8192, 'ingest-test-1')
+    await handler?.(trustedEvent, {
+      filePath: 'D:/docs/report.pdf',
+      visionModel: 'vision-model',
+      visionPrompt: 'Describe the page',
+      normalizeWithLlm: true,
+      normalizationModel: 'normalizer',
+      numCtx: 8192,
+      taskId: 'ingest-test-1',
+    })
 
     expect(sidecarAppService.ingestFile).toHaveBeenCalledWith(
       'D:/docs/report.pdf',
@@ -54,7 +62,7 @@ describe('sidecar IPC facade', () => {
       'ingest-test-1',
       undefined,
     )
-    expect(() => handler?.(trustedEvent, ' ')).toThrow('Invalid IPC payload for ingest:file')
+    expect(() => handler?.(trustedEvent, { filePath: ' ' })).toThrow('Invalid IPC payload for ingest:file')
     expect(sidecarAppService.ingestFile).toHaveBeenCalledTimes(1)
   })
 })

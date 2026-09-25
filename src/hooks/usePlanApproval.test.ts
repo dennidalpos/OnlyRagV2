@@ -3,7 +3,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { resolveInterviewPrompt, usePlanApproval } from './usePlanApproval'
 import { createAcceptedRecommendationAnswers } from '../../shared/domain/agent/interviewDecisionContext'
-import type { AgentPlan, AppSettings, IElectronAPI, InterviewAnalysisResult, UserInterviewAnswer } from '../types'
+import type { AgentPlan, AppSettings, InterviewAnalysisResult, UserInterviewAnswer } from '../types'
+import type { IElectronAPI } from '../../shared/ipc/ipcContract'
 
 describe('usePlanApproval & Plan Refactoring Unit Tests', () => {
   it('turns "skip and use recommended" into accepted decisions instead of discarding them', () => {
@@ -145,7 +146,7 @@ describe('usePlanApproval interview and error flow', () => {
         ],
       }),
       agentPlanEnrichPrompt: vi.fn(
-        async (prompt: string, answers: UserInterviewAnswer[]) =>
+        async ({ prompt, answers }: { prompt: string; answers: UserInterviewAnswer[] }) =>
           `[ORIGINAL USER REQUEST]\n${prompt}\n\n[INTERVIEW DECISIONS]\n- [ACCEPTED RECOMMENDATION] Router: ${answers[0].selectedOption}`,
       ),
       agentPlanGenerate,
@@ -161,15 +162,15 @@ describe('usePlanApproval interview and error flow', () => {
       await currentHook.skipInterviewWithRecommended()
     })
 
-    expect(agentPlanGenerate).toHaveBeenCalledWith(
-      expect.stringContaining('[ACCEPTED RECOMMENDATION] Router: React Router'),
-      'qwen2.5-coder:7b',
+    expect(agentPlanGenerate).toHaveBeenCalledWith({
+      prompt: expect.stringContaining('[ACCEPTED RECOMMENDATION] Router: React Router'),
+      model: 'qwen2.5-coder:7b',
       settings,
-      undefined,
-      '/repo',
-      [expect.objectContaining({ selectedOption: 'React Router', provenance: 'accepted_recommendation' })],
-      expect.objectContaining({ conversationId: 'session-1', planRevisionId: expect.stringMatching(/^planning:/) }),
-    )
+      previousPlan: undefined,
+      workspacePath: '/repo',
+      previousDecisions: [expect.objectContaining({ selectedOption: 'React Router', provenance: 'accepted_recommendation' })],
+      identity: expect.objectContaining({ conversationId: 'session-1', planRevisionId: expect.stringMatching(/^planning:/) }),
+    })
     expect(currentHook.currentPlan).toMatchObject({
       status: 'ready',
       originalPrompt: 'Quale router scegliere: React Router o Custom?',
@@ -182,7 +183,13 @@ describe('usePlanApproval interview and error flow', () => {
 
     const effectivePrompt = expect.stringContaining('[ACCEPTED RECOMMENDATION] Router: React Router')
     expect(onPersistPlan).toHaveBeenCalledWith(expect.objectContaining({ status: 'approved', milestones: expect.any(Array) }))
-    expect(agentPlanSeed).toHaveBeenCalledWith('session-1', '/repo', expect.any(Array), effectivePrompt, expect.stringMatching(/^plan_.*:v1$/))
+    expect(agentPlanSeed).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      workspacePath: '/repo',
+      planMilestones: expect.any(Array),
+      userTask: effectivePrompt,
+      planRevisionId: expect.stringMatching(/^plan_.*:v1$/),
+    })
     expect(onPlanApproved).toHaveBeenCalledWith(expect.objectContaining({ prompt: effectivePrompt, status: 'approved' }))
   })
 
@@ -202,7 +209,7 @@ describe('usePlanApproval interview and error flow', () => {
         ],
       }),
       agentPlanEnrichPrompt: vi.fn(
-        async (prompt: string, answers: UserInterviewAnswer[]) =>
+        async ({ prompt, answers }: { prompt: string; answers: UserInterviewAnswer[] }) =>
           `[ORIGINAL USER REQUEST]\n${prompt}\n\n[INTERVIEW DECISIONS]\n- [EXPLICIT USER ANSWER] Tema: ${answers[0].selectedOption}`,
       ),
       agentPlanGenerate,
@@ -237,7 +244,7 @@ describe('usePlanApproval interview and error flow', () => {
     })
 
     expect(agentPlanGenerate).toHaveBeenCalledTimes(2)
-    expect(agentPlanGenerate.mock.calls[1][0]).toContain('[EXPLICIT USER ANSWER] Tema: Chiaro')
+    expect(agentPlanGenerate.mock.calls[1][0].prompt).toContain('[EXPLICIT USER ANSWER] Tema: Chiaro')
     expect(currentHook.currentPlan).toMatchObject({
       status: 'ready',
       originalPrompt: 'Quale tema scegliere: Scuro o Chiaro?',
@@ -426,7 +433,13 @@ describe('usePlanApproval interview and error flow', () => {
     })
 
     expect(onPersistPlan).toHaveBeenCalledWith(expect.objectContaining({ id: 'plan-reopen', status: 'approved' }))
-    expect(agentPlanSeed).toHaveBeenCalledWith('session-1', '/repo', initialPlans[0].milestones, 'Riprendi il task', 'plan-reopen:v1')
+    expect(agentPlanSeed).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      workspacePath: '/repo',
+      planMilestones: initialPlans[0].milestones,
+      userTask: 'Riprendi il task',
+      planRevisionId: 'plan-reopen:v1',
+    })
     expect(onPlanApproved).toHaveBeenCalledWith(expect.objectContaining({ id: 'plan-reopen' }))
   })
 

@@ -60,10 +60,3 @@ export const sidecarExportPayloadSchema = z
     outputFolder: boundedPath.optional(),
   })
   .strict()
-
-export type SidecarIngestFilePayload = z.infer<typeof sidecarIngestFilePayloadSchema>
-export type SidecarUpdateDocumentPayload = z.infer<typeof sidecarUpdateDocumentPayloadSchema>
-export type SidecarTranslatePayload = z.infer<typeof sidecarTranslatePayloadSchema>
-export type SidecarPagePreviewPayload = z.infer<typeof sidecarPagePreviewPayloadSchema>
-export type SidecarSearchPayload = z.infer<typeof sidecarSearchPayloadSchema>
-export type SidecarExportPayload = z.infer<typeof sidecarExportPayloadSchema>

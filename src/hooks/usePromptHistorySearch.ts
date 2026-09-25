@@ -17,7 +17,7 @@ export function usePromptHistorySearch() {
     setIsSearching(true)
     setError(null)
     try {
-      const res = await window.electronAPI.searchPromptHistory(trimmed, 15)
+      const res = await window.electronAPI.searchPromptHistory({ query: trimmed, topK: 15 })
       setResults(res || [])
       setHasSearched(true)
     } catch (err: unknown) {

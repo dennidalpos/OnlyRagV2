@@ -22,6 +22,46 @@ import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRep
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 
 describe('structured tool outcomes', () => {
+  it('passes a tool result localization key to the timeline without reading its English text', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-tool-log-'))
+    const emitted: { message: string; key?: string }[] = []
+    try {
+      await runToolResultProcessing({
+        parsedTool: { tool: 'inspect_os_env', parameters: {} },
+        toolRes: {
+          outcome: 'success',
+          outputForHistory: 'Environment inspected',
+          logMessage: 'Terminal Command Finished: npm test',
+          localized: { message: { key: 'toolCommandFinished', params: { command: 'npm test' } } },
+        },
+        toolStartedAtMs: Date.now(),
+        stepCount: 1,
+        workspacePath: workspace,
+        flags: { hasFileMutations: false, hasVerifiedBuild: false },
+        sessionChangedFiles: new Map(),
+        goalPlanner: new GoalDecompositionPlanner(),
+        episodicCompactor: { recordStep: () => {} },
+        executionGuard: new TransactionalExecutionGuard(workspace),
+        loopDetector: new AgentActionLoopDetector(2),
+        state: { guardEvents: [], progress: new AgentProgressPolicy(), versionEvidence: {} },
+        sessionId: 'localized-tool-result',
+        isSessionActive: () => false,
+        rendererEvents: null,
+        persistCurrentState: async () => {},
+        emitLog: (_type: string, message: string, _detail?: string, meta?: { localized?: { message?: { key: string } } }) => {
+          emitted.push({ message, key: meta?.localized?.message?.key })
+        },
+        emitDone: () => {},
+        finalizeSession: () => {},
+        closeApplicationRun: async () => ({ outcome: 'continue' }),
+        settings: { enableCodingAgentDebugLog: false },
+      } as unknown as ToolResultProcessingContext)
+      expect(emitted).toContainEqual({ message: 'Terminal Command Finished: npm test', key: 'toolCommandFinished' })
+    } finally {
+      fs.rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
   it('does not infer failure from output text', () => {
     expect(isToolExecutionFailure({ outcome: 'success', outputForHistory: 'Error is discussed here.', logMessage: 'Read file' })).toBe(false)
     expect(isToolExecutionFailure({ outcome: 'rejected', outputForHistory: 'Looks fine.', logMessage: 'Policy rejected' })).toBe(true)

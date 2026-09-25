@@ -120,6 +120,19 @@ export const AGENT_MAIN_TEXT_IT = {
   toolPolicy: '🧰 Policy tool [{kind}]: {reason} — {tools}.',
   contextCompacted: '🗜️ Contesto compattato: {original} → {final} caratteri (euristico).',
   contextReused: '⚡ Contesto Ollama riutilizzato: inviati {sent} caratteri invece di {full} (cache KV).',
+  toolCommandFinished: 'Comando terminale completato: {command}',
+  toolCommandFailed: 'Comando terminale fallito (diagnostica acquisita).',
+  toolCommandException: 'Errore esecuzione terminale: {error}',
+  toolTerminalDisabled: 'Esecuzione dei comandi terminale disabilitata nelle impostazioni.',
+  toolCommandMissing: 'Parametro del comando mancante.',
+  toolTestsNoRunner: 'run_tests: nessun test runner rilevato.',
+  toolTestsBlocked: 'Comando di test bloccato: {command}',
+  toolTestsPassed: 'Test Run: ✅ {passed}/{total} test superati ({framework}).',
+  toolTestsFailed: 'Test Run: ❌ {failed}/{total} test falliti, {passed}/{total} superati ({framework}).',
+  toolTestsTimedOut: 'Test Run: tempo scaduto dopo {seconds} secondi.',
+  toolTestsUnknownPassed: 'Test Run: comando completato (codice di uscita 0); riepilogo del test non riconosciuto.',
+  toolTestsUnknownFailed: 'Test Run: comando fallito (codice di uscita {code}); riepilogo del test non riconosciuto.',
+  toolTestsException: 'Errore esecuzione test: {error}',
 } as const
 
 export type AgentMainTextKey = keyof typeof AGENT_MAIN_TEXT_IT

@@ -27,6 +27,7 @@ import { buildVersionNotFoundDirective, parseVersionNotFound } from '../domain/a
 import { buildVersionRealityDirective, declaredDependencies, findVersionReality } from '../domain/agent/dependencyVersionReality'
 import { buildModuleResolutionDirective, classifyModuleDiagnostic, unresolvedPackages } from '../domain/agent/moduleResolutionDiagnostic'
 import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote, type DiagnosticWorkspaceFacts } from '../domain/agent/compilerDiagnosticDirective'
+import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 
 export interface RunCommandExecution {
   command: string
@@ -305,13 +306,15 @@ export class ProcessToolService {
     healingTail: string,
   ): ToolExecutionResult {
     const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nCommand: "${command}" (Exit Code: ${result.code}${result.timedOut ? ' - TIMED OUT' : ''}${result.interruptedByPrompt ? ' - INTERACTIVE PROMPT DETECTED' : ''})\nCaptured Error Stack Trace & Failure Output:\n\`\`\`\n${rawOutput.slice(0, 4000)}\n\`\`\`${directives}\n\n${healingTail}`
+    const message = { key: 'toolCommandFailed' } as const
     return {
       outcome: 'failure',
       outputForHistory:
         result.timedOut || result.interruptedByPrompt
           ? `${output}\n\n[UNCERTAIN EFFECT - DO NOT RETRY]\nThe process was stopped after it began; inspect state before any further mutation.`
           : output,
-      logMessage: 'Terminal Command Failed (Auto-Healing Diagnostic Captured)',
+      logMessage: formatAgentTextIt(message),
+      localized: { message },
       logDetail: rawOutput.slice(0, 1000),
       isTerminal: true,
       effectOutcome: result.timedOut || result.interruptedByPrompt ? 'uncertain' : 'confirmed',
@@ -356,10 +359,12 @@ export class ProcessToolService {
     signal?: AbortSignal,
   ): Promise<ToolExecutionResult> {
     if (allowTerminalExecution === false) {
+      const message = { key: 'toolTerminalDisabled' } as const
       return Promise.resolve({
         outcome: 'blocked',
         outputForHistory: 'Terminal command execution disabled in Settings.',
-        logMessage: 'Terminal command execution disabled in Settings.',
+        logMessage: formatAgentTextIt(message),
+        localized: { message },
         isTerminal: true,
       })
     }
@@ -510,10 +515,12 @@ export class ProcessToolService {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nFailed executing command "${command}": ${message}`
+      const localizedMessage = { key: 'toolCommandException', params: { error: message } } as const
       return {
         outcome: 'failure',
         outputForHistory: `${output}\n\n[UNCERTAIN EFFECT - DO NOT RETRY]\nExecution failed after dispatch; inspect state before any further mutation.`,
-        logMessage: `Terminal Execution Exception: ${message}`,
+        logMessage: formatAgentTextIt(localizedMessage),
+        localized: { message: localizedMessage },
         isTerminal: true,
         effectOutcome: 'uncertain',
       }

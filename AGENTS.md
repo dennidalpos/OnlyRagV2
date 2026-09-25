@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.18 · 2026-09-25` — Repository facts and verified commands.
+`v1.19 · 2026-09-25` — Repository facts and verified commands.
 
 ## Scope
 
@@ -9,7 +9,7 @@
 
 ## Verified commands
 
-Run from repository root in PowerShell. On 2026-09-25 on Windows (Node 24, Ollama on an RTX 2070) the static checks, `npm run test:fast` (275 files, 2204 tests), the Sidecar tests and all six E2E commands passed; Electron Agent E2E passed again after the native chat changes. `qwen3.8:27b` is now installed; its full-task live run remains to be executed (QWEN38-FULLTASK-01). Installer and full audit were not rerun. Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides). In a container without `node_modules`, `npm ci --ignore-scripts` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1` suffices for static checks and the fast suite; change dependencies with `npx npm@11`, since npm 10 drops lockfile `libc` fields.
+Run from repository root in PowerShell. On 2026-09-25 on Windows (Node 24, Ollama on an RTX 2070) the static checks, `npm run test:fast` (275 files, 2204 tests), the Sidecar tests and all six E2E commands passed; Electron Agent E2E passed again after the native chat changes. `qwen3.8:27b` is installed; its first full-task live run timed out at the former 60-minute Vitest limit before closure, so QWEN38-FULLTASK-01 remains open. The live test timeout now matches the 180-minute session limit. Installer and full audit were not rerun. Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides). In a container without `node_modules`, `npm ci --ignore-scripts` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1` suffices for static checks and the fast suite; change dependencies with `npx npm@11`, since npm 10 drops lockfile `libc` fields.
 
 | Purpose | Command |
 | --- | --- |

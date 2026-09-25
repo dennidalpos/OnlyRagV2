@@ -412,6 +412,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     status: (isToolFailure ? 'failure' : 'success') as 'failure' | 'success',
     verb,
     testRun: testRunMeta,
+    ...(toolRes.localized ? { localized: toolRes.localized } : {}),
   }
 
   if (toolRes.isTerminal) {

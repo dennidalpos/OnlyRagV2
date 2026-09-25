@@ -34,4 +34,15 @@ describe('tool execution contracts', () => {
       }).success,
     ).toBe(true)
   })
+
+  it('keeps a typed localization key and rejects unknown keys', () => {
+    const result = {
+      outcome: 'success',
+      outputForHistory: 'Ran command',
+      logMessage: 'Comando terminale completato: npm test',
+      localized: { message: { key: 'toolCommandFinished', params: { command: 'npm test' } } },
+    }
+    expect(toolExecutionResultSchema.parse(result).localized).toEqual(result.localized)
+    expect(toolExecutionResultSchema.safeParse({ ...result, localized: { message: { key: 'missingKey' } } }).success).toBe(false)
+  })
 })

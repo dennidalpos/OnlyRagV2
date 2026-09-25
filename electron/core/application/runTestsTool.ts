@@ -7,6 +7,7 @@ import { detectTestCommand } from '../domain/agent/tools/execution/testCommandDe
 import type { ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
 import { PersistentPowerShellSession } from '../infrastructure/process/persistentPowerShellSession'
 import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolFileRepository'
+import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 
 type ShellSessionProvider = (workspacePath?: string | null) => PersistentPowerShellSession
 
@@ -29,11 +30,13 @@ export async function executeRunTestsTool(
       (workspace) => agentToolFileRepository.hasPytestConfig(workspace),
     )
     if (!detected) {
+      const message = { key: 'toolTestsNoRunner' } as const
       return {
         outcome: 'blocked',
         outputForHistory:
           'No test command specified and no recognized test runner (package.json "test" script, or pytest.ini/pyproject.toml/setup.cfg) was found in the workspace. Provide an explicit "command" parameter.',
-        logMessage: 'run_tests: no test runner detected',
+        logMessage: formatAgentTextIt(message),
+        localized: { message },
         isTerminal: true,
       }
     }
@@ -43,10 +46,12 @@ export async function executeRunTestsTool(
 
   const secCheck = checkCommandSecurity(execCmd, workspacePath)
   if (!secCheck.isAllowed || secCheck.requiresApproval) {
+    const message = { key: 'toolTestsBlocked', params: { command: execCmd } } as const
     return {
       outcome: 'rejected',
       outputForHistory: `[SECURITY GUARDRAIL BLOCK]\nCommand: "${execCmd}"\nExecution FORBIDDEN by Security Policy: ${secCheck.blockedReason || 'Test commands must be read-only.'}`,
-      logMessage: `[SECURITY BLOCK] Forbidden test command: "${execCmd}"`,
+      logMessage: formatAgentTextIt(message),
+      localized: { message },
       isTerminal: true,
     }
   }
@@ -78,20 +83,36 @@ export async function executeRunTestsTool(
       ? `[TEST RUN TIMED OUT]\nCommand: "${sanitizedCmd}"${detectionNote}\nTest command exceeded ${TEST_TIMEOUT_MS / 1000}s and was terminated.\nPartial output:\n${rawOutput.slice(0, 3000)}`
       : `[TEST RUN RESULT]\nCommand: "${sanitizedCmd}"${detectionNote}\n${statusLine}\n\nOutput:\n${rawOutput.slice(0, 4000)}`
 
+    const message: NonNullable<ToolExecutionResult['localized']>['message'] = res.timedOut
+      ? { key: 'toolTestsTimedOut', params: { seconds: TEST_TIMEOUT_MS / 1000 } }
+      : parsed.framework === 'unknown'
+        ? parsed.success
+          ? { key: 'toolTestsUnknownPassed' }
+          : { key: 'toolTestsUnknownFailed', params: { code: res.code ?? 1 } }
+        : parsed.success
+          ? { key: 'toolTestsPassed', params: { passed: parsed.passed ?? 0, total: parsed.total ?? 0, framework: parsed.framework } }
+          : {
+              key: 'toolTestsFailed',
+              params: { failed: parsed.failed ?? 0, passed: parsed.passed ?? 0, total: parsed.total ?? 0, framework: parsed.framework },
+            }
+
     return {
       outcome: !res.timedOut && parsed.success ? 'success' : 'failure',
       outputForHistory,
-      logMessage: `Test Run: ${statusLine}`,
+      logMessage: formatAgentTextIt(message),
+      localized: { message },
       logDetail: rawOutput.slice(0, 1000),
       isTerminal: true,
       verification: { ran: true, passed: !res.timedOut && parsed.success },
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
+    const localizedMessage = { key: 'toolTestsException', params: { error: message } } as const
     return {
       outcome: 'failure',
       outputForHistory: `[TEST RUN ERROR]\nFailed executing test command "${sanitizedCmd}": ${message}`,
-      logMessage: `Test Run Exception: ${message}`,
+      logMessage: formatAgentTextIt(localizedMessage),
+      localized: { message: localizedMessage },
       isTerminal: true,
     }
   }

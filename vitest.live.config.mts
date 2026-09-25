@@ -26,7 +26,7 @@ export default defineConfig({
     maxWorkers: 1,
     minWorkers: 1,
     isolate: false,
-    testTimeout: 3_600_000,
+    testTimeout: 10_800_000,
     hookTimeout: 600_000,
   },
   resolve: {

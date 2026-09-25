@@ -56,6 +56,7 @@ import {
 } from '../domain/agent/tools/execution/commandPolicy'
 import { toolExecutionResultSchema, type ClassifiedToolExecutionResult, type ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
 import { validateWorkspaceRealpath } from '../infrastructure/filesystem/workspaceRealpathGuard'
+import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 export type { ClassifiedToolExecutionResult, ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
 
 export class AgentToolExecutorService {
@@ -496,16 +497,25 @@ export class AgentToolExecutorService {
 
       case 'run_command': {
         if (settings.allowTerminalExecution === false) {
+          const message = { key: 'toolTerminalDisabled' } as const
           return {
             outcome: 'blocked',
             outputForHistory: 'Terminal command execution disabled in Settings.',
-            logMessage: 'Terminal command execution disabled in Settings.',
+            logMessage: formatAgentTextIt(message),
+            localized: { message },
             isTerminal: true,
           }
         }
         const cmd = parameters.command
         if (!cmd) {
-          return { outcome: 'rejected', outputForHistory: 'Missing command parameter', logMessage: 'Missing command parameter', isTerminal: true }
+          const message = { key: 'toolCommandMissing' } as const
+          return {
+            outcome: 'rejected',
+            outputForHistory: 'Missing command parameter',
+            logMessage: formatAgentTextIt(message),
+            localized: { message },
+            isTerminal: true,
+          }
         }
 
         const installPreconditionFailure = await this.processToolService.validateInstallPreconditions(cmd, workspacePath)
@@ -582,10 +592,12 @@ export class AgentToolExecutorService {
           )
         }
 
+        const message = { key: 'toolCommandFinished', params: { command: cmd } } as const
         return {
           outcome: 'success',
           outputForHistory: `Ran command: "${cmd}"\nOutput:\n${rawOutput}`,
-          logMessage: `Terminal Command Finished: ${cmd}`,
+          logMessage: formatAgentTextIt(message),
+          localized: { message },
           logDetail: rawOutput.slice(0, 1000),
           isTerminal: true,
           effectOutcome: 'confirmed',

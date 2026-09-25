@@ -1068,6 +1068,7 @@ async def async_handler():
       expect(res.outputForHistory).toContain('[TEST RUN RESULT]')
       expect(res.outputForHistory).toContain('5/5 tests passed (vitest)')
       expect(res.logMessage).toContain('Test Run:')
+      expect(res.localized?.message.key).toBe('toolTestsPassed')
     },
     15000,
   )
@@ -1114,14 +1115,16 @@ async def async_handler():
     const res = await agentToolExecutorService.executeTool({ tool: 'run_tests', parameters: {} }, tempDir, settings)
 
     expect(res.outputForHistory).toContain('No test command specified and no recognized test runner')
-    expect(res.logMessage).toBe('run_tests: no test runner detected')
+    expect(res.logMessage).toBe('run_tests: nessun test runner rilevato.')
+    expect(res.localized?.message.key).toBe('toolTestsNoRunner')
   })
 
   it('should block a destructive run_tests command override via the security guardrail', async () => {
     const res = await agentToolExecutorService.executeTool({ tool: 'run_tests', parameters: { command: 'git reset --hard HEAD' } }, tempDir, settings)
 
     expect(res.outputForHistory).toContain('[SECURITY GUARDRAIL BLOCK]')
-    expect(res.logMessage).toContain('[SECURITY BLOCK]')
+    expect(res.logMessage).toContain('Comando di test bloccato:')
+    expect(res.localized?.message.key).toBe('toolTestsBlocked')
   })
 
   it('blocks file mutations through a workspace junction that resolves outside', async () => {

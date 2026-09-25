@@ -489,7 +489,7 @@
             "anyOf": [
               {
                 "maximum": 131072.0,
-                "minimum": 4096.0,
+                "minimum": 256.0,
                 "type": "integer"
               },
               {
@@ -951,7 +951,7 @@
             "anyOf": [
               {
                 "maximum": 131072.0,
-                "minimum": 4096.0,
+                "minimum": 256.0,
                 "type": "integer"
               },
               {

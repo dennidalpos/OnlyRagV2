@@ -15,7 +15,7 @@ import type { ApprovalResponse } from './agentOrchestratorTypes'
 import path from 'node:path'
 import { parseShellFileRead } from '../domain/agent/shellFileRead'
 
-import type { EmitLog } from './agentOrchestratorTypes'
+import { type EmitLog, emitLocalizedLog } from './agentOrchestratorTypes'
 
 type RequestApproval = (payload: AgentApprovalPayload) => Promise<ApprovalResponse>
 
@@ -74,7 +74,7 @@ async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | null
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     episodicCompactor.recordStep({ step: stepCount, tool: 'git_commit', status: 'BLOCKED', summary: message }, message)
-    emitLog('info', `Git commit bloccato: ${message}`)
+    emitLocalizedLog(emitLog, 'info', { key: 'gitCommitBlocked', params: { error: message } })
     return null
   }
   const commitParameters = {
@@ -92,7 +92,7 @@ async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | null
   if (!approval.approved) {
     const feedback = `[USER DENIED] L'utente ha rifiutato il git_commit proposto. Non ripetere questo esatto commit; proponi un'alternativa o chiedi chiarimenti.`
     episodicCompactor.recordStep({ step: stepCount, tool: 'git_commit', status: 'BLOCKED', summary: 'User denied git_commit approval' }, feedback)
-    emitLog('info', `🚫 git_commit rifiutato dall'utente.`)
+    emitLocalizedLog(emitLog, 'info', { key: 'gitCommitDenied' })
     return null
   }
   return { ...parsedTool, parameters: commitParameters }
@@ -128,7 +128,7 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
     if (!security.isAllowed) {
       const feedback = `[COMMAND SAFETY DENIED] ${security.blockedReason || 'Command rejected.'}`
       ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'run_command', status: 'BLOCKED', summary: feedback }, feedback)
-      ctx.emitLog('info', `🔒 Comando bloccato: ${security.blockedReason || 'non sicuro'}`)
+      emitLocalizedLog(ctx.emitLog, 'info', { key: 'commandBlocked', params: { reason: security.blockedReason || { key: 'commandUnsafe' } } })
       return 'denied'
     }
     commandApprovalGranted = Boolean(security.requiresApproval)
@@ -167,7 +167,7 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
   if (!approval.approved) {
     const feedback = `[USER DENIED] L'utente ha rifiutato l'azione proposta (${toolCall.tool} su "${target}").`
     ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: toolCall.tool, status: 'BLOCKED', summary: 'User denied contextual approval' }, feedback)
-    ctx.emitLog('info', `🚫 Azione rifiutata dall'utente: ${toolCall.tool}`)
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'actionDenied', params: { tool: toolCall.tool } })
     return 'denied'
   }
   return {
@@ -185,7 +185,7 @@ function denyFsm(ctx: ToolGateContext) {
     { step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: `FSM denied: ${parsedTool.tool} in ${fsmMode.getMode()} mode` },
     feedback,
   )
-  emitLog('info', `🔒 [${fsmMode.getMode()}] Tool blocked: ${parsedTool.tool}`)
+  emitLocalizedLog(emitLog, 'info', { key: 'modeToolBlocked', params: { mode: fsmMode.getMode(), tool: parsedTool.tool } })
 }
 
 /** Applies phase constraints, strict Ask read-only permissions, contextual consent, and the always-on git_commit gate. */
@@ -197,7 +197,7 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
       // The refresh is read-only and fully determined, so the application performs it instead of
       // refusing whatever else the model proposed: denying it cost 18 steps and a no_mutation stop
       // when qwen2.5-coder:7b kept proposing writes (full-task run 7, 2026-09-24).
-      ctx.emitLog('info', `🔄 Lettura versione eseguita dall'applicazione: ${ctx.requiredReadPath} (proposto: ${ctx.parsedTool.tool}).`)
+      emitLocalizedLog(ctx.emitLog, 'info', { key: 'versionReadByApp', params: { path: ctx.requiredReadPath, proposed: ctx.parsedTool.tool } })
       return { outcome: 'allowed', toolCallForExecution: { tool: 'read_file', parameters: { filePath: ctx.requiredReadPath } } }
     }
   }
@@ -211,7 +211,7 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
     const absolute = path.resolve(root, shellRead)
     if (absolute.startsWith(`${root}${path.sep}`)) {
       const filePath = path.relative(root, absolute).replace(/\\/g, '/')
-      ctx.emitLog('info', `📖 Lettura shell eseguita come read_file: ${filePath} (proposto: ${String(ctx.parsedTool.parameters.command)}).`)
+      emitLocalizedLog(ctx.emitLog, 'info', { key: 'shellReadAsReadFile', params: { path: filePath, command: String(ctx.parsedTool.parameters.command) } })
       return { outcome: 'allowed', toolCallForExecution: { tool: 'read_file', parameters: { filePath } } }
     }
   }
@@ -223,7 +223,7 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
       { step: ctx.stepCount, tool: ctx.parsedTool.tool, status: 'BLOCKED', summary: `Turn policy denied: ${ctx.parsedTool.tool}` },
       feedback,
     )
-    ctx.emitLog('info', `🧰 Tool blocked by current phase: ${ctx.parsedTool.tool}`)
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'phaseToolBlocked', params: { tool: ctx.parsedTool.tool } })
     return { outcome: 'denied', feedback, policyDenial: 'turn_policy' }
   }
 
@@ -245,7 +245,7 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
       { step: ctx.stepCount, tool: 'git_commit', status: 'BLOCKED', summary: 'Git commit deferred until workspace publication' },
       feedback,
     )
-    ctx.emitLog('info', 'Git commit rinviato: pubblica prima le modifiche isolate.')
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'gitCommitDeferred' })
     return { outcome: 'denied' }
   }
   const contextualConsent = await gateContextualConsent(ctx)

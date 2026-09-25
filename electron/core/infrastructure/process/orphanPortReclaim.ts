@@ -37,3 +37,23 @@ export function matchesSidecarOwnership(marker: SidecarOwnershipMarker | null, c
       marker.startedAt === current.startedAt,
   )
 }
+
+/**
+ * Whether `pid` is `ancestorPid` or descends from it within `maxDepth` parent hops. On Windows a
+ * venv's Scripts\python.exe is a launcher that runs the base interpreter as its child, so the
+ * process listening on the port is a child of the process that was spawned, not that process.
+ */
+export async function isProcessOrDescendant(
+  pid: number,
+  ancestorPid: number,
+  readParentPid: (pid: number) => Promise<number | null>,
+  maxDepth = 3,
+): Promise<boolean> {
+  let current: number | null = pid
+  for (let depth = 0; current !== null && current > 0; depth++) {
+    if (current === ancestorPid) return true
+    if (depth === maxDepth) return false
+    current = await readParentPid(current)
+  }
+  return false
+}

@@ -15,11 +15,13 @@ describe('sidecar IPC contract', () => {
       taskId: 'ingest-1',
     })
     expect(sidecarTranslatePayloadSchema.parse({ docId: 'doc-1', sourceLang: 'it', targetLang: 'en' })).toMatchObject({ docId: 'doc-1' })
+    // A vision model trained on 2k tokens (moondream) gets num_ctx 2048 from resolveModelContextLength.
+    expect(sidecarIngestFilePayloadSchema.parse({ filePath: 'a.pdf', numCtx: 2048, taskId: 'ingest-1' })).toMatchObject({ numCtx: 2048 })
   })
 
   it('rejects unsafe or oversized payloads before the HTTP adapter', () => {
     expect(() => sidecarIngestFilePayloadSchema.parse({ filePath: ' ' })).toThrow()
-    expect(() => sidecarIngestFilePayloadSchema.parse({ filePath: 'a.pdf', numCtx: 2048 })).toThrow()
+    expect(() => sidecarIngestFilePayloadSchema.parse({ filePath: 'a.pdf', numCtx: 128, taskId: 'ingest-1' })).toThrow()
     expect(() => sidecarIngestFilePayloadSchema.parse({ filePath: 'a.pdf' })).toThrow()
     expect(() => sidecarTranslatePayloadSchema.parse({ docId: 'x', sourceLang: ' ', targetLang: 'en' })).toThrow()
     expect(() => sidecarSearchPayloadSchema.parse({ query: 'x', topK: 101 })).toThrow()

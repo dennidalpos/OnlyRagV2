@@ -4,7 +4,8 @@ import type { IngestionStreamProgressPayload, TranslateProgressPayload } from '.
 const nonBlank = z.string().trim().min(1)
 const boundedPath = nonBlank.max(4096)
 const modelName = nonBlank.max(200)
-const contextTokens = z.number().int().min(4096).max(131072)
+// The floor stays below every trained context: resolveModelContextLength caps num_ctx at it (moondream: 2048).
+const contextTokens = z.number().int().min(256).max(131072)
 const taskId = nonBlank.max(200)
 
 export const sidecarIngestFilePayloadSchema = z

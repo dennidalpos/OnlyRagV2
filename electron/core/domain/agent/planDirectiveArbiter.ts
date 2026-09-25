@@ -90,6 +90,8 @@ export interface PlanDirectiveInput {
   behaviorFailureDirective?: string | null
   /** The file that diagnostic orders written. */
   behaviorFailureTargetFile?: string | null
+  /** Tools that diagnostic orders beyond the file edit, carried like `verificationFailureTools`. */
+  behaviorFailureTools?: readonly SupportedToolName[]
 }
 
 const FOCUS: PlanDirectiveDecision = { kind: 'focus', blockDirective: null, closureStepDirective: null }
@@ -367,6 +369,8 @@ function resolveBehaviorTestDirective(input: PlanDirectiveInput): PlanDirectiveD
       blockDirective: buildVerificationFailingDirective(BEHAVIOR_TEST_COMMAND, input.behaviorFailureDirective ?? null),
       closureStepDirective: null,
       rewriteTargets: input.behaviorFailureTargetFile ? [input.behaviorFailureTargetFile] : undefined,
+      // Without it a move_file the directive ordered was denied by the turn policy, 30 steps in a row (live full task run 28, 2026-09-25).
+      requiredTools: input.behaviorFailureTools?.length ? input.behaviorFailureTools : undefined,
     }
   }
   return {

@@ -342,10 +342,9 @@ export function useCodingAgentExecution({
         }
       }
 
-      if (
-        log.type === 'info' &&
-        (log.detail?.includes('Circuit Breaker Triggered') || log.message.includes('LLM Stream error') || log.category === 'system_alert')
-      ) {
+      // Keyed, not matched on text: the message is Main's Italian fallback.
+      const messageKey = log.localized?.message?.key
+      if (log.type === 'info' && (messageKey === 'circuitBreakerTriggered' || messageKey === 'llmStreamError' || log.category === 'system_alert')) {
         soundEffectsService.play('error', soundsEnabled)
       }
     })

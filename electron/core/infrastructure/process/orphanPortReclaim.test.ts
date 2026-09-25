@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { matchesSidecarOwnership, parseListeningPidFromNetstat } from './orphanPortReclaim'
+import { isProcessOrDescendant, matchesSidecarOwnership, parseListeningPidFromNetstat } from './orphanPortReclaim'
 
 const NETSTAT_OUTPUT = [
   '',
@@ -44,5 +44,32 @@ describe('matchesSidecarOwnership', () => {
     expect(matchesSidecarOwnership(marker, { ...marker, pid: 1 })).toBe(false)
     expect(matchesSidecarOwnership(marker, { ...marker, executablePath: 'C:\\other\\python.exe' })).toBe(false)
     expect(matchesSidecarOwnership(marker, { ...marker, startedAt: '2026-09-22T11:00:00.000Z' })).toBe(false)
+  })
+})
+
+describe('isProcessOrDescendant', () => {
+  // venv launcher 100 -> base interpreter 200 (listener); 300 is an unrelated process under explorer 4.
+  const parents = new Map<number, number>([
+    [200, 100],
+    [100, 50],
+    [300, 4],
+  ])
+  const readParentPid = async (pid: number) => parents.get(pid) ?? null
+
+  it('accepts the spawned process itself', async () => {
+    await expect(isProcessOrDescendant(100, 100, readParentPid)).resolves.toBe(true)
+  })
+
+  it('accepts the child a venv launcher starts to run the interpreter', async () => {
+    await expect(isProcessOrDescendant(200, 100, readParentPid)).resolves.toBe(true)
+  })
+
+  it('rejects an unrelated listener', async () => {
+    await expect(isProcessOrDescendant(300, 100, readParentPid)).resolves.toBe(false)
+  })
+
+  it('stops walking after the depth limit', async () => {
+    await expect(isProcessOrDescendant(200, 50, readParentPid, 1)).resolves.toBe(false)
+    await expect(isProcessOrDescendant(200, 50, readParentPid, 2)).resolves.toBe(true)
   })
 })

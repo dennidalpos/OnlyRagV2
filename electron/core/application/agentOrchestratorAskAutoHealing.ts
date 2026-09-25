@@ -1,5 +1,5 @@
 import type { AgentToolCall, AgentTaskResult } from '../domain/agent/agentTypes'
-import type { EmitLog } from './agentOrchestratorTypes'
+import { type EmitLog, emitLocalizedLog } from './agentOrchestratorTypes'
 import type { AgentExecutionMode, AgentGuardEvent, AppSettings } from '../../../shared/types'
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import { isVersionQuestion } from '../domain/agent/versionQuestion'
@@ -51,7 +51,7 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
       },
       answer,
     )
-    ctx.emitLog('info', `📦 Domanda sulle versioni risolta dal registro npm: ${question}`, answer)
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'versionQuestionAnswered', params: { question } }, answer)
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'ask', answer)
     }
@@ -99,10 +99,7 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
       },
       feedback,
     )
-    ctx.emitLog(
-      'info',
-      `⚡ Proactive Auto-Healing: Intercettata richiesta di permesso/chiarimento ridondante. L'agente procede direttamente con l'implementazione.`,
-    )
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'redundantAskIntercepted' })
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'ask', feedback)
     }

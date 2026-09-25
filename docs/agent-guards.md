@@ -14,6 +14,7 @@ I guardrail garantiscono la sicurezza dell'ambiente locale, la coerenza delle mo
 | `run_command`/`run_tests` fallito riproposto identico | Blocco immediato (non consuma budget esecuzione) | Trattato come blocco di loop (`loop_unchanged_failure`) |
 | Ripetizione di azione già riuscita | 3 avvisi `redundant_success` | Conteggiato come blocco di loop |
 | Blocco di loop | 2 avvisi, poi 1 blocco su 2 forza l'avanzamento milestone (`force_advance`) | A 20 blocchi senza budget step: arresto `stagnation_abort` |
+| Chiamata bloccata che la direttiva del piano ordina | Il guard cede: il comando di `verification_due`, o una scrittura diversa dalle precedenti sul file in `rewriteTargets` della direttiva ([`agentOrchestratorFinishAndLoopGuards.ts`](../electron/core/application/agentOrchestratorFinishAndLoopGuards.ts)) | Una ripetizione identica (`exact_repeat`) resta bloccata |
 | Domanda generica in AUTO | 2 reindirizzamenti (condivisi con blocchi loop) | Chiusura con `ask_redirect` |
 | Domanda sulle versioni delle dipendenze in AUTO | Risoluzione automatica da registry npm ([`versionQuestion.ts`](../electron/core/domain/agent/versionQuestion.ts)) | Consuma il budget reindirizzamenti; all'esaurimento: `ask_redirect` |
 | `read_file` su directory o file mancante | Restituisce listing directory o `[FILE NOT FOUND: ...]`, non errore di esecuzione | I guard di lettura ripetuta rimangono attivi ([`readFileTool.ts`](../electron/core/domain/agent/tools/fs/readFileTool.ts)) |

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { DiagnosticsData, AppSettings } from '../types'
 import { electronApi } from '../services/electronApi'
 import { logger } from '../lib/logger'
-import { notifyDocumentsChanged } from './useIngestedDocuments'
+import { DOCUMENTS_CHANGED_EVENT, notifyDocumentsChanged } from './useIngestedDocuments'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
 export const DIAGNOSTICS_STARTUP_RETRY_MS = 1000
@@ -21,6 +21,8 @@ export function useDiagnostics(
   const [isScanning, setIsScanning] = useState<boolean>(false)
   const prevSidecarStatusRef = useRef<string | null>(null)
   const prevDocsCountRef = useRef<number | null>(null)
+  // Set while this hook dispatches documents-changed itself, so its own listener does not rescan for it.
+  const notifyingRef = useRef(false)
 
   const runDiagnosticsScan = useCallback(async () => {
     setIsScanning(true)
@@ -37,7 +39,12 @@ export function useDiagnostics(
           (prevSidecarStatusRef.current !== 'online' && currentStatus === 'online') ||
           (prevDocsCountRef.current !== null && prevDocsCountRef.current !== currentCount)
         ) {
-          notifyDocumentsChanged()
+          notifyingRef.current = true
+          try {
+            notifyDocumentsChanged()
+          } finally {
+            notifyingRef.current = false
+          }
         }
 
         prevSidecarStatusRef.current = currentStatus
@@ -73,6 +80,16 @@ export function useDiagnostics(
       if (timer) clearTimeout(timer)
     }
   }, [runDiagnosticsScan, settingsReady, intervalMs])
+
+  // An ingestion or deletion changes the sidebar document count now, not at the next poll.
+  useEffect(() => {
+    if (!settingsReady) return
+    const onDocumentsChanged = () => {
+      if (!notifyingRef.current) void runDiagnosticsScan()
+    }
+    window.addEventListener(DOCUMENTS_CHANGED_EVENT, onDocumentsChanged)
+    return () => window.removeEventListener(DOCUMENTS_CHANGED_EVENT, onDocumentsChanged)
+  }, [runDiagnosticsScan, settingsReady])
 
   return { diagnostics, isScanning, refreshDiagnostics: runDiagnosticsScan }
 }

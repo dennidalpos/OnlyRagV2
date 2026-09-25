@@ -5,6 +5,7 @@ import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { selectModelForTurn, assembleTurnPrompt, freezeContextWindow, decideContextReuse } from './agentOrchestratorPromptAssembly'
 import type { PreparedAgentTurn, TurnDispatchContext, TurnDispatchOutcome, ModelSelection } from './agentOrchestratorRunContext'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
 import type { TurnToolPolicy } from '../domain/agent/turnToolPolicy'
 import { recordRecoveryFailure, recoveryStopDiagnostic, type RecoveryFailureState } from '../domain/agent/recoveryBudget'
 import { CODING_MODEL_KEEP_ALIVE } from '../domain/agent/hardwareProfileResolver'
@@ -101,7 +102,7 @@ async function dispatchToLlm(
         latchProtocol('text')
         toolCallingCapable = false
       }
-      ctx.emitLog('info', `Recupero trasporto Ollama 1/1 dopo: ${message}`)
+      emitLocalizedLog(ctx.emitLog, 'info', { key: 'transportRecovery', params: { error: message } })
     }
   }
 }
@@ -180,7 +181,7 @@ export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: Pr
   }
 
   if ('error' in dispatchResult) {
-    ctx.emitLog('info', `LLM Stream error on step ${ctx.stepCount}: ${dispatchResult.error}`)
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'llmStreamError', params: { step: ctx.stepCount, error: dispatchResult.error } })
     const closure = await ctx.closeApplicationRun({
       trigger: 'transport_error',
       guard: 'transport_budget',
@@ -194,10 +195,13 @@ export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: Pr
 
   const effectiveUsedModel = dispatchResult.usedModel || selection.targetModel
 
-  ctx.emitLog('info', `AI Agent (${ctx.agentMode.toUpperCase()} Step ${ctx.stepCount}):`, dispatchResult.streamedOutput, {
-    category: 'agent_thought',
-    modelName: effectiveUsedModel,
-  })
+  emitLocalizedLog(
+    ctx.emitLog,
+    'info',
+    { key: 'agentThoughtHeader', params: { mode: ctx.agentMode.toUpperCase(), step: ctx.stepCount } },
+    dispatchResult.streamedOutput,
+    { category: 'agent_thought', modelName: effectiveUsedModel },
+  )
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logLlmResponse(ctx.sessionId, ctx.stepCount, dispatchResult.streamedOutput)
   }

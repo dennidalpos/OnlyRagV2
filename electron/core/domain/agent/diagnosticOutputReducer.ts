@@ -40,8 +40,11 @@ export class DiagnosticOutputReducer {
     const lines = clean.split(/\r?\n/)
     const totalLines = lines.length
 
+    // `[plugin vite:css] src/index.css:1:0`, Rolldown's `[UNRESOLVED_IMPORT] Could not resolve …` and
+    // its code frame `[ src/main.jsx:3:8 ]` carry the only project path of a bundler failure; dropping them left the arbiter with no file to name
+    // (live full task runs 33 and 35 of 2026-09-25 re-ran the build 20-30 times).
     const errorPattern =
-      /(?:FAIL|ERROR|Error:|AssertionError|SyntaxError|TypeError|ReferenceError|Exception|failed|UnhandledPromiseRejection|TS\d{4}:|\sat\s|>>>|\berror\b)/i
+      /(?:FAIL|ERROR|Error:|AssertionError|SyntaxError|TypeError|ReferenceError|Exception|failed|UnhandledPromiseRejection|TS\d{4}:|\sat\s|>>>|\berror\b|\[plugin\s[^\]]+\]|is not exported by|\[\s*[^\s\]]+:\d+:\d+\s*\]|\[[A-Z][A-Z_]{3,}\]|Could not resolve|Failed to resolve)/i
     const summaryPattern = /(?:Test Files|Tests|Passed|Failed|Duration|Exit code|npm ERR!|error Command failed)/i
 
     const highlightedLines: string[] = []

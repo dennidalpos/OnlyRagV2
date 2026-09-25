@@ -1,3 +1,4 @@
+import path from 'node:path'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { guardForLoopPattern, recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import { agentToolExecutorService } from './agentToolExecutorService'
@@ -5,9 +6,10 @@ import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
 import { abandonedMilestoneNote } from '../domain/agent/milestoneUpdateAuthority'
 import { isActiveMilestoneDelivered, resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
-import type { PlanDirectiveKind } from '../domain/agent/planDirectiveArbiter'
+import type { PlanDirectiveDecision, PlanDirectiveKind } from '../domain/agent/planDirectiveArbiter'
 import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorRunContext'
-import { type AgentLocalizedText, formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
+import type { AgentLocalizedText } from '../../../shared/domain/agent/agentMainText'
 
 /** Handles the optional finish signal; the application-owned closure decides the real outcome. */
 export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome> {
@@ -29,9 +31,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
         { step: ctx.stepCount, tool: 'finish', status: 'BLOCKED', summary: 'Premature finish with 0 file mutations on session start' },
         zeroMutationIntervention,
       )
-      ctx.emitLog('info', '⛔ DoD Guard: Chiusura rifiutata — Nessun file creato o modificato nel workspace.', zeroMutationIntervention, {
-        category: 'system_alert',
-      })
+      emitLocalizedLog(ctx.emitLog, 'info', { key: 'dodPrematureFinish' }, zeroMutationIntervention, { category: 'system_alert' })
       if (ctx.settings.enableCodingAgentDebugLog) {
         codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'finish', zeroMutationIntervention)
       }
@@ -85,10 +85,11 @@ function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: stri
   ctx.loopDetector.resetTarget(loopTarget)
 
   const nextMilestone = ctx.goalPlanner.getActiveMilestone()
-  ctx.emitLog(
+  emitLocalizedLog(
+    ctx.emitLog,
     'info',
-    `⏭️ Escape strutturale: milestone ${stuckMilestone.id} abbandonata dopo ${loopBlocks} blocchi consecutivi.`,
-    nextMilestone ? `Nuova milestone attiva: ${nextMilestone.id}: ${nextMilestone.title}` : 'Nessuna milestone operativa rimasta.',
+    { key: 'milestoneAbandoned', params: { id: stuckMilestone.id, blocks: loopBlocks } },
+    nextMilestone ? { key: 'milestoneNextActive', params: { id: nextMilestone.id, title: nextMilestone.title } } : { key: 'milestoneNoneLeft' },
     { category: 'system_alert' },
   )
 
@@ -104,6 +105,16 @@ function commandIsOrderedBy(blockDirective: string | null, loopTarget: string | 
   return needle.length > 0 && blockDirective.toLowerCase().includes(needle)
 }
 
+const FILE_EDIT_TOOLS = new Set(['write_file', 'replace_file_content', 'multi_replace_file_content'])
+
+/** True when an arbitrated directive orders a rewrite of exactly the file the loop guard blocked. */
+function writeIsOrderedBy(decision: PlanDirectiveDecision, tool: string, loopTarget: string | undefined, workspacePath: string | null | undefined): boolean {
+  if (!loopTarget || !FILE_EDIT_TOOLS.has(tool)) return false
+  const relativeTarget = workspacePath && path.isAbsolute(loopTarget) ? path.relative(workspacePath, loopTarget) : loopTarget
+  const normalize = (filePath: string) => filePath.trim().replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase()
+  return (decision.rewriteTargets ?? []).some((target) => normalize(target) === normalize(relativeTarget))
+}
+
 /** The sentence that introduces an arbitrated directive inside a loop intervention. */
 function loopPreambleFor(kind: PlanDirectiveKind, loopTarget: string | undefined, repeats: number): string {
   const target = loopTarget || 'this action'
@@ -116,12 +127,12 @@ You have re-issued this call ${repeats} times and the plan has not moved. Repeat
 }
 
 /** What the USER is told about an intervention the arbiter decided. */
-function loopInterventionLogDetail(kind: PlanDirectiveKind): string {
-  if (kind === 'session_closure') return 'Progetto già verificato e nulla di aperto da dimostrare: al modello è stato chiesto di chiudere la sessione.'
-  if (kind === 'dependencies_undeclared') return 'Il codice importa pacchetti non dichiarati in package.json: al modello è stato chiesto di installarli.'
-  if (kind === 'dependencies_missing') return 'Dipendenze dichiarate ma non installate: al modello è stato chiesto di eseguire npm install.'
-  if (kind === 'verification_due') return 'Tutti i deliverable sono su disco: al modello è stato chiesto di eseguire il comando di verifica del progetto.'
-  return 'Intervento automatico: cambio di strategia inviato al modello.'
+function loopInterventionLogDetail(kind: PlanDirectiveKind): AgentLocalizedText {
+  if (kind === 'session_closure') return { key: 'loopDetailSessionClosure' }
+  if (kind === 'dependencies_undeclared') return { key: 'loopDetailDependenciesUndeclared' }
+  if (kind === 'dependencies_missing') return { key: 'loopDetailDependenciesMissing' }
+  if (kind === 'verification_due') return { key: 'loopDetailVerificationDue' }
+  return { key: 'loopDetailStrategyChange' }
 }
 
 /** Returns null when the call isn't a repeated/oscillating action, so the caller proceeds. */
@@ -143,11 +154,17 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
 
   // Replace advisory text with single clear directive to avoid conflicting instructions.
   // If arbiter ordered the blocked command (e.g. verification_due), yield to let verification run.
-  if (planDirective.kind === 'verification_due' && commandIsOrderedBy(planDirective.blockDirective, loopTarget)) {
-    ctx.emitLog(
+  // A write to the file the directive orders rewritten yields too, unless it repeats an earlier call
+  // unchanged: the same-file edit count blocked the ordered package.json fix for 10 steps once the
+  // model finally wrote it (live full task run of 2026-09-25, steps 40-49).
+  const orderedCommand = planDirective.kind === 'verification_due' && commandIsOrderedBy(planDirective.blockDirective, loopTarget)
+  const orderedWrite = loopCheck.pattern !== 'exact_repeat' && writeIsOrderedBy(planDirective, parsedTool.tool, loopTarget, ctx.workspacePath)
+  if (orderedCommand || orderedWrite) {
+    emitLocalizedLog(
+      ctx.emitLog,
       'info',
-      `▶️ Loop guard yielded: "${loopTarget}" is the action the plan directive orders (verification_due).`,
-      'Bloccarlo avrebbe lasciato il modello senza alcuna mossa eseguibile.',
+      { key: 'loopGuardYielded', params: { target: String(loopTarget), kind: planDirective.kind } },
+      { key: 'loopGuardYieldedDetail' },
       { category: 'system_alert' },
     )
     return null
@@ -186,12 +203,11 @@ ${planDirective.blockDirective}`
       },
       redundancyIntervention,
     )
-    ctx.emitLog(
+    emitLocalizedLog(
+      ctx.emitLog,
       'info',
-      `♻️ Azione ridondante: ${parsedTool.tool} già riuscito, ripetuto ${loopCheck.consecutiveDuplicateCount} volte`,
-      arbitratedIntervention
-        ? loopInterventionLogDetail(planDirective.kind)
-        : 'Nessuna stagnazione conteggiata: il modello è invitato ad avanzare al passo successivo.',
+      { key: 'redundantAction', params: { tool: parsedTool.tool, count: loopCheck.consecutiveDuplicateCount } },
+      arbitratedIntervention ? loopInterventionLogDetail(planDirective.kind) : { key: 'redundantNoStagnation' },
     )
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logLoopIntervention(
@@ -233,10 +249,11 @@ ${planDirective.blockDirective}`
     },
     enhancedIntervention,
   )
-  ctx.emitLog(
+  emitLocalizedLog(
+    ctx.emitLog,
     'info',
-    `⚠️ Loop Prevented: ${parsedTool.tool} ripetuto ${loopCheck.consecutiveDuplicateCount} volte`,
-    arbitratedIntervention ? loopInterventionLogDetail(planDirective.kind) : 'Intervento automatico: cambio di strategia inviato al modello.',
+    { key: 'loopPrevented', params: { tool: parsedTool.tool, count: loopCheck.consecutiveDuplicateCount } },
+    loopInterventionLogDetail(arbitratedIntervention ? planDirective.kind : 'focus'),
   )
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logLoopIntervention(ctx.sessionId, ctx.stepCount, parsedTool.tool, loopTarget, loopCheck.consecutiveDuplicateCount, enhancedIntervention)
@@ -245,7 +262,7 @@ ${planDirective.blockDirective}`
     // A hard stop here means the model never broke out of its loop -- this is the session
     // giving up, not completing the task, so it must never be recorded as a success.
     const stagnation: AgentLocalizedText = { key: 'reasonStagnation', params: { steps: loopBlocks } }
-    ctx.emitLog('info', `⚠️ Circuit Breaker: ${formatAgentTextIt(stagnation)}`)
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'circuitBreaker', params: { reason: stagnation } })
     const closure = await ctx.closeApplicationRun({
       trigger: 'guard_stop',
       guard: 'stagnation_abort',

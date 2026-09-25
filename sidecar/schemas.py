@@ -4,6 +4,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 NON_BLANK = r".*\S.*"
 MODEL_NAME = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
 PATH_VALUE = Field(default=None, min_length=1, max_length=4096, pattern=NON_BLANK)
+# Below every trained context: Electron caps num_ctx at the model's own (moondream: 2048).
+CONTEXT_TOKENS = Field(default=None, ge=256, le=131072)
 
 class StrictRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -81,7 +83,7 @@ class IngestPathRequest(StrictRequest):
     normalize_with_llm: Optional[bool] = False
     normalization_model: Optional[str] = MODEL_NAME
     normalization_think: Optional[bool] = False
-    num_ctx: Optional[int] = Field(default=None, ge=4096, le=131072)
+    num_ctx: Optional[int] = CONTEXT_TOKENS
     max_tabular_rows: Optional[int] = Field(default=None, ge=1, le=1_000_000)
     max_excel_rows_per_sheet: Optional[int] = Field(default=None, ge=1, le=1_000_000)
     max_excel_sheets: Optional[int] = Field(default=None, ge=1, le=1_000)
@@ -105,7 +107,7 @@ class TranslateInplaceRequest(StrictRequest):
     # Required: the translator never guesses a model that may not be installed.
     model: str = Field(..., min_length=1, max_length=200, pattern=NON_BLANK)
     target_dir: Optional[str] = PATH_VALUE
-    num_ctx: Optional[int] = Field(default=None, ge=4096, le=131072)
+    num_ctx: Optional[int] = CONTEXT_TOKENS
     think: Optional[bool] = False
     task_id: Optional[str] = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
 

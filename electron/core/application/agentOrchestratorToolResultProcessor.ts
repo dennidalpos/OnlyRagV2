@@ -7,6 +7,7 @@ import { DiagnosticOutputReducer, extractErrorDiagnostics, formatDiagnosticPromp
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { runCircuitBreaker, recordMutationSideEffects, recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ResponseInterpreterState, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorRunContext'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
 import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recoveryStopDiagnostic } from '../domain/agent/recoveryBudget'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { redactSecrets } from '../../logRedactor'
@@ -298,11 +299,13 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
       return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
     }
     recordGuardEvent(ctx.state.guardEvents, 'execution_budget', 'advise', ctx.stepCount)
-    ctx.emitLog('info', `Recupero esecuzione ${decision.state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}: correzione richiesta.`, toolRes.logDetail, {
-      category: 'system_alert',
-      toolName: parsedTool.tool,
-      target: targetParam,
-    })
+    emitLocalizedLog(
+      ctx.emitLog,
+      'info',
+      { key: 'executionRecoveryAttempt', params: { used: decision.state.totalFailures, limit: MAX_FAILURES_PER_RECOVERY_CATEGORY } },
+      toolRes.logDetail,
+      { category: 'system_alert', toolName: parsedTool.tool, target: targetParam },
+    )
   } else if (!isToolFailure && (isMutating || ['run_command', 'run_tests', 'ensure_tool', 'move_file', 'copy_file'].includes(parsedTool.tool))) {
     ctx.state.progress.clearExecutionFailures()
   }
@@ -323,15 +326,12 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   if (versionRecovery.changed) await ctx.persistCurrentState()
 
   for (const remap of remapPlanAfterAliasWrite(ctx, isToolFailure)) {
-    ctx.emitLog(
+    emitLocalizedLog(
+      ctx.emitLog,
       'info',
-      `Piano aggiornato: ${remap.milestones.join(', ')} puntavano a "${remap.from}", che non esiste; ora puntano a "${remap.to}".`,
+      { key: 'planRemappedAlias', params: { milestones: remap.milestones.join(', '), from: remap.from, to: remap.to } },
       undefined,
-      {
-        category: 'system_alert',
-        toolName: parsedTool.tool,
-        target: targetParam,
-      },
+      { category: 'system_alert', toolName: parsedTool.tool, target: targetParam },
     )
   }
 
@@ -349,15 +349,15 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
 
   const remappedMilestones = remapPlanAfterMove(ctx, isToolFailure)
   if (remappedMilestones.length > 0) {
-    ctx.emitLog(
+    emitLocalizedLog(
+      ctx.emitLog,
       'info',
-      `Piano aggiornato dopo lo spostamento: ${remappedMilestones.join(', ')} ora puntano a ${String(parsedTool.parameters.targetPath || parsedTool.parameters.destination)}.`,
-      undefined,
       {
-        category: 'system_alert',
-        toolName: parsedTool.tool,
-        target: targetParam,
+        key: 'planRemappedMove',
+        params: { milestones: remappedMilestones.join(', '), target: String(parsedTool.parameters.targetPath || parsedTool.parameters.destination) },
       },
+      undefined,
+      { category: 'system_alert', toolName: parsedTool.tool, target: targetParam },
     )
     await ctx.persistCurrentState()
   }

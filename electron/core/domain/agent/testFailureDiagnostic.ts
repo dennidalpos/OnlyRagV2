@@ -9,6 +9,23 @@ const MAX_EVIDENCE_CHARS = 400
 const TEST_GLOBAL = /ReferenceError:\s*(describe|it|test|expect|vi|beforeEach|afterEach|beforeAll|afterAll) is not defined/
 const TEST_GLOBAL_CALL = /^(describe|it|test|expect|beforeEach|afterEach|beforeAll|afterAll)\s*\(/
 const UNDEFINED_NAME = /ReferenceError:\s*([A-Za-z_$][\w$]*) is not defined/
+/**
+ * Globals only a browser (or a DOM environment) defines. No import provides them: live full task
+ * run 31 of 2026-09-25 was told to import "document" after BrowserRouter read it under
+ * renderToString in Node, and rewrote the test five times.
+ */
+const BROWSER_GLOBALS = new Set([
+  'document',
+  'window',
+  'navigator',
+  'localStorage',
+  'sessionStorage',
+  'location',
+  'HTMLElement',
+  'requestAnimationFrame',
+  'getComputedStyle',
+])
+const PACKAGE_FRAME = /node_modules[\\/]((?:@[^\\/\s]+[\\/])?[^\\/\s]+)/
 /** Where the names a React smoke test typically forgets come from. */
 const KNOWN_PROVIDERS: Record<string, string> = {
   React: "import React from 'react'",
@@ -36,6 +53,10 @@ export interface FailingTest {
   runner?: 'vitest' | 'jest'
   declaresNoTest?: boolean
   undefinedName?: string
+  /** A browser-only global the tested code read, e.g. `document`. */
+  browserGlobal?: string
+  /** The package whose code read it, from the first stack frame. */
+  browserGlobalPackage?: string
   receivedTruncated?: boolean
 }
 
@@ -86,8 +107,18 @@ export function extractFailingTest(output: string): FailingTest | null {
   // The code frame names the call the runner stopped at even when the message itself is lost.
   const missingGlobal =
     TEST_GLOBAL.exec(text)?.[1] ?? (didNotLoad && /ReferenceError/.test(text) ? TEST_GLOBAL_CALL.exec(loadLine?.source ?? '')?.[1] : undefined)
-  const referenced = UNDEFINED_NAME.exec(text)?.[1]
-  const undefinedName = referenced && !missingGlobal ? referenced : undefined
+  const referencedMatch = UNDEFINED_NAME.exec(text)
+  const referenced = referencedMatch?.[1]
+  const browserGlobal = referenced && !missingGlobal && BROWSER_GLOBALS.has(referenced) ? referenced : undefined
+  const undefinedName = referenced && !missingGlobal && !browserGlobal ? referenced : undefined
+  const firstFrame = referencedMatch
+    ? text
+        .slice(referencedMatch.index)
+        .split('\n')
+        .slice(1)
+        .find((line) => /^\s*(?:❯|at)\s/.test(line))
+    : undefined
+  const browserGlobalPackage = browserGlobal && firstFrame ? PACKAGE_FRAME.exec(firstFrame)?.[1]?.replace(/\\/g, '/') : undefined
   const unresolvedImport =
     didNotLoad && !missingGlobal && !declaresNoTest && !undefinedName
       ? (FAILED_TO_RESOLVE.exec(text)?.[1] ?? RELATIVE_SPECIFIER.exec(loadLine?.source ?? '')?.[1])
@@ -109,7 +140,33 @@ export function extractFailingTest(output: string): FailingTest | null {
     ...(unresolvedImport ? { unresolvedImport } : {}),
     ...(declaresNoTest ? { declaresNoTest } : {}),
     ...(undefinedName ? { undefinedName } : {}),
+    ...(browserGlobal ? { browserGlobal } : {}),
+    ...(browserGlobalPackage ? { browserGlobalPackage } : {}),
   }
+}
+
+/** The DOM environment a runner loads from a file header, and the package that provides it. */
+export function domEnvironmentFor(runner: FailingTest['runner']): { header: string; devPackage: string } {
+  return runner === 'jest'
+    ? { header: '/** @jest-environment jsdom */', devPackage: 'jest-environment-jsdom' }
+    : { header: '// @vitest-environment jsdom', devPackage: 'jsdom' }
+}
+
+/** The directive for code under test that reads a browser global while the runner has no DOM. */
+export function buildBrowserGlobalDirective(failing: FailingTest, environmentInstalled: boolean): string {
+  const name = failing.browserGlobal ?? 'document'
+  const { header, devPackage } = domEnvironmentFor(failing.runner)
+  return [
+    `[THE TEST NEEDS A DOM — "${failing.file}" RUNS WITHOUT ONE, SO "${name}" DOES NOT EXIST]`,
+    `ReferenceError: ${name} is not defined${failing.browserGlobalPackage ? `, thrown inside the package "${failing.browserGlobalPackage}"` : ''}. Code the test renders reads a browser global. No import can provide it, and the test body is not the problem.`,
+    'Directives:',
+    environmentInstalled
+      ? `1. Your next tool call MUST be "write_file" on "${failing.file}": the same complete file with this exact first line: ${header}`
+      : `1. Your next tool call MUST be "run_command" with the command: npm install --save-dev ${devPackage}`,
+    environmentInstalled
+      ? '2. Do NOT change any other line, and do NOT run the test again before the file has changed.'
+      : `2. Then add this exact first line to "${failing.file}": ${header}`,
+  ].join('\n')
 }
 
 /** The directive for a name the test uses but never imports. */

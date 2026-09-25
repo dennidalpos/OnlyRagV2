@@ -1,5 +1,5 @@
 import type { SupportedToolName } from './agentTypes'
-import { buildTestFailureDirective, extractFailingTest, testedModuleText } from './testFailureDiagnostic'
+import { buildBrowserGlobalDirective, buildTestFailureDirective, domEnvironmentFor, extractFailingTest, testedModuleText } from './testFailureDiagnostic'
 
 const ANSI_SEQUENCE = /\u001b\[[0-9;]*m/g
 
@@ -299,6 +299,59 @@ const TEST_SOURCE = /\.(?:test|spec)\.[cm]?[jt]sx?$/i
 const STYLESHEET = /\.(?:css|pcss|scss|sass|less)$/i
 
 /**
+ * Rollup prints `"x" is not exported by "a.jsx", imported by "b.jsx".`; Rolldown (Vite 8) prints
+ * `[MISSING_EXPORT] "x" is not exported by "a.jsx".` and names the importer only in the code frame
+ * below (`[ src/main.jsx:3:8 ]`). No compiler line carries it, so without this the build failure
+ * reached the model as a generic directive and qwen2.5-coder:7b re-read the file for 28 steps
+ * (live full task run 30, 2026-09-25).
+ */
+const BUNDLER_MISSING_EXPORT = /"([^"]+)" is not exported by "([^"]+)"(?:, imported by "([^"]+)")?/
+const CODE_FRAME_FILE = /\[\s*([^\s\]]+?):\d+:\d+\s*\]/
+
+export interface BundlerMissingExport {
+  /** The imported name; `default` for a default import. */
+  name: string
+  /** Workspace path of the module that lacks the export. */
+  exporter: string
+  importer: string | null
+}
+
+export function extractBundlerMissingExport(output: string): BundlerMissingExport | null {
+  const text = (output || '').replace(ANSI_SEQUENCE, '')
+  const match = BUNDLER_MISSING_EXPORT.exec(text)
+  if (!match || IN_DEPENDENCY.test(match[2])) return null
+  const frame = match[3] ? null : CODE_FRAME_FILE.exec(text.slice(match.index + match[0].length))
+  return { name: match[1], exporter: match[2].replace(/\\/g, '/'), importer: match[3] ?? frame?.[1] ?? null }
+}
+
+function buildBundlerMissingExportDirective(missing: BundlerMissingExport, exportedNames: string[]): string {
+  const { name, exporter, importer } = missing
+  const named = exportedNames.filter((n) => n !== 'default')
+  const baseName =
+    exporter
+      .split('/')
+      .pop()
+      ?.replace(/\.[^.]+$/, '') ?? ''
+  // The component a default import means: the file's own name, or its only named export.
+  const defaultCandidate = named.find((n) => n === baseName) ?? (named.length === 1 ? named[0] : null)
+  const fix =
+    name === 'default'
+      ? defaultCandidate
+        ? `the same complete file with "export default ${defaultCandidate}" added as its last line`
+        : 'the same complete file with a default export of the component it defines'
+      : named.length > 0
+        ? `the same complete file, also exporting "${name}" (it currently exports: ${named.slice(0, 24).join(', ')})`
+        : `the same complete file, also exporting "${name}"`
+  return [
+    `[${importer ? `"${importer}"` : 'A MODULE'} IMPORTS "${name}" FROM "${exporter}", WHICH DOES NOT EXPORT IT]`,
+    `The bundler stopped at this import. ${name === 'default' ? `"${exporter}" has no default export` : `"${exporter}" has no export named "${name}"`}${named.length > 0 ? `; it exports: ${named.slice(0, 24).join(', ')}` : ''}.`,
+    `Directives:`,
+    `1. Your next tool call MUST be "write_file" on "${exporter}": ${fix}. Keep every other line.`,
+    `2. Do NOT re-read "${exporter}" and do NOT re-run the build until that file has changed.`,
+  ].join('\n')
+}
+
+/**
  * A relative import the bundler could not resolve in a source file. Live full task run 20 of
  * 2026-09-24: `import "./tailwind.css"` in src/App.jsx failed the build five times under the
  * generic auto-healing text while the model kept rewriting src/index.css.
@@ -414,8 +467,32 @@ export function extractCssSyntaxFailure(output: string): CssSyntaxFailure | null
   return { file, ...(match[2] ? { line: Number(match[2]) } : {}), ...(reason ? { reason } : {}) }
 }
 
+/**
+ * postcss-import resolved a CSS `@import` to a package's JavaScript entry and PostCSS choked on it
+ * (`node_modules/tailwindcss/lib/index.js:1:1: Unknown word "use strict"`). The stylesheet is valid
+ * CSS; its import is not. With Tailwind 3 this is the Tailwind 4 `@import "tailwindcss"` line
+ * (live full task runs 33 and 35 of 2026-09-25).
+ */
+const CSS_IMPORTED_SCRIPT = /node_modules[\\/]((?:@[^\\/\s]+[\\/])?[^\\/\s]+)[\\/]\S*\.[cm]?js:\d+:\d+:\s*Unknown word/
+
+function buildCssImportedScriptDirective(file: string, packageName: string): string {
+  const fix =
+    packageName === 'tailwindcss'
+      ? 'the line @import "tailwindcss"; replaced by these three lines: @tailwind base; @tailwind components; @tailwind utilities; (the Tailwind 3 syntax; @import "tailwindcss" is Tailwind 4 syntax)'
+      : `the @import of "${packageName}" removed`
+  return [
+    `[A CSS @import LOADS JAVASCRIPT — "${file}" IMPORTS THE "${packageName}" PACKAGE]`,
+    `PostCSS followed @import "${packageName}" into the package's JavaScript entry and cannot parse it. The rest of "${file}" is not the problem, and the package is installed correctly.`,
+    'Directives:',
+    `1. Your next tool call MUST be "write_file" on "${file}": the same complete file with ${fix}. Keep every other line.`,
+    '2. Then run the build again.',
+  ].join('\n')
+}
+
 function buildCssSyntaxDirective(failure: CssSyntaxFailure, facts: DiagnosticWorkspaceFacts): string {
   const file = facts.toWorkspaceRelative ? facts.toWorkspaceRelative(failure.file) : failure.file
+  const importedPackage = failure.reason ? CSS_IMPORTED_SCRIPT.exec(failure.reason)?.[1]?.replace(/\\/g, '/') : undefined
+  if (importedPackage) return buildCssImportedScriptDirective(file, importedPackage)
   return [
     `[STYLESHEET SYNTAX ERROR — "${file}"${failure.line ? ` line ${failure.line}` : ''}]`,
     `PostCSS could not parse "${file}"${failure.reason ? `: ${failure.reason}` : ''}. A stylesheet holds only CSS rules and at-rules; JavaScript, JSX or an import statement written for a script is not CSS.`,
@@ -439,9 +516,23 @@ function buildUnresolvedCssImportDirective(cssImport: UnresolvedCssImport, facts
   ].join('\n')
 }
 
+/** A failing test whose code read a browser global, when the output reports no compiler error. */
+function browserGlobalTest(output: string): ReturnType<typeof extractFailingTest> {
+  if (parseCompilerDiagnostics(output).length > 0) return null
+  const failing = extractFailingTest(output)
+  return failing?.browserGlobal ? failing : null
+}
+
+function domEnvironmentInstalled(failing: NonNullable<ReturnType<typeof extractFailingTest>>, facts: DiagnosticWorkspaceFacts): boolean {
+  // Unknown counts as installed: the header is the fix either way, and an install is never ordered on a guess.
+  return facts.fileExists ? facts.fileExists(`node_modules/${domEnvironmentFor(failing.runner).devPackage}/package.json`) : true
+}
+
 /** Tools beyond the file edit that the directive built from this output orders. */
 export function diagnosticFixRequiredTools(output: string, facts: DiagnosticWorkspaceFacts = {}): SupportedToolName[] {
   if (extractJsxInScriptFile(output)) return ['move_file']
+  const browserTest = browserGlobalTest(output)
+  if (browserTest && !domEnvironmentInstalled(browserTest, facts)) return ['run_command']
   const missingProgram = extractMissingScriptProgram(output)
   if (missingProgram && !(VITE_REPLACEABLE.has(missingProgram.program) && facts.binaryInstalled?.('vite'))) return ['run_command']
   return []
@@ -450,6 +541,8 @@ export function diagnosticFixRequiredTools(output: string, facts: DiagnosticWork
 /** The file the directive built from this output will order written, or null when it orders a command instead. */
 export function diagnosticFixTargetFile(output: string, facts: DiagnosticWorkspaceFacts = {}): string | null {
   if (extractSuggestedCommand(output)) return null
+  const browserTest = browserGlobalTest(output)
+  if (browserTest) return domEnvironmentInstalled(browserTest, facts) ? browserTest.file : null
   if (extractJsxInScriptFile(output)) return null
   const missingProgram = extractMissingScriptProgram(output)
   if (missingProgram) return VITE_REPLACEABLE.has(missingProgram.program) && facts.binaryInstalled?.('vite') ? 'package.json' : null
@@ -462,6 +555,8 @@ export function diagnosticFixTargetFile(output: string, facts: DiagnosticWorkspa
     const fix = unresolvedBundlerImportFix(bundlerImport, facts)
     return fix.kind === 'create' ? fix.path : bundlerImport.importer
   }
+  const bundlerExport = extractBundlerMissingExport(output)
+  if (bundlerExport) return bundlerExport.exporter
 
   const mismatch = extractExportMismatch(output)
   if (mismatch) {
@@ -494,6 +589,11 @@ export function buildDiagnosticFixDirective(
   if (cssSyntax) return buildCssSyntaxDirective(cssSyntax, facts)
   const bundlerImport = extractUnresolvedBundlerImport(output)
   if (bundlerImport) return buildUnresolvedBundlerImportDirective(bundlerImport, facts)
+  const bundlerExport = extractBundlerMissingExport(output)
+  if (bundlerExport) {
+    const exporterFile = bundlerExport.exporter.split('/').pop() ?? bundlerExport.exporter
+    return buildBundlerMissingExportDirective(bundlerExport, resolveLocalModuleExports(bundlerExport.exporter, `./${exporterFile}`))
+  }
 
   const jsxInScript = extractJsxInScriptFile(output)
   if (jsxInScript) {
@@ -512,6 +612,7 @@ export function buildDiagnosticFixDirective(
     // No compiler error: a test that ran and failed its assertion is the other diagnosable case.
     const failingTest = extractFailingTest(output)
     if (!failingTest) return null
+    if (failingTest.browserGlobal) return buildBrowserGlobalDirective(failingTest, domEnvironmentInstalled(failingTest, facts))
     const { readWorkspaceFile, readLocalModuleSource } = facts
     const moduleText =
       failingTest.kind === 'assertion' && readWorkspaceFile && readLocalModuleSource

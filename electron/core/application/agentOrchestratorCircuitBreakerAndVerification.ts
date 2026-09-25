@@ -47,6 +47,7 @@ import { checkHtmlEntrypoint, CONVENTIONAL_ENTRY_PATHS } from '../domain/agent/e
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorRunContext'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
 import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 
 /** Returns a `return` outcome once the progress policy's no-mutation budget is spent. */
@@ -55,8 +56,7 @@ export async function runCircuitBreaker(ctx: ToolResultProcessingContext, isMuta
   if (!cbRes) return null
 
   // The circuit breaker is forcing a pause/intervention due to stagnation/looping
-  const cbMsg = `⚠️ Circuit Breaker Triggered: ${formatAgentTextIt(cbRes.reason)}`
-  ctx.emitLog('info', cbMsg)
+  emitLocalizedLog(ctx.emitLog, 'info', { key: 'circuitBreakerTriggered', params: { reason: cbRes.reason } })
 
   // What the USER gets.
   const milestones = ctx.goalPlanner.getMilestones()
@@ -106,7 +106,15 @@ function reportPartialDelivery(
     },
     directive,
   )
-  ctx.emitLog('info', `📄 Milestone ${milestone.id}: mancano ancora ${missing.map((m) => `"${m}"`).join(', ')}.`, directive, { category: 'system_alert' })
+  emitLocalizedLog(
+    ctx.emitLog,
+    'info',
+    { key: 'milestoneStillMissing', params: { id: milestone.id, missing: missing.map((m) => `"${m}"`).join(', ') } },
+    directive,
+    {
+      category: 'system_alert',
+    },
+  )
 }
 
 /**
@@ -139,7 +147,7 @@ function reportRedelivery(
     },
     directive,
   )
-  ctx.emitLog('info', `🔁 Milestone ${milestone.id} era gia' completa: la riscrittura di "${evidencePath}" non ha fatto avanzare il piano.`, directive, {
+  emitLocalizedLog(ctx.emitLog, 'info', { key: 'milestoneRedelivered', params: { id: milestone.id, path: evidencePath } }, directive, {
     category: 'system_alert',
   })
 }
@@ -171,7 +179,7 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, muta
       // Awaiting verification note indicates milestone was complete before this write (re-delivery).
       const wasAlreadySatisfied = Boolean(milestone.notes && milestone.notes.includes(AWAITING_VERIFICATION_MARKER))
       ctx.goalPlanner.updateMilestone(milestone.id, 'in_progress', awaitingVerificationNote(evidencePath))
-      ctx.emitLog('info', `✏️ Milestone ${milestone.id}: scritto "${evidencePath}", tutti i file richiesti sono presenti. In attesa di una verifica che passi.`)
+      emitLocalizedLog(ctx.emitLog, 'info', { key: 'milestoneAwaitingVerification', params: { id: milestone.id, path: evidencePath } })
       if (wasAlreadySatisfied) reportRedelivery(ctx, milestone, evidencePath, probe)
       advancedAny = true
       continue
@@ -250,14 +258,9 @@ function reportNestedProjectDirs(ctx: ToolResultProcessingContext, createdDirs: 
     },
     directive,
   )
-  ctx.emitLog(
-    'info',
-    commandFailed
-      ? `🧹 Il comando fallito ha lasciato ${dirList} nel workspace: richiesta pulizia all'agente.`
-      : `📁 Il comando ha creato ${dirList} annidata nel workspace: il progetto deve stare nella radice.`,
-    directive,
-    { category: 'system_alert' },
-  )
+  emitLocalizedLog(ctx.emitLog, 'info', { key: commandFailed ? 'failedCommandLeftDirs' : 'nestedProjectDirs', params: { dirs: dirList } }, directive, {
+    category: 'system_alert',
+  })
 }
 
 /** Registers the files a successful shell command created or rewrote, and reports any project directory it left in the workspace root. */
@@ -283,7 +286,10 @@ export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, comm
   ctx.flags.hasFileMutations = true
   invalidateVerifiedBuild(ctx)
   if (newlyTracked > 0) {
-    ctx.emitLog('info', `📂 ${newlyTracked} file tracciati dal comando eseguito${scan.truncated ? ' (scansione troncata: workspace molto grande)' : ''}.`)
+    emitLocalizedLog(ctx.emitLog, 'info', {
+      key: 'commandTrackedFiles',
+      params: { count: newlyTracked, truncated: scan.truncated ? { key: 'commandScanTruncated' } : '' },
+    })
   }
 
   // A scaffolder or codegen step can perfectly well deliver the active milestone's file,
@@ -323,10 +329,16 @@ export function promoteMilestonesProvenBy(
     deps.goalPlanner.updateMilestone(milestone.id, 'verified', promotionNote(verificationCommand))
   }
   const progress = deps.goalPlanner.getProgressSummary()
-  deps.emitLog(
-    'info',
-    `✅ ${proven.length} milestone verificate da "${verificationCommand}": ${proven.map((m) => m.id).join(', ')} (${progress.completed}/${progress.total}).`,
-  )
+  emitLocalizedLog(deps.emitLog, 'info', {
+    key: 'milestonesVerifiedBy',
+    params: {
+      count: proven.length,
+      command: verificationCommand,
+      ids: proven.map((m) => m.id).join(', '),
+      completed: progress.completed,
+      total: progress.total,
+    },
+  })
   return proven.length
 }
 
@@ -403,6 +415,7 @@ export function resolvePlanDirectiveForTurn(
     behaviorVerificationFailing: isBehaviorTestFailing(episodes),
     behaviorFailureDirective: behaviorFailureOutput ? diagnose(behaviorFailureOutput) : null,
     behaviorFailureTargetFile: behaviorFailureOutput ? diagnosticFixTargetFile(behaviorFailureOutput, workspaceFacts) : null,
+    behaviorFailureTools: behaviorFailureOutput ? diagnosticFixRequiredTools(behaviorFailureOutput, workspaceFacts) : [],
   })
 }
 
@@ -458,19 +471,11 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
     // Opening a source file in a browser shows text; it proves nothing about the project building or running.
     const previewTarget = ctx.parsedTool.parameters?.filePath || ctx.parsedTool.parameters?.url
     if (!isBrowserRenderableTarget(previewTarget)) {
-      ctx.emitLog(
-        'info',
-        `👁️ Anteprima aperta su "${previewTarget}": non vale come verifica, non è una pagina renderizzata.`,
-        'Esegui una build, un typecheck o un test per verificare il progetto.',
-      )
+      emitLocalizedLog(ctx.emitLog, 'info', { key: 'previewNotRendered', params: { target: String(previewTarget) } }, { key: 'previewNotRenderedHint' })
       return
     }
 
-    ctx.emitLog(
-      'info',
-      `👁️ Anteprima aperta su "${previewTarget}": evidenza raccolta, ma non promuove il milestone a verified.`,
-      'Esegui build, typecheck o test con esito positivo per ottenere la verifica del progetto.',
-    )
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'previewNotPromoting', params: { target: String(previewTarget) } }, { key: 'previewNotPromotingHint' })
     return
   }
 

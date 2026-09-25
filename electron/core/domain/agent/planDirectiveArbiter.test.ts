@@ -546,6 +546,22 @@ describe('behavioral smoke test — a build never proves it, so the arbiter carr
     expect(decision.blockDirective).toContain('"npm test" has already been executed')
   })
 
+  it('carries the tools the failing npm test diagnostic orders, as the build branch does', () => {
+    const decision = resolvePlanDirective(
+      input({
+        milestones,
+        hasVerifiedBuild: true,
+        packageTestScript: 'vitest run',
+        declaredPackages: ['vitest'],
+        behaviorVerificationFailing: true,
+        behaviorFailureTools: ['move_file'],
+      }),
+    )
+
+    expect(decision.kind).toBe('verification_failing')
+    expect(decision.requiredTools).toEqual(['move_file'])
+  })
+
   it('stays out of the way while the test file itself is missing, or when there is no package.json', () => {
     expect(
       resolvePlanDirective(input({ milestones, hasVerifiedBuild: true, packageTestScript: null, deliverableStatusOf: statusMap({ 'm-9': 'unsatisfied' }) }))

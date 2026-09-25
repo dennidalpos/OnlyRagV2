@@ -25,7 +25,9 @@ afterEach(() => {
   fs.rmSync(tempDir, { recursive: true, force: true })
 })
 
-function plannerWith(milestones: Array<{ id: string; title: string; status: 'pending' | 'in_progress' | 'verified' | 'failed' }>) {
+function plannerWith(
+  milestones: Array<{ id: string; title: string; status: 'pending' | 'in_progress' | 'verified' | 'failed'; proposedVerificationCommand?: string }>,
+) {
   const planner = new GoalDecompositionPlanner()
   planner.initializePlan(milestones)
   return planner
@@ -364,7 +366,13 @@ describe('the loop guard yields when the arbitrated directive orders the blocked
     // A delivered milestone plus a project that offers a check is exactly verification_due.
     fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'p', scripts: { build: 'tsc' } }), 'utf-8')
     fs.writeFileSync(path.join(tempDir, 'App.tsx'), 'export const App = () => null\n', 'utf-8')
+    return loopContext([{ id: 'm-1', title: 'The app renders — `App.tsx`', status: 'in_progress' }])
+  }
 
+  function loopContext(
+    milestones: Parameters<typeof plannerWith>[0],
+    logs: string[] = [],
+  ): { ctx: ResponseInterpreterContext; loopDetector: AgentActionLoopDetector } {
     const loopDetector = new AgentActionLoopDetector(2)
     const ctx = {
       streamedOutput: '',
@@ -387,10 +395,12 @@ describe('the loop guard yields when the arbitrated directive orders the blocked
         lastFailureOutputFor: () => null,
         getRecentFullLogs: () => [],
       } as unknown as ResponseInterpreterContext['episodicCompactor'],
-      goalPlanner: plannerWith([{ id: 'm-1', title: 'The app renders — `App.tsx`', status: 'in_progress' }]),
+      goalPlanner: plannerWith(milestones),
       executionGuard: new TransactionalExecutionGuard(tempDir),
       loopDetector,
-      emitLog: () => {},
+      emitLog: (_type: string, _message: string, _detail?: string, meta?: { localized?: { message?: { key: string } } }) => {
+        if (meta?.localized?.message) logs.push(meta.localized.message.key)
+      },
       emitDone: () => {},
       persistCurrentState: async () => {},
       finalizeSession: () => {},
@@ -413,6 +423,46 @@ describe('the loop guard yields when the arbitrated directive orders the blocked
       outcome = await handleLoopDetection(ctx, buildCall)
     }
     expect(outcome).toBeNull()
+  })
+
+  /** Measured 2026-09-25, live full task run: the ordered package.json fix was blocked for 10 steps once written. */
+  it('lets a changed write through to the file the directive orders rewritten, but not an identical repeat', async () => {
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'p', scripts: { build: 'vite build' }, devDependencies: { vitest: '^3.0.0' } }))
+    fs.mkdirSync(path.join(tempDir, 'node_modules', 'vitest'), { recursive: true })
+    fs.writeFileSync(path.join(tempDir, 'node_modules', 'vitest', 'package.json'), JSON.stringify({ name: 'vitest', version: '3.0.0' }))
+    fs.mkdirSync(path.join(tempDir, 'src'))
+    fs.writeFileSync(path.join(tempDir, 'src', 'App.test.jsx'), "import { it } from 'vitest'\nit('renders', () => {})\n")
+    const logs: string[] = []
+    const { ctx } = loopContext(
+      [
+        {
+          id: 'm-8',
+          title: 'A behavioral smoke test exercises the App and the package.json "test" script runs it (vitest run) — `src/App.test.jsx`',
+          status: 'in_progress',
+          proposedVerificationCommand: 'npm test',
+        },
+      ],
+      logs,
+    )
+    const directive = resolvePlanDirectiveForTurn(tempDir, ctx.goalPlanner, false, [])
+    expect(directive.kind).toBe('behavior_test_script_missing')
+    expect(directive.rewriteTargets).toEqual(['package.json'])
+
+    const writePackage = (version: number): AgentToolCall => ({
+      tool: 'write_file',
+      parameters: { filePath: 'package.json', content: JSON.stringify({ name: 'p', version: `1.0.${version}` }) },
+    })
+    for (let i = 0; i < 6; i++) {
+      expect(await handleLoopDetection(ctx, writePackage(i))).toBeNull()
+    }
+    // Past four edits the same-file guard fired and yielded to the directive each time.
+    expect(logs).toContain('loopGuardYielded')
+
+    let outcome = await handleLoopDetection(ctx, writePackage(9))
+    for (let i = 0; i < 4 && outcome === null; i++) {
+      outcome = await handleLoopDetection(ctx, writePackage(9))
+    }
+    expect(outcome).not.toBeNull()
   })
 
   it('still blocks a repeat the directive is not asking for', async () => {

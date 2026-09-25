@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   extractCssSyntaxFailure,
   extractMissingScriptProgram,
+  extractBundlerMissingExport,
   extractUnresolvedBundlerImport,
   extractUnresolvedCssImport,
   buildDiagnosticFixDirective,
@@ -16,6 +17,8 @@ import {
   extractJsxInScriptFile,
   resolveRelativeImportPath,
 } from './compilerDiagnosticDirective'
+import { extractFailingTest } from './testFailureDiagnostic'
+import { DiagnosticOutputReducer } from './diagnosticOutputReducer'
 
 /** The exact output `npx tsc --noEmit` produced at step 21 of the live run of 2026-08-24. */
 const TSC_OUTPUT = [
@@ -635,5 +638,168 @@ describe('a stylesheet PostCSS cannot parse', () => {
     expect(directive).toContain('[STYLESHEET SYNTAX ERROR — "src/index.css" line 3]')
     expect(directive).toContain('MUST be "write_file" on "src/index.css"')
     expect(diagnosticFixTargetFile(POSTCSS, facts)).toBe('src/index.css')
+  })
+})
+
+describe('bundler missing export (Rollup and Rolldown)', () => {
+  // Live full task run 30 of 2026-09-25, Vite 8.3.1: the importer is only in the code frame.
+  const ROLLDOWN_MISSING_EXPORT = [
+    'vite v8.3.1 building client environment for production...',
+    '\u001b[31m[MISSING_EXPORT] \u001b[0m"default" is not exported by "src/App.jsx".',
+    '   \u001b[38;5;246m╭\u001b[0m\u001b[38;5;246m─\u001b[0m\u001b[38;5;246m[\u001b[0m src/main.jsx:3:8 \u001b[38;5;246m]\u001b[0m',
+    ' 3 │ import App from "./App.jsx"',
+  ].join('\n')
+  const ROLLUP_MISSING_EXPORT = 'error during build:\nRollupError: "Header" is not exported by "src/components/Header.jsx", imported by "src/App.jsx".'
+
+  it('reads the exporter and the importer from both formats', () => {
+    expect(extractBundlerMissingExport(ROLLDOWN_MISSING_EXPORT)).toEqual({ name: 'default', exporter: 'src/App.jsx', importer: 'src/main.jsx' })
+    expect(extractBundlerMissingExport(ROLLUP_MISSING_EXPORT)).toEqual({
+      name: 'Header',
+      exporter: 'src/components/Header.jsx',
+      importer: 'src/App.jsx',
+    })
+    expect(extractBundlerMissingExport('"x" is not exported by "node_modules/pkg/index.js"')).toBeNull()
+  })
+
+  it('orders the default export added to the exporter, naming the component it already exports', () => {
+    const resolveLocal = (importer: string, specifier: string) => (importer === 'src/App.jsx' && specifier === './App.jsx' ? ['App'] : [])
+    const directive = buildDiagnosticFixDirective(ROLLDOWN_MISSING_EXPORT, () => [], resolveLocal)
+
+    expect(directive).toContain('"src/main.jsx" IMPORTS "default" FROM "src/App.jsx"')
+    expect(directive).toContain('MUST be "write_file" on "src/App.jsx": the same complete file with "export default App" added as its last line')
+    expect(diagnosticFixTargetFile(ROLLDOWN_MISSING_EXPORT)).toBe('src/App.jsx')
+  })
+
+  it('orders a missing named export without guessing when the exports are unknown', () => {
+    const directive = buildDiagnosticFixDirective(ROLLUP_MISSING_EXPORT)
+
+    expect(directive).toContain('MUST be "write_file" on "src/components/Header.jsx": the same complete file, also exporting "Header"')
+  })
+})
+
+describe('a browser global read by the code under test', () => {
+  // Live full task run 31 of 2026-09-25: BrowserRouter read `document` under renderToString in Node.
+  const DOCUMENT_IN_PACKAGE = [
+    ' RUN  v5.0.2 C:/work/app',
+    ' ❯ src/App.test.jsx (1 test | 1 failed) 6ms',
+    '     × should render correctly 5ms',
+    ' Test Files  1 failed (1)',
+    ' FAIL  src/App.test.jsx > renders the app > should render correctly',
+    'ReferenceError: document is not defined',
+    ' ❯ getUrlBasedHistory node_modules/react-router/dist/development/chunk-OB3PAWPO.mjs:281:27',
+    ' ❯ createBrowserHistory node_modules/react-router/dist/development/chunk-OB3PAWPO.mjs:155:10',
+  ].join('\n')
+  const installed = (present: boolean) => ({ fileExists: (p: string) => present && p === 'node_modules/jsdom/package.json' })
+
+  it('is not read as a missing import', () => {
+    const failing = extractFailingTest(DOCUMENT_IN_PACKAGE)
+    expect(failing).toMatchObject({ file: 'src/App.test.jsx', browserGlobal: 'document', browserGlobalPackage: 'react-router' })
+    expect(failing?.undefinedName).toBeUndefined()
+  })
+
+  it('orders the DOM environment header once jsdom is installed', () => {
+    const directive = buildDiagnosticFixDirective(
+      DOCUMENT_IN_PACKAGE,
+      () => [],
+      () => [],
+      installed(true),
+    )
+
+    expect(directive).toContain('thrown inside the package "react-router"')
+    // Split so Vitest does not read the pragma in this very file and look for jsdom.
+    const header = `// @vitest-${'environment'} jsdom`
+    expect(directive).toContain(`MUST be "write_file" on "src/App.test.jsx": the same complete file with this exact first line: ${header}`)
+    expect(directive).not.toContain('WITHOUT IMPORTING')
+    expect(diagnosticFixTargetFile(DOCUMENT_IN_PACKAGE, installed(true))).toBe('src/App.test.jsx')
+    expect(diagnosticFixRequiredTools(DOCUMENT_IN_PACKAGE, installed(true))).toEqual([])
+  })
+
+  it('orders the jsdom install first when it is missing', () => {
+    const directive = buildDiagnosticFixDirective(
+      DOCUMENT_IN_PACKAGE,
+      () => [],
+      () => [],
+      installed(false),
+    )
+
+    expect(directive).toContain('MUST be "run_command" with the command: npm install --save-dev jsdom')
+    expect(diagnosticFixTargetFile(DOCUMENT_IN_PACKAGE, installed(false))).toBeNull()
+    expect(diagnosticFixRequiredTools(DOCUMENT_IN_PACKAGE, installed(false))).toEqual(['run_command'])
+  })
+})
+
+describe('a CSS @import that loads a package script', () => {
+  // Live full task run 33 of 2026-09-25: @import "tailwindcss" with Tailwind 3 declared.
+  const TAILWIND3_IMPORT = [
+    '> project-dashboard-task@1.0.0 build',
+    '> vite build',
+    'vite v8.3.1 building client environment for production...',
+    'transforming...',
+    '✓ 15 modules transformed.',
+    '✗ Build failed in 692ms',
+    'error during build:',
+    'Build failed with 1 error:',
+    '',
+    '[plugin vite:css] C:/work/app/src/index.css:1:0',
+    'CssSyntaxError: [postcss] postcss-import: C:\\work\\app\\node_modules\\tailwindcss\\lib\\index.js:1:1: Unknown word "use strict"',
+    ...Array.from({ length: 30 }, (_, i) => `    at frame${i} (C:\\work\\app\\node_modules\\postcss\\lib\\parser.js:${600 + i}:22)`),
+    '  errors: [Getter/Setter]',
+    '}',
+  ].join('\n')
+  const facts = { toWorkspaceRelative: (p: string) => p.replace('C:/work/app/', '') }
+
+  it('orders the Tailwind 3 directives in place of the Tailwind 4 import', () => {
+    const directive = buildDiagnosticFixDirective(
+      TAILWIND3_IMPORT,
+      () => [],
+      () => [],
+      facts,
+    )
+
+    expect(directive).toContain('[A CSS @import LOADS JAVASCRIPT — "src/index.css" IMPORTS THE "tailwindcss" PACKAGE]')
+    expect(directive).toContain(
+      'MUST be "write_file" on "src/index.css": the same complete file with the line @import "tailwindcss"; replaced by these three lines: @tailwind base;',
+    )
+    expect(diagnosticFixTargetFile(TAILWIND3_IMPORT, facts)).toBe('src/index.css')
+  })
+
+  it('still names the stylesheet after the output is distilled for the trajectory', () => {
+    const distilled = DiagnosticOutputReducer.distillTerminalOutput(TAILWIND3_IMPORT, 1500)
+    expect(distilled).toContain('[TERMINAL OUTPUT DISTILLED')
+
+    expect(diagnosticFixTargetFile(distilled, facts)).toBe('src/index.css')
+    expect(
+      buildDiagnosticFixDirective(
+        distilled,
+        () => [],
+        () => [],
+        facts,
+      ),
+    ).toContain('IMPORTS THE "tailwindcss" PACKAGE')
+  })
+})
+
+describe('Rolldown unresolved import after distillation', () => {
+  // Live full task run 35 of 2026-09-25: the build was re-run 19 times with no file named.
+  const UNRESOLVED = [
+    '> project-dashboard-task@1.0.0 build',
+    '> vite build',
+    'vite v8.3.1 building client environment for production...',
+    'transforming...',
+    '✓ 15 modules transformed.',
+    '✗ Build failed in 109ms',
+    'error during build:',
+    'Build failed with 2 errors:',
+    "\u001b[31m[UNRESOLVED_IMPORT] \u001b[0mCould not resolve './components/Dashboard' in src/App.jsx",
+    '   \u001b[38;5;246m╭\u001b[0m\u001b[38;5;246m─[\u001b[0m src/App.jsx:3:23 \u001b[38;5;246m]\u001b[0m',
+    ...Array.from({ length: 40 }, (_, i) => `   │ help line ${i} with nothing a diagnosis needs`),
+  ].join('\n')
+
+  it('keeps the unresolved import line, so the arbiter can still name the file', () => {
+    const distilled = DiagnosticOutputReducer.distillTerminalOutput(UNRESOLVED, 800)
+    expect(distilled).toContain('[TERMINAL OUTPUT DISTILLED')
+    expect(distilled).toContain("Could not resolve './components/Dashboard' in src/App.jsx")
+    expect(diagnosticFixTargetFile(UNRESOLVED)).toBe('src/components/Dashboard.jsx')
+    expect(diagnosticFixTargetFile(distilled)).toBe('src/components/Dashboard.jsx')
   })
 })

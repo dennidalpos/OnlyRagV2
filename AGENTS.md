@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.17 · 2026-09-25` — Repository facts and verified commands.
+`v1.18 · 2026-09-25` — Repository facts and verified commands.
 
 ## Scope
 
@@ -9,17 +9,18 @@
 
 ## Verified commands
 
-Run from repository root in PowerShell. On 2026-09-25 on Linux (cloud container, Node 22): `npm run typecheck`, `npm run quality:static`, `npm run audit:deadcode`, `npm run audit:cycles`, `npm run docs:check`, `npm run format:check`, `npx vite build` and `npm run test:fast` (274 files, 2155 passed, 22 skipped) passed after the typed IPC contract; Electron E2E, Sidecar tests and `npm run test:live` were last run on Windows on 2026-09-24 and must be rerun there (SIMPLIFY-VERIFY-WIN-01). Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides), never the Desktop. In a container without `node_modules`, `npm ci --ignore-scripts` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1` is enough for the static checks and the fast suite; change dependencies with `npx npm@11`, since npm 10 drops the lockfile's `libc` fields.
+Run from repository root in PowerShell. On 2026-09-25 on Windows (Node 24, Ollama on an RTX 2070) these passed: the static checks, `npm run test:fast` (274 files, 2183 tests), the Sidecar tests, all six E2E commands, and `npm run test:live` except `fullTaskRun.live.ts`, whose reliability is tracked in FULLTASK-RELIABILITY-01; the installer and the full audit were not rerun. Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides), never the Desktop. In a container without `node_modules`, `npm ci --ignore-scripts` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1` is enough for the static checks and the fast suite; change dependencies with `npx npm@11`, since npm 10 drops the lockfile's `libc` fields.
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (274 files, 2177 tests; 22 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Fast suite | `npm run test:fast` (274 files, 2183 tests; 22 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
 | Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (133 tests) |
 | Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 4 guard scenarios) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |
 | Cold-start network E2E | `npm run test:e2e:cold-start` (Main and Renderer first launch) |
 | Settings bootstrap E2E | `npm run test:e2e:settings-bootstrap` |
 | Bundle and viewport E2E | `npm run test:e2e:bundle-ux` (1024×700 and 1400×900) |
+| Ingestion and translation E2E | `npm run test:e2e:ingest-translate` (dev Sidecar from `.venv`, real Ollama models from `settings.json`, free `:8000`) |
 | Static quality | `npm run quality:static` (Biome lint errors, format-check of every file, IPC and layering guards; `noExplicitAny` is an error in every file, tests included) |
 | Installer | `npm run package:win` (output in `release/`; Vite owns and empties `dist/`) |
 | Full audit | `powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast` |
@@ -40,7 +41,7 @@ Run from repository root in PowerShell. On 2026-09-25 on Linux (cloud container,
 ## Repository specifics
 
 - Sidecar lifecycle is owned by `sidecarProcessManager`; on Windows orphan port reclaim requires exact process identity from `sidecar-ownership.json`.
-- Keep UTF-8 without BOM and avoid CRLF/LF-only diffs.
+- Keep UTF-8 without BOM and avoid CRLF/LF-only diffs. `.gitattributes` checks every text file out with LF, as Biome requires, whatever `core.autocrlf` says; after a clone made before it existed, `git add --renormalize .` followed by `git reset` clears the phantom modifications.
 - A test outside the `dom` project that needs a DOM declares `// @vitest-environment happy-dom` on its first line.
 - `PROJECT_STATUS.json` is the canonical backlog; retain its `todos` string-array format and remove completed entries.
 - Work directly on `master`; do not create branches. Commit only when explicitly requested; push only when explicitly requested.

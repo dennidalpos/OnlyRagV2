@@ -9,7 +9,7 @@ import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHea
 import { normalizeOllamaHost } from '../../../../shared/domain/ollamaHost'
 import { appSettingsRepository } from '../filesystem/appSettingsRepository'
 import { sidecarHttpClient } from '../http/sidecarHttpClient'
-import { matchesSidecarOwnership, parseListeningPidFromNetstat, type SidecarOwnershipMarker } from './orphanPortReclaim'
+import { isProcessOrDescendant, matchesSidecarOwnership, parseListeningPidFromNetstat, type SidecarOwnershipMarker } from './orphanPortReclaim'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
@@ -313,6 +313,18 @@ export class SidecarProcessManager {
     }
   }
 
+  private async readParentPid(pid: number): Promise<number | null> {
+    if (process.platform !== 'win32' || !Number.isSafeInteger(pid) || pid <= 0) return null
+    const raw = await this.readCommandOutput('powershell', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `(Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}').ParentProcessId`,
+    ])
+    const parent = Number.parseInt(raw.trim(), 10)
+    return Number.isSafeInteger(parent) && parent > 0 ? parent : null
+  }
+
   async startPythonSidecar(): Promise<boolean> {
     if (await this.checkSidecarHealth()) {
       // Ours, started earlier in this same session: nothing to do.
@@ -416,13 +428,14 @@ export class SidecarProcessManager {
     const childPid = sidecarProcess?.pid
     const listenerPid =
       process.platform === 'win32' ? parseListeningPidFromNetstat(await this.readCommandOutput('netstat', ['-ano', '-p', 'tcp']), SIDECAR_PORT) : childPid
-    if (!childPid || listenerPid !== childPid) {
+    if (!childPid || !listenerPid || !(await isProcessOrDescendant(listenerPid, childPid, (pid) => this.readParentPid(pid)))) {
       this.stopPythonSidecar()
       this.state = { status: 'offline', error: 'Sidecar port was taken by another process during startup.' }
       return false
     }
     if (process.platform === 'win32') {
-      const identity = await this.readProcessIdentity(childPid)
+      // The listener, not the spawned launcher: orphan reclaim compares this marker with the PID netstat reports.
+      const identity = await this.readProcessIdentity(listenerPid)
       if (!identity) {
         this.stopPythonSidecar()
         this.state = { status: 'offline', error: 'Could not verify Sidecar process ownership.' }

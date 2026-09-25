@@ -5,8 +5,24 @@ import type { AgentCompletionStatus, AgentRunIdentity, AgentVerificationEvidence
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
 import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
+import { type AgentLocalizedText, formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 
 export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
+
+/** Emits an entry the renderer shows in the UI language; the Italian rendering stays its `message`/`detail`. A string detail is verbatim (command output, model text). */
+export function emitLocalizedLog(
+  emitLog: EmitLog,
+  type: Parameters<EmitLog>[0],
+  message: AgentLocalizedText,
+  detail?: AgentLocalizedText | string,
+  meta?: Partial<AgentLogEntry>,
+): void {
+  const localizedDetail = typeof detail === 'object' ? detail : undefined
+  emitLog(type, formatAgentTextIt(message), localizedDetail ? formatAgentTextIt(localizedDetail) : (detail as string | undefined) || undefined, {
+    ...meta,
+    localized: { message, ...(localizedDetail ? { detail: [localizedDetail] } : {}) },
+  })
+}
 
 export interface ApprovalResponse {
   approved: boolean

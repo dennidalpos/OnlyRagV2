@@ -1,6 +1,6 @@
 import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
-import { parseAgentToolCall, type ToolCallRejection } from '../domain/agent/toolParser'
+import { parseAgentToolCall, parseNativeToolCall, type ToolCallRejection } from '../domain/agent/toolParser'
 import { buildToolSchemaCorrectionDirective } from '../domain/agent/ollamaToolSchemaCatalog'
 import { schemaStopReason } from '../domain/agent/agentProgressPolicy'
 import { MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
@@ -11,6 +11,7 @@ import { handleAskTool } from './agentOrchestratorAskAutoHealing'
 import { handleFinishTool, handleLoopDetection } from './agentOrchestratorFinishAndLoopGuards'
 import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorRunContext'
 import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
 
 async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections: readonly ToolCallRejection[] = []): Promise<ResponseInterpretationOutcome> {
   const streamedOutput = ctx.streamedOutput || ''
@@ -54,11 +55,21 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
       },
       feedback,
     )
-    ctx.emitLog(
+    emitLocalizedLog(
+      ctx.emitLog,
       'info',
       rejected
-        ? `Step ${ctx.stepCount} Tool Call Rejected [${rejected.toolName}] — recupero schema ${decision.state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}: ${rejected.errors.join('; ')}`
-        : `Step ${ctx.stepCount} Tool Call Rejected — recupero schema ${decision.state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}: no parsable JSON tool call.`,
+        ? {
+            key: 'toolCallRejected',
+            params: {
+              step: ctx.stepCount,
+              tool: rejected.toolName,
+              used: decision.state.totalFailures,
+              limit: MAX_FAILURES_PER_RECOVERY_CATEGORY,
+              errors: rejected.errors.join('; '),
+            },
+          }
+        : { key: 'toolCallRejectedUnparsed', params: { step: ctx.stepCount, used: decision.state.totalFailures, limit: MAX_FAILURES_PER_RECOVERY_CATEGORY } },
     )
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, toolLabel, feedback)
@@ -80,7 +91,7 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
       { step: ctx.stepCount, tool: 'no_tool_detected', status: 'BLOCKED', summary: 'No tool call found in conversational response' },
       feedback,
     )
-    ctx.emitLog('info', `Step ${ctx.stepCount}: No tool call found in LLM response. Requesting tool invocation...`)
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'noToolCall', params: { step: ctx.stepCount } })
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'no_tool_detected', feedback)
     }
@@ -114,10 +125,15 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
 /** Interprets one turn's raw LLM output: plan extraction, tool-call parsing (with the no-tool-call / malformed-call recovery paths), the finish/loop-detection/ask special cases (see agentOrchestratorFinishAndLoopGuards.ts and agentOrchestratorAskAutoHealing.ts), */
 export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Promise<ResponseInterpretationOutcome> {
   const rejections: ToolCallRejection[] = []
-  const parsedTool = parseAgentToolCall(ctx.streamedOutput, (rejection) => {
+  const onRejection = (rejection: ToolCallRejection) => {
     logger.log('WARN', 'ToolParser', `Rejected ${rejection.toolName} call: ${rejection.errors.join('; ')}`)
     rejections.push(rejection)
-  })
+  }
+  const parsedTool = ctx.nativeCall
+    ? parseNativeToolCall(ctx.nativeCall.function.name, ctx.nativeCall.function.arguments, onRejection)
+    : ctx.nativeMode
+      ? null
+      : parseAgentToolCall(ctx.streamedOutput, onRejection)
   if (!parsedTool) return handleMissingToolCall(ctx, rejections)
 
   // A call that parses ends any prose or rejection streak: the model has produced a valid shape again.
@@ -155,7 +171,12 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
 
   ctx.state.progress.onCallAccepted()
 
-  ctx.emitLog('tool_call', `Step ${ctx.stepCount} Tool Call [${parsedTool.tool}]:`, JSON.stringify(parsedTool.parameters, null, 2))
+  emitLocalizedLog(
+    ctx.emitLog,
+    'tool_call',
+    { key: 'toolCallHeader', params: { step: ctx.stepCount, tool: parsedTool.tool } },
+    JSON.stringify(parsedTool.parameters, null, 2),
+  )
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, parsedTool.tool, parsedTool.parameters, parsedTool.explanation)
   }

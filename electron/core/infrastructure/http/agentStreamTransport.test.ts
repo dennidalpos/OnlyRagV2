@@ -111,6 +111,79 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
     expect(observed).toEqual(['native'])
   })
 
+  it('returns every native call and sends the supplied assistant/tool transcript back to Ollama', async () => {
+    let capturedBody = {} as CapturedOllamaBody
+    const mock = await startMockOllama((req, res) => {
+      let raw = ''
+      req.on('data', (chunk) => (raw += chunk))
+      req.on('end', () => {
+        capturedBody = JSON.parse(raw)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.write(JSON.stringify({ message: { thinking: 'inspect', content: '' }, done: false }) + '\n')
+        res.write(
+          JSON.stringify({
+            message: {
+              content: 'Reading both files',
+              tool_calls: [
+                { function: { index: 0, name: 'read_file', arguments: { filePath: 'a.ts' } } },
+                { function: { index: 1, name: 'read_file', arguments: { filePath: 'b.ts' } } },
+              ],
+            },
+            done: true,
+          }) + '\n',
+        )
+        res.end()
+      })
+    })
+    activeServer = mock.server
+    const messages = [
+      { role: 'system' as const, content: 'Inspect the project' },
+      { role: 'user' as const, content: 'Read both files' },
+      { role: 'assistant' as const, content: '', tool_calls: [{ type: 'function' as const, function: { index: 0, name: 'list_dir', arguments: {} } }] },
+      { role: 'tool' as const, tool_name: 'list_dir', content: 'a.ts, b.ts' },
+    ]
+    const output = await AgentStreamTransport.streamCompletion({
+      targetModel: 'qwen3.8:27b',
+      prompt: 'unused when messages are supplied',
+      messages,
+      runtimeOpts,
+      ollamaEndpoint: mock.baseUrl,
+      isCancelled: () => false,
+      toolCallingCapable: true,
+      toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
+    })
+    expect(capturedBody.messages).toEqual(messages)
+    expect(output).toEqual({
+      content: 'Reading both files',
+      thinking: 'inspect',
+      toolCalls: [
+        { type: 'function', function: { index: 0, name: 'read_file', arguments: { filePath: 'a.ts' } } },
+        { type: 'function', function: { index: 1, name: 'read_file', arguments: { filePath: 'b.ts' } } },
+      ],
+    })
+  })
+
+  it('keeps separate calls streamed in separate chunks without function indexes', async () => {
+    const mock = await startMockOllama((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.write(JSON.stringify({ message: { tool_calls: [{ function: { name: 'read_file', arguments: { filePath: 'a.ts' } } }] }, done: false }) + '\n')
+      res.write(JSON.stringify({ message: { tool_calls: [{ function: { name: 'read_file', arguments: { filePath: 'b.ts' } } }] }, done: true }) + '\n')
+      res.end()
+    })
+    activeServer = mock.server
+    const output = await AgentStreamTransport.streamCompletion({
+      targetModel: 'qwen3.8:27b',
+      prompt: '',
+      messages: [{ role: 'user', content: 'Read both files' }],
+      runtimeOpts,
+      ollamaEndpoint: mock.baseUrl,
+      isCancelled: () => false,
+      toolCallingCapable: true,
+      toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
+    })
+    expect(output.toolCalls.map((call) => call.function.arguments.filePath)).toEqual(['a.ts', 'b.ts'])
+  })
+
   it('should fall back to the accumulated raw text content when tool_calls is empty (e.g. a "tools"-capable model that echoes the call as JSON text instead), streamed across multiple content deltas', async () => {
     const observed: string[] = []
     const mock = await startMockOllama((_req, res) => {

@@ -8,7 +8,7 @@
 - `diff`: diff delle proposte di modifica.
 - `p-queue`: coda dei task Main.
 - `turndown`, `cheerio`: conversione web in Markdown.
-- `node-pty`, `playwright`: terminale e validazione browser.
+- `playwright`: validazione browser. Il terminale usa PowerShell tramite `PersistentPowerShellSession`, senza dipendenze native aggiuntive.
 
 ## Python Sidecar
 

@@ -104,7 +104,9 @@ export function toOllamaJsonSchema(schema: z.ZodType): Record<string, unknown> {
 export function validateStructuredContent<T>(content: string, schema: z.ZodType<T>): StructuredValidationResult<T> {
   let parsed: unknown
   try {
-    parsed = JSON.parse(content)
+    const trimmed = content.trim()
+    const fenced = /^```json\s*([\s\S]*?)\s*```$/i.exec(trimmed)
+    parsed = JSON.parse(fenced ? fenced[1] : trimmed)
   } catch {
     return { status: 'invalid', error: 'Response is not valid JSON' }
   }

@@ -3,7 +3,8 @@ import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
-import stripAnsi from 'strip-ansi'
+import { PersistentPowerShellSession } from './persistentPowerShellSession'
+import { normalizePowerShellCommand } from './powerShellCommand'
 import { logger } from '../logging/logger'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
@@ -23,37 +24,9 @@ export interface ActiveTaskPaths {
   temporaryResiduePath?: string
 }
 
-export function normalizePowerShellCommand(command: string): string {
-  if (!command || typeof command !== 'string') return ''
-  let normalized = command.trim()
-
-  // 1. Ensure npx uses non-interactive -y flag if not already specified
-  normalized = normalized.replace(/^npx\s+(?!-y|--yes)(.+)/i, 'npx -y $1')
-
-  // 2. Ensure create-vite / npm create vite commands are non-interactive
-  if (/\bnpm\s+create\s+vite\b/i.test(normalized) || /\bcreate-vite\b/i.test(normalized)) {
-    if (!normalized.includes('--yes') && !normalized.includes('-y')) {
-      if (normalized.includes('--template') && !normalized.includes('-- --template')) {
-        normalized = normalized.replace(/--template\s+([^\s]+)/i, '-- --template $1 --yes')
-      } else {
-        normalized = `${normalized} --yes`
-      }
-    }
-  }
-
-  // 3. Convert compound && chaining (e.g. "cd dir && npm install") to PowerShell compatible sequence
-  if (normalized.includes('&&')) {
-    const parts = normalized.split(/\s*&&\s*/)
-    if (parts.length > 1) {
-      normalized = parts.join('; if ($?) { ') + ' }'.repeat(parts.length - 1)
-    }
-  }
-
-  return normalized
-}
-
 export class TaskRunner {
   private activeTasksMap = new Map<string, ActiveTask>()
+  private terminalSessions = new Map<string, PersistentPowerShellSession>()
 
   registerActiveTask(id: string, type: ActiveTaskType, destroyFn: () => void, paths: ActiveTaskPaths = {}): string {
     const task: ActiveTask = {
@@ -97,6 +70,8 @@ export class TaskRunner {
 
   cancelAllTasks() {
     logger.log('INFO', 'TaskRunner', `Cancelling all active tasks (${this.activeTasksMap.size} total)...`)
+    for (const session of this.terminalSessions.values()) session.dispose()
+    this.terminalSessions.clear()
     for (const [id, task] of this.activeTasksMap.entries()) {
       try {
         task.destroy()
@@ -184,150 +159,37 @@ export class TaskRunner {
     }
     const normalizedCommand = normalizePowerShellCommand(command)
     const effectiveTimeoutMs = Math.min(Math.max(timeoutMs || 300000, 5000), 1800000)
-    logger.log(
-      'INFO',
-      'TaskRunner',
-      `Executing PowerShell command: ${normalizedCommand}${targetCwd ? ` (CWD: ${targetCwd})` : ''} [Timeout: ${effectiveTimeoutMs / 1000}s]`,
-    )
-
     let executionCwd = app?.getPath ? app.getPath('userData') : process.cwd()
     if (targetCwd && typeof targetCwd === 'string' && fs.existsSync(targetCwd)) {
       try {
-        const st = fs.statSync(targetCwd)
-        if (st.isDirectory()) {
-          executionCwd = targetCwd
-        }
+        if (fs.statSync(targetCwd).isDirectory()) executionCwd = targetCwd
       } catch (cwdErr: unknown) {
-        const msg = cwdErr instanceof Error ? cwdErr.message : String(cwdErr)
-        logger.log('WARN', 'TaskRunner', `Failed checking CWD '${targetCwd}': ${msg}`)
+        logger.log('WARN', 'TaskRunner', `Failed checking CWD '${targetCwd}': ${errorMessage(cwdErr)}`)
       }
     }
 
-    let ptyModule: typeof import('node-pty') | null = null
+    logger.log('INFO', 'TaskRunner', `Executing PowerShell command: ${normalizedCommand} (CWD: ${executionCwd}) [Timeout: ${effectiveTimeoutMs / 1000}s]`)
+    let session = this.terminalSessions.get(executionCwd)
+    if (!session || !session.isRunning) {
+      session = new PersistentPowerShellSession(executionCwd)
+      this.terminalSessions.set(executionCwd, session)
+    }
+    if (session.isExecuting()) {
+      return { success: false, output: '', error: 'A command is already running in this terminal.' }
+    }
     try {
-      ptyModule = require('node-pty')
-    } catch {
-      logger.log('INFO', 'TaskRunner', 'node-pty native module unavailable, using standard child_process fallback.')
-      ptyModule = null
-    }
-
-    const execEnv = {
-      ...process.env,
-      CI: '1',
-      PAGER: 'cat',
-      NPM_CONFIG_YES: 'true',
-      PIP_NO_INPUT: '1',
-    }
-
-    const runWithChildProcess = (): Promise<{ success: boolean; output: string; error?: string }> => {
-      return new Promise((resolve) => {
-        let isCompleted = false
-
-        const psProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', normalizedCommand], {
-          cwd: executionCwd,
-          env: execEnv,
-          windowsHide: true,
-        })
-
-        let stdout = ''
-        let stderr = ''
-
-        const timeoutTimer = setTimeout(() => {
-          if (!isCompleted && !psProcess.killed && psProcess.pid) {
-            logger.log('WARN', 'TaskRunner', `Command timed out after ${effectiveTimeoutMs / 1000}s. Terminating process tree PID ${psProcess.pid}...`)
-            if (process.platform === 'win32') {
-              spawn('taskkill', ['/pid', psProcess.pid.toString(), '/f', '/t'])
-            } else {
-              psProcess.kill('SIGKILL')
-            }
-          }
-        }, effectiveTimeoutMs)
-
-        psProcess.stdout?.on('data', (data) => {
-          stdout += data.toString()
-        })
-        psProcess.stderr?.on('data', (data) => {
-          stderr += data.toString()
-        })
-
-        psProcess.on('close', (code) => {
-          isCompleted = true
-          clearTimeout(timeoutTimer)
-          logger.log('INFO', 'TaskRunner', `PowerShell process PID ${psProcess.pid} finished with exit code ${code}`)
-          const output = (stdout || stderr || (code === 0 ? 'Command executed successfully.' : `Process exited with code ${code}`)).trim()
-          resolve({
-            success: code === 0,
-            output,
-            error: code !== 0 ? stderr.trim() || `Exit code ${code}` : undefined,
-          })
-        })
-
-        psProcess.on('error', (err) => {
-          isCompleted = true
-          clearTimeout(timeoutTimer)
-          logger.log('ERROR', 'TaskRunner', `PowerShell process error: ${err.message}`)
-          resolve({
-            success: false,
-            output: err.message,
-            error: err.message,
-          })
-        })
-      })
-    }
-
-    if (ptyModule) {
-      try {
-        return await new Promise((resolve) => {
-          let isCompleted = false
-          let outputText = ''
-
-          try {
-            const ptyProcess = ptyModule.spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
-              name: 'xterm-color',
-              cols: 120,
-              rows: 30,
-              cwd: executionCwd,
-              env: execEnv as Record<string, string>,
-            })
-
-            const timeoutTimer = setTimeout(() => {
-              if (!isCompleted && ptyProcess.pid) {
-                logger.log('WARN', 'TaskRunner', `node-pty command timed out after ${effectiveTimeoutMs / 1000}s. Terminating process PID ${ptyProcess.pid}...`)
-                if (process.platform === 'win32') {
-                  spawn('taskkill', ['/pid', ptyProcess.pid.toString(), '/f', '/t'])
-                } else {
-                  ptyProcess.kill()
-                }
-              }
-            }, effectiveTimeoutMs)
-
-            ptyProcess.onData((data: string) => {
-              outputText += data
-            })
-
-            ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
-              isCompleted = true
-              clearTimeout(timeoutTimer)
-              logger.log('INFO', 'TaskRunner', `node-pty PowerShell process PID ${ptyProcess.pid} finished with exit code ${exitCode}`)
-              const cleanOutput = stripAnsi(outputText).trim()
-              resolve({
-                success: exitCode === 0,
-                output: cleanOutput || (exitCode === 0 ? 'Command executed successfully.' : `Process exited with code ${exitCode}`),
-                error: exitCode !== 0 ? cleanOutput || `Exit code ${exitCode}` : undefined,
-              })
-            })
-          } catch (ptyErr: unknown) {
-            logger.log('WARN', 'TaskRunner', `node-pty spawn failed synchronously, delegating to child_process: ${errorMessage(ptyErr)}`)
-            runWithChildProcess().then(resolve)
-          }
-        })
-      } catch (outerPtyErr: unknown) {
-        logger.log('WARN', 'TaskRunner', `node-pty outer failure: ${errorMessage(outerPtyErr)}, falling back to child_process`)
-        return runWithChildProcess()
+      const result = await session.execute(normalizedCommand, onChunk, undefined, effectiveTimeoutMs)
+      const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim()
+      return {
+        success: result.code === 0,
+        output: output || (result.code === 0 ? 'Command executed successfully.' : `Process exited with code ${result.code}`),
+        error: result.code === 0 ? undefined : result.stderr.trim() || `Exit code ${result.code}`,
       }
+    } catch (error: unknown) {
+      const message = errorMessage(error)
+      logger.log('ERROR', 'TaskRunner', `PowerShell command failed: ${message}`)
+      return { success: false, output: message, error: message }
     }
-
-    return runWithChildProcess()
   }
 }
 

@@ -110,6 +110,16 @@ export const AGENT_MAIN_TEXT_IT = {
   transportRecovery: 'Recupero trasporto Ollama 1/1 dopo: {error}',
   llmStreamError: 'Errore dello stream LLM al passo {step}: {error}',
   agentThoughtHeader: 'AI Agent ({mode} passo {step}):',
+  toolCallRejected: 'Passo {step}: chiamata tool rifiutata [{tool}]. Recupero schema {used}/{limit}: {errors}',
+  toolCallRejectedUnparsed: 'Passo {step}: chiamata tool rifiutata. Recupero schema {used}/{limit}: nessuna chiamata JSON valida.',
+  noToolCall: 'Passo {step}: nessuna chiamata tool nella risposta del modello. Richiesta una chiamata tool.',
+  toolCallHeader: 'Passo {step}: chiamata tool [{tool}]:',
+  contextClamped: '📏 Contesto limitato dal modello: {hardware} → {ceiling} token ({model} è addestrato a {ceiling}; Ollama troncherebbe il prompt).',
+  contextPreference: '📏 Preferenza contesto applicata: {previous} → {preferred} token ({model}).',
+  contextPolicy: '🎯 Policy contesto [{kind}]: {reason} — omessi {omitted}.',
+  toolPolicy: '🧰 Policy tool [{kind}]: {reason} — {tools}.',
+  contextCompacted: '🗜️ Contesto compattato: {original} → {final} caratteri (euristico).',
+  contextReused: '⚡ Contesto Ollama riutilizzato: inviati {sent} caratteri invece di {full} (cache KV).',
 } as const
 
 export type AgentMainTextKey = keyof typeof AGENT_MAIN_TEXT_IT

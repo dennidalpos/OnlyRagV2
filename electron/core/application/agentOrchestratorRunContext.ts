@@ -27,6 +27,8 @@ import type { SkillMatchContext } from '../domain/skills/skillMatcher'
 import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession, EmitLog } from './agentOrchestratorTypes'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
+import type { AgentChatToolCall } from '../infrastructure/http/agentStreamTransport'
+import type { AssembledPrompt } from '../domain/agent/agentPromptAssembler'
 
 /** Tool step mutable outcome flags. */
 export interface ToolResultMutableFlags {
@@ -109,6 +111,9 @@ export type TurnDispatchContext = AgentRunContext & {
 
 export interface TurnDispatchData {
   streamedOutput: string
+  nativeCalls?: AgentChatToolCall[]
+  nativeMode?: boolean
+  nativeBatchSize?: number
   hasRecentToolFailure: boolean
   errorCountInHistory: number
   compiledHistoryBlock: string
@@ -117,7 +122,7 @@ export interface TurnDispatchData {
 
 export interface PreparedAgentTurn {
   selection: ModelSelection
-  assembled: { stableSection: string; historyBlock: string }
+  assembled: AssembledPrompt
   turnPrompt: string
   contextReuseDecision: OllamaContextReuseDecision
   wasCompacted: boolean
@@ -141,6 +146,8 @@ export interface ModelSelection {
 /** Response interpretation context. */
 export type ResponseInterpreterContext = AgentRunContext & {
   streamedOutput: string
+  nativeCall?: AgentChatToolCall
+  nativeMode?: boolean
   stepCount: number
   hasRecentToolFailure: boolean
   errorCountInHistory: number

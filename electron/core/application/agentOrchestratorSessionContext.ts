@@ -4,6 +4,7 @@ import type { SkillMatchContext } from '../domain/skills/skillMatcher'
 import type { SkillDefinition } from '../domain/skills/skillTypes'
 import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession } from './agentOrchestratorTypes'
+import { completeInterruptedBatch } from './agentChatTranscript'
 import { logger } from '../infrastructure/logging/logger'
 import { generateCompactRepoMap } from '../infrastructure/filesystem/compactSemanticRepoMapper'
 import { resolveWorkspacePath, buildDefaultAgentSettings, buildAttachedContextBlock, buildPinnedFilesContextBlock } from './agentOrchestratorSessionSetup'
@@ -85,6 +86,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   if (savedState?.ollamaRuntimeProfile) session.ollamaRuntimeProfile = savedState.ollamaRuntimeProfile
   session.ollamaGenerationTelemetry = savedState?.ollamaGenerationTelemetry || []
   session.lastVerification = savedState?.lastVerification
+  session.chatMessages = completeInterruptedBatch(savedState?.chatMessages || [])
   // '' when no model is configured: the preflight then blocks the run with a clear message.
   const requestedCodingModel = resolveConfiguredModel('coding', settings, payload.activeModel)
   const codingModel = session.ollamaRuntimeProfile?.model || findMatchingInstalledModel(requestedCodingModel, availableModels) || requestedCodingModel

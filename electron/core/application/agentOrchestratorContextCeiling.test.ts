@@ -45,17 +45,23 @@ beforeEach(() => {
 })
 
 describe('selectModelForTurn — context ceiling', () => {
+  it('keeps native tool calling when an older session recorded a text protocol', () => {
+    const ctx = contextWith(metricsWith(32768))
+    ctx.session.toolCallingProtocolByModel = { [MODEL]: 'text' }
+    expect(selectModelForTurn(ctx).targetModelToolCallingCapable).toBe(true)
+  })
+
   it('leaves the hardware window alone when the model can hold it', () => {
     const selection = selectModelForTurn(contextWith(metricsWith(131072)))
     expect(selection.contextCeiling).toBe(131072)
     expect(selection.runtimeOpts.num_ctx).toBe(32768)
-    expect(logs.filter((l) => l.includes('Context clamped'))).toHaveLength(0)
+    expect(logs.filter((l) => l.includes('Contesto limitato'))).toHaveLength(0)
   })
 
   it('clamps num_ctx down to the model trained context length', () => {
     const selection = selectModelForTurn(contextWith(metricsWith(8192)))
     expect(selection.runtimeOpts.num_ctx).toBe(8192)
-    expect(logs.some((l) => l.includes('Context clamped') && l.includes('8192'))).toBe(true)
+    expect(logs.some((l) => l.includes('Contesto limitato') && l.includes('8192'))).toBe(true)
   })
 
   it('re-derives num_predict and maxContextChars from the clamped window, not the requested one', () => {

@@ -22,6 +22,9 @@ import { workspaceAppService } from './workspaceAppService'
 import { ollamaAppService } from './ollamaAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { appendToolResponse } from './agentChatTranscript'
+import type { AgentChatToolCall } from '../infrastructure/http/agentStreamTransport'
+import type { PreparedAgentTurn, TurnDispatchData } from './agentOrchestratorRunContext'
 
 export type { AgentSession }
 
@@ -389,6 +392,7 @@ export async function runAgentOrchestratorLoop(
   // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
   const PERSIST_EVERY_N_STEPS = 5
 
+  const pendingNativeCalls: Array<{ call: AgentChatToolCall; prepared: PreparedAgentTurn; data: TurnDispatchData }> = []
   while (stepCountBox.value < MAX_STEPS && isSessionActive()) {
     stepCountBox.value++
     setExecutionPhase('collect_context')
@@ -401,27 +405,50 @@ export async function runAgentOrchestratorLoop(
 
     // Routes the turn to a model, assembles/compacts the prompt, freezes/grows num_ctx, decides Ollama context-cache reuse, and dispatches to the LLM with resilient fallback.
     const turnContext = { ...run, stepCount: stepCountBox.value, skillsBlock }
-    const hadRuntimeProfile = Boolean(session.ollamaRuntimeProfile)
-    const preparedTurn = await collectTurnContext(turnContext)
-    if (!hadRuntimeProfile && session.ollamaRuntimeProfile) await persistCurrentState()
-    setExecutionPhase('propose_action')
-    const dispatchOutcome = await requestTurnProposal(turnContext, preparedTurn)
-    if (dispatchOutcome.outcome === 'return') {
-      setExecutionPhase('outcome')
-      return dispatchOutcome.result
+    const pending = pendingNativeCalls.shift()
+    let preparedTurn: PreparedAgentTurn
+    let turnData: TurnDispatchData
+    if (pending) {
+      preparedTurn = pending.prepared
+      turnData = { ...pending.data, nativeCalls: [pending.call] }
+      setExecutionPhase('propose_action')
+    } else {
+      const hadRuntimeProfile = Boolean(session.ollamaRuntimeProfile)
+      preparedTurn = await collectTurnContext(turnContext)
+      if (!hadRuntimeProfile && session.ollamaRuntimeProfile) await persistCurrentState()
+      setExecutionPhase('propose_action')
+      const dispatchOutcome = await requestTurnProposal(turnContext, preparedTurn)
+      if (dispatchOutcome.outcome === 'return') {
+        setExecutionPhase('outcome')
+        return dispatchOutcome.result
+      }
+      turnData = { ...dispatchOutcome.data, nativeBatchSize: dispatchOutcome.data.nativeCalls?.length }
+      for (const call of turnData.nativeCalls?.slice(1) || []) pendingNativeCalls.push({ call, prepared: preparedTurn, data: turnData })
     }
-    const { streamedOutput, hasRecentToolFailure, errorCountInHistory, compiledHistoryBlock, targetModel } = dispatchOutcome.data
+    const { streamedOutput, hasRecentToolFailure, errorCountInHistory, compiledHistoryBlock, targetModel } = turnData
+    const nativeCall = turnData.nativeCalls?.[0]
+    const recordNativeResult = (output: string) => {
+      if (nativeCall) session.chatMessages = appendToolResponse(session.chatMessages || [], nativeCall, output)
+    }
+    if (nativeCall && (turnData.nativeBatchSize || 0) > 1 && (nativeCall.function.name === 'finish' || nativeCall.function.name === 'ask')) {
+      recordNativeResult(`${nativeCall.function.name} must be called alone after the other tool results are available.`)
+      setExecutionPhase('collect_context')
+      continue
+    }
 
     // Interprets the raw LLM output for this turn: plan extraction, tool-call parsing (with no-tool-call / malformed-call recovery), and the finish/loop-detection/ask special cases.
     const interpretation = await interpretTurnResponse({
       ...run,
       streamedOutput,
+      nativeCall,
+      nativeMode: turnData.nativeMode,
       stepCount: stepCountBox.value,
       hasRecentToolFailure,
       errorCountInHistory,
       compiledHistoryBlock,
     })
     if (interpretation.outcome === 'continue') {
+      recordNativeResult('The requested action was not executed. Review the latest application feedback before continuing.')
       setExecutionPhase('collect_context')
       continue
     }
@@ -450,6 +477,7 @@ export async function runAgentOrchestratorLoop(
       isIsolatedWorkspace: Boolean(workspaceTransaction),
     })
     if (gateResult.outcome === 'denied') {
+      recordNativeResult(gateResult.feedback || 'Tool call denied by policy or user.')
       if (settings.enableCodingAgentDebugLog && gateResult.feedback) {
         codingAgentLogger.logToolResult(sessionId, stepCountBox.value, parsedTool.tool, gateResult.feedback)
       }
@@ -484,6 +512,7 @@ export async function runAgentOrchestratorLoop(
         maxStepsLabel,
         signal: session.abortController?.signal,
       })
+      recordNativeResult('Plan update processed. Read the current plan state before continuing.')
       setExecutionPhase('collect_context')
       continue
     }
@@ -509,6 +538,7 @@ export async function runAgentOrchestratorLoop(
         : [...preparedTurn.toolPolicy.allowedTools, toolCallForExecution.tool],
       gateResult.commandApprovalGranted,
     )
+    recordNativeResult(toolRes.outputForHistory)
     agentToolExecutorService.endJournalStep()
 
     if (!isSessionActive()) {
@@ -533,6 +563,10 @@ export async function runAgentOrchestratorLoop(
       setExecutionPhase('outcome')
       return processingOutcome.result
     }
+  }
+
+  for (const pending of pendingNativeCalls) {
+    session.chatMessages = appendToolResponse(session.chatMessages || [], pending.call, 'Not executed: the run ended before this tool call.')
   }
 
   // Cancellation and timeout persist their own terminal checkpoint. Do not fall through to

@@ -25,6 +25,15 @@ describe('project profile discovery', () => {
     expect(discoverProjectProfile(root)).toMatchObject({ classification: 'empty', projects: [] })
   })
 
+  it('ignores pytest cache directories while discovering projects', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-pytest-cache-'))
+    roots.push(root)
+    fs.mkdirSync(path.join(root, '.pytest_cache'))
+    fs.writeFileSync(path.join(root, '.pytest_cache', 'package.json'), '{"name":"cache"}')
+
+    expect(discoverProjectProfile(root)).toMatchObject({ classification: 'empty', projects: [] })
+  })
+
   it('discovers root manifest and lockfile for an existing project', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-existing-'))
     roots.push(root)

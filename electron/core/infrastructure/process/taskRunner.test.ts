@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { TaskRunner, normalizePowerShellCommand } from './taskRunner'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { TaskRunner } from './taskRunner'
+import { normalizePowerShellCommand } from './powerShellCommand'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -13,6 +14,8 @@ describe('TaskRunner Unit & Reliability Tests', () => {
   beforeEach(() => {
     runner = new TaskRunner()
   })
+
+  afterEach(() => runner.cancelAllTasks())
 
   it('should register and unregister active tasks correctly', () => {
     const destroyMock = vi.fn()
@@ -104,5 +107,13 @@ describe('TaskRunner Unit & Reliability Tests', () => {
     const res = await runner.executeTerminalCommand('Write-Output "TaskRunnerReliabilityCheck"', undefined, undefined, 10000)
     expect(res.success).toBe(true)
     expect(res.output).toContain('TaskRunnerReliabilityCheck')
+  })
+
+  itWithPowerShell('keeps shell state between UI terminal commands in one workspace', async () => {
+    const first = await runner.executePowerShellCommand('$env:ONLYRAG_UI_TERMINAL_TEST = "persisted"', process.cwd(), 10000)
+    const second = await runner.executePowerShellCommand('Write-Output $env:ONLYRAG_UI_TERMINAL_TEST', process.cwd(), 10000)
+
+    expect(first.success).toBe(true)
+    expect(second).toMatchObject({ success: true, output: 'persisted' })
   })
 })

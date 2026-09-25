@@ -22,7 +22,7 @@ const PROJECT_MANIFESTS = [
   'composer.json',
 ]
 const LOCKFILES = ['package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', 'poetry.lock', 'Pipfile.lock', 'Cargo.lock', 'composer.lock']
-const IGNORED_DIRECTORIES = new Set(['.git', 'node_modules', 'dist', 'build', 'coverage', '.venv', 'out'])
+const IGNORED_DIRECTORIES = new Set(['.git', '.pytest_cache', 'node_modules', 'dist', 'build', 'coverage', '.venv', 'out'])
 
 function isDirectory(targetPath: string): boolean {
   try {

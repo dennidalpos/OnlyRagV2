@@ -102,6 +102,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
       ollamaRuntimeProfile: session.ollamaRuntimeProfile,
       ollamaGenerationTelemetry: session.ollamaGenerationTelemetry,
       lastVerification: session.lastVerification,
+      chatMessages: session.chatMessages,
     })
 
     if (workspacePath) {

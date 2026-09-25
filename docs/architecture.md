@@ -39,5 +39,6 @@ Per il coding agent il flusso è `plan/interview → plan → execution → veri
 - `ollamaGenerationScheduler` serializza a una richiesta le generazioni Main, identifica ogni operazione e pubblica attiva/coda per annullamenti mirati.
 - `sidecarProcessManager` avvia, monitora e arresta il Sidecar; `orphanPortReclaim` gestisce residui autorizzati su `:8000`.
 - `DisposableAgentWorkspace` crea un worktree/copia temporanea per ogni run; il journal protegge i singoli step al suo interno. La pubblicazione nel workspace utente è esplicita e verifica il baseline prima di copiare i file.
+- Il terminale UI e i tool shell dell'agente usano `PersistentPowerShellSession`, con sessioni separate per workspace. I comandi consecutivi mantengono directory corrente e variabili; timeout, cancellazione e prompt interattivi ricreano la sessione. `TaskRunner` chiude le sessioni UI quando annulla tutti i task o l'app termina.
 
 Verifiche: `npm run audit:cycles`, `npm run typecheck` e `npm run docs:check`.

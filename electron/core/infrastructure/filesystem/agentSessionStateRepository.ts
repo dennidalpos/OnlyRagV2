@@ -12,6 +12,7 @@ import type { AgentExecutionPhase } from '../../domain/agent/agentExecutionPhase
 import type { RecoveryFailureState } from '../../domain/agent/recoveryBudget'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../../domain/agent/ollamaSessionRuntime'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
+import type { AgentChatMessage } from '../http/agentStreamTransport'
 
 export type AgentSessionTerminationReason =
   | 'finish'
@@ -69,6 +70,7 @@ export interface SavedAgentSessionState {
   ollamaRuntimeProfile?: OllamaSessionRuntimeProfile
   ollamaGenerationTelemetry?: OllamaGenerationTelemetry[]
   lastVerification?: AgentVerificationEvidence
+  chatMessages?: AgentChatMessage[]
 }
 
 function normalizePersistedMode(raw: unknown): SavedAgentSessionState {

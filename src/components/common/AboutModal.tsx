@@ -232,14 +232,6 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
     url: 'https://lucide.dev',
   },
   {
-    name: 'node-pty',
-    version: 'v1.1.0',
-    description: 'Native pseudo-terminal integration for PowerShell interactive session execution.',
-    license: 'MIT',
-    category: 'uiAndEditor',
-    url: 'https://github.com/microsoft/node-pty',
-  },
-  {
     name: 'TanStack Virtual',
     version: 'v3.14.10',
     description: 'Headless virtual scrolling for high-volume logs, timelines, and document lists.',

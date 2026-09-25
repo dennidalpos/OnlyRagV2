@@ -9,7 +9,7 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url))
  *
  * These "tests" drive the real orchestrator against a real Ollama model and a real workspace
  * on disk. They take minutes, need a running Ollama, and are not assertions about the code:
- * they are the only way to observe how a small model actually reacts to a guard's wording,
+ * they are the only way to observe how a local model actually reacts to a guard's wording,
  * which no unit test can tell you.
  *
  * Kept out of `vitest.config.mts` because the default suite shares one working directory: a

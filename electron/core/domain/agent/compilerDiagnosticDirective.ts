@@ -294,6 +294,7 @@ export interface UnresolvedBundlerImport {
 const BUNDLER_UNRESOLVED: RegExp[] = [
   /Could not resolve ['"](\.{1,2}\/[^'"]+)['"] in (\S+?)(?::\d+(?::\d+)?)?\s*$/m,
   /Failed to resolve import ["'](\.{1,2}\/[^"']+)["'] from ["']([^"']+)["']/,
+  /Cannot find module ['"](\.{1,2}\/[^'"]+)['"] imported from [^\r\n]+\r?\n\s*❯\s+(\S+\.[cm]?[jt]sx?):\d+:\d+/,
 ]
 const TEST_SOURCE = /\.(?:test|spec)\.[cm]?[jt]sx?$/i
 const STYLESHEET = /\.(?:css|pcss|scss|sass|less)$/i
@@ -372,7 +373,9 @@ export function extractUnresolvedBundlerImport(output: string): UnresolvedBundle
 /** Nearby specifiers that may be what the import meant: the same file name here, one folder up, or in a styles folder. */
 function nearbySpecifiers(specifier: string): string[] {
   const name = specifier.split('/').pop() || ''
-  return [`./${name}`, `../${name}`, `./styles/${name}`, `../styles/${name}`].filter((candidate) => candidate !== specifier)
+  return [`./${name}`, `../${name}`, `./components/${name}`, `./pages/${name}`, `./styles/${name}`, `../styles/${name}`].filter(
+    (candidate) => candidate !== specifier,
+  )
 }
 
 function unresolvedBundlerImportFix(

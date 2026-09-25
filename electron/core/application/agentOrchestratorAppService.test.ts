@@ -142,6 +142,32 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(tracker).toContain('All tasks done perfectly.')
   })
 
+  it('executes every native tool call before asking the model again and returns both results in chat history', async () => {
+    fs.writeFileSync(path.join(tempDir, 'a.txt'), 'first file\n')
+    fs.writeFileSync(path.join(tempDir, 'b.txt'), 'second file\n')
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce({
+        content: '',
+        thinking: 'Read both files',
+        toolCalls: [
+          { type: 'function', function: { index: 0, name: 'read_file', arguments: { filePath: 'a.txt' } } },
+          { type: 'function', function: { index: 1, name: 'read_file', arguments: { filePath: 'b.txt' } } },
+        ],
+      } as never)
+      .mockResolvedValueOnce({ content: 'Both files were inspected.', thinking: '', toolCalls: [] } as never)
+
+    const result = await runAgentOrchestratorLoop({ userTask: 'Explain a.txt and b.txt', agentMode: 'ask', workspacePath: tempDir }, null)
+
+    expect(result.success).toBe(true)
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
+    const secondMessages =
+      (vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[1][0] as { messages?: Array<{ role: string; content: string }> }).messages || []
+    expect(secondMessages.filter((message) => message.role === 'tool')).toEqual([
+      expect.objectContaining({ tool_name: 'read_file', content: expect.stringContaining('first file') }),
+      expect.objectContaining({ tool_name: 'read_file', content: expect.stringContaining('second file') }),
+    ])
+  })
+
   it('runs a shell read as read_file even when the phase exposes only run_command', async () => {
     fs.writeFileSync(path.join(tempDir, 'notes.txt'), 'shell-read-marker\n')
     vi.mocked(AgentStreamTransport.streamCompletion)
@@ -187,7 +213,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const firstCatalog = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[0][0].toolCatalog || []
     expect(vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[0][0].keepAlive).toBe('30m')
     expect(firstCatalog.map((entry) => entry.function.name)).toEqual(expect.arrayContaining(['write_file']))
-    expect(firstCatalog.map((entry) => entry.function.name)).not.toEqual(expect.arrayContaining(['read_file', 'run_command']))
+    expect(firstCatalog.map((entry) => entry.function.name)).toEqual(expect.arrayContaining(['read_file', 'run_command']))
 
     const calls = mockWin.send.mock.calls as Array<[string, { statusText?: string }]>
     const statuses = calls.filter(([channel]) => channel === 'agent:step-update').map(([, data]) => data.statusText)

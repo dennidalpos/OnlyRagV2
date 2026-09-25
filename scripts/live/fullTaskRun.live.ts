@@ -1,12 +1,29 @@
 import { describe, it, expect } from 'vitest'
-import { runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
+import { respondToApproval, runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
+import type { RendererEventSink } from '../../electron/core/domain/ports/rendererEventSink'
+import type { AgentApprovalRequest } from '../../shared/types'
 import { liveWorkspacePath, loadRealSettings, reportRun, resetWorkspace, seedGeneratedPlan } from './agentLiveHarness'
 
-const MODEL = process.env.ONLYRAG_LIVE_MODEL || 'qwen2.5-coder:7b'
+const MODEL = process.env.ONLYRAG_LIVE_MODEL || 'qwen3.8:27b'
 const RUN_LABEL = process.env.ONLYRAG_LIVE_RUN || 'default'
 const SAFE_RUN = `${MODEL}-${RUN_LABEL}`.replace(/[^a-z0-9_-]+/gi, '-')
 const WORKSPACE = liveWorkspacePath(`fulltask_${SAFE_RUN}`)
 const SESSION = `live-full-task-${SAFE_RUN}`
+
+const approvedNpmCommands = new Set(['npm install', 'npm install --save-dev vitest'])
+
+/** The live probe grants only listed npm commands, one request at a time. */
+const npmConsentEvents: RendererEventSink = {
+  isAvailable: () => true,
+  send(channel, payload) {
+    if (channel !== 'agent:approval-request') return
+    const request = payload as AgentApprovalRequest
+    const command = request.contentOrCmd.trim()
+    const approved = request.type === 'terminal_cmd' && request.reasons?.includes('network_access') === true && approvedNpmCommands.has(command)
+    console.log(`npm consent ${approved ? 'approved' : 'denied'} for one terminal command`)
+    respondToApproval(request.runId, approved)
+  },
+}
 
 /** The bar is the independently reviewed regression baseline for this scenario: 12/13 milestone verificate (92%), chiusura raggiunta autonomamente, `npm run build` con exit code 0. */
 const RUN9_VERIFIED_MILESTONES = 12
@@ -48,7 +65,7 @@ Ensure the application is fully runnable, usable and responsive before moving to
 
 describe('live: full task run', () => {
   it('plans and executes the original audit task against a real model', async () => {
-    const settings = loadRealSettings({ codingModel: MODEL })
+    const settings = loadRealSettings({ codingModel: MODEL, agentSessionTimeoutMinutes: 180, capabilityPolicyMode: 'network-approved' })
     resetWorkspace(WORKSPACE)
 
     const seeded = await seedGeneratedPlan({
@@ -77,7 +94,7 @@ describe('live: full task run', () => {
     // have the agent re-deciding, every turn, what the interview already settled.
     const result = await runAgentOrchestratorLoop(
       { userTask: seeded.effectivePrompt, workspacePath: WORKSPACE, agentMode: 'auto', sessionId: SESSION, settings },
-      null,
+      npmConsentEvents,
     )
 
     // Printed BEFORE the assertions on purpose: the first failing expect aborts the test, and the metrics block is what turns "red" into "50/50 steps, 0/13 verified, blocked, 4 commands run".

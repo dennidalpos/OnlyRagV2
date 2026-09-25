@@ -195,7 +195,8 @@ export function correctedTestImport(testFile: string, specifier: string, resolve
 
 /** The import line a test needs for the globals Vitest does not inject unless `globals: true`. */
 function testGlobalsImport(failing: FailingTest): string {
-  return failing.runner === 'jest' ? "import { describe, it, expect } from '@jest/globals'" : "import { describe, it, expect } from 'vitest'"
+  const names = failing.missingGlobal === 'test' ? 'describe, it, test, expect' : 'describe, it, expect'
+  return failing.runner === 'jest' ? `import { ${names} } from '@jest/globals'` : `import { ${names} } from 'vitest'`
 }
 
 /**

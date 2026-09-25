@@ -15,7 +15,8 @@ Prima di persistere una modifica, il codice viene analizzato con il parser AST d
 [`testFailureDiagnostic.ts`](../electron/core/domain/agent/testFailureDiagnostic.ts) analizza l'output dei test (Jest, Vitest) ed emette direttive correttive precise:
 
 - **Import errati**: corregge import relativi non risolti (`./App` al posto di `../App`).
-- **Simboli globali non definiti**: inietta import mancanti per runner privi di globals (es. `import { describe, it, expect } from 'vitest'`).
+- **Simboli globali non definiti**: inietta import mancanti per runner privi di globals, includendo `test` quando è la chiamata non definita.
+- **Import falliti nel codice testato**: se Vitest indica un modulo mancante importato da `src/App.jsx`, la direttiva corregge l'import nell'app, non il file di test.
 - **Asserzioni isolate**: racchiude asserzioni fuori contesto all'interno di un blocco `it`.
 - **Import componenti mancanti**: aggiunge import per `React`, `renderToString`, `render`.
 - **Globali del browser**: `document`, `window`, `localStorage` e simili non definiti non sono import mancanti. Il codice testato (spesso un pacchetto, es. `BrowserRouter` di `react-router`) legge il DOM mentre il runner non ne ha uno: la direttiva fa installare `jsdom` se manca (`jest-environment-jsdom` per Jest) e poi aggiungere `// @vitest-environment jsdom` (o `/** @jest-environment jsdom */`) come prima riga del test.
@@ -28,6 +29,7 @@ Prima di persistere una modifica, il codice viene analizzato con il parser AST d
 - **CSS & PostCSS**: `@import` CSS non risolti vengono sostituiti con il nome del pacchetto o rimossi; gli errori di sintassi PostCSS vengono segnalati direttamente.
 - **`@import` che carica JavaScript**: se PostCSS segue un `@import` dentro il file JS di un pacchetto (`node_modules/tailwindcss/lib/index.js: Unknown word`), la direttiva indica la riga di import e non il foglio di stile; con Tailwind 3 sostituisce `@import "tailwindcss";` (sintassi Tailwind 4) con `@tailwind base; @tailwind components; @tailwind utilities;`.
 - **Risoluzione moduli Vite**: import relativi non trovati vengono instradati per la creazione o rimossi se opzionali.
+- **File vicini già presenti**: prima di creare un modulo mancante, la diagnostica cerca anche nelle cartelle `components/` e `pages/` dell'importatore e corregge lo specifier quando trova il file.
 - **Export mancanti del bundler**: `"x" is not exported by "a.jsx"` di Rollup e `[MISSING_EXPORT]` di Rolldown (Vite 8, con l'importatore solo nel code frame) ordinano di scrivere il modulo esportatore aggiungendo l'export mancante; per `default` indicano il componente già esportato con nome (`export default App`).
 - **Script npm mancanti**: riscrive gli script che invocano binari non installati o ne richiede l'installazione mirata.
 

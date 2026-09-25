@@ -9,11 +9,11 @@
 
 ## Verified commands
 
-Run from repository root in PowerShell. On 2026-09-25 on Windows (Node 24, Ollama on an RTX 2070) these passed: the static checks, `npm run test:fast` (274 files, 2183 tests), the Sidecar tests, all six E2E commands, and `npm run test:live` except `fullTaskRun.live.ts`, whose reliability is tracked in FULLTASK-RELIABILITY-01; the installer and the full audit were not rerun. Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides), never the Desktop. In a container without `node_modules`, `npm ci --ignore-scripts` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1` is enough for the static checks and the fast suite; change dependencies with `npx npm@11`, since npm 10 drops the lockfile's `libc` fields.
+Run from repository root in PowerShell. On 2026-09-25 on Windows (Node 24, Ollama on an RTX 2070) the static checks, `npm run test:fast` (275 files, 2204 tests), the Sidecar tests and all six E2E commands passed; Electron Agent E2E passed again after the native chat changes. The `qwen3.8:27b` full-task live run awaits installation (QWEN38-FULLTASK-01); installer and full audit were not rerun. Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides). In a container without `node_modules`, `npm ci --ignore-scripts` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1` suffices for static checks and the fast suite; change dependencies with `npx npm@11`, since npm 10 drops lockfile `libc` fields.
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (274 files, 2183 tests; 22 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Fast suite | `npm run test:fast` (275 files, 2204 tests; 22 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
 | Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (133 tests) |
 | Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 9 guard scenarios) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |
@@ -37,6 +37,8 @@ Run from repository root in PowerShell. On 2026-09-25 on Windows (Node 24, Ollam
 - Ollama HTTP from Main goes through `electron/core/infrastructure/http/ollamaTransport.ts` (http or https per configured host); defaults live in `shared/domain/ollamaHost.ts` and `shared/domain/settings/appSettingsDefaults.ts`.
 - Sidecar vectors record their `embedding_model` per chunk; search embeds the query once per stored model.
 - Main Ollama generation uses `ollamaGenerationScheduler` at concurrency 1; model inventory uses `/api/tags`.
+- Coding Agent uses `/api/chat` with native tool calls and a persisted assistant/tool transcript; Main executes each call through the existing security gates. The full-task live reference is `qwen3.8:27b`.
+- The UI terminal and agent shell tools use `PersistentPowerShellSession`; sessions retain shell state per workspace and are disposed with active tasks.
 
 ## Repository specifics
 

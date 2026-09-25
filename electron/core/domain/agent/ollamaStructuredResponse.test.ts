@@ -7,6 +7,13 @@ describe('Ollama structured phase responses', () => {
     expect(result.status).toBe('valid')
   })
 
+  it('accepts JSON wholly wrapped in a json code fence', () => {
+    expect(validateStructuredContent('```json\n{"hasQuestions":false,"questions":[]}\n```', interviewPhaseResponseSchema).status).toBe('valid')
+    expect(validateStructuredContent('Here is a result:\n```json\n{"hasQuestions":false,"questions":[]}\n```', interviewPhaseResponseSchema).status).toBe(
+      'invalid',
+    )
+  })
+
   it('keeps JSON validity distinct from semantic schema validity', () => {
     const result = validateStructuredContent('{"hasQuestions":true,"questions":[]}', interviewPhaseResponseSchema)
 

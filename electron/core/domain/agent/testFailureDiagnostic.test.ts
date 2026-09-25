@@ -124,6 +124,16 @@ describe('load failures carry the exact fix when it is computable', () => {
     expect(directive).not.toContain('almost always an import')
   })
 
+  it('imports test when the test call itself is undefined', () => {
+    const output = MISSING_GLOBAL.replace('describe is not defined', 'test is not defined').replace(
+      "describe('Project Dashboard Task'",
+      "test('Project Dashboard Task'",
+    )
+    const directive = buildTestFailureDirective(extractFailingTest(output)!)
+
+    expect(directive).toContain("exact first line added: import { describe, it, test, expect } from 'vitest'")
+  })
+
   it('reads the global from the code frame when the message was lost', () => {
     const failing = extractFailingTest(MISSING_GLOBAL.replace('ReferenceError: describe is not defined', 'ReferenceError: [details redacted]'))
 

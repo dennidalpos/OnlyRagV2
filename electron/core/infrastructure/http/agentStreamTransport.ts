@@ -24,12 +24,33 @@ export interface StreamSession {
   /** When true (and toolCatalog is non-empty), routes through POST /api/chat with a `tools` array instead of the prompt-engineered POST /api/generate path (see ollamaToolCallingCapability.ts). */
   toolCallingCapable?: boolean
   toolCatalog?: OllamaToolSchema[]
+  /** Native chat transcript. When supplied, the structured assistant turn is returned. */
+  messages?: AgentChatMessage[]
   /** Ollama `context` token array from a previous /api/generate response on the SAME model, to continue from instead of re-evaluating the full prompt (see ollamaContextCacheManager.ts / AGT1). */
   previousContext?: number[]
   /** Invoked with the `context` array from the final NDJSON line of a completed /api/generate response (present when `done: true`), and the model that produced it. */
   onContextReceived?: (context: number[], respondingModel: string) => void
   onToolProtocolObserved?: (protocol: ObservedToolCallingProtocol) => void
   onGenerationTelemetry?: (telemetry: OllamaStreamTelemetry) => void
+}
+
+export interface AgentChatToolCall {
+  type: 'function'
+  function: { index: number; name: string; arguments: Record<string, unknown> }
+}
+
+export interface AgentChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content: string
+  thinking?: string
+  tool_calls?: AgentChatToolCall[]
+  tool_name?: string
+}
+
+export interface AgentChatTurn {
+  content: string
+  thinking: string
+  toolCalls: AgentChatToolCall[]
 }
 
 function durationMs(value: unknown): number | undefined {
@@ -57,7 +78,9 @@ function serializeNativeToolCall(name: string, args: Record<string, unknown>): s
 }
 
 export class AgentStreamTransport {
-  static streamCompletion(session: StreamSession): Promise<string> {
+  static streamCompletion(session: StreamSession & { messages: AgentChatMessage[] }): Promise<AgentChatTurn>
+  static streamCompletion(session: StreamSession & { messages?: undefined }): Promise<string>
+  static streamCompletion(session: StreamSession): Promise<string | AgentChatTurn> {
     if (session.signal?.aborted || session.isCancelled()) {
       return Promise.reject(new Error('Agent run cancelled.'))
     }
@@ -68,7 +91,7 @@ export class AgentStreamTransport {
     return scheduled.promise
   }
 
-  private static async streamCompletionNow(session: StreamSession): Promise<string> {
+  private static async streamCompletionNow(session: StreamSession): Promise<string | AgentChatTurn> {
     if (session.toolCallingCapable && session.toolCatalog && session.toolCatalog.length > 0) {
       return this.streamChatWithTools(session)
     }
@@ -244,16 +267,16 @@ export class AgentStreamTransport {
   }
 
   /** Native tool-calling path: POST /api/chat with a `tools` array, streamed (stream:true) and parsed incrementally like streamCompletion's /api/generate path (AGT7) — Ollama's tool_calls field only arrives on the final NDJSON line (done:true), but message.content */
-  private static async streamChatWithTools(session: StreamSession): Promise<string> {
+  private static async streamChatWithTools(session: StreamSession): Promise<string | AgentChatTurn> {
     const { targetModel, prompt, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, onThoughtChunk, isCancelled, signal, onCancelHandle, toolCatalog } =
       session
 
     const chatUrl = resolveOllamaUrl('/api/chat', ollamaEndpoint)
 
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<string | AgentChatTurn>((resolve, reject) => {
       const postData = JSON.stringify({
         model: targetModel,
-        messages: [{ role: 'user', content: prompt }],
+        messages: session.messages ?? [{ role: 'user', content: prompt }],
         tools: toolCatalog,
         stream: true,
         think: session.think === true,
@@ -270,16 +293,16 @@ export class AgentStreamTransport {
       })
 
       let responseTimer: NodeJS.Timeout | null = setTimeout(() => {
-        req.destroy(new Error(`Ollama chat initial response timeout (45s): model '${targetModel}' loading stalled.`))
-      }, 45000)
+        req.destroy(new Error(`Ollama chat initial response timeout (10m): model '${targetModel}' loading stalled.`))
+      }, 600000)
 
       let tokenStallTimer: NodeJS.Timeout | null = null
       const requestStartedAt = Date.now()
       const resetTokenStallTimer = () => {
         if (tokenStallTimer) clearTimeout(tokenStallTimer)
         tokenStallTimer = setTimeout(() => {
-          req.destroy(new Error(`Ollama chat stream stalled: no tokens received for 30s from model '${targetModel}'.`))
-        }, 30000)
+          req.destroy(new Error(`Ollama chat stream stalled: no progress received for 5m from model '${targetModel}'.`))
+        }, 300000)
       }
       const cleanupTimers = () => {
         if (responseTimer) {
@@ -328,6 +351,8 @@ export class AgentStreamTransport {
           let buffer = ''
           let fullText = ''
           let resolvedToolCall: string | null = null
+          let fullThinking = ''
+          const toolCalls: Array<{ index?: number; name: string; arguments: Record<string, unknown> | string }> = []
           let sawDone = false
           let doneReason: string | undefined
           let completedTelemetry: OllamaStreamTelemetry | undefined
@@ -348,14 +373,31 @@ export class AgentStreamTransport {
                 if (thinkingDelta && onThoughtChunk) {
                   onThoughtChunk(thinkingDelta)
                 }
+                if (thinkingDelta) fullThinking += thinkingDelta
                 const contentDelta = parsed?.message?.content
                 if (contentDelta) {
                   fullText += contentDelta
                   if (onTokenChunk) onTokenChunk(contentDelta)
                 }
-                const toolCalls = parsed?.message?.tool_calls
-                if (Array.isArray(toolCalls) && toolCalls.length > 0 && toolCalls[0]?.function?.name) {
-                  resolvedToolCall = serializeNativeToolCall(toolCalls[0].function.name, toolCalls[0].function.arguments || {})
+                const receivedCalls = parsed?.message?.tool_calls
+                if (Array.isArray(receivedCalls)) {
+                  for (let position = 0; position < receivedCalls.length; position++) {
+                    const call = receivedCalls[position]
+                    if (!call?.function) continue
+                    const index = typeof call.function.index === 'number' ? call.function.index : undefined
+                    const previous = index === undefined ? undefined : toolCalls.find((item) => item.index === index)
+                    const name = call.function.name || previous?.name
+                    if (!name) continue
+                    const args = call.function.arguments
+                    const accumulatedArgs =
+                      typeof args === 'string' && typeof previous?.arguments === 'string' ? previous.arguments + args : (args ?? previous?.arguments ?? {})
+                    if (previous) {
+                      previous.name = name
+                      previous.arguments = accumulatedArgs
+                    } else {
+                      toolCalls.push({ index, name, arguments: accumulatedArgs })
+                    }
+                  }
                 }
                 if (parsed?.done === true) {
                   sawDone = true
@@ -375,9 +417,24 @@ export class AgentStreamTransport {
               reject(new Error(`Ollama tool response incomplete${doneReason ? ` (${doneReason})` : ''}`))
               return
             }
+            let structuredCalls: AgentChatToolCall[]
+            try {
+              structuredCalls = toolCalls
+                .sort((left, right) => (left.index ?? Number.MAX_SAFE_INTEGER) - (right.index ?? Number.MAX_SAFE_INTEGER))
+                .map((call, index) => {
+                  const args = typeof call.arguments === 'string' ? JSON.parse(call.arguments) : call.arguments
+                  if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error(`Invalid arguments for ${call.name}`)
+                  return { type: 'function', function: { index, name: call.name, arguments: args } }
+                })
+            } catch (error: unknown) {
+              reject(new Error(`Invalid Ollama tool arguments: ${error instanceof Error ? error.message : String(error)}`))
+              return
+            }
+            const first = structuredCalls[0]
+            if (first) resolvedToolCall = serializeNativeToolCall(first.function.name, first.function.arguments)
             if (completedTelemetry) session.onGenerationTelemetry?.(completedTelemetry)
             session.onToolProtocolObserved?.(resolvedToolCall ? 'native' : 'text')
-            resolve(resolvedToolCall ?? fullText)
+            resolve(session.messages ? { content: fullText, thinking: fullThinking, toolCalls: structuredCalls } : (resolvedToolCall ?? fullText))
           })
         },
       )

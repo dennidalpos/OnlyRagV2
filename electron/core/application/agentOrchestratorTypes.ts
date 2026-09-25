@@ -6,6 +6,7 @@ import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../
 import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 import { type AgentLocalizedText, formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
+import type { AgentChatMessage } from '../infrastructure/http/agentStreamTransport'
 
 export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
@@ -40,6 +41,8 @@ export interface AgentSession {
   activeChildProcess?: ChildProcess | null
   /** Global session watchdog. Cleared on every exit path so it can never outlive its own run. */
   timeoutHandle?: NodeJS.Timeout | null
+  /** Native Ollama assistant/tool turns. The current bounded task context is supplied separately. */
+  chatMessages?: AgentChatMessage[]
   /** Ollama `context` continuation cache (AGT1): the token array + the exact stable/history baseline it corresponds to, so the next turn can detect whether a tail-append delta can be sent instead of the full prompt. */
   ollamaContextTokens?: number[]
   ollamaContextModel?: string

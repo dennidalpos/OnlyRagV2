@@ -579,6 +579,32 @@ describe('a relative import the bundler could not resolve', () => {
     expect(directive).toContain('MUST be "write_file" on "src/Button.jsx", creating that file')
     expect(diagnosticFixTargetFile(output, { fileExists: () => false })).toBe('src/Button.jsx')
   })
+
+  it('attributes a Vitest module load failure to the imported source file', () => {
+    const output = [
+      '> vitest run',
+      ' ❯ src/App.test.jsx (0 test)',
+      ' FAIL  src/App.test.jsx [ src/App.test.jsx ]',
+      "Error: Cannot find module './components/Dashboard' imported from C:/live/project/src/App.jsx",
+      ' ❯ src/App.jsx:6:1',
+      "      6| import Dashboard from './components/Dashboard';",
+      ' ❯ src/App.test.jsx:4:1',
+    ].join('\n')
+
+    expect(extractUnresolvedBundlerImport(output)).toEqual({ importer: 'src/App.jsx', specifier: './components/Dashboard' })
+    expect(buildDiagnosticFixDirective(output, undefined, undefined, { fileExists: () => false })).toContain(
+      'MUST be "write_file" on "src/components/Dashboard.jsx"',
+    )
+    expect(diagnosticFixTargetFile(output, { fileExists: () => false })).toBe('src/components/Dashboard.jsx')
+  })
+
+  it('redirects a parent import to an existing component file', () => {
+    const output = "[UNRESOLVED_IMPORT] Could not resolve '../Navbar' in src/App.jsx"
+    const facts = { fileExists: (path: string) => path === 'src/components/Navbar.jsx' }
+
+    expect(buildDiagnosticFixDirective(output, undefined, undefined, facts)).toContain('"../Navbar" changed to "./components/Navbar"')
+    expect(diagnosticFixTargetFile(output, facts)).toBe('src/App.jsx')
+  })
 })
 
 describe('an npm script whose program is not installed', () => {

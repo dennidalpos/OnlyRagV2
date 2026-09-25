@@ -1,5 +1,4 @@
 import { selectToolSchemas } from '../domain/agent/ollamaToolSchemaCatalog'
-import type { OllamaContextReuseDecision } from '../domain/agent/ollamaContextCacheManager'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
@@ -13,33 +12,46 @@ import { enrichOllamaGenerationTelemetry, type OllamaStreamTelemetry } from '../
 import { ollamaAppService } from './ollamaAppService'
 import { calculateAvailableOutputTokens, countPromptTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 import { resolveOllamaThinkingPreference } from '../../../shared/domain/agent/ollamaThinkingPolicy'
+import { appendAssistantTurn, boundedChatMessages } from './agentChatTranscript'
+import type { AgentChatTurn } from '../infrastructure/http/agentStreamTransport'
 
 async function dispatchToLlm(
   ctx: TurnDispatchContext,
   selection: ModelSelection,
-  assembled: { stableSection: string; historyBlock: string },
+  assembled: PreparedAgentTurn['assembled'],
   turnPrompt: string,
-  contextReuseDecision: OllamaContextReuseDecision,
   wasCompacted: boolean,
   toolPolicy: TurnToolPolicy,
-): Promise<{ streamedOutput: string; usedModel?: string } | { error: string }> {
+): Promise<{ streamedOutput: string; nativeTurn?: AgentChatTurn; usedModel?: string } | { error: string }> {
   let generationTelemetry: OllamaStreamTelemetry | undefined
-  const latchProtocol = (protocol: 'native' | 'text') => {
-    ctx.session.toolCallingProtocolByModel = {
-      ...ctx.session.toolCallingProtocolByModel,
-      [selection.targetModel]: protocol,
-    }
-  }
-  const stream = (toolCallingCapable: boolean) =>
+  const toolCatalog = selectToolSchemas(toolPolicy.allowedTools)
+  const schemaTokens = countPromptTokens(JSON.stringify(toolCatalog))
+  const maxPromptTokens = Math.max(1, selection.runtimeOpts.num_ctx - schemaTokens - 1024 - 256)
+  const corePrompt = [assembled.segments.baseSystemPrompt, assembled.segments.planSection, assembled.segments.skillsSection, assembled.turnSuffix]
+    .filter(Boolean)
+    .join('\n\n')
+  const chat = boundedChatMessages(
+    corePrompt,
+    [assembled.segments.pinnedBlock, assembled.segments.activeFileBlock, assembled.segments.attachedBlock, assembled.segments.mapBlock],
+    ctx.userTask,
+    ctx.session.chatMessages || [],
+    maxPromptTokens,
+    wasCompacted || ctx.session.forceContextCompaction,
+  )
+  const outputCapacity = selection.runtimeOpts.num_ctx - schemaTokens - countPromptTokens(JSON.stringify(chat.messages)) - 256
+  if (outputCapacity < 512) return { error: `Ollama chat context exceeds the ${selection.runtimeOpts.num_ctx}-token hardware budget.` }
+  selection.runtimeOpts.num_predict = Math.min(selection.runtimeOpts.num_predict, outputCapacity)
+  ctx.session.chatMessages = chat.retainedHistory
+  const stream = () =>
     AgentStreamTransport.streamCompletion({
       targetModel: selection.targetModel,
-      prompt: contextReuseDecision.reusedContext ? contextReuseDecision.promptToSend : turnPrompt,
+      prompt: turnPrompt,
       runtimeOpts: selection.runtimeOpts,
       keepAlive: CODING_MODEL_KEEP_ALIVE,
       ollamaEndpoint: ctx.settings.ollamaHost,
-      toolCallingCapable,
-      toolCatalog: toolCallingCapable ? selectToolSchemas(toolPolicy.allowedTools) : undefined,
-      previousContext: contextReuseDecision.reusedContext ? contextReuseDecision.contextTokens : undefined,
+      toolCallingCapable: true,
+      toolCatalog,
+      messages: chat.messages,
       onTokenChunk: (chunk) => {
         if (ctx.isSessionActive() && ctx.session.rendererEvents?.isAvailable()) {
           ctx.session.rendererEvents.send('agent:stream-token', { ...ctx.session.identity, step: ctx.stepCount, chunk })
@@ -56,24 +68,17 @@ async function dispatchToLlm(
       onCancelHandle: (abort) => {
         ctx.session.activeCancelHandle = abort
       },
-      onToolProtocolObserved: selection.targetModelToolCallingProbe ? latchProtocol : undefined,
       onGenerationTelemetry: (telemetry) => {
         generationTelemetry = telemetry
       },
-      onContextReceived: (contextTokens, respondingModel) => {
-        if (wasCompacted || !ctx.isSessionActive()) return
-        ctx.session.ollamaContextTokens = contextTokens
-        ctx.session.ollamaContextModel = respondingModel
-        ctx.session.ollamaContextStableSection = assembled.stableSection
-        ctx.session.ollamaContextHistoryBlock = assembled.historyBlock
-      },
     })
   let transportFailure: RecoveryFailureState | undefined
-  let toolCallingCapable = selection.targetModelToolCallingCapable
   while (true) {
     try {
-      const streamedOutput = await stream(toolCallingCapable)
+      const response = await stream()
       ctx.session.activeCancelHandle = null
+      const nativeTurn = typeof response === 'string' ? undefined : response
+      if (nativeTurn) ctx.session.chatMessages = appendAssistantTurn(ctx.session.chatMessages || [], nativeTurn)
       if (generationTelemetry) {
         const running = await ollamaAppService.getRunningModels(ctx.settings.ollamaHost)
         const loaded = running.models.find((model) => model.name === selection.targetModel || model.model === selection.targetModel)
@@ -82,7 +87,7 @@ async function dispatchToLlm(
           enrichOllamaGenerationTelemetry(generationTelemetry, ctx.stepCount, loaded),
         ].slice(-200)
       }
-      return { streamedOutput, usedModel: selection.targetModel }
+      return { streamedOutput: nativeTurn?.content ?? String(response), nativeTurn, usedModel: selection.targetModel }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       ctx.session.activeCancelHandle = null
@@ -98,10 +103,6 @@ async function dispatchToLlm(
         return { error: `${recoveryStopDiagnostic('transport', decision.state)} Last error: ${message}` }
       }
 
-      if (selection.targetModelToolCallingProbe && toolCallingCapable) {
-        latchProtocol('text')
-        toolCallingCapable = false
-      }
       emitLocalizedLog(ctx.emitLog, 'info', { key: 'transportRecovery', params: { error: message } })
     }
   }
@@ -154,7 +155,7 @@ export async function collectTurnContext(ctx: TurnDispatchContext): Promise<Prep
 
 /** Requests exactly one current-turn proposal from the selected model. */
 export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: PreparedAgentTurn): Promise<TurnDispatchOutcome> {
-  const { selection, assembled, turnPrompt, contextReuseDecision, wasCompacted, toolPolicy } = prepared
+  const { selection, assembled, turnPrompt, wasCompacted, toolPolicy } = prepared
   ctx.emitLog(
     'tool_call',
     `[Step ${ctx.stepCount}/${ctx.maxStepsLabel}] Consulting LLM (${selection.targetModel}) [ctx:${selection.runtimeOpts.num_ctx}${
@@ -165,7 +166,7 @@ export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: Pr
     codingAgentLogger.logTurnPrompt(ctx.sessionId, ctx.stepCount, selection.targetModel, selection.runtimeOpts.num_ctx, turnPrompt)
   }
 
-  const dispatchResult = await dispatchToLlm(ctx, selection, assembled, turnPrompt, contextReuseDecision, wasCompacted, toolPolicy)
+  const dispatchResult = await dispatchToLlm(ctx, selection, assembled, turnPrompt, wasCompacted, toolPolicy)
 
   if (!ctx.isSessionActive()) {
     const completionStatus = ctx.session.completionStatus || 'cancelled'
@@ -210,6 +211,8 @@ export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: Pr
     outcome: 'proceed',
     data: {
       streamedOutput: dispatchResult.streamedOutput,
+      nativeCalls: dispatchResult.nativeTurn?.toolCalls,
+      nativeMode: Boolean(dispatchResult.nativeTurn),
       hasRecentToolFailure: prepared.hasRecentToolFailure,
       errorCountInHistory: prepared.errorCountInHistory,
       compiledHistoryBlock: prepared.compiledHistoryBlock,

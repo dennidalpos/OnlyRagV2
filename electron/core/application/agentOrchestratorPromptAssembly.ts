@@ -7,7 +7,6 @@ import { findMatchingInstalledModel } from '../../../shared/domain/agent/modelTa
 import { HardwareProfileResolver, type OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
 import { assembleTurnPrompt as assembleDomainTurnPrompt } from '../domain/agent/agentPromptAssembler'
 import { HeuristicContextCompactor } from '../domain/agent/heuristicContextCompactor'
-import { resolveToolCallingRoute } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 import { resolveOllamaContextReuse, type OllamaContextReuseDecision } from '../domain/agent/ollamaContextCacheManager'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { generateCompactRepoMap } from '../infrastructure/filesystem/compactSemanticRepoMapper'
@@ -26,6 +25,7 @@ import { resolveConfiguredModel } from '../../../shared/domain/settings/configur
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 import { recordFileVersion } from '../domain/agent/fileVersionEvidence'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
 
 /** Resolves the coding model and hardware-tuned runtime options for the turn. */
 export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
@@ -42,12 +42,9 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   const candidateCoding = resolveConfiguredModel('coding', ctx.settings, ctx.codingModel)
   const targetModel = findMatchingInstalledModel(candidateCoding, ctx.availableModels) || candidateCoding
 
-  // Native tool-calling routing: when the primary model is detected as tool-calling capable (see ollamaToolCallingCapability.ts), route via POST /api/chat with the structured tool catalog instead of relying solely on the prompt-engineered JSON convention.
-  const route = resolveToolCallingRoute(targetModel, ctx.modelCapabilities, ctx.session.toolCallingProtocolByModel?.[targetModel])
-  const targetModelToolCallingCapable = route.capable
-  if (targetModelToolCallingCapable) {
-    ctx.session.ollamaContextModel = undefined
-  }
+  // Preflight already requires native tools; old protocol observations cannot restore text mode.
+  const targetModelToolCallingCapable = true
+  ctx.session.ollamaContextModel = undefined
 
   const pinnedRuntime = ctx.session.ollamaRuntimeProfile
   const runtimeOpts = pinnedRuntime
@@ -58,7 +55,7 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
     return {
       targetModel,
       targetModelToolCallingCapable,
-      targetModelToolCallingProbe: route.probe,
+      targetModelToolCallingProbe: false,
       runtimeOpts,
       contextCeiling: ctx.modelMetrics?.[targetModel]?.contextLength ?? null,
     }
@@ -80,13 +77,13 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   const preferredContext = resolveModelContextLength(targetModel, ctx.settings.modelContextLengths, hardwareContext, trainedContext)
   const contextCeiling = trainedContext ?? null
   if (contextCeiling !== null && contextCeiling < hardwareContext) {
-    ctx.emitLog(
-      'info',
-      `📏 Context clamped to model limit: ${hardwareContext} → ${contextCeiling} tokens (${targetModel} was trained at ${contextCeiling}; Ollama would have truncated the prompt head).`,
-    )
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'contextClamped', params: { hardware: hardwareContext, ceiling: contextCeiling, model: targetModel } })
   }
   if (preferredContext !== runtimeOpts.num_ctx) {
-    ctx.emitLog('info', `📏 Context preference applied: ${runtimeOpts.num_ctx} → ${preferredContext} tokens (${targetModel}).`)
+    emitLocalizedLog(ctx.emitLog, 'info', {
+      key: 'contextPreference',
+      params: { previous: runtimeOpts.num_ctx, preferred: preferredContext, model: targetModel },
+    })
   }
   runtimeOpts.num_ctx = preferredContext
   runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(preferredContext)
@@ -102,7 +99,7 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   return {
     targetModel,
     targetModelToolCallingCapable,
-    targetModelToolCallingProbe: route.probe,
+    targetModelToolCallingProbe: false,
     runtimeOpts,
     contextCeiling,
   }
@@ -245,7 +242,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   const policy = resolveTurnContextPolicy(directive.kind)
   const omitted = omittedBlockNames(policy)
   if (omitted.length > 0) {
-    ctx.emitLog('info', `🎯 Context policy [${directive.kind}]: ${policy.rationale} — omitting ${omitted.join(', ')}.`)
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'contextPolicy', params: { kind: directive.kind, reason: policy.rationale, omitted: omitted.join(', ') } })
   }
 
   // Rewrite directives expose the target file; version conflicts require a fresh read.
@@ -260,8 +257,12 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
         editTargetState: resolveEditTargetState(ctx, turnFiles.targets),
         userTask: ctx.userTask,
         requiredTools: directive.requiredTools,
+        agentMode: ctx.agentMode,
       })
-  ctx.emitLog('info', `🧰 Tool policy [${directive.kind}]: ${toolPolicy.rationale} — ${toolPolicy.allowedTools.join(', ')}.`)
+  emitLocalizedLog(ctx.emitLog, 'info', {
+    key: 'toolPolicy',
+    params: { kind: directive.kind, reason: toolPolicy.rationale, tools: toolPolicy.allowedTools.join(', ') },
+  })
   const planBlock = [
     buildCurrentOperationContext(ctx, directive, toolPolicy, turnFiles.targets),
     requiredReadPath ? `[FILE VERSION RECOVERY]\nCall read_file on "${requiredReadPath}" now. No edit is available until that read succeeds.` : '',
@@ -346,7 +347,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   )
   const turnPrompt = compactionResult.wasCompacted ? compactionResult.prompt : basePrompt
   if (compactionResult.wasCompacted) {
-    ctx.emitLog('info', `🗜️ Context Compacted: ${compactionResult.originalChars} → ${compactionResult.finalChars} chars (heuristic, zero-cost)`)
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'contextCompacted', params: { original: compactionResult.originalChars, final: compactionResult.finalChars } })
   }
 
   return { assembled, compactionResult, turnPrompt, toolPolicy }
@@ -392,10 +393,7 @@ export function decideContextReuse(
         : null,
   })
   if (decision.reusedContext) {
-    ctx.emitLog(
-      'info',
-      `⚡ Ollama Context Reuse: sending ${decision.promptToSend.length} chars instead of the full ${turnPrompt.length}-char prompt (KV-cache continuation).`,
-    )
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'contextReused', params: { sent: decision.promptToSend.length, full: turnPrompt.length } })
   }
   return decision
 }

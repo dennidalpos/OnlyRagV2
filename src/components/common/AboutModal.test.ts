@@ -74,7 +74,6 @@ describe('AboutModal & Credits Data Integrity Unit Tests', () => {
     // UI & Editor
     expect(moduleNames).toContain('Monaco Editor')
     expect(moduleNames).toContain('Lucide React')
-    expect(moduleNames).toContain('node-pty')
     expect(moduleNames).toContain('TanStack Virtual')
     expect(moduleNames).toContain('Diff (diff)')
 

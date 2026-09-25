@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.16 · 2026-09-25` — Repository facts and verified commands.
+`v1.17 · 2026-09-25` — Repository facts and verified commands.
 
 ## Scope
 
@@ -9,11 +9,11 @@
 
 ## Verified commands
 
-Run from repository root in PowerShell. On 2026-09-25 on Windows: `npm run docs:check` (22/22 documentation files passed), `npm run format:check`, `npm run typecheck`, `npm run audit:deadcode`, `npm run audit:cycles`, `npx @biomejs/biome lint --diagnostic-level=error` (0 errors across 733 files), IPC registration check (`scripts/check_ipc_registration.mjs`), layering guard (`scripts/check_layering.mjs`), and targeted Vitest (71/71 tests passing across 6 suites) were rerun and verified after auditing docs against code (splitting agent docs into `docs/agent-runtime.md`, `docs/agent-guards.md`, `docs/agent-diagnostics.md`, updating `docs/api-ipc.md`), and synthesizing source comments across 25 core modules. Prior runs: static checks, fast suite, Sidecar tests (Python 3.12) on Linux (TEST-PLATFORM-01), Electron Agent E2E, and `npm run test:live` on 2026-09-24 (10 scenarios pass 13/13; full task run verified with qwen2.5-coder:7b in runs 15, 17, 22; FULLTASK-RELIABILITY-01, GPTOSS-FULLTASK-01). Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides), never the Desktop.
+Run from repository root in PowerShell. On 2026-09-25 on Linux (cloud container, Node 22): `npm run typecheck`, `npm run quality:static`, `npm run audit:deadcode`, `npm run audit:cycles`, `npm run docs:check`, `npm run format:check`, `npx vite build` and `npm run test:fast` (273 files, 2149 passed, 22 skipped) passed after the typed IPC contract; Electron E2E, Sidecar tests and `npm run test:live` were last run on Windows on 2026-09-24 and must be rerun there (SIMPLIFY-VERIFY-WIN-01). Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides), never the Desktop. In a container without `node_modules`, `npm ci --ignore-scripts` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1` is enough for the static checks and the fast suite; change dependencies with `npx npm@11`, since npm 10 drops the lockfile's `libc` fields.
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (273 files, 2169 tests; 22 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Fast suite | `npm run test:fast` (273 files, 2171 tests; 22 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
 | Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (133 tests) |
 | Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 4 guard scenarios) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |

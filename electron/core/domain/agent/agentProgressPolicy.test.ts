@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { AgentProgressPolicy, PROGRESS_BUDGET, schemaStopSummary, type LoopBlockContext } from './agentProgressPolicy'
+import { AgentProgressPolicy, PROGRESS_BUDGET, schemaStopReason, type LoopBlockContext } from './agentProgressPolicy'
+import { formatAgentTextIt } from '../../../../shared/domain/agent/agentMainText'
 
 const UNLIMITED: LoopBlockContext = { canAdvanceMilestone: true, isUnlimitedSteps: true }
 const CAPPED: LoopBlockContext = { canAdvanceMilestone: true, isUnlimitedSteps: false }
@@ -92,7 +93,7 @@ describe('AgentProgressPolicy prose and schema budgets', () => {
   })
 
   it('reports why the run stopped and reassures about the work already on disk', () => {
-    const summary = schemaStopSummary('replace_file_content', 2)
+    const summary = formatAgentTextIt(schemaStopReason('replace_file_content', 2))
     expect(summary).toContain('replace_file_content')
     expect(summary).toContain('2')
     expect(summary).toContain('restano sul disco')
@@ -119,7 +120,10 @@ describe('AgentProgressPolicy execution budget and steps without mutation', () =
   it('stops after the configured number of executed steps without an effective change', () => {
     const policy = new AgentProgressPolicy()
     for (let step = 1; step < PROGRESS_BUDGET.stepsWithoutMutation; step++) expect(policy.onStepExecuted(false)).toBeNull()
-    expect(policy.onStepExecuted(false)).toMatchObject({ guard: 'no_mutation', reason: expect.stringContaining('No-mutation stagnation streak') })
+    expect(policy.onStepExecuted(false)).toEqual({
+      guard: 'no_mutation',
+      reason: { key: 'reasonNoMutation', params: { steps: PROGRESS_BUDGET.stepsWithoutMutation } },
+    })
   })
 
   it('restarts the no-mutation count on an effective change', () => {

@@ -1,4 +1,5 @@
 import type { AgentGuardId } from '../../../../shared/types'
+import type { AgentLocalizedText } from '../../../../shared/domain/agent/agentMainText'
 import type { RepeatOutcomeKind } from './loopDetector'
 import { recordRecoveryFailure, type RecoveryDecision, type RecoveryFailureState } from './recoveryBudget'
 
@@ -153,21 +154,14 @@ export class AgentProgressPolicy {
   }
 
   /** Counts executed steps without an effective file change; returns the stopping guard once the budget is spent. */
-  onStepExecuted(mutated: boolean): { guard: AgentGuardId; reason: string } | null {
+  onStepExecuted(mutated: boolean): { guard: AgentGuardId; reason: AgentLocalizedText } | null {
     this.stepsWithoutMutation = mutated ? 0 : this.stepsWithoutMutation + 1
     if (this.stepsWithoutMutation < this.budget.stepsWithoutMutation) return null
-    return {
-      guard: 'no_mutation',
-      reason: `No-mutation stagnation streak limit reached (${this.stepsWithoutMutation} read/inspect steps without file changes).`,
-    }
+    return { guard: 'no_mutation', reason: { key: 'reasonNoMutation', params: { steps: this.stepsWithoutMutation } } }
   }
 }
 
-/** The summary a run gets when it never produced a valid tool call again. */
-export function schemaStopSummary(toolName: string, rejections: number): string {
-  return (
-    `Sessione interrotta: ${rejections} chiamate consecutive a "${toolName}" sono state rifiutate dalla validazione dei parametri ` +
-    `e nessuna e' mai stata eseguita. Il contratto del tool e' stato inviato al modello a ogni tentativo. ` +
-    `Nessuna modifica e' stata persa: i file scritti prima di questa serie restano sul disco.`
-  )
+/** The closure reason a run gets when it never produced a valid tool call again. */
+export function schemaStopReason(toolName: string, rejections: number): AgentLocalizedText {
+  return { key: 'reasonSchemaBudget', params: { count: rejections, tool: toolName } }
 }

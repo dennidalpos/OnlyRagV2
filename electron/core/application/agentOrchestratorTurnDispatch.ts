@@ -184,7 +184,7 @@ export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: Pr
     const closure = await ctx.closeApplicationRun({
       trigger: 'transport_error',
       guard: 'transport_budget',
-      reason: `Errore di trasporto LLM al passo ${ctx.stepCount}: ${dispatchResult.error}`,
+      reason: { key: 'reasonTransportError', params: { step: ctx.stepCount, error: dispatchResult.error } },
     })
     return {
       outcome: 'return',

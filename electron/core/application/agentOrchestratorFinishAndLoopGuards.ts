@@ -7,6 +7,7 @@ import { abandonedMilestoneNote } from '../domain/agent/milestoneUpdateAuthority
 import { isActiveMilestoneDelivered, resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { PlanDirectiveKind } from '../domain/agent/planDirectiveArbiter'
 import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorRunContext'
+import { type AgentLocalizedText, formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 
 /** Handles the optional finish signal; the application-owned closure decides the real outcome. */
 export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome> {
@@ -64,7 +65,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
   }
   const closure = await ctx.closeApplicationRun({
     trigger: 'finish',
-    reason: 'Il modello ha segnalato la fine del lavoro; l’applicazione decide l’esito dalle evidenze correnti.',
+    reason: { key: 'reasonFinish' },
     modelSummary: summary,
     allowCorrection: true,
   })
@@ -243,12 +244,12 @@ ${planDirective.blockDirective}`
   if (escapeAction === 'abort') {
     // A hard stop here means the model never broke out of its loop -- this is the session
     // giving up, not completing the task, so it must never be recorded as a success.
-    const stagSummary = `Pausa per stagnazione: raggiunti ${loopBlocks} step consecutivi senza progresso.`
-    ctx.emitLog('info', `⚠️ Circuit Breaker: ${stagSummary}`)
+    const stagnation: AgentLocalizedText = { key: 'reasonStagnation', params: { steps: loopBlocks } }
+    ctx.emitLog('info', `⚠️ Circuit Breaker: ${formatAgentTextIt(stagnation)}`)
     const closure = await ctx.closeApplicationRun({
       trigger: 'guard_stop',
       guard: 'stagnation_abort',
-      reason: stagSummary,
+      reason: stagnation,
     })
     return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
   }

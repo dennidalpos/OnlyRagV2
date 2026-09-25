@@ -2,7 +2,7 @@ import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAnd
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import { parseAgentToolCall, type ToolCallRejection } from '../domain/agent/toolParser'
 import { buildToolSchemaCorrectionDirective } from '../domain/agent/ollamaToolSchemaCatalog'
-import { schemaStopSummary } from '../domain/agent/agentProgressPolicy'
+import { schemaStopReason } from '../domain/agent/agentProgressPolicy'
 import { MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { logger } from '../infrastructure/logging/logger'
@@ -10,6 +10,7 @@ import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { handleAskTool } from './agentOrchestratorAskAutoHealing'
 import { handleFinishTool, handleLoopDetection } from './agentOrchestratorFinishAndLoopGuards'
 import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorRunContext'
+import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 
 async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections: readonly ToolCallRejection[] = []): Promise<ResponseInterpretationOutcome> {
   const streamedOutput = ctx.streamedOutput || ''
@@ -24,12 +25,12 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
     const decision = ctx.state.progress.onSchemaRejection(signature)
 
     if (decision.action === 'stop') {
-      const summary = schemaStopSummary(toolLabel, ctx.state.progress.schemaRejections)
-      ctx.emitLog('info', `⛔ ${summary}`, undefined, { category: 'system_alert' })
+      const reason = schemaStopReason(toolLabel, ctx.state.progress.schemaRejections)
+      ctx.emitLog('info', `⛔ ${formatAgentTextIt(reason)}`, undefined, { category: 'system_alert', localized: { message: reason } })
       const closure = await ctx.closeApplicationRun({
         trigger: 'protocol_error',
         guard: 'schema_budget',
-        reason: summary,
+        reason,
         modelSummary: streamedOutput,
       })
       return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
@@ -104,9 +105,7 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
   const closure = await ctx.closeApplicationRun({
     trigger: 'model_silence',
     ...(hasOperationalWork ? { guard: 'model_silence' as const } : {}),
-    reason: hasOperationalWork
-      ? 'Il modello ha smesso di invocare strumenti mentre restava lavoro operativo aperto.'
-      : 'Il modello ha consegnato il riepilogo finale senza richiedere un tool di chiusura.',
+    reason: hasOperationalWork ? { key: 'reasonModelSilenceOpenWork' } : { key: 'reasonSummaryWithoutFinish' },
     modelSummary: summary,
   })
   return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }

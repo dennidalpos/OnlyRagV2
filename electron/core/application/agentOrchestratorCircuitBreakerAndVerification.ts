@@ -47,6 +47,7 @@ import { checkHtmlEntrypoint, CONVENTIONAL_ENTRY_PATHS } from '../domain/agent/e
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorRunContext'
+import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 
 /** Returns a `return` outcome once the progress policy's no-mutation budget is spent. */
 export async function runCircuitBreaker(ctx: ToolResultProcessingContext, isMutating: boolean): Promise<ToolResultProcessingOutcome | null> {
@@ -54,13 +55,13 @@ export async function runCircuitBreaker(ctx: ToolResultProcessingContext, isMuta
   if (!cbRes) return null
 
   // The circuit breaker is forcing a pause/intervention due to stagnation/looping
-  const cbMsg = `⚠️ Circuit Breaker Triggered: ${cbRes.reason}`
+  const cbMsg = `⚠️ Circuit Breaker Triggered: ${formatAgentTextIt(cbRes.reason)}`
   ctx.emitLog('info', cbMsg)
 
   // What the USER gets.
   const milestones = ctx.goalPlanner.getMilestones()
   const userSummary = compileSessionStopSummary({
-    reason: cbRes.reason,
+    reason: formatAgentTextIt(cbRes.reason),
     stepCount: ctx.stepCount,
     completed: milestones.filter((m) => m.status === 'verified').map((m) => `${m.id}: ${m.title}`),
     outstanding: milestones

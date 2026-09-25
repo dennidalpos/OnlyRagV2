@@ -12,6 +12,7 @@ import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { redactSecrets } from '../../logRedactor'
 import { findModuleExtensionAliases, resolveDeclaredFilePaths } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { fileVersionEvidenceKey, forgetFileVersion, knownFileVersion, recordFileVersion } from '../domain/agent/fileVersionEvidence'
+import { type AgentLocalizedText, formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 
 export function isToolExecutionFailure(toolRes: ClassifiedToolExecutionResult): boolean {
   return toolRes.outcome !== 'success'
@@ -267,10 +268,10 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     const signature = `${parsedTool.tool}:${targetParam || ''}:${toolRes.logMessage.toLowerCase()}`
     const decision = ctx.state.progress.onExecutionFailure(signature)
     if (toolRes.effectOutcome === 'uncertain' || decision.action === 'stop') {
-      const reason =
+      const reason: AgentLocalizedText =
         toolRes.effectOutcome === 'uncertain'
-          ? `Effetto incerto dopo "${parsedTool.tool}": l'operazione non viene ripetuta automaticamente.`
-          : recoveryStopDiagnostic('execution', decision.state)
+          ? { key: 'reasonUncertainEffect', params: { tool: parsedTool.tool } }
+          : { key: 'reasonExecutionRecovery', params: { diagnostic: recoveryStopDiagnostic('execution', decision.state) } }
       ctx.episodicCompactor.recordStep(
         {
           step: ctx.stepCount,
@@ -281,7 +282,8 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
         },
         distilledOutput,
       )
-      ctx.emitLog('terminal', reason, toolRes.logDetail, {
+      ctx.emitLog('terminal', formatAgentTextIt(reason), toolRes.logDetail, {
+        localized: { message: reason },
         category: parsedTool.tool === 'run_command' ? 'command_execution' : 'tool_execution',
         toolName: parsedTool.tool,
         target: targetParam,
@@ -426,7 +428,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   if (terminalOutcome) {
     const closure = await ctx.closeApplicationRun({
       trigger: 'protocol_error',
-      reason: terminalOutcome.result.summary,
+      reason: { key: 'reasonUnsupportedTool', params: { tool: parsedTool.tool } },
     })
     return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
   }

@@ -116,7 +116,7 @@ describe('application-owned agent closure', () => {
 
     const outcome = await closeAgentRunFromEvidence(ctx, {
       trigger: 'model_silence',
-      reason: 'Final report received.',
+      reason: { key: 'reasonSummaryWithoutFinish' },
       modelSummary: 'Implemented the requested change.',
     })
 
@@ -140,6 +140,12 @@ describe('application-owned agent closure', () => {
       expect.stringContaining('Recupero schema: 0/2'),
       expect.objectContaining({ category: 'generic_info', modelName: 'qwen2.5-coder:7b' }),
     )
+    const diagnosticCall = emitLog.mock.calls.find((call) => call[1] === 'Diagnostica sessione: verified')
+    const [, , diagnosticDetail, diagnosticMeta] = diagnosticCall!
+    expect(diagnosticMeta.localized.message).toEqual({ key: 'diagnosticMessage', params: { status: 'verified' } })
+    expect(diagnosticMeta.localized.detail).toContainEqual({ key: 'diagnosticStopReason', params: { reason: { key: 'reasonSummaryWithoutFinish' } } })
+    expect(renderAgentLines(diagnosticMeta.localized.detail)).toBe(diagnosticDetail)
+    expect(diagnosticDetail).toContain('Motivo di stop: Il modello ha consegnato il riepilogo finale senza richiedere un tool di chiusura.')
     expect(setExecutionPhase).toHaveBeenCalledWith('outcome')
     expect(finalizeSession).toHaveBeenCalledTimes(1)
   })
@@ -154,7 +160,7 @@ describe('application-owned agent closure', () => {
     })
     const { ctx, persistCurrentState } = makeContext()
 
-    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: 'Model requested closure.' })
+    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: { key: 'reasonFinish' } })
 
     expect(outcome).toMatchObject({ outcome: 'closed', result: { success: false, completionStatus: 'unverifiable' } })
     if (outcome.outcome === 'closed') expect(outcome.result.summary).toContain('non provano il comportamento end-to-end')
@@ -179,7 +185,7 @@ describe('application-owned agent closure', () => {
     ctx.workspaceTransaction = transaction as never
     ctx.requestApproval = vi.fn(async () => ({ approved: true }))
 
-    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: 'Model requested closure.' })
+    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: { key: 'reasonFinish' } })
 
     expect(outcome).toMatchObject({ outcome: 'closed', result: { completionStatus: 'verified' } })
     expect(ctx.requestApproval).toHaveBeenCalledWith(expect.objectContaining({ type: 'publish_workspace', target: 'C:/workspace' }))
@@ -213,7 +219,7 @@ describe('application-owned agent closure', () => {
     ctx.workspaceTransaction = transaction as never
     ctx.requestApproval = vi.fn(async () => ({ approved: true }))
 
-    await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: 'Model requested closure.' })
+    await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: { key: 'reasonFinish' } })
 
     expect(ctx.requestApproval).toHaveBeenCalledTimes(2)
     expect(execFileSync('git', ['log', '-1', '--format=%s'], { cwd: workspacePath, encoding: 'utf8' }).trim()).toBe('Agent Coding: publish reviewed changes')
@@ -232,7 +238,7 @@ describe('application-owned agent closure', () => {
 
     const outcome = await closeAgentRunFromEvidence(ctx, {
       trigger: 'transport_error',
-      reason: 'LLM transport disconnected.',
+      reason: { key: 'reasonTransportError', params: { step: 3, error: 'LLM transport disconnected.' } },
     })
 
     expect(outcome).toMatchObject({ outcome: 'closed', result: { success: false, completionStatus: 'blocked' } })
@@ -247,7 +253,7 @@ describe('application-owned agent closure', () => {
   it('never starts verification after cancellation', async () => {
     const { ctx, persistCurrentState, finalizeSession } = makeContext({ active: false })
 
-    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'step_budget', reason: 'Budget exhausted.' })
+    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'step_budget', reason: { key: 'reasonStepBudget', params: { max: 10 } } })
 
     expect(outcome).toMatchObject({ outcome: 'closed', result: { success: false, completionStatus: 'cancelled' } })
     expect(runProjectVerification).not.toHaveBeenCalled()
@@ -264,7 +270,7 @@ describe('application-owned agent closure', () => {
 
     const outcome = await closeAgentRunFromEvidence(ctx, {
       trigger: 'step_budget',
-      reason: 'Raggiunto il limite massimo di passaggi configurato (10 step).',
+      reason: { key: 'reasonStepBudget', params: { max: 10 } },
     })
 
     expect(outcome).toMatchObject({ outcome: 'closed', result: { success: false, completionStatus: 'blocked' } })
@@ -281,7 +287,11 @@ describe('application-owned agent closure', () => {
     const { ctx, emitDone, emitLog } = makeContext({ milestoneStatus: 'in_progress' })
     ctx.state.guardEvents.push({ guard: 'loop_exact_repeat', action: 'advise', step: 5 })
 
-    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'guard_stop', guard: 'no_mutation', reason: 'No-mutation streak.' })
+    const outcome = await closeAgentRunFromEvidence(ctx, {
+      trigger: 'guard_stop',
+      guard: 'no_mutation',
+      reason: { key: 'reasonNoMutation', params: { steps: 12 } },
+    })
 
     const expected = [
       { guard: 'loop_exact_repeat', action: 'advise', step: 5 },
@@ -308,7 +318,11 @@ describe('application-owned agent closure', () => {
     })
     const { ctx, emitDone } = makeContext({ milestoneStatus: 'verified' })
 
-    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'guard_stop', guard: 'execution_budget', reason: 'Execution budget exhausted.' })
+    const outcome = await closeAgentRunFromEvidence(ctx, {
+      trigger: 'guard_stop',
+      guard: 'execution_budget',
+      reason: { key: 'reasonExecutionRecovery', params: { diagnostic: 'execution recovery stopped after 2/2 failures' } },
+    })
 
     expect(outcome).toMatchObject({ outcome: 'closed', result: { success: false, completionStatus: 'blocked' } })
     if (outcome.outcome === 'closed') expect(outcome.result.summary).toContain('Run fermato dal guard "execution_budget"')
@@ -325,7 +339,11 @@ describe('application-owned agent closure', () => {
     })
     const { ctx, emitLog } = makeContext({ milestoneStatus: 'verified' })
 
-    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'guard_stop', guard: 'execution_budget', reason: 'Execution budget exhausted.' })
+    const outcome = await closeAgentRunFromEvidence(ctx, {
+      trigger: 'guard_stop',
+      guard: 'execution_budget',
+      reason: { key: 'reasonExecutionRecovery', params: { diagnostic: 'execution recovery stopped after 2/2 failures' } },
+    })
 
     const closureCall = emitLog.mock.calls.find((call) => call[1] === 'Chiusura applicativa: blocked')
     expect(closureCall).toBeDefined()
@@ -358,7 +376,7 @@ describe('application-owned agent closure', () => {
 
     const outcome = await closeAgentRunFromEvidence(ctx, {
       trigger: 'finish',
-      reason: 'Model requested closure.',
+      reason: { key: 'reasonFinish' },
       allowCorrection: true,
     })
 

@@ -550,9 +550,7 @@ export async function runAgentOrchestratorLoop(
   const closure = await closeApplicationRun({
     trigger: budgetExhausted ? 'step_budget' : 'model_silence',
     ...(budgetExhausted ? { guard: 'step_budget' as const } : {}),
-    reason: budgetExhausted
-      ? `Raggiunto il limite massimo di passaggi configurato (${MAX_STEPS} step).`
-      : `Il ciclo dell'agente si è concluso dopo ${stepCountBox.value} passaggi.`,
+    reason: budgetExhausted ? { key: 'reasonStepBudget', params: { max: MAX_STEPS } } : { key: 'reasonLoopEnded', params: { steps: stepCountBox.value } },
   })
   return closure.outcome === 'closed'
     ? closure.result

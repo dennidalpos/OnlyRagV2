@@ -76,41 +76,55 @@ function summarizeGuardEvents(events: ResponseInterpreterState['guardEvents']): 
   return [...counts].map(([key, count]) => (count > 1 ? `${key}×${count}` : key)).join(', ')
 }
 
-function renderDiagnosticDetail(
+/** The session diagnostics as localizable lines; the Italian rendering is the log detail. */
+function diagnosticLines(
   ctx: ApplicationClosureContext,
   request: ApplicationClosureRequest,
   status: AgentCompletionStatus,
   verification?: AgentVerificationEvidence,
-): string {
-  const recovery = (label: string, used = 0, limit = MAX_FAILURES_PER_RECOVERY_CATEGORY) => `${label}: ${used}/${limit}`
+): AgentLocalizedLine[] {
+  const unavailable: AgentLocalizedText = { key: 'diagnosticUnavailable' }
+  const notAvailable: AgentLocalizedText = { key: 'diagnosticNotAvailableShort' }
   const runtime = ctx.runtimeProfile
   const latest = ctx.generationTelemetry?.at(-1)
-  const lines = [
-    `Fase prima della chiusura: ${ctx.getExecutionPhase?.() || 'non disponibile'}`,
-    `Esito: ${status}`,
-    `Motivo di stop: ${redactSecrets(request.reason)}`,
-    `Verifica: ${verification?.status || 'non eseguita'}`,
+  const lines: AgentLocalizedLine[] = [
+    { key: 'diagnosticPhase', params: { phase: ctx.getExecutionPhase?.() || unavailable } },
+    { key: 'diagnosticStatus', params: { status } },
+    { key: 'diagnosticStopReason', params: { reason: request.reason } },
+    { key: 'diagnosticVerification', params: { status: verification?.status || { key: 'diagnosticVerificationNotRun' } } },
   ]
-  if (verification?.command) lines.push(`Comando: ${redactSecrets(verification.command)}`)
-  if (verification?.evidenceLevel) lines.push(`Livello evidenza: ${verification.evidenceLevel}`)
-  if (verification?.detail) lines.push(`Dettaglio verifica: ${verification.detail}`)
+  if (verification?.command) lines.push({ key: 'diagnosticCommand', params: { command: verification.command } })
+  if (verification?.evidenceLevel) lines.push({ key: 'diagnosticEvidenceLevel', params: { level: verification.evidenceLevel } })
+  if (verification?.detail) lines.push({ key: 'diagnosticVerificationDetail', params: { detail: verification.detail } })
   lines.push(
-    recovery('Recupero schema', ctx.state.progress.schemaFailuresSpent),
-    recovery('Recupero esecuzione', ctx.state.progress.executionFailuresSpent),
-    recovery('Correzioni verifica', ctx.state.verificationFixCycles, MAX_VERIFICATION_FIX_CYCLES),
+    { key: 'diagnosticSchemaRecovery', params: { used: ctx.state.progress.schemaFailuresSpent ?? 0, limit: MAX_FAILURES_PER_RECOVERY_CATEGORY } },
+    { key: 'diagnosticExecutionRecovery', params: { used: ctx.state.progress.executionFailuresSpent ?? 0, limit: MAX_FAILURES_PER_RECOVERY_CATEGORY } },
+    { key: 'diagnosticVerificationFixes', params: { used: ctx.state.verificationFixCycles ?? 0, limit: MAX_VERIFICATION_FIX_CYCLES } },
   )
-  if (ctx.state.guardEvents.length > 0) lines.push(`Guard: ${summarizeGuardEvents(ctx.state.guardEvents)}`)
+  if (ctx.state.guardEvents.length > 0) lines.push({ key: 'diagnosticGuards', params: { guards: summarizeGuardEvents(ctx.state.guardEvents) } })
   if (runtime) {
-    lines.push(
-      `Runtime: modello=${runtime.model}; digest=${runtime.digest || 'non disponibile'}; num_ctx=${runtime.options.num_ctx}; num_predict=${runtime.options.num_predict}`,
-    )
+    lines.push({
+      key: 'diagnosticRuntime',
+      params: {
+        model: runtime.model,
+        digest: runtime.digest || unavailable,
+        numCtx: runtime.options.num_ctx,
+        numPredict: runtime.options.num_predict,
+      },
+    })
   }
   if (latest) {
-    lines.push(
-      `Ultima generazione: step=${latest.step}; durata=${latest.wallDurationMs}ms; prompt=${latest.promptTokens ?? 'n/d'} token; output=${latest.completionTokens ?? 'n/d'} token`,
-    )
+    lines.push({
+      key: 'diagnosticLastGeneration',
+      params: {
+        step: latest.step,
+        durationMs: latest.wallDurationMs,
+        promptTokens: latest.promptTokens ?? notAvailable,
+        completionTokens: latest.completionTokens ?? notAvailable,
+      },
+    })
   }
-  return redactSecrets(lines.join('\n'))
+  return lines
 }
 
 function evidenceLevelFromCommand(command: string | undefined): 'structural' | 'behavioral' | undefined {
@@ -350,7 +364,7 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
     ctx.lastVerification = unavailable
     ctx.recordVerificationEvidence?.(unavailable)
   }
-  const diagnosticDetail = renderDiagnosticDetail(ctx, request, status, ctx.lastVerification)
+  const diagnostics = diagnosticLines(ctx, request, status, ctx.lastVerification)
   const completionEvidence: AgentCompletionEvidence = {
     changedFiles: [...tracker.getData().modifiedFiles],
     verification: ctx.lastVerification,
@@ -366,9 +380,11 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
     category: status === 'verified' ? 'final_report' : 'system_alert',
     localized: { message: closureMessage, detail: summaryLines },
   })
-  ctx.emitLog('info', `Diagnostica sessione: ${status}`, diagnosticDetail, {
+  const diagnosticMessage: AgentLocalizedText = { key: 'diagnosticMessage', params: { status } }
+  ctx.emitLog('info', formatAgentTextIt(diagnosticMessage), renderAgentLines(diagnostics), {
     category: 'generic_info',
     modelName: ctx.runtimeProfile?.model,
+    localized: { message: diagnosticMessage, detail: diagnostics },
   })
   ctx.emitDone(success, summary, status, completionEvidence)
   if (ctx.settings.enableCodingAgentDebugLog) {

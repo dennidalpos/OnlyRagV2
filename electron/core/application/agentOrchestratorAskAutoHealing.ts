@@ -119,9 +119,7 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
     const closure = await ctx.closeApplicationRun({
       trigger: 'guard_stop',
       ...(gaveUpWhileStuck ? { guard: 'ask_redirect' as const } : {}),
-      reason: gaveUpWhileStuck
-        ? 'Il modello ha esaurito il recupero automatico e richiede intervento.'
-        : "Il modello richiede una decisione dell'utente prima di proseguire.",
+      reason: gaveUpWhileStuck ? { key: 'reasonAskGaveUp' } : { key: 'reasonAskDecision' },
       modelSummary: question,
     })
     return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }

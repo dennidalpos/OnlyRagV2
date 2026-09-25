@@ -75,7 +75,7 @@ describe('buildDiagnosticFixDirective', () => {
 
   it('does not propose the tool this model cannot emit', () => {
     // `replace_file_content` needs an exact-match parameter the model kept omitting; the old
-    // wording offered it first. See schemaStopSummary in agentProgressPolicy.ts.
+    // wording offered it first. See schemaStopReason in agentProgressPolicy.ts.
     expect(buildDiagnosticFixDirective(TSC_OUTPUT)).not.toContain('replace_file_content')
   })
 

@@ -1,14 +1,24 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { resolveWorkspacePath, buildDefaultAgentSettings, buildAttachedContextBlock, buildPinnedFilesContextBlock } from './agentOrchestratorSessionSetup'
 import { StandaloneScratchWorkspace } from '../infrastructure/filesystem/standaloneScratchWorkspace'
+
+/** Points the protected-directory variables at host-native paths, so the check runs on any OS. */
+function protectedWorkspacePath(): string {
+  const hostRoot = path.parse(process.cwd()).root
+  vi.stubEnv('ProgramFiles', path.join(hostRoot, 'Program Files'))
+  vi.stubEnv('ProgramFiles(x86)', path.join(hostRoot, 'Program Files (x86)'))
+  vi.stubEnv('SystemRoot', path.join(hostRoot, 'Windows'))
+  return path.join(hostRoot, 'Program Files', 'OnlyRag V2')
+}
 
 describe('agentOrchestratorSessionSetup', () => {
   const createdDirs: string[] = []
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     for (const d of createdDirs) {
       try {
         if (fs.existsSync(d)) {
@@ -43,7 +53,7 @@ describe('agentOrchestratorSessionSetup', () => {
   it('should return null when workspacePath is inside protected system directory and not standalone', () => {
     const sessionId = `sys-blocked-${Date.now()}`
     const resolved = resolveWorkspacePath({
-      workspacePath: 'C:\\Program Files\\OnlyRag V2',
+      workspacePath: protectedWorkspacePath(),
       isStandaloneMode: false,
       sessionId,
     } as never)
@@ -57,7 +67,7 @@ describe('agentOrchestratorSessionSetup', () => {
     const scratch = new StandaloneScratchWorkspace(stateDir)
     const resolved = resolveWorkspacePath(
       {
-        workspacePath: 'C:\\Program Files\\OnlyRag V2',
+        workspacePath: protectedWorkspacePath(),
         isStandaloneMode: true,
         sessionId,
       },

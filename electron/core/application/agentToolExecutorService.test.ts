@@ -10,6 +10,9 @@ import { CapabilityPolicyAuditRepository } from '../infrastructure/logging/capab
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import type { AppSettings } from '../../../shared/types'
 
+/** Cases that spawn a real powershell.exe: it exists only on Windows, so other hosts report them as skipped. */
+const itWithPowerShell = it.skipIf(process.platform !== 'win32')
+
 describe('AgentToolExecutorService Unit Tests', () => {
   let tempDir: string
   const settings: AppSettings = {
@@ -537,7 +540,7 @@ async def async_handler():
     expect(res.logMessage).toContain('[SECURITY BLOCK]')
   })
 
-  it('gives the model the failure reason even when the command also printed to stdout', async () => {
+  itWithPowerShell('gives the model the failure reason even when the command also printed to stdout', async () => {
     // The end-to-end shape of every failing `npm run build` in session-1787562597025-q8a5: a banner on stdout, the actual cause on stderr.
     fs.writeFileSync(path.join(tempDir, 'fail.js'), "console.log('BANNER_LINE'); console.error('CAUSE_LINE'); process.exit(1);", 'utf-8')
 
@@ -656,7 +659,7 @@ async def async_handler():
     })
   })
 
-  it('appends the version-conflict directive when an install fails on ERESOLVE', async () => {
+  itWithPowerShell('appends the version-conflict directive when an install fails on ERESOLVE', async () => {
     // A script that reproduces npm's ERESOLVE report on stderr and exits 1, so the whole path is exercised: shell -> stream composition -> auto-healing block.
     fs.writeFileSync(
       path.join(tempDir, 'eresolve.js'),
@@ -694,7 +697,7 @@ async def async_handler():
       return ['const lines = ' + JSON.stringify(lines) + ';', 'for (const line of lines) console.error(line);', 'process.exit(2);'].join('\n')
     }
 
-    it('does not call an unwritten project file a missing dependency', async () => {
+    itWithPowerShell('does not call an unwritten project file a missing dependency', async () => {
       fs.writeFileSync(
         path.join(tempDir, 'build.js'),
         failingBuild([
@@ -717,7 +720,7 @@ async def async_handler():
       expect(res.outputForHistory).toContain('"write_file" on "src/services/api.ts"')
     })
 
-    it('lets the compiler fix survive alongside relative-path resolution errors', async () => {
+    itWithPowerShell('lets the compiler fix survive alongside relative-path resolution errors', async () => {
       fs.writeFileSync(
         path.join(tempDir, 'build.js'),
         failingBuild([
@@ -739,7 +742,7 @@ async def async_handler():
       expect(res.outputForHistory).toContain(`import Button from "../components/Button"`)
     })
 
-    it('names the package instead of shipping the literal placeholder', async () => {
+    itWithPowerShell('names the package instead of shipping the literal placeholder', async () => {
       fs.writeFileSync(
         path.join(tempDir, 'build.js'),
         failingBuild(["src/main.tsx(2,25): error TS2307: Cannot find module 'react-router-dom' or its corresponding type declarations."]),
@@ -770,19 +773,23 @@ async def async_handler():
       expect(res.isTerminal).toBe(true)
     })
 
-    it('lets the install run when the package is declared but node_modules is empty', async () => {
-      // The regression that cost session-1787562597025-q8a5 its build: the agent had authored package.json itself, so every dependency read as "already installed" while nothing was on disk, and the guard cancelled the only npm install of the run.
-      fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }), 'utf-8')
+    itWithPowerShell(
+      'lets the install run when the package is declared but node_modules is empty',
+      async () => {
+        // The regression that cost session-1787562597025-q8a5 its build: the agent had authored package.json itself, so every dependency read as "already installed" while nothing was on disk, and the guard cancelled the only npm install of the run.
+        fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }), 'utf-8')
 
-      const res = await agentToolExecutorService.executeTool(
-        // --dry-run --offline keeps the assertion about the guard, not about npm's network.
-        { tool: 'run_command', parameters: { command: 'npm install react --dry-run --offline --no-audit --no-fund', timeoutSeconds: 30 } },
-        tempDir,
-        settings,
-      )
+        const res = await agentToolExecutorService.executeTool(
+          // --dry-run --offline keeps the assertion about the guard, not about npm's network.
+          { tool: 'run_command', parameters: { command: 'npm install react --dry-run --offline --no-audit --no-fund', timeoutSeconds: 30 } },
+          tempDir,
+          settings,
+        )
 
-      expect(res.outputForHistory).not.toContain('[REDUNDANT_INSTALL_SKIP]')
-    }, 15000)
+        expect(res.outputForHistory).not.toContain('[REDUNDANT_INSTALL_SKIP]')
+      },
+      15000,
+    )
   })
 
   describe('install downgrade guard', () => {
@@ -800,18 +807,22 @@ async def async_handler():
       expect(JSON.parse(fs.readFileSync(path.join(tempDir, 'package.json'), 'utf-8')).dependencies.react).toBe('^18.2.0')
     }, 20000)
 
-    it('lets an upgrade through', async () => {
-      fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18.2.0' } }), 'utf-8')
+    itWithPowerShell(
+      'lets an upgrade through',
+      async () => {
+        fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18.2.0' } }), 'utf-8')
 
-      const res = await agentToolExecutorService.executeTool(
-        // --dry-run --offline keeps the assertion about the guard, not about npm's network.
-        { tool: 'run_command', parameters: { command: 'npm install react@^19.0.0 --dry-run --offline --no-audit --no-fund', timeoutSeconds: 30 } },
-        tempDir,
-        settings,
-      )
+        const res = await agentToolExecutorService.executeTool(
+          // --dry-run --offline keeps the assertion about the guard, not about npm's network.
+          { tool: 'run_command', parameters: { command: 'npm install react@^19.0.0 --dry-run --offline --no-audit --no-fund', timeoutSeconds: 30 } },
+          tempDir,
+          settings,
+        )
 
-      expect(res.outputForHistory).not.toContain('[VERSION DOWNGRADE REFUSED')
-    }, 20000)
+        expect(res.outputForHistory).not.toContain('[VERSION DOWNGRADE REFUSED')
+      },
+      20000,
+    )
   })
 
   describe('active skill adherence gate', () => {
@@ -1042,50 +1053,62 @@ async def async_handler():
     expect(res.logMessage).toBe('Rollback Last Step: nothing to undo')
   })
 
-  it('should run an explicit run_tests command override and return a structured pass/fail summary (AGT8)', async () => {
-    const res = await agentToolExecutorService.executeTool(
-      {
-        tool: 'run_tests',
-        parameters: { command: 'node -e "console.log(\'Tests  5 passed (5)\')"' },
-      },
-      tempDir,
-      settings,
-    )
-
-    expect(res.outputForHistory).toContain('[TEST RUN RESULT]')
-    expect(res.outputForHistory).toContain('5/5 tests passed (vitest)')
-    expect(res.logMessage).toContain('Test Run:')
-  }, 15000)
-
-  it('should auto-detect the test command from package.json scripts.test when no explicit command is given', async () => {
-    fs.writeFileSync(
-      path.join(tempDir, 'package.json'),
-      JSON.stringify({ name: 'fixture', scripts: { test: 'node -e "console.log(\'Tests  2 passed (2)\')"' } }),
-    )
-
-    const res = await agentToolExecutorService.executeTool({ tool: 'run_tests', parameters: {} }, tempDir, settings)
-
-    expect(res.outputForHistory).toContain('auto-detected: package.json scripts.test')
-    expect(res.outputForHistory).toContain('2/2 tests passed (vitest)')
-  }, 15000)
-
-  it('should prefer package.json scripts["test:fast"] over scripts.test when both are present', async () => {
-    fs.writeFileSync(
-      path.join(tempDir, 'package.json'),
-      JSON.stringify({
-        name: 'fixture',
-        scripts: {
-          test: 'node -e "process.exit(1)"',
-          'test:fast': 'node -e "console.log(\'Tests  1 passed (1)\')"',
+  itWithPowerShell(
+    'should run an explicit run_tests command override and return a structured pass/fail summary (AGT8)',
+    async () => {
+      const res = await agentToolExecutorService.executeTool(
+        {
+          tool: 'run_tests',
+          parameters: { command: 'node -e "console.log(\'Tests  5 passed (5)\')"' },
         },
-      }),
-    )
+        tempDir,
+        settings,
+      )
 
-    const res = await agentToolExecutorService.executeTool({ tool: 'run_tests', parameters: {} }, tempDir, settings)
+      expect(res.outputForHistory).toContain('[TEST RUN RESULT]')
+      expect(res.outputForHistory).toContain('5/5 tests passed (vitest)')
+      expect(res.logMessage).toContain('Test Run:')
+    },
+    15000,
+  )
 
-    expect(res.outputForHistory).toContain('auto-detected: package.json scripts["test:fast"]')
-    expect(res.outputForHistory).toContain('1/1 tests passed (vitest)')
-  }, 15000)
+  itWithPowerShell(
+    'should auto-detect the test command from package.json scripts.test when no explicit command is given',
+    async () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify({ name: 'fixture', scripts: { test: 'node -e "console.log(\'Tests  2 passed (2)\')"' } }),
+      )
+
+      const res = await agentToolExecutorService.executeTool({ tool: 'run_tests', parameters: {} }, tempDir, settings)
+
+      expect(res.outputForHistory).toContain('auto-detected: package.json scripts.test')
+      expect(res.outputForHistory).toContain('2/2 tests passed (vitest)')
+    },
+    15000,
+  )
+
+  itWithPowerShell(
+    'should prefer package.json scripts["test:fast"] over scripts.test when both are present',
+    async () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify({
+          name: 'fixture',
+          scripts: {
+            test: 'node -e "process.exit(1)"',
+            'test:fast': 'node -e "console.log(\'Tests  1 passed (1)\')"',
+          },
+        }),
+      )
+
+      const res = await agentToolExecutorService.executeTool({ tool: 'run_tests', parameters: {} }, tempDir, settings)
+
+      expect(res.outputForHistory).toContain('auto-detected: package.json scripts["test:fast"]')
+      expect(res.outputForHistory).toContain('1/1 tests passed (vitest)')
+    },
+    15000,
+  )
 
   it('should return a graceful message when run_tests has no explicit command and no recognized test runner is found', async () => {
     const res = await agentToolExecutorService.executeTool({ tool: 'run_tests', parameters: {} }, tempDir, settings)

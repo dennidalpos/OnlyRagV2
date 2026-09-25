@@ -1,5 +1,9 @@
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { ProcessToolService } from './processToolService'
+
+// Host-native paths: the resolver uses node:path, so a literal C:\ is only absolute on Windows.
+const hostRoot = path.parse(process.cwd()).root
 
 function createService(execute: (...args: never[]) => Promise<unknown>) {
   return new ProcessToolService({
@@ -25,8 +29,8 @@ describe('ProcessToolService run_command', () => {
   it('blocks unsafe commands before spawning the shell', async () => {
     const execute = vi.fn()
     const result = await createService(execute).executeRunCommand(
-      'Remove-Item -Recurse -Force C:\\',
-      'C:\\workspace',
+      `Remove-Item -Recurse -Force ${hostRoot}`,
+      path.join(hostRoot, 'workspace'),
       undefined,
       undefined,
       undefined,

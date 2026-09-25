@@ -1,3 +1,4 @@
+import nodePath from 'node:path'
 import { describe, it, expect } from 'vitest'
 import type { WorkspaceProject } from '../../../../shared/types'
 import { deriveNameFromPath, upsertProject, touchProject, sortProjectsByRecency, mergeProjects, renameProjectInList } from './projectRegistryDomain'
@@ -8,7 +9,8 @@ function buildProject(path: string, overrides: Partial<WorkspaceProject> = {}): 
 
 describe('projectRegistryDomain', () => {
   it('deriveNameFromPath returns the basename, tolerating a trailing slash', () => {
-    expect(deriveNameFromPath('D:\\Projects\\Alpha')).toBe('Alpha')
+    // Host-native: the basename comes from node:path, which splits on backslashes only on Windows.
+    expect(deriveNameFromPath(nodePath.join(nodePath.parse(process.cwd()).root, 'Projects', 'Alpha'))).toBe('Alpha')
     expect(deriveNameFromPath('/home/user/beta/')).toBe('beta')
     expect(deriveNameFromPath('')).toBe('Workspace')
   })

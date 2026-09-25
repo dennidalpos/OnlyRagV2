@@ -7,6 +7,8 @@ npm run docs:check
 npm run test:fast
 ```
 
+Il test rapido gira su ogni sistema: i test sui path usano path nativi dell'host (`path.join` sulla radice di `process.cwd()`, `vi.stubEnv` per `ProgramFiles` e `SystemRoot`) e quelli che dipendono dall'hardware simulano `hardwareProbe`. Solo i casi che avviano un vero `powershell.exe` (`itWithPowerShell`, cioè `it.skipIf(process.platform !== 'win32')`) risultano `skipped` fuori da Windows; gli script E2E Electron avviano `electron.exe` e girano solo su Windows.
+
 Se fallisce il test rapido, usare il target indicato:
 
 ```powershell

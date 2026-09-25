@@ -18,6 +18,14 @@ vi.mock('./ollamaAppService', () => ({
   },
 }))
 
+// A fixed 12 GB GPU / 32 GB host, so the hardware-derived context ceiling does not depend on the test machine.
+vi.mock('../infrastructure/diagnostics/hardwareProbe', () => ({
+  hardwareProbe: {
+    getCachedGpuInfo: () => ({ hasNvidiaGpu: true, vramTotalMB: 12288 }),
+    getMemoryInfo: () => ({ totalRAMGB: 32 }),
+  },
+}))
+
 const settings = {
   defaultModel: 'llama3.2',
   codingModel: 'qwen2.5-coder:7b',

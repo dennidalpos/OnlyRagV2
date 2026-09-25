@@ -1,5 +1,9 @@
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { VisualValidationRunner } from './visualValidationRunner'
+
+// Host-native paths: the services resolve with node:path, so a literal C:\ is only absolute on Windows.
+const workspace = path.join(path.parse(process.cwd()).root, 'workspace')
 
 function runtime() {
   const page = {
@@ -25,7 +29,7 @@ describe('VisualValidationRunner', () => {
       () => ({ isFile: () => true }),
     )
 
-    const result = await runner.launchArtifact({ artifactPath: '..\\outside.html' }, 'C:\\workspace')
+    const result = await runner.launchArtifact({ artifactPath: path.join('..', 'outside.html') }, workspace)
 
     expect(result).toMatchObject({ status: 'UNAVAILABLE' })
     expect((result as { error: string }).error).toContain('Security Violation')
@@ -40,7 +44,7 @@ describe('VisualValidationRunner', () => {
       () => ({ isFile: () => true }),
     )
 
-    const result = await runner.launchArtifact({ artifactPath: 'dist/index.html', viewport: { width: 800, height: 600 } }, 'C:\\workspace')
+    const result = await runner.launchArtifact({ artifactPath: 'dist/index.html', viewport: { width: 800, height: 600 } }, workspace)
 
     expect(result.status).toBe('ready')
     expect(mocks.runtime.launch).toHaveBeenCalledWith({ headless: true })
@@ -62,7 +66,7 @@ describe('VisualValidationRunner', () => {
       () => ({ isFile: () => true }),
     )
 
-    const result = await runner.launchArtifact({ artifactPath: 'dist/index.html' }, 'C:\\workspace')
+    const result = await runner.launchArtifact({ artifactPath: 'dist/index.html' }, workspace)
 
     expect(result).toMatchObject({ status: 'UNAVAILABLE' })
     expect((result as { error: string }).error).toContain('Executable does not exist')
@@ -78,7 +82,7 @@ describe('VisualValidationRunner', () => {
       () => ({ isFile: () => true }),
     )
 
-    const result = await runner.launchArtifact({ artifactPath: 'dist/index.html', timeoutMs: 100 }, 'C:\\workspace')
+    const result = await runner.launchArtifact({ artifactPath: 'dist/index.html', timeoutMs: 100 }, workspace)
 
     expect(result).toMatchObject({ status: 'UNAVAILABLE' })
     expect((result as { error: string }).error).toContain('Timeout 100ms exceeded')
@@ -94,16 +98,16 @@ describe('VisualValidationRunner', () => {
       () => ({ isFile: () => true }),
     )
 
-    const result = await runner.captureEvidence({ artifactPath: 'dist/index.html' }, 'C:\\workspace', 'C:\\workspace\\artifacts')
+    const result = await runner.captureEvidence({ artifactPath: 'dist/index.html' }, workspace, path.join(workspace, 'artifacts'))
 
     expect(result).toEqual({
-      screenshot: { status: 'available', path: 'C:\\workspace\\artifacts\\preview.png' },
+      screenshot: { status: 'available', path: path.join(workspace, 'artifacts', 'preview.png') },
       dom: { status: 'available', content: '<main>Ready</main>' },
       console: [],
       http: [],
       redaction: { applied: false, fields: [] },
     })
-    expect(mocks.page.screenshot).toHaveBeenCalledWith({ path: 'C:\\workspace\\artifacts\\preview.png', timeout: 30_000 })
+    expect(mocks.page.screenshot).toHaveBeenCalledWith({ path: path.join(workspace, 'artifacts', 'preview.png'), timeout: 30_000 })
     expect(mocks.browser.close).toHaveBeenCalledTimes(1)
   })
 
@@ -122,7 +126,7 @@ describe('VisualValidationRunner', () => {
       () => ({ isFile: () => true }),
     )
 
-    const result = await runner.captureEvidence({ artifactPath: 'dist/index.html' }, 'C:\\workspace', 'C:\\workspace\\artifacts')
+    const result = await runner.captureEvidence({ artifactPath: 'dist/index.html' }, workspace, path.join(workspace, 'artifacts'))
 
     expect(result).toMatchObject({
       console: [{ level: 'error', message: 'token=[REDACTED]' }],
@@ -147,7 +151,7 @@ describe('VisualValidationRunner', () => {
       () => ({ isFile: () => true }),
     )
 
-    const result = await runner.captureEvidence({ artifactPath: 'dist/index.html' }, 'C:\\workspace', 'C:\\workspace\\artifacts', controller.signal)
+    const result = await runner.captureEvidence({ artifactPath: 'dist/index.html' }, workspace, path.join(workspace, 'artifacts'), controller.signal)
 
     expect(result).toMatchObject({ status: 'UNAVAILABLE' })
     expect((result as { error: string }).error).toContain('aborted')

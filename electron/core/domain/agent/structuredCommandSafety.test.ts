@@ -1,8 +1,12 @@
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { inspectStructuredCommand } from './structuredCommandSafety'
 
+// Host-native paths: the resolver uses node:path, so a literal C:\ is only absolute on Windows.
+const hostRoot = path.parse(process.cwd()).root
+
 describe('inspectStructuredCommand', () => {
-  const workspace = 'C:\\workspace'
+  const workspace = path.join(hostRoot, 'workspace')
 
   it('keeps a quoted separator inside a command argument', () => {
     expect(inspectStructuredCommand("Write-Output 'a;b'", workspace)).toEqual({ allowed: true, requiresApproval: false })
@@ -10,7 +14,7 @@ describe('inspectStructuredCommand', () => {
 
   it('rejects dynamic invocation and paths outside the workspace', () => {
     expect(inspectStructuredCommand('Invoke-Expression $command', workspace)).toMatchObject({ allowed: false })
-    expect(inspectStructuredCommand('Remove-Item -Recurse -Force C:\\', workspace)).toMatchObject({ allowed: false })
+    expect(inspectStructuredCommand(`Remove-Item -Recurse -Force ${hostRoot}`, workspace)).toMatchObject({ allowed: false })
   })
 
   it('requires approval for a confined file mutation and destructive git action', () => {

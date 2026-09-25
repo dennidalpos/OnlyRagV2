@@ -4,6 +4,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 
+/** Cases that spawn a real powershell.exe: it exists only on Windows, so other hosts report them as skipped. */
+const itWithPowerShell = it.skipIf(process.platform !== 'win32')
+
 describe('TaskRunner Unit & Reliability Tests', () => {
   let runner: TaskRunner
 
@@ -97,7 +100,7 @@ describe('TaskRunner Unit & Reliability Tests', () => {
     expect(res.error).toBe('Invalid command')
   })
 
-  it('should execute simple PowerShell command and return clean output', async () => {
+  itWithPowerShell('should execute simple PowerShell command and return clean output', async () => {
     const res = await runner.executeTerminalCommand('Write-Output "TaskRunnerReliabilityCheck"', undefined, undefined, 10000)
     expect(res.success).toBe(true)
     expect(res.output).toContain('TaskRunnerReliabilityCheck')

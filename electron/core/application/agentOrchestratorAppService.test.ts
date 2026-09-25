@@ -83,6 +83,9 @@ vi.mock('./skillAppService', () => ({
   },
 }))
 
+/** Cases that spawn a real powershell.exe: it exists only on Windows, so other hosts report them as skipped. */
+const itWithPowerShell = it.skipIf(process.platform !== 'win32')
+
 describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () => {
   let tempDir: string
 
@@ -238,7 +241,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     )
   })
 
-  it('stops after the corrective attempt fails too', async () => {
+  itWithPowerShell('stops after the corrective attempt fails too', async () => {
     vi.mocked(AgentStreamTransport.streamCompletion)
       .mockResolvedValueOnce(commandJson('pytest failing_test.py'))
       .mockResolvedValueOnce(commandJson('pytest failing_test.py -x'))
@@ -258,7 +261,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
   })
 
-  it('refuses an unchanged rerun of a failed command instead of spending the execution budget on it', async () => {
+  itWithPowerShell('refuses an unchanged rerun of a failed command instead of spending the execution budget on it', async () => {
     vi.mocked(AgentStreamTransport.streamCompletion)
       .mockResolvedValueOnce(commandJson('pytest failing_test.py'))
       .mockResolvedValueOnce(commandJson('pytest failing_test.py'))
@@ -270,7 +273,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(vi.mocked(AgentStreamTransport.streamCompletion).mock.calls.length).toBeGreaterThan(2)
   })
 
-  it('does not reach a later ask after the execution recovery budget is exhausted', async () => {
+  itWithPowerShell('does not reach a later ask after the execution recovery budget is exhausted', async () => {
     const askJson = '```json\n{\n  "tool": "ask",\n  "parameters": { "question": "What should we do next?" }\n}\n```'
 
     vi.mocked(AgentStreamTransport.streamCompletion)
@@ -310,7 +313,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     })
   })
 
-  it('should trip stagnation circuit breaker when repeated failures occur on complex tasks', async () => {
+  itWithPowerShell('should trip stagnation circuit breaker when repeated failures occur on complex tasks', async () => {
     const failingCommandJson = (n: number) => `\`\`\`json\n{\n  "tool": "run_command",\n  "parameters": { "command": "pytest failing_test_${n}.py" }\n}\n\`\`\``
     vi.mocked(AgentStreamTransport.streamCompletion)
       .mockResolvedValueOnce(failingCommandJson(1))

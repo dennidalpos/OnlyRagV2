@@ -1,7 +1,11 @@
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { recordToolPolicyDenial, runToolGates } from './agentOrchestratorToolGates'
 import { AgentProgressPolicy, PROGRESS_BUDGET } from '../domain/agent/agentProgressPolicy'
 import type { AgentGuardEvent } from '../../../shared/types'
+
+// Host-native paths: the resolver uses node:path, so a literal C:\ is only absolute on Windows.
+const hostRoot = path.parse(process.cwd()).root
 
 describe('runToolGates network-approved policy', () => {
   it('rejects a tool omitted from the current phase before approval or execution', async () => {
@@ -97,7 +101,7 @@ describe('runToolGates structured command safety', () => {
   const base = {
     agentMode: 'auto' as const,
     fsmMode: { isToolAllowed: vi.fn(() => true) } as never,
-    workspacePath: 'C:\\workspace',
+    workspacePath: path.join(hostRoot, 'workspace'),
     stepCount: 6,
     episodicCompactor: { recordStep: vi.fn() } as never,
     emitLog: vi.fn(),
@@ -120,7 +124,7 @@ describe('runToolGates structured command safety', () => {
     const result = await runToolGates({
       ...base,
       requestApproval,
-      parsedTool: { tool: 'run_command', parameters: { command: 'Remove-Item -Recurse -Force C:\\' } },
+      parsedTool: { tool: 'run_command', parameters: { command: `Remove-Item -Recurse -Force ${hostRoot}` } },
     })
 
     expect(result).toEqual({ outcome: 'denied' })

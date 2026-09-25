@@ -13,7 +13,7 @@ Run from repository root in PowerShell. On 2026-09-25 on Windows: `npm run docs:
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (273 files, 2195 tests; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Fast suite | `npm run test:fast` (273 files, 2169 tests; 22 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
 | Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (133 tests) |
 | Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 4 guard scenarios) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |

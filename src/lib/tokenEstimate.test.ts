@@ -51,7 +51,8 @@ describe('tokenEstimate cache bounds', () => {
   })
 
   it('bounds the cached characters when every draft is a long template', () => {
-    const template = 'x'.repeat(100_000)
+    // Natural text: a run of one repeated character is the BPE tokenizer's slowest input and would time the test out.
+    const template = 'The quick brown fox jumps over the lazy dog. '.repeat(2_300).slice(0, 100_000)
     for (let i = 0; i < 40; i++) estimateTokenCount(`${template}${i}`)
     expect(tokenEstimateCacheSize().chars).toBeLessThanOrEqual(2_000_000)
     expect(tokenEstimateCacheSize().entries).toBeLessThan(40)

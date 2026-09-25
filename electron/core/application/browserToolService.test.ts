@@ -1,5 +1,9 @@
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserToolService } from './browserToolService'
+
+// Host-native paths: the services resolve with node:path, so a literal C:\ is only absolute on Windows.
+const workspace = path.join(path.parse(process.cwd()).root, 'workspace')
 
 function createService(overrides: Partial<ConstructorParameters<typeof BrowserToolService>[0]> = {}) {
   return new BrowserToolService({
@@ -15,7 +19,7 @@ describe('BrowserToolService open_in_browser', () => {
     const openExternal = vi.fn(async () => undefined)
     const openPath = vi.fn(async () => '')
     const service = createService({ openExternal, openPath })
-    const result = await service.executeOpenInBrowser({}, 'C:\\workspace')
+    const result = await service.executeOpenInBrowser({}, workspace)
 
     expect(result.outputForHistory).toContain('missing')
     expect(openExternal).not.toHaveBeenCalled()
@@ -27,7 +31,7 @@ describe('BrowserToolService open_in_browser', () => {
     const openPath = vi.fn(async () => '')
     const service = createService({ openExternal, openPath })
 
-    const result = await service.executeOpenInBrowser({ url: 'https://example.test/preview' }, 'C:\\workspace')
+    const result = await service.executeOpenInBrowser({ url: 'https://example.test/preview' }, workspace)
 
     expect(result.outputForHistory).toContain('Successfully opened URL')
     expect(openExternal).toHaveBeenCalledWith('https://example.test/preview')
@@ -39,7 +43,7 @@ describe('BrowserToolService open_in_browser', () => {
     const service = createService({ openPath })
 
     for (const filePath of ['build\\setup.exe', 'run.bat', 'deploy.ps1', 'shortcut.lnk']) {
-      const result = await service.executeOpenInBrowser({ filePath }, 'C:\\workspace')
+      const result = await service.executeOpenInBrowser({ filePath }, workspace)
       expect(result.outcome).toBe('rejected')
     }
     expect(openPath).not.toHaveBeenCalled()
@@ -50,7 +54,7 @@ describe('BrowserToolService open_in_browser', () => {
     const openPath = vi.fn(async () => '')
     const service = createService({ exists, openPath })
 
-    const result = await service.executeOpenInBrowser({ filePath: '..\\outside.html' }, 'C:\\workspace')
+    const result = await service.executeOpenInBrowser({ filePath: path.join('..', 'outside.html') }, workspace)
 
     expect(result.outputForHistory).toContain('Security Violation')
     expect(exists).not.toHaveBeenCalled()
@@ -62,10 +66,10 @@ describe('BrowserToolService open_in_browser', () => {
     const openPath = vi.fn(async () => 'default application unavailable')
     const service = createService({ exists, openPath })
 
-    const result = await service.executeOpenInBrowser({ filePath: 'dist/index.html' }, 'C:\\workspace')
+    const result = await service.executeOpenInBrowser({ filePath: 'dist/index.html' }, workspace)
 
-    expect(exists).toHaveBeenCalledWith('C:\\workspace\\dist\\index.html')
-    expect(openPath).toHaveBeenCalledWith('C:\\workspace\\dist\\index.html')
+    expect(exists).toHaveBeenCalledWith(path.join(workspace, 'dist', 'index.html'))
+    expect(openPath).toHaveBeenCalledWith(path.join(workspace, 'dist', 'index.html'))
     expect(result.outputForHistory).toContain('default application unavailable')
   })
 })

@@ -1,8 +1,21 @@
 import path from 'node:path'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { isIgnoredPath, isSecretFile, validatePathSafety, isProtectedSystemDirectory } from './contextFilter'
 
+/** Points the protected-directory variables at host-native paths, so the check runs on any OS. */
+function stubWindowsSystemDirectories(): string {
+  const hostRoot = path.parse(process.cwd()).root
+  vi.stubEnv('ProgramFiles', path.join(hostRoot, 'Program Files'))
+  vi.stubEnv('ProgramFiles(x86)', path.join(hostRoot, 'Program Files (x86)'))
+  vi.stubEnv('SystemRoot', path.join(hostRoot, 'Windows'))
+  return hostRoot
+}
+
 describe('contextFilter domain logic & AppSec protection', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('should ignore standard hidden & build directories', () => {
     expect(isIgnoredPath('node_modules', true)).toBe(true)
     expect(isIgnoredPath('.git', true)).toBe(true)
@@ -77,11 +90,12 @@ describe('contextFilter domain logic & AppSec protection', () => {
   })
 
   it('should identify and block protected system directories (Program Files / Windows)', () => {
-    expect(isProtectedSystemDirectory('C:\\Program Files\\OnlyRag V2')).toBe(true)
-    expect(isProtectedSystemDirectory('C:\\Windows\\System32')).toBe(true)
-    expect(isProtectedSystemDirectory('C:\\Users\\Utente\\Desktop\\test_app')).toBe(false)
+    const hostRoot = stubWindowsSystemDirectories()
+    expect(isProtectedSystemDirectory(path.join(hostRoot, 'Program Files', 'OnlyRag V2'))).toBe(true)
+    expect(isProtectedSystemDirectory(path.join(hostRoot, 'Windows', 'System32'))).toBe(true)
+    expect(isProtectedSystemDirectory(path.join(hostRoot, 'Users', 'Utente', 'Desktop', 'test_app'))).toBe(false)
 
-    const sysPath = validatePathSafety('package.json', 'C:\\Program Files\\OnlyRag V2')
+    const sysPath = validatePathSafety('package.json', path.join(hostRoot, 'Program Files', 'OnlyRag V2'))
     expect(sysPath.safePath).toBeNull()
     expect(sysPath.error).toContain('protected system directory')
   })

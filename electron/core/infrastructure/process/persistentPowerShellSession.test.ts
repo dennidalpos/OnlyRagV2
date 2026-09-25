@@ -1,6 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { PersistentPowerShellSession } from './persistentPowerShellSession'
 
+/** Cases that spawn a real powershell.exe: it exists only on Windows, so other hosts report them as skipped. */
+const itWithPowerShell = it.skipIf(process.platform !== 'win32')
+
 describe('PersistentPowerShellSession Unit Tests', () => {
   let session: PersistentPowerShellSession | null = null
 
@@ -11,7 +14,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     }
   })
 
-  it('should execute basic PowerShell command and capture stdout', async () => {
+  itWithPowerShell('should execute basic PowerShell command and capture stdout', async () => {
     session = new PersistentPowerShellSession(process.cwd())
     const res = await session.execute('Write-Output "Hello Persistent Shell"')
 
@@ -19,7 +22,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     expect(res.stdout).toContain('Hello Persistent Shell')
   })
 
-  it('should preserve environment variable state across sequential commands', async () => {
+  itWithPowerShell('should preserve environment variable state across sequential commands', async () => {
     session = new PersistentPowerShellSession(process.cwd())
 
     // Command 1: Set environment variable
@@ -32,7 +35,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     expect(res2.stdout).toContain('StatePreserved42')
   })
 
-  it('should preserve variable state across sequential commands', async () => {
+  itWithPowerShell('should preserve variable state across sequential commands', async () => {
     session = new PersistentPowerShellSession(process.cwd())
 
     // Step 1: define variable
@@ -44,7 +47,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     expect(res.stdout).toContain('Val: 150')
   })
 
-  it('returns the failure reason on stderr alongside the banner the command wrote to stdout', async () => {
+  itWithPowerShell('returns the failure reason on stderr alongside the banner the command wrote to stdout', async () => {
     session = new PersistentPowerShellSession(process.cwd())
 
     // Pins the contract the executor now depends on: BOTH streams come back populated.
@@ -55,7 +58,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     expect(res.code).not.toBe(0)
   })
 
-  it('should abort immediately on an interactive prompt instead of waiting out the full timeout', async () => {
+  itWithPowerShell('should abort immediately on an interactive prompt instead of waiting out the full timeout', async () => {
     session = new PersistentPowerShellSession(process.cwd())
 
     const startedAt = Date.now()
@@ -84,7 +87,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     expect(res.stderr).toContain('cancelled before execution')
   })
 
-  it('cancels an in-flight command and recreates the shell without leaving a residue', async () => {
+  itWithPowerShell('cancels an in-flight command and recreates the shell without leaving a residue', async () => {
     session = new PersistentPowerShellSession(process.cwd())
     const controller = new AbortController()
     const execution = session.execute('Start-Sleep -Seconds 30', undefined, undefined, 25000, controller.signal)
@@ -102,7 +105,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     expect(followUp.stdout).toContain('shell recreated after cancellation')
   })
 
-  it('times out an in-flight command and recreates the shell without leaving a residue', async () => {
+  itWithPowerShell('times out an in-flight command and recreates the shell without leaving a residue', async () => {
     session = new PersistentPowerShellSession(process.cwd())
 
     const result = await session.execute('Start-Sleep -Seconds 30', undefined, undefined, 1000)

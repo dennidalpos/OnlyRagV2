@@ -49,6 +49,15 @@ function createMockWindow(): { window: RendererEventSink; send: ReturnType<typeo
   }
 }
 
+// The context window follows the host's RAM and GPU: fixed facts keep a small CI runner from
+// shrinking it until every run closes on the first turn.
+vi.mock('../infrastructure/diagnostics/hardwareProbe', () => ({
+  hardwareProbe: {
+    getCachedGpuInfo: () => ({ hasNvidiaGpu: true, vramTotalMB: 8192 }),
+    getMemoryInfo: () => ({ totalRAMGB: 32 }),
+  },
+}))
+
 vi.mock('../infrastructure/http/agentStreamTransport', () => ({
   AgentStreamTransport: {
     streamCompletion: vi.fn(),

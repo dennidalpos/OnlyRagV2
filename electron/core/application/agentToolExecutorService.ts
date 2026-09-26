@@ -40,7 +40,7 @@ import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolF
 import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
 import { devToolProbeRepository } from '../infrastructure/process/devToolProbeRepository'
 import { buildSkillAdherenceRefusal, validateSkillAdherence } from '../domain/skills/skillAdherenceValidator'
-import { workspaceIncrementalTypecheck } from '../infrastructure/process/workspaceIncrementalTypecheck'
+import { workspaceTypecheckWorker } from '../infrastructure/process/workspaceTypecheckWorkerClient'
 import { type DevToolStatus } from '../domain/agent/devToolchain'
 import { probeToolchain } from '../domain/agent/tools/execution/devToolchainTools'
 import type { AppSettings } from '../../../shared/types'
@@ -103,10 +103,10 @@ export class AgentToolExecutorService {
         readContent: (absolutePath) => this.readContentSafely(absolutePath),
         importIntegrityDirective: (filePath, content, currentWorkspace) => this.importIntegrityDirective(filePath, content, currentWorkspace),
         versionRealityDirective: (filePath, content) => this.versionRealityDirective(filePath, content),
-        incrementalTypecheck: (currentWorkspace, filePath) => workspaceIncrementalTypecheck.checkWrittenFile(currentWorkspace, filePath) || '',
+        incrementalTypecheck: async (currentWorkspace, filePath) => (await workspaceTypecheckWorker.checkWrittenFile(currentWorkspace, filePath)) || '',
         contentVersion,
       },
-      checkWrittenFile: (currentWorkspace, filePath) => workspaceIncrementalTypecheck.checkWrittenFile(currentWorkspace, filePath) || '',
+      checkWrittenFile: async (currentWorkspace, filePath) => (await workspaceTypecheckWorker.checkWrittenFile(currentWorkspace, filePath)) || '',
       replaceFile: {
         exists: (absolutePath) => documentIoRepository.exists(absolutePath),
         readIfExists: (absolutePath) => agentToolFileRepository.readIfExists(absolutePath),

@@ -199,33 +199,14 @@ def _rapidocr_cuda_available() -> bool:
     except ImportError:
         return False
 
-def _find_rapidocr_config() -> Optional[str]:
-    """Locates rapidocr_onnxruntime config.yaml across packaged PyInstaller and standard Python environments."""
-    import sys
-    try:
-        import rapidocr_onnxruntime
-        mod_dir = os.path.dirname(os.path.abspath(rapidocr_onnxruntime.__file__))
-        cfg_cand = os.path.join(mod_dir, "config.yaml")
-        if os.path.exists(cfg_cand):
-            return cfg_cand
-    except Exception:
-        pass
-
-    if hasattr(sys, "_MEIPASS"):
-        meipass_cfg = os.path.join(getattr(sys, "_MEIPASS"), "rapidocr_onnxruntime", "config.yaml")
-        if os.path.exists(meipass_cfg):
-            return meipass_cfg
-
-    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-    internal_cfg = os.path.join(exe_dir, "_internal", "rapidocr_onnxruntime", "config.yaml")
-    if os.path.exists(internal_cfg):
-        return internal_cfg
-
-    res_cfg = os.path.join(exe_dir, "..", "resources", "sidecar", "_internal", "rapidocr_onnxruntime", "config.yaml")
-    if os.path.exists(res_cfg):
-        return os.path.abspath(res_cfg)
-
-    return None
+def _ocr_items(output: Any) -> List[Any]:
+    """Pairs each detected box with its text from a rapidocr RapidOCROutput (boxes/txts are None
+    when nothing was recognised), in the (points, text) shape the layout reconstruction reads."""
+    boxes = getattr(output, "boxes", None)
+    txts = getattr(output, "txts", None)
+    if boxes is None or txts is None:
+        return []
+    return list(zip(boxes, txts))
 
 def _reconstruct_layout_from_ocr_boxes(raw_results: Any) -> str:
     """Groups detected OCR bounding boxes into visual lines and paragraphs in reading order with multi-column support via vectorized NumPy."""
@@ -321,30 +302,29 @@ def _get_rapidocr_engine():
         if _RAPIDOCR_ENGINE is not None:
             return _RAPIDOCR_ENGINE
 
-        from rapidocr_onnxruntime import RapidOCR
+        from rapidocr import RapidOCR
 
         use_cuda = _rapidocr_cuda_available()
-        cfg_path = _find_rapidocr_config()
-        ocr_kwargs: Dict[str, Any] = {
-            "det_use_cuda": use_cuda,
-            "cls_use_cuda": use_cuda,
-            "rec_use_cuda": use_cuda,
-            "det_limit_side_len": 2500,
-            "det_db_unclip_ratio": 1.6,
-            "det_db_box_thresh": 0.5
+        # The models ship inside the rapidocr wheel (and PyInstaller's collect_all), so the default
+        # config and model directory resolve next to the package and nothing is downloaded.
+        # limit_type "max" caps the long side at 2500: rapidocr 3's "min" upscales the short side to
+        # that length, which on a 400x100 crop left the detector with an empty result.
+        ocr_params: Dict[str, Any] = {
+            "Global.log_level": "warning",
+            "EngineConfig.onnxruntime.use_cuda": use_cuda,
+            "Det.limit_side_len": 2500,
+            "Det.limit_type": "max",
+            "Det.unclip_ratio": 1.6,
+            "Det.box_thresh": 0.5,
         }
-        if cfg_path:
-            ocr_kwargs["config_path"] = cfg_path
 
         try:
-            _RAPIDOCR_ENGINE = RapidOCR(**ocr_kwargs)
+            _RAPIDOCR_ENGINE = RapidOCR(params=ocr_params)
         except Exception as init_err:
             if use_cuda:
                 logger.warning(f"RapidOCR CUDA initialization failed ({init_err}), falling back to CPU execution.")
-                ocr_kwargs["det_use_cuda"] = False
-                ocr_kwargs["cls_use_cuda"] = False
-                ocr_kwargs["rec_use_cuda"] = False
-                _RAPIDOCR_ENGINE = RapidOCR(**ocr_kwargs)
+                ocr_params["EngineConfig.onnxruntime.use_cuda"] = False
+                _RAPIDOCR_ENGINE = RapidOCR(params=ocr_params)
             else:
                 raise init_err
 
@@ -368,7 +348,7 @@ def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
     except Exception:
         scale_x, scale_y = 1.0, 1.0
 
-    result, _elapse = engine(prepared_bytes)
+    result = _ocr_items(engine(prepared_bytes))
     if not result:
         return []
 
@@ -443,8 +423,7 @@ def run_rapid_ocr(image_bytes: bytes) -> str:
     Executes on CUDA when available, and automatically falls back to CPU execution on minimal/CPU-only hardware."""
     engine = _get_rapidocr_engine()
     prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560)
-    result, _elapse = engine(prepared_bytes)
-    return _reconstruct_layout_from_ocr_boxes(result)
+    return _reconstruct_layout_from_ocr_boxes(_ocr_items(engine(prepared_bytes)))
 
 def run_layout_ocr(image_bytes: bytes) -> str:
     """High-fidelity local OCR engine via RapidOCR.

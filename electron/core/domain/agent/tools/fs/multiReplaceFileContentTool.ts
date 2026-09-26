@@ -32,7 +32,7 @@ export async function executeMultiReplaceFileContentTool(
   buildChangeStats: (filePath: string, before: string, after: string) => { filePath: string; additions: number; deletions: number },
   contentVersion: (content: string) => string,
   /** Diagnostics for the file just written (the incremental typecheck), appended to the result. */
-  checkWrittenFile: (absolutePath: string) => string = () => '',
+  checkWrittenFile: (absolutePath: string) => Promise<string> = async () => '',
 ): Promise<ToolExecutionResult> {
   const filePath = parameters.filePath
   const replacements = (parameters.replacements || []) as Array<{ targetContent: string; replacementContent: string }>
@@ -96,7 +96,7 @@ export async function executeMultiReplaceFileContentTool(
   if (result.success)
     return {
       outcome: 'success',
-      outputForHistory: `Successfully replaced ${prepared.replacedCount} chunks in ${filePath}\nApplied change:\n${compactMutationDiff(beforeContent, prepared.content)}${workspacePath ? checkWrittenFile(safePath) : ''}`,
+      outputForHistory: `Successfully replaced ${prepared.replacedCount} chunks in ${filePath}\nApplied change:\n${compactMutationDiff(beforeContent, prepared.content)}${workspacePath ? await checkWrittenFile(safePath) : ''}`,
       ...toolLog('toolMultiReplaceDone', { count: prepared.replacedCount, file: path.basename(filePath) }),
       changeStats: buildChangeStats(safePath, beforeContent, prepared.content),
     }

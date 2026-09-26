@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { app } from 'electron'
+import { userDataRoot } from './userDataRoot'
 import { CustomHubInput, SkillHubSource } from '../../domain/skills/skillTypes'
 import { logger } from '../logging/logger'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
@@ -46,7 +46,7 @@ export const BUILTIN_HUB_SOURCES: SkillHubSource[] = [
 
 export class CustomHubRepository {
   private getStoragePath(): string {
-    const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(process.cwd(), 'userdata_dev')
+    const baseDir = userDataRoot()
     return path.join(baseDir, 'custom_hubs.json')
   }
 

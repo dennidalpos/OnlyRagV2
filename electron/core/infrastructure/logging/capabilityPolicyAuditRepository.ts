@@ -1,17 +1,16 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { app } from 'electron'
 import { sanitizeLogMessage } from '../../../logRedactor'
 import { capabilityPolicyAuditEventSchema, type CapabilityPolicyAuditEvent, type CapabilityPolicyAuditStore } from '../../domain/agent/capabilityPolicyContract'
 import { safeAtomicWrite } from '../filesystem/safeAtomicFileWriter'
+import { userDataRoot } from '../filesystem/userDataRoot'
 
 const FILE_NAME = 'capability_policy_audit.json'
 const MAX_EVENTS = 1000
 
 /** Next to the Main log in Electron's userData; headless runs (tests, live harness) use the repository-local userdata_dev like every other user store. */
 function defaultPath(): string {
-  const root = app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(process.cwd(), 'userdata_dev')
-  return path.join(root, 'logs', FILE_NAME)
+  return path.join(userDataRoot(), 'logs', FILE_NAME)
 }
 
 function redactEvent(event: CapabilityPolicyAuditEvent): CapabilityPolicyAuditEvent {

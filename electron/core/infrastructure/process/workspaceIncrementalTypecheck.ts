@@ -7,15 +7,35 @@ interface CachedProgram {
   program: ts.Program
 }
 
+/** Message Main posts to the typecheck worker (electron/typecheckWorker.ts). */
+export interface TypecheckRequest {
+  id: number
+  workspacePath: string
+  filePath: string
+}
+
+/** Worker reply: the diagnostic block, or null when the file is clean or not checked. */
+export interface TypecheckResponse {
+  id: number
+  diagnostic: string | null
+}
+
 const MAX_CACHED_WORKSPACES = 8
 const TYPECHECKED_SOURCE = /\.(?:[cm]?ts|tsx|jsx?)$/i
 
-/** Reuses TypeScript's previous Program for successive writes in one workspace. */
+export function isTypecheckedSource(filePath: string): boolean {
+  return TYPECHECKED_SOURCE.test(filePath)
+}
+
+/**
+ * Reuses TypeScript's previous Program for successive writes in one workspace. The check is
+ * synchronous, so Main runs it on a worker thread through WorkspaceTypecheckWorkerClient.
+ */
 export class WorkspaceIncrementalTypecheck {
   private readonly cache = new Map<string, CachedProgram>()
 
   checkWrittenFile(workspacePath: string, absoluteFilePath: string): string | null {
-    if (!TYPECHECKED_SOURCE.test(absoluteFilePath)) return null
+    if (!isTypecheckedSource(absoluteFilePath)) return null
 
     const configPath = path.join(workspacePath, 'tsconfig.json')
     if (!fs.existsSync(configPath)) return null
@@ -71,5 +91,3 @@ export class WorkspaceIncrementalTypecheck {
     return `\n\n[POST-WRITE TYPECHECK DIAGNOSTIC]\n${lines.join('\n')}\nThe file was written, but it does not typecheck. Correct the diagnostic before rewriting other files.`
   }
 }
-
-export const workspaceIncrementalTypecheck = new WorkspaceIncrementalTypecheck()

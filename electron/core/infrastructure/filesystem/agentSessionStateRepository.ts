@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import { ensureWorkspaceMetadataDirectory } from './workspaceMetadataDirectory'
 import path from 'node:path'
-import os from 'node:os'
 import { logger } from '../logging/logger'
 import type { AgentMode } from '../../domain/agent/agentTypes'
 import type { EpisodicStepRecord } from '../../domain/agent/episodicMemoryCompactor'
@@ -9,6 +8,7 @@ import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolve
 import type { AgentCompletionStatus, AgentGuardEvent, AgentGuardId, AgentRunIdentity, AgentVerificationEvidence } from '../../../../shared/types'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
+import { userDataSessionsDir } from './userDataRoot'
 import type { AgentExecutionPhase } from '../../domain/agent/agentExecutionPhase'
 import type { RecoveryFailureState } from '../../domain/agent/recoveryBudget'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../../domain/agent/ollamaSessionRuntime'
@@ -96,7 +96,7 @@ export class AgentSessionStateRepository {
       if (fs.existsSync(stateDir)) return stateDir
     }
 
-    const fallbackDir = path.join(os.homedir(), '.onlyrag_v2', 'sessions')
+    const fallbackDir = userDataSessionsDir()
     if (!fs.existsSync(fallbackDir)) {
       try {
         fs.mkdirSync(fallbackDir, { recursive: true })
@@ -185,7 +185,7 @@ export class AgentSessionStateRepository {
     try {
       const filePath = this.getStateFilePath(sessionId, workspacePath)
       if (!fs.existsSync(filePath)) {
-        const fallbackPath = path.join(os.homedir(), '.onlyrag_v2', 'sessions', `.agent_state_${sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`)
+        const fallbackPath = path.join(userDataSessionsDir(), `.agent_state_${sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`)
         if (!fs.existsSync(fallbackPath)) return null
         const rawFallback = await fs.promises.readFile(fallbackPath, 'utf-8')
         return normalizePersistedMode(JSON.parse(rawFallback))
@@ -240,7 +240,7 @@ export class AgentSessionStateRepository {
       if (fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath)
       }
-      const fallbackPath = path.join(os.homedir(), '.onlyrag_v2', 'sessions', `.agent_state_${sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`)
+      const fallbackPath = path.join(userDataSessionsDir(), `.agent_state_${sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`)
       if (fs.existsSync(fallbackPath)) {
         await fs.promises.unlink(fallbackPath)
       }
@@ -253,7 +253,7 @@ export class AgentSessionStateRepository {
 
   public async clearAllSessionStates(workspacePath?: string | null): Promise<boolean> {
     try {
-      const dirs = [this.getStorageDir(workspacePath), path.join(os.homedir(), '.onlyrag_v2', 'sessions')]
+      const dirs = [this.getStorageDir(workspacePath), userDataSessionsDir()]
       for (const dir of dirs) {
         if (fs.existsSync(dir)) {
           const files = await fs.promises.readdir(dir)

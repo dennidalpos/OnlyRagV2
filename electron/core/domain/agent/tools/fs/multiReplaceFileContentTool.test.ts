@@ -22,7 +22,7 @@ describe('executeMultiReplaceFileContentTool', () => {
       journal,
       (filePath, before, after) => ({ filePath, additions: after.length - before.length, deletions: 0 }),
       (content) => `hash:${content}`,
-      () => '\n[TYPECHECK] src/file.ts(1,1): error TS2304',
+      async () => '\n[TYPECHECK] src/file.ts(1,1): error TS2304',
     )
 
     expect(journal.recordOriginalState).toHaveBeenCalledWith(expect.any(String), 'one\ntwo')

@@ -81,8 +81,8 @@ try {
             throw "[ERRORE] Python del virtualenv non trovato in $venvPython. Eseguire npm run setup:dev."
         }
         $venvPythonVersion = (& $venvPython --version 2>&1).ToString()
-        if ($LASTEXITCODE -ne 0 -or $venvPythonVersion -notmatch 'Python 3\.12\.') {
-            throw "[ERRORE] Virtualenv non compatibile: rilevato $venvPythonVersion, richiesto Python 3.12. Eseguire npm run setup:dev."
+        if ($LASTEXITCODE -ne 0 -or $venvPythonVersion -notmatch 'Python 3\.13\.') {
+            throw "[ERRORE] Virtualenv non compatibile: rilevato $venvPythonVersion, richiesto Python 3.13. Eseguire npm run setup:dev."
         }
         if (-not (Test-Path -LiteralPath $venvPyInstaller)) {
             throw "[ERRORE] PyInstaller non trovato in $venvPyInstaller. Eseguire npm run setup:dev."

@@ -2,15 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import yaml from 'js-yaml'
-import { app } from 'electron'
+import { userDataRoot } from './userDataRoot'
 import { logger } from '../logging/logger'
 import { SkillDefinition, SkillMetadata, SkillOriginType } from '../../domain/skills/skillTypes'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
-
-/** Electron's userData, or the repository-local `userdata_dev` store when running headless. */
-function userDataRoot(): string {
-  return app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(process.cwd(), 'userdata_dev')
-}
 
 export function calculateSkillChecksum(content: string): string {
   const normalized = content.replace(/\r\n/g, '\n').trim()

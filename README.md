@@ -17,7 +17,7 @@ The concise technical guides are organized by scope in [`docs/README.md`](./docs
 
 ## Quick start
 
-Requirements: Windows 10/11 64-bit, Node `>=24.19.0 <25`, npm `>=11 <12`, Python `3.12.10` and Ollama.
+Requirements: Windows 10/11 64-bit, Node `>=24.19.0 <25`, npm `>=11 <12`, Python `3.13.15` and Ollama.
 
 ```powershell
 git clone https://github.com/dennidalpos/OnlyRagV2.git

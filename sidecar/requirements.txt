@@ -12,10 +12,10 @@ pandas>=2.0.0
 python-docx>=1.1.0
 pillow>=10.0.0
 puremagic>=1.30
-# Installed by setup_dev_environment.ps1 after RapidOCR's CPU dependency is removed.
+# rapidocr 3 does not pull the CPU onnxruntime wheel; setup_dev_environment.ps1 swaps it out if anything else does.
 # onnxruntime-gpu includes CPU fallback; the two distributions cannot coexist.
 onnxruntime-gpu[cuda,cudnn]==1.29.0
-rapidocr-onnxruntime>=1.4.0
+rapidocr>=3.9.0
 wordfreq>=3.1.0
 symspellpy>=6.7.7
 langdetect>=1.0.9

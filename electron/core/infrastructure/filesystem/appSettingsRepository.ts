@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
+import { userDataRoot } from './userDataRoot'
 import { logger } from '../logging/logger'
 import type { AppSettings } from '../../../../shared/types'
 import { sanitizeAppSettings } from '../../domain/settings/appSettingsDomain'
@@ -38,7 +39,7 @@ export class AppSettingsRepository {
 
   private getStateFilePath(): string {
     if (this.stateFilePath) return this.stateFilePath
-    const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(process.cwd(), 'userdata_dev')
+    const baseDir = userDataRoot()
     return path.join(baseDir, SETTINGS_FILE_NAME)
   }
 

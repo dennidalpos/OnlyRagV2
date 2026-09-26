@@ -7,7 +7,7 @@ Lo stato è `online` solo con HTTP 200 e un payload `/health` completo: risposta
 
 - Parser per PDF, DOCX, testo, immagini e dati tabellari.
 - `file_type` è parte del contratto di ingestione, aggiornamento e lista: il Main lo normalizza senza perdere `docx`, così l'idoneità alla traduzione in-place resta stabile.
-- PDF: estrazione nativa; OCR locale RapidOCR quando serve; Vision Ollama come percorso configurabile. Le pagine sono renderizzate su un pool di 3 thread: il motore RapidOCR viene creato una sola volta sotto lock (`_get_rapidocr_engine`), e un'inizializzazione fallita viene ritentata alla chiamata successiva.
+- PDF: estrazione nativa; OCR locale RapidOCR quando serve; Vision Ollama come percorso configurabile. Le pagine sono renderizzate su un pool di 3 thread: il motore RapidOCR viene creato una sola volta sotto lock (`_get_rapidocr_engine`), e un'inizializzazione fallita viene ritentata alla chiamata successiva. Dal passaggio a Python 3.13 il pacchetto è `rapidocr` 3 (`rapidocr-onnxruntime` si ferma a Python 3.12): i modelli PP-OCRv6 sono inclusi nel wheel e nel bundle PyInstaller, quindi nulla viene scaricato; il rilevamento limita il lato lungo a 2500 px (`Det.limit_type: max`) e usa CUDA tramite `onnxruntime-gpu` quando disponibile.
 - I chunk ricevono intestazioni contestuali e vengono indicizzati in LanceDB con il modello di embedding configurato (`embeddingModel`), registrato su ogni chunk.
 - Se l'embedding Ollama fallisce, il vettore deterministico CPU marca il documento `indexed_fallback`.
 - Ogni stream ha un `task_id`: l'annullamento è cooperativo ai confini sicuri e pulisce i record LanceDB parziali.

@@ -56,7 +56,7 @@ interface DeleteFileDependencies {
   buildSkillRefusal?: (filePath: string, violation: SkillAdherenceViolation) => string
   contentVersion?: (content: string) => string
   /** Incremental typecheck of a file an edit tool just wrote; empty when clean or not TypeScript. */
-  checkWrittenFile?: (workspacePath: string, absolutePath: string) => string
+  checkWrittenFile?: (workspacePath: string, absolutePath: string) => Promise<string>
 }
 
 /** Application service for filesystem tools extracted from the legacy executor. */
@@ -121,7 +121,7 @@ export class FsToolService {
       this.dependencies.journal,
       this.dependencies.buildChangeStats,
       this.dependencies.contentVersion || ((content) => content),
-      (absolutePath) => (workspacePath && this.dependencies.checkWrittenFile?.(workspacePath, absolutePath)) || '',
+      async (absolutePath) => (workspacePath && (await this.dependencies.checkWrittenFile?.(workspacePath, absolutePath))) || '',
     )
   }
 
@@ -144,7 +144,7 @@ export class FsToolService {
       this.dependencies.journal,
       this.dependencies.buildChangeStats,
       this.dependencies.contentVersion || ((content) => content),
-      (absolutePath) => (workspacePath && this.dependencies.checkWrittenFile?.(workspacePath, absolutePath)) || '',
+      async (absolutePath) => (workspacePath && (await this.dependencies.checkWrittenFile?.(workspacePath, absolutePath))) || '',
     )
   }
 

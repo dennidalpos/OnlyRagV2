@@ -2,7 +2,7 @@
 .SYNOPSIS
     Prepara l'ambiente di sviluppo usando la root del repository dello script.
 .DESCRIPTION
-    Verifica Node.js 24.19.x e Python 3.12.x, installa le dipendenze npm dal lockfile e
+    Verifica Node.js 24.19.x e Python 3.13.x, installa le dipendenze npm dal lockfile e
     crea/aggiorna il virtualenv Python locale senza dipendere dalla directory corrente.
 #>
 
@@ -28,16 +28,16 @@ try {
     $pythonLauncher = Get-Command py -ErrorAction SilentlyContinue
     if ($pythonLauncher) {
         $pythonCommand = 'py'
-        $pythonArgs = @('-3.12')
+        $pythonArgs = @('-3.13')
         & $pythonCommand @pythonArgs --version | Out-Null
     } else {
         $pythonCommand = 'python'
         $pythonArgs = @()
         & $pythonCommand --version | Out-Null
     }
-    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Python 3.12 non trovato. Installare Python 3.12 e ripetere.' }
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Python 3.13 non trovato. Installare Python 3.13 e ripetere.' }
     $pythonVersion = (& $pythonCommand @pythonArgs --version 2>&1).ToString()
-    if ($pythonVersion -notmatch 'Python 3\.12\.') { Stop-WithMessage "Rilevato ${pythonVersion}: richiesto Python 3.12." }
+    if ($pythonVersion -notmatch 'Python 3\.13\.') { Stop-WithMessage "Rilevato ${pythonVersion}: richiesto Python 3.13." }
 
     npm ci
     if ($LASTEXITCODE -ne 0) { Stop-WithMessage "Installazione delle dipendenze npm fallita con exit code $LASTEXITCODE." }
@@ -54,7 +54,7 @@ try {
     $venvConfig = Join-Path $venvDir 'pyvenv.cfg'
     if ((Test-Path -LiteralPath $venvPython) -and (Test-Path -LiteralPath $venvConfig)) {
         $venvVersion = (Get-Content -LiteralPath $venvConfig | Where-Object { $_ -match '^version\s*=' } | Select-Object -First 1)
-        $venvIsValid = $venvVersion -match 'version\s*=\s*3\.12\.'
+        $venvIsValid = $venvVersion -match 'version\s*=\s*3\.13\.'
     }
         if (-not $venvIsValid) {
             if (Test-Path -LiteralPath $venvDir) {
@@ -68,11 +68,18 @@ try {
     if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Aggiornamento di pip fallito.' }
     & $venvPython -m pip install -r (Join-Path $rootDir 'sidecar/requirements-dev.txt')
     if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Installazione delle dipendenze Python fallita.' }
-    # RapidOCR declares the CPU wheel, so replace it with the GPU wheel after resolution.
-    & $venvPython -m pip uninstall --yes onnxruntime
-    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Rimozione del runtime ONNX CPU fallita.' }
-    & $venvPython -m pip install --upgrade --force-reinstall --constraint (Join-Path $rootDir 'sidecar/constraints.txt') 'onnxruntime-gpu[cuda,cudnn]==1.29.0'
-    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Installazione del runtime ONNX GPU fallita.' }
+    # rapidocr 3 no longer declares onnxruntime. Should another dependency pull the CPU wheel, it
+    # shares the onnxruntime package directory with onnxruntime-gpu, so swap it for the GPU wheel.
+    # Queried through stdout: pip show reports a missing package on stderr, which Windows
+    # PowerShell turns into a terminating error under ErrorActionPreference Stop.
+    $cpuOnnxRuntime = & $venvPython -c "import importlib.metadata as m; print(any((d.metadata['Name'] or '').lower() == 'onnxruntime' for d in m.distributions()))"
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Controllo del runtime ONNX fallito.' }
+    if ($cpuOnnxRuntime -eq 'True') {
+        & $venvPython -m pip uninstall --yes onnxruntime
+        if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Rimozione del runtime ONNX CPU fallita.' }
+        & $venvPython -m pip install --upgrade --force-reinstall --constraint (Join-Path $rootDir 'sidecar/constraints.txt') 'onnxruntime-gpu[cuda,cudnn]==1.29.0'
+        if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Installazione del runtime ONNX GPU fallita.' }
+    }
     Write-Host "[PASS] Ambiente pronto in $rootDir" -ForegroundColor Green
     exit 0
 } catch {

@@ -1,11 +1,11 @@
 import fs from 'node:fs'
 import { ensureWorkspaceMetadataDirectory } from './workspaceMetadataDirectory'
 import path from 'node:path'
-import os from 'node:os'
 import { logger } from '../logging/logger'
 import type { CodingSession } from '../../../../shared/types'
 import { normalizeSession, sortSessionsByRecency, upsertSession } from '../../domain/sessions/sessionHistoryDomain'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
+import { userDataSessionsDir } from './userDataRoot'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const HISTORY_FILE_NAME = 'session_history.json'
@@ -26,7 +26,7 @@ export class SessionHistoryRepository {
   }
 
   private getFallbackDir(): string {
-    return this.customFallbackDir || path.join(os.homedir(), '.onlyrag_v2', 'sessions')
+    return this.customFallbackDir || userDataSessionsDir()
   }
 
   private async runExclusive<T>(operation: () => Promise<T>): Promise<T> {

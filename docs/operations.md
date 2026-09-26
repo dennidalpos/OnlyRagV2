@@ -4,7 +4,7 @@
 
 - Windows 10/11 64-bit.
 - Node `>=24.19.0 <25` e npm `>=11 <12` (`.nvmrc`, `package.json`).
-- Python `3.12.10` (`.python-version`).
+- Python `3.13.15` (`.python-version`).
 - Ollama installato, con endpoint predefinito `http://127.0.0.1:11434`.
 - In modalità remota un endpoint offline mostra solo Riprova server e Configura server; installazione e avvio locali restano disponibili esclusivamente in modalità locale.
 

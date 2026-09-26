@@ -58,7 +58,9 @@ export default defineConfig({
     tailwindcss(),
     electron({
       main: {
-        entry: 'electron/main.ts',
+        // The typecheck worker is a second entry so it lands next to main.js as typecheckWorker.js
+        // (WorkspaceTypecheckWorkerClient loads it from __dirname); shared modules become chunks.
+        entry: { main: 'electron/main.ts', typecheckWorker: 'electron/typecheckWorker.ts' },
         vite: {
           build: {
             // Keep compression while preserving names: Oxc's default mangling

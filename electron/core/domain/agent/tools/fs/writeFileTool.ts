@@ -35,7 +35,7 @@ export interface WriteFileDependencies {
   readContent: (absolutePath: string) => string
   importIntegrityDirective: (filePath: string | undefined, content: string, workspacePath: string | null | undefined) => string
   versionRealityDirective: (filePath: string | undefined, content: string) => Promise<string>
-  incrementalTypecheck: (workspacePath: string, filePath: string) => string
+  incrementalTypecheck: (workspacePath: string, filePath: string) => Promise<string>
   contentVersion: (content: string) => string
 }
 
@@ -167,7 +167,7 @@ export async function executeWriteFileTool(
     }
   }
 
-  const typecheckDiagnostic = workspacePath ? dependencies.incrementalTypecheck(workspacePath, safePath) || '' : ''
+  const typecheckDiagnostic = workspacePath ? (await dependencies.incrementalTypecheck(workspacePath, safePath)) || '' : ''
   return {
     outcome: 'success',
     outputForHistory: `Successfully wrote file ${filePath} (${exists ? 'updated existing file' : 'created new file'})${dependencies.importIntegrityDirective(filePath, content, workspacePath)}${await dependencies.versionRealityDirective(filePath, content)}${typecheckDiagnostic}`,

@@ -3,6 +3,7 @@
   "entry": [
     "electron/main.ts!",
     "electron/preload.ts!",
+    "electron/typecheckWorker.ts!",
     "src/components/chat/ChatView.tsx!",
     "src/components/coding/CodingAgentView.tsx!",
     "src/components/translation/TranslationView.tsx!",

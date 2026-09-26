@@ -18,11 +18,10 @@ def fake_rapidocr(monkeypatch):
             constructions.append(kwargs)
             time.sleep(0.05)
 
-    module = types.ModuleType("rapidocr_onnxruntime")
+    module = types.ModuleType("rapidocr")
     module.RapidOCR = SlowRapidOCR
-    monkeypatch.setitem(sys.modules, "rapidocr_onnxruntime", module)
+    monkeypatch.setitem(sys.modules, "rapidocr", module)
     monkeypatch.setattr(ocr, "_rapidocr_cuda_available", lambda: False)
-    monkeypatch.setattr(ocr, "_find_rapidocr_config", lambda: None)
     monkeypatch.setattr(ocr, "_RAPIDOCR_ENGINE", None)
     return constructions
 
@@ -44,7 +43,7 @@ def test_concurrent_first_calls_build_one_engine(fake_rapidocr):
 
 def test_failed_initialization_is_retried_on_next_call(monkeypatch, fake_rapidocr):
     attempts = {"count": 0}
-    working = sys.modules["rapidocr_onnxruntime"].RapidOCR
+    working = sys.modules["rapidocr"].RapidOCR
 
     class FailingOnce:
         def __init__(self, **kwargs):
@@ -53,7 +52,7 @@ def test_failed_initialization_is_retried_on_next_call(monkeypatch, fake_rapidoc
                 raise RuntimeError("model files missing")
             working(**kwargs)
 
-    monkeypatch.setattr(sys.modules["rapidocr_onnxruntime"], "RapidOCR", FailingOnce)
+    monkeypatch.setattr(sys.modules["rapidocr"], "RapidOCR", FailingOnce)
 
     with pytest.raises(RuntimeError):
         ocr._get_rapidocr_engine()

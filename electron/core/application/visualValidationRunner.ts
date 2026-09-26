@@ -81,6 +81,8 @@ export class VisualValidationRunner {
       return { status: 'UNAVAILABLE', artifactPath: parsed.data.artifactPath, error: 'Artifact path is not a regular file.' }
 
     let browser: BrowserLike | undefined
+    // A page that fails to load is the artifact's problem, not a missing runtime: the model must fix the page.
+    let stage: 'launch' | 'load' = 'launch'
     try {
       browser = await this.runtime.launch({ headless: true })
       const context = await browser.newContext({ viewport: parsed.data.viewport })
@@ -106,6 +108,7 @@ export class VisualValidationRunner {
         if (redact(response.url?.() || '').fields.length > 0) redactedFields.add('url')
         httpEntries.push({ url, status, method: response.request?.().method?.() || 'GET' })
       })
+      stage = 'load'
       await page.goto(pathToFileURL(path.resolve(pathCheck.safePath)).href, { waitUntil: 'load', timeout: parsed.data.timeoutMs })
       let closed = false
       const close = async () => {
@@ -117,7 +120,8 @@ export class VisualValidationRunner {
     } catch (error: unknown) {
       await browser?.close().catch(() => undefined)
       const message = error instanceof Error ? error.message : String(error)
-      return { status: 'UNAVAILABLE', artifactPath: parsed.data.artifactPath, error: `Playwright runtime unavailable: ${message}` }
+      const reason = stage === 'load' ? `The page did not load: ${message}` : `Playwright runtime unavailable: ${message}`
+      return { status: 'UNAVAILABLE', artifactPath: parsed.data.artifactPath, error: reason }
     }
   }
 

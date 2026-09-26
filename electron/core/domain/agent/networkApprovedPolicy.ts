@@ -28,7 +28,7 @@ export function authorizeNetworkApproved(input: CapabilityPolicyRequest): Capabi
     request.capability === 'http-download' ||
     request.capability === 'browser' ||
     (request.capability === 'git' && ['connect', 'download'].includes(request.operation)) ||
-    (request.capability === 'shell' && request.operation === 'execute' && shellCommandHasEgress(request.target || ''))
+    (request.capability === 'shell' && request.operation === 'execute' && shellCommandHasEgress(request.target || '', request.localBinaries))
 
   if (!networkOperation) return result(request, true, false, 'Local capability allowed in network-approved mode')
   if (!request.consent.requested || !request.consent.granted || !request.consent.consentId) {

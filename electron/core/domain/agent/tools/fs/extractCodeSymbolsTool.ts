@@ -2,6 +2,7 @@ import path from 'node:path'
 import type { AgentToolCall } from '../../agentTypes'
 import { validatePathSafety } from '../../contextFilter'
 import type { ToolExecutionResult } from '../toolExecutionContracts'
+import { toolLog } from '../toolExecutionContracts'
 
 export interface CodeSymbolsRepository {
   extractCodeSymbols(
@@ -25,7 +26,7 @@ export async function executeExtractCodeSymbolsTool(
     return {
       outcome: 'rejected',
       outputForHistory: `Security Violation: ${pathCheck.error}`,
-      logMessage: `Extract Code Symbols Rejected: ${pathCheck.error}`,
+      ...toolLog('toolEditPathRejected', { tool: 'extract_code_symbols', error: String(pathCheck.error) }),
     }
   }
 
@@ -37,7 +38,7 @@ export async function executeExtractCodeSymbolsTool(
       return {
         outcome: 'success',
         outputForHistory: output,
-        logMessage: `Code Symbols: 0 found in ${path.basename(pathCheck.safePath)}`,
+        ...toolLog('toolSymbolsNone', { file: path.basename(pathCheck.safePath) }),
       }
     }
 
@@ -46,7 +47,7 @@ export async function executeExtractCodeSymbolsTool(
     return {
       outcome: 'success',
       outputForHistory: output,
-      logMessage: `Code Symbols: ${result.symbols.length} symbols in ${path.basename(pathCheck.safePath)}`,
+      ...toolLog('toolSymbolsFound', { count: result.symbols.length, file: path.basename(pathCheck.safePath) }),
       logDetail: formatted.slice(0, 600),
     }
   }
@@ -54,6 +55,6 @@ export async function executeExtractCodeSymbolsTool(
   return {
     outcome: 'failure',
     outputForHistory: `Error: Extracting code symbols failed: ${result.error || targetPath}`,
-    logMessage: `Code Symbols Error: ${result.error || targetPath}`,
+    ...toolLog('toolSymbolsError', { error: String(result.error || targetPath) }),
   }
 }

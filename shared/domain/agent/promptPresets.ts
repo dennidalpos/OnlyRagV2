@@ -1,37 +1,5 @@
 export type FeatureModule = 'coding' | 'chat' | 'translation' | 'images'
 
-/** Tool schema block for the coding agent. */
-export const CODING_TOOLS_BLOCK = `AVAILABLE AGENT TOOLS (Format response strictly as JSON block \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`):
-- read_file: { "filePath": "path/to/file", "startLine"?: 1, "endLine"?: 50 }
-- get_file_info: { "filePath": "path/to/file" }
-- extract_code_symbols: { "filePath": "path/to/file", "symbolType"?: "all" | "function" | "class" | "interface" }
-- replace_file_content: { "filePath": "path", "targetContent": "exact unique text", "replacementContent": "new code", "expectedContentHash": "FILE VERSION from read_file" }
-- multi_replace_file_content: { "filePath": "path", "replacements": [{ "targetContent": "exact unique text", "replacementContent": "new text" }], "expectedContentHash": "FILE VERSION from read_file" }
-- write_file: { "filePath": "path", "content": "full text", "expectedContentHash": "required FILE VERSION when overwriting; omit for a new file" }
-- delete_file: { "filePath": "path" }
-- grep_search: { "query": "pattern", "isRegex": false }
-- list_dir: { "dirPath": "path" }
-- list_files_recursive: { "dirPath": "path", "maxDepth"?: 3 }
-- copy_file: { "sourcePath": "path", "targetPath": "path" }
-- move_file: { "sourcePath": "path", "targetPath": "path" }
-- create_directory: { "dirPath": "path" }
-- git_status: {}
-- git_diff: { "filePath"?: "path", "staged"?: false }
-- git_commit: { "commitMessage": "commit message" } (ALWAYS requires explicit user approval before it runs, in every agent mode — unlike other mutating tools)
-- rollback_workspace: {}
-- rollback_last_step: {} (undoes only the previous step's file changes, not the whole session)
-- web_search: { "query": "documentation or technical search term" }
-- fetch_web_content: { "url": "https://..." }
-- download_file: { "url": "https://...", "filePath": "path/inside/workspace" }
-- run_command: { "command": "shell command line (e.g. npm install, pip install, npm test)" }
-- run_tests: { "command"?: "optional override, e.g. 'pytest -k test_login'. Omit to auto-detect the workspace test runner." } (returns a structured pass/fail summary instead of raw output)
-- update_plan: { "milestoneId": "m-2", "status": "in_progress" | "verified" | "failed", "notes"?: "short note" } (mark plan progress the moment a milestone starts, is verified, or fails)
-- ask: { "question": "Question or clarification for the user in user's language" }
-- open_in_browser: { "filePath"?: "index.html", "url"?: "http://..." } (opens a file or web page directly in the default browser/viewer)
-- inspect_os_env: {} (also reports which development tools are installed: node, npm, pnpm, git, python, ollama)
-- ensure_tool: { "toolName": "node" | "npm" | "pnpm" | "git" | "python" | "ollama" } (installs the tool if missing; no other software can be installed)
-- finish: { "summary": "Comprehensive Markdown final report in user's language containing: 1) Implemented Features, 2) Modified/Created Files, 3) Verification Results, 4) Summary & Usage" }`
-
 /** Behavioural rules for the coding agent, rendered as the `directives` partial. */
 export const CODING_CORE_DIRECTIVES = `LANGUAGE: Write every explanation, thought and summary in the SAME language the user wrote in. Code and commands keep their own syntax.
 
@@ -55,13 +23,10 @@ EXECUTION RULES
 
 /** Coding master template. */
 export const DEFAULT_CODING_PROMPT = `You are an expert AI Coding Agent. Operating in {{agentMode}} mode.
-{{^nativeToolCalling}}USER INSTRUCTION: "{{userTask}}"
-{{/nativeToolCalling}}WORKSPACE ROOT: {{workspacePath}}
+WORKSPACE ROOT: {{workspacePath}}
 CURRENT DATE: {{currentDate}}
 
-{{> directives}}
-
-{{^nativeToolCalling}}{{> tools}}{{/nativeToolCalling}}`
+{{> directives}}`
 
 /** RAG chat prompt. */
 export const DEFAULT_CHAT_PROMPT = `You are a helpful RAG (Retrieval-Augmented Generation) Assistant answering questions about the user's local document collection.

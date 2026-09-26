@@ -2,6 +2,7 @@ import type { FeatureModule } from './promptPresets'
 import type { AppSettings } from '../../types'
 import { PROMPT_HIERARCHY, findPromptNode, partialNodesForModule, rootNodeForModule, type PromptNode, type PromptNodeId } from './promptHierarchyRegistry'
 import { renderPromptTemplate, collapseBlankRuns } from './promptTemplateEngine'
+import { DEFAULT_APP_SETTINGS } from '../settings/appSettingsDefaults'
 
 export type { FeatureModule }
 
@@ -9,10 +10,8 @@ export interface CompileOptions {
   /** Values for the template's `{{variables}}`. */
   variables?: Record<string, unknown>
   settings?: AppSettings
-  /** Capabilities reported by the model (e.g. ['completion', 'tools']). */
+  /** Capabilities reported by the model (e.g. ['completion', 'vision']). */
   capabilities?: readonly string[]
-  /** Runtime-owned partial values, such as a phase-filtered tool catalogue. */
-  partialOverrides?: Readonly<Record<string, string>>
 }
 
 export interface CompiledPrompt {
@@ -32,14 +31,10 @@ export function resolveNodeTemplate(nodeId: PromptNodeId, settings?: AppSettings
   return { template: node.defaultValue, isCustom: false }
 }
 
-function isOmitted(node: PromptNode, capabilities: readonly string[]): boolean {
-  return Boolean(node.omittedWhenCapability && capabilities.includes(node.omittedWhenCapability))
-}
-
 export class PromptCompiler {
   /** Compiles a module system prompt from root and referenced partial nodes. */
   static compileModulePrompt(module: FeatureModule, options: CompileOptions = {}): CompiledPrompt {
-    const { variables = {}, settings, capabilities = [], partialOverrides = {} } = options
+    const { variables = {}, settings, capabilities = [] } = options
 
     const root = rootNodeForModule(module)
     if (!root) return { prompt: '', isCustom: false }
@@ -49,27 +44,20 @@ export class PromptCompiler {
 
     const partials: Record<string, string> = {}
     for (const child of partialNodesForModule(module)) {
-      if (isOmitted(child, capabilities)) {
-        // Native tools parameter supplies schema
-        partials[child.partialName as string] = ''
-        continue
-      }
-      if (child.partialName && Object.hasOwn(partialOverrides, child.partialName)) {
-        partials[child.partialName] = partialOverrides[child.partialName]
-        continue
-      }
       const resolvedChild = resolveNodeTemplate(child.id, settings)
       partials[child.partialName as string] = resolvedChild.template
       isCustom = isCustom || resolvedChild.isCustom
     }
 
-    const policy = settings?.capabilityPolicyMode
+    const policy = (settings ?? DEFAULT_APP_SETTINGS).capabilityPolicyMode
     const view: Record<string, unknown> = {
       ...variables,
-      nativeToolCalling: capabilities.includes('tools'),
+      // Every model speaks native tool calls now; custom templates written with {{^nativeToolCalling}}
+      // sections for the retired text protocol keep rendering their native variant.
+      nativeToolCalling: true,
       nativeVision: capabilities.includes('vision'),
       // Rules may only name tools the capability policy lets the run use (see turnToolPolicy.ts).
-      webResearch: policy === undefined || policy === 'network-approved',
+      webResearch: policy === 'network-approved',
       browserPreview: policy !== 'offline-strict',
     }
 
@@ -77,19 +65,9 @@ export class PromptCompiler {
     return { prompt, isCustom }
   }
 
-  /** Compiles coding agent prompt. */
-  static compileCodingPrompt(
-    variables: Record<string, unknown> = {},
-    settings?: AppSettings,
-    toolCallingCapable = false,
-    toolPromptOverride?: string,
-  ): CompiledPrompt {
-    return PromptCompiler.compileModulePrompt('coding', {
-      variables,
-      settings,
-      capabilities: toolCallingCapable ? ['tools'] : [],
-      partialOverrides: toolPromptOverride === undefined ? undefined : { tools: toolPromptOverride },
-    })
+  /** Compiles coding agent prompt. The tool catalogue travels as the request's native `tools` array. */
+  static compileCodingPrompt(variables: Record<string, unknown> = {}, settings?: AppSettings): CompiledPrompt {
+    return PromptCompiler.compileModulePrompt('coding', { variables, settings })
   }
 
   /** Factory default for a node, with no variable substitution. */
@@ -101,24 +79,6 @@ export class PromptCompiler {
 /** The prompt a module will actually send, given current settings. */
 export function getEffectivePrompt(module: FeatureModule, settings?: AppSettings, options: Omit<CompileOptions, 'settings'> = {}): CompiledPrompt {
   return PromptCompiler.compileModulePrompt(module, { ...options, settings })
-}
-
-import { supportsNativeToolCallingByFamily } from './ollamaToolCallingCapability'
-
-export function activeModelForModule(module: string, settings?: AppSettings): string {
-  if (!settings) return ''
-  switch (module) {
-    case 'coding':
-      return settings.codingModel || settings.defaultModel || ''
-    case 'chat':
-      return settings.chatModel || settings.defaultModel || ''
-    case 'translation':
-      return settings.translationModel || settings.defaultModel || ''
-    case 'images':
-      return settings.visionModel || settings.defaultModel || ''
-    default:
-      return settings.defaultModel || ''
-  }
 }
 
 /** Renders a template with sample/context values for preview. */
@@ -184,12 +144,9 @@ export function compilePromptWithSampleVars(
     partials[child.partialName as string] = override && override.trim() ? override : child.defaultValue
   }
 
-  const activeModel = settings ? activeModelForModule(node.module, settings) : ''
-  const isNativeTool = supportsNativeToolCallingByFamily(activeModel)
-
   const view: Record<string, unknown> = {
     ...samples,
-    nativeToolCalling: isNativeTool,
+    nativeToolCalling: true,
     nativeVision: true,
     webResearch: true,
     browserPreview: true,

@@ -145,16 +145,21 @@ function pathTargets(args: readonly string[]): string[] {
   return targets
 }
 
-function staysInWorkspace(target: string, workspacePath: string | null | undefined, allowRoot = false): boolean {
+/** Resolves a command's path argument against the shell's working directory (`base`, default the workspace root). */
+function resolveTarget(target: string, workspacePath: string, base?: string): string {
+  return path.resolve(base ?? path.resolve(workspacePath), target)
+}
+
+function staysInWorkspace(target: string, workspacePath: string | null | undefined, allowRoot = false, base?: string): boolean {
   if (!workspacePath || !target || target === '*' || target.includes('$')) return false
   const root = path.resolve(workspacePath)
-  const resolved = path.resolve(root, target)
+  const resolved = resolveTarget(target, workspacePath, base)
   return isPathWithinRoot(root, resolved) && (allowRoot || resolved !== root)
 }
 
-function targetsStayInWorkspace(args: readonly string[], workspacePath?: string | null): boolean {
+function targetsStayInWorkspace(args: readonly string[], workspacePath?: string | null, base?: string): boolean {
   const targets = pathTargets(args)
-  return targets.length > 0 && targets.every((target) => target !== '.' && staysInWorkspace(target, workspacePath))
+  return targets.length > 0 && targets.every((target) => staysInWorkspace(target, workspacePath, false, base))
 }
 
 /** Commands (and their aliases) that delete, move or overwrite workspace files. */
@@ -209,11 +214,11 @@ function runsInlineCode(name: string, args: readonly string[]): boolean {
 
 const GIT_GLOBAL_OPTIONS_WITH_VALUE = new Set(['-c', '-C', '--git-dir', '--work-tree', '--namespace'])
 
-function inspectGit(args: readonly string[], workspacePath?: string | null): StructuredCommandSafetyResult {
+function inspectGit(args: readonly string[], workspacePath?: string | null, base?: string): StructuredCommandSafetyResult {
   let index = 0
   while (index < args.length && args[index].startsWith('-')) {
     const option = args[index]
-    if (option === '-C' && !staysInWorkspace(args[index + 1] || '', workspacePath, true)) {
+    if (option === '-C' && !staysInWorkspace(args[index + 1] || '', workspacePath, true, base)) {
       return { allowed: false, requiresApproval: false, reason: 'git -C must point inside the workspace.' }
     }
     index += GIT_GLOBAL_OPTIONS_WITH_VALUE.has(option) ? 2 : 1
@@ -234,12 +239,13 @@ function inspectGit(args: readonly string[], workspacePath?: string | null): Str
   return { allowed: true, requiresApproval: false }
 }
 
-function inspectCommand(command: ParsedCommand, workspacePath?: string | null): StructuredCommandSafetyResult {
+/** `nextDirectory` is where a location command leaves the shell, for the segments that follow it. */
+function inspectCommand(command: ParsedCommand, workspacePath?: string | null, base?: string): StructuredCommandSafetyResult & { nextDirectory?: string } {
   const { name, args, redirectTargets } = command
   let requiresApproval = false
 
   for (const target of redirectTargets) {
-    if (!staysInWorkspace(target, workspacePath))
+    if (!staysInWorkspace(target, workspacePath, false, base))
       return { allowed: false, requiresApproval: false, reason: `Output redirection outside the workspace rejected: ${target || '(missing)'}.` }
     requiresApproval = true
   }
@@ -247,23 +253,24 @@ function inspectCommand(command: ParsedCommand, workspacePath?: string | null): 
   if (DESTRUCTIVE_FILE_COMMANDS.has(name)) {
     const createsDirectory =
       (name === 'new-item' || name === 'ni') && args.some((arg, index) => arg.toLowerCase() === '-itemtype' && /^dir/i.test(args[index + 1] || ''))
-    if (!targetsStayInWorkspace(args, workspacePath)) {
+    if (!targetsStayInWorkspace(args, workspacePath, base)) {
       return { allowed: false, requiresApproval: false, reason: `Workspace confinement rejected ${name}.` }
     }
     return { allowed: true, requiresApproval: requiresApproval || !createsDirectory }
   }
 
   if (DIRECTORY_COMMANDS.has(name)) {
-    if (!targetsStayInWorkspace(args, workspacePath)) return { allowed: false, requiresApproval: false, reason: `Workspace confinement rejected ${name}.` }
+    if (!targetsStayInWorkspace(args, workspacePath, base))
+      return { allowed: false, requiresApproval: false, reason: `Workspace confinement rejected ${name}.` }
     return { allowed: true, requiresApproval }
   }
 
   if (LOCATION_COMMANDS.has(name)) {
     const target = pathTargets(args)[0] || ''
-    if (!staysInWorkspace(target, workspacePath, true)) {
+    if (!workspacePath || !staysInWorkspace(target, workspacePath, true, base)) {
       return { allowed: false, requiresApproval: false, reason: `${name} may only change to a directory inside the workspace.` }
     }
-    return { allowed: true, requiresApproval }
+    return { allowed: true, requiresApproval, nextDirectory: resolveTarget(target, workspacePath, base) }
   }
 
   if (
@@ -289,21 +296,27 @@ function inspectCommand(command: ParsedCommand, workspacePath?: string | null): 
   if (runsInlineCode(name, args)) return { allowed: true, requiresApproval: true }
 
   if (name === 'git') {
-    const git = inspectGit(args, workspacePath)
+    const git = inspectGit(args, workspacePath, base)
     return git.allowed ? { allowed: true, requiresApproval: requiresApproval || git.requiresApproval } : git
   }
   return { allowed: true, requiresApproval }
 }
 
 /** Parses PowerShell-style command segments and classifies mutable operations without regex matching. */
-export function inspectStructuredCommand(command: string, workspacePath?: string | null): StructuredCommandSafetyResult {
+export function inspectStructuredCommand(command: string, workspacePath?: string | null, currentDirectory?: string): StructuredCommandSafetyResult {
   const parsed = parseCommands(command)
   if (!Array.isArray(parsed)) return { allowed: false, requiresApproval: false, reason: parsed.refused }
+  // Relative paths resolve where the shell stands: a `cd` persists between commands and within one.
+  let base =
+    workspacePath && currentDirectory && isPathWithinRoot(path.resolve(workspacePath), path.resolve(currentDirectory))
+      ? path.resolve(currentDirectory)
+      : undefined
   let requiresApproval = false
   for (const entry of parsed) {
-    const result = inspectCommand(entry, workspacePath)
+    const { nextDirectory, ...result } = inspectCommand(entry, workspacePath, base)
     if (!result.allowed) return result
     requiresApproval ||= result.requiresApproval
+    if (nextDirectory) base = nextDirectory
   }
   return { allowed: true, requiresApproval }
 }

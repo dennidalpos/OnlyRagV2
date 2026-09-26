@@ -22,11 +22,15 @@ describe('executeMultiReplaceFileContentTool', () => {
       journal,
       (filePath, before, after) => ({ filePath, additions: after.length - before.length, deletions: 0 }),
       (content) => `hash:${content}`,
+      () => '\n[TYPECHECK] src/file.ts(1,1): error TS2304',
     )
 
     expect(journal.recordOriginalState).toHaveBeenCalledWith(expect.any(String), 'one\ntwo')
     expect(repository.writeFileVersioned).toHaveBeenCalledWith(expect.any(String), 'ONE\ntwo', 'hash:one\ntwo', expect.any(Function))
     expect(result.outputForHistory).toContain('Successfully replaced 1 chunks')
+    // Like write_file, an edit reports what it changed and what the typechecker now says about the file.
+    expect(result.outputForHistory).toContain('Applied change:\n- one\n+ ONE')
+    expect(result.outputForHistory).toContain('[TYPECHECK] src/file.ts(1,1): error TS2304')
   })
 
   it('rejects empty replacement batches', async () => {
@@ -42,7 +46,7 @@ describe('executeMultiReplaceFileContentTool', () => {
       (content) => `hash:${content}`,
     )
 
-    expect(result.logMessage).toBe('Missing multi-replace parameters')
+    expect(result.localized?.message).toEqual({ key: 'toolEditMissingParams', params: { tool: 'multi_replace_file_content' } })
   })
 
   it('rejects an ambiguous batch before journaling or writing partial content', async () => {

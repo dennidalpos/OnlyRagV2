@@ -1,6 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
 import type { RendererEventSink } from '../domain/ports/rendererEventSink'
-import type { ObservedToolCallingProtocol } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 import type { AgentCompletionStatus, AgentRunIdentity, AgentVerificationEvidence } from '../../../shared/types'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
@@ -50,13 +49,6 @@ export interface AgentSession {
   lastPromptTokenEstimate?: number
   /** Reported/estimated prompt tokens (1 to 1.5), applied to later estimates. */
   promptTokenRatio?: number
-  /** Ollama `context` continuation cache (AGT1): the token array + the exact stable/history baseline it corresponds to, so the next turn can detect whether a tail-append delta can be sent instead of the full prompt. */
-  ollamaContextTokens?: number[]
-  ollamaContextModel?: string
-  ollamaContextStableSection?: string
-  ollamaContextHistoryBlock?: string
-  /** Protocol observed from the first capability-less Ollama turn, keyed by exact model tag. */
-  toolCallingProtocolByModel?: Record<string, ObservedToolCallingProtocol>
   /** Set while the loop is paused inside an approval gate (see `requestApproval` in runAgentOrchestratorLoop), so an in-flight `agent:approval-response` and a cancellation/timeout racing against it both resolve the same pending Promise exactly once instead of leavi */
   pendingApprovalResolve?: (response: ApprovalResponse) => void
   /** Registered after bootstrap so user cancellation can persist its terminal cause. */

@@ -125,6 +125,11 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
     settings: context.settings,
     emitLog,
   })
+  // The chat opens with the conversation's first task (see agentOrchestratorTurnDispatch); a follow-up
+  // request comes after the transcript it follows, once, as the user's next message.
+  if (!context.resumesRun && context.userTask.trim() !== state.initialUserTask.trim()) {
+    session.chatMessages = [...(session.chatMessages || []), { role: 'user', content: context.userTask }]
+  }
 
   const persistence = buildSessionPersistence({
     sessionId,

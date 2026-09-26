@@ -2,6 +2,7 @@ import path from 'node:path'
 import type { AgentToolCall } from '../../agentTypes'
 import { validatePathSafety } from '../../contextFilter'
 import type { ToolExecutionResult } from '../toolExecutionContracts'
+import { toolLog } from '../toolExecutionContracts'
 
 export interface FileInfoRepository {
   getFileInfo(absolutePath: string): {
@@ -24,7 +25,7 @@ export function executeFileInfoTool(
     return {
       outcome: 'rejected',
       outputForHistory: `Security Violation: ${pathCheck.error}`,
-      logMessage: `Get File Info Rejected: ${pathCheck.error}`,
+      ...toolLog('toolEditPathRejected', { tool: 'get_file_info', error: String(pathCheck.error) }),
     }
   }
 
@@ -34,7 +35,7 @@ export function executeFileInfoTool(
       return {
         outcome: 'success',
         outputForHistory: `[FILE INFO: ${targetPath}]\nStatus: Does Not Exist\n[END FILE INFO]`,
-        logMessage: `File Info: File not found: ${targetPath}`,
+        ...toolLog('toolFileNotFound', { path: String(targetPath) }),
       }
     }
 
@@ -50,14 +51,14 @@ export function executeFileInfoTool(
     return {
       outcome: 'success',
       outputForHistory: infoStr,
-      logMessage: `File Info retrieved for ${path.basename(pathCheck.safePath)}`,
+      ...toolLog('toolFileInfoDone', { file: path.basename(pathCheck.safePath) }),
     }
   } catch (error: unknown) {
     const message = (error as { message?: string })?.message || 'Unknown file info error'
     return {
       outcome: 'failure',
       outputForHistory: `Get File Info Error: ${message}`,
-      logMessage: `File Info Error: ${message}`,
+      ...toolLog('toolFileInfoError', { error: message }),
     }
   }
 }

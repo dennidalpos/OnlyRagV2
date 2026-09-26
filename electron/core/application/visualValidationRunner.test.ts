@@ -73,6 +73,20 @@ describe('VisualValidationRunner', () => {
     expect(mocks.browser.close).toHaveBeenCalledTimes(1)
   })
 
+  it('reports a browser that cannot start as a missing runtime', async () => {
+    const mocks = runtime()
+    mocks.runtime.launch.mockRejectedValueOnce(new Error('Executable does not exist'))
+    const runner = new VisualValidationRunner(
+      mocks.runtime,
+      () => true,
+      () => ({ isFile: () => true }),
+    )
+
+    const result = await runner.launchArtifact({ artifactPath: 'dist/index.html' }, workspace)
+
+    expect((result as { error: string }).error).toBe('Playwright runtime unavailable: Executable does not exist')
+  })
+
   it('returns UNAVAILABLE when navigation exceeds the requested timeout', async () => {
     const mocks = runtime()
     mocks.page.goto.mockRejectedValueOnce(new Error('Timeout 100ms exceeded'))
@@ -85,7 +99,7 @@ describe('VisualValidationRunner', () => {
     const result = await runner.launchArtifact({ artifactPath: 'dist/index.html', timeoutMs: 100 }, workspace)
 
     expect(result).toMatchObject({ status: 'UNAVAILABLE' })
-    expect((result as { error: string }).error).toContain('Timeout 100ms exceeded')
+    expect((result as { error: string }).error).toBe('The page did not load: Timeout 100ms exceeded')
     expect(mocks.page.goto).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ timeout: 100 }))
     expect(mocks.browser.close).toHaveBeenCalledTimes(1)
   })

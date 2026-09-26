@@ -6,6 +6,7 @@ import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 
 import type { EmitLog } from './agentOrchestratorTypes'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
 
 export interface SessionWatchdogParams {
   session: AgentSession
@@ -49,7 +50,7 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
     if (!isSessionActive()) return
     const timeoutSummary = `Sessione terminata automaticamente: superato il limite di ${Math.round(SESSION_TIMEOUT_MS / 60000)} minuti.`
     logger.log('WARN', 'AgentOrchestratorApp', `[SESSION TIMEOUT] ${timeoutSummary} SessionId: ${sessionId}`)
-    emitLog('info', `⏱️ Session Timeout: ${timeoutSummary}`)
+    emitLocalizedLog(emitLog, 'info', { key: 'sessionTimeout', params: { minutes: Math.round(SESSION_TIMEOUT_MS / 60000) } })
     // Reported before the session is marked cancelled: emitDone is suppressed for inactive sessions,
     // so the Renderer never learned that a timed-out run had ended. The work stays on disk.
     const checkpointId = agentToolExecutorService.checkpointJournal(session.workspacePath, session.id)

@@ -5,7 +5,7 @@ import type { OllamaSamplingOverrides } from '../../types'
  * model's Modelfile defaults, which is what model vendors tune and document: Qwen, for instance,
  * warns that near-greedy decoding in thinking mode causes endless repetition.
  */
-const SAMPLING_LIMITS: Record<keyof OllamaSamplingOverrides, { min: number; max: number; integer?: boolean }> = {
+export const SAMPLING_LIMITS: Record<keyof OllamaSamplingOverrides, { min: number; max: number; integer?: boolean }> = {
   temperature: { min: 0, max: 2 },
   top_p: { min: 0, max: 1 },
   top_k: { min: 1, max: 1000, integer: true },

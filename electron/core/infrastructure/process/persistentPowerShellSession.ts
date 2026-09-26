@@ -37,6 +37,11 @@ export class PersistentPowerShellSession {
     return this.isBusy
   }
 
+  /** The shell's working directory after the last command (a `cd` persists between commands). */
+  public get currentDirectory(): string {
+    return this.activeCwd
+  }
+
   private initProcess(): void {
     try {
       this.proc = spawn('powershell.exe', ['-NoProfile', '-NoLogo', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', '-'], {
@@ -100,6 +105,7 @@ export class PersistentPowerShellSession {
     const startDelimiter = `__ONLYRAG_OUT_START_${token}__`
     const endDelimiter = `__ONLYRAG_OUT_END_${token}__`
     const exitDelimiter = `__ONLYRAG_EXIT_${token}__`
+    const cwdMarker = `__ONLYRAG_CWD_${token}__`
 
     return new Promise<ShellExecutionOutput>((resolve) => {
       let fullOutput = ''
@@ -224,6 +230,10 @@ export class PersistentPowerShellSession {
           exitCode = parseInt(codeMatch[1], 10)
         }
 
+        const cwdLine = exitPart.split(/\r?\n/).find((line) => line.startsWith(cwdMarker))
+        const directory = cwdLine?.slice(cwdMarker.length).trim()
+        if (directory) this.activeCwd = directory
+
         return { stdout: capturedStdout.trim(), stderr: stderrOutput.trim(), code: exitCode }
       }
 
@@ -254,6 +264,7 @@ export class PersistentPowerShellSession {
         `${normalized}\n` +
         `$__onlyrag_ok = $?\n` +
         `Write-Output "${endDelimiter}"\n` +
+        `Write-Output "${cwdMarker}$((Get-Location).ProviderPath)"\n` +
         `Write-Output "${statusExpression}"\n` +
         `Write-Output "${exitDelimiter}"\n`
       this.proc?.stdin?.write(wrappedPayload)

@@ -7,6 +7,7 @@ import { validateAST } from '../../fuzzyPatchEngine'
 import type { SkillAdherenceViolation } from '../../../skills/skillAdherenceValidator'
 import type { ToolExecutionResult } from '../toolExecutionContracts'
 import { compactMutationDiff, versionConflictFeedback } from '../../versionedFileMutation'
+import { toolLog } from '../toolExecutionContracts'
 
 export interface WriteFileRepository {
   writeFileVersioned(
@@ -54,7 +55,7 @@ export async function executeWriteFileTool(
     return {
       outcome: 'rejected',
       outputForHistory: `[WRITE_FILE REJECTED: PATH IS A DIRECTORY]\n"${filePath}" ends with a path separator, so it names a directory, but content was supplied for it.\nDirectives:\n1. To create the folder, call create_directory with dirPath "${filePath}".\n2. To write this content, call write_file again with the full file path, including the file name and extension.`,
-      logMessage: `Write File Rejected: directory path with content ("${filePath}")`,
+      ...toolLog('toolWriteDirectoryPath', { path: String(filePath) }),
     }
   }
 
@@ -62,24 +63,36 @@ export async function executeWriteFileTool(
     const dirPath = String(filePath)
     const dirCheck = validatePathSafety(dirPath, workspacePath)
     if (!dirCheck.safePath) {
-      return { outcome: 'rejected', outputForHistory: `Security Violation: ${dirCheck.error}`, logMessage: `Create Directory Rejected: ${dirCheck.error}` }
+      return {
+        outcome: 'rejected',
+        outputForHistory: `Security Violation: ${dirCheck.error}`,
+        ...toolLog('toolEditPathRejected', { tool: 'create_directory', error: String(dirCheck.error) }),
+      }
     }
     try {
       dependencies.supportRepository.mkdir(dirCheck.safePath)
       return {
         outcome: 'success',
         outputForHistory: `Created DIRECTORY ${dirPath} (not a file: the path ends with a separator, so it was routed to create_directory). To add files inside it, call write_file with a full path such as "${dirPath.replace(/[\\/]+$/, '')}/example.ts".`,
-        logMessage: `Created directory ${path.basename(dirCheck.safePath)} (write_file routed to create_directory)`,
+        ...toolLog('toolWriteRoutedToDirectory', { dir: path.basename(dirCheck.safePath) }),
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
-      return { outcome: 'failure', outputForHistory: `Error creating directory ${dirPath}: ${message}`, logMessage: `Create directory error: ${message}` }
+      return {
+        outcome: 'failure',
+        outputForHistory: `Error creating directory ${dirPath}: ${message}`,
+        ...toolLog('toolCreateDirectoryError', { error: message }),
+      }
     }
   }
 
   const pathCheck = validatePathSafety(filePath, workspacePath)
   if (!pathCheck.safePath) {
-    return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Write File Rejected: ${pathCheck.error}` }
+    return {
+      outcome: 'rejected',
+      outputForHistory: `Security Violation: ${pathCheck.error}`,
+      ...toolLog('toolEditPathRejected', { tool: 'write_file', error: String(pathCheck.error) }),
+    }
   }
   const safePath = pathCheck.safePath
 
@@ -89,7 +102,7 @@ export async function executeWriteFileTool(
     return {
       outcome: 'rejected',
       outputForHistory: `[ROOT CONFIG PATH REJECTED]\n"${workspaceRelativePath}" is a project configuration or entry file, so build tools will not discover it under src/.\nWrite the same complete content to "${rootConfigPath}" instead.`,
-      logMessage: `Write File Rejected: root config targeted under src (${workspaceRelativePath})`,
+      ...toolLog('toolWriteRootConfigUnderSrc', { path: workspaceRelativePath }),
     }
   }
 
@@ -98,7 +111,7 @@ export async function executeWriteFileTool(
     return {
       outcome: 'rejected',
       outputForHistory: buildSkillRefusal(workspaceRelativePath, skillViolation),
-      logMessage: `Write File Rejected: violates active skill ${skillViolation.skillName}`,
+      ...toolLog('toolEditSkillViolation', { tool: 'write_file', skill: skillViolation.skillName }),
     }
   }
 
@@ -107,7 +120,7 @@ export async function executeWriteFileTool(
     return {
       outcome: 'rejected',
       outputForHistory: `[PRE-COMMIT AST VALIDATION ERROR IN ${filePath}]\n${astCheck.syntaxError} (Line ${astCheck.line || '?'}:${astCheck.character || '?'})\nFile write blocked before disk persistence to prevent workspace corruption. Please fix syntax error.`,
-      logMessage: `Write File Rejected (AST Syntax Error): ${astCheck.syntaxError}`,
+      ...toolLog('toolEditSyntaxError', { tool: 'write_file', error: String(astCheck.syntaxError) }),
     }
   }
 
@@ -119,7 +132,7 @@ export async function executeWriteFileTool(
     return {
       outcome: 'success',
       outputForHistory: buildRedundantWriteNotice(String(filePath), redundant.kind, redundant.isEmpty),
-      logMessage: `No-op write: ${path.basename(safePath)} was already up to date`,
+      ...toolLog('toolWriteNoOp', { file: path.basename(safePath) }),
       noOpMutation: true,
     }
   }
@@ -127,7 +140,7 @@ export async function executeWriteFileTool(
     return {
       outcome: 'rejected',
       outputForHistory: versionConflictFeedback(String(filePath), parameters.expectedContentHash, actualHash, compactMutationDiff(beforeContent, content)),
-      logMessage: `Write File Rejected: stale or missing version for ${path.basename(safePath)}`,
+      ...toolLog('toolEditStaleVersion', { tool: 'write_file', file: path.basename(safePath) }),
     }
   }
 
@@ -144,17 +157,21 @@ export async function executeWriteFileTool(
           result.currentContentHash || 'missing',
           compactMutationDiff(result.currentContent || '', content),
         ),
-        logMessage: `Write File Rejected: concurrent change in ${path.basename(safePath)}`,
+        ...toolLog('toolEditConcurrentChange', { tool: 'write_file', file: path.basename(safePath) }),
       }
     }
-    return { outcome: 'failure', outputForHistory: `Error writing file ${filePath}: ${result.error}`, logMessage: `Write file error: ${result.error}` }
+    return {
+      outcome: 'failure',
+      outputForHistory: `Error writing file ${filePath}: ${result.error}`,
+      ...toolLog('toolWriteError', { error: String(result.error) }),
+    }
   }
 
   const typecheckDiagnostic = workspacePath ? dependencies.incrementalTypecheck(workspacePath, safePath) || '' : ''
   return {
     outcome: 'success',
     outputForHistory: `Successfully wrote file ${filePath} (${exists ? 'updated existing file' : 'created new file'})${dependencies.importIntegrityDirective(filePath, content, workspacePath)}${await dependencies.versionRealityDirective(filePath, content)}${typecheckDiagnostic}`,
-    logMessage: `${exists ? 'Updated existing file' : 'Created new file'} ${path.basename(safePath)}`,
+    ...toolLog(exists ? 'toolWriteUpdated' : 'toolWriteCreated', { file: path.basename(safePath) }),
     changeStats: dependencies.buildChangeStats(safePath, beforeContent, content),
   }
 }

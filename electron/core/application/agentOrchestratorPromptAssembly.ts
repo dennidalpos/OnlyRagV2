@@ -6,8 +6,6 @@ import path from 'node:path'
 import { findMatchingInstalledModel } from '../../../shared/domain/agent/modelTagMatcher'
 import { HardwareProfileResolver, type OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
 import { assembleTurnPrompt as assembleDomainTurnPrompt } from '../domain/agent/agentPromptAssembler'
-import { HeuristicContextCompactor } from '../domain/agent/heuristicContextCompactor'
-import { resolveOllamaContextReuse, type OllamaContextReuseDecision } from '../domain/agent/ollamaContextCacheManager'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { generateCompactRepoMap } from '../infrastructure/filesystem/compactSemanticRepoMapper'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
@@ -43,10 +41,6 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   const candidateCoding = resolveConfiguredModel('coding', ctx.settings, ctx.codingModel)
   const targetModel = findMatchingInstalledModel(candidateCoding, ctx.availableModels) || candidateCoding
 
-  // Preflight already requires native tools; old protocol observations cannot restore text mode.
-  const targetModelToolCallingCapable = true
-  ctx.session.ollamaContextModel = undefined
-
   // Only the context window is pinned per session. Sampling comes from the user's current per-model
   // overrides; with none, the Modelfile defaults apply (checkpoints written before 2026-09-26 carried
   // a fixed 0.1/0.9/1.1 profile that is deliberately dropped here).
@@ -62,8 +56,6 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   if (pinnedRuntime) {
     return {
       targetModel,
-      targetModelToolCallingCapable,
-      targetModelToolCallingProbe: false,
       runtimeOpts,
       contextCeiling: ctx.modelMetrics?.[targetModel]?.contextLength ?? null,
     }
@@ -75,11 +67,8 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   // prompt to fit — which is the system prompt and the plan block, the two things the agent
   // cannot work without (measured 2026-08-24, see ollamaHttpClient.getModelMetrics).
   //
-  // The damage was never the clamp itself; it was maxContextChars being derived from the
-  // UNCLAMPED window. That told HeuristicContextCompactor there was room it did not have, so it
-  // declined to compact and handed Ollama a prompt guaranteed to be beheaded. Deriving both
-  // num_predict and maxContextChars from the clamped value turns a silent decapitation into
-  // ordinary, visible compaction of the tail.
+  // Every budget (num_predict, maxContextChars, the chat transcript's prompt budget) is therefore
+  // derived from the clamped window, never from the hardware one.
   const hardwareContext = runtimeOpts.num_ctx
   const trainedContext = ctx.modelMetrics?.[targetModel]?.contextLength
   const preferredContext = resolveModelContextLength(targetModel, ctx.settings.modelContextLengths, hardwareContext, trainedContext)
@@ -106,8 +95,6 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
 
   return {
     targetModel,
-    targetModelToolCallingCapable,
-    targetModelToolCallingProbe: false,
     runtimeOpts,
     contextCeiling,
   }
@@ -232,7 +219,7 @@ export function buildCurrentOperationContext(
   ].join('\n')
 }
 
-export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: ModelSelection, compiledHistoryBlock: string) {
+export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: ModelSelection) {
   // Use one arbiter decision for both the plan and tool policy.
   const directive = resolvePlanDirectiveForTurn(
     ctx.workspacePath,
@@ -316,7 +303,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     }
   }
 
-  // Assemble base prompt segments, then apply heuristic compaction at 75% watermark.
+  // The segments become the frozen system message and this turn's context message (see agentOrchestratorTurnDispatch).
   const assembled = assembleDomainTurnPrompt({
     userTask: ctx.userTask,
     initialUserTask: ctx.initialUserTask,
@@ -329,41 +316,15 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     pinnedFilesContextStr: policy.includePinnedFiles ? [ctx.pinnedFilesContextStr, rewriteTargetBlock].filter(Boolean).join('\n') : '',
     skillsBlock,
     planBlock,
-    toolOutputHistory: compiledHistoryBlock,
     attachedContext: effectiveAttachedContext,
     projectContextMapStr: currentProjectMapStr,
     settings: ctx.settings,
     runtimeOpts: selection.runtimeOpts,
-    toolCallingCapable: selection.targetModelToolCallingCapable,
-    availableToolNames: toolPolicy.allowedTools,
   })
-  const basePrompt = assembled.prompt
-
-  // Feed the compactor the assembler's DISJOINT segments.
-  const seg = assembled.segments
-  const compactionResult = HeuristicContextCompactor.compile(
-    {
-      systemPrompt: seg.baseSystemPrompt || basePrompt,
-      activePlanBlock: seg.planSection,
-      pinnedFilesBlock: seg.pinnedBlock,
-      activeFileBlock: seg.activeFileBlock,
-      skillsBlock: seg.skillsSection,
-      historyBlock: compiledHistoryBlock,
-      attachedContext: seg.attachedBlock,
-      projectMapBlock: seg.mapBlock,
-    },
-    selection.runtimeOpts.maxContextChars,
-    { force: Boolean(ctx.session.forceContextCompaction) },
-  )
-  const turnPrompt = compactionResult.wasCompacted ? compactionResult.prompt : basePrompt
-  if (compactionResult.wasCompacted) {
-    emitLocalizedLog(ctx.emitLog, 'info', { key: 'contextCompacted', params: { original: compactionResult.originalChars, final: compactionResult.finalChars } })
-  }
-
-  return { assembled, compactionResult, turnPrompt, toolPolicy }
+  return { assembled, toolPolicy }
 }
 
-/** Keeps the selected per-model context stable; prompt size is handled by compaction, not ctx resizing. */
+/** Keeps the selected per-model context stable; prompt size is handled by transcript trimming, not ctx resizing. */
 export function freezeContextWindow(ctx: TurnDispatchContext, runtimeOpts: OllamaRuntimeOptions) {
   if (ctx.sessionNumCtxBox.value === null) {
     ctx.sessionNumCtxBox.value = runtimeOpts.num_ctx
@@ -372,38 +333,4 @@ export function freezeContextWindow(ctx: TurnDispatchContext, runtimeOpts: Ollam
     runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx)
     runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx)
   }
-}
-
-/** AGT1: reuse Ollama's `context` continuation instead of resending the full prompt whenever this turn's stable section + history are a byte-exact continuation of the prior turn's on the SAME model (see ollamaContextCacheManager.ts). */
-export function decideContextReuse(
-  ctx: TurnDispatchContext,
-  selection: ModelSelection,
-  assembled: { stableSection: string; historyBlock: string; turnSuffix: string },
-  turnPrompt: string,
-  wasCompacted: boolean,
-): OllamaContextReuseDecision {
-  if (selection.targetModelToolCallingCapable) {
-    return { reusedContext: false, promptToSend: turnPrompt }
-  }
-  const decision = resolveOllamaContextReuse({
-    targetModel: selection.targetModel,
-    stableSection: assembled.stableSection,
-    historyBlock: assembled.historyBlock,
-    turnSuffix: assembled.turnSuffix,
-    fullPrompt: turnPrompt,
-    wasCompacted,
-    baseline:
-      ctx.session.ollamaContextModel === selection.targetModel && ctx.session.ollamaContextStableSection !== undefined
-        ? {
-            model: ctx.session.ollamaContextModel,
-            stableSection: ctx.session.ollamaContextStableSection,
-            historyBlock: ctx.session.ollamaContextHistoryBlock || '',
-            contextTokens: ctx.session.ollamaContextTokens || [],
-          }
-        : null,
-  })
-  if (decision.reusedContext) {
-    emitLocalizedLog(ctx.emitLog, 'info', { key: 'contextReused', params: { sent: decision.promptToSend.length, full: turnPrompt.length } })
-  }
-  return decision
 }

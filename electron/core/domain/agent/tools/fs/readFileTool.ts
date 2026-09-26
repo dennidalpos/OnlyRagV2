@@ -3,6 +3,7 @@ import type { AgentToolCall } from '../../agentTypes'
 import { validatePathSafety } from '../../contextFilter'
 import type { ToolExecutionResult } from '../toolExecutionContracts'
 import { executeListDirectoryTool, type ListDirectoryRepository } from './listDirectoryTool'
+import { toolLog } from '../toolExecutionContracts'
 
 export interface ReadFileRepository {
   readFile(
@@ -46,7 +47,7 @@ function readFailureAsWorkspaceFact(
     return {
       ...listing,
       outputForHistory: `[READ_FILE ON DIRECTORY: ${targetPath}] "${targetPath}" is a directory, so it was listed instead. Call read_file on one of its files.\n${listing.outputForHistory}`,
-      logMessage: `Read File on directory, listed instead (${entries.length} items)`,
+      ...toolLog('toolReadDirectoryListed', { count: entries.length }),
     }
   }
   if (entries === undefined) return null
@@ -62,7 +63,7 @@ function readFailureAsWorkspaceFact(
   return {
     outcome: 'success',
     outputForHistory: `[FILE NOT FOUND: ${targetPath}] The file does not exist yet. Do not read it again: create it with write_file if the plan needs it, or read an existing file listed below.\n${parentListing}`,
-    logMessage: `Read File: not found (${targetPath})`,
+    ...toolLog('toolFileNotFound', { path: String(targetPath) }),
   }
 }
 
@@ -78,7 +79,7 @@ export async function executeReadFileTool(
     return {
       outcome: 'rejected',
       outputForHistory: `Security Violation: ${pathCheck.error}`,
-      logMessage: `Read File Rejected: ${pathCheck.error}`,
+      ...toolLog('toolEditPathRejected', { tool: 'read_file', error: String(pathCheck.error) }),
     }
   }
 
@@ -97,7 +98,7 @@ export async function executeReadFileTool(
     return {
       outcome: 'success',
       outputForHistory: output,
-      logMessage: `Read File Result${sliceHeader}`,
+      ...toolLog('toolReadDone', { range: sliceHeader }),
       logDetail: result.content.slice(0, 600),
     }
   }
@@ -108,6 +109,6 @@ export async function executeReadFileTool(
   return {
     outcome: 'failure',
     outputForHistory: `Error: File reading failed: ${result.error || targetPath}`,
-    logMessage: `File Read Error: ${result.error || targetPath}`,
+    ...toolLog('toolReadError', { error: String(result.error || targetPath) }),
   }
 }

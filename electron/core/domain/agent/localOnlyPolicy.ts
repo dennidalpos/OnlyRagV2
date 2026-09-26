@@ -46,7 +46,7 @@ export function authorizeLocalOnly(input: CapabilityPolicyRequest): CapabilityPo
   if (
     request.capability === 'shell' &&
     request.operation === 'execute' &&
-    shellCommandHasEgress(request.target || '') &&
+    shellCommandHasEgress(request.target || '', request.localBinaries) &&
     !isLoopbackTarget(request.target || '')
   ) {
     return result(request, false, 'Shell command targets external network in local-only mode')

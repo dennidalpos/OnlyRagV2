@@ -1,9 +1,11 @@
 import type { ToolExecutionResult } from '../toolExecutionContracts'
+import { toolLog } from '../toolExecutionContracts'
 
 export interface GitCommitResult {
   success: boolean
   output: string
   logMessage: string
+  localized?: ToolExecutionResult['localized']
 }
 
 export interface GitCommandError {
@@ -25,10 +27,10 @@ export function executeGitStatus(cwd: string, run: GitRun): import('../toolExecu
     const outStr = stdout.trim()
       ? `[GIT STATUS: ${cwd}]\n${stdout.trim()}\n[END GIT STATUS]`
       : `[GIT STATUS: ${cwd}]\nWorking tree clean (no modified or untracked files).\n[END GIT STATUS]`
-    return { outcome: 'success', outputForHistory: outStr, logMessage: `Git Status checked in ${cwd.split(/[\\/]/).pop() || cwd}` }
+    return { outcome: 'success', outputForHistory: outStr, ...toolLog('toolGitStatusDone', { dir: cwd.split(/[\\/]/).pop() || cwd }) }
   } catch (error: unknown) {
     const message = (error as { message?: string })?.message || 'Unknown git error'
-    return { outcome: 'failure', outputForHistory: `Git Status Error: ${message}`, logMessage: `Git Status Error: ${message}` }
+    return { outcome: 'failure', outputForHistory: `Git Status Error: ${message}`, ...toolLog('toolGitStatusError', { error: message }) }
   }
 }
 
@@ -40,17 +42,34 @@ export function executeGitDiff(
   run: GitRun,
 ): ToolExecutionResult {
   if (targetPath && pathCheck && !pathCheck.safePath) {
-    return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Git Diff Rejected: ${pathCheck.error}` }
+    return {
+      outcome: 'rejected',
+      outputForHistory: `Security Violation: ${pathCheck.error}`,
+      ...toolLog('toolEditPathRejected', { tool: 'git_diff', error: String(pathCheck.error) }),
+    }
   }
-  const args = ['diff', ...(staged ? ['--staged'] : []), ...(pathCheck?.safePath ? ['--', pathCheck.safePath] : [])]
+  const pathArgs = pathCheck?.safePath ? ['--', pathCheck.safePath] : []
+  const args = ['diff', ...(staged ? ['--staged'] : []), ...pathArgs]
   const label = staged ? 'staged' : 'unstaged'
   const render = (stdout: string, overflowed: boolean): ToolExecutionResult => {
     const trimmed = stdout.trim()
     const truncated = overflowed || trimmed.length > GIT_DIFF_HISTORY_CHARS
+    // `git diff` never shows files git does not track yet, which are usually the ones the run created.
+    const untracked = staged ? [] : untrackedFiles(cwd, pathArgs, run)
+    const untrackedBlock = untracked.length
+      ? `[UNTRACKED FILES: new, not in git yet, so the diff omits them; read_file shows their content]\n${untracked
+          .slice(0, MAX_UNTRACKED_LISTED)
+          .map((file) => `- ${file}`)
+          .join('\n')}${untracked.length > MAX_UNTRACKED_LISTED ? `\n- ... ${untracked.length - MAX_UNTRACKED_LISTED} more` : ''}\n`
+      : ''
     const outStr = trimmed
-      ? `[GIT DIFF (${label}): ${targetPath || cwd}]\n\`\`\`diff\n${trimmed.slice(0, GIT_DIFF_HISTORY_CHARS)}\n\`\`\`\n${truncated ? '[DIFF TRUNCATED: pass filePath to inspect one file]\n' : ''}[END GIT DIFF]`
-      : `[GIT DIFF: ${targetPath || cwd}]\nNo differences detected.\n[END GIT DIFF]`
-    return { outcome: 'success', outputForHistory: outStr, logMessage: `Git Diff completed for ${targetPath ? targetPath.split(/[\\/]/).pop() : 'workspace'}` }
+      ? `[GIT DIFF (${label}): ${targetPath || cwd}]\n\`\`\`diff\n${trimmed.slice(0, GIT_DIFF_HISTORY_CHARS)}\n\`\`\`\n${truncated ? '[DIFF TRUNCATED: pass filePath to inspect one file]\n' : ''}${untrackedBlock}[END GIT DIFF]`
+      : `[GIT DIFF: ${targetPath || cwd}]\n${untracked.length ? 'No differences in tracked files.' : 'No differences detected.'}\n${untrackedBlock}[END GIT DIFF]`
+    return {
+      outcome: 'success',
+      outputForHistory: outStr,
+      ...toolLog('toolGitDiffDone', { target: targetPath ? targetPath.split(/[\\/]/).pop() || targetPath : 'workspace' }),
+    }
   }
   try {
     return render(run(cwd, args, 15000), false)
@@ -60,11 +79,24 @@ export function executeGitDiff(
     const partial = bufferOverflowOutput(error)
     if (partial !== undefined) return render(partial, true)
     const message = (error as { message?: string })?.message || 'Unknown git error'
-    return { outcome: 'failure', outputForHistory: `Git Diff Error: ${message}`, logMessage: `Git Diff Error: ${message}` }
+    return { outcome: 'failure', outputForHistory: `Git Diff Error: ${message}`, ...toolLog('toolGitDiffError', { error: message }) }
   }
 }
 
 const GIT_DIFF_HISTORY_CHARS = 8000
+const MAX_UNTRACKED_LISTED = 50
+
+/** Files git does not track yet (ignored ones excluded); empty when git cannot list them. */
+function untrackedFiles(cwd: string, pathArgs: readonly string[], run: GitRun): string[] {
+  try {
+    return run(cwd, ['ls-files', '--others', '--exclude-standard', ...pathArgs], 15000)
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
 
 function bufferOverflowOutput(error: unknown): string | undefined {
   const failure = error as { code?: string; stdout?: { toString(): string } | string }
@@ -79,7 +111,7 @@ export function performGitCommit(cwd: string, commitMessage: string, paths: read
     return {
       success: false,
       output: 'Git Commit Error: commitMessage parameter is required.',
-      logMessage: 'Git Commit Error: missing commit message',
+      ...toolLog('toolGitCommitMissingMessage'),
     }
   }
 
@@ -88,7 +120,7 @@ export function performGitCommit(cwd: string, commitMessage: string, paths: read
     return {
       success: true,
       output: `[GIT COMMIT: ${cwd}]\n${stdout.trim()}\n[END GIT COMMIT]`,
-      logMessage: `Git Commit created in ${cwd.split(/[\\/]/).pop() || cwd}`,
+      ...toolLog('toolGitCommitDone', { dir: cwd.split(/[\\/]/).pop() || cwd }),
     }
   } catch (error: unknown) {
     const commandError = error as GitCommandError
@@ -98,7 +130,7 @@ export function performGitCommit(cwd: string, commitMessage: string, paths: read
     return {
       success: false,
       output: `Git Commit Error: ${detail}`,
-      logMessage: `Git Commit Error: ${detail}`,
+      ...toolLog('toolGitCommitError', { error: detail }),
     }
   }
 }

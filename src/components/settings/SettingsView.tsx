@@ -42,6 +42,7 @@ import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwar
 import { resolveOllamaRuntimeMemory } from '../../../shared/domain/hardware/ollamaRuntimeMemory'
 import { buildOllamaModelOptions, getOllamaModelIdentity } from '../../services/ollamaModelOptions'
 import { ModelThinkingControl } from './ModelThinkingControl'
+import { ModelSamplingControl } from './ModelSamplingControl'
 import { CodingAgentDebugToggle } from './CodingAgentDebugToggle'
 
 interface SettingsViewProps {
@@ -500,6 +501,8 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                           {isInstalled && (
                             <ModelThinkingControl modelName={modelName} metrics={modelMetrics} settings={settings} onUpdateSettings={onUpdateSettings} />
                           )}
+
+                          {isInstalled && <ModelSamplingControl modelName={modelName} settings={settings} onUpdateSettings={onUpdateSettings} />}
 
                           {usedByModules.length > 0 && (
                             <div className="text-[10px] text-emerald-300/90 bg-emerald-950/30 border border-emerald-900/50 rounded-lg px-2 py-1">

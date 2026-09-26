@@ -1,13 +1,13 @@
 import type { AgentToolCall, SupportedToolName } from '../domain/agent/agentTypes'
 import type { AgentTaskResult } from '../domain/agent/agentTypes'
-import type { AgentApprovalPayload, AgentApprovalReason, AgentGuardEvent } from '../../../shared/types'
+import type { AgentApprovalPayload, AgentApprovalReason, AgentGuardEvent, AppSettings } from '../../../shared/types'
 import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
 import type { AgentExecutionMode } from '../../../shared/types'
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
-import { agentToolExecutorService } from './agentToolExecutorService'
+import { AgentToolExecutorService, agentToolExecutorService } from './agentToolExecutorService'
 import { buildInstallCommand } from '../domain/agent/devToolchain'
 import { shellCommandHasEgress } from '../domain/agent/offlineStrictPolicy'
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'
@@ -28,7 +28,7 @@ export interface ToolGateContext {
   episodicCompactor: EpisodicMemoryCompactor
   emitLog: EmitLog
   requestApproval: RequestApproval
-  capabilityPolicyMode?: 'offline-strict' | 'local-only' | 'network-approved'
+  capabilityPolicyMode: AppSettings['capabilityPolicyMode']
   allowedToolsForTurn?: readonly SupportedToolName[]
   requiredReadPath?: string
   runOwnedPaths?: readonly string[]
@@ -102,6 +102,7 @@ async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | { de
 
 function approvalTypeForTool(tool: string): AgentApprovalPayload['type'] {
   if (tool === 'run_command' || tool === 'ensure_tool') return 'terminal_cmd'
+  if (['web_search', 'fetch_web_content', 'open_in_browser', 'validate_visual_artifact'].includes(tool)) return 'network_request'
   if (tool === 'download_file') return 'download_file'
   if (tool === 'delete_file') return 'delete_file'
   if (tool === 'multi_replace_file_content') return 'multi_replace'
@@ -109,10 +110,12 @@ function approvalTypeForTool(tool: string): AgentApprovalPayload['type'] {
   return 'write_file'
 }
 
-function requiresNetworkConsent(tool: AgentToolCall): boolean {
+function requiresNetworkConsent(tool: AgentToolCall, workspacePath: string | null): boolean {
   if (['web_search', 'fetch_web_content', 'download_file', 'ensure_tool'].includes(tool.tool)) return true
   if (tool.tool === 'open_in_browser') return /^https?:\/\//i.test(String(tool.parameters.url || ''))
-  return tool.tool === 'run_command' && shellCommandHasEgress(String(tool.parameters.command || ''))
+  if (tool.tool !== 'run_command') return false
+  const command = String(tool.parameters.command || '')
+  return shellCommandHasEgress(command, AgentToolExecutorService.localNpxBinaries(command, workspacePath))
 }
 
 type ContextualConsent = {
@@ -126,7 +129,11 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
   let toolCall = ctx.parsedTool
   let commandApprovalGranted = false
   if (toolCall.tool === 'run_command') {
-    const security = checkCommandSecurity(String(toolCall.parameters.command || ''), ctx.workspacePath)
+    const security = checkCommandSecurity(
+      String(toolCall.parameters.command || ''),
+      ctx.workspacePath,
+      agentToolExecutorService.currentShellDirectory(ctx.workspacePath),
+    )
     if (!security.isAllowed) {
       const feedback = `[COMMAND SAFETY DENIED] ${security.blockedReason || 'Command rejected.'} The command was not run. Rewrite it as a simpler command, or use the dedicated file tools instead of the shell.`
       ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'run_command', status: 'BLOCKED', summary: feedback }, feedback)
@@ -137,7 +144,7 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
     toolCall = { ...toolCall, parameters: { ...toolCall.parameters, command: security.sanitizedCommand } }
   }
 
-  const requiresNetwork = ctx.capabilityPolicyMode === 'network-approved' && requiresNetworkConsent(toolCall)
+  const requiresNetwork = ctx.capabilityPolicyMode === 'network-approved' && requiresNetworkConsent(toolCall, ctx.workspacePath)
   const requiresInstall = toolCall.tool === 'ensure_tool'
   const requiresGuided = ctx.agentMode === 'guided' && MUTATING_TOOLS_REQUIRING_GUIDED_APPROVAL.includes(toolCall.tool)
   if (!commandApprovalGranted && !requiresNetwork && !requiresInstall && !requiresGuided) return undefined

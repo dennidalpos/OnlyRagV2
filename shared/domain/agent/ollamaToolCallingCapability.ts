@@ -20,7 +20,6 @@ const VISION_ONLY_FAMILY_PREFIXES = ['qwen2.5vl', 'qwen2vl', 'qwen3vl', 'llama3.
 
 /** Map of installed model name -> capabilities array, as reported by /api/tags. */
 export type ModelCapabilitiesMap = Record<string, string[]>
-export type ObservedToolCallingProtocol = 'native' | 'text'
 
 /**
  * Allow-list fallback: does the model's family (name before the `:tag`)

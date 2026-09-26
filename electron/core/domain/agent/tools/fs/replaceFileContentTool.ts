@@ -5,6 +5,7 @@ import { validateAST } from '../../fuzzyPatchEngine'
 import { applyUniqueReplacements, compactMutationDiff, versionConflictFeedback } from '../../versionedFileMutation'
 import type { SkillAdherenceViolation } from '../../../skills/skillAdherenceValidator'
 import type { ToolExecutionResult } from '../toolExecutionContracts'
+import { toolLog } from '../toolExecutionContracts'
 
 export interface ReplaceFileRepository {
   exists(absolutePath: string): boolean
@@ -31,13 +32,19 @@ export async function executeReplaceFileContentTool(
   journal: ReplaceFileJournal,
   buildChangeStats: (filePath: string, before: string, after: string) => { filePath: string; additions: number; deletions: number },
   contentVersion: (content: string) => string,
+  /** Diagnostics for the file just written (the incremental typecheck), appended to the result. */
+  checkWrittenFile: (absolutePath: string) => string = () => '',
 ): Promise<ToolExecutionResult> {
   const filePath = parameters.filePath
   const targetContent = parameters.targetContent
   const replacementContent = parameters.replacementContent || ''
   const pathCheck = validatePathSafety(filePath, workspacePath)
   if (!pathCheck.safePath) {
-    return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `File Replace Rejected: ${pathCheck.error}` }
+    return {
+      outcome: 'rejected',
+      outputForHistory: `Security Violation: ${pathCheck.error}`,
+      ...toolLog('toolEditPathRejected', { tool: 'replace_file_content', error: String(pathCheck.error) }),
+    }
   }
   const safePath = pathCheck.safePath
 
@@ -45,11 +52,15 @@ export async function executeReplaceFileContentTool(
     return {
       outcome: 'rejected',
       outputForHistory: `File not found or missing parameters for replacement: ${filePath || 'unknown'}`,
-      logMessage: 'Missing replace parameters',
+      ...toolLog('toolEditMissingParams', { tool: 'replace_file_content' }),
     }
   }
   if (!repository.exists(safePath)) {
-    return { outcome: 'failure', outputForHistory: `Error: File not found for replacement: ${filePath}`, logMessage: `File not found: ${filePath}` }
+    return {
+      outcome: 'failure',
+      outputForHistory: `Error: File not found for replacement: ${filePath}`,
+      ...toolLog('toolFileNotFound', { path: String(filePath) }),
+    }
   }
 
   const currentContent = repository.readIfExists(safePath)
@@ -58,13 +69,17 @@ export async function executeReplaceFileContentTool(
     return {
       outcome: 'rejected',
       outputForHistory: versionConflictFeedback(String(filePath), parameters.expectedContentHash, actualHash),
-      logMessage: `Replacement rejected: stale version for ${path.basename(filePath)}`,
+      ...toolLog('toolEditStaleVersion', { tool: 'replace_file_content', file: path.basename(filePath) }),
     }
   }
   const replacement = applyUniqueReplacements(currentContent, [{ targetContent, replacementContent }])
   if (!replacement.success) {
     const failureFeedback = `[REPLACE FILE ERROR IN ${filePath}]\n${replacement.error}\nCurrent version: ${actualHash}\nRead the file again and generate a fresh exact edit. No content was written.`
-    return { outcome: 'rejected', outputForHistory: failureFeedback, logMessage: `Replacement failed in ${path.basename(filePath)}: ${replacement.error}` }
+    return {
+      outcome: 'rejected',
+      outputForHistory: failureFeedback,
+      ...toolLog('toolEditFailed', { tool: 'replace_file_content', file: path.basename(filePath), error: String(replacement.error) }),
+    }
   }
 
   const skillViolation = skillAdherence(String(filePath), replacementContent, activeSkillGuidelines)
@@ -72,7 +87,7 @@ export async function executeReplaceFileContentTool(
     return {
       outcome: 'rejected',
       outputForHistory: buildSkillRefusal(String(filePath), skillViolation),
-      logMessage: `File Replace Rejected: violates active skill ${skillViolation.skillName}`,
+      ...toolLog('toolEditSkillViolation', { tool: 'replace_file_content', skill: skillViolation.skillName }),
     }
   }
 
@@ -81,7 +96,7 @@ export async function executeReplaceFileContentTool(
     return {
       outcome: 'rejected',
       outputForHistory: `[PRE-COMMIT AST VALIDATION ERROR IN ${filePath}]\n${astCheck.syntaxError} (Line ${astCheck.line || '?'}:${astCheck.character || '?'})\nReplacement blocked before disk persistence to prevent syntax corruption.`,
-      logMessage: `File Replace Rejected (AST Syntax Error): ${astCheck.syntaxError}`,
+      ...toolLog('toolEditSyntaxError', { tool: 'replace_file_content', error: String(astCheck.syntaxError) }),
     }
   }
 
@@ -98,20 +113,20 @@ export async function executeReplaceFileContentTool(
           writeResult.currentContentHash || 'missing',
           compactMutationDiff(writeResult.currentContent || '', replacement.content),
         ),
-        logMessage: `Replacement rejected: concurrent change in ${path.basename(filePath)}`,
+        ...toolLog('toolEditConcurrentChange', { tool: 'replace_file_content', file: path.basename(filePath) }),
       }
     }
     return {
       outcome: 'failure',
       outputForHistory: `Error writing replaced content to ${filePath}: ${writeResult.error}`,
-      logMessage: `Write error in ${path.basename(filePath)}`,
+      ...toolLog('toolEditFailed', { tool: 'replace_file_content', file: path.basename(filePath), error: String(writeResult.error || 'write error') }),
     }
   }
 
   return {
     outcome: 'success',
-    outputForHistory: `Successfully replaced content in ${filePath}`,
-    logMessage: `Successfully replaced target chunk in ${path.basename(filePath)}`,
+    outputForHistory: `Successfully replaced content in ${filePath}\nApplied change:\n${compactMutationDiff(currentContent, replacement.content)}${workspacePath ? checkWrittenFile(safePath) : ''}`,
+    ...toolLog('toolReplaceDone', { file: path.basename(filePath) }),
     changeStats: buildChangeStats(safePath, currentContent, replacement.content),
   }
 }

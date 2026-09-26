@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  OLLAMA_TOOL_SCHEMA_CATALOG,
-  buildToolSchemaCorrectionDirective,
-  findToolSchema,
-  renderToolPromptCatalog,
-  selectToolSchemas,
-} from './ollamaToolSchemaCatalog'
+import { OLLAMA_TOOL_SCHEMA_CATALOG, buildToolSchemaCorrectionDirective, findToolSchema, selectToolSchemas } from './ollamaToolSchemaCatalog'
 
 describe('findToolSchema', () => {
   it('returns the entry for a known tool and nothing for an unknown one', () => {
@@ -16,17 +10,14 @@ describe('findToolSchema', () => {
 })
 
 describe('phase-filtered catalogues', () => {
-  it('keeps only the selected native and text schemas', () => {
+  it('keeps only the selected schemas, in policy order', () => {
     expect(selectToolSchemas(['read_file', 'finish']).map((entry) => entry.function.name)).toEqual(['read_file', 'finish'])
-    const prompt = renderToolPromptCatalog(['replace_file_content'])
-    expect(prompt).toContain('replace_file_content')
-    expect(prompt).not.toContain('write_file')
-    expect(prompt).not.toContain('run_command')
+    expect(selectToolSchemas(['finish', 'teleport_file', 'read_file']).map((entry) => entry.function.name)).toEqual(['finish', 'read_file'])
   })
 })
 
 describe('buildToolSchemaCorrectionDirective', () => {
-  it('names the tool, the reason, the mandatory parameters and the exact shape to emit', () => {
+  it('names the tool, the reason and the mandatory parameters, and asks for a corrected call', () => {
     // Replaces "mandatory input parameters were missing or malformed. Please ensure you
     // provide valid JSON with all required parameters" — which named none of these.
     const directive = buildToolSchemaCorrectionDirective('write_file', ["Missing required parameter 'filePath' for write_file"])
@@ -35,8 +26,7 @@ describe('buildToolSchemaCorrectionDirective', () => {
     expect(directive).toContain("Missing required parameter 'filePath'")
     expect(directive).toContain('Mandatory parameters:')
     expect(directive).toContain('"filePath"')
-    expect(directive).toContain('"tool": "write_file"')
-    expect(directive).toContain('```json')
+    expect(directive).toContain('Call write_file again with corrected arguments')
   })
 
   it('separates optional parameters from mandatory ones', () => {
@@ -63,7 +53,7 @@ describe('buildToolSchemaCorrectionDirective', () => {
     for (const entry of OLLAMA_TOOL_SCHEMA_CATALOG) {
       const directive = buildToolSchemaCorrectionDirective(entry.function.name, ['x'])
       expect(directive, entry.function.name).toContain(entry.function.name)
-      expect(directive, entry.function.name).toContain('```json')
+      expect(directive, entry.function.name).toContain('Nothing was executed')
     }
   })
 })

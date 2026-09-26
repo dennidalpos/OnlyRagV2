@@ -1,6 +1,7 @@
 import type { AgentToolCall } from '../../agentTypes'
 import { validatePathSafety } from '../../contextFilter'
 import type { ToolExecutionResult } from '../toolExecutionContracts'
+import { toolLog } from '../toolExecutionContracts'
 
 export interface ListDirectoryRepository {
   listDirEntries(absolutePath: string): { name: string; isDir: boolean }[] | null
@@ -17,7 +18,7 @@ export function executeListDirectoryTool(
     return {
       outcome: 'rejected',
       outputForHistory: `Security Violation: ${pathCheck.error}`,
-      logMessage: `List Dir Rejected: ${pathCheck.error}`,
+      ...toolLog('toolEditPathRejected', { tool: 'list_dir', error: String(pathCheck.error) }),
     }
   }
 
@@ -29,20 +30,20 @@ export function executeListDirectoryTool(
       return {
         outcome: 'success',
         outputForHistory: output,
-        logMessage: `Directory Listing Result (${entries.length} items)`,
+        ...toolLog('toolListDirDone', { count: entries.length }),
       }
     }
     return {
       outcome: 'failure',
       outputForHistory: `Directory not found: ${dirPath}`,
-      logMessage: `Directory not found: ${dirPath}`,
+      ...toolLog('toolDirNotFound', { path: String(dirPath) }),
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     return {
       outcome: 'failure',
       outputForHistory: `Error listing directory ${dirPath}: ${message}`,
-      logMessage: `Error listing directory: ${message}`,
+      ...toolLog('toolListDirError', { error: message }),
     }
   }
 }

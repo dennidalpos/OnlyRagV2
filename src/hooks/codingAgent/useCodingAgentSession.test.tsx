@@ -69,7 +69,6 @@ describe('useCodingAgentSession', () => {
   }
 
   beforeEach(() => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     container = document.createElement('div')
     root = createRoot(container)
   })
@@ -147,7 +146,6 @@ describe('useCodingAgentAttachments', () => {
   }
 
   beforeEach(async () => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     ingestedDocsHook.documents = [
       { id: 'doc-1', filename: 'a.pdf', filePath: 'C:/w/docs/a.pdf' },
       { id: 'doc-2', filename: 'b.pdf', filePath: 'C:/elsewhere/b.pdf' },

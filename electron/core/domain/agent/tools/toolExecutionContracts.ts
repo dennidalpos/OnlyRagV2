@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { AgentToolCall } from '../agentTypes'
 import type { PendingMutationType } from '../../../../../shared/domain/agent/pendingChangeProjection'
-import { AGENT_MAIN_TEXT_IT, type AgentMainTextKey } from '../../../../../shared/domain/agent/agentMainText'
+import { AGENT_MAIN_TEXT_IT, formatAgentTextIt, type AgentMainTextKey } from '../../../../../shared/domain/agent/agentMainText'
 
 const nonBlank = z.string().trim().min(1).max(4096)
 const toolLogMessageSchema = z
@@ -55,6 +55,12 @@ export interface ToolExecutionResult {
 }
 
 export type ClassifiedToolExecutionResult = ToolExecutionResult
+
+/** A tool result's log line: the Italian fallback text plus the key the UI renders in the user's language. */
+export function toolLog(key: AgentMainTextKey, params?: Readonly<Record<string, string | number>>): Pick<ToolExecutionResult, 'logMessage' | 'localized'> {
+  const message = params ? { key, params } : { key }
+  return { logMessage: formatAgentTextIt(message), localized: { message } }
+}
 
 /** Maps file-mutating tools to the mutation shape shown by the approval surface. */
 export const FILE_MUTATION_TOOL_TO_PROPOSAL_TYPE: Partial<Record<AgentToolCall['tool'], PendingMutationType>> = {

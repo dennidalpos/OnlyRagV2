@@ -26,6 +26,7 @@ import {
   formatAgentTextIt,
   renderAgentLines,
 } from '../../../shared/domain/agent/agentMainText'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
 
 export interface ApplicationClosureContext {
   workspacePath: string | null
@@ -212,7 +213,7 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
   const shouldRunVerification = ctx.settings.verifyBeforeFinish !== false && ctx.flags.hasFileMutations && evidenceLevel !== 'behavioral'
 
   if (shouldRunVerification) {
-    ctx.emitLog('info', '🔎 Verifica finale governata dall’applicazione...')
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'finalVerificationStarted' })
     run = await runProjectVerification(ctx.workspacePath, (chunk) => ctx.emitLog('terminal', chunk), ctx.signal)
     const verificationEvidence = toVerificationEvidence(run)
     ctx.recordVerificationEvidence?.(verificationEvidence)
@@ -242,7 +243,7 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
           { step: ctx.stepCount, tool: 'application_verification', status: 'BLOCKED', summary: `Verification failed (round ${decision.cyclesSpent})` },
           decision.directive,
         )
-        ctx.emitLog('info', `🔒 Verifica fallita (giro ${decision.cyclesSpent}): correzione richiesta.`, decision.directive, {
+        emitLocalizedLog(ctx.emitLog, 'info', { key: 'finalVerificationFailed', params: { round: decision.cyclesSpent } }, decision.directive, {
           category: 'system_alert',
         })
         await ctx.persistCurrentState()

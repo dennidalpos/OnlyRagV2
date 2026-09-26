@@ -298,14 +298,6 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
     url: 'https://github.com/nodeca/js-yaml',
   },
   {
-    name: 'JsonRepair',
-    version: 'v3.15.0',
-    description: 'Fault-tolerant JSON parser and auto-repair engine for LLM tool call payload extraction.',
-    license: 'ISC',
-    category: 'skillsAndEcosystem',
-    url: 'https://github.com/josdejong/jsonrepair',
-  },
-  {
     name: 'Fast-Levenshtein',
     version: 'v3.0.0',
     description: 'Levenshtein distance string similarity calculation for typo-tolerant skill matching.',

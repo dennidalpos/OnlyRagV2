@@ -1,6 +1,5 @@
 import {
   FeatureModule,
-  CODING_TOOLS_BLOCK,
   CODING_CORE_DIRECTIVES,
   DEFAULT_CODING_PROMPT,
   DEFAULT_CHAT_PROMPT,
@@ -10,10 +9,7 @@ import {
 
 /** The configuration tree: every system prompt the user can edit, and nothing else. */
 
-export type PromptNodeId = 'coding:master' | 'coding:directives' | 'coding:tools' | 'chat' | 'translation' | 'images:analysis'
-
-/** Capabilities Ollama reports per model via /api/tags. */
-export type OllamaCapability = 'tools' | 'vision' | 'completion' | 'insert' | 'embedding'
+export type PromptNodeId = 'coding:master' | 'coding:directives' | 'chat' | 'translation' | 'images:analysis'
 
 export interface PromptVariableMeta {
   /** Mustache name, without braces. */
@@ -39,8 +35,6 @@ export interface PromptNode {
   partialName?: string
   /** Partials the template must still reference. */
   requiredPartials?: string[]
-  /** When the active model reports this capability, the node is omitted from the compiled prompt and its editor is read-only. */
-  omittedWhenCapability?: OllamaCapability
   /**
    * Set when nothing in the app currently sends this prompt to a model. Editing it is stored and
    * preserved, but has no runtime effect yet — the modal says so instead of implying otherwise.
@@ -82,7 +76,7 @@ export const PROMPT_HIERARCHY: PromptCategory[] = [
         label: 'Master Template',
         defaultValue: DEFAULT_CODING_PROMPT,
         variables: CODING_VARIABLES,
-        requiredPartials: ['directives', 'tools'],
+        requiredPartials: ['directives'],
       },
       {
         id: 'coding:directives',
@@ -93,17 +87,6 @@ export const PROMPT_HIERARCHY: PromptCategory[] = [
         defaultValue: CODING_CORE_DIRECTIVES,
         variables: CODING_VARIABLES.filter((v) => v.name === 'workspacePath'),
         partialName: 'directives',
-      },
-      {
-        id: 'coding:tools',
-        module: 'coding',
-        labelKey: 'promptConfig.nodeCodingTools',
-        descriptionKey: 'promptConfig.nodeCodingToolsDesc',
-        label: 'Tool Schema Block',
-        defaultValue: CODING_TOOLS_BLOCK,
-        variables: [],
-        partialName: 'tools',
-        omittedWhenCapability: 'tools',
       },
     ],
   },

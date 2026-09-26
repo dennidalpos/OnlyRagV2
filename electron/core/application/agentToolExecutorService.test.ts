@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { execSync } from 'node:child_process'
-import { AgentToolExecutorService, agentToolExecutorService } from './agentToolExecutorService'
+import { AgentToolExecutorService } from './agentToolExecutorService'
 import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
 import { webClient } from '../infrastructure/http/webClient'
 import { CapabilityPolicyAuditRepository } from '../infrastructure/logging/capabilityPolicyAuditRepository'
@@ -15,9 +15,14 @@ const itWithPowerShell = it.skipIf(process.platform !== 'win32')
 
 describe('AgentToolExecutorService Unit Tests', () => {
   let tempDir: string
+  // A fresh executor per test whose policy audit goes to the temp dir, never to the user's home.
+  let agentToolExecutorService: AgentToolExecutorService
+  // What the approval gate hands the executor once the user consents to a network action.
+  const consented = [undefined, undefined, '', undefined, { requested: true, granted: true, consentId: 'test-consent' }] as const
   const settings: AppSettings = {
     defaultModel: 'llama3.2',
     ocrEngine: 'native_cuda',
+    capabilityPolicyMode: 'network-approved',
     ollamaHost: '',
     codingModel: 'llama3.2',
     translationModel: 'llama3.2',
@@ -30,6 +35,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-executor-test-'))
+    agentToolExecutorService = new AgentToolExecutorService(new CapabilityPolicyAuditRepository(path.join(tempDir, 'policy-audit.json')))
     npmRegistryClient.clearCache()
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
   })
@@ -165,7 +171,12 @@ describe('AgentToolExecutorService Unit Tests', () => {
     }
     const executor = new AgentToolExecutorService(undefined, runner as never)
 
-    const result = await executor.executeTool({ tool: 'validate_visual_artifact', parameters: { artifactPath: 'dist/index.html' } }, tempDir, settings)
+    const result = await executor.executeTool(
+      { tool: 'validate_visual_artifact', parameters: { artifactPath: 'dist/index.html' } },
+      tempDir,
+      settings,
+      ...consented,
+    )
 
     expect(runner.captureEvidence).toHaveBeenCalledWith(
       { artifactPath: 'dist/index.html' },
@@ -272,7 +283,12 @@ describe('AgentToolExecutorService Unit Tests', () => {
         results: [{ title: 'Library API docs', url: 'https://example.com/docs', snippet: 'Current API reference' }],
       })
 
-      const result = await agentToolExecutorService.executeTool({ tool: 'web_search', parameters: { query: 'library current API' } }, tempDir, settings)
+      const result = await agentToolExecutorService.executeTool(
+        { tool: 'web_search', parameters: { query: 'library current API' } },
+        tempDir,
+        settings,
+        ...consented,
+      )
 
       expect(result.outputForHistory).toContain('[WEB RESEARCH DIRECTIVE]')
       expect(result.outputForHistory).toContain('IMMEDIATE NEXT tool call MUST be fetch_web_content')
@@ -290,6 +306,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
         { tool: 'fetch_web_content', parameters: { url: 'https://example.com/docs' } },
         tempDir,
         settings,
+        ...consented,
       )
 
       expect(result.outputForHistory).toContain('UNTRUSTED REFERENCE')
@@ -386,7 +403,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
 
     expect(res.outputForHistory).toContain('PRE-COMMIT AST VALIDATION ERROR')
     expect(res.outputForHistory).toContain('JSON Syntax Error')
-    expect(res.logMessage).toContain('Write File Rejected (AST Syntax Error)')
+    expect(res.localized?.message.key).toBe('toolEditSyntaxError')
     expect(fs.existsSync(filePath)).toBe(false)
   })
 
@@ -513,6 +530,7 @@ async def async_handler():
     )
 
     expect(successRes.outputForHistory).toContain('Successfully replaced content')
+    expect(successRes.outputForHistory).toContain('Applied change:\n- const a = 1;\n+ const a = 100;')
 
     const failRes = await agentToolExecutorService.executeTool(
       {
@@ -767,7 +785,12 @@ async def async_handler():
       fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }), 'utf-8')
       fs.mkdirSync(path.join(tempDir, 'node_modules', 'react'), { recursive: true })
 
-      const res = await agentToolExecutorService.executeTool({ tool: 'run_command', parameters: { command: 'npm install react' } }, tempDir, settings)
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'run_command', parameters: { command: 'npm install react' } },
+        tempDir,
+        settings,
+        ...consented,
+      )
 
       expect(res.outputForHistory).toContain('[REDUNDANT_INSTALL_SKIP]')
       expect(res.isTerminal).toBe(true)
@@ -797,7 +820,12 @@ async def async_handler():
       // versionRealityDirective only ever saw `write_file` on package.json, so this command -- which rewrites the same file -- succeeded three times unchallenged (steps 21, 30, 31) and left `react@"^16.14.0" from the root project`.
       fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18.2.0' } }), 'utf-8')
 
-      const res = await agentToolExecutorService.executeTool({ tool: 'run_command', parameters: { command: 'npm install react@^16.8.0' } }, tempDir, settings)
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'run_command', parameters: { command: 'npm install react@^16.8.0' } },
+        tempDir,
+        settings,
+        ...consented,
+      )
 
       expect(res.outputForHistory).toContain('[VERSION DOWNGRADE REFUSED — INSTALL NOT RUN]')
       expect(res.outputForHistory).toContain('"react": "^18.2.0"')
@@ -916,7 +944,12 @@ async def async_handler():
     })
 
     it('refuses an old major on the first install of an undeclared package', async () => {
-      const res = await agentToolExecutorService.executeTool({ tool: 'run_command', parameters: { command: 'npm install vite@^4.0.0' } }, tempDir, settings)
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'run_command', parameters: { command: 'npm install vite@^4.0.0' } },
+        tempDir,
+        settings,
+        ...consented,
+      )
 
       expect(res.outputForHistory).toContain('[STALE INSTALL VERSION — INSTALL NOT RUN]')
       expect(res.outputForHistory).toContain('npm install vite@8.0.0')
@@ -924,7 +957,12 @@ async def async_handler():
     })
 
     it('refuses a range that matches no published version before npm can return ETARGET', async () => {
-      const res = await agentToolExecutorService.executeTool({ tool: 'run_command', parameters: { command: 'npm install vite@^9.3.5' } }, tempDir, settings)
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'run_command', parameters: { command: 'npm install vite@^9.3.5' } },
+        tempDir,
+        settings,
+        ...consented,
+      )
 
       expect(res.outputForHistory).toContain('[THAT VERSION DOES NOT EXIST — INSTALL NOT RUN]')
       expect(res.outputForHistory).toContain('npm install vite@8.0.0')
@@ -944,7 +982,7 @@ async def async_handler():
 
     expect(res.outputForHistory).toContain('[TOOL_AS_SHELL_BLOCK]')
     expect(res.outputForHistory).toContain('EXECUTION BLOCKED: "write_file" is a structured tool, not a shell executable.')
-    expect(res.logMessage).toContain('[TOOL_AS_SHELL_BLOCK] Blocked shell execution of tool "write_file"')
+    expect(res.localized?.message).toEqual({ key: 'toolShellToolConfusion', params: { tool: 'write_file' } })
     expect(res.isTerminal).toBe(true)
   })
 
@@ -1050,7 +1088,7 @@ async def async_handler():
     const res = await agentToolExecutorService.executeTool({ tool: 'rollback_last_step', parameters: {} }, tempDir, settings)
 
     expect(res.outputForHistory).toContain('Nothing to undo')
-    expect(res.logMessage).toBe('Rollback Last Step: nothing to undo')
+    expect(res.localized?.message.key).toBe('toolRollbackStepEmpty')
   })
 
   itWithPowerShell(
@@ -1189,7 +1227,7 @@ async def async_handler():
     )
 
     expect(res.outputForHistory).toContain('[GIT COMMIT:')
-    expect(res.logMessage).toContain('Git Commit created')
+    expect(res.logMessage).toContain('Commit Git creato')
     const log = execSync('git log --oneline -1', { cwd: tempDir, encoding: 'utf-8' })
     expect(log).toContain('Add file.txt')
     expect(execSync('git status --short', { cwd: tempDir, encoding: 'utf-8' })).toContain('?? unrelated.txt')
@@ -1206,7 +1244,7 @@ async def async_handler():
     )
 
     expect(res.outputForHistory).toContain('commitMessage')
-    expect(res.logMessage).toContain('missing commit message')
+    expect(res.logMessage).toContain('messaggio mancante')
   })
 
   it('performGitCommit (called directly, as workspaceAppService.gitCommit does from the approval-flow IPC handler) commits successfully', () => {
@@ -1220,7 +1258,7 @@ async def async_handler():
 
     expect(res.success).toBe(true)
     expect(res.output).toContain('[GIT COMMIT:')
-    expect(res.logMessage).toContain('Git Commit created')
+    expect(res.logMessage).toContain('Commit Git creato')
     const log = execSync('git log --oneline -1', { cwd: tempDir, encoding: 'utf-8' })
     expect(log).toContain('Add direct.txt')
   }, 15000)
@@ -1228,7 +1266,7 @@ async def async_handler():
   it('performGitCommit returns success: false with no commitMessage, without touching git', () => {
     const res = agentToolExecutorService.performGitCommit(tempDir, '', [], '')
     expect(res.success).toBe(false)
-    expect(res.logMessage).toContain('missing commit message')
+    expect(res.logMessage).toContain('messaggio mancante')
   })
 
   it('should report line-level change stats for write_file, distinguishing a new file from an edit', async () => {
@@ -1304,16 +1342,21 @@ async def async_handler():
   })
 
   it('should refuse to install anything outside the toolchain allow-list', async () => {
-    const res = await agentToolExecutorService.executeTool({ tool: 'ensure_tool', parameters: { toolName: 'docker' } } as never, tempDir, settings)
+    const res = await agentToolExecutorService.executeTool(
+      { tool: 'ensure_tool', parameters: { toolName: 'docker' } } as never,
+      tempDir,
+      settings,
+      ...consented,
+    )
 
     expect(res.outputForHistory).toContain('ENSURE_TOOL REJECTED')
     expect(res.outputForHistory).toContain('not an installable development tool')
-    expect(res.logMessage).toContain('not allow-listed')
+    expect(res.localized?.message).toEqual({ key: 'toolEnsureNotAllowed', params: { tool: 'docker' } })
   })
 
   it('should report an already-installed tool without attempting any installation', async () => {
     // node is running this very test suite, so it is guaranteed present.
-    const res = await agentToolExecutorService.executeTool({ tool: 'ensure_tool', parameters: { toolName: 'node' } } as never, tempDir, settings)
+    const res = await agentToolExecutorService.executeTool({ tool: 'ensure_tool', parameters: { toolName: 'node' } } as never, tempDir, settings, ...consented)
 
     expect(res.outputForHistory).toContain('already installed')
     expect(res.outputForHistory).not.toContain('winget install')
@@ -1339,10 +1382,15 @@ async def async_handler():
   })
 
   it('should handle open_in_browser parameter validation and missing target', async () => {
-    const missingParams = await agentToolExecutorService.executeTool({ tool: 'open_in_browser', parameters: {} }, tempDir, settings)
+    const missingParams = await agentToolExecutorService.executeTool({ tool: 'open_in_browser', parameters: {} }, tempDir, settings, ...consented)
     expect(missingParams.outputForHistory).toContain('missing "filePath" or "url"')
 
-    const missingFile = await agentToolExecutorService.executeTool({ tool: 'open_in_browser', parameters: { filePath: 'nonexistent.html' } }, tempDir, settings)
+    const missingFile = await agentToolExecutorService.executeTool(
+      { tool: 'open_in_browser', parameters: { filePath: 'nonexistent.html' } },
+      tempDir,
+      settings,
+      ...consented,
+    )
     expect(missingFile.outputForHistory).toContain('File not found to open')
   })
 

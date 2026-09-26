@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, it, expect } from 'vitest'
-import { parseAgentToolCall } from '../domain/agent/toolParser'
+import { parseNativeToolCall } from '../domain/agent/toolParser'
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import { validatePathSafety } from '../domain/agent/contextFilter'
 
@@ -8,17 +8,8 @@ describe('Agent Engine Synthetic End-to-End Benchmark Suite', () => {
   const repoRoot = process.cwd()
 
   it('Scenario A (Full Cycle): Read File -> Bug Detection -> Chunk Replace -> Verification', () => {
-    // 1. Step 1 LLM response proposes reading file
-    const llmStep1 = `\`\`\`json
-{
-  "tool": "read_file",
-  "parameters": {
-    "filePath": "src/utils/math.ts"
-  },
-  "explanation": "Reading math utility to locate calculation bug"
-}
-\`\`\``
-    const step1Parsed = parseAgentToolCall(llmStep1)
+    // 1. Step 1: the model calls read_file
+    const step1Parsed = parseNativeToolCall('read_file', { filePath: 'src/utils/math.ts' })
     expect(step1Parsed).not.toBeNull()
     expect(step1Parsed?.tool).toBe('read_file')
     expect(step1Parsed?.parameters.filePath).toBe('src/utils/math.ts')
@@ -27,52 +18,28 @@ describe('Agent Engine Synthetic End-to-End Benchmark Suite', () => {
     const pathCheck = validatePathSafety(step1Parsed!.parameters.filePath, repoRoot)
     expect(pathCheck.safePath).not.toBeNull()
 
-    // 3. Step 2 LLM response proposes replace_file_content fix
-    const llmStep2 = `\`\`\`json
-{
-  "tool": "replace_file_content",
-  "parameters": {
-    "filePath": "src/utils/math.ts",
-    "targetContent": "return a - b // BUG",
-    "replacementContent": "return a + b"
-  },
-  "explanation": "Fixing addition bug in math utility"
-}
-\`\`\``
-    const step2Parsed = parseAgentToolCall(llmStep2)
+    // 3. Step 2: the model calls replace_file_content with the fix
+    const step2Parsed = parseNativeToolCall('replace_file_content', {
+      filePath: 'src/utils/math.ts',
+      targetContent: 'return a - b // BUG',
+      replacementContent: 'return a + b',
+    })
     expect(step2Parsed).not.toBeNull()
     expect(step2Parsed?.tool).toBe('replace_file_content')
     expect(step2Parsed?.parameters.targetContent).toBe('return a - b // BUG')
     expect(step2Parsed?.parameters.replacementContent).toBe('return a + b')
 
-    // 4. Step 3 LLM response completes task
-    const llmStep3 = `\`\`\`json
-{
-  "tool": "finish",
-  "parameters": {
-    "summary": "Fixed calculation bug in math.ts successfully."
-  }
-}
-\`\`\``
-    const step3Parsed = parseAgentToolCall(llmStep3)
+    // 4. Step 3: the model calls finish
+    const step3Parsed = parseNativeToolCall('finish', { summary: 'Fixed calculation bug in math.ts successfully.' })
     expect(step3Parsed).not.toBeNull()
     expect(step3Parsed?.tool).toBe('finish')
   })
 
   it('Scenario B (Out of Scope / Explanation Only): Minimal response without code modifications', () => {
-    const llmResponse = `\`\`\`json
-{
-  "tool": "finish",
-  "parameters": {
-    "summary": "React is a JavaScript library for building user interfaces."
-  },
-  "explanation": "Explaining concept without workspace file modifications"
-}
-\`\`\``
-    const parsed = parseAgentToolCall(llmResponse)
+    const parsed = parseNativeToolCall('finish', { summary: 'React is a JavaScript library for building user interfaces.' })
     expect(parsed).not.toBeNull()
     expect(parsed?.tool).toBe('finish')
-    expect(parsed?.explanation).toContain('without workspace file modifications')
+    expect(parsed?.parameters.summary).toContain('JavaScript library')
   })
 
   it('Scenario C (Security Interception Benchmark): Rejecting malicious command & traversal attempts', () => {

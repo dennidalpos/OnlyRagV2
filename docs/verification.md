@@ -43,7 +43,7 @@ npm run test:e2e:electron
 
 ## Limiti da non nascondere
 
-- Agent Coding non usa il fallback testuale dei tool. Altri percorsi che chiamano direttamente il trasporto `/api/generate` mantengono quel protocollo.
+- Agent Coding parla con Ollama solo via `/api/chat` con tool nativi: non esiste un fallback testuale, e un modello senza capacità `tools` è rifiutato dal preflight.
 - L'offload CPU può aumentare la latenza per modelli oltre la VRAM disponibile.
 - Le prove su Ollama dipendono da versione, modelli installati, hardware e stato del daemon.
 - Una verifica non disponibile non equivale a una verifica superata; il sistema conserva esiti distinti.

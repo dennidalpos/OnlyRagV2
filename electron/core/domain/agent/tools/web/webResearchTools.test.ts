@@ -13,7 +13,7 @@ describe('web research tools', () => {
 
   it('reports an empty search result without throwing', async () => {
     await expect(executeWebSearch('unknown', 8, async () => ({ success: false, results: [], error: 'No results' }))).resolves.toMatchObject({
-      logMessage: 'Web Search: No results found for "unknown"',
+      logMessage: 'Ricerca web: nessun risultato per "unknown"',
     })
   })
 
@@ -32,6 +32,6 @@ describe('web research tools', () => {
       executeWebContentFetch('https://example.test', async () => {
         throw new Error('network down')
       }),
-    ).resolves.toMatchObject({ logMessage: 'Web Fetch Error: network down' })
+    ).resolves.toMatchObject({ logMessage: 'Errore download web: network down' })
   })
 })

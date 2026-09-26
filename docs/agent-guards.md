@@ -37,5 +37,5 @@ I guardrail garantiscono la sicurezza dell'ambiente locale, la coerenza delle mo
 ## Sicurezza comandi e filesystem
 
 - **Git distruttivo bloccato**: comandi quali `reset --hard`, `clean -f`, ripristini globali (`checkout -- .`), force-push e cancellazioni branch sono intercettati e rifiutati alla radice ([`commandSecurity.ts`](../electron/core/domain/agent/commandSecurity.ts)).
-- **Confinamento path**: risoluzione rigorosa di realpath; symlink e junction puntanti all'esterno del workspace attivo sono bloccati.
-- **Rete e pacchetti**: operazioni di rete, installazione di dipendenze e commit richiedono conferma esplicita dell'utente.
+- **Confinamento path**: risoluzione rigorosa di realpath; symlink e junction puntanti all'esterno del workspace attivo sono bloccati. I path relativi dei comandi si risolvono nella directory corrente della shell persistente, che conserva i `cd` fra un comando e l'altro e dentro lo stesso comando ([`structuredCommandSafety.ts`](../electron/core/domain/agent/structuredCommandSafety.ts)).
+- **Rete e pacchetti**: operazioni di rete, installazione di dipendenze e commit richiedono conferma esplicita dell'utente. `npx` di un comando che non è in `node_modules/.bin` conta come rete, perché npx lo scaricherebbe; così `pnpm dlx`, `yarn dlx` e `bunx` ([`offlineStrictPolicy.ts`](../electron/core/domain/agent/offlineStrictPolicy.ts)).

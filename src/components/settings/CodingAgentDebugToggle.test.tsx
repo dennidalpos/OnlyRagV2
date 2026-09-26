@@ -8,6 +8,7 @@ import { CodingAgentDebugToggle } from './CodingAgentDebugToggle'
 const settings: AppSettings = {
   defaultModel: '',
   ocrEngine: 'native_cuda',
+  capabilityPolicyMode: 'network-approved',
   ollamaHost: 'http://127.0.0.1:11434',
   enableCodingAgentDebugLog: false,
   includeCodingAgentDebugPayloads: true,
@@ -18,7 +19,6 @@ describe('CodingAgentDebugToggle', () => {
   let root: Root
 
   beforeEach(() => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)

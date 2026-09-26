@@ -5,7 +5,6 @@ import {
   DEFAULT_IMAGE_ANALYSIS_PROMPT,
   DEFAULT_CODING_PROMPT,
   CODING_CORE_DIRECTIVES,
-  CODING_TOOLS_BLOCK,
 } from '../../../../shared/domain/agent/promptPresets'
 import { ALL_PROMPT_NODES } from '../../../../shared/domain/agent/promptHierarchyRegistry'
 
@@ -61,20 +60,14 @@ describe('core directives survive in the consolidated prompts', () => {
     expect(CODING_CORE_DIRECTIVES).toMatch(/IMMEDIATE NEXT tool call MUST be fetch_web_content/)
     expect(CODING_CORE_DIRECTIVES).toMatch(/untrusted reference data/i)
   })
-
-  it('the tool block still advertises the finish tool', () => {
-    expect(CODING_TOOLS_BLOCK).toContain('- finish:')
-  })
 })
 
 describe('template wiring', () => {
-  it('the coding master references both child nodes as partials', () => {
+  it('the coding master references the directives partial and no prose tool catalogue', () => {
+    // Tools travel as the native `tools` array of /api/chat; the task as the first user message.
     expect(DEFAULT_CODING_PROMPT).toContain('{{> directives}}')
-    expect(DEFAULT_CODING_PROMPT).toContain('{{> tools}}')
-  })
-
-  it('gates the tool partial on the native tool-calling capability', () => {
-    expect(DEFAULT_CODING_PROMPT).toMatch(/\{\{\^nativeToolCalling\}\}.*\{\{> tools\}\}.*\{\{\/nativeToolCalling\}\}/s)
+    expect(DEFAULT_CODING_PROMPT).not.toContain('{{> tools}}')
+    expect(DEFAULT_CODING_PROMPT).not.toContain('{{userTask}}')
   })
 
   it('no default carries legacy single-brace placeholders', () => {

@@ -139,7 +139,7 @@ describe('ProcessToolService inspect_os_env', () => {
 
     const result = service.inspectOsEnvironment()
 
-    expect(result.logMessage).toBe('Guest OS Environment & Toolchain Inventory')
+    expect(result.localized?.message.key).toBe('toolOsInventory')
     expect(result.outputForHistory).toContain('Guest OS Environment:')
     expect(result.outputForHistory).toContain('- node: OK (24.20.0)')
     expect(result.outputForHistory).toContain('- python: MISSING')

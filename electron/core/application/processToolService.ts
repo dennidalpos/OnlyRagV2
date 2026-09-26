@@ -28,6 +28,7 @@ import { buildVersionRealityDirective, declaredDependencies, findVersionReality 
 import { buildModuleResolutionDirective, classifyModuleDiagnostic, unresolvedPackages } from '../domain/agent/moduleResolutionDiagnostic'
 import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote, type DiagnosticWorkspaceFacts } from '../domain/agent/compilerDiagnosticDirective'
 import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
+import { toolLog } from '../domain/agent/tools/toolExecutionContracts'
 
 export interface RunCommandExecution {
   command: string
@@ -91,7 +92,7 @@ export class ProcessToolService {
       return {
         outcome: 'rejected',
         outputForHistory: output,
-        logMessage: `[TOOL_AS_SHELL_BLOCK] Blocked shell execution of tool "${confusedToolName}"`,
+        ...toolLog('toolShellToolConfusion', { tool: confusedToolName }),
         isTerminal: true,
       }
     }
@@ -111,7 +112,7 @@ export class ProcessToolService {
       return {
         outcome: 'rejected',
         outputForHistory: output,
-        logMessage: `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${command}"`,
+        ...toolLog('toolDevServerBlocked', { command }),
         isTerminal: true,
       }
     }
@@ -130,7 +131,7 @@ export class ProcessToolService {
         `1. Do NOT run this install again, and do NOT add --force or --legacy-peer-deps.`,
         `2. If your code imports "${unknownPackage}", it is importing something that does not exist: use a real package, or write that code yourself.`,
       ].join('\n')
-      return { outcome: 'rejected', outputForHistory: output, logMessage: `Install refused: ${unknownPackage} does not exist on npm`, isTerminal: true }
+      return { outcome: 'rejected', outputForHistory: output, ...toolLog('toolInstallUnknownPackage', { package: unknownPackage }), isTerminal: true }
     }
 
     const packageJson = workspacePath && this.dependencies.readPackageJson ? await this.dependencies.readPackageJson(workspacePath) : null
@@ -140,7 +141,7 @@ export class ProcessToolService {
       return {
         outcome: 'rejected',
         outputForHistory: invalidTarget.refusal,
-        logMessage: `Install refused: ${invalidTarget.name} has a ${invalidTarget.kind} requested version`,
+        ...toolLog('toolInstallInvalidVersion', { package: invalidTarget.name, kind: invalidTarget.kind }),
         isTerminal: true,
       }
     }
@@ -152,7 +153,7 @@ export class ProcessToolService {
       return {
         outcome: 'rejected',
         outputForHistory: downgrade.refusal,
-        logMessage: `Install refused: would downgrade ${downgrade.name} below the declared major`,
+        ...toolLog('toolInstallDowngrade', { package: downgrade.name }),
         isTerminal: true,
       }
     }
@@ -184,7 +185,7 @@ export class ProcessToolService {
     return {
       outcome: 'success',
       outputForHistory: output,
-      logMessage: `[REDUNDANT_INSTALL_SKIP] Skipped already-installed: ${declared.join(', ')}`,
+      ...toolLog('toolInstallRedundant', { packages: declared.join(', ') }),
       isTerminal: true,
     }
   }
@@ -345,7 +346,7 @@ export class ProcessToolService {
     return {
       outcome: 'success',
       outputForHistory: output,
-      logMessage: 'Guest OS Environment & Toolchain Inventory',
+      ...toolLog('toolOsInventory'),
       logDetail: output,
     }
   }
@@ -386,7 +387,7 @@ export class ProcessToolService {
       return {
         outcome: 'rejected',
         outputForHistory: `[ENSURE_TOOL REJECTED] '${requested || '(empty)'}' is not an installable development tool. Allowed: ${allowed}. Installing anything else is not permitted — ask the user instead.`,
-        logMessage: `ensure_tool rejected: '${requested}' is not allow-listed`,
+        ...toolLog('toolEnsureNotAllowed', { tool: String(requested) }),
         isTerminal: true,
       }
     }
@@ -397,7 +398,7 @@ export class ProcessToolService {
       return {
         outcome: 'success',
         outputForHistory: `${definition.displayName} is already installed (version ${status.version}). No installation performed.`,
-        logMessage: `${definition.displayName} already present (${status.version})`,
+        ...toolLog('toolEnsurePresent', { name: definition.displayName, version: String(status.version) }),
         isTerminal: true,
       }
     }
@@ -406,7 +407,7 @@ export class ProcessToolService {
       return {
         outcome: 'blocked',
         outputForHistory: `${definition.displayName} is missing, but terminal execution is disabled in Settings so it cannot be installed. Ask the user to install it manually.`,
-        logMessage: 'ensure_tool blocked: terminal execution disabled',
+        ...toolLog('toolEnsureTerminalDisabled'),
         isTerminal: true,
       }
     }
@@ -417,7 +418,7 @@ export class ProcessToolService {
       return {
         outcome: 'failure',
         outputForHistory: `[ENSURE_TOOL ERROR] No installation package is registered for '${definition.id}'.`,
-        logMessage: `ensure_tool: no package for ${definition.id}`,
+        ...toolLog('toolEnsureNoPackage', { tool: definition.id }),
         isTerminal: true,
       }
     }
@@ -426,7 +427,7 @@ export class ProcessToolService {
       return {
         outcome: 'blocked',
         outputForHistory: `[ENSURE_TOOL UNSUPPORTED] Automatic installation is only implemented for Windows (winget). Install ${definition.displayName} manually, then continue.`,
-        logMessage: 'ensure_tool: unsupported platform',
+        ...toolLog('toolEnsureUnsupportedPlatform'),
         isTerminal: true,
       }
     }
@@ -443,7 +444,7 @@ export class ProcessToolService {
         return {
           outcome: 'success',
           outputForHistory: `Successfully installed ${installTarget.displayName}. ${definition.displayName} is now available (version ${verified.version}). PATH refreshed for this session.`,
-          logMessage: `Installed ${installTarget.displayName} (${definition.id} ${verified.version})`,
+          ...toolLog('toolEnsureInstalled', { name: installTarget.displayName, tool: definition.id, version: String(verified.version) }),
           logDetail: installCmd,
           isTerminal: true,
         }
@@ -453,7 +454,7 @@ export class ProcessToolService {
       return {
         outcome: 'failure',
         outputForHistory: `[ENSURE_TOOL INSTALL FAILED]\nCommand: "${installCmd}"\n${definition.displayName} is still not detectable after installation.\nOutput:\n${rawOutput.slice(0, 2000)}\n\nDo not retry the same installation. Continue without this tool or ask the user to install it manually.`,
-        logMessage: `ensure_tool: ${definition.displayName} still missing after install`,
+        ...toolLog('toolEnsureStillMissing', { name: definition.displayName }),
         logDetail: rawOutput.slice(0, 1000),
         isTerminal: true,
       }
@@ -462,7 +463,7 @@ export class ProcessToolService {
       return {
         outcome: 'failure',
         outputForHistory: `[ENSURE_TOOL ERROR] Failed installing ${installTarget.displayName}: ${message}`,
-        logMessage: `ensure_tool exception: ${message}`,
+        ...toolLog('toolEnsureException', { error: message }),
         isTerminal: true,
       }
     }
@@ -477,16 +478,17 @@ export class ProcessToolService {
     onProcessSpawned: ((proc: ChildProcess) => void) | undefined,
     securityApprovalGranted = false,
   ): Promise<RunCommandExecution | ToolExecutionResult> {
-    const security = checkCommandSecurity(command, workspacePath)
+    const shell = this.dependencies.getShellSession(workspacePath)
+    const security = checkCommandSecurity(command, workspacePath, shell.currentDirectory)
     if (!security.isAllowed) {
       const output = `[SECURITY GUARDRAIL BLOCK]\nCommand: "${command}"\nExecution FORBIDDEN by Security Policy: ${security.blockedReason}\nDirective: Refrain from executing dangerous commands.`
-      return { outcome: 'rejected', outputForHistory: output, logMessage: `[SECURITY BLOCK] Forbidden command: "${command}"`, isTerminal: true }
+      return { outcome: 'rejected', outputForHistory: output, ...toolLog('toolSecurityBlock', { command }), isTerminal: true }
     }
     if (security.requiresApproval && !securityApprovalGranted) {
       return {
         outcome: 'rejected',
         outputForHistory: `[SECURITY APPROVAL REQUIRED]\nCommand: "${command}"\nExecution requires an explicit approval through the agent gate.`,
-        logMessage: `[SECURITY APPROVAL REQUIRED] Command: "${command}"`,
+        ...toolLog('toolSecurityApprovalRequired', { command }),
         isTerminal: true,
       }
     }
@@ -496,9 +498,7 @@ export class ProcessToolService {
     const timeoutMs = resolveCommandTimeoutMs(command, timeoutSeconds)
 
     try {
-      const result = await this.dependencies
-        .getShellSession(workspacePath)
-        .execute(executableCommand, (chunk) => onTerminalOutput?.(chunk.trim()), onProcessSpawned, timeoutMs, signal)
+      const result = await shell.execute(executableCommand, (chunk) => onTerminalOutput?.(chunk.trim()), onProcessSpawned, timeoutMs, signal)
       const rawOutput = DiagnosticOutputReducer.composeCommandOutput(result.stdout, result.stderr, result.code)
       // A generator that was cancelled prints the notice as its own line ("✖ Operation cancelled").
       // Matching anywhere in the text turned passing test runs into failures whenever a test name

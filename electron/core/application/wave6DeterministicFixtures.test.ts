@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { AgentToolExecutorService } from './agentToolExecutorService'
-import { parseAgentToolCall } from '../domain/agent/toolParser'
+import { parseNativeToolCall } from '../domain/agent/toolParser'
 import { toolExecutionResultSchema } from '../domain/agent/tools/toolExecutionContracts'
 import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
@@ -58,9 +58,9 @@ describe('Wave 6 deterministic safety fixtures', () => {
     expect(result.terminalCode).toBe('MODEL_UNSUITABLE')
   })
 
-  it('rejects truncated or malformed model output without throwing', () => {
-    expect(() => parseAgentToolCall('{ "tool": "read_file", "parameters":')).not.toThrow()
-    expect(parseAgentToolCall('{ "tool": "read_file", "parameters":')).toBeNull()
+  it('rejects a native call with malformed arguments without throwing', () => {
+    expect(() => parseNativeToolCall('read_file', { filePath: 42 })).not.toThrow()
+    expect(parseNativeToolCall('read_file', {})).toBeNull()
   })
 
   it('keeps a project without tests verifiable only through its declared build command', () => {

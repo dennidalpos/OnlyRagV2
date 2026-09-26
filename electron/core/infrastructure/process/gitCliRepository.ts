@@ -21,6 +21,8 @@ export interface GitCommitPreview {
 const GIT_DIFF_MAX_BUFFER = 64 * 1024 * 1024
 /** Tool output is truncated anyway; a larger diff overflows with its first part kept (ENOBUFS). */
 const GIT_RUN_MAX_BUFFER = 8 * 1024 * 1024
+/** `git commit` runs the repository's pre-commit hooks (lint-staged, tests), which routinely exceed 15 s. */
+const GIT_COMMIT_TIMEOUT_MS = 120_000
 
 export class GitCliRepository {
   private normalizeOwnedPaths(cwd: string, ownedPaths: readonly string[]): string[] {
@@ -92,7 +94,7 @@ export class GitCliRepository {
     return execFileSync('git', ['commit', '--only', '-m', message, '--', ...preview.paths], {
       cwd,
       encoding: 'utf-8',
-      timeout: 15000,
+      timeout: GIT_COMMIT_TIMEOUT_MS,
       stdio: ['pipe', 'pipe', 'pipe'],
     })
   }

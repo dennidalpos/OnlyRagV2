@@ -18,6 +18,7 @@ describe('runToolGates network-approved policy', () => {
       workspacePath: null,
       stepCount: 2,
       episodicCompactor: { recordStep } as never,
+      capabilityPolicyMode: 'network-approved',
       emitLog: vi.fn(),
       requestApproval,
       allowedToolsForTurn: ['read_file'],
@@ -48,6 +49,8 @@ describe('runToolGates network-approved policy', () => {
     })
 
     expect(requestApproval).toHaveBeenCalledOnce()
+    // A search is not a file write: the card must not try to diff the query as a path.
+    expect(requestApproval.mock.calls[0][0]).toMatchObject({ type: 'network_request', target: 'official documentation' })
     expect(result).toMatchObject({
       outcome: 'allowed',
       policyConsent: { requested: true, granted: true },
@@ -104,6 +107,7 @@ describe('runToolGates structured command safety', () => {
     workspacePath: path.join(hostRoot, 'workspace'),
     stepCount: 6,
     episodicCompactor: { recordStep: vi.fn() } as never,
+    capabilityPolicyMode: 'network-approved' as const,
     emitLog: vi.fn(),
   }
 
@@ -139,6 +143,7 @@ describe('runToolGates version refresh', () => {
     workspacePath: 'C:\\workspace',
     stepCount: 3,
     episodicCompactor: { recordStep: vi.fn() } as never,
+    capabilityPolicyMode: 'network-approved' as const,
     emitLog: vi.fn(),
     requestApproval: vi.fn(),
     allowedToolsForTurn: ['read_file'] as const,
@@ -198,6 +203,7 @@ describe('runToolGates shell reads', () => {
     workspacePath: 'D:/work/app',
     stepCount: 16,
     episodicCompactor: { recordStep: vi.fn() } as never,
+    capabilityPolicyMode: 'network-approved' as const,
     emitLog: vi.fn(),
     requestApproval: vi.fn(),
     allowedToolsForTurn: allowedToolsForTurn as never,

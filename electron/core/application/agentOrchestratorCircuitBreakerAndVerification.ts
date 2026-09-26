@@ -1,4 +1,5 @@
 import type { AppSettings } from '../../../shared/types'
+import { DEFAULT_APP_SETTINGS } from '../../../shared/domain/settings/appSettingsDefaults'
 import path from 'node:path'
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import {
@@ -231,7 +232,7 @@ export async function recordMutationSideEffects(ctx: ToolResultProcessingContext
         stagCheck.suggestedAction,
       )
       recordGuardEvent(ctx.state.guardEvents, 'fs_oscillation', 'advise', ctx.stepCount)
-      ctx.emitLog('info', `⚡ ExecutionGuard: ${stagCheck.reason}`)
+      emitLocalizedLog(ctx.emitLog, 'info', { key: 'executionGuardNotice', params: { reason: String(stagCheck.reason) } })
     }
   }
 
@@ -343,12 +344,12 @@ export function promoteMilestonesProvenBy(
   return proven.length
 }
 
-/** The single directive this turn's plan block carries, or the ordinary focus block. */
-/** Package installs reach the registry: only the network-approved policy (or the legacy unset one) can run them. */
+/** Package installs reach the registry: only the network-approved policy can run them. */
 export function installsAllowed(mode: AppSettings['capabilityPolicyMode']): boolean {
-  return mode === undefined || mode === 'network-approved'
+  return mode === 'network-approved'
 }
 
+/** The single directive this turn's plan block carries, or the ordinary focus block. */
 export function resolvePlanDirectiveForTurn(
   workspacePath: string | null | undefined,
   goalPlanner: GoalDecompositionPlanner,
@@ -359,7 +360,7 @@ export function resolvePlanDirectiveForTurn(
   /** Recent full tool outputs, where a pending package.json rewrite order is found. */
   recentFullLogs: readonly { step: number; output: string }[] = [],
   /** Capability policy of the run: without registry access the arbiter never orders an install. */
-  capabilityPolicyMode?: AppSettings['capabilityPolicyMode'],
+  capabilityPolicyMode: AppSettings['capabilityPolicyMode'] = DEFAULT_APP_SETTINGS.capabilityPolicyMode,
 ): PlanDirectiveDecision {
   if (!workspacePath) return { kind: 'focus', blockDirective: null, closureStepDirective: null }
 

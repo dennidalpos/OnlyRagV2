@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Save,
   Check,
-  Info,
   AlertTriangle,
   RotateCcw,
   Plus,
@@ -35,7 +34,6 @@ import {
   type PromptIssue,
 } from '../../constants/promptConfig'
 // Offline capability signal.
-import { supportsNativeToolCallingByFamily } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 import { ONLYRAG_MONACO_THEME_NAME, defineOnlyRagMonacoTheme, getStandardMonacoOptions } from '../../lib/monacoTheme'
 import { estimateTokenCount } from '../../lib/tokenEstimate'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
@@ -67,22 +65,6 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   MessageSquare,
   Languages,
   Image: ImageIcon,
-}
-
-/** The model each module actually runs on, for the capability notice. */
-function activeModelForModule(module: string, settings: AppSettings): string {
-  switch (module) {
-    case 'coding':
-      return settings.codingModel || settings.defaultModel || ''
-    case 'chat':
-      return settings.chatModel || settings.defaultModel || ''
-    case 'translation':
-      return settings.translationModel || settings.defaultModel || ''
-    case 'images':
-      return settings.visionModel || settings.defaultModel || ''
-    default:
-      return settings.defaultModel || ''
-  }
 }
 
 export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> = ({
@@ -160,12 +142,6 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
     tokens: draftTokens,
     chars: draft.length,
   })
-
-  const capabilityOmitted = useMemo(() => {
-    if (!selectedNode?.omittedWhenCapability) return false
-    const model = activeModelForModule(selectedNode.module, settings)
-    return selectedNode.omittedWhenCapability === 'tools' && supportsNativeToolCallingByFamily(model)
-  }, [selectedNode, settings])
 
   const preview = useMemo(
     () =>
@@ -377,13 +353,6 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
                   </div>
                 </div>
               </div>
-
-              {capabilityOmitted && (
-                <div className="mx-5 mt-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 flex gap-2 text-[11px] text-amber-200 shrink-0">
-                  <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  <span>{t('promptConfig.capabilityOmitted')}</span>
-                </div>
-              )}
 
               <div className="flex-1 min-h-0 m-5 rounded-xl border border-slate-800 overflow-hidden bg-[#080c14]">
                 {editorTimedOut && !isEditorMounted ? (

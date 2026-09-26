@@ -2,6 +2,7 @@ import type { AgentToolCall } from '../../agentTypes'
 import { validatePathSafety } from '../../contextFilter'
 import { MAX_RECURSIVE_LIST_ITEMS } from '../../ioLimits'
 import type { ToolExecutionResult } from '../toolExecutionContracts'
+import { toolLog } from '../toolExecutionContracts'
 
 const IGNORED_DIRECTORIES = new Set(['node_modules', '.git', 'dist', '.venv', 'build', '.next', 'out', 'coverage', '.pytest_cache'])
 
@@ -22,7 +23,7 @@ export function executeListFilesRecursiveTool(
     return {
       outcome: 'rejected',
       outputForHistory: `Security Violation: ${pathCheck.error}`,
-      logMessage: `List Files Recursive Rejected: ${pathCheck.error}`,
+      ...toolLog('toolEditPathRejected', { tool: 'list_files_recursive', error: String(pathCheck.error) }),
     }
   }
 
@@ -31,7 +32,7 @@ export function executeListFilesRecursiveTool(
       return {
         outcome: 'failure',
         outputForHistory: `Directory not found: ${dirPath}`,
-        logMessage: `Directory not found: ${dirPath}`,
+        ...toolLog('toolDirNotFound', { path: String(dirPath) }),
       }
     }
 
@@ -40,7 +41,7 @@ export function executeListFilesRecursiveTool(
     return {
       outcome: 'success',
       outputForHistory: output,
-      logMessage: `Recursive List: ${discovered.length} items in ${dirPath}`,
+      ...toolLog('toolListRecursiveDone', { count: discovered.length, path: String(dirPath) }),
       logDetail: output.slice(0, 800),
     }
   } catch (error: unknown) {
@@ -48,7 +49,7 @@ export function executeListFilesRecursiveTool(
     return {
       outcome: 'failure',
       outputForHistory: `Error listing files recursively: ${message}`,
-      logMessage: `Recursive list error: ${message}`,
+      ...toolLog('toolListRecursiveError', { error: message }),
     }
   }
 }

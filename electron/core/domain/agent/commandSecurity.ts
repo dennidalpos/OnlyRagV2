@@ -8,7 +8,8 @@ export interface SecurityCheckResult {
   requiresApproval?: boolean
 }
 
-export function checkCommandSecurity(rawCmd: string, workspacePath?: string | null): SecurityCheckResult {
+/** `currentDirectory` is the shell's working directory, which relative paths in the command resolve against. */
+export function checkCommandSecurity(rawCmd: string, workspacePath?: string | null, currentDirectory?: string): SecurityCheckResult {
   if (!rawCmd || typeof rawCmd !== 'string') {
     return { isAllowed: false, blockedReason: 'Empty or invalid command parameter', sanitizedCommand: '' }
   }
@@ -17,7 +18,7 @@ export function checkCommandSecurity(rawCmd: string, workspacePath?: string | nu
 
   // Cross-platform Unix -> PowerShell command translation
   const sanitized = sanitizePowerShellCommand(trimmed)
-  const safety = inspectStructuredCommand(sanitized, workspacePath)
+  const safety = inspectStructuredCommand(sanitized, workspacePath, currentDirectory)
   if (!safety.allowed) {
     return {
       isAllowed: false,

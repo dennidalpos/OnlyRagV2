@@ -23,10 +23,9 @@ describe('useWorkspaceFiles', () => {
   }
 
   beforeEach(async () => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     pendingReads.clear()
     readWorkspaceFile.mockClear()
-    ;(window as unknown as { electronAPI: unknown }).electronAPI = { readWorkspaceFile }
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = { readWorkspaceFile, listWorkspaceFiles: vi.fn().mockResolvedValue([]) }
     root = createRoot(document.createElement('div'))
     await act(async () => root.render(<Harness />))
   })

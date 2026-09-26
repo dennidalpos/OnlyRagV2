@@ -31,7 +31,7 @@ describe('RecoveryToolService rollback_workspace', () => {
     }).executeRollbackWorkspace()
 
     expect(result.outputForHistory).toContain('Errors: failed restoring file.txt')
-    expect(result.logMessage).toContain('0 files restored')
+    expect(result.localized?.message).toEqual({ key: 'toolRollbackWorkspaceDone', params: { count: 0 } })
   })
 
   it('rolls back only the last completed step and consumes the journal entry', () => {

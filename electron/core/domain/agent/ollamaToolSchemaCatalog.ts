@@ -278,39 +278,14 @@ export function selectToolSchemas(toolNames: readonly string[]): OllamaToolSchem
   return toolNames.map((name) => findToolSchema(name)).filter((entry): entry is OllamaToolSchema => Boolean(entry))
 }
 
-/** Compact text fallback for models without native tool calling. */
-export function renderToolPromptCatalog(toolNames: readonly string[]): string {
-  const lines = selectToolSchemas(toolNames).map(({ function: definition }) => {
-    const fields = Object.entries(definition.parameters.properties).map(([name, property]) => {
-      const optional = definition.parameters.required.includes(name) ? '' : '?'
-      return `"${name}"${optional}: ${property.type}`
-    })
-    return `- ${definition.name}: { ${fields.join(', ')} } — ${definition.description}`
-  })
-  return ['AVAILABLE TOOLS FOR THIS TURN (emit exactly one JSON block with tool, parameters and explanation):', ...lines].join('\n')
-}
-
-/** A plausible value for a parameter, used only to render the example call. */
-function exampleValueFor(paramName: string, type: string): string {
-  if (type === 'integer' || type === 'number') return '1'
-  if (type === 'boolean') return 'false'
-  if (type === 'array') return '[...]'
-  return `"<${paramName}>"`
-}
-
 /** What to send back to a model whose tool call was rejected by parameter validation. */
-export function buildToolSchemaCorrectionDirective(toolName: string, errors: readonly string[] = [], nativeToolCalling = false): string {
+export function buildToolSchemaCorrectionDirective(toolName: string, errors: readonly string[] = []): string {
   const schema = findToolSchema(toolName)
   const why = errors.length > 0 ? errors.map((e) => `- ${e}`).join('\n') : '- The call was missing or malformed.'
 
   if (!schema) {
     const known = OLLAMA_TOOL_SCHEMA_CATALOG.map((entry) => entry.function.name).join(', ')
-    return [
-      `[TOOL CALL REJECTED: UNKNOWN TOOL "${toolName}"]`,
-      why,
-      `Available tools: ${known}.`,
-      nativeToolCalling ? 'Call one of those tools by its exact name.' : `Emit one JSON tool call using an exact name from that list.`,
-    ].join('\n')
+    return [`[TOOL CALL REJECTED: UNKNOWN TOOL "${toolName}"]`, why, `Available tools: ${known}.`, 'Call one of those tools by its exact name.'].join('\n')
   }
 
   const { parameters } = schema.function
@@ -318,38 +293,12 @@ export function buildToolSchemaCorrectionDirective(toolName: string, errors: rea
   const optional = Object.keys(parameters.properties).filter((name) => !required.includes(name))
   const describe = (name: string) => `  - "${name}" (${parameters.properties[name].type}): ${parameters.properties[name].description}`
 
-  if (nativeToolCalling) {
-    return [
-      `[TOOL CALL REJECTED: "${toolName}" PARAMETERS INVALID]`,
-      why,
-      required.length > 0 ? `Mandatory parameters:\n${required.map(describe).join('\n')}` : 'This tool takes no mandatory parameters.',
-      optional.length > 0 ? `Optional parameters:\n${optional.map(describe).join('\n')}` : '',
-      `Nothing was executed. Call ${toolName} again with corrected arguments.`,
-    ]
-      .filter((line) => line !== '')
-      .join('\n')
-  }
-
-  const exampleBody = required.length > 0 ? required : Object.keys(parameters.properties).slice(0, 1)
-  const exampleParams = exampleBody.map((name) => `    "${name}": ${exampleValueFor(name, parameters.properties[name].type)}`).join(',\n')
-
   return [
     `[TOOL CALL REJECTED: "${toolName}" PARAMETERS INVALID]`,
     why,
-    '',
     required.length > 0 ? `Mandatory parameters:\n${required.map(describe).join('\n')}` : 'This tool takes no mandatory parameters.',
     optional.length > 0 ? `Optional parameters:\n${optional.map(describe).join('\n')}` : '',
-    '',
-    'Emit exactly this shape, filled in:',
-    '```json',
-    '{',
-    `  "tool": "${toolName}",`,
-    '  "parameters": {',
-    exampleParams,
-    '  },',
-    '  "explanation": "..."',
-    '}',
-    '```',
+    `Nothing was executed. Call ${toolName} again with corrected arguments.`,
   ]
     .filter((line) => line !== '')
     .join('\n')

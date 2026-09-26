@@ -9,7 +9,6 @@ describe('ModelThinkingControl', () => {
   let root: Root
 
   beforeEach(() => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -28,7 +27,7 @@ describe('ModelThinkingControl', () => {
           <ModelThinkingControl
             modelName="qwen3:4b"
             metrics={{ 'qwen3:4b': { capabilities: ['completion', 'thinking'], family: 'qwen3' } }}
-            settings={{ defaultModel: '', ocrEngine: 'native_cuda', ollamaHost: 'http://localhost:11434' }}
+            settings={{ defaultModel: '', ocrEngine: 'native_cuda', capabilityPolicyMode: 'network-approved', ollamaHost: 'http://localhost:11434' }}
             onUpdateSettings={onUpdateSettings}
             {...props}
           />

@@ -23,6 +23,8 @@ import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/
 import type { EmitLog } from './agentOrchestratorTypes'
 import { resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
 
 export interface SessionContextParams {
   payload: AgentTaskPayload
@@ -53,6 +55,8 @@ export interface SessionContext {
   matchedSkills: SkillDefinition[]
   /** Non-null when a resumed run cannot safely reproduce its pinned runtime. */
   resumeValidationError: string | null
+  /** True when this call resumes the interrupted run itself, not a new run in the same conversation. */
+  resumesRun: boolean
 }
 
 async function scanProjectMap(workspacePath: string): Promise<string> {
@@ -83,9 +87,13 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
 
   const availableModels = await ollamaAppService.getInstalledModels(settings.ollamaHost)
   const savedState = await agentSessionStateRepository.loadSessionState(sessionId, workspacePath)
-  if (savedState?.ollamaRuntimeProfile) session.ollamaRuntimeProfile = savedState.ollamaRuntimeProfile
-  session.ollamaGenerationTelemetry = savedState?.ollamaGenerationTelemetry || []
+  const resumesRun = savedState?.status === 'IN_PROGRESS' && matchesAgentRunIdentity(savedState.runIdentity, session.identity)
+  // Only the interrupted run itself keeps its pinned model and context window; a follow-up run in the
+  // same conversation is a new run and takes the current settings (and measures its own speed).
+  if (resumesRun && savedState?.ollamaRuntimeProfile) session.ollamaRuntimeProfile = savedState.ollamaRuntimeProfile
+  session.ollamaGenerationTelemetry = resumesRun ? savedState?.ollamaGenerationTelemetry || [] : []
   session.lastVerification = savedState?.lastVerification
+  // The transcript is the conversation, so a follow-up keeps it; the bootstrap appends the new request.
   session.chatMessages = completeInterruptedBatch(savedState?.chatMessages || [])
   // '' when no model is configured: the preflight then blocks the run with a clear message.
   const requestedCodingModel = resolveConfiguredModel('coding', settings, payload.activeModel)
@@ -121,7 +129,10 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     autoInstallHubSkills: settings.autoInstallHubSkills,
     autoInstallMinScore: settings.autoInstallMinScore,
     onConfirmInstall: (candidate: SkillInstallCandidate) => {
-      emitLog('info', `🧩 Skill Hub: richiesta conferma installazione '${candidate.skillName}' da ${candidate.hubName} (score ${candidate.score.toFixed(1)})`)
+      emitLocalizedLog(emitLog, 'info', {
+        key: 'skillInstallConfirm',
+        params: { skill: candidate.skillName, hub: candidate.hubName, score: candidate.score.toFixed(1) },
+      })
       return skillInstallApprovalService.requestApproval(session.rendererEvents, candidate, session.identity)
     },
   }
@@ -132,7 +143,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     if (session.rendererEvents?.isAvailable()) {
       session.rendererEvents.send('agent:skills-matched', { ...session.identity, skills: skillNames })
     }
-    emitLog('info', `✨ Skill Router: Attivate ${matchedSkills.length} skill [${skillNames.join(', ')}]`)
+    emitLocalizedLog(emitLog, 'info', { key: 'skillsActivated', params: { count: matchedSkills.length, skills: skillNames.join(', ') } })
     if (settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logSkillsMatched(sessionId, skillNames)
     }
@@ -155,5 +166,6 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     skillMatchingOptions,
     matchedSkills,
     resumeValidationError,
+    resumesRun,
   }
 }

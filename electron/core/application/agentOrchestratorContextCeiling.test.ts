@@ -45,12 +45,6 @@ beforeEach(() => {
 })
 
 describe('selectModelForTurn — context ceiling', () => {
-  it('keeps native tool calling when an older session recorded a text protocol', () => {
-    const ctx = contextWith(metricsWith(32768))
-    ctx.session.toolCallingProtocolByModel = { [MODEL]: 'text' }
-    expect(selectModelForTurn(ctx).targetModelToolCallingCapable).toBe(true)
-  })
-
   it('leaves the hardware window alone when the model can hold it', () => {
     const selection = selectModelForTurn(contextWith(metricsWith(131072)))
     expect(selection.contextCeiling).toBe(131072)

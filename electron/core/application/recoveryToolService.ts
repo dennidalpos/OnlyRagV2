@@ -1,5 +1,6 @@
 import type { RollbackResult } from '../infrastructure/filesystem/atomicWorkspaceJournal'
 import type { ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
+import { toolLog } from '../domain/agent/tools/toolExecutionContracts'
 
 interface RecoveryJournal {
   rollbackAll(): RollbackResult
@@ -23,7 +24,7 @@ export class RecoveryToolService {
     return {
       outcome: result.errors.length > 0 ? 'failure' : 'success',
       outputForHistory: summary,
-      logMessage: `Workspace Rollback: ${result.restoredCount} files restored`,
+      ...toolLog('toolRollbackWorkspaceDone', { count: result.restoredCount }),
     }
   }
 
@@ -36,7 +37,7 @@ export class RecoveryToolService {
       return {
         outcome: 'blocked',
         outputForHistory: '[ROLLBACK LAST STEP] Nothing to undo: the previous step made no file changes, or there is no completed step yet.',
-        logMessage: 'Rollback Last Step: nothing to undo',
+        ...toolLog('toolRollbackStepEmpty'),
       }
     }
     const result = this.rollbackLastStep()
@@ -48,7 +49,7 @@ export class RecoveryToolService {
     return {
       outcome: result.errors.length > 0 ? 'failure' : 'success',
       outputForHistory: summary,
-      logMessage: `Rollback Last Step: ${result.restoredCount} files restored`,
+      ...toolLog('toolRollbackStepDone', { count: result.restoredCount }),
     }
   }
 }

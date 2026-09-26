@@ -83,7 +83,6 @@ describe('AboutModal & Credits Data Integrity Unit Tests', () => {
     expect(moduleNames).toContain('LobeHub Marketplace')
     expect(moduleNames).toContain('Turndown & Cheerio')
     expect(moduleNames).toContain('js-yaml')
-    expect(moduleNames).toContain('JsonRepair')
     expect(moduleNames).toContain('GPT-Tokenizer')
   })
 })

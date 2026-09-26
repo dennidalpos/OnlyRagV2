@@ -46,7 +46,6 @@ describe('useIngestion loads the selected document on demand', () => {
   }
 
   beforeEach(async () => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     documentsStore.documents = [docA, docB]
     pending.clear()
     getIngestedDocument.mockClear()

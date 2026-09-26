@@ -21,7 +21,6 @@ import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryComp
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import type { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import type { OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
-import type { OllamaContextReuseDecision } from '../domain/agent/ollamaContextCacheManager'
 import type { TurnToolPolicy } from '../domain/agent/turnToolPolicy'
 import type { SkillMatchContext } from '../domain/skills/skillMatcher'
 import type { SkillMatchingOptions } from './skillAppService'
@@ -112,7 +111,6 @@ export type TurnDispatchContext = AgentRunContext & {
 export interface TurnDispatchData {
   streamedOutput: string
   nativeCalls?: AgentChatToolCall[]
-  nativeMode?: boolean
   nativeBatchSize?: number
   hasRecentToolFailure: boolean
   errorCountInHistory: number
@@ -123,9 +121,6 @@ export interface TurnDispatchData {
 export interface PreparedAgentTurn {
   selection: ModelSelection
   assembled: AssembledPrompt
-  turnPrompt: string
-  contextReuseDecision: OllamaContextReuseDecision
-  wasCompacted: boolean
   hasRecentToolFailure: boolean
   errorCountInHistory: number
   compiledHistoryBlock: string
@@ -136,8 +131,6 @@ export type TurnDispatchOutcome = { outcome: 'return'; result: AgentTaskResult }
 
 export interface ModelSelection {
   targetModel: string
-  targetModelToolCallingCapable: boolean
-  targetModelToolCallingProbe: boolean
   runtimeOpts: OllamaRuntimeOptions
   /** Model trained context length ceiling. */
   contextCeiling: number | null
@@ -147,7 +140,6 @@ export interface ModelSelection {
 export type ResponseInterpreterContext = AgentRunContext & {
   streamedOutput: string
   nativeCall?: AgentChatToolCall
-  nativeMode?: boolean
   stepCount: number
   hasRecentToolFailure: boolean
   errorCountInHistory: number

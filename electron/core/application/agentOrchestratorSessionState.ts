@@ -18,6 +18,7 @@ import { captureMilestoneFileEvidence, createWorkspaceDeliverableProbe } from '.
 import { resolveDeclaredFilePaths, resolveMilestoneDeliverableStatus } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 
 import type { EmitLog } from './agentOrchestratorTypes'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
 
 export interface SessionStateParams {
   payload: AgentTaskPayload
@@ -168,7 +169,7 @@ export async function initializeSessionState(params: SessionStateParams): Promis
       const restoredMilestones = revalidateRestoredMilestones(executionState.planMilestones, workspacePath)
       goalPlanner.loadMilestones(restoredMilestones)
       const staleCount = restoredMilestones.filter((milestone, index) => milestone.status !== executionState.planMilestones[index].status).length
-      if (staleCount > 0) emitLog('info', `♻️ ${staleCount} persisted milestone evidence marked for revalidation.`)
+      if (staleCount > 0) emitLocalizedLog(emitLog, 'info', { key: 'milestoneEvidenceStale', params: { count: staleCount } })
     }
     emitLog(
       'info',
@@ -176,7 +177,7 @@ export async function initializeSessionState(params: SessionStateParams): Promis
     )
   } else if (planSeed.length > 0) {
     goalPlanner.loadMilestones(planSeed)
-    emitLog('info', `Loaded ${planSeed.length} approved plan milestones for this new run.`)
+    emitLocalizedLog(emitLog, 'info', { key: 'planMilestonesLoaded', params: { count: planSeed.length } })
   }
 
   const sessionNumCtxBox: { value: number | null } = { value: null }

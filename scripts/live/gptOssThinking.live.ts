@@ -39,9 +39,10 @@ describe.skipIf(!model)('live: GPT-OSS level-only thinking', () => {
     const tokens: string[] = []
     const thoughts: string[] = []
 
-    const answer = await AgentStreamTransport.streamCompletion({
+    const turn = await AgentStreamTransport.streamCompletion({
       targetModel: model!,
-      prompt: 'Reply with exactly the word OK and nothing else.',
+      messages: [{ role: 'user', content: 'Reply with exactly the word OK and nothing else.' }],
+      toolCatalog: [],
       runtimeOpts: { num_ctx: 4096, temperature: 0, num_predict: 512, maxContextChars: 12000 },
       ollamaEndpoint: host,
       think: false,
@@ -50,6 +51,7 @@ describe.skipIf(!model)('live: GPT-OSS level-only thinking', () => {
       onThoughtChunk: (chunk) => thoughts.push(chunk),
     })
 
+    const answer = turn.content
     console.log(`answer=${JSON.stringify(answer)} thought_chars=${thoughts.join('').length}`)
     expect(answer.trim()).toBe('OK')
     expect(tokens.join('')).toBe(answer)

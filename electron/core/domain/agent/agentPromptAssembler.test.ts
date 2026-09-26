@@ -7,6 +7,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   const defaultSettings: AppSettings = {
     defaultModel: 'llama3.2',
     ocrEngine: 'native_cuda',
+    capabilityPolicyMode: 'network-approved',
     ollamaHost: '',
     codingModel: 'llama3.2',
     translationModel: 'llama3.2',
@@ -18,232 +19,89 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   }
 
   const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions('Medium')
+  const baseInput = {
+    userTask: 'Fix typo in index.html',
+    agentMode: 'auto' as const,
+    stepCount: 1,
+    maxSteps: 50,
+    workspacePath: 'D:/project',
+    settings: defaultSettings,
+    runtimeOpts,
+  }
 
-  it('should assemble turn prompt with base guidelines and user task', () => {
-    const { prompt } = assembleTurnPrompt({
-      userTask: 'Fix typo in index.html',
-      agentMode: 'auto',
-      stepCount: 1,
-      maxSteps: 50,
-      workspacePath: 'D:/project',
-      toolOutputHistory: [],
-      settings: defaultSettings,
-      runtimeOpts,
-    })
+  it('builds the system prompt from the coding guidelines and the workspace', () => {
+    const { segments } = assembleTurnPrompt(baseInput)
 
-    expect(prompt).toContain('Fix typo in index.html')
-    expect(prompt).toContain('D:/project')
-    expect(prompt).toContain('AGENT')
-    expect(prompt).toContain('INCREMENTAL')
-    expect(prompt).toContain('PREVIEW')
-    expect(prompt).toContain('SCAFFOLD FIRST')
+    expect(segments.baseSystemPrompt).toContain('D:/project')
+    expect(segments.baseSystemPrompt).toContain('Operating in AUTO mode')
+    expect(segments.baseSystemPrompt).toContain('INCREMENTAL')
+    expect(segments.baseSystemPrompt).toContain('PREVIEW')
+    expect(segments.baseSystemPrompt).toContain('SCAFFOLD FIRST')
   })
 
-  it('should include pinned files and active file snippet when provided', () => {
-    const { prompt } = assembleTurnPrompt({
-      userTask: 'Refactor calculateTotal',
-      agentMode: 'auto',
-      stepCount: 2,
-      maxSteps: 50,
-      workspacePath: 'D:/project',
+  it('keeps the task and the tool catalogue out of the system prompt', () => {
+    // Native requests carry the task once, as the first user message (buildChatRequest), and the
+    // tools as the request's `tools` array, so the system prompt stays identical across runs.
+    const { segments } = assembleTurnPrompt(baseInput)
+
+    expect(segments.baseSystemPrompt).not.toContain('Fix typo in index.html')
+    expect(segments.baseSystemPrompt).not.toContain('AVAILABLE AGENT TOOLS')
+  })
+
+  it('includes pinned files and the active file snippet in their own segments', () => {
+    const { segments } = assembleTurnPrompt({
+      ...baseInput,
       activeFile: { name: 'calc.ts', path: 'D:/project/calc.ts', content: 'export function calculateTotal() {}', versionHash: 'a'.repeat(64) },
       pinnedFilesContextStr: '[EXPLICIT REFERENCED FILE: helper.ts]\n```\nconst tax = 0.22;\n```',
-      toolOutputHistory: ['Ran command: npm test'],
-      settings: defaultSettings,
-      runtimeOpts,
     })
 
-    expect(prompt).toContain('Active File Open in Editor: calc.ts')
-    expect(prompt).toContain('export function calculateTotal() {}')
-    expect(prompt).toContain('EXPLICIT REFERENCED FILE: helper.ts')
-    expect(prompt).toContain('PREVIOUS COMPLETED TOOL STEPS & RESULTS')
-    expect(prompt).toContain('Ran command: npm test')
+    expect(segments.activeFileBlock).toContain('Active File Open in Editor: calc.ts')
+    expect(segments.activeFileBlock).toContain('export function calculateTotal() {}')
+    expect(segments.pinnedBlock).toContain('EXPLICIT REFERENCED FILE: helper.ts')
   })
 
-  it('should cap the project map block per its own hardware-tiered budget, without applying a second full-prompt truncation pass', () => {
-    // AgentPromptAssembler no longer re-truncates the assembled prompt against maxContextChars — that watermark-based compaction is HeuristicContextCompactor's sole responsibility in the orchestrator loop (see agentOrchestratorAppService.ts).
+  it('caps the project map block per its own hardware-tiered budget', () => {
     const hugeMap = 'a'.repeat(25000)
-    const { prompt } = assembleTurnPrompt({
-      userTask: 'Optimize database queries',
-      agentMode: 'auto',
-      stepCount: 3,
-      maxSteps: 50,
-      workspacePath: 'D:/project',
-      projectContextMapStr: hugeMap,
-      toolOutputHistory: [],
-      settings: defaultSettings,
-      runtimeOpts: { ...runtimeOpts, maxContextChars: 16000 },
-    })
+    const { segments } = assembleTurnPrompt({ ...baseInput, projectContextMapStr: hugeMap, runtimeOpts: { ...runtimeOpts, maxContextChars: 16000 } })
 
     const expectedMapChars = Math.floor(16000 * 0.18)
-    expect(prompt).not.toContain('a'.repeat(expectedMapChars + 1))
-    expect(prompt).toContain('a'.repeat(expectedMapChars))
+    expect(segments.mapBlock).not.toContain('a'.repeat(expectedMapChars + 1))
+    expect(segments.mapBlock).toContain('a'.repeat(expectedMapChars))
   })
 
-  it('should omit the prose tool schema block when toolCallingCapable=true (AGT2: native tool-calling models already receive it via the `tools` API param)', () => {
-    const withProse = assembleTurnPrompt({
-      userTask: 'Fix typo in index.html',
-      agentMode: 'auto',
-      stepCount: 1,
-      maxSteps: 50,
-      workspacePath: 'D:/project',
-      toolOutputHistory: [],
-      settings: defaultSettings,
-      runtimeOpts,
-    })
-    const nativeToolCalling = assembleTurnPrompt({
-      userTask: 'Fix typo in index.html',
-      agentMode: 'auto',
-      stepCount: 1,
-      maxSteps: 50,
-      workspacePath: 'D:/project',
-      toolOutputHistory: [],
-      settings: defaultSettings,
-      runtimeOpts,
-      toolCallingCapable: true,
-    })
+  it('carries the step counter only in turnSuffix, rendering ∞ for an unlimited budget', () => {
+    const { segments, turnSuffix } = assembleTurnPrompt({ ...baseInput, stepCount: 5 })
+    expect(turnSuffix).toBe('CURRENT TURN STATUS: Step 5/50.')
+    expect(Object.values(segments).some((segment) => segment.includes('Step 5'))).toBe(false)
 
-    expect(withProse.prompt).toContain('AVAILABLE AGENT TOOLS')
-    expect(nativeToolCalling.prompt).not.toContain('AVAILABLE AGENT TOOLS')
-    // Native requests carry the task once, as the first user message (buildChatRequest), so the
-    // system prompt stays identical across follow-up runs and Ollama can reuse its cached prefix.
-    expect(nativeToolCalling.segments.baseSystemPrompt).not.toContain('Fix typo in index.html')
-    expect(withProse.segments.baseSystemPrompt).toContain('Fix typo in index.html')
+    expect(assembleTurnPrompt({ ...baseInput, maxSteps: Infinity }).turnSuffix).toContain('Step 1/∞')
+    expect(assembleTurnPrompt({ ...baseInput, maxSteps: 0 }).turnSuffix).toContain('Step 1/∞')
   })
 
-  it('renders only the application-selected tools for text fallback models', () => {
-    const { prompt } = assembleTurnPrompt({
-      userTask: 'Fix typo in index.html',
-      agentMode: 'auto',
-      stepCount: 1,
-      maxSteps: 50,
-      workspacePath: 'D:/project',
-      toolOutputHistory: [],
-      settings: defaultSettings,
-      runtimeOpts,
-      availableToolNames: ['replace_file_content', 'ask'],
-    })
+  it('keeps the system prompt byte-identical across turns', () => {
+    const turn1 = assembleTurnPrompt({ ...baseInput, stepCount: 1, planBlock: 'PLAN A' })
+    const turn2 = assembleTurnPrompt({ ...baseInput, stepCount: 2, planBlock: 'PLAN B' })
 
-    expect(prompt).toContain('AVAILABLE TOOLS FOR THIS TURN')
-    expect(prompt).toContain('- replace_file_content:')
-    expect(prompt).not.toContain('- write_file:')
-    expect(prompt).not.toContain('- run_command:')
+    expect(turn1.segments.baseSystemPrompt).toBe(turn2.segments.baseSystemPrompt)
   })
 
-  it('should render ∞ when maxSteps is Infinity or 0', () => {
-    const { prompt } = assembleTurnPrompt({
-      userTask: 'Long running task',
-      agentMode: 'auto',
-      stepCount: 1,
-      maxSteps: Infinity,
-      workspacePath: 'D:/project',
-      toolOutputHistory: [],
-      settings: defaultSettings,
-      runtimeOpts,
+  it('exposes every context block as its own disjoint segment', () => {
+    const { segments } = assembleTurnPrompt({
+      ...baseInput,
+      planBlock: '### STRUCTURED EXECUTION PLAN\nm-1: scaffold',
+      skillsBlock: '## CONTEXTUAL SKILLS\ntailwind-css-v4',
+      pinnedFilesContextStr: 'pinned.ts contents',
+      attachedContext: 'rag docs context',
+      projectContextMapStr: 'src/\n  App.tsx',
     })
 
-    expect(prompt).toContain('Step 1/∞')
-  })
-
-  describe('stableSection / historyBlock / turnSuffix decomposition (AGT1: Ollama context/KV-cache reuse)', () => {
-    const baseInput = {
-      userTask: 'Fix typo in index.html',
-      agentMode: 'auto' as const,
-      maxSteps: 50,
-      workspacePath: 'D:/project',
-      settings: defaultSettings,
-      runtimeOpts,
+    expect(segments.planSection).toContain('m-1: scaffold')
+    expect(segments.skillsSection).toContain('tailwind-css-v4')
+    expect(segments.pinnedBlock).toContain('pinned.ts contents')
+    expect(segments.attachedBlock).toContain('rag docs context')
+    expect(segments.mapBlock).toContain('App.tsx')
+    for (const marker of ['m-1: scaffold', 'tailwind-css-v4', 'pinned.ts contents', 'rag docs context', 'App.tsx']) {
+      expect(segments.baseSystemPrompt).not.toContain(marker)
     }
-
-    it('should keep stableSection byte-identical across turns when only stepCount and history change', () => {
-      const turn1 = assembleTurnPrompt({ ...baseInput, stepCount: 1, toolOutputHistory: [] })
-      const turn2 = assembleTurnPrompt({ ...baseInput, stepCount: 2, toolOutputHistory: ['Ran command: THIS_IS_TURN_2_HISTORY_MARKER'] })
-
-      expect(turn1.stableSection).toBe(turn2.stableSection)
-      expect(turn1.stableSection).not.toContain('Step 1')
-      expect(turn1.stableSection).not.toContain('THIS_IS_TURN_2_HISTORY_MARKER')
-    })
-
-    it('should change stableSection when pinned files or task prompt change', () => {
-      const standard = assembleTurnPrompt({ ...baseInput, stepCount: 1, toolOutputHistory: [] })
-      const differentTask = assembleTurnPrompt({ ...baseInput, userTask: 'Different task requirement', stepCount: 1, toolOutputHistory: [] })
-      const withPinned = assembleTurnPrompt({
-        ...baseInput,
-        stepCount: 1,
-        toolOutputHistory: [],
-        pinnedFilesContextStr: '[EXPLICIT REFERENCED FILE: helper.ts]',
-      })
-
-      expect(standard.stableSection).not.toBe(differentTask.stableSection)
-      expect(standard.stableSection).not.toBe(withPinned.stableSection)
-    })
-
-    it('should produce an append-only historyBlock: turn 2 history starts with turn 1 history when steps are only added', () => {
-      const turn1 = assembleTurnPrompt({ ...baseInput, stepCount: 1, toolOutputHistory: 'STEP 1 SUMMARY' })
-      const turn2 = assembleTurnPrompt({ ...baseInput, stepCount: 2, toolOutputHistory: 'STEP 1 SUMMARY\n\nSTEP 2 SUMMARY' })
-
-      expect(turn2.historyBlock.startsWith(turn1.historyBlock)).toBe(true)
-    })
-
-    it('should carry the step counter only in turnSuffix, not in stableSection or historyBlock', () => {
-      const { stableSection, historyBlock, turnSuffix } = assembleTurnPrompt({
-        ...baseInput,
-        stepCount: 5,
-        toolOutputHistory: [],
-      })
-
-      expect(turnSuffix).toContain('Step 5/50')
-      expect(stableSection).not.toContain('Step 5')
-      expect(historyBlock).not.toContain('Step 5')
-    })
-
-    it('should reassemble to the same full prompt from stableSection + historyBlock + turnSuffix', () => {
-      const { prompt, stableSection, historyBlock, turnSuffix } = assembleTurnPrompt({
-        ...baseInput,
-        stepCount: 1,
-        toolOutputHistory: 'STEP 1 SUMMARY',
-      })
-
-      const reassembled = [stableSection, historyBlock, turnSuffix].filter((p) => p && p.trim()).join('\n\n')
-      expect(reassembled).toBe(prompt)
-    })
-  })
-
-  describe('segments (compactor input contract)', () => {
-    it('exposes stableSection as DISJOINT segments that rejoin to exactly stableSection', () => {
-      // The orchestrator must feed HeuristicContextCompactor these segments, never stableSection itself.
-      const { stableSection, segments } = assembleTurnPrompt({
-        userTask: 'Build a dashboard',
-        agentMode: 'auto',
-        stepCount: 3,
-        maxSteps: 50,
-        workspacePath: 'D:/project',
-        planBlock: '### STRUCTURED EXECUTION PLAN\nm-1: scaffold',
-        skillsBlock: '## CONTEXTUAL SKILLS\ntailwind-css-v4',
-        pinnedFilesContextStr: 'pinned.ts contents',
-        attachedContext: 'rag docs context',
-        projectContextMapStr: 'src/\n  App.tsx',
-        toolOutputHistory: 'HISTORY BLOCK',
-        settings: defaultSettings,
-        runtimeOpts,
-      })
-
-      const rejoined = [
-        segments.baseSystemPrompt,
-        segments.planSection,
-        segments.pinnedBlock,
-        segments.activeFileBlock,
-        segments.skillsSection,
-        segments.attachedBlock,
-        segments.mapBlock,
-      ]
-        .filter((p) => p && p.trim())
-        .join('\n\n')
-
-      expect(rejoined).toBe(stableSection)
-      // and no segment may itself contain the whole joined section (the double-count signature)
-      expect(segments.baseSystemPrompt).not.toBe(stableSection)
-      expect(segments.baseSystemPrompt.length).toBeLessThan(stableSection.length)
-    })
   })
 })

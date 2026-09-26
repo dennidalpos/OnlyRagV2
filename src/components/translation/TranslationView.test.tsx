@@ -38,12 +38,12 @@ describe('TranslationView in-place job lifecycle', () => {
   const click = (element: HTMLElement) => act(async () => element.dispatchEvent(new MouseEvent('click', { bubbles: true })))
 
   beforeEach(async () => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     cancelTask.mockClear()
     translateDocumentInplace.mockClear()
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       translateDocumentInplace,
       cancelTask,
+      getIngestedDocument: vi.fn(async () => ({ ...pdfDoc, extractedMarkdown: '# Report' })),
       onTranslateProgress: (callback: (payload: TranslateProgressPayload) => void) => {
         emitProgress = callback
         return () => {}

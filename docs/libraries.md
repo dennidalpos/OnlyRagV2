@@ -4,7 +4,7 @@
 
 - React, Vite, Electron, Tailwind e Monaco: UI e packaging.
 - `gpt-tokenizer`: stima BPE del contesto.
-- `zod`, `jsonrepair`: contratti e recupero delle risposte strutturate.
+- `zod`: contratti delle risposte strutturate.
 - `diff`: diff delle proposte di modifica.
 - `p-queue`: coda dei task Main.
 - `turndown`, `cheerio`: conversione web in Markdown.

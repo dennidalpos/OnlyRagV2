@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { authorizeOfflineStrict, shellCommandHasEgress } from './offlineStrictPolicy'
+import { authorizeOfflineStrict, npxCommandNames, shellCommandHasEgress } from './offlineStrictPolicy'
 
 function request(overrides: Record<string, unknown> = {}) {
   return {
@@ -67,7 +67,36 @@ describe('package manager egress detection', () => {
 
   it('leaves local builds and tests alone', () => {
     for (const command of ['npm run build', 'npm test', 'npx vitest run', 'npx tsc --noEmit', 'python -m pytest', 'git status']) {
-      expect(shellCommandHasEgress(command), command).toBe(false)
+      expect(shellCommandHasEgress(command, ['vitest', 'tsc']), command).toBe(false)
     }
+  })
+
+  it('treats npx of a command the workspace does not provide as a download', () => {
+    // npx installs a missing package without asking, and the shell adds -y: without this check a
+    // bare `npx cowsay` reached the registry with no consent even in offline-strict mode.
+    expect(shellCommandHasEgress('npx tsc --noEmit')).toBe(true)
+    expect(shellCommandHasEgress('npx create-vite@latest . --template react', ['vite'])).toBe(true)
+    expect(shellCommandHasEgress('npm run build; npx -y cowsay hi', ['tsc'])).toBe(true)
+    expect(shellCommandHasEgress('pnpm dlx create-next-app')).toBe(true)
+    expect(shellCommandHasEgress('bunx prettier .')).toBe(true)
+    expect(shellCommandHasEgress('npx --no-install eslint .')).toBe(false)
+  })
+})
+
+describe('npxCommandNames', () => {
+  it('names the command npx runs in every segment, without versions', () => {
+    expect(npxCommandNames('npx -y create-vite@latest app')).toEqual(['create-vite'])
+    expect(npxCommandNames('npx @angular/cli@17 new app')).toEqual(['@angular/cli'])
+    expect(npxCommandNames('npx -p typescript tsc --noEmit')).toEqual(['typescript', 'tsc'])
+    expect(npxCommandNames('npx --package=prettier@3 prettier .')).toEqual(['prettier', 'prettier'])
+    expect(npxCommandNames('npm run build && npx vitest run')).toEqual(['vitest'])
+    expect(npxCommandNames('npx.cmd eslint .')).toEqual(['eslint'])
+  })
+
+  it('ignores npx runs that cannot download and commands that are not npx', () => {
+    expect(npxCommandNames('npx --no eslint .')).toEqual([])
+    expect(npxCommandNames('npx --offline vitest')).toEqual([])
+    expect(npxCommandNames('npm test')).toEqual([])
+    expect(npxCommandNames('echo npx vitest')).toEqual([])
   })
 })

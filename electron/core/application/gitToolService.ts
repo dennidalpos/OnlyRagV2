@@ -29,7 +29,12 @@ export class GitToolService {
   executeCommit(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): ToolExecutionResult {
     const paths = Array.isArray(parameters.commitPaths) ? parameters.commitPaths.filter((value): value is string => typeof value === 'string') : []
     const result = this.commit(workspacePath || process.cwd(), parameters.commitMessage || '', paths, String(parameters.commitDiffHash || ''))
-    return { outcome: result.success ? 'success' : 'failure', outputForHistory: result.output, logMessage: result.logMessage }
+    return {
+      outcome: result.success ? 'success' : 'failure',
+      outputForHistory: result.output,
+      logMessage: result.logMessage,
+      ...(result.localized ? { localized: result.localized } : {}),
+    }
   }
 
   previewCommit(cwd: string, paths: readonly string[]): GitCommitPreview {

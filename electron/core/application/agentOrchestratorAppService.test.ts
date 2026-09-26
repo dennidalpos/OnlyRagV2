@@ -11,6 +11,7 @@ import {
   respondToApproval,
 } from './agentOrchestratorAppService'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
+import type { AgentChatTurn } from '../infrastructure/http/agentStreamTransport'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
 import { buildDefaultAgentSettings } from './agentOrchestratorSessionSetup'
@@ -26,12 +27,19 @@ const TOOL_ENABLED_SETTINGS: AppSettings = {
   codingModel: 'llama3.2',
   allowTerminalExecution: true,
   allowFileModifications: true,
-  capabilityPolicyMode: undefined,
+  capabilityPolicyMode: 'network-approved',
 }
 const runAgentOrchestratorLoop: typeof runOrchestratorLoop = (payload, win) =>
   runOrchestratorLoop({ ...payload, settings: { ...TOOL_ENABLED_SETTINGS, ...payload.settings } }, win)
 
-const commandJson = (command: string) => `\`\`\`json\n{\n  "tool": "run_command",\n  "parameters": { "command": "${command}" }\n}\n\`\`\``
+/** One scripted native model turn: a single call of `tool` with `parameters`. */
+const toolTurn = (tool: string, parameters: Record<string, unknown>): AgentChatTurn => ({
+  content: '',
+  thinking: '',
+  toolCalls: [{ type: 'function', function: { index: 0, name: tool, arguments: parameters } }],
+})
+
+const commandTurn = (command: string) => toolTurn('run_command', { command })
 
 function createMockWindow(): { window: RendererEventSink; send: ReturnType<typeof vi.fn> } {
   const send = vi.fn()
@@ -120,9 +128,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   it('should route finish through the application evidence gate and persist the model report', async () => {
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(
-      '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "All tasks done perfectly." }\n}\n```',
-    )
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(toolTurn('finish', { summary: 'All tasks done perfectly.' }))
 
     const res = await runAgentOrchestratorLoop(
       {
@@ -167,11 +173,47 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     ])
   })
 
+  it('continues the conversation on a follow-up run, with the current model instead of the pinned one', async () => {
+    const sessionId = 'follow-up-conversation'
+    const identity = (runId: string) => ({ runId, conversationId: sessionId, planRevisionId: `${runId}:v1`, workspaceId: `workspace:${tempDir}` })
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce({ content: 'The workspace is empty.', thinking: '', toolCalls: [] })
+      .mockResolvedValueOnce({ content: 'Still empty.', thinking: '', toolCalls: [] })
+
+    await runAgentOrchestratorLoop(
+      { identity: identity('run-1'), sessionId, userTask: 'Describe the workspace', agentMode: 'ask', workspacePath: tempDir },
+      null,
+    )
+    await runAgentOrchestratorLoop(
+      {
+        identity: identity('run-2'),
+        sessionId,
+        userTask: 'Anything new?',
+        initialUserTask: 'Describe the workspace',
+        agentMode: 'ask',
+        workspacePath: tempDir,
+        settings: { ...TOOL_ENABLED_SETTINGS, codingModel: 'qwen2.5-coder:7b' },
+      },
+      null,
+    )
+
+    const [first, second] = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls.map(([request]) => request)
+    expect(first.targetModel).toBe('llama3.2:3b')
+    // A follow-up is a new run: the model and context window pinned by run 1 no longer apply.
+    expect(second.targetModel).toBe('qwen2.5-coder:7b')
+    const contents = second.messages.map((message) => `${message.role}:${message.content}`)
+    expect(contents[1]).toBe('user:Describe the workspace')
+    const previousAnswer = contents.indexOf('assistant:The workspace is empty.')
+    const followUp = contents.indexOf('user:Anything new?')
+    expect(previousAnswer).toBeGreaterThan(1)
+    expect(followUp).toBeGreaterThan(previousAnswer)
+  })
+
   it('runs a shell read as read_file even when the phase exposes only run_command', async () => {
     fs.writeFileSync(path.join(tempDir, 'notes.txt'), 'shell-read-marker\n')
     vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce('```json\n{"tool":"run_command","parameters":{"command":"cat notes.txt"}}\n```')
-      .mockResolvedValueOnce('```json\n{"tool":"finish","parameters":{"summary":"Done"}}\n```')
+      .mockResolvedValueOnce(toolTurn('run_command', { command: 'cat notes.txt' }))
+      .mockResolvedValueOnce(toolTurn('finish', { summary: 'Done' }))
 
     await runAgentOrchestratorLoop(
       {
@@ -193,8 +235,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
   it('runs and persists the explicit application phase sequence', async () => {
     vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce('```json\n{"tool":"write_file","parameters":{"filePath":"phase.ts","content":"export const phase = true"}}\n```')
-      .mockResolvedValueOnce('```json\n{"tool":"finish","parameters":{"summary":"Done"}}\n```')
+      .mockResolvedValueOnce(toolTurn('write_file', { filePath: 'phase.ts', content: 'export const phase = true' }))
+      .mockResolvedValueOnce(toolTurn('finish', { summary: 'Done' }))
     const mockWin = createMockWindow()
     const sessionId = 'explicit-phase-sequence'
 
@@ -223,8 +265,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
   it('scopes every emitted Agent Coding event to one immutable run identity', async () => {
     vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce('```json\n{"tool":"write_file","parameters":{"filePath":"identity.ts","content":"export const identity = true"}}\n```')
-      .mockResolvedValueOnce('```json\n{"tool":"finish","parameters":{"summary":"Done"}}\n```')
+      .mockResolvedValueOnce(toolTurn('write_file', { filePath: 'identity.ts', content: 'export const identity = true' }))
+      .mockResolvedValueOnce(toolTurn('finish', { summary: 'Done' }))
     const mockWin = createMockWindow()
     const identity = {
       runId: 'run-identity-1',
@@ -268,7 +310,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
   itWithPowerShell('stops once six execution failures follow each other', async () => {
     const stream = vi.mocked(AgentStreamTransport.streamCompletion)
-    for (let attempt = 1; attempt <= 6; attempt++) stream.mockResolvedValueOnce(commandJson(`pytest failing_test_${attempt}.py`))
+    for (let attempt = 1; attempt <= 6; attempt++) stream.mockResolvedValueOnce(commandTurn(`pytest failing_test_${attempt}.py`))
 
     const res = await runAgentOrchestratorLoop(
       {
@@ -287,8 +329,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
   itWithPowerShell('refuses an unchanged rerun of a failed command instead of spending the execution budget on it', async () => {
     vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce(commandJson('pytest failing_test.py'))
-      .mockResolvedValueOnce(commandJson('pytest failing_test.py'))
+      .mockResolvedValueOnce(commandTurn('pytest failing_test.py'))
+      .mockResolvedValueOnce(commandTurn('pytest failing_test.py'))
 
     const res = await runAgentOrchestratorLoop({ userTask: 'Debug test failures', agentMode: 'auto', workspacePath: tempDir }, null)
 
@@ -298,11 +340,11 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   itWithPowerShell('does not reach a later ask after the execution recovery budget is exhausted', async () => {
-    const askJson = '```json\n{\n  "tool": "ask",\n  "parameters": { "question": "What should we do next?" }\n}\n```'
+    const askTurn = toolTurn('ask', { question: 'What should we do next?' })
 
     const stream = vi.mocked(AgentStreamTransport.streamCompletion)
-    for (let attempt = 1; attempt <= 6; attempt++) stream.mockResolvedValueOnce(commandJson(`pytest still_failing_${attempt}.py`))
-    stream.mockResolvedValueOnce(askJson)
+    for (let attempt = 1; attempt <= 6; attempt++) stream.mockResolvedValueOnce(commandTurn(`pytest still_failing_${attempt}.py`))
+    stream.mockResolvedValueOnce(askTurn)
 
     const res = await runAgentOrchestratorLoop(
       {
@@ -319,8 +361,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
   it('persists application closure when ask recovery is exhausted', async () => {
     const sessionId = 'ask-recovery-terminal-closure'
-    const askJson = (attempt: number) => `\`\`\`json\n{"tool":"ask","parameters":{"question":"What should we do next? Attempt ${attempt}"}}\n\`\`\``
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(askJson(1)).mockResolvedValueOnce(askJson(2)).mockResolvedValueOnce(askJson(3))
+    const askTurn = (attempt: number) => toolTurn('ask', { question: `What should we do next? Attempt ${attempt}` })
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(askTurn(1)).mockResolvedValueOnce(askTurn(2)).mockResolvedValueOnce(askTurn(3))
     await agentSessionStateRepository.seedPlanMilestones(sessionId, tempDir, [{ id: 'm-ask', title: 'Fix app.ts', status: 'pending' }], 'Fix app.ts')
 
     const res = await runAgentOrchestratorLoop({ userTask: 'Fix app.ts', agentMode: 'auto', workspacePath: tempDir, sessionId }, null)
@@ -337,19 +379,20 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   itWithPowerShell('should trip stagnation circuit breaker when repeated failures occur on complex tasks', async () => {
-    const failingCommandJson = (n: number) => `\`\`\`json\n{\n  "tool": "run_command",\n  "parameters": { "command": "pytest failing_test_${n}.py" }\n}\n\`\`\``
+    const failingCommandTurn = (n: number) => toolTurn('run_command', { command: `pytest failing_test_${n}.py` })
     vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce(failingCommandJson(1))
-      .mockResolvedValueOnce(failingCommandJson(2))
-      .mockResolvedValueOnce(failingCommandJson(3))
-      .mockResolvedValueOnce(failingCommandJson(4))
-      .mockResolvedValueOnce(failingCommandJson(5))
-      .mockResolvedValueOnce(failingCommandJson(6))
-      .mockResolvedValueOnce(failingCommandJson(7))
+      .mockResolvedValueOnce(failingCommandTurn(1))
+      .mockResolvedValueOnce(failingCommandTurn(2))
+      .mockResolvedValueOnce(failingCommandTurn(3))
+      .mockResolvedValueOnce(failingCommandTurn(4))
+      .mockResolvedValueOnce(failingCommandTurn(5))
+      .mockResolvedValueOnce(failingCommandTurn(6))
+      .mockResolvedValueOnce(failingCommandTurn(7))
 
     const settings: AppSettings = {
       defaultModel: 'llama3.2',
       ocrEngine: 'native_cuda',
+      capabilityPolicyMode: 'network-approved',
       ollamaHost: '',
       codingModel: 'qwen2.5-coder:7b',
       translationModel: 'llama3.2',
@@ -385,8 +428,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       effectOutcome: 'uncertain',
     })
     vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce('```json\n{"tool":"run_command","parameters":{"command":"pytest failing_test.py"}}\n```')
-      .mockResolvedValueOnce('```json\n{"tool":"finish","parameters":{"summary":"should not run"}}\n```')
+      .mockResolvedValueOnce(toolTurn('run_command', { command: 'pytest failing_test.py' }))
+      .mockResolvedValueOnce(toolTurn('finish', { summary: 'should not run' }))
 
     try {
       const res = await runAgentOrchestratorLoop(
@@ -407,9 +450,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   it('should pause for human approval in Guided mode, then resume and execute the tool once approved', async () => {
-    const writeFileJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Write approved and applied." }\n}\n```'
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeFileJson).mockResolvedValueOnce(finishJson)
+    const writeFileTurn = toolTurn('write_file', { filePath: 'index.ts', content: 'console.log(1)' })
+    const finishTurn = toolTurn('finish', { summary: 'Write approved and applied.' })
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeFileTurn).mockResolvedValueOnce(finishTurn)
 
     const mockWin = createMockWindow()
     const sessionId = 'test-ask-approval-session'
@@ -435,9 +478,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   it('routes a colloquial Italian build request to Guided write approval on the first turn', async () => {
-    const writeFileJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.html", "content": "<main>Gatto</main>" }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Sito creato." }\n}\n```'
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeFileJson).mockResolvedValueOnce(finishJson)
+    const writeFileTurn = toolTurn('write_file', { filePath: 'index.html', content: '<main>Gatto</main>' })
+    const finishTurn = toolTurn('finish', { summary: 'Sito creato.' })
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeFileTurn).mockResolvedValueOnce(finishTurn)
 
     const mockWin = createMockWindow()
     const sessionId = 'italian-colloquial-guided-approval'
@@ -469,10 +512,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const filePath = path.join(tempDir, 'partial.ts')
     fs.writeFileSync(filePath, 'line1\nline2\nline3\nline4\nline5', 'utf-8')
 
-    const writeFileJson =
-      '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "partial.ts", "content": "line1\\nCHANGED2\\nline3\\nline4\\nCHANGED5" }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Partial approval applied." }\n}\n```'
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeFileJson).mockResolvedValueOnce(finishJson)
+    const writeFileTurn = toolTurn('write_file', { filePath: 'partial.ts', content: 'line1\nCHANGED2\nline3\nline4\nCHANGED5' })
+    const finishTurn = toolTurn('finish', { summary: 'Partial approval applied.' })
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeFileTurn).mockResolvedValueOnce(finishTurn)
 
     const mockWin = createMockWindow()
     const sessionId = 'test-ask-partial-approval-session'
@@ -495,9 +537,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   it('should feed a denial back to the model and keep the loop running when the user rejects an approval', async () => {
-    const writeFileJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Acknowledged the denial." }\n}\n```'
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeFileJson).mockResolvedValueOnce(finishJson)
+    const writeFileTurn = toolTurn('write_file', { filePath: 'index.ts', content: 'console.log(1)' })
+    const finishTurn = toolTurn('finish', { summary: 'Acknowledged the denial.' })
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeFileTurn).mockResolvedValueOnce(finishTurn)
 
     const mockWin = createMockWindow()
     const sessionId = 'test-ask-rejection-session'
@@ -520,8 +562,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   it('should still allow finish in ASK mode without triggering approval flow', async () => {
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Inspection complete." }\n}\n```'
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(finishJson)
+    const finishTurn = toolTurn('finish', { summary: 'Inspection complete.' })
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(finishTurn)
 
     const res = await runAgentOrchestratorLoop(
       {
@@ -537,9 +579,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   it('should always pause for human approval on git_commit in Auto mode', async () => {
-    const commitJson = '```json\n{\n  "tool": "git_commit",\n  "parameters": { "commitMessage": "Add feature X" }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Commit step handled." }\n}\n```'
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(commitJson).mockResolvedValueOnce(finishJson)
+    const commitTurn = toolTurn('git_commit', { commitMessage: 'Add feature X' })
+    const finishTurn = toolTurn('finish', { summary: 'Commit step handled.' })
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(commitTurn).mockResolvedValueOnce(finishTurn)
 
     const mockWin = createMockWindow()
     const sessionId = 'test-agent-commit-approval-session'
@@ -576,8 +618,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   it('should resolve a pending approval as denied when the session is cancelled while awaiting a response', async () => {
-    const writeFileJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeFileJson)
+    const writeFileTurn = toolTurn('write_file', { filePath: 'index.ts', content: 'console.log(1)' })
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeFileTurn)
 
     const mockWin = createMockWindow()
     const sessionId = 'test-cancel-during-approval-session'
@@ -645,9 +687,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       }),
     )
 
-    const updateJson = '```json\n{\n  "tool": "update_plan",\n  "parameters": { "milestoneId": "m-1", "status": "verified" }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Done." }\n}\n```'
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(updateJson).mockResolvedValueOnce(finishJson).mockResolvedValueOnce(finishJson)
+    const updateTurn = toolTurn('update_plan', { milestoneId: 'm-1', status: 'verified' })
+    const finishTurn = toolTurn('finish', { summary: 'Done.' })
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(updateTurn).mockResolvedValueOnce(finishTurn).mockResolvedValueOnce(finishTurn)
 
     await runAgentOrchestratorLoop({ identity, userTask: 'Build the app', agentMode: 'auto', workspacePath: tempDir, sessionId }, null)
 
@@ -659,10 +701,10 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   it('should keep num_ctx frozen across turns instead of resizing it per prompt', async () => {
-    const listJson = '```json\n{\n  "tool": "list_dir",\n  "parameters": { "dirPath": "." }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Listed." }\n}\n```'
+    const listTurn = toolTurn('list_dir', { dirPath: '.' })
+    const finishTurn = toolTurn('finish', { summary: 'Listed.' })
 
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(listJson).mockResolvedValueOnce(listJson).mockResolvedValueOnce(finishJson)
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(listTurn).mockResolvedValueOnce(listTurn).mockResolvedValueOnce(finishTurn)
 
     await runAgentOrchestratorLoop({ userTask: 'List the workspace', agentMode: 'auto', workspacePath: tempDir }, null)
 
@@ -684,9 +726,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         send: (channel: string, payload: unknown) => sent.push({ channel, payload }),
       }
 
-      vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(
-        '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Quick exit." }\n}\n```',
-      )
+      vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(toolTurn('finish', { summary: 'Quick exit.' }))
 
       const res = await runAgentOrchestratorLoop({ userTask: 'Do nothing', agentMode: 'auto', workspacePath: tempDir, sessionId: 'reused-session-id' }, fakeWin)
       expect(res.success).toBe(false)
@@ -703,10 +743,10 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   it('should close once as unverifiable when modified work has no project check', async () => {
-    const writeJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "app.js", "content": "console.log(1)" }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Done." }\n}\n```'
+    const writeTurn = toolTurn('write_file', { filePath: 'app.js', content: 'console.log(1)' })
+    const finishTurn = toolTurn('finish', { summary: 'Done.' })
 
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeJson).mockResolvedValueOnce(finishJson).mockResolvedValueOnce(finishJson)
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeTurn).mockResolvedValueOnce(finishTurn).mockResolvedValueOnce(finishTurn)
 
     const res = await runAgentOrchestratorLoop(
       {
@@ -724,14 +764,14 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   it('should not ask the model to repeat finish when evidence is unavailable', async () => {
-    const writeJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "b.js", "content": "console.log(2)" }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Second attempt." }\n}\n```'
+    const writeTurn = toolTurn('write_file', { filePath: 'b.js', content: 'console.log(2)' })
+    const finishTurn = toolTurn('finish', { summary: 'Second attempt.' })
 
     vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce(writeJson)
-      .mockResolvedValueOnce(finishJson)
-      .mockResolvedValueOnce(finishJson)
-      .mockResolvedValueOnce(finishJson)
+      .mockResolvedValueOnce(writeTurn)
+      .mockResolvedValueOnce(finishTurn)
+      .mockResolvedValueOnce(finishTurn)
+      .mockResolvedValueOnce(finishTurn)
 
     const res = await runAgentOrchestratorLoop(
       {
@@ -764,10 +804,10 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.completionStatus).toBe('blocked')
   })
 
-  const verificationWriteJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "app.js", "content": "console.log(1)" }\n}\n```'
-  const verificationFinishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "All done." }\n}\n```'
+  const verificationWriteTurn = toolTurn('write_file', { filePath: 'app.js', content: 'console.log(1)' })
+  const verificationFinishTurn = toolTurn('finish', { summary: 'All done.' })
 
-  function scriptTurns(...turns: string[]) {
+  function scriptTurns(...turns: AgentChatTurn[]) {
     let chain = vi.mocked(AgentStreamTransport.streamCompletion)
     for (const turn of turns) chain = chain.mockResolvedValueOnce(turn)
   }
@@ -786,7 +826,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         command: 'npm test',
         evidenceLevel: 'behavioral',
       })
-      scriptTurns(verificationWriteJson, verificationFinishJson)
+      scriptTurns(verificationWriteTurn, verificationFinishTurn)
 
       const res = await runAgentOrchestratorLoop(
         { userTask: 'Create app.js', agentMode: 'auto', workspacePath: tempDir, settings: finishVerificationSettings },
@@ -809,7 +849,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         command: 'npm run build',
         failureDetail: "error TS2307: Cannot find module './main'",
       })
-      scriptTurns(verificationWriteJson, verificationFinishJson, verificationFinishJson, verificationFinishJson, verificationFinishJson, verificationFinishJson)
+      scriptTurns(verificationWriteTurn, verificationFinishTurn, verificationFinishTurn, verificationFinishTurn, verificationFinishTurn, verificationFinishTurn)
 
       const res = await runAgentOrchestratorLoop(
         { userTask: 'Create app.js', agentMode: 'auto', workspacePath: tempDir, settings: finishVerificationSettings },
@@ -829,7 +869,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         .mockResolvedValueOnce({ hasVerificationCommand: true, passed: false, status: 'failed', failureDetail: 'boom 1' })
         .mockResolvedValueOnce({ hasVerificationCommand: true, passed: false, status: 'failed', failureDetail: 'boom 2' })
         .mockResolvedValue({ hasVerificationCommand: true, passed: true, status: 'verified', command: 'npm test', evidenceLevel: 'behavioral' })
-      scriptTurns(verificationWriteJson, verificationFinishJson, verificationFinishJson, verificationFinishJson)
+      scriptTurns(verificationWriteTurn, verificationFinishTurn, verificationFinishTurn, verificationFinishTurn)
 
       const res = await runAgentOrchestratorLoop(
         { userTask: 'Create app.js', agentMode: 'auto', workspacePath: tempDir, settings: finishVerificationSettings },
@@ -844,7 +884,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     it('closes as unverifiable when the project offers no verification command', async () => {
       vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
       // Three turns, because the missing-build reason is surfaced to the model once before finish is let through: the second finish is the one that closes the session.
-      scriptTurns(verificationWriteJson, verificationFinishJson, verificationFinishJson)
+      scriptTurns(verificationWriteTurn, verificationFinishTurn, verificationFinishTurn)
 
       const res = await runAgentOrchestratorLoop(
         { userTask: 'Create app.js', agentMode: 'auto', workspacePath: tempDir, settings: finishVerificationSettings },
@@ -859,11 +899,11 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
   describe('a session whose model stops issuing tool calls', () => {
     // session-1787497654743-4enx closed "Status: COMPLETED" at step 86 after three responses that did not parse as tool calls, with four milestones abandoned, four never started and finish never invoked — so the whole Definition of Done gate was skipped and the resu
-    const prose = 'Everything looks complete to me, the application should work now.'
+    const prose: AgentChatTurn = { content: 'Everything looks complete to me, the application should work now.', thinking: '', toolCalls: [] }
 
     it('closes the session as FAILED rather than COMPLETED', async () => {
       vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
-      scriptTurns(verificationWriteJson, prose, prose, prose)
+      scriptTurns(verificationWriteTurn, prose, prose, prose)
 
       const res = await runAgentOrchestratorLoop({ userTask: 'Create app.js', agentMode: 'auto', workspacePath: tempDir }, null)
 
@@ -874,7 +914,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     it('runs application verification even when finish was never reached', async () => {
       vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
-      scriptTurns(verificationWriteJson, prose, prose, prose)
+      scriptTurns(verificationWriteTurn, prose, prose, prose)
 
       await runAgentOrchestratorLoop({ userTask: 'Create app.js', agentMode: 'auto', workspacePath: tempDir }, null)
 

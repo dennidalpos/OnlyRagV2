@@ -27,6 +27,7 @@ import { appendToolResponse } from './agentChatTranscript'
 import { restoreAgentCheckpoint } from '../infrastructure/filesystem/agentCheckpointStore'
 import type { AgentChatToolCall } from '../infrastructure/http/agentStreamTransport'
 import type { PreparedAgentTurn, TurnDispatchData } from './agentOrchestratorRunContext'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
 
 export type { AgentSession }
 
@@ -138,10 +139,6 @@ export function requestActiveAgentContextCompaction(target: AgentRunIdentity | s
   if (!session || (typeof target !== 'string' && !matchesAgentRunIdentity(session.identity, target))) return false
   session.forceContextCompaction = true
   session.nativeSystemPrompt = undefined
-  session.ollamaContextTokens = undefined
-  session.ollamaContextModel = undefined
-  session.ollamaContextStableSection = undefined
-  session.ollamaContextHistoryBlock = undefined
   return true
 }
 
@@ -270,7 +267,7 @@ export async function runAgentOrchestratorLoop(
   if (!workspacePath && !isStandaloneMode) {
     const errorMsg =
       'Nessuna cartella di progetto / workspace specificata. Per creare o scrivere file di progetto, seleziona o apri prima una directory di lavoro in OnlyRag.'
-    emitLog('info', `❌ Errore Workspace: ${errorMsg}`)
+    emitLocalizedLog(emitLog, 'info', { key: 'workspaceError', params: { error: errorMsg } })
     emitDone(false, errorMsg, 'blocked')
     await persistCurrentState('runtime_validation', 'blocked')
     clearSessionTimeout()
@@ -295,7 +292,10 @@ export async function runAgentOrchestratorLoop(
     toolchain: guestOsInfo.tools,
   })
   for (const check of preflight.checks) {
-    emitLog('info', `${check.passed ? '✓' : check.blocking ? '✗' : '!'} Preflight ${check.id}: ${check.detail}`)
+    emitLocalizedLog(emitLog, 'info', {
+      key: 'preflightCheck',
+      params: { mark: check.passed ? '✓' : check.blocking ? '✗' : '!', id: check.id, detail: check.detail },
+    })
   }
   if (!preflight.ready) {
     const failures = preflight.checks
@@ -453,7 +453,6 @@ export async function runAgentOrchestratorLoop(
       ...run,
       streamedOutput,
       nativeCall,
-      nativeMode: turnData.nativeMode,
       stepCount: stepCountBox.value,
       hasRecentToolFailure,
       errorCountInHistory,
@@ -464,7 +463,7 @@ export async function runAgentOrchestratorLoop(
       if (nativeCall) recordNativeResult(feedback)
       // A prose-only reply has no call to answer: the feedback becomes the next user message, so the
       // transcript never ends on an assistant message the model would merely continue.
-      else if (turnData.nativeMode) session.chatMessages = [...(session.chatMessages || []), { role: 'user', content: feedback }]
+      else session.chatMessages = [...(session.chatMessages || []), { role: 'user', content: feedback }]
       setExecutionPhase('collect_context')
       continue
     }

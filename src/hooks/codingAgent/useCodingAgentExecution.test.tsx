@@ -44,7 +44,6 @@ describe('useCodingAgentExecution', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers()
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     startAgentTask.mockClear()
     doneListener = undefined
     const unsubscribe = () => () => {}

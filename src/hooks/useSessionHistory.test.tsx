@@ -19,7 +19,6 @@ describe('useSessionHistory persistence', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers()
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     localStorage.setItem('onlyrag_sessions_migrated_to_filesystem_v1', 'done')
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       saveCodingSession,

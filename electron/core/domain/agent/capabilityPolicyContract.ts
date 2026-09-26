@@ -45,6 +45,8 @@ export const capabilityPolicyRequestSchema = z
     mode: capabilityPolicyModeSchema,
     workspaceRoot: nonBlank,
     target: nonBlank.optional(),
+    /** npx commands the workspace provides in node_modules/.bin, so running them needs no download. */
+    localBinaries: z.array(nonBlank.max(214)).max(64).optional(),
     consent: capabilityConsentSchema,
     limits: capabilityLimitsSchema.optional(),
   })

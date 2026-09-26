@@ -49,6 +49,22 @@ describe('inspectStructuredCommand: what coding work needs and what it must not 
     expect(allowed(`Set-Location ${hostRoot}`)).toMatchObject({ allowed: false })
   })
 
+  it('resolves relative paths where the shell stands, not at the workspace root', () => {
+    const src = path.join(workspace, 'src')
+    const fromSrc = (command: string) => inspectStructuredCommand(command, workspace, src)
+
+    // The persistent shell keeps a `cd`: from src/ the parent is the root, still inside.
+    expect(fromSrc('cd ..')).toEqual({ allowed: true, requiresApproval: false })
+    expect(fromSrc('cd ..\\..')).toMatchObject({ allowed: false })
+    expect(fromSrc('Remove-Item ..\\dist -Recurse')).toEqual({ allowed: true, requiresApproval: true })
+    expect(fromSrc('Remove-Item ..\\..\\sibling -Recurse')).toMatchObject({ allowed: false })
+    // A cd inside the command moves the base for the segments after it.
+    expect(allowed('cd src; Remove-Item ..\\..\\sibling')).toMatchObject({ allowed: false })
+    expect(allowed('cd src\\components; Remove-Item ..\\old.ts')).toEqual({ allowed: true, requiresApproval: true })
+    // A reported directory outside the workspace is not trusted: paths resolve at the root again.
+    expect(inspectStructuredCommand('cd ..', workspace, hostRoot)).toMatchObject({ allowed: false })
+  })
+
   it('asks before inline code and refuses git operations aimed outside the workspace or at history', () => {
     expect(allowed("node -e \"require('fs').rmSync('x')\"")).toEqual({ allowed: true, requiresApproval: true })
     expect(allowed('cmd /c del /s *.js')).toEqual({ allowed: true, requiresApproval: true })

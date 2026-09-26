@@ -68,6 +68,23 @@ describe('git inspection tools', () => {
     })
   })
 
+  it('lists the untracked files an unstaged diff cannot show', () => {
+    const run = vi.fn((_cwd: string, args: readonly string[]) => (args[0] === 'ls-files' ? 'src/new.ts\nsrc/other.ts\n' : ''))
+    const result = executeGitDiff('workspace', undefined, false, null, run)
+
+    expect(run).toHaveBeenCalledWith('workspace', ['ls-files', '--others', '--exclude-standard'], 15000)
+    expect(result.outputForHistory).toContain('No differences in tracked files.')
+    expect(result.outputForHistory).toContain('[UNTRACKED FILES')
+    expect(result.outputForHistory).toContain('- src/new.ts')
+    expect(result.outputForHistory).toContain('- src/other.ts')
+  })
+
+  it('does not list untracked files for a staged diff', () => {
+    const run = vi.fn(() => 'diff --git a/app.ts b/app.ts')
+    executeGitDiff('workspace', undefined, true, null, run)
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+
   it('passes shell metacharacters in a path as one literal argument', () => {
     const run = vi.fn(() => '')
     const hostile = 'workspace/a" & calc & ".ts'

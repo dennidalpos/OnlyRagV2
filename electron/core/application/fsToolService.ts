@@ -11,6 +11,7 @@ import { executeWriteFileTool, type WriteFileDependencies } from '../domain/agen
 import { executeReplaceFileContentTool } from '../domain/agent/tools/fs/replaceFileContentTool'
 import { executeMultiReplaceFileContentTool } from '../domain/agent/tools/fs/multiReplaceFileContentTool'
 import type { SkillAdherenceViolation } from '../domain/skills/skillAdherenceValidator'
+import { toolLog } from '../domain/agent/tools/toolExecutionContracts'
 
 interface DeleteFileRepository {
   deleteFile(filePath: string): Promise<{ success: boolean; error?: string }>
@@ -54,6 +55,8 @@ interface DeleteFileDependencies {
   skillAdherence?: (filePath: string, content: string, guidelines: string) => SkillAdherenceViolation | null
   buildSkillRefusal?: (filePath: string, violation: SkillAdherenceViolation) => string
   contentVersion?: (content: string) => string
+  /** Incremental typecheck of a file an edit tool just wrote; empty when clean or not TypeScript. */
+  checkWrittenFile?: (workspacePath: string, absolutePath: string) => string
 }
 
 /** Application service for filesystem tools extracted from the legacy executor. */
@@ -87,7 +90,7 @@ export class FsToolService {
     activeSkillGuidelines: string,
   ): Promise<ToolExecutionResult> {
     if (allowFileModifications === false) {
-      return { outcome: 'blocked', outputForHistory: 'Direct file write disabled in Settings.', logMessage: 'File write disabled in settings' }
+      return { outcome: 'blocked', outputForHistory: 'Direct file write disabled in Settings.', ...toolLog('toolWriteDisabled') }
     }
     return executeWriteFileTool(
       parameters,
@@ -106,7 +109,7 @@ export class FsToolService {
     activeSkillGuidelines: string,
   ): Promise<ToolExecutionResult> {
     if (allowFileModifications === false) {
-      return { outcome: 'blocked', outputForHistory: 'Direct file modification disabled in Settings.', logMessage: 'File modification disabled in settings' }
+      return { outcome: 'blocked', outputForHistory: 'Direct file modification disabled in Settings.', ...toolLog('toolModifyDisabled') }
     }
     return executeReplaceFileContentTool(
       parameters,
@@ -118,6 +121,7 @@ export class FsToolService {
       this.dependencies.journal,
       this.dependencies.buildChangeStats,
       this.dependencies.contentVersion || ((content) => content),
+      (absolutePath) => (workspacePath && this.dependencies.checkWrittenFile?.(workspacePath, absolutePath)) || '',
     )
   }
 
@@ -128,7 +132,7 @@ export class FsToolService {
     activeSkillGuidelines: string,
   ): Promise<ToolExecutionResult> {
     if (allowFileModifications === false) {
-      return { outcome: 'blocked', outputForHistory: 'Direct file modification disabled in Settings.', logMessage: 'File modification disabled in settings' }
+      return { outcome: 'blocked', outputForHistory: 'Direct file modification disabled in Settings.', ...toolLog('toolModifyDisabled') }
     }
     return executeMultiReplaceFileContentTool(
       parameters,
@@ -140,6 +144,7 @@ export class FsToolService {
       this.dependencies.journal,
       this.dependencies.buildChangeStats,
       this.dependencies.contentVersion || ((content) => content),
+      (absolutePath) => (workspacePath && this.dependencies.checkWrittenFile?.(workspacePath, absolutePath)) || '',
     )
   }
 
@@ -149,30 +154,38 @@ export class FsToolService {
     allowFileModifications: boolean | undefined,
   ): Promise<ToolExecutionResult> {
     if (allowFileModifications === false) {
-      return { outcome: 'blocked', outputForHistory: 'Direct file deletion disabled in Settings.', logMessage: 'File deletion disabled in settings' }
+      return { outcome: 'blocked', outputForHistory: 'Direct file deletion disabled in Settings.', ...toolLog('toolDeleteDisabled') }
     }
 
     const filePath = parameters.filePath
     const pathCheck = validatePathSafety(filePath, workspacePath)
     if (!pathCheck.safePath) {
-      return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Delete File Rejected: ${pathCheck.error}` }
+      return {
+        outcome: 'rejected',
+        outputForHistory: `Security Violation: ${pathCheck.error}`,
+        ...toolLog('toolEditPathRejected', { tool: 'delete_file', error: String(pathCheck.error) }),
+      }
     }
 
     if (!filePath) {
-      return { outcome: 'rejected', outputForHistory: 'Missing file path for deletion', logMessage: 'Missing delete parameter' }
+      return { outcome: 'rejected', outputForHistory: 'Missing file path for deletion', ...toolLog('toolEditMissingParams', { tool: 'delete_file' }) }
     }
 
     const beforeContent = this.dependencies.readContent(pathCheck.safePath)
     this.dependencies.journal.recordBeforeModification(pathCheck.safePath)
     const result = await this.dependencies.repository.deleteFile(pathCheck.safePath)
     if (!result.success) {
-      return { outcome: 'failure', outputForHistory: `Error deleting file ${filePath}: ${result.error}`, logMessage: `Error deleting file: ${result.error}` }
+      return {
+        outcome: 'failure',
+        outputForHistory: `Error deleting file ${filePath}: ${result.error}`,
+        ...toolLog('toolActionError', { tool: 'delete_file', error: String(result.error) }),
+      }
     }
 
     return {
       outcome: 'success',
       outputForHistory: `Successfully deleted file ${filePath}`,
-      logMessage: `Successfully deleted file ${path.basename(filePath)}`,
+      ...toolLog('toolDeleteDone', { file: path.basename(filePath) }),
       changeStats: this.dependencies.buildChangeStats(pathCheck.safePath, beforeContent, ''),
     }
   }
@@ -183,13 +196,17 @@ export class FsToolService {
     allowFileModifications: boolean | undefined,
   ): ToolExecutionResult {
     if (allowFileModifications === false) {
-      return { outcome: 'blocked', outputForHistory: 'Directory creation disabled in Settings.', logMessage: 'Directory creation disabled in settings' }
+      return { outcome: 'blocked', outputForHistory: 'Directory creation disabled in Settings.', ...toolLog('toolDirectoryDisabled') }
     }
 
     const dirPath = parameters.dirPath || parameters.filePath
     const pathCheck = validatePathSafety(dirPath, workspacePath)
     if (!pathCheck.safePath) {
-      return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Create Directory Rejected: ${pathCheck.error}` }
+      return {
+        outcome: 'rejected',
+        outputForHistory: `Security Violation: ${pathCheck.error}`,
+        ...toolLog('toolEditPathRejected', { tool: 'create_directory', error: String(pathCheck.error) }),
+      }
     }
 
     try {
@@ -197,11 +214,15 @@ export class FsToolService {
       return {
         outcome: 'success',
         outputForHistory: `Successfully created directory ${dirPath}`,
-        logMessage: `Successfully created directory ${path.basename(pathCheck.safePath)}`,
+        ...toolLog('toolDirectoryCreated', { dir: path.basename(pathCheck.safePath) }),
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
-      return { outcome: 'failure', outputForHistory: `Error creating directory ${dirPath}: ${message}`, logMessage: `Create directory error: ${message}` }
+      return {
+        outcome: 'failure',
+        outputForHistory: `Error creating directory ${dirPath}: ${message}`,
+        ...toolLog('toolCreateDirectoryError', { error: message }),
+      }
     }
   }
 
@@ -211,7 +232,7 @@ export class FsToolService {
     allowFileModifications: boolean | undefined,
   ): ToolExecutionResult {
     if (allowFileModifications === false) {
-      return { outcome: 'blocked', outputForHistory: 'File copy disabled in Settings.', logMessage: 'File copy disabled in settings' }
+      return { outcome: 'blocked', outputForHistory: 'File copy disabled in Settings.', ...toolLog('toolCopyDisabled') }
     }
 
     const sourcePath = parameters.sourcePath || parameters.filePath
@@ -223,7 +244,7 @@ export class FsToolService {
       return {
         outcome: 'rejected',
         outputForHistory: `Security Violation: ${sourceCheck.error || targetCheck.error}`,
-        logMessage: 'Copy File Rejected: Security Violation',
+        ...toolLog('toolPathOutsideWorkspace', { tool: 'copy_file' }),
       }
     }
 
@@ -234,14 +255,14 @@ export class FsToolService {
       return {
         outcome: 'success',
         outputForHistory: `Successfully copied file from ${sourcePath} to ${targetPath}`,
-        logMessage: `Successfully copied ${path.basename(sourceCheck.safePath)} -> ${path.basename(targetCheck.safePath)}`,
+        ...toolLog('toolCopyDone', { source: path.basename(sourceCheck.safePath), target: path.basename(targetCheck.safePath) }),
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       return {
         outcome: 'failure',
         outputForHistory: `Error copying file from ${sourcePath} to ${targetPath}: ${message}`,
-        logMessage: `Copy file error: ${message}`,
+        ...toolLog('toolActionError', { tool: 'copy_file', error: message }),
       }
     }
   }
@@ -252,7 +273,7 @@ export class FsToolService {
     allowFileModifications: boolean | undefined,
   ): ToolExecutionResult {
     if (allowFileModifications === false) {
-      return { outcome: 'blocked', outputForHistory: 'File move/rename disabled in Settings.', logMessage: 'File move disabled in settings' }
+      return { outcome: 'blocked', outputForHistory: 'File move/rename disabled in Settings.', ...toolLog('toolMoveDisabled') }
     }
 
     const sourcePath = parameters.sourcePath || parameters.filePath
@@ -264,7 +285,7 @@ export class FsToolService {
       return {
         outcome: 'rejected',
         outputForHistory: `Security Violation: ${sourceCheck.error || targetCheck.error}`,
-        logMessage: 'Move File Rejected: Security Violation',
+        ...toolLog('toolPathOutsideWorkspace', { tool: 'move_file' }),
       }
     }
 
@@ -276,14 +297,14 @@ export class FsToolService {
       return {
         outcome: 'success',
         outputForHistory: `Successfully moved file from ${sourcePath} to ${targetPath}`,
-        logMessage: `Successfully moved ${path.basename(sourceCheck.safePath)} -> ${path.basename(targetCheck.safePath)}`,
+        ...toolLog('toolMoveDone', { source: path.basename(sourceCheck.safePath), target: path.basename(targetCheck.safePath) }),
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       return {
         outcome: 'failure',
         outputForHistory: `Error moving file from ${sourcePath} to ${targetPath}: ${message}`,
-        logMessage: `Move file error: ${message}`,
+        ...toolLog('toolActionError', { tool: 'move_file', error: message }),
       }
     }
   }
@@ -299,7 +320,7 @@ export class FsToolService {
       return {
         outcome: 'rejected',
         outputForHistory: `Security Violation: ${pathCheck.error}`,
-        logMessage: `Grep Search Rejected: ${pathCheck.error}`,
+        ...toolLog('toolEditPathRejected', { tool: 'grep_search', error: String(pathCheck.error) }),
       }
     }
 
@@ -309,7 +330,7 @@ export class FsToolService {
         return {
           outcome: 'success',
           outputForHistory: `Grep search for "${query}" in [${targetDir}] returned 0 matches.`,
-          logMessage: `Grep Search: 0 matches for "${query}"`,
+          ...toolLog('toolGrepNone', { query: String(query) }),
         }
       }
       const displayedMatches = matches.slice(0, 50)
@@ -317,14 +338,14 @@ export class FsToolService {
       return {
         outcome: 'success',
         outputForHistory: `Grep search for "${query}" in [${targetDir}] returned ${matches.length} matches (showing first ${displayedMatches.length}):\n${formattedMatches}`,
-        logMessage: `Grep Search: ${matches.length} matches for "${query}"`,
+        ...toolLog('toolGrepFound', { count: matches.length, query: String(query) }),
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       return {
         outcome: 'failure',
         outputForHistory: `Error executing grep search for "${query}": ${message}`,
-        logMessage: `Grep Search Error: ${message}`,
+        ...toolLog('toolActionError', { tool: 'grep_search', error: message }),
       }
     }
   }

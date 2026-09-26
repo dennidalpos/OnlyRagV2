@@ -2,7 +2,7 @@ import { selectToolSchemas } from '../domain/agent/ollamaToolSchemaCatalog'
 import { AgentStreamTransport, DEFAULT_STREAM_STALL_MS } from '../infrastructure/http/agentStreamTransport'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import { selectModelForTurn, assembleTurnPrompt, freezeContextWindow, decideContextReuse } from './agentOrchestratorPromptAssembly'
+import { selectModelForTurn, assembleTurnPrompt, freezeContextWindow } from './agentOrchestratorPromptAssembly'
 import type { PreparedAgentTurn, TurnDispatchContext, TurnDispatchOutcome, ModelSelection } from './agentOrchestratorRunContext'
 import { emitLocalizedLog } from './agentOrchestratorTypes'
 import type { TurnToolPolicy } from '../domain/agent/turnToolPolicy'
@@ -54,6 +54,16 @@ export function streamStallTimeoutMs(telemetry: readonly { completionTokens?: nu
   return Math.min(MAX_STREAM_STALL_MS, Math.max(DEFAULT_STREAM_STALL_MS, Math.ceil((TOOL_CALL_TOKEN_ALLOWANCE / tokensPerSecond) * 1000)))
 }
 
+/** The chat request as the debug log records it: the transcript in order, then this turn's tool names (last, so consecutive turns share a prefix the log can elide). */
+function renderChatRequestForLog(messages: readonly AgentChatMessage[], toolNames: readonly string[]): string {
+  const rendered = messages.map((message) => {
+    const header = `### ${message.role}${message.tool_name ? ` (${message.tool_name})` : ''}`
+    const calls = message.tool_calls?.length ? `\n[tool_calls] ${JSON.stringify(message.tool_calls)}` : ''
+    return `${header}\n${message.content}${calls}`
+  })
+  return [...rendered, `### tools\n${toolNames.join(', ')}`].join('\n\n')
+}
+
 /** Model-output failures the model can fix itself: sent back as feedback instead of retried verbatim. */
 function modelOutputCorrection(errorMessage: string): string | null {
   if (/incomplete \(length\)/i.test(errorMessage)) {
@@ -73,10 +83,8 @@ async function dispatchToLlm(
   ctx: TurnDispatchContext,
   selection: ModelSelection,
   assembled: PreparedAgentTurn['assembled'],
-  turnPrompt: string,
-  wasCompacted: boolean,
   toolPolicy: TurnToolPolicy,
-): Promise<{ streamedOutput: string; nativeTurn?: AgentChatTurn; usedModel?: string } | { error: string }> {
+): Promise<{ nativeTurn: AgentChatTurn; usedModel: string } | { error: string }> {
   let generationTelemetry: OllamaStreamTelemetry | undefined
   const toolCatalog = selectToolSchemas(toolPolicy.allowedTools)
   const schemaTokens = countPromptTokens(JSON.stringify(toolCatalog))
@@ -95,7 +103,7 @@ async function dispatchToLlm(
   const turnContext = [assembled.segments.planSection, assembled.turnSuffix].filter((part) => part.trim()).join('\n\n')
   const chat = buildChatRequest({
     systemPrompt: ctx.session.nativeSystemPrompt,
-    userTask: ctx.userTask,
+    userTask: ctx.initialUserTask,
     history: ctx.session.chatMessages || [],
     turnContext,
     maxPromptTokens,
@@ -110,6 +118,10 @@ async function dispatchToLlm(
   if (outputCapacity < MIN_OUTPUT_TOKENS) return { error: `Ollama chat context exceeds the ${numCtx}-token window.` }
   selection.runtimeOpts.num_predict = outputCapacity
   ctx.session.chatMessages = chat.retainedHistory
+  if (ctx.settings.enableCodingAgentDebugLog) {
+    const toolNames = toolCatalog.map((tool) => tool.function.name)
+    codingAgentLogger.logTurnPrompt(ctx.sessionId, ctx.stepCount, selection.targetModel, numCtx, renderChatRequestForLog(chat.messages, toolNames))
+  }
   if (ctx.isSessionActive() && ctx.session.rendererEvents?.isAvailable()) {
     const promptBudgetTokens = Math.max(1, numCtx - outputReserveTokens(numCtx))
     ctx.session.rendererEvents.send('agent:context-budget', {
@@ -128,11 +140,9 @@ async function dispatchToLlm(
   const stream = () =>
     AgentStreamTransport.streamCompletion({
       targetModel: selection.targetModel,
-      prompt: turnPrompt,
       runtimeOpts: selection.runtimeOpts,
       keepAlive: CODING_MODEL_KEEP_ALIVE,
       ollamaEndpoint: ctx.settings.ollamaHost,
-      toolCallingCapable: true,
       toolCatalog,
       messages: chat.messages,
       onTokenChunk: (chunk) => {
@@ -159,10 +169,9 @@ async function dispatchToLlm(
   let transportFailure: RecoveryFailureState | undefined
   while (true) {
     try {
-      const response = await stream()
+      const nativeTurn = await stream()
       ctx.session.activeCancelHandle = null
-      const nativeTurn = typeof response === 'string' ? undefined : response
-      if (nativeTurn) ctx.session.chatMessages = appendAssistantTurn(ctx.session.chatMessages || [], nativeTurn)
+      ctx.session.chatMessages = appendAssistantTurn(ctx.session.chatMessages || [], nativeTurn)
       if (generationTelemetry) {
         const estimate = ctx.session.lastPromptTokenEstimate
         const reported = generationTelemetry.promptTokens
@@ -174,7 +183,7 @@ async function dispatchToLlm(
           enrichOllamaGenerationTelemetry(generationTelemetry, ctx.stepCount, loaded),
         ].slice(-200)
       }
-      return { streamedOutput: nativeTurn?.content ?? String(response), nativeTurn, usedModel: selection.targetModel }
+      return { nativeTurn, usedModel: selection.targetModel }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       ctx.session.activeCancelHandle = null
@@ -211,14 +220,10 @@ export async function collectTurnContext(ctx: TurnDispatchContext): Promise<Prep
 
   const selection = selectModelForTurn(ctx)
   freezeContextWindow(ctx, selection.runtimeOpts)
-  const { assembled, compactionResult, turnPrompt, toolPolicy } = await assembleTurnPrompt(ctx, selection, compiledHistoryBlock)
-  const contextReuseDecision = decideContextReuse(ctx, selection, assembled, turnPrompt, compactionResult.wasCompacted)
+  const { assembled, toolPolicy } = await assembleTurnPrompt(ctx, selection)
   return {
     selection,
     assembled,
-    turnPrompt,
-    contextReuseDecision,
-    wasCompacted: compactionResult.wasCompacted,
     hasRecentToolFailure,
     errorCountInHistory,
     compiledHistoryBlock,
@@ -228,18 +233,14 @@ export async function collectTurnContext(ctx: TurnDispatchContext): Promise<Prep
 
 /** Requests exactly one current-turn proposal from the selected model. */
 export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: PreparedAgentTurn): Promise<TurnDispatchOutcome> {
-  const { selection, assembled, turnPrompt, wasCompacted, toolPolicy } = prepared
+  const { selection, assembled, toolPolicy } = prepared
   ctx.emitLog(
     'tool_call',
     `[Step ${ctx.stepCount}/${ctx.maxStepsLabel}] Consulting LLM (${selection.targetModel}) [ctx:${selection.runtimeOpts.num_ctx}${
       ctx.fsmMode.getMode() !== 'AUTO' ? ` | Mode:${ctx.fsmMode.getMode()}` : ''
     }]...`,
   )
-  if (ctx.settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logTurnPrompt(ctx.sessionId, ctx.stepCount, selection.targetModel, selection.runtimeOpts.num_ctx, turnPrompt)
-  }
-
-  const dispatchResult = await dispatchToLlm(ctx, selection, assembled, turnPrompt, wasCompacted, toolPolicy)
+  const dispatchResult = await dispatchToLlm(ctx, selection, assembled, toolPolicy)
 
   if (!ctx.isSessionActive()) {
     const completionStatus = ctx.session.completionStatus || 'cancelled'
@@ -267,25 +268,22 @@ export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: Pr
     }
   }
 
-  const effectiveUsedModel = dispatchResult.usedModel || selection.targetModel
+  const effectiveUsedModel = dispatchResult.usedModel
+  const streamedOutput = dispatchResult.nativeTurn.content
 
-  emitLocalizedLog(
-    ctx.emitLog,
-    'info',
-    { key: 'agentThoughtHeader', params: { mode: ctx.agentMode.toUpperCase(), step: ctx.stepCount } },
-    dispatchResult.streamedOutput,
-    { category: 'agent_thought', modelName: effectiveUsedModel },
-  )
+  emitLocalizedLog(ctx.emitLog, 'info', { key: 'agentThoughtHeader', params: { mode: ctx.agentMode.toUpperCase(), step: ctx.stepCount } }, streamedOutput, {
+    category: 'agent_thought',
+    modelName: effectiveUsedModel,
+  })
   if (ctx.settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logLlmResponse(ctx.sessionId, ctx.stepCount, dispatchResult.streamedOutput)
+    codingAgentLogger.logLlmResponse(ctx.sessionId, ctx.stepCount, streamedOutput)
   }
 
   return {
     outcome: 'proceed',
     data: {
-      streamedOutput: dispatchResult.streamedOutput,
-      nativeCalls: dispatchResult.nativeTurn?.toolCalls,
-      nativeMode: Boolean(dispatchResult.nativeTurn),
+      streamedOutput,
+      nativeCalls: dispatchResult.nativeTurn.toolCalls,
       hasRecentToolFailure: prepared.hasRecentToolFailure,
       errorCountInHistory: prepared.errorCountInHistory,
       compiledHistoryBlock: prepared.compiledHistoryBlock,

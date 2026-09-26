@@ -36,7 +36,7 @@ export default defineConfig({
       { extends: true, test: { name: 'node', environment: 'node', include: nodeTestGlobs } },
       {
         extends: true,
-        test: { name: 'dom', environment: 'happy-dom', include: ['src/**/*.test.{ts,tsx}'], exclude: nodeTestGlobs },
+        test: { name: 'dom', environment: 'happy-dom', include: ['src/**/*.test.{ts,tsx}'], exclude: nodeTestGlobs, setupFiles: ['src/test/domSetup.ts'] },
       },
     ],
     fileParallelism: false,

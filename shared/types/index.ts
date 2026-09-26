@@ -225,8 +225,8 @@ export interface AppSettings {
   embeddingModel?: string
   allowTerminalExecution?: boolean
   allowFileModifications?: boolean
-  /** Agent capability policy. Undefined preserves the legacy unrestricted mode until configured. */
-  capabilityPolicyMode?: 'offline-strict' | 'local-only' | 'network-approved'
+  /** Agent capability policy; sanitized settings always carry one (default network-approved). */
+  capabilityPolicyMode: 'offline-strict' | 'local-only' | 'network-approved'
   ocrEngine: 'native_cuda' | 'vision_model'
   normalizeWithLlm?: boolean
   ollamaHost: string
@@ -351,7 +351,16 @@ export type AgentApprovalReason = 'workspace_mutation' | 'network_access' | 'ext
 
 export interface AgentApprovalRequest extends AgentRunIdentity {
   sessionId: string
-  type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit' | 'publish_workspace'
+  type:
+    | 'write_file'
+    | 'replace_chunk'
+    | 'multi_replace'
+    | 'delete_file'
+    | 'download_file'
+    | 'terminal_cmd'
+    | 'network_request'
+    | 'git_commit'
+    | 'publish_workspace'
   target: string
   contentOrCmd: string
   replacement?: string

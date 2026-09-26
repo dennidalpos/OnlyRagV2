@@ -47,6 +47,7 @@ import type { AppSettings } from '../../../shared/types'
 import { authorizeOfflineStrict } from '../domain/agent/offlineStrictPolicy'
 import { authorizeLocalOnly } from '../domain/agent/localOnlyPolicy'
 import { authorizeAndPersistNetworkApproved } from '../domain/agent/networkApprovedPolicy'
+import { npxCommandNames } from '../domain/agent/offlineStrictPolicy'
 import type { Capability, CapabilityConsent, CapabilityOperation } from '../domain/agent/capabilityPolicyContract'
 import { CapabilityPolicyAuditRepository } from '../infrastructure/logging/capabilityPolicyAuditRepository'
 import {
@@ -58,6 +59,7 @@ import {
 import { toolExecutionResultSchema, type ClassifiedToolExecutionResult, type ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
 import { validateWorkspaceRealpath } from '../infrastructure/filesystem/workspaceRealpathGuard'
 import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
+import { toolLog } from '../domain/agent/tools/toolExecutionContracts'
 export type { ClassifiedToolExecutionResult, ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
 
 export class AgentToolExecutorService {
@@ -104,6 +106,7 @@ export class AgentToolExecutorService {
         incrementalTypecheck: (currentWorkspace, filePath) => workspaceIncrementalTypecheck.checkWrittenFile(currentWorkspace, filePath) || '',
         contentVersion,
       },
+      checkWrittenFile: (currentWorkspace, filePath) => workspaceIncrementalTypecheck.checkWrittenFile(currentWorkspace, filePath) || '',
       replaceFile: {
         exists: (absolutePath) => documentIoRepository.exists(absolutePath),
         readIfExists: (absolutePath) => agentToolFileRepository.readIfExists(absolutePath),
@@ -148,6 +151,11 @@ export class AgentToolExecutorService {
     })
   }
 
+  /** The npx commands of `command` the workspace already provides, which npx runs without downloading. */
+  static localNpxBinaries(command: string, workspacePath: string | null | undefined): string[] {
+    return workspacePath ? npxCommandNames(command).filter((name) => isBinaryInstalled(workspacePath, name)) : []
+  }
+
   private async policyBlock(
     parsedTool: AgentToolCall,
     workspacePath: string | null | undefined,
@@ -155,8 +163,6 @@ export class AgentToolExecutorService {
     consent: CapabilityConsent,
     sessionId: string,
   ): Promise<ToolExecutionResult | null> {
-    if (!settings.capabilityPolicyMode) return null
-
     const networkTool = (
       {
         web_search: ['http-download', 'connect', parsedTool.parameters.query],
@@ -179,6 +185,7 @@ export class AgentToolExecutorService {
       mode: settings.capabilityPolicyMode,
       workspaceRoot: workspacePath || 'standalone',
       target: target ? String(target) : undefined,
+      ...(capability === 'shell' ? { localBinaries: AgentToolExecutorService.localNpxBinaries(String(target || ''), workspacePath) } : {}),
       consent,
     } as const
     const policy =
@@ -192,7 +199,7 @@ export class AgentToolExecutorService {
     return {
       outcome: 'blocked',
       outputForHistory: `[POLICY BLOCK] ${policy.reason}`,
-      logMessage: `[POLICY BLOCK] ${parsedTool.tool}: ${policy.reason}`,
+      ...toolLog('toolPolicyBlock', { tool: parsedTool.tool, reason: policy.reason }),
       isTerminal: true,
     }
   }
@@ -262,7 +269,7 @@ export class AgentToolExecutorService {
         return {
           outcome: 'rejected',
           outputForHistory: `Security Violation: ${check.error}`,
-          logMessage: `${parsedTool.tool} rejected: ${check.error}`,
+          ...toolLog('toolEditPathRejected', { tool: parsedTool.tool, error: String(check.error) }),
           isTerminal: true,
         }
       }
@@ -380,6 +387,12 @@ export class AgentToolExecutorService {
     return session
   }
 
+  /** The agent shell's working directory for this workspace, when a shell is already running there. */
+  public currentShellDirectory(workspacePath?: string | null): string | undefined {
+    const session = this.shellSessions.get(workspacePath || process.cwd())
+    return session?.isRunning ? session.currentDirectory : undefined
+  }
+
   public disposeShellSessions(): void {
     for (const session of this.shellSessions.values()) {
       session.dispose()
@@ -435,7 +448,7 @@ export class AgentToolExecutorService {
       return {
         outcome: 'rejected',
         outputForHistory: `[TURN TOOL POLICY DENIED] Tool "${tool}" is not available for this phase.`,
-        logMessage: `Turn tool policy denied: ${tool}`,
+        ...toolLog('toolTurnPolicyDenied', { tool }),
         isTerminal: true,
       }
     }
@@ -674,7 +687,12 @@ export class AgentToolExecutorService {
             redaction: { applied: false, fields: [] },
             error: 'Visual validation requires an active workspace.',
           })
-          return { outcome: 'blocked', outputForHistory: JSON.stringify(result), logMessage: result.error || 'Visual validation unavailable', isTerminal: true }
+          return {
+            outcome: 'blocked',
+            outputForHistory: JSON.stringify(result),
+            ...toolLog('toolVisualUnavailable', { error: result.error || 'unknown' }),
+            isTerminal: true,
+          }
         }
         const outputDirectory = path.join(workspacePath, '.onlyrag', 'visual-validation')
         documentIoRepository.ensureDirectory(outputDirectory)
@@ -694,7 +712,7 @@ export class AgentToolExecutorService {
         return {
           outcome: result.status === 'verified' ? 'success' : 'blocked',
           outputForHistory: JSON.stringify(result),
-          logMessage: `Visual validation ${result.status}: ${parameters.artifactPath || 'artifact'}`,
+          ...toolLog('toolVisualDone', { status: result.status, target: String(parameters.artifactPath || 'artifact') }),
           logDetail: JSON.stringify(result).slice(0, 4000),
           isTerminal: true,
         }
@@ -708,7 +726,7 @@ export class AgentToolExecutorService {
         return {
           outcome: 'rejected',
           outputForHistory: `Unrecognized or unsupported tool: ${tool}`,
-          logMessage: `Unsupported tool ${tool}`,
+          ...toolLog('toolUnsupported', { tool: String(tool) }),
           isTerminal: true,
           terminalCode: 'MODEL_UNSUITABLE',
         }

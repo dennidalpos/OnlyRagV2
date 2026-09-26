@@ -5,6 +5,7 @@ import type { SkillAdherenceViolation } from '../../../skills/skillAdherenceVali
 import type { ToolExecutionResult } from '../toolExecutionContracts'
 import { validateAST } from '../../fuzzyPatchEngine'
 import { applyUniqueReplacements, compactMutationDiff, versionConflictFeedback } from '../../versionedFileMutation'
+import { toolLog } from '../toolExecutionContracts'
 
 export interface MultiReplaceFileRepository {
   readIfExists(absolutePath: string): string
@@ -30,12 +31,18 @@ export async function executeMultiReplaceFileContentTool(
   journal: MultiReplaceFileJournal,
   buildChangeStats: (filePath: string, before: string, after: string) => { filePath: string; additions: number; deletions: number },
   contentVersion: (content: string) => string,
+  /** Diagnostics for the file just written (the incremental typecheck), appended to the result. */
+  checkWrittenFile: (absolutePath: string) => string = () => '',
 ): Promise<ToolExecutionResult> {
   const filePath = parameters.filePath
   const replacements = (parameters.replacements || []) as Array<{ targetContent: string; replacementContent: string }>
   const pathCheck = validatePathSafety(filePath, workspacePath)
   if (!pathCheck.safePath) {
-    return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Multi Replace Rejected: ${pathCheck.error}` }
+    return {
+      outcome: 'rejected',
+      outputForHistory: `Security Violation: ${pathCheck.error}`,
+      ...toolLog('toolEditPathRejected', { tool: 'multi_replace_file_content', error: String(pathCheck.error) }),
+    }
   }
   const safePath = pathCheck.safePath
 
@@ -43,7 +50,7 @@ export async function executeMultiReplaceFileContentTool(
     return {
       outcome: 'rejected',
       outputForHistory: `Missing parameters or empty chunks for multi-replace: ${filePath || 'unknown'}`,
-      logMessage: 'Missing multi-replace parameters',
+      ...toolLog('toolEditMissingParams', { tool: 'multi_replace_file_content' }),
     }
   }
 
@@ -52,7 +59,7 @@ export async function executeMultiReplaceFileContentTool(
     return {
       outcome: 'rejected',
       outputForHistory: buildSkillRefusal(String(filePath), skillViolation),
-      logMessage: `Multi Replace Rejected: violates active skill ${skillViolation.skillName}`,
+      ...toolLog('toolEditSkillViolation', { tool: 'multi_replace_file_content', skill: skillViolation.skillName }),
     }
   }
 
@@ -62,7 +69,7 @@ export async function executeMultiReplaceFileContentTool(
     return {
       outcome: 'rejected',
       outputForHistory: versionConflictFeedback(String(filePath), parameters.expectedContentHash, actualHash),
-      logMessage: `Multi-replace rejected: stale version for ${path.basename(filePath)}`,
+      ...toolLog('toolEditStaleVersion', { tool: 'multi_replace_file_content', file: path.basename(filePath) }),
     }
   }
   const prepared = applyUniqueReplacements(beforeContent, replacements)
@@ -70,7 +77,7 @@ export async function executeMultiReplaceFileContentTool(
     return {
       outcome: 'rejected',
       outputForHistory: `[REPLACE FILE ERROR IN ${filePath}]\n${prepared.error}\nCurrent version: ${actualHash}\nRead the file again and regenerate the complete replacement set. No content was written.`,
-      logMessage: `Multi-replace failed in ${path.basename(filePath)}: ${prepared.error}`,
+      ...toolLog('toolEditFailed', { tool: 'multi_replace_file_content', file: path.basename(filePath), error: String(prepared.error) }),
     }
   }
 
@@ -79,7 +86,7 @@ export async function executeMultiReplaceFileContentTool(
     return {
       outcome: 'rejected',
       outputForHistory: `[PRE-COMMIT AST VALIDATION ERROR IN ${filePath}]\n${astCheck.syntaxError} (Line ${astCheck.line || '?'}:${astCheck.character || '?'})\nMulti-replace blocked before disk persistence to prevent syntax corruption.`,
-      logMessage: `Multi Replace Rejected (AST Syntax Error): ${astCheck.syntaxError}`,
+      ...toolLog('toolEditSyntaxError', { tool: 'multi_replace_file_content', error: String(astCheck.syntaxError) }),
     }
   }
 
@@ -89,8 +96,8 @@ export async function executeMultiReplaceFileContentTool(
   if (result.success)
     return {
       outcome: 'success',
-      outputForHistory: `Successfully replaced ${prepared.replacedCount} chunks in ${filePath}`,
-      logMessage: `Successfully applied ${prepared.replacedCount} replacements in ${path.basename(filePath)}`,
+      outputForHistory: `Successfully replaced ${prepared.replacedCount} chunks in ${filePath}\nApplied change:\n${compactMutationDiff(beforeContent, prepared.content)}${workspacePath ? checkWrittenFile(safePath) : ''}`,
+      ...toolLog('toolMultiReplaceDone', { count: prepared.replacedCount, file: path.basename(filePath) }),
       changeStats: buildChangeStats(safePath, beforeContent, prepared.content),
     }
 
@@ -103,9 +110,13 @@ export async function executeMultiReplaceFileContentTool(
         result.currentContentHash || 'missing',
         compactMutationDiff(result.currentContent || '', prepared.content),
       ),
-      logMessage: `Multi-replace rejected: concurrent change in ${path.basename(filePath)}`,
+      ...toolLog('toolEditConcurrentChange', { tool: 'multi_replace_file_content', file: path.basename(filePath) }),
     }
 
   const failureFeedback = `[REPLACE FILE ERROR IN ${filePath}]\n${result.error}\nNo partial replacement was written.`
-  return { outcome: 'failure', outputForHistory: failureFeedback, logMessage: `Multi-replace failed in ${path.basename(filePath)}: ${result.error}` }
+  return {
+    outcome: 'failure',
+    outputForHistory: failureFeedback,
+    ...toolLog('toolEditFailed', { tool: 'multi_replace_file_content', file: path.basename(filePath), error: String(result.error) }),
+  }
 }

@@ -50,7 +50,6 @@ describe('translation hooks', () => {
   }
 
   beforeEach(() => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     documentsStore.documents = [markdownDoc, pdfDoc]
     generateOllamaStream.mockReset()
     getIngestedDocument.mockClear()

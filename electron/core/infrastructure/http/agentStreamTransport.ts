@@ -1,7 +1,6 @@
 import { logger } from '../logging/logger'
 import type { OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
 import type { OllamaToolSchema } from '../../domain/agent/ollamaToolSchemaCatalog'
-import type { ObservedToolCallingProtocol } from '../../../../shared/domain/agent/ollamaToolCallingCapability'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
 import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
 import { resolveOllamaUrl, requestOllama } from './ollamaTransport'
@@ -12,7 +11,6 @@ import { pickSamplingOverrides } from '../../../../shared/domain/agent/ollamaSam
 
 export interface StreamSession {
   targetModel: string
-  prompt: string
   runtimeOpts: OllamaRuntimeOptions
   keepAlive?: string
   ollamaEndpoint?: string
@@ -23,18 +21,12 @@ export interface StreamSession {
   isCancelled: () => boolean
   signal?: AbortSignal
   onCancelHandle?: (abort: () => void) => void
-  /** When true (and toolCatalog is non-empty), routes through POST /api/chat with a `tools` array instead of the prompt-engineered POST /api/generate path (see ollamaToolCallingCapability.ts). */
-  toolCallingCapable?: boolean
-  toolCatalog?: OllamaToolSchema[]
-  /** Native chat transcript. When supplied, the structured assistant turn is returned. */
-  messages?: AgentChatMessage[]
-  /** Ollama `context` token array from a previous /api/generate response on the SAME model, to continue from instead of re-evaluating the full prompt (see ollamaContextCacheManager.ts / AGT1). */
-  previousContext?: number[]
-  /** Invoked with the `context` array from the final NDJSON line of a completed /api/generate response (present when `done: true`), and the model that produced it. */
-  onContextReceived?: (context: number[], respondingModel: string) => void
-  onToolProtocolObserved?: (protocol: ObservedToolCallingProtocol) => void
+  /** Native tool schemas offered this turn; an empty catalogue sends no `tools` field. */
+  toolCatalog: OllamaToolSchema[]
+  /** The native chat transcript sent as `messages`. */
+  messages: AgentChatMessage[]
   onGenerationTelemetry?: (telemetry: OllamaStreamTelemetry) => void
-  /** Silence tolerated on the native chat stream before it is treated as stalled (default 5 min). */
+  /** Silence tolerated on the chat stream before it is treated as stalled (default 5 min). */
   stallTimeoutMs?: number
 }
 
@@ -96,204 +88,28 @@ function streamTelemetry(parsed: Record<string, unknown>, model: string, numCtx:
   }
 }
 
-/** Serializes a native tool_calls[0] entry into the same {"name", "arguments"} JSON text shape toolParser.ts already knows how to parse (see extractToolCallFromText's rawToolName / "arguments" handling), so a native tool-calling response and a prompt-engineered o */
-function serializeNativeToolCall(name: string, args: Record<string, unknown>): string {
-  return JSON.stringify({ name, arguments: args })
-}
-
 export class AgentStreamTransport {
-  static streamCompletion(session: StreamSession & { messages: AgentChatMessage[] }): Promise<AgentChatTurn>
-  static streamCompletion(session: StreamSession & { messages?: undefined }): Promise<string>
-  static streamCompletion(session: StreamSession): Promise<string | AgentChatTurn> {
+  /** Streams one agent turn from POST /api/chat, the only agent protocol: the model answers with native tool calls. */
+  static streamCompletion(session: StreamSession): Promise<AgentChatTurn> {
     if (session.signal?.aborted || session.isCancelled()) {
       return Promise.reject(new Error('Agent run cancelled.'))
     }
-    const scheduled = ollamaGenerationScheduler.schedule('agent', (setActiveCancel) =>
-      this.streamCompletionNow({ ...session, onCancelHandle: setActiveCancel }),
-    )
+    const scheduled = ollamaGenerationScheduler.schedule('agent', (setActiveCancel) => this.streamChat({ ...session, onCancelHandle: setActiveCancel }))
     session.onCancelHandle?.(scheduled.cancel)
     return scheduled.promise
   }
 
-  private static async streamCompletionNow(session: StreamSession): Promise<string | AgentChatTurn> {
-    if (session.toolCallingCapable && session.toolCatalog && session.toolCatalog.length > 0) {
-      return this.streamChatWithTools(session)
-    }
-
-    const {
-      targetModel,
-      prompt,
-      runtimeOpts,
-      keepAlive,
-      ollamaEndpoint,
-      onTokenChunk,
-      onThoughtChunk,
-      isCancelled,
-      signal,
-      onCancelHandle,
-      previousContext,
-      onContextReceived,
-      onGenerationTelemetry,
-    } = session
-
-    // Honors https:// hosts like every other Ollama call (this path used to force plain http).
-    const ollamaUrl = resolveOllamaUrl('/api/generate', ollamaEndpoint)
-
-    return new Promise<string>((resolve, reject) => {
-      const postData = JSON.stringify({
-        model: targetModel,
-        prompt,
-        stream: true,
-        ...thinkField(session.think),
-        keep_alive: keepAlive || '30m',
-        ...(previousContext && previousContext.length > 0 ? { context: previousContext } : {}),
-        options: ollamaRequestOptions(runtimeOpts),
-      })
-
-      let responseTimer: NodeJS.Timeout | null = setTimeout(() => {
-        req.destroy(new Error(`Ollama initial response timeout (45s): model '${targetModel}' loading stalled.`))
-      }, 45000)
-
-      let tokenStallTimer: NodeJS.Timeout | null = null
-      const requestStartedAt = Date.now()
-
-      const resetTokenStallTimer = () => {
-        if (tokenStallTimer) clearTimeout(tokenStallTimer)
-        tokenStallTimer = setTimeout(() => {
-          req.destroy(new Error(`Ollama stream stalled: no tokens received for 30s from model '${targetModel}'.`))
-        }, 30000)
-      }
-
-      const cleanupTimers = () => {
-        if (responseTimer) {
-          clearTimeout(responseTimer)
-          responseTimer = null
-        }
-        if (tokenStallTimer) {
-          clearTimeout(tokenStallTimer)
-          tokenStallTimer = null
-        }
-      }
-
-      const req = requestOllama(
-        ollamaUrl,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-          },
-        },
-        (res) => {
-          if (responseTimer) {
-            clearTimeout(responseTimer)
-            responseTimer = null
-          }
-
-          if (res.statusCode && res.statusCode !== 200) {
-            cleanupTimers()
-            let errBody = ''
-            res.on('data', (chunk) => {
-              errBody += chunk.toString()
-            })
-            res.on('end', () => {
-              const msg =
-                res.statusCode === 404
-                  ? `Model '${targetModel}' is not pulled in Ollama. Please run 'ollama pull ${targetModel}'.`
-                  : `Ollama HTTP Error ${res.statusCode}: ${errBody.slice(0, 300)}`
-              reject(new Error(msg))
-            })
-            return
-          }
-
-          resetTokenStallTimer()
-
-          let buffer = ''
-          let fullText = ''
-          let sawDone = false
-          let doneReason: string | undefined
-          let completedTelemetry: OllamaStreamTelemetry | undefined
-
-          res.on('data', (chunk) => {
-            if (isCancelled()) {
-              cleanupTimers()
-              req.destroy()
-              resolve(fullText)
-              return
-            }
-            resetTokenStallTimer()
-            buffer = consumeNdjsonChunk(
-              buffer,
-              chunk,
-              (parsed) => {
-                const thinkingDelta = parsed.thinking ?? parsed.message?.thinking
-                if (thinkingDelta && onThoughtChunk) {
-                  onThoughtChunk(thinkingDelta)
-                }
-                if (parsed.response) {
-                  fullText += parsed.response
-                  if (onTokenChunk) {
-                    onTokenChunk(parsed.response)
-                  }
-                }
-                if (parsed.done && Array.isArray(parsed.context) && onContextReceived) {
-                  onContextReceived(parsed.context, targetModel)
-                }
-                if (parsed.done === true) {
-                  sawDone = true
-                  doneReason = parsed.done_reason
-                  completedTelemetry = streamTelemetry(parsed, targetModel, runtimeOpts.num_ctx, requestStartedAt)
-                }
-              },
-              (jsonErr) => {
-                logger.log('WARN', 'AgentStreamTransport', `Partial stream JSON parse skipped: ${jsonErr.message}`)
-              },
-            )
-          })
-
-          res.on('end', () => {
-            cleanupTimers()
-            if (!isCancelled() && (!sawDone || doneReason === 'length')) {
-              reject(new Error(`Ollama response incomplete${doneReason ? ` (${doneReason})` : ''}`))
-              return
-            }
-            if (completedTelemetry) onGenerationTelemetry?.(completedTelemetry)
-            resolve(fullText)
-          })
-        },
-      )
-
-      req.on('error', (err: NodeJS.ErrnoException) => {
-        cleanupTimers()
-        if (err.code === 'ECONNREFUSED') {
-          reject(new Error(`Ollama service is not reachable at ${normalizeOllamaHost(ollamaEndpoint)}. Please ensure Ollama is running.`))
-        } else {
-          reject(err)
-        }
-      })
-
-      const abortRequest = () => req.destroy(new Error('Agent run cancelled.'))
-      if (onCancelHandle) onCancelHandle(abortRequest)
-      signal?.addEventListener('abort', abortRequest, { once: true })
-      req.on('close', () => signal?.removeEventListener('abort', abortRequest))
-
-      req.write(postData)
-      req.end()
-    })
-  }
-
-  /** Native tool-calling path: POST /api/chat with a `tools` array, streamed (stream:true) and parsed incrementally like streamCompletion's /api/generate path (AGT7) — Ollama's tool_calls field only arrives on the final NDJSON line (done:true), but message.content */
-  private static async streamChatWithTools(session: StreamSession): Promise<string | AgentChatTurn> {
-    const { targetModel, prompt, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, onThoughtChunk, isCancelled, signal, onCancelHandle, toolCatalog } =
-      session
+  /** Streamed (stream:true) and parsed incrementally, so content and thinking reach the UI as they arrive; tool calls may arrive on any line up to done:true. */
+  private static async streamChat(session: StreamSession): Promise<AgentChatTurn> {
+    const { targetModel, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, onThoughtChunk, isCancelled, signal, onCancelHandle, toolCatalog } = session
 
     const chatUrl = resolveOllamaUrl('/api/chat', ollamaEndpoint)
 
-    return new Promise<string | AgentChatTurn>((resolve, reject) => {
+    return new Promise<AgentChatTurn>((resolve, reject) => {
       const postData = JSON.stringify({
         model: targetModel,
-        messages: session.messages ?? [{ role: 'user', content: prompt }],
-        tools: toolCatalog,
+        messages: session.messages,
+        ...(toolCatalog.length > 0 ? { tools: toolCatalog } : {}),
         stream: true,
         ...thinkField(session.think),
         keep_alive: keepAlive || '30m',
@@ -359,7 +175,6 @@ export class AgentStreamTransport {
 
           let buffer = ''
           let fullText = ''
-          let resolvedToolCall: string | null = null
           let fullThinking = ''
           const toolCalls: Array<{ index?: number; name: string; arguments: Record<string, unknown> | string }> = []
           let sawDone = false
@@ -370,7 +185,7 @@ export class AgentStreamTransport {
             if (isCancelled()) {
               cleanupTimers()
               req.destroy()
-              resolve(fullText)
+              resolve({ content: fullText, thinking: fullThinking, toolCalls: [] })
               return
             }
             resetTokenStallTimer()
@@ -439,11 +254,8 @@ export class AgentStreamTransport {
               reject(new Error(`Invalid Ollama tool arguments: ${error instanceof Error ? error.message : String(error)}`))
               return
             }
-            const first = structuredCalls[0]
-            if (first) resolvedToolCall = serializeNativeToolCall(first.function.name, first.function.arguments)
             if (completedTelemetry) session.onGenerationTelemetry?.(completedTelemetry)
-            session.onToolProtocolObserved?.(resolvedToolCall ? 'native' : 'text')
-            resolve(session.messages ? { content: fullText, thinking: fullThinking, toolCalls: structuredCalls } : (resolvedToolCall ?? fullText))
+            resolve({ content: fullText, thinking: fullThinking, toolCalls: structuredCalls })
           })
         },
       )

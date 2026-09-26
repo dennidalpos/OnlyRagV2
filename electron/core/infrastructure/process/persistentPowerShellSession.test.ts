@@ -1,4 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { PersistentPowerShellSession } from './persistentPowerShellSession'
 
 /** Cases that spawn a real powershell.exe: it exists only on Windows, so other hosts report them as skipped. */
@@ -33,6 +36,25 @@ describe('PersistentPowerShellSession Unit Tests', () => {
 
     expect(res2.code).toBe(0)
     expect(res2.stdout).toContain('StatePreserved42')
+  })
+
+  itWithPowerShell('reports the directory a cd left the shell in', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-shell-cwd-'))
+    fs.mkdirSync(path.join(root, 'src'))
+    try {
+      // Started outside root: the shell process keeps its start directory until it exits, and
+      // Windows refuses to delete a directory a live process stands in.
+      session = new PersistentPowerShellSession(os.tmpdir())
+      await session.execute(`Set-Location -LiteralPath '${root}'`)
+      expect(path.resolve(session.currentDirectory)).toBe(path.resolve(root))
+
+      await session.execute('Set-Location src')
+      expect(path.resolve(session.currentDirectory)).toBe(path.resolve(root, 'src'))
+    } finally {
+      session?.dispose()
+      session = null
+      fs.rmSync(root, { recursive: true, force: true })
+    }
   })
 
   itWithPowerShell('should preserve variable state across sequential commands', async () => {

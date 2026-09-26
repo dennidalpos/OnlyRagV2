@@ -112,14 +112,16 @@ describe('AppSettingsDomain Unit Tests', () => {
         'coding:qwen': 'legacy family prompt',
         vision: 'legacy module prompt',
         chat: 'still a real node',
-        'coding:tools': 'also real',
+        'coding:directives': 'also real',
+        // The text-protocol tool catalogue node was retired on 2026-09-26.
+        'coding:tools': 'retired node',
         'chat:llama': 'legacy',
       },
     })
 
     expect(sanitized.customPromptOverrides).toEqual({
       chat: 'still a real node',
-      'coding:tools': 'also real',
+      'coding:directives': 'also real',
     })
   })
 

@@ -113,7 +113,6 @@ describe('usePlanApproval interview and error flow', () => {
   }
 
   beforeEach(async () => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     onPlanApproved = vi.fn<(plan: AgentPlan) => void>()
     onPersistPlan = vi.fn<(plan: AgentPlan) => Promise<boolean>>().mockResolvedValue(true)
     initialPlans = []

@@ -9,6 +9,7 @@ describe('Domain & Intent Sub-Router Unit Tests', () => {
     medicalModel: 'adrienbrault/biomistral-7b:Q4_K_M',
     legalModel: 'saul-instruct:7b',
     ocrEngine: 'native_cuda',
+    capabilityPolicyMode: 'network-approved',
     ollamaHost: 'http://127.0.0.1:11434',
   }
 
@@ -123,6 +124,7 @@ describe('Domain & Intent Sub-Router Unit Tests', () => {
       const minimalSettings: AppSettings = {
         defaultModel: 'llama3.2',
         ocrEngine: 'native_cuda',
+        capabilityPolicyMode: 'network-approved',
         ollamaHost: '',
       }
       const resMedical = evaluateDomainIntent('Paziente con referto di ematologia alterato', minimalSettings)

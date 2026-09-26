@@ -158,7 +158,7 @@ export async function initializeSessionState(params: SessionStateParams): Promis
       executionFailure: executionState.recoveryFailures?.execution,
     })
     responseInterpreterState.pendingVersionConflictReadPath = executionState.recoveryFailures?.versionConflictReadPath
-    responseInterpreterState.versionEvidence = restoreFileVersionEvidence(executionState.versionEvidence, executionState.versionedReadEvidence)
+    responseInterpreterState.versionEvidence = restoreFileVersionEvidence(executionState.versionEvidence)
     responseInterpreterState.verificationFixCycles = executionState.recoveryFailures?.verificationFixCycles || 0
     responseInterpreterState.guardEvents = [...(executionState.guardEvents || [])]
     stepCountBox.value = executionState.stepCount || 0

@@ -17,8 +17,4 @@ export function registerSessionHistoryIpcHandlers() {
   ipcMain.handle('sessions:clear', async (_event, payload) => {
     return sessionHistoryAppService.clearSessions(payload?.workspacePath)
   })
-
-  ipcMain.handle('sessions:migrate-legacy', async (_event, { sessions }) => {
-    return sessionHistoryAppService.migrateLegacySessions(sessions)
-  })
 }

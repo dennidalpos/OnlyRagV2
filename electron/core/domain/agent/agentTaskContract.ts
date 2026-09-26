@@ -83,8 +83,7 @@ export const userInterviewAnswerSchema = z.object({
 
 /**
  * Complete `AgentPlan` as the renderer sends it back for a revision (`agent:plan-generate`).
- * Unknown keys are stripped; list fields a legacy plan may lack default to empty, because plan
- * generation reads `milestones` and `retainedEvidence` directly.
+ * Unknown keys are stripped; every list field is required, as in `AgentPlan`.
  */
 export const agentPlanSchema = z.object({
   formatVersion: z.literal(2),
@@ -103,22 +102,15 @@ export const agentPlanSchema = z.object({
         rationale: text.optional(),
       }),
     )
-    .max(200)
-    .default([]),
-  retainedEvidence: z
-    .array(z.object({ interventionId: short, summary: text, verificationReferences: z.array(text).max(100).default([]) }))
-    .max(200)
-    .default([]),
-  supersededWork: z
-    .array(z.object({ interventionId: short, reason: text }))
-    .max(200)
-    .default([]),
+    .max(200),
+  retainedEvidence: z.array(z.object({ interventionId: short, summary: text, verificationReferences: z.array(text).max(100) })).max(200),
+  supersededWork: z.array(z.object({ interventionId: short, reason: text })).max(200),
   status: z.enum(['idle', 'generating', 'ready', 'approved', 'rejected', 'error', 'cancelled']),
   errorPhase: z.enum(['interview', 'planning']).optional(),
   errorMessage: text.optional(),
   createdAt: short,
   baseStepOffset: z.number().int().nonnegative().optional(),
-  milestones: z.array(planMilestoneSchema).max(100).default([]),
+  milestones: z.array(planMilestoneSchema).max(100),
   approvalError: text.optional(),
   capabilityProfile: capabilityProfileSchema.optional(),
 })

@@ -1,7 +1,7 @@
 import nodePath from 'node:path'
 import { describe, it, expect } from 'vitest'
 import type { WorkspaceProject } from '../../../../shared/types'
-import { deriveNameFromPath, upsertProject, touchProject, sortProjectsByRecency, mergeProjects, renameProjectInList } from './projectRegistryDomain'
+import { deriveNameFromPath, upsertProject, touchProject, sortProjectsByRecency, renameProjectInList } from './projectRegistryDomain'
 
 function buildProject(path: string, overrides: Partial<WorkspaceProject> = {}): WorkspaceProject {
   return { path, name: 'proj', addedAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-01T00:00:00.000Z', ...overrides }
@@ -64,19 +64,5 @@ describe('projectRegistryDomain', () => {
     ]
     const sorted = sortProjectsByRecency(projects)
     expect(sorted.map((p) => p.path)).toEqual(['/repo/new', '/repo/never-reopened', '/repo/old'])
-  })
-
-  it('mergeProjects keeps the existing entry on conflict and adds only new paths', () => {
-    const existing = [buildProject('/repo/a', { name: 'Existing Name' })]
-    const incoming = [buildProject('/repo/a', { name: 'Legacy Name' }), buildProject('/repo/b', { name: 'New' })]
-    const merged = mergeProjects(existing, incoming)
-    expect(merged).toHaveLength(2)
-    expect(merged.find((p) => p.path === '/repo/a')?.name).toBe('Existing Name')
-    expect(merged.find((p) => p.path === '/repo/b')?.name).toBe('New')
-  })
-
-  it('mergeProjects is a no-op when nothing new is incoming', () => {
-    const existing = [buildProject('/repo/a')]
-    expect(mergeProjects(existing, [buildProject('/repo/a')])).toBe(existing)
   })
 })

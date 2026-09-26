@@ -16,8 +16,8 @@ export interface CompactPlanState {
 }
 
 /**
- * Recognises persisted legacy closing milestones so they are not treated as outstanding work.
- * Canonical v2 plans do not create these entries; the application owns session closure.
+ * Recognises a closing milestone ("finish", "final report") a model may still write into its plan,
+ * so it is not treated as outstanding work: the application owns session closure.
  */
 export function isCompletionMilestoneTitle(input: string | Pick<PlanMilestone, 'title' | 'filePaths'>): boolean {
   const title = typeof input === 'string' ? input : input.title

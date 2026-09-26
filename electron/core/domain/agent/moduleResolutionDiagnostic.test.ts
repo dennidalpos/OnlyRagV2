@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { classifyModuleDiagnostic, unresolvedPackages, packageOfSpecifier, buildModuleResolutionDirective } from './moduleResolutionDiagnostic'
+import { classifyModuleDiagnostic, unresolvedPackages, packageOfSpecifier, buildModuleResolutionNote } from './moduleResolutionDiagnostic'
 
 /** Verbatim from run 7 of 2026-08-25, where every package named was already installed. */
 const RUN_7_OUTPUT = `
@@ -55,9 +55,9 @@ describe('classifyModuleDiagnostic', () => {
   })
 })
 
-describe('buildModuleResolutionDirective', () => {
+describe('buildModuleResolutionNote', () => {
   it('orders the config edit and forbids the reinstall that was already tried nine times', () => {
-    const directive = buildModuleResolutionDirective(RUN_7_OUTPUT, ['react-router-dom', '@mui/material'])
+    const directive = buildModuleResolutionNote(RUN_7_OUTPUT, ['react-router-dom', '@mui/material'])
 
     expect(directive).toContain('THE PACKAGE IS INSTALLED — THE COMPILER CANNOT SEE IT')
     expect(directive).toContain('"write_file" on "tsconfig.json"')
@@ -68,7 +68,7 @@ describe('buildModuleResolutionDirective', () => {
   })
 
   it('does not claim the compiler said so when it did not', () => {
-    const directive = buildModuleResolutionDirective("Cannot find module 'left-pad'", ['left-pad'])
+    const directive = buildModuleResolutionNote("Cannot find module 'left-pad'", ['left-pad'])
 
     expect(directive).not.toContain('named the cause itself')
     expect(directive).toContain('TypeScript configuration')
@@ -78,7 +78,7 @@ describe('buildModuleResolutionDirective', () => {
 describe('the directive names one value', () => {
   it('never offers "node", which TypeScript 7 removed', () => {
     // Run 12 of 2026-08-25: the version directive moved the project to typescript@^7.0.2, the model took the "node" fallback this directive used to offer, and the build died on TS5108 "Option 'moduleResolution=node10' has been removed".
-    const directive = buildModuleResolutionDirective("Cannot find module 'react'", ['react'])
+    const directive = buildModuleResolutionNote("Cannot find module 'react'", ['react'])
 
     expect(directive).toContain('"moduleResolution": "bundler"')
     expect(directive).not.toContain('"node"')

@@ -5,32 +5,9 @@ import { errorMessage } from '../../shared/domain/errors/errorMessage'
 import { translate } from '../i18n/I18nContext'
 
 const LAST_WORKSPACE_STORAGE_KEY = 'onlyrag_last_workspace'
-const LEGACY_PROJECTS_STORAGE_KEY = 'onlyrag_workspace_projects'
-const MIGRATION_FLAG_KEY = 'onlyrag_projects_migrated_to_main_v1'
 
 function deriveNameFromPath(pathStr: string): string {
   return pathStr.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace'
-}
-
-/** One-shot import of the project list previously kept in localStorage. */
-async function migrateLegacyProjects(): Promise<void> {
-  if (localStorage.getItem(MIGRATION_FLAG_KEY) === 'done') return
-  const raw = localStorage.getItem(LEGACY_PROJECTS_STORAGE_KEY)
-  if (!raw) {
-    localStorage.setItem(MIGRATION_FLAG_KEY, 'done')
-    return
-  }
-  if (!window.electronAPI?.migrateLegacyProjects) return
-
-  try {
-    const parsed = JSON.parse(raw)
-    const res = await window.electronAPI.migrateLegacyProjects({ projects: parsed })
-    localStorage.removeItem(LEGACY_PROJECTS_STORAGE_KEY)
-    localStorage.setItem(MIGRATION_FLAG_KEY, 'done')
-    logger.info('useWorkspaceProjects', `Migrated ${res?.migrated ?? 0} legacy project(s) to the main-process registry.`)
-  } catch (err: unknown) {
-    logger.warn('useWorkspaceProjects', `Legacy project migration failed, will retry on next launch: ${errorMessage(err)}`)
-  }
 }
 
 /** Saved project folders and the workspace root the Coding Agent Studio is attached to, including standalone (no-workspace) mode. */
@@ -46,7 +23,6 @@ export function useWorkspaceProjects(settings?: AppSettings) {
   useEffect(() => {
     let cancelled = false
     const loadProjects = async () => {
-      await migrateLegacyProjects()
       if (!window.electronAPI?.listProjects) return
       try {
         const list = await window.electronAPI.listProjects()

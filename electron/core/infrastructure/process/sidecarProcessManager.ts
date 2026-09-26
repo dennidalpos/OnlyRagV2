@@ -27,11 +27,6 @@ const ORPHAN_PORT_RELEASE_INTERVAL_MS = 400
 
 let sidecarProcess: ChildProcess | null = null
 
-export interface LegacySidecarDataMigration {
-  moved: string[]
-  conflicts: string[]
-}
-
 /** Uvicorn writes routine lifecycle and access records to stderr; classify by content instead of stream. */
 export function classifySidecarStderr(message: string): 'INFO' | 'WARN' | 'ERROR' {
   const lines = message
@@ -44,36 +39,6 @@ export function classifySidecarStderr(message: string): 'INFO' | 'WARN' | 'ERROR
   if (lines.some((line) => /^(WARNING|WARN):/i.test(line))) return 'WARN'
   if (lines.length > 0 && lines.every((line) => /^INFO:/i.test(line))) return 'INFO'
   return 'WARN'
-}
-
-/**
- * Older Electron builds passed `<userData>/data` as ONLYRAG_DATA_DIR while Python
- * appended its own `data` segment. Move that nested content back to the canonical
- * directory without overwriting any entry already present there.
- */
-export function migrateLegacyNestedSidecarData(userDataDir: string): LegacySidecarDataMigration {
-  const canonicalDataDir = path.join(userDataDir, 'data')
-  const legacyNestedDataDir = path.join(canonicalDataDir, 'data')
-  const result: LegacySidecarDataMigration = { moved: [], conflicts: [] }
-
-  if (!fs.existsSync(legacyNestedDataDir)) return result
-
-  fs.mkdirSync(canonicalDataDir, { recursive: true })
-  for (const entry of fs.readdirSync(legacyNestedDataDir)) {
-    const source = path.join(legacyNestedDataDir, entry)
-    const destination = path.join(canonicalDataDir, entry)
-    if (fs.existsSync(destination)) {
-      result.conflicts.push(entry)
-      continue
-    }
-    fs.renameSync(source, destination)
-    result.moved.push(entry)
-  }
-
-  if (fs.readdirSync(legacyNestedDataDir).length === 0) {
-    fs.rmdirSync(legacyNestedDataDir)
-  }
-  return result
 }
 
 export class SidecarProcessManager {
@@ -352,14 +317,6 @@ export class SidecarProcessManager {
     this.stopPythonSidecar()
 
     const userDataDir = app.getPath('userData')
-    const migration = migrateLegacyNestedSidecarData(userDataDir)
-    if (migration.moved.length > 0) {
-      logger.log('INFO', 'Sidecar', `Migrated legacy nested data entries: ${migration.moved.join(', ')}`)
-    }
-    if (migration.conflicts.length > 0) {
-      logger.log('WARN', 'Sidecar', `Legacy nested data entries left in place because canonical entries already exist: ${migration.conflicts.join(', ')}`)
-    }
-
     const dataDir = path.join(userDataDir, 'data')
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true })

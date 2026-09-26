@@ -151,8 +151,8 @@ describe('buildInstallDowngradeRefusal', () => {
     const refusal = buildInstallDowngradeRefusal(downgrade, '19.2.0')
     const imperatives = refusal.split('\n').filter((line) => /^\d\./.test(line))
     expect(imperatives).toHaveLength(2)
-    expect(imperatives[0]).toMatch(/^1\. Do NOT/)
-    expect(imperatives[1]).toContain('replace that package')
+    expect(imperatives[0]).toContain('replaces that package')
+    expect(imperatives[1]).toMatch(/^2\. Do NOT/)
   })
 })
 

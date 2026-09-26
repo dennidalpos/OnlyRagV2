@@ -140,9 +140,8 @@ try {
     if ($Mode -in @("Logs", "UserData", "Full") -or $CleanLogs) {
         $logRoots = @(
             @{ Path = Join-Path $env:APPDATA "onlyrag-v2\logs"; Root = $env:APPDATA },
+            @{ Path = Join-Path $env:APPDATA "OnlyRag V2\logs"; Root = $env:APPDATA },
             @{ Path = Join-Path $env:LOCALAPPDATA "OnlyRagV2\logs"; Root = $env:LOCALAPPDATA },
-            @{ Path = Join-Path $env:USERPROFILE ".onlyragv2\logs"; Root = $env:USERPROFILE },
-            @{ Path = Join-Path $env:USERPROFILE ".onlyrag_v2\logs"; Root = $env:USERPROFILE },
             @{ Path = Join-Path $rootDir "logs"; Root = $rootDir },
             @{ Path = Join-Path $rootDir "userdata_dev\logs"; Root = $rootDir }
         )
@@ -184,8 +183,7 @@ try {
         $userDataRoots = @(
             @{ Path = Join-Path $env:LOCALAPPDATA "OnlyRagV2"; Root = $env:LOCALAPPDATA },
             @{ Path = Join-Path $env:APPDATA "onlyrag-v2"; Root = $env:APPDATA },
-            @{ Path = Join-Path $env:USERPROFILE ".onlyragv2"; Root = $env:USERPROFILE },
-            @{ Path = Join-Path $env:USERPROFILE ".onlyrag_v2"; Root = $env:USERPROFILE }
+            @{ Path = Join-Path $env:APPDATA "OnlyRag V2"; Root = $env:APPDATA }
         )
         foreach ($entry in $userDataRoots) {
             Remove-OwnedPath -Path $entry.Path -AllowedRoot $entry.Root -Label "Remove OnlyRag user data"

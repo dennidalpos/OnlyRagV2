@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { resolveStandaloneScratchBasePath, StandaloneScratchWorkspace } from './standaloneScratchWorkspace'
+import { StandaloneScratchWorkspace } from './standaloneScratchWorkspace'
 
 describe('StandaloneScratchWorkspace', () => {
   let basePath: string
@@ -54,8 +54,7 @@ describe('StandaloneScratchWorkspace', () => {
     })
   })
 
-  it('uses a home-scoped fallback instead of the process working directory', () => {
-    expect(resolveStandaloneScratchBasePath()).toBe(path.join(os.homedir(), '.onlyrag_v2'))
-    expect(resolveStandaloneScratchBasePath()).not.toBe(path.resolve(process.cwd()))
+  it('falls back to the headless userdata_dev store instead of the home folder', () => {
+    expect(new StandaloneScratchWorkspace().getPath()).toBe(path.join(process.cwd(), 'userdata_dev', 'agent-scratch'))
   })
 })

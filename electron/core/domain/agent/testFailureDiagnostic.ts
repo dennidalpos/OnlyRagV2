@@ -1,5 +1,7 @@
 /** Reads a failing Jest/Vitest/node:test run the way compilerDiagnosticDirective reads tsc: which file, which assertion. */
 
+import { diagnosticAdvice, type DiagnosticAdvice } from './diagnosticAdvice'
+
 const ANSI = /\u001b\[[0-9;]*m/g
 const TEST_FILE = /(?:^|\s)(?:FAIL|×|✕|❯)\s+(\S+\.(?:test|spec)\.[cm]?[jt]sx?)\b/m
 const TEST_FILE_PATH = /(^|[\\/])[^\\/]+\.(?:test|spec)\.[cm]?[jt]sx?$/i
@@ -152,34 +154,38 @@ export function domEnvironmentFor(runner: FailingTest['runner']): { header: stri
     : { header: '// @vitest-environment jsdom', devPackage: 'jsdom' }
 }
 
-/** The directive for code under test that reads a browser global while the runner has no DOM. */
-export function buildBrowserGlobalDirective(failing: FailingTest, environmentInstalled: boolean): string {
+/** The fix for code under test that reads a browser global while the runner has no DOM. */
+export function buildBrowserGlobalAdvice(failing: FailingTest, environmentInstalled: boolean): DiagnosticAdvice {
   const name = failing.browserGlobal ?? 'document'
   const { header, devPackage } = domEnvironmentFor(failing.runner)
-  return [
+  return diagnosticAdvice(
     `[THE TEST NEEDS A DOM — "${failing.file}" RUNS WITHOUT ONE, SO "${name}" DOES NOT EXIST]`,
-    `ReferenceError: ${name} is not defined${failing.browserGlobalPackage ? `, thrown inside the package "${failing.browserGlobalPackage}"` : ''}. Code the test renders reads a browser global. No import can provide it, and the test body is not the problem.`,
-    'Directives:',
+    [
+      `ReferenceError: ${name} is not defined${failing.browserGlobalPackage ? `, thrown inside the package "${failing.browserGlobalPackage}"` : ''}. Code the test renders reads a browser global. No import can provide it, and the test body is not the problem.`,
+    ],
     environmentInstalled
-      ? `1. Your next tool call MUST be "write_file" on "${failing.file}": the same complete file with this exact first line: ${header}`
-      : `1. Your next tool call MUST be "run_command" with the command: npm install --save-dev ${devPackage}`,
-    environmentInstalled
-      ? '2. Do NOT change any other line, and do NOT run the test again before the file has changed.'
-      : `2. Then add this exact first line to "${failing.file}": ${header}`,
-  ].join('\n')
+      ? `"write_file" on "${failing.file}": the same complete file with this exact first line: ${header}`
+      : `"run_command" with the command: npm install --save-dev ${devPackage}`,
+    [
+      environmentInstalled
+        ? 'Do NOT change any other line, and do NOT run the test again before the file has changed.'
+        : `Then add this exact first line to "${failing.file}": ${header}`,
+    ],
+  )
 }
 
-/** The directive for a name the test uses but never imports. */
-function buildUndefinedNameDirective(failing: FailingTest, name: string): string {
+/** The fix for a name the test uses but never imports. */
+function buildUndefinedNameAdvice(failing: FailingTest, name: string): DiagnosticAdvice {
   const provider = KNOWN_PROVIDERS[name] ?? (name === failing.missingGlobal ? testGlobalsImport(failing) : undefined)
-  return [
+  return diagnosticAdvice(
     `[THE TEST USES "${name}" WITHOUT IMPORTING IT — "${failing.file}"${failing.loadLine ? ` line ${failing.loadLine.line}` : ''}]`,
-    ...(failing.loadLine ? [`The runner stopped at: ${failing.loadLine.source}`] : []),
-    `ReferenceError: ${name} is not defined. The assertion never ran, so it is not the problem.`,
-    'Directives:',
-    `1. Your next tool call MUST be "write_file" on "${failing.file}": the same complete file with ${provider ? `this exact line added after the other imports: ${provider}` : `the import that provides "${name}" added at the top`}.`,
-    '2. Do NOT run the test again before a file has changed.',
-  ].join('\n')
+    [
+      failing.loadLine && `The runner stopped at: ${failing.loadLine.source}`,
+      `ReferenceError: ${name} is not defined. The assertion never ran, so it is not the problem.`,
+    ],
+    `"write_file" on "${failing.file}": the same complete file with ${provider ? `this exact line added after the other imports: ${provider}` : `the import that provides "${name}" added at the top`}.`,
+    ['Do NOT run the test again before a file has changed.'],
+  )
 }
 
 /**
@@ -204,56 +210,62 @@ function testGlobalsImport(failing: FailingTest): string {
  * `import App from '../App'` in place four times, and was simply wrong for `describe is not
  * defined`. Both fixes are computable, so the directive states the exact line.
  */
-function buildLoadFailureDirective(failing: FailingTest, resolvesTo?: (importingFile: string, specifier: string) => boolean): string {
-  const header = [
-    `[THE TEST FILE DID NOT LOAD — "${failing.file}"${failing.loadLine ? ` line ${failing.loadLine.line}` : ''}]`,
-    ...(failing.loadLine ? [`The runner stopped at: ${failing.loadLine.source}`] : []),
-  ]
+function buildLoadFailureAdvice(failing: FailingTest, resolvesTo?: (importingFile: string, specifier: string) => boolean): DiagnosticAdvice {
+  const heading = `[THE TEST FILE DID NOT LOAD — "${failing.file}"${failing.loadLine ? ` line ${failing.loadLine.line}` : ''}]`
+  const stoppedAt = failing.loadLine ? `The runner stopped at: ${failing.loadLine.source}` : null
   const noRerun = 'Do NOT run the test again before a file has changed.'
 
   if (failing.missingGlobal) {
     const importLine = testGlobalsImport(failing)
-    return [
-      ...header,
-      `"${failing.missingGlobal}" is not defined: this runner does not inject describe/it/expect as globals, so the file must import them. The test body is not the problem.`,
-      'Directives:',
-      `1. Your next tool call MUST be "write_file" on "${failing.file}": the same complete file with this exact first line added: ${importLine}`,
-      `2. ${noRerun}`,
-    ].join('\n')
+    return diagnosticAdvice(
+      heading,
+      [
+        stoppedAt,
+        `"${failing.missingGlobal}" is not defined: this runner does not inject describe/it/expect as globals, so the file must import them. The test body is not the problem.`,
+      ],
+      `"write_file" on "${failing.file}": the same complete file with this exact first line added: ${importLine}`,
+      [noRerun],
+    )
   }
 
   if (failing.declaresNoTest) {
     // Full task run 13 of 2026-09-24: the smoke test put its expect() inside an exported helper
     // that nothing called, and the generic import advice left it that way.
-    return [
-      ...header,
-      `The file loaded, but it declares no test: the runner only runs assertions written inside it('...', () => { ... }) or test('...', () => { ... }). A helper function that nothing calls is not a test.`,
-      'Directives:',
-      `1. Your next tool call MUST be "write_file" on "${failing.file}": the complete file with ${testGlobalsImport(failing)} after the other imports, and every expect() inside one it('renders the app', () => { ... }) block. No exported helper.`,
-      `2. ${noRerun}`,
-    ].join('\n')
+    return diagnosticAdvice(
+      heading,
+      [
+        stoppedAt,
+        `The file loaded, but it declares no test: the runner only runs assertions written inside it('...', () => { ... }) or test('...', () => { ... }). A helper function that nothing calls is not a test.`,
+      ],
+      `"write_file" on "${failing.file}": the complete file with ${testGlobalsImport(failing)} after the other imports, and every expect() inside one it('renders the app', () => { ... }) block. No exported helper.`,
+      [noRerun],
+    )
   }
 
   const corrected = failing.unresolvedImport && resolvesTo ? correctedTestImport(failing.file, failing.unresolvedImport, resolvesTo) : null
   if (failing.unresolvedImport && corrected) {
     const source = failing.loadLine?.source
     const fixedLine = source?.includes(failing.unresolvedImport) ? source.replace(failing.unresolvedImport, corrected) : null
-    return [
-      ...header,
-      `"${failing.unresolvedImport}" does not resolve from "${failing.file}"; "${corrected}" does. A relative import is resolved from the folder of the file that contains it.`,
-      'Directives:',
-      `1. Your next tool call MUST be "write_file" on "${failing.file}": the same complete file with ${fixedLine ? `the line "${source}" replaced by exactly: ${fixedLine}` : `every "${failing.unresolvedImport}" import changed to "${corrected}"`}`,
-      `2. ${noRerun}`,
-    ].join('\n')
+    return diagnosticAdvice(
+      heading,
+      [
+        stoppedAt,
+        `"${failing.unresolvedImport}" does not resolve from "${failing.file}"; "${corrected}" does. A relative import is resolved from the folder of the file that contains it.`,
+      ],
+      `"write_file" on "${failing.file}": the same complete file with ${fixedLine ? `the line "${source}" replaced by exactly: ${fixedLine}` : `every "${failing.unresolvedImport}" import changed to "${corrected}"`}`,
+      [noRerun],
+    )
   }
 
-  return [
-    ...header,
-    `No test ran: the file failed before its first test, which is almost always an import that does not resolve. A relative import is resolved from the folder of "${failing.file}", so a file in that same folder is imported as "./Name", not "../Name".`,
-    'Directives:',
-    `1. Your next tool call MUST be "write_file" on "${failing.file}", with the complete file and that import pointing at a file that exists.`,
-    `2. ${noRerun}`,
-  ].join('\n')
+  return diagnosticAdvice(
+    heading,
+    [
+      stoppedAt,
+      `No test ran: the file failed before its first test, which is almost always an import that does not resolve. A relative import is resolved from the folder of "${failing.file}", so a file in that same folder is imported as "./Name", not "../Name".`,
+    ],
+    `"write_file" on "${failing.file}", with the complete file and that import pointing at a file that exists.`,
+    [noRerun],
+  )
 }
 
 /** One instruction for a failing test: fix the import that kept it from loading, or the assertion that disagrees with the code. */
@@ -309,15 +321,15 @@ function assertionRewrite(source: string, text: string): string | null {
   return pattern.test(source) ? source.replace(pattern, (_match, matcher: string) => `.${matcher}('${text}')`) : null
 }
 
-export function buildTestFailureDirective(
+export function buildTestFailureAdvice(
   failing: FailingTest,
   resolvesTo?: (importingFile: string, specifier: string) => boolean,
   moduleText?: TestedModuleText | null,
-): string {
+): DiagnosticAdvice {
   // A test global missing inside a test that ran (`expect is not defined`) needs the same import as one missing at load.
   const undefinedName = failing.undefinedName ?? (failing.kind === 'assertion' ? failing.missingGlobal : undefined)
-  if (undefinedName) return buildUndefinedNameDirective(failing, undefinedName)
-  if (failing.kind === 'load') return buildLoadFailureDirective(failing, resolvesTo)
+  if (undefinedName) return buildUndefinedNameAdvice(failing, undefinedName)
+  if (failing.kind === 'load') return buildLoadFailureAdvice(failing, resolvesTo)
   // Full task run 14 of 2026-09-24: told to "assert content the code really produces", the model
   // re-proposed the same failing toContain('<div class="bg-white">') twenty times. The rendered
   // output is in the runner's Received line, so the corrected assertion is computable.
@@ -331,14 +343,15 @@ export function buildTestFailureDirective(
     : text
       ? `its failing assertion replaced by one on text the page really renders, e.g. expect(html).toContain('${text}')`
       : `the test rewritten so that it asserts content the code really produces${failing.received ? ' (the Received value above)' : ''}`
-  return [
+  return diagnosticAdvice(
     `[THE TEST RAN AND ITS ASSERTION FAILED — "${failing.file}"${failing.loadLine ? ` line ${failing.loadLine.line}` : ''}]`,
-    ...(failing.expected ? [`Expected: ${failing.expected}`] : []),
-    ...(failing.received ? [`Received${failing.receivedTruncated ? ' (cut short by the runner)' : ''}: ${failing.received}`] : []),
-    ...(!receivedText && moduleText ? [`"${moduleText.module}", which the test renders, contains the literal text '${moduleText.text}'.`] : []),
-    `The runner, the dependencies and the script all work: only the assertion disagrees with what the code produced. Running the test again cannot change that.`,
-    `Directives:`,
-    `1. Your next tool call MUST be "write_file" on "${failing.file}": the same complete file with ${exactFix}. If the Received output shows the application itself is broken (empty, or an error), fix the application file instead.`,
-    `2. Do NOT run the test again before a file has changed.`,
-  ].join('\n')
+    [
+      failing.expected && `Expected: ${failing.expected}`,
+      failing.received && `Received${failing.receivedTruncated ? ' (cut short by the runner)' : ''}: ${failing.received}`,
+      !receivedText && moduleText && `"${moduleText.module}", which the test renders, contains the literal text '${moduleText.text}'.`,
+      `The runner, the dependencies and the script all work: only the assertion disagrees with what the code produced. Running the test again cannot change that.`,
+    ],
+    `"write_file" on "${failing.file}": the same complete file with ${exactFix}. If the Received output shows the application itself is broken (empty, or an error), fix the application file instead.`,
+    [`Do NOT run the test again before a file has changed.`],
+  )
 }

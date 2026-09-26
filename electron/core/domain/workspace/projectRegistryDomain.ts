@@ -48,11 +48,3 @@ export function touchProject(projects: WorkspaceProject[], projectPath: string):
 export function sortProjectsByRecency(projects: WorkspaceProject[]): WorkspaceProject[] {
   return [...projects].sort((a, b) => Date.parse(b.lastOpenedAt || b.addedAt) - Date.parse(a.lastOpenedAt || a.addedAt))
 }
-
-/** Merges legacy (localStorage) projects into an existing registry, keeping the registry's entries on conflict. */
-export function mergeProjects(existing: WorkspaceProject[], incoming: WorkspaceProject[]): WorkspaceProject[] {
-  const existingPaths = new Set(existing.map((p) => p.path))
-  const newcomers = incoming.filter((p) => p && typeof p.path === 'string' && p.path && !existingPaths.has(p.path))
-  if (newcomers.length === 0) return existing
-  return sortProjectsByRecency([...existing, ...newcomers])
-}

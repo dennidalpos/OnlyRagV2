@@ -62,8 +62,6 @@ export interface SavedAgentSessionState {
   }
   /** Per-file content versions the agent may edit against (normalized path -> sha256). */
   versionEvidence?: Record<string, string>
-  /** Single read hash saved by sessions before versionEvidence; read on restore only. */
-  versionedReadEvidence?: { filePath: string; contentHash: string }
   /** Guard firings of the run, oldest first (bounded by MAX_GUARD_EVENTS). */
   guardEvents?: AgentGuardEvent[]
   /** Guard whose `stop` ended the run; distinguishes the causes folded into terminationReason 'circuit_breaker'. */
@@ -77,7 +75,7 @@ export interface SavedAgentSessionState {
 function normalizePersistedMode(raw: unknown): SavedAgentSessionState {
   const record = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const mode = record.agentMode
-  const agentMode: AgentMode = mode === 'ask' || mode === 'guided' || mode === 'auto' ? mode : mode === 'agent' ? 'auto' : 'guided'
+  const agentMode: AgentMode = mode === 'ask' || mode === 'guided' || mode === 'auto' ? mode : 'guided'
   return { ...record, agentMode } as SavedAgentSessionState
 }
 
@@ -88,7 +86,6 @@ export class AgentSessionStateRepository {
       if (!fs.existsSync(stateDir)) {
         try {
           fs.mkdirSync(stateDir, { recursive: true })
-          this.migrateLegacyStateFiles(workspacePath, stateDir)
         } catch (err: unknown) {
           logger.log('WARN', 'AgentSessionStateRepo', `Could not create .onlyrag/sessions dir in workspace: ${errorMessage(err)}`)
         }
@@ -105,21 +102,6 @@ export class AgentSessionStateRepository {
       }
     }
     return fallbackDir
-  }
-
-  /** One-time move of `.agent_state_*.json` files left directly under the workspace's `.onlyrag/` folder by the pre-unification layout (`.assistant/` + `.onlyrag/`), into the new `.onlyrag/sessions/` subfolder, so existing sessions are not orphaned. */
-  private migrateLegacyStateFiles(workspacePath: string, newStateDir: string): void {
-    const legacyDir = path.join(workspacePath, '.onlyrag')
-    try {
-      const entries = fs.readdirSync(legacyDir, { withFileTypes: true })
-      for (const entry of entries) {
-        if (entry.isFile() && entry.name.startsWith('.agent_state_') && entry.name.endsWith('.json')) {
-          fs.renameSync(path.join(legacyDir, entry.name), path.join(newStateDir, entry.name))
-        }
-      }
-    } catch (err: unknown) {
-      logger.log('WARN', 'AgentSessionStateRepo', `Legacy state migration skipped: ${errorMessage(err)}`)
-    }
   }
 
   private getStateFilePath(sessionId: string, workspacePath?: string | null): string {
@@ -146,7 +128,6 @@ export class AgentSessionStateRepository {
       const assistantDir = path.join(ensureWorkspaceMetadataDirectory(workspacePath), 'assistant')
       if (!fs.existsSync(assistantDir)) {
         await fs.promises.mkdir(assistantDir, { recursive: true })
-        await this.migrateLegacyTracker(workspacePath, assistantDir)
       }
       const trackerPath = path.join(assistantDir, 'SESSION_TRACKER.md')
       const markdown = tracker.compileTrackerMarkdown()
@@ -166,18 +147,6 @@ export class AgentSessionStateRepository {
     } catch (err: unknown) {
       logger.log('WARN', 'AgentSessionStateRepo', `Failed reading SESSION_TRACKER.md: ${errorMessage(err)}`)
       return null
-    }
-  }
-
-  /** One-time move of a pre-unification `.assistant/SESSION_TRACKER.md` into the new folder. */
-  private async migrateLegacyTracker(workspacePath: string, newAssistantDir: string): Promise<void> {
-    const legacyPath = path.join(workspacePath, '.assistant', 'SESSION_TRACKER.md')
-    try {
-      if (fs.existsSync(legacyPath)) {
-        await fs.promises.rename(legacyPath, path.join(newAssistantDir, 'SESSION_TRACKER.md'))
-      }
-    } catch (err: unknown) {
-      logger.log('WARN', 'AgentSessionStateRepo', `Legacy tracker migration skipped: ${errorMessage(err)}`)
     }
   }
 

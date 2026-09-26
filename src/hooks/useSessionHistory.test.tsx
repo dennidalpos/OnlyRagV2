@@ -19,7 +19,6 @@ describe('useSessionHistory persistence', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers()
-    localStorage.setItem('onlyrag_sessions_migrated_to_filesystem_v1', 'done')
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       saveCodingSession,
       listCodingSessions: vi.fn(async () => []),

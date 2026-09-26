@@ -52,9 +52,13 @@ jobs:
           if (-not (Test-Path -LiteralPath 'sidecar/requirements-dev.txt')) {
             throw 'Required sidecar dependency file not found: sidecar/requirements-dev.txt'
           }
-          python -m pip install --upgrade pip
+          # lint_format.ps1 and test_sidecar_health.ps1 run Python from .venv, as on a developer machine.
+          python -m venv .venv
+          if ($LASTEXITCODE -ne 0) { throw "Virtualenv creation failed with exit code $LASTEXITCODE." }
+          $venvPython = Join-Path '.venv' 'Scripts/python.exe'
+          & $venvPython -m pip install --upgrade pip
           if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed with exit code $LASTEXITCODE." }
-          python -m pip install -r sidecar/requirements-dev.txt
+          & $venvPython -m pip install -r sidecar/requirements-dev.txt
           if ($LASTEXITCODE -ne 0) { throw "Python dependency installation failed with exit code $LASTEXITCODE." }
 
       - name: Run Serial Quality & Lint Script (Fail-Fast)

@@ -1,6 +1,7 @@
 /** Compares declared dependencies with injected registry facts and emits one remediation. */
 
 import { maxSatisfying, valid, validRange } from 'semver'
+import { diagnosticAdvice, parseRenderedAdvice, renderAdvice, type DiagnosticAdvice } from './diagnosticAdvice'
 
 export interface DeclaredDependency {
   name: string
@@ -71,30 +72,41 @@ export function findVersionReality(declared: DeclaredDependency[], facts: Regist
   return findings
 }
 
-/** One instruction, and the non-existent package wins when both are present. */
-export function buildVersionRealityDirective(findings: VersionRealityFindings): string | null {
+/** The manifest fix that blocks every install, or null; a non-existent package wins over an unpublished range. */
+function blockingManifestAdvice(findings: VersionRealityFindings): DiagnosticAdvice | null {
   if (findings.nonexistent.length > 0) {
     const names = findings.nonexistent
-    return [
-      `\n\n[THESE PACKAGES DO NOT EXIST ON NPM]`,
-      `${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} declared in package.json and the npm registry has never heard of ${names.length === 1 ? 'it' : 'them'}. No install can ever succeed, whatever flags you add.`,
-      `Directives:`,
-      `1. Your next tool call MUST be "write_file" on "package.json", with the complete file and ${names.length === 1 ? 'that entry' : 'those entries'} removed.`,
-      `2. Do NOT try to install ${names.length === 1 ? 'it' : 'them'} again, with or without flags. Once the manifest is clean, the files importing ${names.length === 1 ? 'it' : 'them'} are the next thing the compiler will name.`,
-    ].join('\n')
+    return diagnosticAdvice(
+      `[THESE PACKAGES DO NOT EXIST ON NPM]`,
+      [
+        `${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} declared in package.json and the npm registry has never heard of ${names.length === 1 ? 'it' : 'them'}. No install can ever succeed, whatever flags you add.`,
+      ],
+      `"write_file" on "package.json", with the complete file and ${names.length === 1 ? 'that entry' : 'those entries'} removed.`,
+      [
+        `Do NOT try to install ${names.length === 1 ? 'it' : 'them'} again, with or without flags. Once the manifest is clean, the files importing ${names.length === 1 ? 'it' : 'them'} are the next thing the compiler will name.`,
+      ],
+    )
   }
 
   if (findings.unpublished.length > 0) {
     const shown = findings.unpublished.slice(0, 5)
-    return [
-      `\n\n[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]`,
-      ...shown.map((item) => `- ${item.name}: you declared ${item.declared}, npm currently publishes ${item.latest}`),
-      `No install can succeed while package.json contains ${shown.length === 1 ? 'this range' : 'these ranges'}.`,
-      `Directives:`,
-      `1. Your next tool call MUST be "write_file" on "package.json", with the complete file and ${shown.length === 1 ? 'that range' : 'those ranges'} replaced by the current version${shown.length === 1 ? '' : 's'} above.`,
-      `2. Do NOT run an install first and do NOT guess another version.`,
-    ].join('\n')
+    return diagnosticAdvice(
+      `[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]`,
+      [
+        ...shown.map((item) => `- ${item.name}: you declared ${item.declared}, npm currently publishes ${item.latest}`),
+        `No install can succeed while package.json contains ${shown.length === 1 ? 'this range' : 'these ranges'}.`,
+      ],
+      `"write_file" on "package.json", with the complete file and ${shown.length === 1 ? 'that range' : 'those ranges'} replaced by the current version${shown.length === 1 ? '' : 's'} above.`,
+      [`Do NOT run an install first and do NOT guess another version.`],
+    )
   }
+  return null
+}
+
+/** The tool-result note on registry facts that contradict package.json: one fix, as advice. */
+export function buildVersionRealityNote(findings: VersionRealityFindings): string | null {
+  const blocking = blockingManifestAdvice(findings)
+  if (blocking) return `\n\n${renderAdvice(blocking)}`
 
   if (findings.outdated.length > 0) {
     const shown = findings.outdated.slice(0, 5)
@@ -109,19 +121,19 @@ export function buildVersionRealityDirective(findings: VersionRealityFindings): 
   return null
 }
 
-/** Headers of the directives above that make every install fail until package.json changes. */
+/** Headings of the fixes above that make every install fail until package.json changes. */
 const BLOCKING_MANIFEST_MARKERS = ['[THESE PACKAGES DO NOT EXIST ON NPM]', '[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]']
 
 /**
- * The manifest rewrite a tool result ordered and no later write of package.json has answered, or
- * null. Without it the arbiter kept ordering `npm install` (run_command only) while the tool
- * result ordered a package.json rewrite the turn policy then refused: 28 denied writes and a
- * `no_mutation` stop in the full-task run of 2026-09-24.
+ * The manifest rewrite a tool result advised and no later write of package.json has answered, or
+ * null; the arbiter turns it into the turn's order. Without it the arbiter kept ordering
+ * `npm install` (run_command only) while the tool result asked for a package.json rewrite the turn
+ * policy then refused: 28 denied writes and a `no_mutation` stop in the full-task run of 2026-09-24.
  */
-export function pendingManifestDirective(
+export function pendingManifestAdvice(
   recentLogs: readonly { step: number; output: string }[],
   episodes: readonly { step?: number; tool: string; target?: string; status: 'SUCCESS' | 'FAILURE' | 'BLOCKED' }[],
-): string | null {
+): DiagnosticAdvice | null {
   for (let i = recentLogs.length - 1; i >= 0; i--) {
     const log = recentLogs[i]
     const start = BLOCKING_MANIFEST_MARKERS.map((marker) => log.output.lastIndexOf(marker)).reduce((a, b) => Math.max(a, b), -1)
@@ -130,12 +142,7 @@ export function pendingManifestDirective(
       (e) => (e.step ?? 0) > log.step && e.status === 'SUCCESS' && e.tool === 'write_file' && /(^|[\\/])package\.json$/i.test((e.target || '').trim()),
     )
     if (answered) return null
-    const lines = log.output.slice(start).split('\n')
-    const end = lines.findIndex((line) => /^2\. /.test(line))
-    return lines
-      .slice(0, end < 0 ? lines.length : end + 1)
-      .join('\n')
-      .trim()
+    return parseRenderedAdvice(log.output.slice(start))
   }
   return null
 }

@@ -285,6 +285,9 @@ describe('agent IPC session-state facade', () => {
       objective: 'Build app',
       status: 'ready',
       createdAt: '2026-09-23T00:00:00.000Z',
+      decisions: [],
+      retainedEvidence: [],
+      supersededWork: [],
       milestones: [{ id: 'm-1', title: 'Build', status: 'verified', injected: 'x' }],
       injected: { nested: true },
     }
@@ -293,14 +296,13 @@ describe('agent IPC session-state facade', () => {
     const forwarded = vi.mocked(planGenerationAppService.generatePlanText).mock.calls[0][0].previousPlan as unknown as Record<string, unknown>
     expect(forwarded).not.toHaveProperty('injected')
     expect(forwarded.milestones).toEqual([{ id: 'm-1', title: 'Build', status: 'verified' }])
-    // A legacy plan without list fields gets empty lists instead of undefined reads.
-    expect(forwarded).toMatchObject({ decisions: [], retainedEvidence: [], supersededWork: [] })
 
     for (const malformed of [
       { ...basePlan, milestones: [{ id: 'm-1', title: 'Build', status: 'done' }] },
       { ...basePlan, retainedEvidence: [{ interventionId: 'm-1' }] },
       { ...basePlan, status: 'unknown' },
       { ...basePlan, formatVersion: 1 },
+      { ...basePlan, decisions: undefined },
     ]) {
       expect(() =>
         handler(trustedEvent, { prompt: 'Build app', model: 'model', settings: {}, previousPlan: malformed, workspacePath: '/repo', previousDecisions: [] }),

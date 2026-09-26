@@ -225,7 +225,7 @@ describe('ProcessToolService ETARGET on a range package.json declares', () => {
     expect(versionNotFoundDirective).toContain('[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]')
     expect(versionNotFoundDirective).toContain('react: you declared ^19.8.0')
     expect(versionNotFoundDirective).toContain('react-dom: you declared ^19.8.0')
-    expect(versionNotFoundDirective).toContain('MUST be "write_file" on "package.json"')
+    expect(versionNotFoundDirective).toContain('Next tool call: "write_file" on "package.json"')
   })
 
   it('keeps the install directive when the refused range came from the command, not the manifest', async () => {

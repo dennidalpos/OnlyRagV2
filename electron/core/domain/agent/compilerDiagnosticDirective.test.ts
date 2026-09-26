@@ -5,7 +5,7 @@ import {
   extractBundlerMissingExport,
   extractUnresolvedBundlerImport,
   extractUnresolvedCssImport,
-  buildDiagnosticFixDirective,
+  buildDiagnosticFixAdvice,
   buildDeferredDiagnosticNote,
   extractExportMismatch,
   extractSuggestedCommand,
@@ -18,6 +18,13 @@ import {
   resolveRelativeImportPath,
 } from './compilerDiagnosticDirective'
 import { extractFailingTest } from './testFailureDiagnostic'
+import { ORDER_MARKER, renderAdvice, renderOrder } from './diagnosticAdvice'
+
+/** The fix as the arbiter orders it, the form in which its wording matters most. */
+function buildDiagnosticFixDirective(...args: Parameters<typeof buildDiagnosticFixAdvice>): string | null {
+  const advice = buildDiagnosticFixAdvice(...args)
+  return advice && renderOrder(advice)
+}
 import { DiagnosticOutputReducer } from './diagnosticOutputReducer'
 
 /** The exact output `npx tsc --noEmit` produced at step 21 of the live run of 2026-08-24. */
@@ -205,7 +212,7 @@ describe('buildDiagnosticFixDirective — export/import mismatch', () => {
     expect(directive).toContain('does not prove which public API the task requires')
     expect(directive).toContain('src/pages/Dashboard.tsx')
     expect(directive).toContain('import Dashboard from "../pages/Dashboard"')
-    expect(directive).toContain('Change exactly one side')
+    expect(directive).toContain('"write_file" on exactly one side')
     expect(directive.match(/^\d+\. /gm)).toHaveLength(2)
     expect(directive).toContain('Do NOT re-run the command until you have changed a file')
   })
@@ -238,7 +245,7 @@ describe('buildDiagnosticFixDirective — export/import mismatch', () => {
     const mixed = ["src/routes/index.tsx(8,15): error TS2304: Cannot find name 'TasksPage'.", TS2613_OUTPUT].join('\n')
     const directive = buildDiagnosticFixDirective(mixed)!
 
-    expect(directive).toContain('Change exactly one side now with "write_file"')
+    expect(directive).toContain('MUST be "write_file" on exactly one side')
     // The other error is named, never ordered.
     expect(directive).toContain("src/routes/index.tsx line 8 (TS2304): Cannot find name 'TasksPage'.")
     expect(directive.match(/^\d+\. /gm)).toHaveLength(2)
@@ -268,7 +275,7 @@ describe('buildDeferredDiagnosticNote', () => {
   it('names the code errors the winning directive does not fix', () => {
     const note = buildDeferredDiagnosticNote(MIXED)!
 
-    expect(note).toContain('ALSO REPORTED, AFTER THE DIRECTIVE ABOVE')
+    expect(note).toContain('ALSO REPORTED, AFTER THE FIX ABOVE')
     expect(note).toContain('src/components/Button.tsx line 6')
     expect(note).toContain('src/main.tsx line 6')
     // The module error belongs to the directive above, not here.
@@ -278,7 +285,7 @@ describe('buildDeferredDiagnosticNote', () => {
   it('gives no instruction for now, so one message still carries one imperative', () => {
     const note = buildDeferredDiagnosticNote(MIXED)!
 
-    expect(note).toContain('Do not act on them in this step')
+    expect(note).toContain('best left for a later step')
     expect(note).not.toMatch(/next tool call MUST/i)
     expect(note).not.toMatch(/\bwrite_file\b/)
   })
@@ -827,5 +834,15 @@ describe('Rolldown unresolved import after distillation', () => {
     expect(distilled).toContain("Could not resolve './components/Dashboard' in src/App.jsx")
     expect(diagnosticFixTargetFile(UNRESOLVED)).toBe('src/components/Dashboard.jsx')
     expect(diagnosticFixTargetFile(distilled)).toBe('src/components/Dashboard.jsx')
+  })
+})
+
+describe('the fix as a tool result carries it', () => {
+  it('is advice: only the arbiter turns a diagnosed fix into an order', () => {
+    for (const output of [TSC_OUTPUT, TS7016_OUTPUT, TS2613_OUTPUT, TS2614_OUTPUT, ROLLDOWN_JSX_IN_JS]) {
+      const advice = buildDiagnosticFixAdvice(output)!
+      expect(renderAdvice(advice)).not.toMatch(ORDER_MARKER)
+      expect(renderOrder(advice)).toMatch(ORDER_MARKER)
+    }
   })
 })

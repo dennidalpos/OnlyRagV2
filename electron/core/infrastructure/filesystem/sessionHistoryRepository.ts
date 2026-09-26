@@ -49,7 +49,6 @@ export class SessionHistoryRepository {
       if (!fs.existsSync(stateDir)) {
         try {
           fs.mkdirSync(stateDir, { recursive: true })
-          this.migrateLegacyHistoryFile(workspacePath, stateDir)
         } catch (err: unknown) {
           logger.log('WARN', 'SessionHistoryRepo', `Could not create .onlyrag/sessions dir in workspace: ${errorMessage(err)}`)
         }
@@ -66,21 +65,6 @@ export class SessionHistoryRepository {
       }
     }
     return fallbackDir
-  }
-
-  /**
-   * One-time move of `session_history.json` left directly under the workspace's `.onlyrag/`
-   * folder by the pre-unification layout, into the new `.onlyrag/sessions/` subfolder.
-   */
-  private migrateLegacyHistoryFile(workspacePath: string, newStateDir: string): void {
-    const legacyPath = path.join(workspacePath, '.onlyrag', HISTORY_FILE_NAME)
-    try {
-      if (fs.existsSync(legacyPath)) {
-        fs.renameSync(legacyPath, path.join(newStateDir, HISTORY_FILE_NAME))
-      }
-    } catch (err: unknown) {
-      logger.log('WARN', 'SessionHistoryRepo', `Legacy history migration skipped: ${errorMessage(err)}`)
-    }
   }
 
   /** Every directory a session for this workspace could legitimately be stored in: the workspace-scoped `.onlyrag/sessions` folder (if the workspace still exists on disk) and the home fallback used for standalone sessions or workspaces that were unavailable at save */
@@ -205,21 +189,6 @@ export class SessionHistoryRepository {
       }
 
       return true
-    })
-  }
-
-  /**
-   * Merges records coming from the one-shot localStorage migration, keeping any
-   * session already stored on disk (the filesystem store always wins).
-   */
-  public async mergeSessions(workspacePath: string | null, incoming: CodingSession[]): Promise<number> {
-    return this.runExclusive(async () => {
-      const existing = await this.readStore(workspacePath)
-      const existingIds = new Set(existing.map((session) => session.id))
-      const newcomers = incoming.filter((session) => !existingIds.has(session.id))
-      if (newcomers.length === 0) return 0
-      const saved = await this.writeStore(workspacePath, sortSessionsByRecency([...existing, ...newcomers]))
-      return saved ? newcomers.length : 0
     })
   }
 }

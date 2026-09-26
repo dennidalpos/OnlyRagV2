@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildNpmResolutionDirective, npmResolutionDirectiveFor, parseNpmResolutionConflict, installableRange } from './npmResolutionConflict'
+import { buildNpmResolutionNote, npmResolutionNoteFor, parseNpmResolutionConflict, installableRange } from './npmResolutionConflict'
 
 /** Verbatim from the live run of 2026-08-24 (npm 10 "npm error" prefix). */
 const REAL_ERESOLVE_OUTPUT = `npm error code ERESOLVE
@@ -59,11 +59,11 @@ npm error Found: vite@4.5.14`
   })
 })
 
-describe('buildNpmResolutionDirective', () => {
+describe('buildNpmResolutionNote', () => {
   const conflict = parseNpmResolutionConflict(REAL_ERESOLVE_OUTPUT)!
 
   it("names both versions and gives a command copied from npm's own range", () => {
-    const directive = buildNpmResolutionDirective(conflict)
+    const directive = buildNpmResolutionNote(conflict)
 
     expect(directive).toContain('vite@4.5.14')
     expect(directive).toContain('@vitejs/plugin-react@6.1.0')
@@ -75,21 +75,21 @@ describe('buildNpmResolutionDirective', () => {
   it('gives one instruction and a fallback, never a menu the model can escalate', () => {
     // The first draft said "Pick ONE of these and run it now"; in the live probe the model
     // answered by calling `ask` and quoting both options back at a user who was not there.
-    const directive = buildNpmResolutionDirective(conflict)
-    expect(directive).toContain('Do this now, exactly:')
+    const directive = buildNpmResolutionNote(conflict)
+    expect(directive).toContain('Next tool call:')
     expect(directive).not.toMatch(/pick one/i)
     expect(directive).toMatch(/do not ask the user/i)
   })
 
   it('keeps the version spec attached and unquoted so it survives being retyped', () => {
     // The model dropped the spec from `vite@"^8.0.0"` and ran a bare `npm install vite`.
-    const directive = buildNpmResolutionDirective(conflict)
+    const directive = buildNpmResolutionNote(conflict)
     expect(directive).toContain('npm install vite@^8.0.0')
     expect(directive).toMatch(/a bare "npm install vite" changes nothing/i)
   })
 
   it('steers the model away from the two escapes npm advertises', () => {
-    const directive = buildNpmResolutionDirective(conflict)
+    const directive = buildNpmResolutionNote(conflict)
     expect(directive).toContain('--legacy-peer-deps')
     expect(directive).toMatch(/never use --force/i)
   })
@@ -97,15 +97,15 @@ describe('buildNpmResolutionDirective', () => {
   it('says the fix is not in the source files', () => {
     // The generic auto-healing directive told the model to "locate the failing file, syntax,
     // or command parameter" — which sent it rewriting files that were never the problem.
-    expect(buildNpmResolutionDirective(conflict)).toMatch(/do not edit source files/i)
+    expect(buildNpmResolutionNote(conflict)).toMatch(/do not edit source files/i)
   })
 })
 
-describe('npmResolutionDirectiveFor', () => {
+describe('npmResolutionNoteFor', () => {
   it('returns an appendable block for a conflict and an empty string otherwise', () => {
-    expect(npmResolutionDirectiveFor(REAL_ERESOLVE_OUTPUT)).toContain('[DEPENDENCY VERSION CONFLICT — ERESOLVE]')
-    expect(npmResolutionDirectiveFor(REAL_ERESOLVE_OUTPUT).startsWith('\n\n')).toBe(true)
-    expect(npmResolutionDirectiveFor('build succeeded')).toBe('')
+    expect(npmResolutionNoteFor(REAL_ERESOLVE_OUTPUT)).toContain('[DEPENDENCY VERSION CONFLICT — ERESOLVE]')
+    expect(npmResolutionNoteFor(REAL_ERESOLVE_OUTPUT).startsWith('\n\n')).toBe(true)
+    expect(npmResolutionNoteFor('build succeeded')).toBe('')
   })
 })
 
@@ -121,7 +121,7 @@ describe('installableRange', () => {
   })
 
   it('produces a command with no shell operator in it', () => {
-    const directive = buildNpmResolutionDirective({
+    const directive = buildNpmResolutionNote({
       installed: { name: 'eslint', version: '9.7.0' },
       requiredBy: { name: 'eslint-plugin-react', version: '7.32.2' },
       requiredRange: '^3 || ^4 || ^9.7',
@@ -141,7 +141,7 @@ describe('installableRange', () => {
   })
 
   it('redirects an ERESOLVE to the requiring package when satisfying it would downgrade the root dependency', () => {
-    const directive = buildNpmResolutionDirective({
+    const directive = buildNpmResolutionNote({
       installed: { name: 'react', version: '18.2.0' },
       declaredRange: '^18.2.0',
       requiredBy: { name: 'use-optimistic', version: '1.0.0' },

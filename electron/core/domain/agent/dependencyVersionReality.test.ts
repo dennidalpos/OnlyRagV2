@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { declaredDependencies, majorOf, findVersionReality, buildVersionRealityDirective, pendingManifestDirective } from './dependencyVersionReality'
+import { declaredDependencies, majorOf, findVersionReality, buildVersionRealityNote, pendingManifestAdvice } from './dependencyVersionReality'
+import { ORDER_MARKER } from './diagnosticAdvice'
 
 /** The manifest run 10 of 2026-08-25 wrote, which took that session to 0/12. */
 const RUN_10_MANIFEST = {
@@ -69,9 +70,9 @@ describe('findVersionReality', () => {
   })
 })
 
-describe('buildVersionRealityDirective', () => {
+describe('buildVersionRealityNote', () => {
   it('deals with the invented package first, since no install can succeed while it is declared', () => {
-    const directive = buildVersionRealityDirective({
+    const directive = buildVersionRealityNote({
       nonexistent: ['@tailwindcss/react'],
       unpublished: [],
       outdated: [{ name: 'typescript', declared: '^4.7.3', latest: '5.9.2' }],
@@ -84,7 +85,7 @@ describe('buildVersionRealityDirective', () => {
   })
 
   it('gives the real version number, because the model cannot know it', () => {
-    const directive = buildVersionRealityDirective({
+    const directive = buildVersionRealityNote({
       nonexistent: [],
       unpublished: [],
       outdated: [{ name: 'typescript', declared: '^4.7.3', latest: '5.9.2' }],
@@ -95,11 +96,11 @@ describe('buildVersionRealityDirective', () => {
   })
 
   it('says nothing when the manifest matches reality', () => {
-    expect(buildVersionRealityDirective({ nonexistent: [], unpublished: [], outdated: [] })).toBeNull()
+    expect(buildVersionRealityNote({ nonexistent: [], unpublished: [], outdated: [] })).toBeNull()
   })
 
   it('replaces an unpublished manifest range before install', () => {
-    const directive = buildVersionRealityDirective({
+    const directive = buildVersionRealityNote({
       nonexistent: [],
       unpublished: [{ name: 'react-dom', declared: '^19.8.0', latest: '19.2.0' }],
       outdated: [],
@@ -115,7 +116,7 @@ describe('buildVersionRealityDirective', () => {
 describe('one instruction per message', () => {
   // Run 14 of 2026-08-25: the directive ended with "Then install again", and the model ran `npm install` repeatedly until the loop guard aborted the session at step 21, 0/12, with package.json never rewritten.
   it('keeps an outdated major advisory, since an old major still installs', () => {
-    const outdated = buildVersionRealityDirective({
+    const outdated = buildVersionRealityNote({
       nonexistent: [],
       unpublished: [],
       outdated: [{ name: 'typescript', declared: '^4.7.3', latest: '5.9.2' }],
@@ -126,10 +127,12 @@ describe('one instruction per message', () => {
   })
 
   it('never orders a source edit alongside removing an invented package', () => {
-    const missing = buildVersionRealityDirective({ nonexistent: ['@tailwindcss/react'], unpublished: [], outdated: [] })!
+    const missing = buildVersionRealityNote({ nonexistent: ['@tailwindcss/react'], unpublished: [], outdated: [] })!
 
     expect(missing).toContain('Do NOT try to install')
-    expect(missing.match(/MUST be/g)).toHaveLength(1)
+    expect(missing.match(/Next tool call:/g)).toHaveLength(1)
+    // A tool result advises; only the arbiter orders.
+    expect(missing).not.toMatch(ORDER_MARKER)
   })
 })
 
@@ -165,24 +168,22 @@ describe('packages whose major bump rewrites the configuration', () => {
   })
 })
 
-describe('pendingManifestDirective', () => {
+describe('pendingManifestAdvice', () => {
   const output = [
     'npm error code ETARGET',
     '',
-    '[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]',
-    '- react: you declared ^19.8.0, npm currently publishes 19.3.0',
-    'Directives:',
-    '1. Your next tool call MUST be "write_file" on "package.json", with the complete file and that range replaced by the current version above.',
-    '2. Do NOT run an install first and do NOT guess another version.',
+    buildVersionRealityNote({ nonexistent: [], unpublished: [{ name: 'react', declared: '^19.8.0', latest: '19.3.0' }], outdated: [] })!.trim(),
     '',
-    'DO NOT ask the user vague clarification questions: carry out the directive above.',
+    'A vague clarification question to the user will not help here: the diagnostics above name the fix.',
   ].join('\n')
 
-  it('returns the ordered rewrite, without the text around it, while nothing has written package.json since', () => {
-    const directive = pendingManifestDirective([{ step: 4, output }], [{ step: 4, tool: 'run_command', target: 'npm install', status: 'FAILURE' }])
+  it('reads back the advised rewrite, without the text around it, while nothing has written package.json since', () => {
+    const advice = pendingManifestAdvice([{ step: 4, output }], [{ step: 4, tool: 'run_command', target: 'npm install', status: 'FAILURE' }])
 
-    expect(directive?.startsWith('[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]')).toBe(true)
-    expect(directive?.endsWith('do NOT guess another version.')).toBe(true)
+    expect(advice?.heading).toBe('[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]')
+    expect(advice?.facts[0]).toBe('- react: you declared ^19.8.0, npm currently publishes 19.3.0')
+    expect(advice?.nextCall).toContain('"write_file" on "package.json"')
+    expect(advice?.constraints).toEqual(['Do NOT run an install first and do NOT guess another version.'])
   })
 
   it('counts the order as answered once package.json is written successfully afterwards', () => {
@@ -191,10 +192,10 @@ describe('pendingManifestDirective', () => {
       { step: 5, tool: 'write_file', target: 'C:\\ws\\package.json', status: 'SUCCESS' as const },
     ]
 
-    expect(pendingManifestDirective([{ step: 4, output }], episodes)).toBeNull()
+    expect(pendingManifestAdvice([{ step: 4, output }], episodes)).toBeNull()
   })
 
   it('ignores advisory output such as an outdated major', () => {
-    expect(pendingManifestDirective([{ step: 2, output: '[THESE VERSIONS ARE MAJOR RELEASES BEHIND — THE REGISTRY WAS ASKED]' }], [])).toBeNull()
+    expect(pendingManifestAdvice([{ step: 2, output: '[THESE VERSIONS ARE MAJOR RELEASES BEHIND — THE REGISTRY WAS ASKED]' }], [])).toBeNull()
   })
 })

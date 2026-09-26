@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { buildTestFailureDirective, extractFailingTest, isTestFilePath, literalJsxText, renderedTextFragment, testedModuleText } from './testFailureDiagnostic'
-import { buildDiagnosticFixDirective, diagnosticFixTargetFile } from './compilerDiagnosticDirective'
+import { buildTestFailureAdvice, extractFailingTest, isTestFilePath, literalJsxText, renderedTextFragment, testedModuleText } from './testFailureDiagnostic'
+import { buildDiagnosticFixAdvice, diagnosticFixTargetFile } from './compilerDiagnosticDirective'
+import { renderOrder } from './diagnosticAdvice'
+
+/** The fixes as the arbiter orders them, the form in which their wording matters most. */
+function buildDiagnosticFixDirective(...args: Parameters<typeof buildDiagnosticFixAdvice>): string | null {
+  const advice = buildDiagnosticFixAdvice(...args)
+  return advice && renderOrder(advice)
+}
+function buildTestFailureDirective(...args: Parameters<typeof buildTestFailureAdvice>): string {
+  return renderOrder(buildTestFailureAdvice(...args))
+}
 
 /** The Jest output of the full-task run of 2026-09-24 (run 6), ANSI colours included. */
 const JEST_OUTPUT = [

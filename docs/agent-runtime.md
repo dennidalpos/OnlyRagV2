@@ -34,7 +34,7 @@ complexity check -> [interview -> plan] -> collect_context -> propose_action
 
 - **Run di progetto**: opera direttamente nel workspace dell'utente, con i suoi `node_modules`, il piano approvato e lo stato di sessione. Il journal registra lo stato precedente di ogni file modificato dai tool; a fine run, anche per annullamento o timeout, diventa un checkpoint in `.onlyrag/checkpoints/<id>` ([`agentCheckpointStore.ts`](../electron/core/infrastructure/filesystem/agentCheckpointStore.ts)) e le modifiche restano sul disco. Il ripristino è un'azione esplicita dell'utente (`agent:restore-checkpoint`, pulsante nella scheda di evidenza). La cartella `.onlyrag/` contiene un `.gitignore` che la esclude dal repository. Gli effetti dei comandi shell (installazioni, generatori) non sono nel checkpoint e compaiono tra gli effetti esterni.
 - La scoperta dei progetti ignora le cartelle di cache di pytest, oltre a build, dipendenze e ambienti virtuali: una cache non accessibile non interrompe il piano.
-- **Standalone**: confinato in `userData/agent-scratch`, persistente tra sessioni e gestibile da UI (Mostra, Esporta, Svuota). Le run senza workspace valido sono rifiutate senza ricadere nella cartella di installazione o in `process.cwd()`.
+- **Standalone**: confinato in `userData/agent-scratch` (`userdata_dev/agent-scratch` senza Electron, mai la cartella home), persistente tra sessioni e gestibile da UI (Mostra, Esporta, Svuota). Le run senza workspace valido sono rifiutate senza ricadere nella cartella di installazione o in `process.cwd()`.
 
 ## Contesto, token e thinking
 

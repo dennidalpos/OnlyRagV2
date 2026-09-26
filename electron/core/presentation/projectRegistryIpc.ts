@@ -21,8 +21,4 @@ export function registerProjectRegistryIpcHandlers() {
   ipcMain.handle('projects:remove', async (_event, { projectPath }) => {
     return projectRegistryAppService.removeProject(projectPath)
   })
-
-  ipcMain.handle('projects:migrate-legacy', async (_event, { projects }) => {
-    return projectRegistryAppService.migrateLegacyProjects(projects)
-  })
 }

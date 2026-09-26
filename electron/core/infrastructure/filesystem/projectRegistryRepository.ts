@@ -3,7 +3,7 @@ import path from 'node:path'
 import { userDataRoot } from './userDataRoot'
 import { logger } from '../logging/logger'
 import type { WorkspaceProject } from '../../../../shared/types'
-import { upsertProject, touchProject, sortProjectsByRecency, mergeProjects, renameProjectInList } from '../../domain/workspace/projectRegistryDomain'
+import { upsertProject, touchProject, sortProjectsByRecency, renameProjectInList } from '../../domain/workspace/projectRegistryDomain'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
@@ -89,15 +89,6 @@ export class ProjectRegistryRepository {
     const remaining = projects.filter((p) => p.path !== projectPath)
     if (remaining.length === projects.length) return false
     return this.writeStore(remaining)
-  }
-
-  /** Merges legacy localStorage projects in, keeping the registry's own entries on conflict. */
-  public async mergeLegacy(incoming: WorkspaceProject[]): Promise<number> {
-    const existing = await this.readStore()
-    const merged = mergeProjects(existing, incoming)
-    if (merged.length === existing.length) return 0
-    const saved = await this.writeStore(merged)
-    return saved ? merged.length - existing.length : 0
   }
 }
 

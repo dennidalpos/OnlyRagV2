@@ -33,9 +33,9 @@ import { isVerificationFailing } from '../domain/agent/verificationAttemptTracke
 import { isProjectTestCommand, isUsableTestScript } from '../domain/agent/behaviorTestDirective'
 import { isTestFilePath } from '../domain/agent/testFailureDiagnostic'
 import { extractPackageImportStatements } from '../domain/agent/importDeclarationGate'
-import { pendingManifestDirective } from '../domain/agent/dependencyVersionReality'
+import { pendingManifestAdvice } from '../domain/agent/dependencyVersionReality'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
-import { buildDiagnosticFixDirective, diagnosticFixRequiredTools, diagnosticFixTargetFile } from '../domain/agent/compilerDiagnosticDirective'
+import { buildDiagnosticFixAdvice, diagnosticFixRequiredTools, diagnosticFixTargetFile } from '../domain/agent/compilerDiagnosticDirective'
 import {
   isBinaryInstalled,
   packageHasStyleEntry,
@@ -385,7 +385,7 @@ export function resolvePlanDirectiveForTurn(
     readLocalModuleSource: (importingFile: string, specifier: string) => readLocalModuleSource(workspacePath, importingFile, specifier),
   }
   const diagnose = (output: string) =>
-    buildDiagnosticFixDirective(
+    buildDiagnosticFixAdvice(
       output,
       (pkg) => readPackageExports(workspacePath, pkg),
       (importingFile, specifier) => readLocalModuleExports(workspacePath, importingFile, specifier),
@@ -408,7 +408,7 @@ export function resolvePlanDirectiveForTurn(
     undeclaredDependencies: installsAllowed(capabilityPolicyMode) ? scanUndeclaredImports(workspacePath) : [],
     // Read back from the session's own trajectory rather than kept as a second piece of state: the episodes are already recorded, already persisted, and already say which installs failed and which later succeeded.
     packagesWithFailedInstall: packagesWithFailedInstall(episodes),
-    pendingManifestDirective: pendingManifestDirective(recentFullLogs, episodes),
+    pendingManifestAdvice: pendingManifestAdvice(recentFullLogs, episodes),
     importStatementsOf: (file, packageName) => {
       try {
         return extractPackageImportStatements(file, documentIoRepository.readText(path.join(workspacePath, file)), packageName)
@@ -418,14 +418,14 @@ export function resolvePlanDirectiveForTurn(
     },
     verificationCommand: verification,
     verificationFailing: isVerificationFailing(episodes, verification?.command),
-    verificationFailureDirective: lastVerificationFailureOutput ? diagnose(lastVerificationFailureOutput) : null,
+    verificationFailureAdvice: lastVerificationFailureOutput ? diagnose(lastVerificationFailureOutput) : null,
     verificationFailureTargetFile: lastVerificationFailureOutput ? diagnosticFixTargetFile(lastVerificationFailureOutput, workspaceFacts) : null,
     verificationFailureTools: lastVerificationFailureOutput ? diagnosticFixRequiredTools(lastVerificationFailureOutput, workspaceFacts) : [],
     disconnectedEntrypoint: resolveDisconnectedEntrypoint(workspacePath, probe),
     packageTestScript: manifest.packageJson ? (manifest.packageJson.scripts?.test ?? null) : undefined,
     declaredPackages: declared,
     behaviorVerificationFailing: isBehaviorTestFailing(episodes),
-    behaviorFailureDirective: behaviorFailureOutput ? diagnose(behaviorFailureOutput) : null,
+    behaviorFailureAdvice: behaviorFailureOutput ? diagnose(behaviorFailureOutput) : null,
     behaviorFailureTargetFile: behaviorFailureOutput ? diagnosticFixTargetFile(behaviorFailureOutput, workspaceFacts) : null,
     behaviorFailureTools: behaviorFailureOutput ? diagnosticFixRequiredTools(behaviorFailureOutput, workspaceFacts) : [],
   })

@@ -19,7 +19,7 @@ import { AtomicWorkspaceJournal, RollbackResult } from '../infrastructure/filesy
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { PersistentPowerShellSession } from '../infrastructure/process/persistentPowerShellSession'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
-import { declaredDependencies, findVersionReality, buildVersionRealityDirective, type DeclaredDependency } from '../domain/agent/dependencyVersionReality'
+import { declaredDependencies, findVersionReality, buildVersionRealityNote, type DeclaredDependency } from '../domain/agent/dependencyVersionReality'
 import { buildVersionAnswer, versionQuestionPackages } from '../domain/agent/versionQuestion'
 import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
 import { extractRequestedPackages } from '../domain/agent/installCommandParser'
@@ -333,13 +333,13 @@ export class AgentToolExecutorService {
     findings.unpublished = findings.unpublished.filter((item) => !this.reportedVersionFacts.has(item.name))
     findings.outdated = findings.outdated.filter((o) => !this.reportedVersionFacts.has(o.name))
 
-    const directive = buildVersionRealityDirective(findings)
-    if (!directive) return ''
+    const note = buildVersionRealityNote(findings)
+    if (!note) return ''
     for (const name of [...findings.nonexistent, ...findings.unpublished.map((item) => item.name), ...findings.outdated.map((o) => o.name)]) {
       this.reportedVersionFacts.add(name)
     }
     logger.log('WARN', 'AgentToolExecutor', `[VERSION_REALITY] package.json declares versions the registry contradicts`)
-    return directive
+    return note
   }
 
   /** Registry-backed answer to a version question the model asked in AUTO mode (see versionQuestion.ts). */

@@ -52,17 +52,11 @@ export function knownFileVersion(evidence: FileVersionEvidence | undefined, file
   return options.wholeFile ? undefined : stored.slice(PARTIAL_VIEW_PREFIX.length)
 }
 
-/** Restores evidence saved before it became per-file (a single `{ filePath, contentHash }`). */
-export function restoreFileVersionEvidence(
-  saved: FileVersionEvidence | undefined,
-  legacy: { filePath: string; contentHash: string } | undefined,
-): FileVersionEvidence {
+/** Restores the per-file evidence a saved run state carries, re-applying the bound and path normalization. */
+export function restoreFileVersionEvidence(saved: FileVersionEvidence | undefined): FileVersionEvidence {
   const evidence: FileVersionEvidence = {}
   for (const [filePath, contentHash] of Object.entries(saved ?? {})) {
     if (typeof contentHash === 'string') recordFileVersion(evidence, filePath, contentHash)
-  }
-  if (legacy?.filePath && legacy.contentHash && !knownFileVersion(evidence, legacy.filePath)) {
-    recordFileVersion(evidence, legacy.filePath, legacy.contentHash)
   }
   return evidence
 }

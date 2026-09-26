@@ -79,30 +79,12 @@ export const AppLayout: React.FC = () => {
       if (!window.electronAPI?.getAppSettings) return
       setSettingsBootstrap({ status: 'loading' })
       try {
-        let backendSettings = await window.electronAPI.getAppSettings()
-        if (!backendSettings) {
-          const legacy = localStorage.getItem('onlyrag_app_settings')
-          if (legacy) {
-            const parsed = JSON.parse(legacy) as AppSettings
-            backendSettings = {
-              ...parsed,
-              maxToolCallSteps: typeof parsed.maxToolCallSteps === 'number' && parsed.maxToolCallSteps >= 200 ? 0 : parsed.maxToolCallSteps,
-              hasCompletedInitialSetup: parsed.hasCompletedInitialSetup || localStorage.getItem('onlyrag_initial_setup_completed') === 'true',
-              language: parsed.language || (localStorage.getItem('onlyrag_language') === 'en' ? 'en' : 'it'),
-            }
-            if (window.electronAPI.saveAppSettings && !(await window.electronAPI.saveAppSettings(backendSettings))) {
-              throw new Error('Legacy settings migration failed')
-            }
-          }
-        }
+        const backendSettings = await window.electronAPI.getAppSettings()
         if (!isMounted) return
         if (backendSettings) {
           setSettings(backendSettings)
           if (backendSettings.language && backendSettings.language !== language) setLanguage(backendSettings.language)
         }
-        localStorage.removeItem('onlyrag_app_settings')
-        localStorage.removeItem('onlyrag_initial_setup_completed')
-        localStorage.removeItem('onlyrag_language')
         if (!backendSettings?.hasCompletedInitialSetup && !backendSettings?.defaultModel) setIsWizardOpen(true)
         setSettingsBootstrap({ status: 'ready' })
       } catch (err: unknown) {

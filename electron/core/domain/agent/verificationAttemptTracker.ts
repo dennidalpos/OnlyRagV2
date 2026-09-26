@@ -1,3 +1,5 @@
+import { renderOrder, type DiagnosticAdvice } from './diagnosticAdvice'
+
 /** The shape this module needs from a recorded step; matches EpisodicStepRecord. */
 export interface TrajectoryStep {
   tool: string
@@ -54,31 +56,31 @@ export function isVerificationFailing(episodes: readonly TrajectoryStep[], verif
 export function buildVerificationFailingDirective(
   verificationCommand: string,
   /**
-   * The diagnostic directive built from the failing run, to be CARRIED here rather than referred
-   * to. Null when none could be built, and the text then falls back to the pointer.
+   * The fix diagnosed from the failing run, to be CARRIED here as this turn's order rather than
+   * referred to. Null when none could be built, and the text then falls back to the pointer.
    */
-  embeddedDirective: string | null = null,
+  embeddedAdvice: DiagnosticAdvice | null = null,
 ): string {
   const head = [
     `[THE PROJECT CHECK ALREADY RAN AND FAILED — DO NOT RUN IT AGAIN YET]`,
     `"${verificationCommand}" has already been executed and reported errors, and nothing has changed since. Running it again will report the same errors: the command reads the code, it does not change it.`,
   ]
 
-  // Carrying it beats pointing at it, and does not break the rule above: there is still exactly ONE prescription in the turn, and it is still the diagnostic's — the only thing that has read the compiler's own suggestion.
-  if (embeddedDirective) {
+  // Carrying it beats pointing at it: the tool result offered the same fix as advice, and this is the turn's one order — the diagnostic's, the only thing that has read the compiler's own suggestion.
+  if (embeddedAdvice) {
     return [
       ...head,
       `This is what that failure requires:`,
-      embeddedDirective,
+      renderOrder(embeddedAdvice),
       `Run "${verificationCommand}" again only after the above has actually changed a file.`,
     ].join('\n')
   }
 
   return [
     ...head,
-    `Its output is in your recent tool results above, together with the directive that says exactly what to do about it — which file to write, or which command to run.`,
+    `Its output is in your recent tool results above, together with the diagnostics that say what to do about it — which file to write, or which command to run.`,
     `Directives:`,
-    `1. Do what that directive says. It is the only instruction that applies right now.`,
+    `1. Apply the fix those diagnostics name. It is the only instruction that applies right now.`,
     `2. Run "${verificationCommand}" again only after that has actually changed something.`,
   ].join('\n')
 }

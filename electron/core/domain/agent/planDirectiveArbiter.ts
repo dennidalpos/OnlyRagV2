@@ -17,6 +17,7 @@ import {
 } from './behaviorTestDirective'
 import type { SupportedToolName } from './agentTypes'
 import type { PackageImportStatement } from './importDeclarationGate'
+import { renderOrder, type DiagnosticAdvice } from './diagnosticAdvice'
 
 export type PlanDirectiveKind =
   | 'session_closure'
@@ -62,15 +63,15 @@ export interface PlanDirectiveInput {
   /** Packages whose installation already failed. */
   packagesWithFailedInstall: readonly string[]
   /** Pending package.json rewrite from dependency checks. */
-  pendingManifestDirective?: string | null
+  pendingManifestAdvice?: DiagnosticAdvice | null
   importStatementsOf?: (file: string, packageName: string) => readonly PackageImportStatement[]
   verificationCommand: { command: string; source: string } | null
   verificationFailing: boolean
-  /** Directive from last failing verification. */
-  verificationFailureDirective?: string | null
-  /** The file that directive orders written, so the prompt can carry its current content. */
+  /** Fix diagnosed from the last failing verification; the arbiter alone turns it into an order. */
+  verificationFailureAdvice?: DiagnosticAdvice | null
+  /** The file that fix writes, so the prompt can carry its current content. */
   verificationFailureTargetFile?: string | null
-  /** Tools beyond the file edit that the failure directive orders. */
+  /** Tools beyond the file edit that the failure fix needs. */
   verificationFailureTools?: readonly SupportedToolName[]
   /**
    * The project's HTML entry page loads none of its own code. Null when the project has no
@@ -86,11 +87,11 @@ export interface PlanDirectiveInput {
   declaredPackages?: readonly string[]
   /** `npm test` has already run, failed, and nothing has been written since. */
   behaviorVerificationFailing?: boolean
-  /** The diagnostic built from that failing `npm test`, carried like `verificationFailureDirective`. */
-  behaviorFailureDirective?: string | null
-  /** The file that diagnostic orders written. */
+  /** The fix diagnosed from that failing `npm test`, carried like `verificationFailureAdvice`. */
+  behaviorFailureAdvice?: DiagnosticAdvice | null
+  /** The file that fix writes. */
   behaviorFailureTargetFile?: string | null
-  /** Tools that diagnostic orders beyond the file edit, carried like `verificationFailureTools`. */
+  /** Tools that fix needs beyond the file edit, carried like `verificationFailureTools`. */
   behaviorFailureTools?: readonly SupportedToolName[]
 }
 
@@ -226,10 +227,10 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
 
   // Ahead of every install: while package.json names what npm does not publish, each install
   // fails the same way, and ordering one spends the execution budget on a known failure.
-  if (!input.hasVerifiedBuild && input.pendingManifestDirective) {
+  if (!input.hasVerifiedBuild && input.pendingManifestAdvice) {
     return {
       kind: 'dependencies_unpublished',
-      blockDirective: input.pendingManifestDirective,
+      blockDirective: renderOrder(input.pendingManifestAdvice),
       closureStepDirective: null,
       rewriteTargets: ['package.json'],
     }
@@ -286,12 +287,12 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
     !input.hasVerifiedBuild &&
     input.verificationCommand &&
     input.verificationFailing &&
-    input.verificationFailureDirective &&
+    input.verificationFailureAdvice &&
     !isEveryDeliverableSatisfied(input)
   ) {
     return {
       kind: 'verification_failing',
-      blockDirective: buildVerificationFailingDirective(input.verificationCommand.command, input.verificationFailureDirective),
+      blockDirective: buildVerificationFailingDirective(input.verificationCommand.command, input.verificationFailureAdvice),
       closureStepDirective: null,
       rewriteTargets: input.verificationFailureTargetFile ? [input.verificationFailureTargetFile] : undefined,
       requiredTools: input.verificationFailureTools?.length ? input.verificationFailureTools : undefined,
@@ -306,7 +307,7 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
     if (input.verificationFailing) {
       return {
         kind: 'verification_failing',
-        blockDirective: buildVerificationFailingDirective(input.verificationCommand.command, input.verificationFailureDirective ?? null),
+        blockDirective: buildVerificationFailingDirective(input.verificationCommand.command, input.verificationFailureAdvice ?? null),
         closureStepDirective: null,
         // The model rewrites this file next. Nine live runs show it never reads one first, so
         // showing it is the difference between an edit and a blind replacement.
@@ -366,7 +367,7 @@ function resolveBehaviorTestDirective(input: PlanDirectiveInput): PlanDirectiveD
   if (input.behaviorVerificationFailing) {
     return {
       kind: 'verification_failing',
-      blockDirective: buildVerificationFailingDirective(BEHAVIOR_TEST_COMMAND, input.behaviorFailureDirective ?? null),
+      blockDirective: buildVerificationFailingDirective(BEHAVIOR_TEST_COMMAND, input.behaviorFailureAdvice ?? null),
       closureStepDirective: null,
       rewriteTargets: input.behaviorFailureTargetFile ? [input.behaviorFailureTargetFile] : undefined,
       // Without it a move_file the directive ordered was denied by the turn policy, 30 steps in a row (live full task run 28, 2026-09-25).

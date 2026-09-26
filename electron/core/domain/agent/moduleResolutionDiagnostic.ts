@@ -1,4 +1,6 @@
 /** `Cannot find module 'x'` / `Cannot find module "x"`, in tsc and bundler phrasing alike. */
+
+import { diagnosticAdvice, renderAdvice } from './diagnosticAdvice'
 const CANNOT_FIND_MODULE = /cannot find module\s+['"`]([^'"`]+)['"`]/gi
 
 /** TypeScript says this itself when the failure is its own resolution mode. */
@@ -34,18 +36,22 @@ export function classifyModuleDiagnostic(output: string, isPackageInstalled: (pk
   return 'compiler_resolution'
 }
 
-/** One instruction: fix the config that cannot see `node_modules`. */
-export function buildModuleResolutionDirective(output: string, packages: string[]): string {
+/** One fix, as advice: the config that cannot see `node_modules`. */
+export function buildModuleResolutionNote(output: string, packages: string[]): string {
   const named = packages.slice(0, 4).join(', ')
   const compilerSaidSo = RESOLUTION_HINT.test(output || '')
-  return [
-    `\n\n[THE PACKAGE IS INSTALLED — THE COMPILER CANNOT SEE IT]`,
-    `${named}${packages.length > 4 ? ` and ${packages.length - 4} more` : ''} ${packages.length === 1 ? 'is' : 'are'} already present in node_modules, so this is NOT a missing dependency and installing ${packages.length === 1 ? 'it' : 'them'} again will report exactly the same error.`,
-    compilerSaidSo
-      ? `The compiler named the cause itself: its "moduleResolution" setting. With "module": "ESNext" and no "moduleResolution", TypeScript falls back to "classic", which never looks inside node_modules.`
-      : `The cause is the TypeScript configuration: without a node-aware "moduleResolution", the compiler never looks inside node_modules.`,
-    `Directives:`,
-    `1. Your next tool call MUST be "write_file" on "tsconfig.json", with the complete file, adding "moduleResolution": "bundler" to compilerOptions.`,
-    `2. Do NOT run any install command for ${packages.length === 1 ? 'this package' : 'these packages'}. ${packages.length === 1 ? 'It is' : 'They are'} on disk already.`,
-  ].join('\n')
+  const advice = diagnosticAdvice(
+    `[THE PACKAGE IS INSTALLED — THE COMPILER CANNOT SEE IT]`,
+    [
+      `${named}${packages.length > 4 ? ` and ${packages.length - 4} more` : ''} ${packages.length === 1 ? 'is' : 'are'} already present in node_modules, so this is NOT a missing dependency and installing ${packages.length === 1 ? 'it' : 'them'} again will report exactly the same error.`,
+      compilerSaidSo
+        ? `The compiler named the cause itself: its "moduleResolution" setting. With "module": "ESNext" and no "moduleResolution", TypeScript falls back to "classic", which never looks inside node_modules.`
+        : `The cause is the TypeScript configuration: without a node-aware "moduleResolution", the compiler never looks inside node_modules.`,
+    ],
+    `"write_file" on "tsconfig.json", with the complete file, adding "moduleResolution": "bundler" to compilerOptions.`,
+    [
+      `Do NOT run any install command for ${packages.length === 1 ? 'this package' : 'these packages'}. ${packages.length === 1 ? 'It is' : 'They are'} on disk already.`,
+    ],
+  )
+  return `\n\n${renderAdvice(advice)}`
 }

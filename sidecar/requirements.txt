@@ -20,7 +20,8 @@ wordfreq>=3.1.0
 symspellpy>=6.7.7
 langdetect>=1.0.9
 tabulate>=0.9.0
-opencv-python-headless>=4.8.0
+# rapidocr requires opencv-python; a headless pin would install a second build into the same cv2 package.
+opencv-python>=4.8.0
 ftfy>=6.2.0
 # Mustache renderer for the `images:analysis` vision prompt: its per-page variables
 # (currentPage/numPages/activePageContent) are only known inside the sidecar page loop, so the

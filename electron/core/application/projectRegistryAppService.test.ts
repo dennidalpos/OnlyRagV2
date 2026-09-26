@@ -6,7 +6,6 @@ import path from 'node:path'
 vi.mock('../infrastructure/filesystem/projectRegistryRepository', () => ({
   projectRegistryRepository: {
     remove: vi.fn(),
-    mergeLegacy: vi.fn(async (projects: unknown[]) => projects.length),
   },
 }))
 vi.mock('./sessionHistoryAppService', () => ({
@@ -66,22 +65,5 @@ describe('ProjectRegistryAppService project removal and purge fan-out', () => {
 
     // Cleanup tempDir
     fs.rmSync(tempDir, { recursive: true, force: true })
-  })
-})
-
-describe('ProjectRegistryAppService legacy migration', () => {
-  it('stores only the declared project fields of valid legacy entries', async () => {
-    const result = await projectRegistryAppService.migrateLegacyProjects([
-      { path: '/repo/a', name: 'a', addedAt: '2026-01-01', lastOpenedAt: '2026-02-01', injected: { admin: true } },
-      { path: '/repo/b', name: 'b', addedAt: '2026-01-02', lastOpenedAt: 42 },
-      { path: '', name: 'empty', addedAt: '2026-01-03' },
-      null,
-    ])
-
-    expect(result).toEqual({ migrated: 2 })
-    expect(projectRegistryRepository.mergeLegacy).toHaveBeenCalledWith([
-      { path: '/repo/a', name: 'a', addedAt: '2026-01-01', lastOpenedAt: '2026-02-01' },
-      { path: '/repo/b', name: 'b', addedAt: '2026-01-02' },
-    ])
   })
 })

@@ -66,21 +66,6 @@ describe('SessionHistoryRepository Unit Tests', () => {
     expect(await sessionHistoryRepository.listSessions(tempDir)).toHaveLength(0)
   })
 
-  it('should migrate a pre-unification session_history.json out of the flat .onlyrag/ folder into .onlyrag/sessions/', async () => {
-    const legacyOnlyragDir = path.join(tempDir, '.onlyrag')
-    fs.mkdirSync(legacyOnlyragDir, { recursive: true })
-    fs.writeFileSync(
-      path.join(legacyOnlyragDir, 'session_history.json'),
-      JSON.stringify({ version: 1, sessions: [buildSession('legacy-migrated-session', tempDir, { title: 'Legacy' })] }),
-      'utf-8',
-    )
-
-    const listed = await sessionHistoryRepository.listSessions(tempDir)
-    expect(listed.find((s) => s.id === 'legacy-migrated-session')?.title).toBe('Legacy')
-    expect(fs.existsSync(path.join(legacyOnlyragDir, 'session_history.json'))).toBe(false)
-    expect(fs.existsSync(path.join(legacyOnlyragDir, 'sessions', 'session_history.json'))).toBe(true)
-  })
-
   it('should update an existing session instead of duplicating it', async () => {
     await sessionHistoryRepository.saveSession(buildSession('session-2', tempDir, { title: 'Prima' }))
     await sessionHistoryRepository.saveSession(buildSession('session-2', tempDir, { title: 'Seconda' }))
@@ -98,21 +83,6 @@ describe('SessionHistoryRepository Unit Tests', () => {
 
     const listed = await sessionHistoryRepository.listSessions(tempDir)
     expect(listed.map((session) => session.id)).toEqual(expect.arrayContaining(['session-concurrent-a', 'session-concurrent-b']))
-  })
-
-  it('should merge legacy sessions without overwriting the ones already on disk', async () => {
-    await sessionHistoryRepository.saveSession(buildSession('session-3', tempDir, { title: 'Su disco' }))
-
-    const merged = await sessionHistoryRepository.mergeSessions(tempDir, [
-      buildSession('session-3', tempDir, { title: 'Legacy duplicata' }),
-      buildSession('session-4', tempDir, { title: 'Legacy nuova' }),
-    ])
-
-    expect(merged).toBe(1)
-    const listed = await sessionHistoryRepository.listSessions(tempDir)
-    expect(listed).toHaveLength(2)
-    expect(listed.find((s) => s.id === 'session-3')?.title).toBe('Su disco')
-    expect(listed.find((s) => s.id === 'session-4')?.title).toBe('Legacy nuova')
   })
 
   it('should clear the whole workspace store', async () => {

@@ -61,7 +61,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(loadedAfterClear).toBeNull()
   })
 
-  it('maps persisted pre-simplification modes to the canonical modes', async () => {
+  it('falls back to guided for an unknown persisted mode', async () => {
     const stateDir = path.join(tempDir, '.onlyrag', 'sessions')
     fs.mkdirSync(stateDir, { recursive: true })
     const base = {
@@ -74,11 +74,9 @@ describe('AgentSessionStateRepository Unit Tests', () => {
       userTask: 'Resume',
       updatedAt: new Date().toISOString(),
     }
-    fs.writeFileSync(path.join(stateDir, '.agent_state_legacy-agent.json'), JSON.stringify({ ...base, sessionId: 'legacy-agent', agentMode: 'agent' }))
-    fs.writeFileSync(path.join(stateDir, '.agent_state_legacy-plan.json'), JSON.stringify({ ...base, sessionId: 'legacy-plan', agentMode: 'plan' }))
+    fs.writeFileSync(path.join(stateDir, '.agent_state_unknown-mode.json'), JSON.stringify({ ...base, sessionId: 'unknown-mode', agentMode: 'plan' }))
 
-    await expect(agentSessionStateRepository.loadSessionState('legacy-agent', tempDir)).resolves.toMatchObject({ agentMode: 'auto' })
-    await expect(agentSessionStateRepository.loadSessionState('legacy-plan', tempDir)).resolves.toMatchObject({ agentMode: 'guided' })
+    await expect(agentSessionStateRepository.loadSessionState('unknown-mode', tempDir)).resolves.toMatchObject({ agentMode: 'guided' })
   })
 
   it('persists the terminal reason as structured state rather than requiring summary parsing', async () => {
@@ -213,43 +211,6 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(loaded?.pendingPlanMilestones?.[0].title).toBe('Design schema')
     expect(loaded?.pendingPlanUserTask).toBe('Build the login flow')
     expect(loaded?.stepCount).toBe(0)
-  })
-
-  it('should migrate a pre-unification .assistant/SESSION_TRACKER.md into .onlyrag/assistant/ on first write', async () => {
-    const legacyDir = path.join(tempDir, '.assistant')
-    fs.mkdirSync(legacyDir, { recursive: true })
-    fs.writeFileSync(path.join(legacyDir, 'SESSION_TRACKER.md'), '# Legacy tracker content', 'utf-8')
-
-    const tracker = new SessionDebtTracker({
-      sessionId: 'migration-session',
-      completedTasks: [],
-      unresolvedIssues: [],
-      nextSteps: [],
-      modifiedFiles: [],
-    })
-    const saved = await agentSessionStateRepository.saveSessionTrackerMarkdown(tempDir, tracker)
-    expect(saved).toBe(true)
-
-    const newPath = path.join(tempDir, '.onlyrag', 'assistant', 'SESSION_TRACKER.md')
-    expect(fs.existsSync(newPath)).toBe(true)
-    // The freshly written tracker (not the legacy content) must win at the new path.
-    expect(fs.readFileSync(newPath, 'utf-8')).not.toContain('Legacy tracker content')
-  })
-
-  it('should migrate pre-unification .agent_state_*.json files out of the flat .onlyrag/ folder into .onlyrag/sessions/', async () => {
-    const legacyOnlyragDir = path.join(tempDir, '.onlyrag')
-    fs.mkdirSync(legacyOnlyragDir, { recursive: true })
-    fs.writeFileSync(
-      path.join(legacyOnlyragDir, '.agent_state_legacy-migrated-session.json'),
-      JSON.stringify({ sessionId: 'legacy-migrated-session', stepCount: 3 }),
-      'utf-8',
-    )
-
-    const loaded = await agentSessionStateRepository.loadSessionState('legacy-migrated-session', tempDir)
-    expect(loaded).not.toBeNull()
-    expect(loaded?.stepCount).toBe(3)
-    expect(fs.existsSync(path.join(legacyOnlyragDir, '.agent_state_legacy-migrated-session.json'))).toBe(false)
-    expect(fs.existsSync(path.join(legacyOnlyragDir, 'sessions', '.agent_state_legacy-migrated-session.json'))).toBe(true)
   })
 
   it('should keep an approved plan separate from an existing run state', async () => {

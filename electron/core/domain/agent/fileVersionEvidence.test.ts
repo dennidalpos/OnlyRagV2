@@ -38,11 +38,8 @@ describe('fileVersionEvidence', () => {
     expect(knownFileVersion(evidence, `f${MAX_FILE_VERSION_EVIDENCE}.js`)).toBe(`sha256:${MAX_FILE_VERSION_EVIDENCE}`)
   })
 
-  it('restores the single read hash saved by older sessions', () => {
-    expect(restoreFileVersionEvidence(undefined, { filePath: 'src/App.tsx', contentHash: 'sha256:old' })).toEqual({ 'src/app.tsx': 'sha256:old' })
-    expect(restoreFileVersionEvidence({ 'src/app.tsx': 'sha256:new' }, { filePath: 'src/App.tsx', contentHash: 'sha256:old' })).toEqual({
-      'src/app.tsx': 'sha256:new',
-    })
-    expect(restoreFileVersionEvidence(undefined, undefined)).toEqual({})
+  it('restores saved per-file evidence with normalized paths', () => {
+    expect(restoreFileVersionEvidence({ 'src/App.tsx': 'sha256:new' })).toEqual({ 'src/app.tsx': 'sha256:new' })
+    expect(restoreFileVersionEvidence(undefined)).toEqual({})
   })
 })

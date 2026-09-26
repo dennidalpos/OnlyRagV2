@@ -1,4 +1,5 @@
 import { majorOf } from './dependencyVersionReality'
+import { diagnosticAdvice, renderAdvice } from './diagnosticAdvice'
 
 /** The two sides of an ERESOLVE peer conflict, as npm reported them. */
 export interface NpmResolutionConflict {
@@ -102,7 +103,7 @@ export function installableRange(requiredRange: string, installedVersion?: strin
   return nonDowngrading.reduce((best, candidate) => (Number(majorOf(candidate) ?? -1) > Number(majorOf(best) ?? -1) ? candidate : best)).replace(/\s+/g, '')
 }
 
-export function buildNpmResolutionDirective(conflict: NpmResolutionConflict): string {
+export function buildNpmResolutionNote(conflict: NpmResolutionConflict): string {
   const installedLabel = `${conflict.installed.name}@${conflict.installed.version}`
   const requirer = describeRequirer(conflict)
   const declaredNote = conflict.declaredRange
@@ -113,38 +114,43 @@ export function buildNpmResolutionDirective(conflict: NpmResolutionConflict): st
   const targetRange = installableRange(conflict.requiredRange, conflict.installed.version)
 
   if (!targetRange) {
-    return [
-      '[DEPENDENCY VERSION CONFLICT — ROOT DOWNGRADE REFUSED]',
-      `${installedLabel} is in the tree${declaredNote}, but ${requirer} requires ${conflict.installed.name}@${conflict.requiredRange}.`,
-      `Every explicit compatible branch is below the installed ${conflict.installed.name} major. Keep ${installedLabel}; changing the root dependency would downgrade the project to satisfy the package that does not fit.`,
-      '',
-      'Do this now, exactly:',
-      `     npm view ${conflict.requiredBy.name} versions --json`,
-      `Then install a version of ${conflict.requiredBy.name} whose peer dependencies support ${conflict.installed.name}@${conflict.installed.version}, or remove ${conflict.requiredBy.name} if none does.`,
-      '',
-      `Do NOT downgrade ${conflict.installed.name}, and never use --force or --legacy-peer-deps: they install a mismatched tree anyway.`,
-    ].join('\n')
+    return renderAdvice(
+      diagnosticAdvice(
+        '[DEPENDENCY VERSION CONFLICT — ROOT DOWNGRADE REFUSED]',
+        [
+          `${installedLabel} is in the tree${declaredNote}, but ${requirer} requires ${conflict.installed.name}@${conflict.requiredRange}.`,
+          `Every explicit compatible branch is below the installed ${conflict.installed.name} major. Keep ${installedLabel}; changing the root dependency would downgrade the project to satisfy the package that does not fit.`,
+        ],
+        `"run_command" with: npm view ${conflict.requiredBy.name} versions --json`,
+        [
+          `Then install a version of ${conflict.requiredBy.name} whose peer dependencies support ${conflict.installed.name}@${conflict.installed.version}, or remove ${conflict.requiredBy.name} if none does.`,
+          `Do NOT downgrade ${conflict.installed.name}, and never use --force or --legacy-peer-deps: they install a mismatched tree anyway.`,
+        ],
+      ),
+    )
   }
 
   const upgradeCommand = `npm install ${conflict.installed.name}@${targetRange}`
 
-  return [
-    '[DEPENDENCY VERSION CONFLICT — ERESOLVE]',
-    `${installedLabel} is in the tree${declaredNote}, but ${requirer} requires ${conflict.installed.name}@${conflict.requiredRange}.`,
-    'This is a VERSION mismatch. No file in the workspace is wrong, so do not edit source files, and do not ask the user which version to use — decide and act.',
-    '',
-    'Do this now, exactly:',
-    `     ${upgradeCommand}`,
-    `That moves ${conflict.installed.name} to the range ${conflict.requiredBy.name} needs. Include the version — a bare "npm install ${conflict.installed.name}" changes nothing.`,
-    '',
-    `Only if that command also fails: keep ${installedLabel} instead and downgrade the other side, listing the candidates first with "npm view ${conflict.requiredBy.name} versions --json".`,
-    '',
-    'Never re-run the failed command unchanged, and never use --force or --legacy-peer-deps: they install the mismatched tree anyway and the project then fails when it runs.',
-  ].join('\n')
+  return renderAdvice(
+    diagnosticAdvice(
+      '[DEPENDENCY VERSION CONFLICT — ERESOLVE]',
+      [
+        `${installedLabel} is in the tree${declaredNote}, but ${requirer} requires ${conflict.installed.name}@${conflict.requiredRange}.`,
+        'This is a VERSION mismatch. No file in the workspace is wrong, so do not edit source files, and do not ask the user which version to use — decide and act.',
+      ],
+      `"run_command" with: ${upgradeCommand}`,
+      [
+        `That moves ${conflict.installed.name} to the range ${conflict.requiredBy.name} needs. Include the version — a bare "npm install ${conflict.installed.name}" changes nothing.`,
+        `Only if that command also fails: keep ${installedLabel} instead and downgrade the other side, listing the candidates first with "npm view ${conflict.requiredBy.name} versions --json".`,
+        'Never re-run the failed command unchanged, and never use --force or --legacy-peer-deps: they install the mismatched tree anyway and the project then fails when it runs.',
+      ],
+    ),
+  )
 }
 
-/** Convenience for the executor: the directive for this output, or '' when it is not an ERESOLVE failure. */
-export function npmResolutionDirectiveFor(output: string): string {
+/** Convenience for the executor: the note for this output, or '' when it is not an ERESOLVE failure. */
+export function npmResolutionNoteFor(output: string): string {
   const conflict = parseNpmResolutionConflict(output)
-  return conflict ? `\n\n${buildNpmResolutionDirective(conflict)}` : ''
+  return conflict ? `\n\n${buildNpmResolutionNote(conflict)}` : ''
 }

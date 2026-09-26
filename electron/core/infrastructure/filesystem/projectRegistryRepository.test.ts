@@ -54,17 +54,4 @@ describe('ProjectRegistryRepository Unit Tests', () => {
     expect(await repo.list()).toHaveLength(0)
     expect(await repo.remove('/repo/never-existed')).toBe(false)
   })
-
-  it('mergeLegacy should import projects not already in the registry, keeping the registry entry on conflict', async () => {
-    await repo.upsert('/repo/a', 'Registry Name')
-    const migrated = await repo.mergeLegacy([
-      { path: '/repo/a', name: 'Legacy Name', addedAt: '2020-01-01T00:00:00.000Z' },
-      { path: '/repo/b', name: 'Legacy B', addedAt: '2020-01-01T00:00:00.000Z' },
-    ])
-    expect(migrated).toBe(1)
-    const listed = await repo.list()
-    expect(listed).toHaveLength(2)
-    expect(listed.find((p) => p.path === '/repo/a')?.name).toBe('Registry Name')
-    expect(listed.find((p) => p.path === '/repo/b')?.name).toBe('Legacy B')
-  })
 })

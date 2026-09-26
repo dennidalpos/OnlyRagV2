@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { buildExplicitFirstCommandDirective, resolvePlanDirective, type PlanDirectiveInput } from './planDirectiveArbiter'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
+import { diagnosticAdvice, renderOrder } from './diagnosticAdvice'
 
 /** The arbiter exists because fifteen guards wrote into one prompt and none of them decided what the model should read now. */
 
@@ -440,7 +441,7 @@ describe('verification_failing publishes the file it orders rewritten', () => {
     const decision = resolvePlanDirective(
       input({
         verificationFailing: true,
-        verificationFailureDirective: '[THE COMPILER NAMED THE FILE AND THE LINE]',
+        verificationFailureAdvice: diagnosticAdvice('[THE COMPILER NAMED THE FILE AND THE LINE]', [], '"write_file" on "src/components/TaskCard.tsx".'),
         verificationFailureTargetFile: 'src/components/TaskCard.tsx',
       }),
     )
@@ -462,7 +463,7 @@ describe('verification_failing publishes the file it orders rewritten', () => {
     const decision = resolvePlanDirective(
       input({
         verificationFailing: true,
-        verificationFailureDirective: '[INSTALL THE MISSING TYPES]',
+        verificationFailureAdvice: diagnosticAdvice('[INSTALL THE MISSING TYPES]', [], '"run_command" with the command: npm install --save-dev @types/react'),
         verificationFailureTargetFile: null,
       }),
     )
@@ -572,18 +573,22 @@ describe('behavioral smoke test — a build never proves it, so the arbiter carr
 })
 
 describe('dependencies_unpublished — a manifest npm cannot satisfy outranks every install', () => {
-  const manifestOrder = '[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]\n- react: you declared ^19.8.0, npm currently publishes 19.3.0'
+  const manifestAdvice = diagnosticAdvice(
+    '[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]',
+    ['- react: you declared ^19.8.0, npm currently publishes 19.3.0'],
+    '"write_file" on "package.json", with the complete file and that range replaced by the current version above.',
+  )
 
   it('orders the pending package.json rewrite instead of npm install, and shows the file', () => {
-    const decision = resolvePlanDirective(input({ missingDependencies: ['react'], pendingManifestDirective: manifestOrder }))
+    const decision = resolvePlanDirective(input({ missingDependencies: ['react'], pendingManifestAdvice: manifestAdvice }))
 
     expect(decision.kind).toBe('dependencies_unpublished')
-    expect(decision.blockDirective).toBe(manifestOrder)
+    expect(decision.blockDirective).toBe(renderOrder(manifestAdvice))
     expect(decision.rewriteTargets).toEqual(['package.json'])
   })
 
   it('falls back to the install once no rewrite is pending', () => {
-    expect(resolvePlanDirective(input({ missingDependencies: ['react'], pendingManifestDirective: null })).kind).toBe('dependencies_missing')
+    expect(resolvePlanDirective(input({ missingDependencies: ['react'], pendingManifestAdvice: null })).kind).toBe('dependencies_missing')
   })
 })
 
@@ -595,7 +600,11 @@ describe('a failed check with a concrete diagnostic is fixed before more files a
         milestones,
         deliverableStatusOf: statusMap({ 'm-2': 'unsatisfied' }),
         verificationFailing: true,
-        verificationFailureDirective: '[JSX IN A .js FILE — THIS BUNDLER ONLY PARSES JSX IN .jsx OR .tsx]',
+        verificationFailureAdvice: diagnosticAdvice(
+          '[JSX IN A .js FILE — THIS BUNDLER ONLY PARSES JSX IN .jsx OR .tsx]',
+          [],
+          '"move_file" with sourcePath "src/App.js" and targetPath "src/App.jsx".',
+        ),
         verificationFailureTools: ['move_file'],
       }),
     )

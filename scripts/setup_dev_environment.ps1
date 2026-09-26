@@ -80,6 +80,16 @@ try {
         & $venvPython -m pip install --upgrade --force-reinstall --constraint (Join-Path $rootDir 'sidecar/constraints.txt') 'onnxruntime-gpu[cuda,cudnn]==1.29.0'
         if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Installazione del runtime ONNX GPU fallita.' }
     }
+    # Environments set up before 2026-09-26 also carry opencv-python-headless. Both builds install
+    # into the same cv2 directory, so removing one breaks cv2 until opencv-python is reinstalled.
+    $headlessOpenCv = & $venvPython -c "import importlib.metadata as m; print(any((d.metadata['Name'] or '').lower() == 'opencv-python-headless' for d in m.distributions()))"
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Controllo di OpenCV fallito.' }
+    if ($headlessOpenCv -eq 'True') {
+        & $venvPython -m pip uninstall --yes opencv-python-headless
+        if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Rimozione di opencv-python-headless fallita.' }
+        & $venvPython -m pip install --no-deps --force-reinstall --constraint (Join-Path $rootDir 'sidecar/constraints.txt') opencv-python
+        if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Reinstallazione di opencv-python fallita.' }
+    }
     Write-Host "[PASS] Ambiente pronto in $rootDir" -ForegroundColor Green
     exit 0
 } catch {

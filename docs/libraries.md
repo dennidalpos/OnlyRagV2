@@ -14,7 +14,7 @@
 
 - FastAPI/Uvicorn/Pydantic: HTTP e validazione.
 - LanceDB/NumPy/Pandas: persistenza e dati vettoriali.
-- PyMuPDF, python-docx, Pillow, RapidOCR (`rapidocr` 3, modelli PP-OCRv6 nel wheel) e ONNX Runtime GPU: parsing/OCR.
+- PyMuPDF, python-docx, Pillow, RapidOCR (`rapidocr` 3, modelli PP-OCRv6 nel wheel), OpenCV (`opencv-python`, la build richiesta da `rapidocr`) e ONNX Runtime GPU: parsing/OCR.
 - `wordfreq`, `symspellpy`, `langdetect`: vocabolario e normalizzazione.
 
 Versioni e vincoli sono nei manifest [`package.json`](../package.json), [`sidecar/requirements.txt`](../sidecar/requirements.txt) e [`sidecar/constraints.txt`](../sidecar/constraints.txt). Non duplicarli nella documentazione.

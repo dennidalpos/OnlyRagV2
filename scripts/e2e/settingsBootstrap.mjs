@@ -26,22 +26,22 @@ try {
   await page.waitForFunction(() => Boolean(window.electronAPI), undefined, { timeout: 20_000 })
   const settingsBanner = page.getByTestId('settings-bootstrap-error')
 
-  // Real settings:get handler: settings.json wins over conflicting legacy localStorage values.
-  await page.evaluate(() => {
-    localStorage.setItem('onlyrag_app_settings', JSON.stringify({ defaultModel: 'legacy:latest', language: 'it', hasCompletedInitialSetup: false }))
-    localStorage.setItem('onlyrag_language', 'it')
-  })
+  // Real settings:get handler: the versioned settings.json is loaded as written.
   await page.reload({ waitUntil: 'load' })
   await page.locator('#tab-ingestion').getByText('Doc Ingestion').waitFor({ timeout: 10_000 })
   await page.waitForTimeout(350)
   let persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
-  assert.equal(persisted.settings.defaultModel, explicitSettings.defaultModel, 'Legacy localStorage overrode settings.json')
+  assert.equal(persisted.settings.defaultModel, explicitSettings.defaultModel)
   assert.equal(persisted.settings.language, 'en')
   assert.equal(await page.getByRole('dialog').count(), 0, 'Wizard opened despite completed setup in settings.json')
-  assert.equal(await page.evaluate(() => localStorage.getItem('onlyrag_app_settings')), null)
 
-  // Real settings:get handler with an unreadable file: recoverable error, no overwrite, no diagnostics, then retry.
+  // Real settings:get handler with an unreadable or unversioned file: recoverable error, no overwrite, no diagnostics, then retry.
   const validSettingsFile = fs.readFileSync(settingsPath)
+  const unversionedSettingsFile = JSON.stringify(explicitSettings)
+  fs.writeFileSync(settingsPath, unversionedSettingsFile)
+  await page.reload({ waitUntil: 'load' })
+  await settingsBanner.waitFor({ timeout: 10_000 })
+  assert.equal(fs.readFileSync(settingsPath, 'utf8'), unversionedSettingsFile, 'Unversioned settings.json was rewritten')
   const corruptSettingsFile = '{ "version": 2, "settings": '
   fs.writeFileSync(settingsPath, corruptSettingsFile)
   await application.evaluate(({ ipcMain }) => {
@@ -94,11 +94,6 @@ try {
       }
     })
   })
-  await page.evaluate(() => {
-    localStorage.setItem('onlyrag_app_settings', JSON.stringify({ defaultModel: 'legacy:latest', language: 'it', hasCompletedInitialSetup: false }))
-    localStorage.setItem('onlyrag_initial_setup_completed', 'false')
-    localStorage.setItem('onlyrag_language', 'it')
-  })
   await page.reload({ waitUntil: 'load' })
   await page.locator('#tab-ingestion').getByText('Doc Ingestion').waitFor({ timeout: 10_000 })
   await page.waitForTimeout(1_800)
@@ -110,14 +105,6 @@ try {
   assert.equal(persisted.settings.defaultModel, explicitSettings.defaultModel)
   assert.equal(persisted.settings.language, explicitSettings.language)
   assert.equal(persisted.settings.hasCompletedInitialSetup, true)
-  assert.deepEqual(
-    await page.evaluate(() => [
-      localStorage.getItem('onlyrag_app_settings'),
-      localStorage.getItem('onlyrag_initial_setup_completed'),
-      localStorage.getItem('onlyrag_language'),
-    ]),
-    [null, null, null],
-  )
   assert.equal(await page.getByRole('dialog').count(), 0, 'Wizard opened despite completed setup')
   await application.close()
 
@@ -128,31 +115,10 @@ try {
     env: { ...process.env, ONLYRAG_E2E_TEST: '1', ONLYRAG_E2E_USER_DATA: userData, ELECTRON_DISABLE_SECURITY_WARNINGS: '1' },
     timeout: 30_000,
   })
-  const migrationPage = await application.firstWindow()
-  await migrationPage.waitForFunction(() => Boolean(window.electronAPI), undefined, { timeout: 20_000 })
-  await migrationPage.waitForTimeout(350)
-  await migrationPage.evaluate(() => {
-    localStorage.setItem('onlyrag_app_settings', JSON.stringify({ defaultModel: 'legacy-test:latest', hasCompletedInitialSetup: false }))
-    localStorage.setItem('onlyrag_initial_setup_completed', 'true')
-    localStorage.setItem('onlyrag_language', 'en')
-  })
-  fs.rmSync(settingsPath)
-  await migrationPage.reload({ waitUntil: 'load' })
-  await migrationPage.locator('#tab-ingestion').getByText('Doc Ingestion').waitFor({ timeout: 10_000 })
-  await migrationPage.waitForTimeout(350)
-  const migrated = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
-  assert.equal(migrated.settings.defaultModel, 'legacy-test:latest')
-  assert.equal(migrated.settings.language, 'en')
-  assert.equal(migrated.settings.hasCompletedInitialSetup, true)
-  assert.equal(await migrationPage.getByRole('dialog').count(), 0, 'Wizard opened after completed legacy setup migration')
-  assert.deepEqual(
-    await migrationPage.evaluate(() => [
-      localStorage.getItem('onlyrag_app_settings'),
-      localStorage.getItem('onlyrag_initial_setup_completed'),
-      localStorage.getItem('onlyrag_language'),
-    ]),
-    [null, null, null],
-  )
+  const writesPage = await application.firstWindow()
+  await writesPage.waitForFunction(() => Boolean(window.electronAPI), undefined, { timeout: 20_000 })
+  await writesPage.locator('#tab-ingestion').getByText('Doc Ingestion').waitFor({ timeout: 10_000 })
+  await writesPage.waitForTimeout(350)
 
   await application.evaluate(({ ipcMain }) => {
     globalThis.__settingsWrites = { calls: 0, active: 0, maxActive: 0, last: null }
@@ -168,25 +134,23 @@ try {
       return true
     })
   })
-  const languageButton = migrationPage.locator('aside button:has(svg.lucide-globe)')
+  const languageButton = writesPage.locator('aside button:has(svg.lucide-globe)')
   await languageButton.click()
   await languageButton.click()
   await languageButton.click()
-  await migrationPage.waitForTimeout(450)
+  await writesPage.waitForTimeout(450)
   let writes = await application.evaluate(() => globalThis.__settingsWrites)
   assert.equal(writes.calls, 1, 'Rapid changes were not coalesced into one save')
   assert.equal(writes.last.language, 'it')
   await languageButton.click()
-  await migrationPage.waitForTimeout(150)
+  await writesPage.waitForTimeout(150)
   await languageButton.click()
-  await migrationPage.waitForTimeout(650)
+  await writesPage.waitForTimeout(650)
   writes = await application.evaluate(() => globalThis.__settingsWrites)
   assert.equal(writes.calls, 3, 'Separated changes did not produce the expected saves')
   assert.equal(writes.maxActive, 1, 'Settings saves overlapped')
   assert.equal(writes.last.language, 'it')
-  console.log(
-    '[PASS] Settings bootstrap, real file precedence, unreadable-file recovery, one-shot migration, language, wizard and serialized/coalesced writes.',
-  )
+  console.log('[PASS] Settings bootstrap, versioned file load, unreadable and unversioned file recovery, language, wizard and serialized/coalesced writes.')
 } finally {
   if (application) await application.close()
   fs.rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })

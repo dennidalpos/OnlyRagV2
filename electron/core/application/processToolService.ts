@@ -22,11 +22,12 @@ import { logger } from '../infrastructure/logging/logger'
 import { executeRunTestsTool } from './runTestsTool'
 import { extractRequestedPackages } from '../domain/agent/installCommandParser'
 import { findAlreadyInstalledPackages } from '../domain/agent/tools/execution/commandPolicy'
-import { npmResolutionDirectiveFor } from '../domain/agent/npmResolutionConflict'
-import { buildVersionNotFoundDirective, parseVersionNotFound } from '../domain/agent/npmVersionNotFound'
-import { buildVersionRealityDirective, declaredDependencies, findVersionReality } from '../domain/agent/dependencyVersionReality'
-import { buildModuleResolutionDirective, classifyModuleDiagnostic, unresolvedPackages } from '../domain/agent/moduleResolutionDiagnostic'
-import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote, type DiagnosticWorkspaceFacts } from '../domain/agent/compilerDiagnosticDirective'
+import { npmResolutionNoteFor } from '../domain/agent/npmResolutionConflict'
+import { buildVersionNotFoundNote, parseVersionNotFound } from '../domain/agent/npmVersionNotFound'
+import { buildVersionRealityNote, declaredDependencies, findVersionReality } from '../domain/agent/dependencyVersionReality'
+import { buildModuleResolutionNote, classifyModuleDiagnostic, unresolvedPackages } from '../domain/agent/moduleResolutionDiagnostic'
+import { buildDiagnosticFixAdvice, buildDeferredDiagnosticNote, type DiagnosticWorkspaceFacts } from '../domain/agent/compilerDiagnosticDirective'
+import { diagnosticAdvice, renderAdvice } from '../domain/agent/diagnosticAdvice'
 import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 import { toolLog } from '../domain/agent/tools/toolExecutionContracts'
 
@@ -233,7 +234,7 @@ export class ProcessToolService {
     if (!declared.some((dep) => dep.name === refusedPackage)) return ''
     const findings = findVersionReality(declared, await this.dependencies.lookupPackages(declared.map((dep) => dep.name)))
     // Only what blocks the install: an old major is advice, not the reason this command failed.
-    return buildVersionRealityDirective({ ...findings, outdated: [] }) || ''
+    return buildVersionRealityNote({ ...findings, outdated: [] }) || ''
   }
 
   async classifyFailureDiagnostics(
@@ -246,20 +247,20 @@ export class ProcessToolService {
     moduleResolutionDirective: string
     missingDepDirective: string
   }> {
-    const resolutionConflictDirective = npmResolutionDirectiveFor(rawOutput)
+    const resolutionConflictDirective = npmResolutionNoteFor(rawOutput)
     const versionNotFound = resolutionConflictDirective ? null : parseVersionNotFound(rawOutput)
     const manifestVersionDirective = versionNotFound ? await this.manifestVersionRealityDirective(versionNotFound.packageName, workspacePath) : ''
     const versionNotFoundDirective =
       manifestVersionDirective ||
       (versionNotFound && this.dependencies.lookupPackage
-        ? buildVersionNotFoundDirective(versionNotFound, (await this.dependencies.lookupPackage(versionNotFound.packageName)).latest)
+        ? buildVersionNotFoundNote(versionNotFound, (await this.dependencies.lookupPackage(versionNotFound.packageName)).latest)
         : '')
     const unresolved = resolutionConflictDirective ? [] : unresolvedPackages(rawOutput)
     const moduleCause =
       workspacePath && unresolved.length > 0 && this.dependencies.missingFromNodeModules
         ? classifyModuleDiagnostic(rawOutput, (pkg) => this.dependencies.missingFromNodeModules!(workspacePath, [pkg]).length === 0)
         : 'none'
-    const moduleResolutionDirective = moduleCause === 'compiler_resolution' ? buildModuleResolutionDirective(rawOutput, unresolved) : ''
+    const moduleResolutionDirective = moduleCause === 'compiler_resolution' ? buildModuleResolutionNote(rawOutput, unresolved) : ''
     const lowerOutput = rawOutput.toLowerCase()
     const isMissingDependency =
       !resolutionConflictDirective &&
@@ -272,7 +273,16 @@ export class ProcessToolService {
       .map((pkg) => `"${pkg}"`)
       .join(', ')
     const missingDepDirective = isMissingDependency
-      ? `\n\n[MISSING DEPENDENCY DIAGNOSTIC]\nCompilation failed because ${missingDepList ? `${missingDepList} ${unresolved.length === 1 ? 'is' : 'are'} imported but not installed` : 'an imported module/package is missing'}.\nDirectives:\n1. Your next tool call MUST be "run_command" with: npm install ${missingDepList ? unresolved.slice(0, 5).join(' ') : '<the package named in the error above>'}\n2. Do NOT re-run the project check until that install has completed.`
+      ? `\n\n${renderAdvice(
+          diagnosticAdvice(
+            '[MISSING DEPENDENCY DIAGNOSTIC]',
+            [
+              `Compilation failed because ${missingDepList ? `${missingDepList} ${unresolved.length === 1 ? 'is' : 'are'} imported but not installed` : 'an imported module/package is missing'}.`,
+            ],
+            `"run_command" with: npm install ${missingDepList ? unresolved.slice(0, 5).join(' ') : '<the package named in the error above>'}`,
+            ['Do NOT re-run the project check until that install has completed.'],
+          ),
+        )}`
       : ''
     return { resolutionConflictDirective, versionNotFoundDirective, unresolved, moduleResolutionDirective, missingDepDirective }
   }
@@ -329,14 +339,13 @@ export class ProcessToolService {
     readLocalModuleExports: (importingFile: string, specifier: string) => string[],
     workspaceFacts: DiagnosticWorkspaceFacts = {},
   ): { deferredDiagnosticNote: string; healingTail: string } {
-    const diagnosticDirective = specificDirectiveFired
-      ? null
-      : buildDiagnosticFixDirective(rawOutput, readPackageExports, readLocalModuleExports, workspaceFacts)
+    const diagnosticAdvice = specificDirectiveFired ? null : buildDiagnosticFixAdvice(rawOutput, readPackageExports, readLocalModuleExports, workspaceFacts)
     const deferredDiagnosticNote = specificDirectiveFired ? buildDeferredDiagnosticNote(rawOutput) || '' : ''
     const healingTail = specificDirectiveFired
-      ? 'DO NOT ask the user vague clarification questions: carry out the directive above.'
-      : diagnosticDirective ||
-        'AUTO-HEALING DIRECTIVE: The command above failed. DO NOT ask the user vague clarification questions, and do NOT re-run it unchanged — it will fail the same way. Read the output above, identify the one file or command parameter at fault, and fix that with write_file.'
+      ? 'A vague clarification question to the user will not help here: the diagnostics above name the fix.'
+      : diagnosticAdvice
+        ? renderAdvice(diagnosticAdvice)
+        : 'AUTO-HEALING NOTE: The command above failed, and re-running it unchanged will fail the same way; a vague clarification question to the user will not help either. Read the output above, identify the one file or command parameter at fault, and fix that with write_file.'
     return { deferredDiagnosticNote, healingTail }
   }
 

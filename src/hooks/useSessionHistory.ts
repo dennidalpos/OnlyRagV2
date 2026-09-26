@@ -12,10 +12,8 @@ import {
 import { logger } from '../lib/logger'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
-const LEGACY_SESSIONS_STORAGE_KEY = 'onlyrag_coding_sessions_v2'
 /** Coalesces the burst of per-log mutations a running agent produces into one write per session. */
 const SESSION_WRITE_DEBOUNCE_MS = 500
-const MIGRATION_FLAG_KEY = 'onlyrag_sessions_migrated_to_filesystem_v1'
 
 export interface ExecutedPromptResult {
   outcome: ExecutedPromptOutcome
@@ -43,27 +41,6 @@ function createEmptySession(workspacePath: string | null): CodingSession {
     actionLogs: [],
     executedPrompts: [],
     promptQueue: [],
-  }
-}
-
-/** One-shot import of the sessions previously kept in localStorage. */
-async function migrateLegacySessions(): Promise<void> {
-  if (localStorage.getItem(MIGRATION_FLAG_KEY) === 'done') return
-  const raw = localStorage.getItem(LEGACY_SESSIONS_STORAGE_KEY)
-  if (!raw) {
-    localStorage.setItem(MIGRATION_FLAG_KEY, 'done')
-    return
-  }
-  if (!window.electronAPI?.migrateLegacyCodingSessions) return
-
-  try {
-    const parsed = JSON.parse(raw)
-    const res = await window.electronAPI.migrateLegacyCodingSessions({ sessions: parsed })
-    localStorage.removeItem(LEGACY_SESSIONS_STORAGE_KEY)
-    localStorage.setItem(MIGRATION_FLAG_KEY, 'done')
-    logger.info('useSessionHistory', `Migrated ${res?.migrated ?? 0} legacy coding session(s) to the filesystem store.`)
-  } catch (err: unknown) {
-    logger.warn('useSessionHistory', `Legacy session migration failed, will retry on next launch: ${errorMessage(err)}`)
   }
 }
 
@@ -149,14 +126,13 @@ export function useSessionHistory(workspacePath: string | null) {
     [persistDebounced],
   )
 
-  // Loads the history of the active workspace, after the one-shot localStorage migration.
+  // Loads the history of the active workspace.
   useEffect(() => {
     let cancelled = false
 
     const loadSessions = async () => {
       setIsLoadingSessions(true)
       await flushPendingWrites()
-      await migrateLegacySessions()
 
       let stored: CodingSession[] = []
       if (window.electronAPI?.listCodingSessions) {

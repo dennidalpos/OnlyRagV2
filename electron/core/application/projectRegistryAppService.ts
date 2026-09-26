@@ -66,26 +66,6 @@ export class ProjectRegistryAppService {
 
     return removed
   }
-
-  /**
-   * One-shot import of the projects the renderer used to persist in localStorage
-   * ('onlyrag_workspace_projects'). Existing registry entries always win on conflict.
-   */
-  async migrateLegacyProjects(rawProjects: unknown): Promise<{ migrated: number }> {
-    if (!Array.isArray(rawProjects) || rawProjects.length === 0) return { migrated: 0 }
-    // Only the declared WorkspaceProject fields reach the registry: localStorage is renderer-controlled.
-    const valid: WorkspaceProject[] = rawProjects
-      .filter((p) => !!p && typeof p.path === 'string' && p.path && typeof p.name === 'string' && typeof p.addedAt === 'string')
-      .map((p) => ({
-        path: p.path,
-        name: p.name,
-        addedAt: p.addedAt,
-        ...(typeof p.lastOpenedAt === 'string' ? { lastOpenedAt: p.lastOpenedAt } : {}),
-      }))
-    const migrated = await projectRegistryRepository.mergeLegacy(valid)
-    logger.log('INFO', 'ProjectRegistryAppService', `Migrated ${migrated} legacy project(s) from localStorage to the main-process registry.`)
-    return { migrated }
-  }
 }
 
 export const projectRegistryAppService = new ProjectRegistryAppService()

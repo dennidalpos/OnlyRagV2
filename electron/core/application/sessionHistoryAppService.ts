@@ -1,6 +1,4 @@
 import type { CodingSession } from '../../../shared/types'
-import { logger } from '../infrastructure/logging/logger'
-import { normalizeSession } from '../domain/sessions/sessionHistoryDomain'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { sessionHistoryRepository } from '../infrastructure/filesystem/sessionHistoryRepository'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
@@ -39,28 +37,6 @@ export class SessionHistoryAppService {
     }
     await sidecarAppService.removePromptHistoryForSessions(sessionIds)
     return cleared
-  }
-
-  /** One-shot import of the sessions the renderer used to persist in localStorage ('onlyrag_coding_sessions_v2'). */
-  async migrateLegacySessions(rawSessions: unknown): Promise<{ migrated: number }> {
-    if (!Array.isArray(rawSessions) || rawSessions.length === 0) return { migrated: 0 }
-
-    const byWorkspace = new Map<string | null, CodingSession[]>()
-    for (const raw of rawSessions) {
-      const session = normalizeSession(raw)
-      if (!session) continue
-      const bucket = byWorkspace.get(session.workspacePath) || []
-      bucket.push(session)
-      byWorkspace.set(session.workspacePath, bucket)
-    }
-
-    let migrated = 0
-    for (const [workspacePath, sessions] of byWorkspace) {
-      migrated += await sessionHistoryRepository.mergeSessions(workspacePath, sessions)
-    }
-
-    logger.log('INFO', 'SessionHistoryAppService', `Migrated ${migrated} legacy coding session(s) from localStorage to the filesystem store.`)
-    return { migrated }
   }
 }
 

@@ -1,4 +1,6 @@
 /** Why a proposed write is being treated as a no-op, for the message handed to the model. */
+
+import { diagnosticAdvice, renderAdvice } from './diagnosticAdvice'
 export type RedundantWriteKind = 'identical' | 'line_endings_only'
 
 export interface RedundantWriteVerdict {
@@ -30,14 +32,17 @@ export function detectRedundantWrite(fileExists: boolean, existingContent: strin
 export function buildRedundantWriteNotice(filePath: string, kind: RedundantWriteKind, isEmpty = false): string {
   // The contradiction this branch exists to end, measured on 2026-08-25: the model wrote `src/services/TaskService.ts` with an empty body, the file was created at zero bytes, and every identical retry was answered "the deliverable exists and is correct" — while th
   if (isEmpty) {
-    return [
-      `[NO-OP WRITE: "${filePath}" IS EMPTY AND STAYS EMPTY]`,
-      `The file exists but holds nothing, and the content you just sent was empty too, so nothing changed.`,
-      `An empty file cannot satisfy the milestone that names it: it will keep being reported as missing or placeholder however many times you write it.`,
-      `Directives:`,
-      `1. Call "write_file" on "${filePath}" again with the COMPLETE body of the file — the real implementation, not an empty string and not a TODO comment.`,
-      `2. Do NOT send empty content for this file again.`,
-    ].join('\n')
+    return renderAdvice(
+      diagnosticAdvice(
+        `[NO-OP WRITE: "${filePath}" IS EMPTY AND STAYS EMPTY]`,
+        [
+          `The file exists but holds nothing, and the content you just sent was empty too, so nothing changed.`,
+          `An empty file cannot satisfy the milestone that names it: it will keep being reported as missing or placeholder however many times you write it.`,
+        ],
+        `"write_file" on "${filePath}" again with the COMPLETE body of the file — the real implementation, not an empty string and not a TODO comment.`,
+        [`Do NOT send empty content for this file again.`],
+      ),
+    )
   }
 
   const detail =
@@ -45,15 +50,16 @@ export function buildRedundantWriteNotice(filePath: string, kind: RedundantWrite
       ? `The file "${filePath}" already holds exactly this content — the only difference was line endings, which is not a code change.`
       : `The file "${filePath}" already holds exactly this content, byte for byte.`
 
-  return [
-    `[NO-OP WRITE: "${filePath}" WAS ALREADY UP TO DATE]`,
-    detail,
-    'Nothing was written and nothing changed on disk. This is NOT an error: the deliverable exists and is correct.',
-    'Because no file changed, any build or test you already ran is still valid — you do NOT need to re-run it.',
-    'Directives:',
-    `1. Do NOT write "${filePath}" again with this content.`,
-    "2. If this file was the deliverable of your active milestone, that milestone's work is DONE: mark it with update_plan or run its verification command.",
-    '3. Otherwise move to the next unfinished file or step.',
-    '4. If every milestone is complete, invoke the "finish" tool with your final report.',
-  ].join('\n')
+  return renderAdvice(
+    diagnosticAdvice(
+      `[NO-OP WRITE: "${filePath}" WAS ALREADY UP TO DATE]`,
+      [
+        detail,
+        'Nothing was written and nothing changed on disk. This is NOT an error: the deliverable exists and is correct.',
+        'Because no file changed, any build or test you already ran is still valid — you do NOT need to re-run it.',
+      ],
+      `"update_plan" or the verification command, if this file was the deliverable of your active milestone: that milestone's work is DONE. Otherwise, the next unfinished file or step.`,
+      [`Do NOT write "${filePath}" again with this content.`, 'If every milestone is complete, invoke the "finish" tool with your final report.'],
+    ),
+  )
 }

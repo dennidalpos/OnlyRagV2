@@ -1,6 +1,7 @@
 import { major, maxSatisfying, valid, validRange } from 'semver'
 import { extractRequestedPackages } from './installCommandParser'
 import { majorOf } from './dependencyVersionReality'
+import { diagnosticAdvice, renderAdvice } from './diagnosticAdvice'
 
 /** A package an install command names together with an explicit version specifier. */
 export interface InstallVersionTarget {
@@ -84,38 +85,40 @@ export function findRegistryInstallIssue(
   return null
 }
 
-/** The refusal, in the shape the sibling refusal in this executor already uses: one prohibition, then one thing to do, and nothing else. */
+/** The refusal: what was not run and why, then one fix as advice. */
 export function buildInstallDowngradeRefusal(downgrade: ManifestDowngrade, latest?: string): string {
   const { name, requested, declared } = downgrade
   const latestNote = latest ? ` npm currently publishes ${name}@${latest}.` : ''
-  return [
-    `[VERSION DOWNGRADE REFUSED — INSTALL NOT RUN]`,
-    `package.json declares "${name}": "${declared}" and this command would replace that declaration with "${requested}", a lower major.${latestNote}`,
-    `The command was not executed. An install rewrites package.json in place, so this would pin the whole tree to ${name}@${downgrade.requestedMajor} and every later install of a package built for ${name}@${downgrade.declaredMajor} would fail on a peer conflict it is impossible to trace back here.`,
-    `Directives:`,
-    `1. Do NOT install ${name} below "${declared}", and do NOT add --force or --legacy-peer-deps.`,
-    `2. Whatever demanded ${name}@${requested} is the side that does not fit this project: replace that package with one that supports ${name}@${downgrade.declaredMajor}, or drop it.`,
-  ].join('\n')
+  return renderAdvice(
+    diagnosticAdvice(
+      `[VERSION DOWNGRADE REFUSED — INSTALL NOT RUN]`,
+      [
+        `package.json declares "${name}": "${declared}" and this command would replace that declaration with "${requested}", a lower major.${latestNote}`,
+        `The command was not executed. An install rewrites package.json in place, so this would pin the whole tree to ${name}@${downgrade.requestedMajor} and every later install of a package built for ${name}@${downgrade.declaredMajor} would fail on a peer conflict it is impossible to trace back here.`,
+        `Whatever demanded ${name}@${requested} is the side that does not fit this project.`,
+      ],
+      `one that replaces that package with a version supporting ${name}@${downgrade.declaredMajor}, or drops it.`,
+      [`Do NOT install ${name} below "${declared}", and do NOT add --force or --legacy-peer-deps.`],
+    ),
+  )
 }
 
-/** One registry-backed replacement command; no guessed version and no failed install first. */
+/** One registry-backed replacement command, as advice; no guessed version and no failed install first. */
 export function buildRegistryInstallRefusal(issue: RegistryInstallIssue): string {
-  if (issue.kind === 'unpublished') {
-    return [
-      `[THAT VERSION DOES NOT EXIST — INSTALL NOT RUN]`,
-      `${issue.name}@${issue.requested} matches no published version. The registry reports ${issue.name}@${issue.latest} as current.`,
-      `The command was not executed because npm would reject it with ETARGET.`,
-      `Directives:`,
-      `1. Your next tool call MUST be "run_command" with: npm install ${issue.name}@${issue.latest}`,
-      `2. Do NOT re-run the refused command, and do NOT guess another version.`,
-    ].join('\n')
-  }
-  return [
-    `[STALE INSTALL VERSION — INSTALL NOT RUN]`,
-    `${issue.name}@${issue.requested} resolves to ${issue.resolved}, but the registry reports ${issue.name}@${issue.latest} as current.`,
-    `This package is not declared in package.json, so there is no existing project constraint that justifies starting a new dependency on an older major.`,
-    `Directives:`,
-    `1. Your next tool call MUST be "run_command" with: npm install ${issue.name}@${issue.latest}`,
-    `2. Do NOT re-run the refused command, and do NOT guess another version.`,
-  ].join('\n')
+  const heading = issue.kind === 'unpublished' ? `[THAT VERSION DOES NOT EXIST — INSTALL NOT RUN]` : `[STALE INSTALL VERSION — INSTALL NOT RUN]`
+  const facts =
+    issue.kind === 'unpublished'
+      ? [
+          `${issue.name}@${issue.requested} matches no published version. The registry reports ${issue.name}@${issue.latest} as current.`,
+          `The command was not executed because npm would reject it with ETARGET.`,
+        ]
+      : [
+          `${issue.name}@${issue.requested} resolves to ${issue.resolved}, but the registry reports ${issue.name}@${issue.latest} as current.`,
+          `This package is not declared in package.json, so there is no existing project constraint that justifies starting a new dependency on an older major.`,
+        ]
+  return renderAdvice(
+    diagnosticAdvice(heading, facts, `"run_command" with: npm install ${issue.name}@${issue.latest}`, [
+      `Do NOT re-run the refused command, and do NOT guess another version.`,
+    ]),
+  )
 }

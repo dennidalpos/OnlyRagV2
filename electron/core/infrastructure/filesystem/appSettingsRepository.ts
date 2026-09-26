@@ -11,17 +11,11 @@ import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 const SETTINGS_FILE_NAME = 'settings.json'
 const SETTINGS_FORMAT_VERSION = 2
 
-export function decodeSettingsFile(value: unknown): { settings: AppSettings; needsMigration: boolean } {
-  if (value && typeof value === 'object' && !Array.isArray(value) && 'version' in value) {
-    const envelope = value as { version?: unknown; settings?: unknown }
-    if (envelope.version !== SETTINGS_FORMAT_VERSION) throw new Error('Unsupported settings version')
-    return { settings: sanitizeAppSettings(envelope.settings), needsMigration: false }
-  }
-  const legacy = value && typeof value === 'object' && !Array.isArray(value) ? { ...(value as Record<string, unknown>) } : {}
-  if (typeof legacy.maxToolCallSteps === 'number' && legacy.maxToolCallSteps >= 200) {
-    legacy.maxToolCallSteps = 0
-  }
-  return { settings: sanitizeAppSettings(legacy), needsMigration: true }
+/** Accepts only the versioned envelope `{ version, settings }` written by saveSettings. */
+function decodeSettingsFile(value: unknown): AppSettings {
+  const envelope = value && typeof value === 'object' && !Array.isArray(value) ? (value as { version?: unknown; settings?: unknown }) : {}
+  if (envelope.version !== SETTINGS_FORMAT_VERSION) throw new Error('Unsupported settings version')
+  return sanitizeAppSettings(envelope.settings)
 }
 
 /**
@@ -85,8 +79,8 @@ export class AppSettingsRepository {
     try {
       const raw = await fs.promises.readFile(targetPath, 'utf-8')
       const parsed = JSON.parse(raw)
-      const { settings, needsMigration } = decodeSettingsFile(parsed)
-      if (targetPath !== filePath || needsMigration) {
+      const settings = decodeSettingsFile(parsed)
+      if (targetPath !== filePath) {
         await this.saveSettings(settings)
       }
       return settings

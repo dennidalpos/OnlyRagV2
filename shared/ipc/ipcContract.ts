@@ -201,7 +201,6 @@ export interface IpcInvokeContract {
   'sessions:delete': { payload: { sessionId: string; workspacePath?: string | null }; result: boolean }
   'sessions:clear': { payload: { workspacePath?: string | null }; result: boolean }
   /** One-shot import of the sessions an older version kept in localStorage. */
-  'sessions:migrate-legacy': { payload: { sessions: unknown }; result: { migrated: number } }
   'projects:list': { payload: void; result: WorkspaceProject[] }
   /** Explicit "add project": creates the entry, or refreshes its name, if unseen. */
   'projects:register': { payload: { projectPath: string; name?: string }; result: WorkspaceProject }
@@ -210,7 +209,6 @@ export interface IpcInvokeContract {
   'projects:rename': { payload: { projectPath: string; name: string }; result: WorkspaceProject | null }
   'projects:remove': { payload: { projectPath: string }; result: boolean }
   /** One-shot import of the project list an older version kept in localStorage. */
-  'projects:migrate-legacy': { payload: { projects: unknown }; result: { migrated: number } }
   'settings:get': { payload: void; result: AppSettings | null }
   'settings:save': { payload: AppSettings; result: boolean }
   /** Embeds and upserts one completed prompt into the semantic history index. */
@@ -343,13 +341,11 @@ export const IPC_INVOKE_METHODS = {
   saveCodingSession: 'sessions:save',
   deleteCodingSession: 'sessions:delete',
   clearCodingSessions: 'sessions:clear',
-  migrateLegacyCodingSessions: 'sessions:migrate-legacy',
   listProjects: 'projects:list',
   registerProject: 'projects:register',
   touchProject: 'projects:touch',
   renameProject: 'projects:rename',
   removeProjectFromRegistry: 'projects:remove',
-  migrateLegacyProjects: 'projects:migrate-legacy',
   getAppSettings: 'settings:get',
   saveAppSettings: 'settings:save',
   indexPromptHistory: 'history:index',

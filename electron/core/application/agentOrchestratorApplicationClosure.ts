@@ -288,7 +288,7 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
     evidence = { key: 'evidenceGuardStop', params: { guard: request.guard, evidence } }
   }
 
-  // Legacy plans may still contain a synthetic “invoke finish” milestone. It is control flow,
+  // A model-written plan may still contain a closing “finish” milestone. It is control flow,
   // not user work: close it here so it cannot survive as artificial debt in the next session.
   for (const milestone of ctx.goalPlanner.getMilestones()) {
     if (isCompletionMilestoneTitle(milestone) && milestone.status !== 'verified') {

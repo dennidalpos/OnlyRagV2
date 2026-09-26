@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildVerificationFailingDirective, isVerificationFailing } from './verificationAttemptTracker'
 import type { TrajectoryStep } from './verificationAttemptTracker'
+import { diagnosticAdvice } from './diagnosticAdvice'
 
 function step(tool: string, target: string, status: TrajectoryStep['status']): TrajectoryStep {
   return { tool, target, status }
@@ -106,11 +107,7 @@ describe('buildVerificationFailingDirective', () => {
 /** The directive used to point at a diagnostic instead of carrying it: "do what that directive says", meaning one sitting in the tool history. */
 describe('buildVerificationFailingDirective — carrying the diagnostic', () => {
   const BUILD_CMD = 'npm run build'
-  const DIAGNOSTIC = [
-    '[THE COMPILER NAMED THE FILE AND THE LINE — FIX THAT FILE]',
-    'Directives:',
-    '1. Your next tool call MUST be "write_file" on "src/App.tsx".',
-  ].join('\n')
+  const DIAGNOSTIC = diagnosticAdvice('[THE COMPILER NAMED THE FILE AND THE LINE — FIX THAT FILE]', [], '"write_file" on "src/App.tsx".')
 
   it('embeds the diagnostic rather than referring to it', () => {
     const directive = buildVerificationFailingDirective(BUILD_CMD, DIAGNOSTIC)
@@ -118,7 +115,7 @@ describe('buildVerificationFailingDirective — carrying the diagnostic', () => 
     expect(directive).toContain('"write_file" on "src/App.tsx"')
     // The pointer, and the instruction to go and resolve it, are gone.
     expect(directive).not.toContain('recent tool results above')
-    expect(directive).not.toContain('Do what that directive says')
+    expect(directive).not.toContain('Apply the fix those diagnostics name')
   })
 
   it('still forbids re-running the check before something changes', () => {
@@ -137,6 +134,6 @@ describe('buildVerificationFailingDirective — carrying the diagnostic', () => 
   it('falls back to the pointer when there is no diagnostic to carry', () => {
     const directive = buildVerificationFailingDirective(BUILD_CMD, null)
     expect(directive).toContain('recent tool results above')
-    expect(directive).toContain('Do what that directive says')
+    expect(directive).toContain('Apply the fix those diagnostics name')
   })
 })

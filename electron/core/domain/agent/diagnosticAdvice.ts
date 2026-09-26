@@ -17,7 +17,10 @@ export interface DiagnosticAdvice {
 /** Heads the steps of advice; the directive in the turn context, when there is one, takes precedence. */
 export const ADVICE_LABEL = 'Suggested fix (advice; the turn context carries the one directive for this turn):'
 
-/** Wording that only an order carries: tool results and gate refusals must never contain it. */
+/**
+ * Wording that only an order carries: tool results and gate refusals must never contain it.
+ * @internal
+ */
 export const ORDER_MARKER = /\bDirectives:|\bMUST\b/
 
 export function diagnosticAdvice(

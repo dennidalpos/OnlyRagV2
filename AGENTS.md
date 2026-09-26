@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.21 · 2026-09-26` — Repository facts and verified commands.
+`v1.22 · 2026-09-26` — Repository facts and verified commands.
 
 ## Scope
 
@@ -9,11 +9,11 @@
 
 ## Verified commands
 
-Run from repository root in PowerShell. On 2026-09-26 on Windows (Node 24, Python 3.13.15, Ollama on an RTX 2070), after the move of the Sidecar to Python 3.13 (OCR on `rapidocr` 3) and of the post-edit typecheck to a worker thread, every command in the table passed: typecheck, `quality:static`, `audit:deadcode`, `audit:cycles`, `docs:check`, `npm run test:fast` (276 files, 2196 tests), the Sidecar tests (133), all six E2E commands, `npm run package:win` and the full audit. `qwen3.8:27b` is installed; its full-task rerun after the audit is pending (QWEN38-FULLTASK-01). The live test timeout matches the 180-minute session limit. Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides). In a container without `node_modules`, `npm ci --ignore-scripts` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1` suffices for static checks and the fast suite; change dependencies with `npx npm@11`, since npm 10 drops lockfile `libc` fields.
+Run from repository root in PowerShell. On 2026-09-26 on Windows (Node 24, Python 3.13.15, Ollama on an RTX 2070), after the move of the Sidecar to Python 3.13 (OCR on `rapidocr` 3) and of the post-edit typecheck to a worker thread, every command in the table passed, including all six E2E commands and the full audit. After the removal of the legacy migrations and the move of tool-result diagnostics to advice (same day), typecheck, `quality:static`, `audit:deadcode`, `audit:cycles`, `docs:check`, `npm run test:fast` (276 files, 2188 tests), the Sidecar tests (133), `test:e2e:electron`, `test:e2e:settings-bootstrap` and `npm run package:win` passed again; the other E2E commands and the full audit were not rerun. `qwen3.8:27b` is installed; its full-task rerun after the audit is pending (QWEN38-FULLTASK-01). The live test timeout matches the 180-minute session limit. Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides). In a container without `node_modules`, `npm ci --ignore-scripts` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1` suffices for static checks and the fast suite; change dependencies with `npx npm@11`, since npm 10 drops lockfile `libc` fields.
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (276 files, 2196 tests; 22 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Fast suite | `npm run test:fast` (276 files, 2188 tests; 22 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
 | Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (133 tests) |
 | Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 9 guard scenarios) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |

@@ -8,6 +8,7 @@ import type { SkillAdherenceViolation } from '../../../skills/skillAdherenceVali
 import type { ToolExecutionResult } from '../toolExecutionContracts'
 import { compactMutationDiff, versionConflictFeedback } from '../../versionedFileMutation'
 import { toolLog } from '../toolExecutionContracts'
+import { renderAdviceSteps } from '../../diagnosticAdvice'
 
 export interface WriteFileRepository {
   writeFileVersioned(
@@ -54,7 +55,14 @@ export async function executeWriteFileTool(
   if (targetKind === 'contradictory') {
     return {
       outcome: 'rejected',
-      outputForHistory: `[WRITE_FILE REJECTED: PATH IS A DIRECTORY]\n"${filePath}" ends with a path separator, so it names a directory, but content was supplied for it.\nDirectives:\n1. To create the folder, call create_directory with dirPath "${filePath}".\n2. To write this content, call write_file again with the full file path, including the file name and extension.`,
+      outputForHistory: renderAdviceSteps(
+        '[WRITE_FILE REJECTED: PATH IS A DIRECTORY]',
+        [`"${filePath}" ends with a path separator, so it names a directory, but content was supplied for it.`],
+        [
+          `To create the folder, call create_directory with dirPath "${filePath}".`,
+          'To write this content, call write_file again with the full file path, including the file name and extension.',
+        ],
+      ),
       ...toolLog('toolWriteDirectoryPath', { path: String(filePath) }),
     }
   }

@@ -11,7 +11,6 @@ export function recordGuardEvent(events: AgentGuardEvent[], guard: AgentGuardId,
 }
 
 export function guardForLoopPattern(pattern: LoopPattern | undefined): AgentGuardId {
-  if (pattern === 'shell_tool_confusion') return 'shell_tool_confusion'
   if (pattern === 'cycle') return 'loop_cycle'
   if (pattern === 'unchanged_failing_repeat') return 'loop_unchanged_failure'
   if (pattern === 'same_file_edits') return 'loop_same_file_edits'

@@ -22,7 +22,7 @@ import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAnd
 import { compileSessionStopSummary } from '../domain/agent/sessionDebtTracker'
 import { isBrowserRenderableTarget } from '../domain/agent/browserPreviewVerification'
 import { checkVerificationCommandSafety } from '../../../shared/domain/agent/verificationCommandSafety'
-import { resolvePlanDirective } from '../domain/agent/planDirectiveArbiter'
+import { resolvePlanDirective, userFirstCommandDecision } from '../domain/agent/planDirectiveArbiter'
 import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
 import { readWorkspaceManifest } from '../infrastructure/filesystem/workspaceManifestReader'
@@ -51,6 +51,7 @@ import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/plan
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorRunContext'
 import { emitLocalizedLog } from './agentOrchestratorTypes'
 import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
+import { renderAdviceSteps } from '../domain/agent/diagnosticAdvice'
 
 /** Returns a `return` outcome once the progress policy's no-mutation budget is spent. */
 export async function runCircuitBreaker(ctx: ToolResultProcessingContext, isMutating: boolean): Promise<ToolResultProcessingOutcome | null> {
@@ -245,8 +246,27 @@ function reportNestedProjectDirs(ctx: ToolResultProcessingContext, createdDirs: 
 
   const dirList = createdDirs.map((d) => `"${d}"`).join(', ')
   const directive = commandFailed
-    ? `[FAILED COMMAND LEFT DIRECTORIES BEHIND]\nThe command failed, but it created ${dirList} in the workspace root and did not fully remove them. A partially written directory tree can be locked or unreadable.\nDirectives:\n1. Inspect ${dirList} with list_dir and delete what the failed command left behind before retrying anything.\n2. Do NOT re-run the same generator. Build the project files directly at the workspace root with write_file.`
-    : `[PROJECT CREATED IN THE WRONG PLACE]\nThe command created ${dirList} inside the workspace root. The workspace root IS the project root — the project must NOT live in a nested subfolder.\nDirectives:\n1. Move the generated files up to the workspace root, or recreate them there directly with write_file.\n2. Delete the nested directory once its contents are at the root.\n3. Never pass a project name to a generator: scaffold in place.`
+    ? renderAdviceSteps(
+        '[FAILED COMMAND LEFT DIRECTORIES BEHIND]',
+        [
+          `The command failed, but it created ${dirList} in the workspace root and did not fully remove them. A partially written directory tree can be locked or unreadable.`,
+        ],
+        [
+          `Inspect ${dirList} with list_dir and delete what the failed command left behind before retrying anything.`,
+          'Instead of re-running the same generator, build the project files directly at the workspace root with write_file.',
+        ],
+      )
+    : renderAdviceSteps(
+        '[PROJECT CREATED IN THE WRONG PLACE]',
+        [
+          `The command created ${dirList} inside the workspace root. The workspace root IS the project root: a project in a nested subfolder is not the deliverable.`,
+        ],
+        [
+          'Move the generated files up to the workspace root, or recreate them there directly with write_file.',
+          'Delete the nested directory once its contents are at the root.',
+          'Scaffold in place: a generator given a project name creates a nested folder.',
+        ],
+      )
 
   ctx.episodicCompactor.recordStep(
     {
@@ -361,8 +381,12 @@ export function resolvePlanDirectiveForTurn(
   recentFullLogs: readonly { step: number; output: string }[] = [],
   /** Capability policy of the run: without registry access the arbiter never orders an install. */
   capabilityPolicyMode: AppSettings['capabilityPolicyMode'] = DEFAULT_APP_SETTINGS.capabilityPolicyMode,
+  /** The command the user required first, on the first turn only. */
+  userMandatedFirstCommand: string | null = null,
 ): PlanDirectiveDecision {
-  if (!workspacePath) return { kind: 'focus', blockDirective: null, closureStepDirective: null }
+  if (!workspacePath) {
+    return userMandatedFirstCommand ? userFirstCommandDecision(userMandatedFirstCommand) : { kind: 'focus', blockDirective: null, closureStepDirective: null }
+  }
 
   const probe = createWorkspaceDeliverableProbe(workspacePath)
   const manifest = readWorkspaceManifest(workspacePath)
@@ -394,6 +418,7 @@ export function resolvePlanDirectiveForTurn(
   const behaviorFailureOutput = failureOutputOf('npm test')
 
   return resolvePlanDirective({
+    userMandatedFirstCommand,
     hasVerifiedBuild,
     milestones: goalPlanner.getMilestones(),
     activeMilestone: goalPlanner.getActiveMilestone(),

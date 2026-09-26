@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { renderAdviceSteps } from '../../domain/agent/diagnosticAdvice'
 
 export interface FilesystemStateSnapshot {
   timestamp: number
@@ -92,8 +93,16 @@ export class TransactionalExecutionGuard {
       return {
         allowed: false,
         reason: 'Workspace State Oscillation Detected',
-        suggestedAction:
-          '[CRITICAL SYSTEM GUARD: FILESYSTEM OSCILLATION DETECTED]\nYour recent file mutations restored the workspace to a previous state without solving the issue.\nDirectives:\n1. Stop reverting files to prior broken versions.\n2. Run a build/test verification command via run_command to get exact compiler/test errors.\n3. Analyze the error log before making further modifications.',
+        suggestedAction: renderAdviceSteps(
+          '[CRITICAL SYSTEM GUARD: FILESYSTEM OSCILLATION DETECTED]',
+          [
+            'Your recent file mutations restored the workspace to a previous state without solving the issue: reverting to a prior broken version does not fix it.',
+          ],
+          [
+            'Run a build/test verification command via run_command to get exact compiler/test errors.',
+            'Analyze the error log before making further modifications.',
+          ],
+        ),
       }
     }
 

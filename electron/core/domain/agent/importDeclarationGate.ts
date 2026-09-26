@@ -1,6 +1,7 @@
 import ts from 'typescript'
 import { builtinModules } from 'node:module'
 import { scriptKindForPath } from './sourceScriptKind'
+import { renderAdviceSteps } from './diagnosticAdvice'
 
 /** Declared project packages and import path aliases. */
 export interface DeclaredPackages {
@@ -152,13 +153,17 @@ export function evaluateFileImportIntegrity(filePath: string, content: string, d
   return {
     ok: false,
     undeclared,
-    directive:
-      `[UNDECLARED IMPORT IN ${filePath}]\n` +
-      `The file was written, but it imports ${undeclared.length} package${undeclared.length === 1 ? '' : 's'} that package.json does not declare:\n` +
-      `${list}\n` +
-      `This file cannot compile as it stands. Directives:\n` +
-      `1. If the package is real and you meant to use it, install it with run_command (e.g. "npm install <package>") so package.json declares it.\n` +
-      `2. If you are not certain the package exists, rewrite the file using only what the project already declares. Inventing a plausible-looking package name is the most common cause of this message.\n` +
-      `3. Do not leave the import in place and move on. The next build will fail on this file.`,
+    directive: renderAdviceSteps(
+      `[UNDECLARED IMPORT IN ${filePath}]`,
+      [
+        `The file was written, but it imports ${undeclared.length} package${undeclared.length === 1 ? '' : 's'} that package.json does not declare:`,
+        list,
+        'This file cannot compile as it stands: left in place, the import fails the next build.',
+      ],
+      [
+        'If the package is real and you meant to use it, install it with run_command (e.g. "npm install <package>") so package.json declares it.',
+        'If you are not certain the package exists, rewrite the file using only what the project already declares. Inventing a plausible-looking package name is the most common cause of this message.',
+      ],
+    ),
   }
 }

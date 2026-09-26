@@ -9,6 +9,7 @@ import { isActiveMilestoneDelivered, resolvePlanDirectiveForTurn } from './agent
 import type { PlanDirectiveDecision, PlanDirectiveKind } from '../domain/agent/planDirectiveArbiter'
 import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorRunContext'
 import { emitLocalizedLog } from './agentOrchestratorTypes'
+import { renderAdviceSteps } from '../domain/agent/diagnosticAdvice'
 import type { AgentLocalizedText } from '../../../shared/domain/agent/agentMainText'
 
 /** Handles the optional finish signal; the application-owned closure decides the real outcome. */
@@ -25,7 +26,18 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     const isPrematureStart = ctx.stepCount <= 2 && !ctx.flags.hasFileMutations && pendingMilestonesCount > 0
     if (isPrematureStart && !ctx.surfacedDodReasons.has('premature_start')) {
       ctx.surfacedDodReasons.add('premature_start')
-      const zeroMutationIntervention = `[CRITICAL EXECUTION ERROR: PREMATURE FINISH WITH ZERO WORK DONE]\nYou have NOT created or modified any files yet in this workspace (0 files touched).\nYou are STRICTLY FORBIDDEN from calling the "finish" tool at this stage.\nDirectives:\n1. You MUST begin implementing the first milestone immediately.\n2. Create the necessary project files (e.g. package.json, src/App.tsx, index.html) using "write_file" or scaffold with "run_command".\n3. DO NOT invoke "finish" until your implementation is written and verified.`
+      const zeroMutationIntervention = renderAdviceSteps(
+        '[CRITICAL EXECUTION ERROR: PREMATURE FINISH WITH ZERO WORK DONE]',
+        [
+          'You have NOT created or modified any files yet in this workspace (0 files touched).',
+          'The "finish" call was refused: the plan still has pending milestones and none of their work exists on disk.',
+        ],
+        [
+          'Begin implementing the first milestone.',
+          'Create the necessary project files (e.g. package.json, src/App.tsx, index.html) using "write_file" or scaffold with "run_command".',
+          'Invoke "finish" once your implementation is written and verified.',
+        ],
+      )
 
       ctx.episodicCompactor.recordStep(
         { step: ctx.stepCount, tool: 'finish', status: 'BLOCKED', summary: 'Premature finish with 0 file mutations on session start' },
@@ -192,7 +204,7 @@ ${planDirective.blockDirective}`
     recordGuardEvent(ctx.state.guardEvents, 'redundant_success', 'advise', ctx.stepCount)
     const redundancyIntervention =
       arbitratedIntervention ||
-      `${loopCheck.suggestedIntervention}\n\n[REDUNDANCY DIRECTIVE (Attempt ${loopDecision.redundantBlocks})]\nThis is NOT a failure and it is NOT counted against you: '${loopTarget || 'target'}' already ran successfully. The milestone it belongs to is still achievable — do not abandon it and do not report it as blocked.\nDo not re-issue this identical call: its result is already in your recent tool outputs above. Advance to the next unfinished step instead.`
+      `${loopCheck.suggestedIntervention}\n\n[REDUNDANCY NOTE (Attempt ${loopDecision.redundantBlocks})]\nThis is NOT a failure and it is NOT counted against you: '${loopTarget || 'target'}' already ran successfully. The milestone it belongs to is still achievable — do not abandon it and do not report it as blocked.\nDo not re-issue this identical call: its result is already in your recent tool outputs above. Advance to the next unfinished step instead.`
 
     ctx.episodicCompactor.recordStep(
       {
@@ -228,7 +240,7 @@ ${planDirective.blockDirective}`
   // A build or test command is how the task gets verified at all, so the escape must never read as "stop running it".
   const escapeDirective = isCommand
     ? `\n[CRITICAL ESCAPE STRATEGY]: Do not re-issue this command unchanged — nothing about the workspace has changed since it last ran. Read the error text in the diagnostics above, apply the fix it names with write_file or replace_file_content, and THEN run the command again. Running a build or test command after a real edit is always allowed and is how this task gets verified. If the command is a scaffolding generator that failed, write the files it would have produced directly instead.`
-    : `\n[CRITICAL ESCAPE STRATEGY]: You MUST run a verification command via run_command or read a different file to break out of this loop.`
+    : `\n[CRITICAL ESCAPE STRATEGY]: Run a verification command via run_command or read a different file: either breaks this loop.`
 
   const escapeAction = loopDecision.escape
   const planAdvanceDirective = escapeAction === 'force_milestone_advance' ? forceMilestoneAdvance(ctx, loopTarget, parsedTool.tool) : null
@@ -238,7 +250,7 @@ ${planDirective.blockDirective}`
 
   const enhancedIntervention =
     arbitratedIntervention ||
-    `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${loopBlocks})]\nYou have been blocked ${loopBlocks} times for repeating the same operation on '${loopTarget || 'target'}'. What is blocked is the IDENTICAL call, and the block lifts as soon as the situation changes: re-issuing it unchanged will be blocked again, issuing it after a real edit will not.${escapeDirective}${planAdvanceDirective || ''}`
+    `${loopCheck.suggestedIntervention}\n\n[STAGNATION NOTE (Attempt ${loopBlocks})]\nYou have been blocked ${loopBlocks} times for repeating the same operation on '${loopTarget || 'target'}'. What is blocked is the IDENTICAL call, and the block lifts as soon as the situation changes: re-issuing it unchanged will be blocked again, issuing it after a real edit will not.${escapeDirective}${planAdvanceDirective || ''}`
 
   ctx.episodicCompactor.recordStep(
     {

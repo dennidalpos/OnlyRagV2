@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildExplicitFirstCommandDirective, resolvePlanDirective, type PlanDirectiveInput } from './planDirectiveArbiter'
+import { extractUserMandatedFirstCommand, resolvePlanDirective, type PlanDirectiveInput } from './planDirectiveArbiter'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 import { diagnosticAdvice, renderOrder } from './diagnosticAdvice'
@@ -8,17 +8,22 @@ import { diagnosticAdvice, renderOrder } from './diagnosticAdvice'
 
 const VERIFICATION = { command: 'npm run build', source: 'package.json script "build"' }
 
-describe('buildExplicitFirstCommandDirective', () => {
-  it('pins an explicitly requested first command', () => {
-    const directive = buildExplicitFirstCommandDirective('Run exactly `npm install vite@^4.0.0` first.', true)!
-
-    expect(directive).toContain('MUST be "run_command" with the command: npm install vite@^4.0.0')
-    expect(directive).toContain('Do NOT run a build')
+describe('user-mandated first command', () => {
+  it('reads the command only from the explicit wording on the first turn', () => {
+    expect(extractUserMandatedFirstCommand('Run exactly `npm install vite@^4.0.0` first.', true)).toBe('npm install vite@^4.0.0')
+    expect(extractUserMandatedFirstCommand('Run exactly `npm install vite@^4.0.0` first.', false)).toBeNull()
+    expect(extractUserMandatedFirstCommand('Please run `npm install vite@^4.0.0`.', true)).toBeNull()
   })
 
-  it('does not override later turns or ordinary wording', () => {
-    expect(buildExplicitFirstCommandDirective('Run exactly `npm install vite@^4.0.0` first.', false)).toBeNull()
-    expect(buildExplicitFirstCommandDirective('Please run `npm install vite@^4.0.0`.', true)).toBeNull()
+  it('is the one directive of the turn, ahead of every other decision', () => {
+    // Missing dependencies would otherwise order "npm install": two orders on turn 1 before the arbiter owned this one.
+    const decision = resolvePlanDirective(input({ userMandatedFirstCommand: 'npm install vite@^4.0.0', missingDependencies: ['react'] }))
+
+    expect(decision.kind).toBe('user_first_command')
+    expect(decision.blockDirective).toContain('MUST be "run_command" with the command: npm install vite@^4.0.0')
+    expect(decision.blockDirective).toContain('Do NOT run a build')
+    expect(decision.blockDirective).not.toContain('DEPENDENCIES NOT INSTALLED')
+    expect(decision.requiredTools).toEqual(['run_command'])
   })
 })
 

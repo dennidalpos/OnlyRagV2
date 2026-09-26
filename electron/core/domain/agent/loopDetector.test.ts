@@ -97,7 +97,7 @@ describe('AgentActionLoopDetector Unit Tests', () => {
     const res4 = detector.recordAndCheck(call4)
     expect(res4.isLooping).toBe(true)
     expect(res4.suggestedIntervention).toContain('[CRITICAL FILE EDIT LOOP: 4 EDITS ON src/config.ts WITHOUT VERIFICATION]')
-    expect(res4.suggestedIntervention).toContain('DO NOT edit "src/config.ts" again in your next step.')
+    expect(res4.suggestedIntervention).toContain('before editing "src/config.ts" again')
   })
 
   it('should detect redundant write_file loops when same target is written multiple times', () => {
@@ -177,22 +177,7 @@ describe('AgentActionLoopDetector Unit Tests', () => {
     expect(detector.historyLength).toBe(0)
   })
 
-  it('should detect the Shell-Tool Confusion Loop when a tool name is repeatedly passed to run_command', () => {
-    const call: AgentToolCall = {
-      tool: 'run_command',
-      parameters: { command: 'write_file "src/App.tsx" "content"' },
-    }
-
-    const res1 = detector.recordAndCheck(call)
-    expect(res1.isLooping).toBe(false)
-
-    const res2 = detector.recordAndCheck(call)
-    expect(res2.isLooping).toBe(true)
-    expect(res2.suggestedIntervention).toContain('[CRITICAL SHELL-TOOL CONFUSION LOOP: "write_file" PASSED AS SHELL COMMAND')
-    expect(res2.suggestedIntervention).toContain('"write_file" is a STRUCTURED TOOL')
-  })
-
-  it('should not trigger the Shell-Tool Confusion Loop for legitimate run_command calls', () => {
+  it('does not treat a second run of the same command as a loop within tolerance', () => {
     const call: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm run typecheck' } }
 
     const res1 = detector.recordAndCheck(call)

@@ -27,7 +27,7 @@ import { buildVersionNotFoundNote, parseVersionNotFound } from '../domain/agent/
 import { buildVersionRealityNote, declaredDependencies, findVersionReality } from '../domain/agent/dependencyVersionReality'
 import { buildModuleResolutionNote, classifyModuleDiagnostic, unresolvedPackages } from '../domain/agent/moduleResolutionDiagnostic'
 import { buildDiagnosticFixAdvice, buildDeferredDiagnosticNote, type DiagnosticWorkspaceFacts } from '../domain/agent/compilerDiagnosticDirective'
-import { diagnosticAdvice, renderAdvice } from '../domain/agent/diagnosticAdvice'
+import { diagnosticAdvice, renderAdvice, renderAdviceSteps } from '../domain/agent/diagnosticAdvice'
 import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 import { toolLog } from '../domain/agent/tools/toolExecutionContracts'
 
@@ -78,17 +78,11 @@ export class ProcessToolService {
   validateRunCommandPreconditions(command: string): ToolExecutionResult | null {
     const confusedToolName = TOOL_NAME_PREFIXES.find((toolName) => command.trimStart().startsWith(toolName))
     if (confusedToolName) {
-      const output = [
+      const output = renderAdviceSteps(
         `[TOOL_AS_SHELL_BLOCK]`,
-        `Command: "${command}"`,
-        `EXECUTION BLOCKED: "${confusedToolName}" is a structured tool, not a shell executable.`,
-        `You MUST invoke it as a JSON tool call, not as a shell command.`,
-        `Correct format:`,
-        '```json',
-        `{ "tool": "${confusedToolName}", "parameters": { ... }, "explanation": "..." }`,
-        '```',
-        `Do NOT pass tool names to run_command. Use the tool directly.`,
-      ].join('\n')
+        [`Command: "${command}"`, `EXECUTION BLOCKED: "${confusedToolName}" is a structured tool, not a shell executable, so run_command cannot run it.`],
+        [`Call the "${confusedToolName}" tool directly as a native tool call with its own parameters.`],
+      )
       logger.log('WARN', 'ProcessToolService', `[TOOL_AS_SHELL_BLOCK] Model tried to run tool "${confusedToolName}" as shell command`)
       return {
         outcome: 'rejected',
@@ -99,16 +93,18 @@ export class ProcessToolService {
     }
 
     if (isBlockingDevServerCommand(command)) {
-      const output = [
+      const output = renderAdviceSteps(
         `[BLOCKING_DEV_SERVER_BLOCK]`,
-        `Command: "${command}"`,
-        `EXECUTION BLOCKED: this command starts a dev/watch server or otherwise never exits on its own.`,
-        `run_command waits synchronously for the process to exit, so this would hang until the timeout is reached, wasting several minutes with no useful result.`,
-        `Directives:`,
-        `1. To verify the project builds correctly, use a one-shot command instead (e.g. "npm run build" or "tsc --noEmit").`,
-        `2. Do NOT run dev servers, watch-mode test runners, or long-lived processes via run_command.`,
-        `3. If you need the running app visually verified, tell the user it is ready to start manually -- do not attempt to launch it yourself.`,
-      ].join('\n')
+        [
+          `Command: "${command}"`,
+          `EXECUTION BLOCKED: this command starts a dev/watch server or otherwise never exits on its own.`,
+          `run_command waits synchronously for the process to exit, so this would hang until the timeout is reached, wasting several minutes with no useful result. Dev servers, watch-mode test runners and other long-lived processes are refused the same way.`,
+        ],
+        [
+          `To verify the project builds correctly, use a one-shot command instead (e.g. "npm run build" or "tsc --noEmit").`,
+          `If the running app needs a visual check, tell the user it is ready to start manually: the start is theirs.`,
+        ],
+      )
       logger.log('WARN', 'ProcessToolService', `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${command}"`)
       return {
         outcome: 'rejected',
@@ -125,13 +121,13 @@ export class ProcessToolService {
     if (!this.dependencies.lookupPackages) return null
     const unknownPackage = await firstNonexistentInstallTarget(command, this.dependencies.lookupPackages)
     if (unknownPackage) {
-      const output = [
+      const output = renderAdviceSteps(
         `[PACKAGE DOES NOT EXIST — INSTALL NOT RUN]`,
-        `The npm registry has no package named "${unknownPackage}". This command was not executed, because no flag makes an install of a non-existent package succeed.`,
-        `Directives:`,
-        `1. Do NOT run this install again, and do NOT add --force or --legacy-peer-deps.`,
-        `2. If your code imports "${unknownPackage}", it is importing something that does not exist: use a real package, or write that code yourself.`,
-      ].join('\n')
+        [
+          `The npm registry has no package named "${unknownPackage}". This command was not executed, because no flag makes an install of a non-existent package succeed: rerunning it, with or without --force or --legacy-peer-deps, is refused the same way.`,
+        ],
+        [`If your code imports "${unknownPackage}", it is importing something that does not exist: use a real package, or write that code yourself.`],
+      )
       return { outcome: 'rejected', outputForHistory: output, ...toolLog('toolInstallUnknownPackage', { package: unknownPackage }), isTerminal: true }
     }
 

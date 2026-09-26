@@ -548,8 +548,8 @@ try {
   assert.deepEqual(unchanged.stop, ['no_mutation'], describe(unchanged))
   assert.equal(unchanged.done.completionStatus, 'blocked')
 
-  // The five guards below never fired in the 67 live snapshots of 2026-09-25; each is kept and
-  // driven here by the deterministic model instead (AGENT-GUARD-GROWTH-01).
+  // The guards below never fired in the 67 live snapshots of 2026-09-25; each is kept and driven
+  // here by the deterministic model instead (AGENT-GUARD-GROWTH-01).
   const unlimitedSteps = { allowTerminalExecution: true, allowFileModifications: true, capabilityPolicyMode: 'network-approved', maxToolCallSteps: 0 }
   const roomySteps = { ...unlimitedSteps, maxToolCallSteps: 30 }
   const finishCall = { type: 'tool', name: 'finish', arguments: { summary: 'Done.' } }
@@ -568,7 +568,10 @@ try {
   const confusion = await runGuardScenario('shell-tool-confusion', [shellTool('note-2.txt'), shellTool('note-3.txt'), shellTool('note-4.txt')], {
     capabilityProfile: roomySteps,
   })
-  assert(advisesOf(confusion, 'shell_tool_confusion') >= 1, describe(confusion))
+  // Each call is refused on its own (TOOL_AS_SHELL_BLOCK) and counts toward execution_budget; the
+  // separate loop pattern for it never fired live and was removed on 2026-09-26.
+  assert.equal(advisesOf(confusion, 'execution_budget'), 3, describe(confusion))
+  assert(confusion.logs.filter((message) => String(message).includes('TOOL_AS_SHELL_BLOCK')).length >= 3, describe(confusion))
   assert.equal(confusion.done.success, false)
 
   console.log('[guard 7/9] a file written back to earlier contents')

@@ -43,7 +43,9 @@ describe('CapabilityPolicyAuditRepository', () => {
     expect(await repository.append({ invalid: true } as never)).toBe(false)
   })
 
-  it('retains only the latest 1000 events', async () => {
+  // 1005 appends each rewrite the bounded file: about 2 s idle, over the 5 s default while a live
+  // model run holds the CPU (2026-09-26).
+  it('retains only the latest 1000 events', { timeout: 30_000 }, async () => {
     for (let index = 0; index < 1005; index += 1) await repository.append(event(index))
     const loaded = await repository.load()
     expect(loaded).toHaveLength(1000)

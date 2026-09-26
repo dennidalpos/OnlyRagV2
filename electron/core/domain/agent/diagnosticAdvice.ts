@@ -42,6 +42,14 @@ export function renderAdvice(advice: DiagnosticAdvice): string {
 }
 
 /**
+ * Advice without a single next call, for guards that offer alternatives (a loop intervention, a
+ * refused call): heading, observed facts, then the numbered options under the advice label.
+ */
+export function renderAdviceSteps(heading: string, facts: readonly (string | false | null | undefined)[], steps: readonly string[]): string {
+  return [heading, ...facts.filter((fact): fact is string => Boolean(fact)), ADVICE_LABEL, ...steps.map((step, index) => `${index + 1}. ${step}`)].join('\n')
+}
+
+/**
  * Reads back advice that renderAdvice wrote into a tool result, starting at its heading. Recorded
  * tool results persist only as text, and the arbiter re-reads them to see which fix is still owed.
  */

@@ -20,7 +20,7 @@ describe('decideVerificationGate', () => {
     if (decision.action !== 'block_and_retry') return
     expect(decision.cyclesSpent).toBe(1)
     expect(decision.directive).toContain('error TS2307')
-    expect(decision.directive).toMatch(/forbidden from calling "finish"/i)
+    expect(decision.directive).toMatch(/so "finish" was refused/i)
     expect(decision.directive).toContain(`round 1 of ${MAX_VERIFICATION_FIX_CYCLES}`)
   })
 

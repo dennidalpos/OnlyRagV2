@@ -1,12 +1,13 @@
 import type { UntrustedJson } from '../../../../shared/types'
 import crypto from 'node:crypto'
 import type { AgentToolCall } from './agentTypes'
+import { renderAdviceSteps } from './diagnosticAdvice'
 
 /** How the previous invocations of a repeated action actually ended. */
 export type RepeatOutcomeKind = 'succeeding' | 'failing' | 'unknown'
 
 /** Which repetition pattern tripped the detector. */
-export type LoopPattern = 'shell_tool_confusion' | 'exact_repeat' | 'unchanged_failing_repeat' | 'cycle' | 'same_file_edits' | 'same_target_reads'
+export type LoopPattern = 'exact_repeat' | 'unchanged_failing_repeat' | 'cycle' | 'same_file_edits' | 'same_target_reads'
 
 export interface LoopCheckResult {
   isLooping: boolean
@@ -156,51 +157,6 @@ export class AgentActionLoopDetector {
     const target = this.extractTarget(toolCall)
     this.targetHistory.push({ tool: toolCall.tool, target })
 
-    // Check for tool keyword passed as shell command
-    const SHELL_TOOL_KEYWORDS = [
-      'write_file',
-      'read_file',
-      'replace_file_content',
-      'multi_replace_file_content',
-      'delete_file',
-      'list_dir',
-      'list_files_recursive',
-      'grep_search',
-      'extract_code_symbols',
-      'create_directory',
-      'copy_file',
-      'move_file',
-      'web_search',
-      'fetch_web_content',
-      'download_file',
-      'inspect_os_env',
-      'ask',
-      'finish',
-    ]
-    if (toolCall.tool === 'run_command' && toolCall.parameters?.command) {
-      const rawCmd = String(toolCall.parameters.command).trimStart()
-      const matchedKeyword = SHELL_TOOL_KEYWORDS.find((kw) => rawCmd.startsWith(kw))
-      if (matchedKeyword) {
-        const recentRunCmds = this.targetHistory.slice(-5)
-        const consecutiveToolKeywordCmds = recentRunCmds.filter(
-          (rec) => rec.tool === 'run_command' && rec.target?.trimStart().startsWith(matchedKeyword),
-        ).length
-        if (consecutiveToolKeywordCmds >= 2) {
-          return {
-            isLooping: true,
-            consecutiveDuplicateCount: consecutiveToolKeywordCmds + 1,
-            pattern: 'shell_tool_confusion',
-            suggestedIntervention: [
-              `[CRITICAL SHELL-TOOL CONFUSION LOOP: "${matchedKeyword}" PASSED AS SHELL COMMAND ${consecutiveToolKeywordCmds + 1} TIMES]`,
-              `"${matchedKeyword}" is a STRUCTURED TOOL — it is NOT a shell executable.`,
-              `You MUST stop passing it to run_command immediately.`,
-              `Call the "${matchedKeyword}" tool directly with its own arguments instead of passing its name to run_command.`,
-            ].join('\n'),
-          }
-        }
-      }
-    }
-
     // 1. Exact parameter repeat check
     // A build or test re-run after a successful edit is the normal fix cycle (edit, build, edit,
     // build), not a repeat: for checks only runs since the last edit count as duplicates.
@@ -217,14 +173,15 @@ export class AgentActionLoopDetector {
         consecutiveDuplicateCount: duplicateCount,
         pattern: 'unchanged_failing_repeat',
         repeatOutcome: 'failing',
-        suggestedIntervention: [
+        suggestedIntervention: renderAdviceSteps(
           `[UNCHANGED RETRY BLOCKED: "${target || toolCall.tool}" FAILED AND NOTHING HAS CHANGED SINCE]`,
-          'This exact call failed on its last run, and no file edit or command has run after it, so it would fail again the same way. It was NOT executed.',
-          'Directives:',
-          '1. Read the error in your RECENT DETAILED TOOL OUTPUTS and follow any directive attached to it.',
-          '2. Apply the fix it names with write_file or replace_file_content (read the file first if you need its current content).',
-          '3. Then run this call again: after a real change it is allowed.',
-        ].join('\n'),
+          ['This exact call failed on its last run, and no file edit or command has run after it, so it would fail again the same way. It was NOT executed.'],
+          [
+            'Read the error in your RECENT DETAILED TOOL OUTPUTS and the suggested fix attached to it.',
+            'Apply the fix it names with write_file or replace_file_content (read the file first if you need its current content).',
+            'Then run this call again: after a real change it is allowed.',
+          ],
+        ),
       }
     }
 
@@ -235,8 +192,30 @@ export class AgentActionLoopDetector {
       // A repeat whose previous runs SUCCEEDED needs the opposite advice: there is no error to investigate and no alternative approach to find — the action already did its job and its effect is on disk.
       const suggestedIntervention =
         repeatOutcome === 'succeeding'
-          ? `[REDUNDANT ACTION: "${toolCall.tool}" ALREADY SUCCEEDED ${record?.successes || 1} TIME(S)]\nYou have re-issued the exact same "${toolCall.tool}" call ${duplicateCount} times. Every previous execution SUCCEEDED — nothing is broken and there is no error to fix.\nIts effect is ALREADY applied${target ? ` to "${target}"` : ''}: re-running it changes nothing and wastes a step.\nDirectives:\n1. Treat this action as DONE and move to the NEXT unfinished step of your active milestone.\n2. If the milestone's deliverable is already in place, run its verification command via run_command, then mark it with update_plan.\n3. If every milestone is complete and verified, invoke the "finish" tool with your final report.`
-          : `[CRITICAL LOOP INTERVENTION: REPEATED ACTION DETECTED]\nYou have attempted the exact same "${toolCall.tool}" action ${duplicateCount} times without progressing.\nDO NOT repeat this tool call with the same parameters.\nDirectives:\n1. If a file edit or replace failed, read the file first to inspect exact lines and whitespace.\n2. If a command or build failed, investigate the error stack trace and try an alternative approach.\n3. If you are stuck or require human guidance, use the "ask" tool to explain the blocker.`
+          ? renderAdviceSteps(
+              `[REDUNDANT ACTION: "${toolCall.tool}" ALREADY SUCCEEDED ${record?.successes || 1} TIME(S)]`,
+              [
+                `You have re-issued the exact same "${toolCall.tool}" call ${duplicateCount} times. Every previous execution SUCCEEDED — nothing is broken and there is no error to fix.`,
+                `Its effect is ALREADY applied${target ? ` to "${target}"` : ''}: re-running it changes nothing and wastes a step.`,
+              ],
+              [
+                'Treat this action as DONE and move to the NEXT unfinished step of your active milestone.',
+                "If the milestone's deliverable is already in place, run its verification command via run_command, then mark it with update_plan.",
+                'If every milestone is complete and verified, invoke the "finish" tool with your final report.',
+              ],
+            )
+          : renderAdviceSteps(
+              '[CRITICAL LOOP INTERVENTION: REPEATED ACTION DETECTED]',
+              [
+                `You have attempted the exact same "${toolCall.tool}" action ${duplicateCount} times without progressing.`,
+                'Repeating this tool call with the same parameters will not progress.',
+              ],
+              [
+                'If a file edit or replace failed, read the file first to inspect exact lines and whitespace.',
+                'If a command or build failed, investigate the error stack trace and try an alternative approach.',
+                'If you are stuck or require human guidance, use the "ask" tool to explain the blocker.',
+              ],
+            )
 
       return {
         isLooping: true,
@@ -271,15 +250,27 @@ export class AgentActionLoopDetector {
 
       if (sameFileEdits >= 4) {
         const isConfigFile = /(package\.json|tsconfig\.json|vite\.config|requirements\.txt|pyproject\.toml|Cargo\.toml|go\.mod)$/i.test(target)
-        const configDirectives = isConfigFile
-          ? `\n3. The file "${target}" is ALREADY created on disk. DO NOT edit "${target}" again. Proceed IMMEDIATELY to implementing source code components in src/ (e.g. src/App.tsx, components, pages) or use update_plan.`
-          : ''
+        const configStep = isConfigFile
+          ? [
+              `The file "${target}" is ALREADY created on disk: leave it as it is and continue with the source code components in src/ (e.g. src/App.tsx, components, pages) or use update_plan.`,
+            ]
+          : []
 
         return {
           isLooping: true,
           consecutiveDuplicateCount: sameFileEdits,
           pattern: 'same_file_edits',
-          suggestedIntervention: `[CRITICAL FILE EDIT LOOP: ${sameFileEdits} EDITS ON ${target} WITHOUT VERIFICATION]\nYou have executed ${sameFileEdits} edit operations (write_file/replace_file_content/multi_replace_file_content) on "${target}" in a row, without verifying any of them.\nDO NOT edit "${target}" again in your next step.\nDirectives:\n1. Execute a build, test, or typecheck command via run_command (e.g. npm run build, npm test, npm run typecheck) to verify syntax and runtime integrity.\n2. If your implementation is complete and verified, invoke the finish tool immediately.${configDirectives}`,
+          suggestedIntervention: renderAdviceSteps(
+            `[CRITICAL FILE EDIT LOOP: ${sameFileEdits} EDITS ON ${target} WITHOUT VERIFICATION]`,
+            [
+              `You have executed ${sameFileEdits} edit operations (write_file/replace_file_content/multi_replace_file_content) on "${target}" in a row, without verifying any of them.`,
+            ],
+            [
+              `Execute a build, test, or typecheck command via run_command (e.g. npm run build, npm test, npm run typecheck) to verify syntax and runtime integrity before editing "${target}" again.`,
+              'If your implementation is complete and verified, invoke the finish tool.',
+              ...configStep,
+            ],
+          ),
           // Edits that all landed are redundancy, not stagnation: the file exists and the milestone is reachable.
           repeatOutcome: this.classifyRepeatOutcome(toolCall),
         }
@@ -298,7 +289,17 @@ export class AgentActionLoopDetector {
           isLooping: true,
           consecutiveDuplicateCount: consecutiveReads,
           pattern: 'same_target_reads',
-          suggestedIntervention: `[CRITICAL READ LOOP INTERVENTION: REPEATED READS ON ${target}]\nYou have called read/inspect tools on "${target}" ${consecutiveReads} consecutive times without making any file changes or running commands.\nDO NOT call read_file or list_dir again on this target.\nDirectives:\n1. The file contents are ALREADY visible in your RECENT DETAILED TOOL OUTPUTS.\n2. Proceed IMMEDIATELY with write_file, replace_file_content, or run_command to make progress.\n3. If you have completed all changes, execute your verification build/test command or call finish.`,
+          suggestedIntervention: renderAdviceSteps(
+            `[CRITICAL READ LOOP INTERVENTION: REPEATED READS ON ${target}]`,
+            [
+              `You have called read/inspect tools on "${target}" ${consecutiveReads} consecutive times without making any file changes or running commands.`,
+              'The file contents are ALREADY visible in your RECENT DETAILED TOOL OUTPUTS: another read_file or list_dir on this target shows nothing new.',
+            ],
+            [
+              'Continue with write_file, replace_file_content, or run_command to make progress.',
+              'If you have completed all changes, execute your verification build/test command or call finish.',
+            ],
+          ),
         }
       }
     }
@@ -336,7 +337,11 @@ export class AgentActionLoopDetector {
           return {
             isOscillating: true,
             cycleLength: k,
-            suggestedDirective: `[OSCILLATION DETECTED] You are trapped in an oscillating loop of length ${k}. You MUST STOP repeating these edits. Re-read the target file with read_file, run a test command with run_command, or re-evaluate your plan strategy.`,
+            suggestedDirective: renderAdviceSteps(
+              '[OSCILLATION DETECTED]',
+              [`You are trapped in an oscillating loop of length ${k}: repeating these edits only restores a state you already had.`],
+              ['Re-read the target file with read_file, run a test command with run_command, or re-evaluate your plan strategy.'],
+            ),
           }
         }
       }

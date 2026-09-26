@@ -2,6 +2,7 @@
 
 import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
+import { renderAdviceSteps } from './diagnosticAdvice'
 
 /**
  * Marker opening the note of a milestone abandoned by the loop guard to break an infinite loop.
@@ -80,12 +81,11 @@ export function resolveMilestoneUpdate(req: MilestoneUpdateRequest): MilestoneUp
     return {
       kind: 'reject',
       reason: `Milestone '${current.id}' cannot be verified: ${named.length ? named.join(', ') : 'deliverables'} not on disk`,
-      directive:
-        `[UPDATE_PLAN REJECTED: DELIVERABLES MISSING] Milestone '${current.id}' names files it has not produced, so it cannot be verified — whatever its check reported.\n` +
-        `${whichFiles}\n` +
-        `Directives:\n` +
-        `1. Write the missing file(s) with write_file, with real content — not a TODO comment.\n` +
-        `2. Then mark this milestone again. A check that passes while a declared file is absent is proving something other than this milestone.`,
+      directive: renderAdviceSteps(
+        `[UPDATE_PLAN REJECTED: DELIVERABLES MISSING] Milestone '${current.id}' names files it has not produced, so it cannot be verified — whatever its check reported.`,
+        [whichFiles, 'A check that passes while a declared file is absent is proving something other than this milestone.'],
+        ['Write the missing file(s) with write_file, with real content — not a TODO comment.', 'Then mark this milestone again.'],
+      ),
     }
   }
 

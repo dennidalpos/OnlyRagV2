@@ -47,12 +47,12 @@ describe('evaluateDependencyIntegrity', () => {
     expect(verdict.missing.map((m) => m.packageName)).toEqual(['zod'])
   })
 
-  it('tells the model what to do, naming the packages and forbidding an early finish', () => {
+  it('advises the fix, naming the packages and when finish is accepted', () => {
     const directive = evaluateDependencyIntegrity(O3TX_MISSING, WORKSPACE).directive ?? ''
     expect(directive).toContain('react-router-dom')
     expect(directive).toContain('@mui/material')
     expect(directive).toContain('src/App.tsx')
-    expect(directive).toMatch(/do not call finish/i)
+    expect(directive).toMatch(/finish is accepted once it passes/i)
   })
 
   it('leaves a file outside the workspace as an absolute path rather than mangling it', () => {

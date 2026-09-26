@@ -7,6 +7,19 @@ import { PersistentPowerShellSession } from './persistentPowerShellSession'
 /** Cases that spawn a real powershell.exe: it exists only on Windows, so other hosts report them as skipped. */
 const itWithPowerShell = it.skipIf(process.platform !== 'win32')
 
+/** taskkill is asynchronous: retries until Windows releases a directory a disposed shell stood in. */
+async function removeWhenReleased(dir: string): Promise<void> {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true })
+      return
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+  }
+  fs.rmSync(dir, { recursive: true, force: true })
+}
+
 describe('PersistentPowerShellSession Unit Tests', () => {
   let session: PersistentPowerShellSession | null = null
 
@@ -55,6 +68,28 @@ describe('PersistentPowerShellSession Unit Tests', () => {
       session?.dispose()
       session = null
       fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  itWithPowerShell('spells the directory like a workspace opened through a junction', async () => {
+    // Same mismatch as an 8.3 short-name workspace: the shell reports the resolved path, the workspace keeps its own spelling.
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-shell-alias-')))
+    const target = path.join(root, 'target')
+    const workspace = path.join(root, 'workspace')
+    fs.mkdirSync(path.join(target, 'src'), { recursive: true })
+    fs.symlinkSync(target, workspace, 'junction')
+    try {
+      session = new PersistentPowerShellSession(workspace)
+      await session.execute(`Set-Location -LiteralPath '${path.join(target, 'src')}'`)
+      expect(session.currentDirectory).toBe(path.join(workspace, 'src'))
+
+      await session.execute(`Set-Location -LiteralPath '${root}'`)
+      expect(path.resolve(session.currentDirectory)).toBe(path.resolve(root))
+    } finally {
+      session?.dispose()
+      session = null
+      // The shell started inside the junction.
+      await removeWhenReleased(root)
     }
   })
 

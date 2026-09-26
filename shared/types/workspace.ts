@@ -33,7 +33,6 @@ export type AgentGuardId =
   | 'loop_cycle'
   | 'loop_same_file_edits'
   | 'loop_same_target_reads'
-  | 'shell_tool_confusion'
   | 'redundant_success'
   | 'stagnation_abort'
   | 'no_mutation'

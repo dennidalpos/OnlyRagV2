@@ -13,7 +13,7 @@ import { skillAppService } from './skillAppService'
 import { resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
 import { resolveTurnContextPolicy, omittedBlockNames } from '../domain/agent/turnContextPolicy'
 import { extractDeliverablePaths } from '../../../shared/domain/agent/milestoneDeliverableResolver'
-import { buildExplicitFirstCommandDirective } from '../domain/agent/planDirectiveArbiter'
+import { extractUserMandatedFirstCommand } from '../domain/agent/planDirectiveArbiter'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorRunContext'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
@@ -229,10 +229,11 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     (command) => ctx.episodicCompactor.lastFailureOutputFor('run_command', command),
     ctx.episodicCompactor.getRecentFullLogs(),
     ctx.settings.capabilityPolicyMode,
+    extractUserMandatedFirstCommand(ctx.userTask, ctx.stepCount === 1),
   )
-  const progressPlanBlock = [buildExplicitFirstCommandDirective(ctx.userTask, ctx.stepCount === 1), ctx.goalPlanner.compileProgressPrompt({ directive })]
-    .filter(Boolean)
-    .join('\n\n')
+  // The plan block carries the directive; without a plan the user's first command still reaches the model.
+  const progressPlanBlock =
+    ctx.goalPlanner.compileProgressPrompt({ directive }) || (directive.kind === 'user_first_command' ? (directive.blockDirective ?? '') : '')
 
   // Apply the directive to the optional context blocks.
   const policy = resolveTurnContextPolicy(directive.kind)

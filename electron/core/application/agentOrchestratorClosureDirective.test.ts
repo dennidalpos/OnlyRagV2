@@ -227,7 +227,7 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
     const lastDirective = recordedDirectives[recordedDirectives.length - 1]
     expect(lastDirective).not.toContain('move to the NEXT unfinished step')
     expect(lastDirective).not.toContain('Advance to the next unfinished step')
-    expect(lastDirective).not.toContain('REDUNDANCY DIRECTIVE')
+    expect(lastDirective).not.toContain('REDUNDANCY NOTE')
   })
 
   // The same text replaces the stagnation branch, which is reached by repeats that FAILED.

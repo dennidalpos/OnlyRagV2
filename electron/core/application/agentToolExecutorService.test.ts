@@ -290,8 +290,8 @@ describe('AgentToolExecutorService Unit Tests', () => {
         ...consented,
       )
 
-      expect(result.outputForHistory).toContain('[WEB RESEARCH DIRECTIVE]')
-      expect(result.outputForHistory).toContain('IMMEDIATE NEXT tool call MUST be fetch_web_content')
+      expect(result.outputForHistory).toContain('[WEB RESEARCH NOTE]')
+      expect(result.outputForHistory).toContain('fetch the most relevant official or primary documentation URL above with fetch_web_content')
       expect(result.outputForHistory).toContain('https://example.com/docs')
     })
 
@@ -981,7 +981,7 @@ async def async_handler():
     )
 
     expect(res.outputForHistory).toContain('[TOOL_AS_SHELL_BLOCK]')
-    expect(res.outputForHistory).toContain('EXECUTION BLOCKED: "write_file" is a structured tool, not a shell executable.')
+    expect(res.outputForHistory).toContain('EXECUTION BLOCKED: "write_file" is a structured tool, not a shell executable')
     expect(res.localized?.message).toEqual({ key: 'toolShellToolConfusion', params: { tool: 'write_file' } })
     expect(res.isTerminal).toBe(true)
   })

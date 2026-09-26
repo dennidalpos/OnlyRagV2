@@ -76,7 +76,10 @@ Task `fullTaskRun.live.ts` (React + Tailwind "Project Dashboard Task"), stesso h
 | 2026-09-25 (prima dell'audit) | qwen3.8:27b | fermata dal limite di Vitest, 0/8 verificate | 23/50 | 60 min | 57,9 s | 128 s |
 | 2026-09-26 b | qwen3-coder:30b | `transport_budget` (stallo di 5 min, vedi E19), 0/8 | 29/50 | 28 min | 4,6 s | 15 s |
 | 2026-09-26 c | qwen3-coder:30b | **`verified`, 8/8 milestone** | 37/50 | 53 min | 5,0 s | 21 s |
+| 2026-09-26 rerun-e | qwen3.8:27b | `step_budget` a 25 step (harness sui default, vedi sotto), 0/7 | 25/25 | 128 min | 9,1 s | circa 5 min (media) |
 
 Nella run c le installazioni sono state approvate ed eseguite, e il ciclo modifica → build (tre build fallite, poi riuscita) si è svolto senza blocchi del loop detector. Le guardie scattate sono solo avvisi `execution_budget`.
 
-Snapshot: `%USERPROFILE%\OnlyRag-Live\snapshots\*audit-20260926c*`. Il risultato di qwen3.8:27b è registrato in `PROJECT_STATUS.json`.
+Snapshot: `%USERPROFILE%\OnlyRag-Live\snapshots\*audit-20260926c*`.
+
+La run qwen3.8:27b rerun-e (snapshot `*rerun-20260926e*`, con `session_state.json` e telemetria per turno) conferma il riuso della cache con la trascrizione append-only: dopo il primo turno a freddo (5244 token in 42,7 s) ogni turno valuta solo i token aggiunti, 8–12 s anche con 21704 token di prompt. Il collo di bottiglia è la generazione: circa 2 token/s all'83% su CPU (3,8 GB su 22 GB in VRAM con `num_ctx` 65536), fino a 32 minuti per un turno da 3874 token, 7 generazioni in 128 minuti. La run si è fermata a 25 step perché `loadRealSettings` spargeva l'envelope `{ version, settings }` di `settings.json` invece di decodificarlo e usava quindi i default: corretto con `decodeSettingsFile`. Il seguito è in `PROJECT_STATUS.json` (QWEN38-FULLTASK-01).

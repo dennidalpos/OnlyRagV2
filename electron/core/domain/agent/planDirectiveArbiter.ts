@@ -20,6 +20,7 @@ import type { PackageImportStatement } from './importDeclarationGate'
 import { renderOrder, type DiagnosticAdvice } from './diagnosticAdvice'
 
 export type PlanDirectiveKind =
+  | 'user_first_command'
   | 'session_closure'
   | 'dependencies_undeclared'
   | 'dependencies_uninstallable'
@@ -52,6 +53,8 @@ export interface UndeclaredDependency {
 }
 
 export interface PlanDirectiveInput {
+  /** The command the user required as the first action, on the first turn only (see extractUserMandatedFirstCommand). */
+  userMandatedFirstCommand?: string | null
   hasVerifiedBuild: boolean
   milestones: readonly PlanMilestone[]
   activeMilestone: PlanMilestone | undefined
@@ -121,18 +124,30 @@ export function buildDependencyInstallDirective(missing: readonly string[]): str
   ].join('\n')
 }
 
-/** Preserves an explicit user-requested first command against competing plan heuristics. */
-export function buildExplicitFirstCommandDirective(userTask: string, isFirstTurn: boolean): string | null {
+/** The command a task written as "Run exactly `<command>` first" requires, on the first turn only. */
+export function extractUserMandatedFirstCommand(userTask: string, isFirstTurn: boolean): string | null {
   if (!isFirstTurn) return null
-  const match = userTask.match(/\bRun exactly\s+`([^`]+)`\s+first\b/i)
-  if (!match) return null
-  return [
-    `[USER-MANDATED FIRST COMMAND]`,
-    `The user explicitly required this command as the first action: ${match[1]}`,
-    `Directives:`,
-    `1. Your next tool call MUST be "run_command" with the command: ${match[1]}`,
-    `2. Do NOT run a build, edit a file, or call any other tool before it.`,
-  ].join('\n')
+  return userTask.match(/\bRun exactly\s+`([^`]+)`\s+first\b/i)?.[1] ?? null
+}
+
+/**
+ * The highest-priority decision: the user's explicit first command outranks every plan heuristic,
+ * and as the turn's one directive it no longer reaches the model next to a second order (a
+ * dependencies_missing install or the focus block's directives).
+ */
+export function userFirstCommandDecision(command: string): PlanDirectiveDecision {
+  return {
+    kind: 'user_first_command',
+    blockDirective: [
+      `[USER-MANDATED FIRST COMMAND]`,
+      `The user explicitly required this command as the first action: ${command}`,
+      `Directives:`,
+      `1. Your next tool call MUST be "run_command" with the command: ${command}`,
+      `2. Do NOT run a build, edit a file, or call any other tool before it.`,
+    ].join('\n'),
+    closureStepDirective: null,
+    requiredTools: ['run_command'],
+  }
 }
 
 /**
@@ -215,6 +230,8 @@ export function buildVerificationDueDirective(verification: { command: string; s
 
 /** The single directive for this turn, chosen by declared priority. */
 export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDecision {
+  if (input.userMandatedFirstCommand) return userFirstCommandDecision(input.userMandatedFirstCommand)
+
   const closure = assessPostVerificationClosure({
     hasVerifiedBuild: input.hasVerifiedBuild,
     milestones: input.milestones,

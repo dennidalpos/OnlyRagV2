@@ -9,6 +9,7 @@ import { planGenerationAppService } from '../../electron/core/application/planGe
 import { agentInterviewAppService } from '../../electron/core/application/agentInterviewAppService'
 import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../../electron/core/infrastructure/logging/codingAgentLogger'
+import { decodeSettingsFile } from '../../electron/core/infrastructure/filesystem/appSettingsRepository'
 
 /** One dedicated folder for every live workspace and snapshot, so runs never scatter directories on the Desktop. */
 export const LIVE_RUN_ROOT = process.env.ONLYRAG_LIVE_ROOT || path.join(os.homedir(), 'OnlyRag-Live')
@@ -70,7 +71,9 @@ export function loadRealSettings(overrides: Partial<AppSettings> = {}): AppSetti
   // 2026-09-24 full-task loop could not be read back otherwise).
   const diagnostics: Partial<AppSettings> = { enableCodingAgentDebugLog: true, includeCodingAgentDebugPayloads: true }
   codingAgentLogger.mirrorUnredactedTo(LIVE_UNREDACTED_AUDIT_PATH)
-  return { ...JSON.parse(fs.readFileSync(settingsPath, 'utf-8')), ...diagnostics, ...overrides } as AppSettings
+  // The file is the versioned envelope { version, settings }: spreading it raw ran rerun-20260926e on
+  // defaults (25 steps instead of the user's 50) with every user setting ignored.
+  return { ...decodeSettingsFile(JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))), ...diagnostics, ...overrides }
 }
 
 /** Empties a workspace directory without deleting the directory itself (it may be open elsewhere). */

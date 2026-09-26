@@ -1,9 +1,12 @@
 import { spawn, execFileSync, ChildProcess } from 'node:child_process'
 import crypto from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { logger } from '../logging/logger'
 import { normalizePowerShellCommand } from './powerShellCommand'
 import { detectInteractivePrompt } from '../../domain/agent/shellStreamGuard'
+import { isPathWithinRoot } from '../../domain/agent/pathContainment'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export interface ShellExecutionOutput {
@@ -37,9 +40,14 @@ export class PersistentPowerShellSession {
     return this.isBusy
   }
 
-  /** The shell's working directory after the last command (a `cd` persists between commands). */
+  /**
+   * The shell's working directory after the last command (a `cd` persists between commands), spelled
+   * like the workspace path when it lies inside it: PowerShell reports the long, resolved path, while
+   * a workspace opened through an 8.3 short name (TEMP under C:\Users\RUNNER~1) or a junction keeps
+   * its own spelling, and the command safety check compares the two textually.
+   */
   public get currentDirectory(): string {
-    return this.activeCwd
+    return spellInsideWorkspace(this.activeCwd, this.workspacePath)
   }
 
   private initProcess(): void {
@@ -323,5 +331,18 @@ export class PersistentPowerShellSession {
 
   public get isRunning(): boolean {
     return Boolean(this.proc && !this.proc.killed)
+  }
+}
+
+function spellInsideWorkspace(directory: string, workspacePath: string): string {
+  if (!workspacePath || isPathWithinRoot(path.resolve(workspacePath), path.resolve(directory))) return directory
+  try {
+    const realWorkspace = fs.realpathSync.native(workspacePath)
+    const realDirectory = fs.realpathSync.native(directory)
+    if (!isPathWithinRoot(realWorkspace, realDirectory)) return directory
+    return path.join(workspacePath, path.relative(realWorkspace, realDirectory))
+  } catch {
+    // A deleted directory keeps the reported path: the safety check then resolves from the workspace root.
+    return directory
   }
 }

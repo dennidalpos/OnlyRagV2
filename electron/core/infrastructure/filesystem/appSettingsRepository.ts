@@ -10,8 +10,11 @@ import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 const SETTINGS_FILE_NAME = 'settings.json'
 const SETTINGS_FORMAT_VERSION = 2
 
-/** Accepts only the versioned envelope `{ version, settings }` written by saveSettings. */
-function decodeSettingsFile(value: unknown): AppSettings {
+/**
+ * Accepts only the versioned envelope `{ version, settings }` written by saveSettings.
+ * @internal Also read by the live harness (scripts/live), which loads the user's real settings.
+ */
+export function decodeSettingsFile(value: unknown): AppSettings {
   const envelope = value && typeof value === 'object' && !Array.isArray(value) ? (value as { version?: unknown; settings?: unknown }) : {}
   if (envelope.version !== SETTINGS_FORMAT_VERSION) throw new Error('Unsupported settings version')
   return sanitizeAppSettings(envelope.settings)

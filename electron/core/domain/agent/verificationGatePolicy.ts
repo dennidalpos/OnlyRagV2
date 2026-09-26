@@ -1,3 +1,5 @@
+import { renderAdviceSteps } from './diagnosticAdvice'
+
 /** Rounds of correct-and-re-verify allowed before the session is given up as failed. */
 export const MAX_VERIFICATION_FIX_CYCLES = 3
 
@@ -48,15 +50,18 @@ export function decideVerificationGate(input: VerificationGateInput): Verificati
   return {
     action: 'block_and_retry',
     cyclesSpent,
-    directive:
-      '[DEFINITION OF DONE VIOLATION: VERIFICATION FAILED]\n' +
-      `The verification of this project does not pass (round ${cyclesSpent} of ${MAX_VERIFICATION_FIX_CYCLES}). ` +
-      'You are FORBIDDEN from calling "finish" until it does.\n\n' +
-      `${detail || '(no output captured)'}\n\n` +
-      'Directives:\n' +
-      '1. Read the failure above and fix its ROOT CAUSE in the source files. Do not rerun the same command unchanged.\n' +
-      '2. Fix one cause at a time, then verify again.\n' +
-      '3. Do not delete or empty files to make the error disappear — that is not a fix.\n' +
-      `4. After ${MAX_VERIFICATION_FIX_CYCLES} failed rounds the session is closed as FAILED, so make this correction count.`,
+    directive: renderAdviceSteps(
+      '[DEFINITION OF DONE VIOLATION: VERIFICATION FAILED]',
+      [
+        `The verification of this project does not pass (round ${cyclesSpent} of ${MAX_VERIFICATION_FIX_CYCLES}), so "finish" was refused.`,
+        detail || '(no output captured)',
+        `After ${MAX_VERIFICATION_FIX_CYCLES} failed rounds the session is closed as FAILED.`,
+      ],
+      [
+        'Read the failure above and fix its ROOT CAUSE in the source files; the same command rerun unchanged fails the same way.',
+        'Fix one cause at a time, then verify again.',
+        'Deleting or emptying files to make the error disappear is not a fix.',
+      ],
+    ),
   }
 }

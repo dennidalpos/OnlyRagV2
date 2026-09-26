@@ -1,3 +1,5 @@
+import { renderAdviceSteps } from './diagnosticAdvice'
+
 /** Package name -> the files that import it. The shape depcheck reports. */
 export type MissingDependencyMap = Record<string, string[]>
 
@@ -44,15 +46,14 @@ export function evaluateDependencyIntegrity(missingMap: MissingDependencyMap, wo
   return {
     ok: false,
     missing,
-    directive:
-      '[UNDECLARED DEPENDENCIES: THE PROJECT CANNOT BUILD]\n' +
-      `The code imports ${missing.length} package${missing.length === 1 ? '' : 's'} that package.json does not declare:\n` +
-      `${lines.join('\n')}\n` +
-      'Directives:\n' +
-      '1. Either add each package to the "dependencies" of package.json and re-run the install, ' +
-      'or rewrite the importing files to use what the project already declares.\n' +
-      '2. Prefer rewriting when the import contradicts the requested stack — pulling in a second ' +
-      'UI framework alongside the one you were asked to use is not a fix.\n' +
-      '3. Re-run the verification command afterwards. Do not call finish until it passes.',
+    directive: renderAdviceSteps(
+      '[UNDECLARED DEPENDENCIES: THE PROJECT CANNOT BUILD]',
+      [`The code imports ${missing.length} package${missing.length === 1 ? '' : 's'} that package.json does not declare:`, ...lines],
+      [
+        'Either add each package to the "dependencies" of package.json and re-run the install, or rewrite the importing files to use what the project already declares.',
+        'Prefer rewriting when the import contradicts the requested stack — pulling in a second UI framework alongside the one you were asked to use is not a fix.',
+        'Re-run the verification command afterwards: finish is accepted once it passes.',
+      ],
+    ),
   }
 }

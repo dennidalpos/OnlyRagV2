@@ -4,6 +4,7 @@ import { isCompletionMilestoneTitle } from '../../../../shared/domain/agent/plan
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 import { AWAITING_VERIFICATION_MARKER } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
+import { renderAdviceSteps } from './diagnosticAdvice'
 
 export interface PromotionCandidate {
   id: string
@@ -59,14 +60,14 @@ export function partialDeliveryDirective(milestoneId: string, writtenPath: strin
   const list = missingPaths.map((p) => `"${p}"`).join(', ')
   const plural = missingPaths.length === 1 ? 'file' : 'files'
 
-  return [
+  return renderAdviceSteps(
     `[MILESTONE ${milestoneId} IS NOT DONE YET: ${missingPaths.length} ${plural.toUpperCase()} STILL MISSING]`,
-    `"${writtenPath}" is on disk with real content, so it is not what this milestone is still waiting on. Milestone ${milestoneId} also requires ${list}, which ${missingPaths.length === 1 ? 'is' : 'are'} NOT on disk (or holds placeholder content).`,
-    `This milestone CANNOT be verified until every file it names exists with real content.`,
-    `Directives:`,
-    `1. Write ${list} next, rather than the file you have already delivered.`,
-    `2. Then run this milestone's verification command, or mark it with update_plan.`,
-  ].join('\n')
+    [
+      `"${writtenPath}" is on disk with real content, so it is not what this milestone is still waiting on. Milestone ${milestoneId} also requires ${list}, which ${missingPaths.length === 1 ? 'is' : 'are'} NOT on disk (or holds placeholder content).`,
+      `This milestone CANNOT be verified until every file it names exists with real content.`,
+    ],
+    [`Write ${list} next, rather than the file you have already delivered.`, `Then run this milestone's verification command, or mark it with update_plan.`],
+  )
 }
 
 /**

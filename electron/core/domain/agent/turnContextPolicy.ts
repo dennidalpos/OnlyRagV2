@@ -47,6 +47,8 @@ function codeFixOnly(rationale: string): TurnContextPolicy {
 /** Resolves turn context policy based on plan directive kind. */
 export function resolveTurnContextPolicy(kind: PlanDirectiveKind): TurnContextPolicy {
   switch (kind) {
+    case 'user_first_command':
+      return commandOnly('running the command the user required first — directive names the exact command')
     case 'session_closure':
       return commandOnly('closing the session — directive only')
 

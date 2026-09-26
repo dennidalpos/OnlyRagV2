@@ -91,7 +91,7 @@ describe('buildVersionRealityDirective', () => {
     })!
 
     expect(directive).toContain('you declared ^4.7.3, npm currently publishes 5.9.2')
-    expect(directive).toContain('"write_file" on "package.json"')
+    expect(directive).toContain('Consider updating that range in package.json')
   })
 
   it('says nothing when the manifest matches reality', () => {
@@ -114,15 +114,15 @@ describe('buildVersionRealityDirective', () => {
 
 describe('one instruction per message', () => {
   // Run 14 of 2026-08-25: the directive ended with "Then install again", and the model ran `npm install` repeatedly until the loop guard aborted the session at step 21, 0/12, with package.json never rewritten.
-  it('never orders an install alongside the manifest rewrite', () => {
+  it('keeps an outdated major advisory, since an old major still installs', () => {
     const outdated = buildVersionRealityDirective({
       nonexistent: [],
       unpublished: [],
       outdated: [{ name: 'typescript', declared: '^4.7.3', latest: '5.9.2' }],
     })!
 
-    expect(outdated).toContain('Do NOT run an install first')
-    expect(outdated).not.toMatch(/Then install/i)
+    // An order here contradicted the arbiter's install directive in the 2026-09-25 qwen3.8 run.
+    expect(outdated).not.toMatch(/MUST|Do NOT/)
   })
 
   it('never orders a source edit alongside removing an invented package', () => {

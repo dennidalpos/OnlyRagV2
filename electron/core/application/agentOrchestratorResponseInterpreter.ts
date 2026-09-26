@@ -15,8 +15,11 @@ import { emitLocalizedLog } from './agentOrchestratorTypes'
 
 async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections: readonly ToolCallRejection[] = []): Promise<ResponseInterpretationOutcome> {
   const streamedOutput = ctx.streamedOutput || ''
-  const hasToolCallAttempt =
-    rejections.length > 0 || streamedOutput.includes('<tool_call>') || streamedOutput.includes('```json') || streamedOutput.toLowerCase().includes('"tool"')
+  // Native calls arrive structured, so only a schema rejection is a failed attempt there; JSON in the
+  // prose (a code sample, a config file) is not a call and must not spend the schema budget.
+  const hasToolCallAttempt = ctx.nativeMode
+    ? rejections.length > 0
+    : rejections.length > 0 || streamedOutput.includes('<tool_call>') || streamedOutput.includes('```json') || streamedOutput.toLowerCase().includes('"tool"')
 
   if (hasToolCallAttempt) {
     // This branch used to return `continue` without incrementing anything, and the loop detector never sees these calls because validation rejects them before it runs.
@@ -39,7 +42,7 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
 
     recordGuardEvent(ctx.state.guardEvents, 'schema_budget', 'advise', ctx.stepCount)
     const feedback = rejected
-      ? buildToolSchemaCorrectionDirective(rejected.toolName, rejected.errors)
+      ? buildToolSchemaCorrectionDirective(rejected.toolName, rejected.errors, ctx.nativeMode)
       : '[TOOL PARSER REJECTION DIAGNOSTIC]\nNo tool call could be parsed from your response. Emit exactly ONE fenced json block containing "tool", "parameters" and "explanation".'
     ctx.episodicCompactor.recordStep(
       {
@@ -102,7 +105,7 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
 
   // In CHAT mode a prose answer with no tool call IS the deliverable: the turn is done.
   if (ctx.agentMode === 'ask') {
-    agentToolExecutorService.commitJournal()
+    agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.sessionId)
     ctx.emitLog('info', `Task Finished: ${summary.slice(0, 300)}`)
     ctx.emitDone(true, summary)
     if (ctx.settings.enableCodingAgentDebugLog) {

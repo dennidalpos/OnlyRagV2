@@ -45,13 +45,26 @@ describe('ModelThinkingControl', () => {
     expect(onUpdateSettings).toHaveBeenCalledWith({ modelThinkingPreferences: { 'qwen3:4b': true } })
   })
 
-  it('shows a compatibility note instead of a switch for level-only models', async () => {
+  it('offers only levels, without an off switch, for level-only models', async () => {
     await renderControl({
       modelName: 'gpt-oss:20b',
       metrics: { 'gpt-oss:20b': { capabilities: ['completion', 'thinking'], family: 'gpt-oss' } },
     })
-    expect(container.textContent).toContain('Thinking gestito a livelli')
+    const labels = Array.from(container.querySelectorAll('[role="radio"]')).map((button) => button.textContent)
+    expect(labels).toEqual(['Predefinito del modello', 'low', 'medium', 'high'])
     expect(container.querySelector('[role="switch"]')).toBeNull()
+  })
+
+  it('lists the levels /api/show reports and stores or clears the chosen one', async () => {
+    const metrics = {
+      'qwen3.8:27b': { capabilities: ['completion', 'tools', 'thinking'], thinking: { values: [false, 'low', 'medium', 'xhigh'], default: 'medium' } },
+    }
+    const onUpdateSettings = await renderControl({ modelName: 'qwen3.8:27b', metrics })
+    const buttons = Array.from(container.querySelectorAll('[role="radio"]')) as HTMLButtonElement[]
+    expect(buttons.map((button) => button.textContent)).toEqual(['Predefinito del modello (medium)', 'Spento', 'low', 'medium', 'xhigh'])
+    expect(buttons[0].getAttribute('aria-checked')).toBe('true')
+    await act(async () => buttons[2].click())
+    expect(onUpdateSettings).toHaveBeenCalledWith({ modelThinkingPreferences: { 'qwen3.8:27b': 'low' } })
   })
 
   it('renders no control for unsupported models', async () => {

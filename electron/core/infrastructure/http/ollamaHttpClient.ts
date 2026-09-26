@@ -1,6 +1,14 @@
 import http from 'node:http'
 import { logger } from '../logging/logger'
-import type { RunningModelInfo, OllamaGenerationOptions, OllamaModelMetrics } from '../../../../shared/types'
+import type {
+  RunningModelInfo,
+  OllamaGenerationOptions,
+  OllamaModelMetrics,
+  OllamaSamplingOverrides,
+  OllamaThinkingSupport,
+  OllamaThinkValue,
+} from '../../../../shared/types'
+import { pickSamplingOverrides } from '../../../../shared/domain/agent/ollamaSamplingOptions'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
 import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
 import { resolveOllamaUrl, requestOllama, type OllamaUrl } from './ollamaTransport'
@@ -18,13 +26,9 @@ export interface OllamaStructuredRequest {
   host?: string
   keepAlive?: string
   /** Structured JSON does not benefit from hidden reasoning; level-only models take their lowest level. */
-  think?: boolean | 'low' | 'medium' | 'high'
-  options?: {
+  think?: OllamaThinkValue
+  options?: OllamaSamplingOverrides & {
     num_ctx?: number
-    temperature?: number
-    top_p?: number
-    repeat_penalty?: number
-    num_thread?: number
     num_predict?: number
   }
 }
@@ -49,6 +53,21 @@ export interface RawOllamaTagModel {
   }
   capabilities?: string[]
   [key: string]: unknown
+}
+
+export interface OllamaModelShowFacts {
+  contextLength?: number
+  thinking?: OllamaThinkingSupport
+}
+
+/** `/api/show` reports `thinking: { values: [false, "low", ...], default: "medium" }` for models with reasoning levels. */
+function parseThinkingSupport(raw: unknown): OllamaThinkingSupport | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const record = raw as { values?: unknown; default?: unknown }
+  const isValue = (value: unknown): value is OllamaThinkValue => typeof value === 'boolean' || (typeof value === 'string' && value.trim() !== '')
+  const values = Array.isArray(record.values) ? record.values.filter(isValue) : []
+  if (values.length === 0) return undefined
+  return { values, ...(isValue(record.default) ? { default: record.default } : {}) }
 }
 
 export class OllamaHttpClient {
@@ -180,18 +199,24 @@ export class OllamaHttpClient {
       }
     }
 
-    // `details.context_length` is not present in every Ollama version.
+    // `details.context_length` is not present in every Ollama version; `thinking` levels exist only in /api/show.
     await Promise.all(
       Object.keys(map).map(async (name) => {
-        const contextLength = await this.getModelContextLength(name, customHost)
-        if (contextLength !== undefined) map[name].contextLength = contextLength
+        const facts = await this.getModelShowFacts(name, customHost)
+        if (facts.contextLength !== undefined) map[name].contextLength = facts.contextLength
+        if (facts.thinking) map[name].thinking = facts.thinking
       }),
     )
 
     return map
   }
 
-  getModelContextLength(modelName: string, customHost?: string): Promise<number | undefined> {
+  async getModelContextLength(modelName: string, customHost?: string): Promise<number | undefined> {
+    return (await this.getModelShowFacts(modelName, customHost)).contextLength
+  }
+
+  /** Reads the trained context length and the supported `think` values from /api/show. */
+  getModelShowFacts(modelName: string, customHost?: string): Promise<OllamaModelShowFacts> {
     const urlOpts = this.resolveUrl('/api/show', customHost)
     const postData = JSON.stringify({ model: modelName })
     return new Promise((resolve) => {
@@ -211,7 +236,7 @@ export class OllamaHttpClient {
           })
           res.on('end', () => {
             try {
-              if (res.statusCode !== 200) return resolve(undefined)
+              if (res.statusCode !== 200) return resolve({})
               const parsed = JSON.parse(data)
               const candidates = [
                 parsed?.details?.context_length,
@@ -221,17 +246,17 @@ export class OllamaHttpClient {
                   .map(([, value]) => value),
               ]
               const value = candidates.find((candidate) => typeof candidate === 'number' && candidate > 0)
-              resolve(typeof value === 'number' ? value : undefined)
+              resolve({ contextLength: typeof value === 'number' ? value : undefined, thinking: parseThinkingSupport(parsed?.thinking) })
             } catch {
-              resolve(undefined)
+              resolve({})
             }
           })
         },
       )
-      req.on('error', () => resolve(undefined))
+      req.on('error', () => resolve({}))
       req.setTimeout(5000, () => {
         req.destroy()
-        resolve(undefined)
+        resolve({})
       })
       req.write(postData)
       req.end()
@@ -318,67 +343,6 @@ export class OllamaHttpClient {
       req.setTimeout(10000, () => {
         req.destroy()
         resolve({ success: false, error: 'Model unload timed out' })
-      })
-
-      req.write(postData)
-      req.end()
-    })
-  }
-
-  /** Loads a model into memory without generating anything (empty prompt + keep_alive), the mirror image of unloadModel above. */
-  preloadModel(modelName: string, customHost?: string, keepAlive: string = '30m'): Promise<{ success: boolean; error?: string }> {
-    if (!modelName || !modelName.trim()) {
-      return Promise.resolve({ success: false, error: 'Invalid model name' })
-    }
-    const cleanModel = modelName.trim()
-    const urlOpts = this.resolveUrl('/api/generate', customHost)
-
-    return ollamaGenerationScheduler.schedule('preload', (setActiveCancel) => this.preloadModelNow(cleanModel, keepAlive, urlOpts, setActiveCancel)).promise
-  }
-
-  private preloadModelNow(
-    cleanModel: string,
-    keepAlive: string,
-    urlOpts: OllamaUrl,
-    setActiveCancel: (cancel: () => void) => void,
-  ): Promise<{ success: boolean; error?: string }> {
-    return new Promise((resolve) => {
-      const postData = JSON.stringify({
-        model: cleanModel,
-        prompt: '',
-        keep_alive: keepAlive,
-      })
-
-      const req = this.request(
-        urlOpts,
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-          },
-        },
-        (res) => {
-          res.resume()
-          res.on('end', () => {
-            logger.log('INFO', 'OllamaClient', `Model ${cleanModel} warm-up completed. Status: HTTP ${res.statusCode}`)
-            resolve({ success: res.statusCode === 200 })
-          })
-        },
-      )
-
-      req.on('error', (err: NodeJS.ErrnoException) => {
-        logger.log('WARN', 'OllamaClient', `Model warm-up skipped for ${cleanModel}: ${err.message}`)
-        resolve({ success: false, error: err.message })
-      })
-      setActiveCancel(() => req.destroy())
-
-      req.setTimeout(120000, () => {
-        req.destroy()
-        resolve({ success: false, error: 'Model warm-up timed out' })
       })
 
       req.write(postData)
@@ -596,10 +560,7 @@ export class OllamaHttpClient {
         keep_alive: customOptions?.keep_alive,
         options: {
           num_ctx: customOptions?.num_ctx || 16384,
-          temperature: customOptions?.temperature ?? 0.1,
-          top_p: customOptions?.top_p ?? 0.9,
-          repeat_penalty: customOptions?.repeat_penalty ?? 1.1,
-          ...(customOptions?.num_thread ? { num_thread: customOptions.num_thread } : {}),
+          ...pickSamplingOverrides(customOptions),
         },
       })
       const req = this.request(
@@ -706,10 +667,7 @@ export class OllamaHttpClient {
       keep_alive: request.keepAlive || '30m',
       options: {
         num_ctx: request.options?.num_ctx || 16384,
-        temperature: request.options?.temperature ?? 0.1,
-        top_p: request.options?.top_p ?? 0.9,
-        repeat_penalty: request.options?.repeat_penalty ?? 1.1,
-        ...(request.options?.num_thread ? { num_thread: request.options.num_thread } : {}),
+        ...pickSamplingOverrides(request.options),
         ...(request.options?.num_predict ? { num_predict: request.options.num_predict } : {}),
       },
     })

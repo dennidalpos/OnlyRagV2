@@ -12,7 +12,7 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(defaults.maxToolCallSteps).toBe(25)
     expect(defaults.allowFileModifications).toBe(false)
     expect(defaults.allowTerminalExecution).toBe(false)
-    expect(defaults.capabilityPolicyMode).toBe('offline-strict')
+    expect(defaults.capabilityPolicyMode).toBe('network-approved')
     expect(defaults.modelThinkingPreferences).toEqual({})
   })
 
@@ -24,7 +24,7 @@ describe('AppSettingsDomain Unit Tests', () => {
 
   it('preserves a valid capability policy mode and drops invalid values', () => {
     expect(sanitizeAppSettings({ capabilityPolicyMode: 'offline-strict' }).capabilityPolicyMode).toBe('offline-strict')
-    expect(sanitizeAppSettings({ capabilityPolicyMode: 'auto' }).capabilityPolicyMode).toBe('offline-strict')
+    expect(sanitizeAppSettings({ capabilityPolicyMode: 'auto' }).capabilityPolicyMode).toBe('network-approved')
   })
 
   it('sanitizes independent per-model thinking preferences', () => {
@@ -32,10 +32,11 @@ describe('AppSettingsDomain Unit Tests', () => {
       sanitizeModelThinkingPreferences({
         ' qwen3:4b ': true,
         'gpt-oss:20b': false,
-        invalid: 'yes',
+        'qwen3.8:27b': ' low ',
+        invalid: 'not a level!',
         '': true,
       }),
-    ).toEqual({ 'qwen3:4b': true, 'gpt-oss:20b': false })
+    ).toEqual({ 'qwen3:4b': true, 'gpt-oss:20b': false, 'qwen3.8:27b': 'low' })
 
     expect(
       sanitizeAppSettings({

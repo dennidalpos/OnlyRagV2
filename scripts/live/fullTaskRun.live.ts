@@ -10,17 +10,22 @@ const SAFE_RUN = `${MODEL}-${RUN_LABEL}`.replace(/[^a-z0-9_-]+/gi, '-')
 const WORKSPACE = liveWorkspacePath(`fulltask_${SAFE_RUN}`)
 const SESSION = `live-full-task-${SAFE_RUN}`
 
-const approvedNpmCommands = new Set(['npm install', 'npm install --save-dev vitest'])
+/**
+ * Consent a user of the network-approved policy gives: network access (package installs with any
+ * flags, web research) and confined workspace edits. Host tool installs and commits stay denied.
+ * The probe used to approve only the exact string "npm install", so "npm install --no-audit" was
+ * refused and the 2026-09-25 run measured the script rather than the agent.
+ */
+const CONSENTED_REASONS = new Set(['network_access', 'workspace_mutation'])
 
-/** The live probe grants only listed npm commands, one request at a time. */
 const npmConsentEvents: RendererEventSink = {
   isAvailable: () => true,
   send(channel, payload) {
     if (channel !== 'agent:approval-request') return
     const request = payload as AgentApprovalRequest
-    const command = request.contentOrCmd.trim()
-    const approved = request.type === 'terminal_cmd' && request.reasons?.includes('network_access') === true && approvedNpmCommands.has(command)
-    console.log(`npm consent ${approved ? 'approved' : 'denied'} for one terminal command`)
+    const reasons = request.reasons ?? []
+    const approved = request.type !== 'git_commit' && reasons.length > 0 && reasons.every((reason) => CONSENTED_REASONS.has(reason))
+    console.log(`consent ${approved ? 'approved' : 'denied'} for ${request.type} (${reasons.join(', ') || 'no reason'}): ${request.contentOrCmd.slice(0, 120)}`)
     respondToApproval(request.runId, approved)
   },
 }

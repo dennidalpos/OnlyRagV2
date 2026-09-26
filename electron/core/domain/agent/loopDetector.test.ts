@@ -214,16 +214,15 @@ describe('AgentActionLoopDetector Unit Tests', () => {
     // Distinct paths keep the alternation below from reading as an edit/command oscillation.
     const fixCall = (content: string, filePath = `src/${content}.ts`): AgentToolCall => ({ tool: 'write_file', parameters: { filePath, content } })
 
-    it('classifies a repeat as failing when the earlier executions failed', () => {
+    it('does not treat a check re-run after each successful fix as a repeat', () => {
       runStep(installCall, false)
       runStep(fixCall('a'), true)
       runStep(installCall, false)
       runStep(fixCall('b'), true)
-      const blocked = runStep(installCall, false)
+      const retried = runStep(installCall, false)
 
-      expect(blocked.isLooping).toBe(true)
-      expect(blocked.repeatOutcome).toBe('failing')
-      expect(blocked.suggestedIntervention).toContain('[CRITICAL LOOP INTERVENTION')
+      // Edit, check, edit, check is the normal fix cycle; runs 38 and 41 needed seven test runs to pass.
+      expect(retried.isLooping).toBe(false)
     })
 
     it('classifies a repeat as succeeding when every earlier execution succeeded', () => {
@@ -238,14 +237,12 @@ describe('AgentActionLoopDetector Unit Tests', () => {
       expect(blocked.suggestedIntervention).not.toContain('investigate the error stack trace')
     })
 
-    it('treats a command that succeeded and then broke as a failing repeat', () => {
+    it('allows a command that succeeded and then broke to run again after a fix', () => {
       runStep(installCall, true)
       runStep(installCall, false)
       runStep(fixCall('a'), true)
-      const blocked = runStep(installCall, false)
 
-      expect(blocked.repeatOutcome).toBe('failing')
-      expect(blocked.suggestedIntervention).toContain('[CRITICAL LOOP INTERVENTION')
+      expect(runStep(installCall, false).isLooping).toBe(false)
     })
 
     it('refuses a failed check re-issued with nothing changed since, before it runs', () => {
@@ -394,5 +391,33 @@ describe('same-file edit streaks end at a check', () => {
     detector.recordOutcome(build, false)
 
     expect(detector.recordAndCheck(edit('d')).isLooping).toBe(false)
+  })
+})
+
+describe('fix cycles are not loops', () => {
+  it('lets edit, build, edit, build run without an exact-repeat block', () => {
+    const detector = new AgentActionLoopDetector()
+    const build = { tool: 'run_command' as const, parameters: { command: 'npm run build' } }
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const edit = {
+        tool: 'replace_file_content' as const,
+        parameters: { filePath: 'src/App.tsx', targetContent: `v${attempt}`, replacementContent: `v${attempt + 1}` },
+      }
+      expect(detector.recordAndCheck(edit).isLooping).toBe(false)
+      detector.recordOutcome(edit, true)
+      expect(detector.recordAndCheck(build).isLooping).toBe(false)
+      detector.recordOutcome(build, false)
+    }
+  })
+
+  it('still stops the same build re-run with nothing edited in between', () => {
+    const detector = new AgentActionLoopDetector()
+    const build = { tool: 'run_command' as const, parameters: { command: 'npm run build' } }
+    const results = [0, 1, 2, 3].map(() => {
+      const check = detector.recordAndCheck(build)
+      detector.recordOutcome(build, true)
+      return check.isLooping
+    })
+    expect(results).toContain(true)
   })
 })

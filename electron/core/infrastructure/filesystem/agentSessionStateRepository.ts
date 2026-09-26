@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { ensureWorkspaceMetadataDirectory } from './workspaceMetadataDirectory'
 import path from 'node:path'
 import os from 'node:os'
 import { logger } from '../logging/logger'
@@ -83,7 +84,7 @@ function normalizePersistedMode(raw: unknown): SavedAgentSessionState {
 export class AgentSessionStateRepository {
   private getStorageDir(workspacePath?: string | null): string {
     if (workspacePath && fs.existsSync(workspacePath)) {
-      const stateDir = path.join(workspacePath, '.onlyrag', 'sessions')
+      const stateDir = path.join(ensureWorkspaceMetadataDirectory(workspacePath), 'sessions')
       if (!fs.existsSync(stateDir)) {
         try {
           fs.mkdirSync(stateDir, { recursive: true })
@@ -142,7 +143,7 @@ export class AgentSessionStateRepository {
   public async saveSessionTrackerMarkdown(workspacePath: string | null, tracker: SessionDebtTracker): Promise<boolean> {
     if (!workspacePath || !fs.existsSync(workspacePath)) return false
     try {
-      const assistantDir = path.join(workspacePath, '.onlyrag', 'assistant')
+      const assistantDir = path.join(ensureWorkspaceMetadataDirectory(workspacePath), 'assistant')
       if (!fs.existsSync(assistantDir)) {
         await fs.promises.mkdir(assistantDir, { recursive: true })
         await this.migrateLegacyTracker(workspacePath, assistantDir)

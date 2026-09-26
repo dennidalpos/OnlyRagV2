@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { ensureWorkspaceMetadataDirectory } from './workspaceMetadataDirectory'
 import path from 'node:path'
 import os from 'node:os'
 import { logger } from '../logging/logger'
@@ -44,7 +45,7 @@ export class SessionHistoryRepository {
 
   private getStorageDir(workspacePath?: string | null): string {
     if (workspacePath && fs.existsSync(workspacePath)) {
-      const stateDir = path.join(workspacePath, '.onlyrag', 'sessions')
+      const stateDir = path.join(ensureWorkspaceMetadataDirectory(workspacePath), 'sessions')
       if (!fs.existsSync(stateDir)) {
         try {
           fs.mkdirSync(stateDir, { recursive: true })

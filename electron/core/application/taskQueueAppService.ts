@@ -7,7 +7,6 @@ import { logger } from '../infrastructure/logging/logger'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import type { AgentRunIdentity } from '../../../shared/types'
-import { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
 import { standaloneScratchWorkspace } from '../infrastructure/filesystem/standaloneScratchWorkspace'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import path from 'node:path'
@@ -156,7 +155,6 @@ export class TaskQueueAppService {
   private async executeTaskItem(item: TaskQueueItem<QueuedAgentTask>): Promise<void> {
     const { id, payload } = item
     const { payload: taskPayload, rendererEvents, resolve } = payload
-    let transaction: DisposableAgentWorkspace | undefined
 
     logger.log(
       'INFO',
@@ -165,19 +163,17 @@ export class TaskQueueAppService {
     )
 
     try {
-      transaction = taskPayload.workspacePath && !taskPayload.isStandaloneMode ? DisposableAgentWorkspace.create(taskPayload.workspacePath, id) : undefined
-      const executionPayload = transaction
-        ? { ...taskPayload, sourceWorkspacePath: taskPayload.workspacePath, workspacePath: transaction.workspacePath }
-        : taskPayload
-      const result = await runAgentOrchestratorLoop(executionPayload, rendererEvents, id, transaction)
+      // The run edits the user's workspace in place: its real node_modules, plan and session state
+      // are there, and every changed file is recorded in a checkpoint the user can restore. The
+      // former per-run copy left out node_modules and .onlyrag, so each run reinstalled dependencies
+      // and could not see the approved plan.
+      const result = await runAgentOrchestratorLoop(taskPayload, rendererEvents, id)
       this.queue.markCompleted(id)
       resolve(result)
     } catch (err: unknown) {
       this.queue.markFailed(id, errorMessage(err))
       logger.log('ERROR', 'TaskQueueAppService', `Task execution [${id}] failed: ${errorMessage(err)}`)
       resolve({ success: false, summary: `Execution error: ${errorMessage(err)}`, error: errorMessage(err) })
-    } finally {
-      transaction?.dispose()
     }
   }
 }

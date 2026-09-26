@@ -26,7 +26,7 @@ export function projectPendingChange(proposal: PendingChangeProposal, before: st
     case 'replace_chunk': {
       const target = String(proposal.targetContent ?? '')
       if (!target || !current.includes(target)) return current
-      return current.replace(target, String(proposal.replacementContent ?? ''))
+      return current.replace(target, () => String(proposal.replacementContent ?? ''))
     }
 
     case 'multi_replace': {
@@ -34,7 +34,7 @@ export function projectPendingChange(proposal: PendingChangeProposal, before: st
       for (const chunk of proposal.replacements || []) {
         const target = chunk?.targetContent
         if (target && projected.includes(target)) {
-          projected = projected.replace(target, String(chunk.replacementContent ?? ''))
+          projected = projected.replace(target, () => String(chunk.replacementContent ?? ''))
         }
       }
       return projected

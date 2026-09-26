@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  resolveAgentThinkValue,
   resolveOllamaThinkingMode,
   resolveOllamaThinkingPreference,
   resolveStructuredThinkValue,
@@ -60,5 +61,37 @@ describe('resolveStructuredThinkValue', () => {
       true,
     )
     expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('llama3.2:latest', {}, metrics as never))).toBe(false)
+  })
+})
+
+describe('thinking levels reported by /api/show', () => {
+  const reported = {
+    'qwen3.8:27b': {
+      capabilities: ['completion', 'vision', 'tools', 'thinking'],
+      family: 'qwen35',
+      thinking: { values: [false, 'low', 'medium', 'xhigh'], default: 'medium' },
+    },
+    'gpt-oss:20b': { capabilities: ['completion', 'tools', 'thinking'], family: 'gptoss', thinking: { values: ['low', 'medium', 'high'], default: 'medium' } },
+    'llama3.2:latest': { capabilities: ['completion', 'tools'], family: 'llama' },
+  }
+
+  it('classifies from the reported values, not from the model family', () => {
+    expect(resolveOllamaThinkingMode('qwen3.8:27b', reported)).toMatchObject({ mode: 'binary', levels: ['low', 'medium', 'xhigh'], modelDefault: 'medium' })
+    expect(resolveOllamaThinkingMode('gpt-oss:20b', reported)).toMatchObject({ mode: 'level-only', levels: ['low', 'medium', 'high'] })
+  })
+
+  it('omits think for the agent unless the user chose a value the model accepts', () => {
+    expect(resolveAgentThinkValue('qwen3.8:27b', {}, reported)).toBeUndefined()
+    expect(resolveAgentThinkValue('qwen3.8:27b', { modelThinkingPreferences: { 'qwen3.8:27b': 'low' } }, reported)).toBe('low')
+    expect(resolveAgentThinkValue('qwen3.8:27b', { modelThinkingPreferences: { 'qwen3.8:27b': 'high' } }, reported)).toBeUndefined()
+    expect(resolveAgentThinkValue('qwen3.8:27b', { modelThinkingPreferences: { 'qwen3.8:27b': false } }, reported)).toBe(false)
+    expect(resolveAgentThinkValue('gpt-oss:20b', { modelThinkingPreferences: { 'gpt-oss:20b': false } }, reported)).toBe('low')
+    expect(resolveAgentThinkValue('llama3.2:latest', { modelThinkingPreferences: { 'llama3.2:latest': true } }, reported)).toBeUndefined()
+  })
+
+  it('treats a chosen level as enabled for boolean-only features and removes a cleared preference', () => {
+    expect(resolveOllamaThinkingPreference('qwen3.8:27b', { modelThinkingPreferences: { 'qwen3.8:27b': 'low' } }, reported).think).toBe(true)
+    expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('gpt-oss:20b', {}, reported))).toBe('low')
+    expect(updateModelThinkingPreference({ 'qwen3.8:27b': 'low' }, 'qwen3.8:27b', undefined)).toEqual({})
   })
 })

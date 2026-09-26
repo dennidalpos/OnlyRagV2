@@ -1,4 +1,5 @@
 import { workspaceAppService } from './workspaceAppService'
+import { saveAgentCheckpoint } from '../infrastructure/filesystem/agentCheckpointStore'
 import { FsToolService } from './fsToolService'
 import { ProcessToolService } from './processToolService'
 import { WebToolService } from './webToolService'
@@ -213,6 +214,17 @@ export class AgentToolExecutorService {
     return this.journal.commit()
   }
 
+  /**
+   * Ends the run's journal without undoing anything: the pre-run state of every file the run
+   * changed is saved as a checkpoint the user can restore later. Returns its id, or null when the
+   * run changed no file (or there is no workspace to hold it).
+   */
+  public checkpointJournal(workspacePath: string | null | undefined, runId: string): string | null {
+    const checkpointId = workspacePath ? saveAgentCheckpoint(workspacePath, agentCheckpointId(runId), this.journal.sessionBaseline) : null
+    this.journal.commit()
+    return checkpointId
+  }
+
   /** Stages and commits all changes in `cwd` via execFileSync (argv array, no shell) -- safe against injection via the commit message without needing to escape it for a shell string. */
   public previewGitCommit(cwd: string, observedPaths: readonly string[] = []) {
     return this.gitToolService.previewCommit(cwd, [...this.journal.trackedPaths, ...observedPaths])
@@ -229,6 +241,14 @@ export class AgentToolExecutorService {
         copy_file: ['sourcePath', 'filePath', 'targetPath', 'destination'],
         move_file: ['sourcePath', 'filePath', 'targetPath', 'destination'],
         download_file: ['filePath'],
+        // Reads follow symlinks and junctions too: without the real-path check a junction inside
+        // the workspace exposed any folder on the disk to read_file and grep_search.
+        read_file: ['filePath'],
+        get_file_info: ['filePath'],
+        extract_code_symbols: ['filePath'],
+        list_dir: ['dirPath'],
+        list_files_recursive: ['dirPath'],
+        grep_search: ['dirPath'],
       } as Record<string, string[]>
     )[parsedTool.tool]
     if (!fields) return null
@@ -705,4 +725,9 @@ export const __testing = {
   isBlockingDevServerCommand,
   extractRequestedPackages,
   findAlreadyInstalledPackages,
+}
+
+/** A filesystem-safe, unique checkpoint name for one run. */
+export function agentCheckpointId(runId: string): string {
+  return `${runId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 50)}-${Date.now().toString(36)}`
 }

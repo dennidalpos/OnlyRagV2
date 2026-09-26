@@ -40,7 +40,7 @@ Nel flusso Agent Coding la richiesta di approvazione `git_commit` include `commi
 
 Il payload di `workspace:write-file` porta anche `workspaceRoot`: il salvataggio editor applica lo stesso controllo realpath delle mutazioni Agent Coding.
 
-Le run Agent Coding di progetto non ricevono il path utente: Main sostituisce il workspace con un worktree/copia temporanea e chiede il consenso `publish_workspace` prima di riportare le modifiche. Lo standalone opera invece nel workspace persistente dedicato `userData/agent-scratch`. Il consenso di pubblicazione usa `agent:approval-response` con la stessa identità immutabile della run.
+Le run Agent Coding di progetto lavorano nel workspace dell'utente; lo standalone opera nel workspace persistente dedicato `userData/agent-scratch`. `agent:restore-checkpoint` (`{ workspacePath, checkpointId }`) riporta i file modificati da una run allo stato precedente; viene rifiutato mentre una run lavora nello stesso workspace.
 
 `agent:start-task` restituisce `runId` e `queuePosition`; `agent:cancel-task` richiede quell'identità e non annulla altre run.
 

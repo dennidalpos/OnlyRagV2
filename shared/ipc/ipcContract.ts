@@ -186,6 +186,11 @@ export interface IpcInvokeContract {
     payload: { sessionId: string; workspacePath: string | null; planMilestones: PlanMilestone[]; userTask?: string; planRevisionId?: string }
     result: boolean
   }
+  /** Returns the files a finished, cancelled or timed-out run changed to their pre-run state. */
+  'agent:restore-checkpoint': {
+    payload: { workspacePath: string; checkpointId: string }
+    result: { success: boolean; restoredCount: number; errors: string[] }
+  }
   /** Self-contained Markdown debug bundle for external analysis. */
   'agent:export-ai-debug-bundle': {
     payload: { sessionId: string; workspacePath?: string | null; settings?: AppSettings; activeModelName?: string; activeSkills?: string[] }
@@ -332,6 +337,7 @@ export const IPC_INVOKE_METHODS = {
   agentPlanCancel: 'agent:plan-cancel',
   agentGetPlanState: 'agent:get-plan-state',
   agentPlanSeed: 'agent:plan-seed',
+  restoreAgentCheckpoint: 'agent:restore-checkpoint',
   exportAiDebugBundle: 'agent:export-ai-debug-bundle',
   listCodingSessions: 'sessions:list',
   saveCodingSession: 'sessions:save',

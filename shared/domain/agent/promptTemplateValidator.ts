@@ -64,7 +64,7 @@ export function validateNodeTemplate(nodeId: PromptNodeId, template: string): Pr
 
   // Repeated variables are legitimate — the image prompt names {{currentPage}} twice on purpose.
   const known = new Set(node.variables.map((v) => v.name))
-  const contextual = new Set(['nativeToolCalling', 'nativeVision'])
+  const contextual = new Set(['nativeToolCalling', 'nativeVision', 'webResearch', 'browserPreview'])
   for (const token of tokens) {
     if (token.type !== 'variable') continue
     if (known.has(token.name) || contextual.has(token.name)) continue

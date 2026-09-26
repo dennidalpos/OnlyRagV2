@@ -119,3 +119,32 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     expect(followUp.stdout).toContain('shell recreated after timeout')
   })
 })
+
+describe('PersistentPowerShellSession output fidelity', () => {
+  let session: PersistentPowerShellSession | null = null
+  afterEach(() => {
+    session?.dispose()
+    session = null
+  })
+
+  itWithPowerShell('returns non-ASCII output intact, from PowerShell and from a native program', async () => {
+    session = new PersistentPowerShellSession(process.cwd())
+    const fromShell = await session.execute('Write-Output "città ✓ perché"')
+    expect(fromShell.stdout).toContain('città ✓ perché')
+    const fromNode = await session.execute('node -e "console.log(String.fromCodePoint(0x2713) + \' però\')"')
+    expect(fromNode.stdout).toContain('✓ però')
+  })
+
+  itWithPowerShell('does not treat a finished log line that mentions a prompt as a prompt', async () => {
+    session = new PersistentPowerShellSession(process.cwd())
+    const res = await session.execute(
+      'Write-Output "test: asks (y/n) before overwrite"; Start-Sleep -Milliseconds 500; Write-Output "done"',
+      undefined,
+      undefined,
+      20000,
+    )
+    expect(res.interruptedByPrompt).toBeUndefined()
+    expect(res.stdout).toContain('done')
+    expect(res.code).toBe(0)
+  })
+})

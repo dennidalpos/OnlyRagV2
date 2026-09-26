@@ -58,7 +58,6 @@ vi.mock('./ollamaAppService', () => ({
       'deepseek-r1:8b': { capabilities: ['completion', 'tools'], contextLength: 32768 },
     }),
     testConnection: vi.fn().mockResolvedValue({ success: true, modelsCount: 3 }),
-    preloadModel: vi.fn().mockResolvedValue({ success: true }),
   },
 }))
 
@@ -267,10 +266,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     )
   })
 
-  itWithPowerShell('stops after the corrective attempt fails too', async () => {
-    vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce(commandJson('pytest failing_test.py'))
-      .mockResolvedValueOnce(commandJson('pytest failing_test.py -x'))
+  itWithPowerShell('stops once six execution failures follow each other', async () => {
+    const stream = vi.mocked(AgentStreamTransport.streamCompletion)
+    for (let attempt = 1; attempt <= 6; attempt++) stream.mockResolvedValueOnce(commandJson(`pytest failing_test_${attempt}.py`))
 
     const res = await runAgentOrchestratorLoop(
       {
@@ -283,8 +281,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     expect(res.success).toBe(false)
     expect(res.completionStatus).toBe('blocked')
-    expect(res.summary).toContain('execution recovery stopped after 2/2 failures')
-    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
+    expect(res.summary).toContain('execution recovery stopped after 6/6 failures')
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(6)
   })
 
   itWithPowerShell('refuses an unchanged rerun of a failed command instead of spending the execution budget on it', async () => {
@@ -302,10 +300,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   itWithPowerShell('does not reach a later ask after the execution recovery budget is exhausted', async () => {
     const askJson = '```json\n{\n  "tool": "ask",\n  "parameters": { "question": "What should we do next?" }\n}\n```'
 
-    vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce(commandJson('pytest still_failing.py'))
-      .mockResolvedValueOnce(commandJson('pytest still_failing.py -x'))
-      .mockResolvedValueOnce(askJson)
+    const stream = vi.mocked(AgentStreamTransport.streamCompletion)
+    for (let attempt = 1; attempt <= 6; attempt++) stream.mockResolvedValueOnce(commandJson(`pytest still_failing_${attempt}.py`))
+    stream.mockResolvedValueOnce(askJson)
 
     const res = await runAgentOrchestratorLoop(
       {
@@ -317,7 +314,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     )
     expect(res.success).toBe(false)
     expect(res.summary).not.toContain('What should we do next?')
-    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(6)
   })
 
   it('persists application closure when ask recovery is exhausted', async () => {
@@ -347,6 +344,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       .mockResolvedValueOnce(failingCommandJson(3))
       .mockResolvedValueOnce(failingCommandJson(4))
       .mockResolvedValueOnce(failingCommandJson(5))
+      .mockResolvedValueOnce(failingCommandJson(6))
+      .mockResolvedValueOnce(failingCommandJson(7))
 
     const settings: AppSettings = {
       defaultModel: 'llama3.2',
@@ -372,12 +371,12 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       null,
     )
 
-    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(6)
     expect(res.success).toBe(false)
     expect(res.completionStatus).toBe('blocked')
   })
 
-  it('does not request another model turn after a command returns an uncertain effect', async () => {
+  it('reports a command with an uncertain effect to the model instead of ending the run', async () => {
     const execute = vi.spyOn(agentToolExecutorService, 'executeTool').mockResolvedValueOnce({
       outcome: 'failure',
       outputForHistory: '[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\n[UNCERTAIN EFFECT - DO NOT RETRY]',
@@ -399,10 +398,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         null,
       )
 
-      expect(res.summary).toContain('Effetto incerto')
-      expect(res.evidence?.nonRollbackEffects).toEqual(['run_command: effetto esterno incerto dopo pytest failing_test.py'])
+      expect(res.summary).not.toContain('Effetto incerto')
       expect(execute).toHaveBeenCalledOnce()
-      expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(AgentStreamTransport.streamCompletion).mock.calls.length).toBeGreaterThan(1)
     } finally {
       execute.mockRestore()
     }
@@ -603,8 +601,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         completionStatus: 'cancelled',
         evidence: expect.objectContaining({
           changedFiles: [],
-          cancellationStatus: 'rolled_back',
-          rollbackRestoredFiles: 0,
+          // Stop keeps whatever the run wrote; undoing it is an explicit checkpoint restore.
+          cancellationStatus: 'kept',
           nonRollbackEffects: [],
         }),
       }),

@@ -19,12 +19,17 @@ export function fileVersionEvidenceKey(filePath: string): string {
   return filePath.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase()
 }
 
-export function recordFileVersion(evidence: FileVersionEvidence, filePath: string, contentHash: string): void {
+/** Prefix of a version the agent saw only part of (a line range, or a read cut for the transcript). */
+const PARTIAL_VIEW_PREFIX = 'partial:'
+
+export function recordFileVersion(evidence: FileVersionEvidence, filePath: string, contentHash: string, options: { complete?: boolean } = {}): void {
   const key = fileVersionEvidenceKey(filePath)
   if (!key || !contentHash) return
+  // A complete view already recorded for the same content is not downgraded by a later partial read.
+  const stored = options.complete === false && evidence[key] !== contentHash ? `${PARTIAL_VIEW_PREFIX}${contentHash}` : contentHash
   // Re-inserting moves the entry to the end, so eviction drops the least recently seen file.
   delete evidence[key]
-  evidence[key] = contentHash
+  evidence[key] = stored
   const keys = Object.keys(evidence)
   for (const stale of keys.slice(0, Math.max(0, keys.length - MAX_FILE_VERSION_EVIDENCE))) {
     delete evidence[stale]
@@ -35,8 +40,16 @@ export function forgetFileVersion(evidence: FileVersionEvidence, filePath: strin
   delete evidence[fileVersionEvidenceKey(filePath)]
 }
 
-export function knownFileVersion(evidence: FileVersionEvidence | undefined, filePath: string): string | undefined {
-  return evidence?.[fileVersionEvidenceKey(filePath)]
+/**
+ * The version the agent may edit against. A targeted replace is safe after a partial view (its exact,
+ * unique target must still match), but a whole-file overwrite is not: the model would silently drop
+ * every line it never saw. `wholeFile` therefore returns only versions seen in full.
+ */
+export function knownFileVersion(evidence: FileVersionEvidence | undefined, filePath: string, options: { wholeFile?: boolean } = {}): string | undefined {
+  const stored = evidence?.[fileVersionEvidenceKey(filePath)]
+  if (!stored) return undefined
+  if (!stored.startsWith(PARTIAL_VIEW_PREFIX)) return stored
+  return options.wholeFile ? undefined : stored.slice(PARTIAL_VIEW_PREFIX.length)
 }
 
 /** Restores evidence saved before it became per-file (a single `{ filePath, contentHash }`). */

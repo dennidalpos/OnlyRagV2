@@ -512,13 +512,15 @@ try {
   assert.equal(silence.done.completionStatus, 'blocked')
   assert.equal(silence.guardEvents.filter((event) => event.guard === 'model_silence' && event.action === 'advise').length, 2)
 
-  console.log('[guard 2/9] the same rejected tool call')
-  const escapingWrite = writeCall('../outside-scratch.txt', 'escape')
-  const rejected = await runGuardScenario('rejected-tool', [escapingWrite, escapingWrite, escapingWrite])
+  console.log('[guard 2/9] rejected tool calls in a row')
+  // Six consecutive failed executions end the run (EXECUTION_RECOVERY_LIMITS); an identical
+  // proposal would be intercepted earlier by the loop detector, so each targets another file.
+  const escapingWrites = Array.from({ length: 6 }, (_, index) => writeCall(`../outside-scratch-${index + 1}.txt`, 'escape'))
+  const rejected = await runGuardScenario('rejected-tool', escapingWrites)
   assert.equal(rejected.done.success, false)
   assert.deepEqual(rejected.stop, ['execution_budget'], describe(rejected))
   assert.equal(rejected.done.completionStatus, 'blocked')
-  assert(!fs.existsSync(path.join(path.dirname(scratchPath), 'outside-scratch.txt')))
+  for (let index = 1; index <= 6; index++) assert(!fs.existsSync(path.join(path.dirname(scratchPath), `outside-scratch-${index}.txt`)))
 
   console.log('[guard 3/9] the same successful write repeated')
   const sameWrite = writeCall('guard-fixtures/repeated.txt', 'same content\n')

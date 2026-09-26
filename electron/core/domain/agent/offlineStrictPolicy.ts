@@ -6,9 +6,13 @@ import {
 } from './capabilityPolicyContract'
 
 const EGRESS_COMMAND_PATTERNS = [
-  /\b(?:curl|wget|fetch|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer)\b/i,
-  /\b(?:git\s+(?:clone|fetch|pull|push|remote\s+add))\b/i,
-  /\b(?:npm|pnpm|yarn|npx)\s+(?:install|add|update|publish|exec)\b/i,
+  /\b(?:curl|wget|fetch|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|iwr|irm)\b/i,
+  /\b(?:git\s+(?:clone|fetch|pull|push|remote\s+add|submodule|ls-remote))\b/i,
+  /\b(?:npm|pnpm|yarn|npx|bun)\s+(?:install|i|ci|add|update|upgrade|publish|exec)\b/i,
+  /^\s*(?:yarn|pnpm\s+i)\s*$/i,
+  /\b(?:pip|pip3|uv|poetry)\s+(?:install|add|download|sync)\b/i,
+  /\bpython[0-9.]*\s+-m\s+pip\s+install\b/i,
+  /\b(?:cargo\s+(?:install|add|fetch)|go\s+(?:get|install|mod\s+download))\b/i,
   /\b(?:ssh|scp|sftp|ftp)\b/i,
   /\b(?:netcat|nc)\b/i,
   /https?:\/\//i,

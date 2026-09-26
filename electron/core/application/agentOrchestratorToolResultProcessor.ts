@@ -8,7 +8,8 @@ import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { runCircuitBreaker, recordMutationSideEffects, recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ResponseInterpreterState, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorRunContext'
 import { emitLocalizedLog } from './agentOrchestratorTypes'
-import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recoveryStopDiagnostic } from '../domain/agent/recoveryBudget'
+import { TOOL_RESULT_MAX_CHARS } from './agentChatTranscript'
+import { EXECUTION_RECOVERY_LIMITS, recoveryStopDiagnostic } from '../domain/agent/recoveryBudget'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { redactSecrets } from '../../logRedactor'
 import { findModuleExtensionAliases, resolveDeclaredFilePaths } from '../../../shared/domain/agent/milestoneDeliverableResolver'
@@ -84,7 +85,8 @@ export function updateVersionConflictRecovery(
   if (ctx.parsedTool.tool === 'read_file') {
     const version = ctx.toolRes.outputForHistory.match(/\[FILE VERSION:\s*(sha256:[a-f0-9]+)\]/i)?.[1]
     if (!version) return { changed: false }
-    recordFileVersion(evidence, filePath, version)
+    const ranged = ctx.parsedTool.parameters.startLine !== undefined || ctx.parsedTool.parameters.endLine !== undefined
+    recordFileVersion(evidence, filePath, version, { complete: !ranged && ctx.toolRes.outputForHistory.length <= TOOL_RESULT_MAX_CHARS })
     if (ctx.state.pendingVersionConflictReadPath && sameFilePath(filePath, ctx.state.pendingVersionConflictReadPath)) {
       ctx.state.pendingVersionConflictReadPath = undefined
       ctx.state.progress.clearExecutionFailures()
@@ -100,21 +102,20 @@ export function updateVersionConflictRecovery(
   return { changed: false }
 }
 
-/** Attaches the version the agent last saw of the edited file, unless the call carries its own. */
+/**
+ * Attaches the version the agent last saw of the edited file. The version is the application's
+ * record, never the model's: a model asked to echo hashes invented one (sha256:9e7b0d0a4c1f2b3d...,
+ * qwen3.8 live run of 2026-09-25). A whole-file write_file needs a version seen in full.
+ */
 export function applyVersionedReadEvidence(
   toolCall: AgentToolCall,
   state: Pick<ResponseInterpreterState, 'versionEvidence'>,
 ): { toolCall: AgentToolCall; consumed: boolean } {
-  if (!VERSIONED_EDIT_TOOLS.has(toolCall.tool) || toolCall.parameters.expectedContentHash) return { toolCall, consumed: false }
-  const known = knownFileVersion(state.versionEvidence, String(toolCall.parameters.filePath || ''))
-  if (!known) return { toolCall, consumed: false }
-  return {
-    consumed: true,
-    toolCall: {
-      ...toolCall,
-      parameters: { ...toolCall.parameters, expectedContentHash: known },
-    },
-  }
+  if (!VERSIONED_EDIT_TOOLS.has(toolCall.tool)) return { toolCall, consumed: false }
+  const { expectedContentHash: _modelSupplied, ...parameters } = toolCall.parameters
+  const known = knownFileVersion(state.versionEvidence, String(parameters.filePath || ''), { wholeFile: toolCall.tool === 'write_file' })
+  if (!known) return { toolCall: { ...toolCall, parameters }, consumed: false }
+  return { consumed: true, toolCall: { ...toolCall, parameters: { ...parameters, expectedContentHash: known } } }
 }
 
 function extractTargetParam(parsedTool: AgentToolCall): string | undefined {
@@ -267,12 +268,14 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
 
   if (isToolFailure && shouldSpendExecutionRecoveryBudget(toolRes)) {
     const signature = `${parsedTool.tool}:${targetParam || ''}:${toolRes.logMessage.toLowerCase()}`
+    // A timed-out or prompt-interrupted command is reported to the model like any failure (its
+    // output says the effect is uncertain and to inspect state first); it no longer ends the run.
     const decision = ctx.state.progress.onExecutionFailure(signature)
-    if (toolRes.effectOutcome === 'uncertain' || decision.action === 'stop') {
-      const reason: AgentLocalizedText =
-        toolRes.effectOutcome === 'uncertain'
-          ? { key: 'reasonUncertainEffect', params: { tool: parsedTool.tool } }
-          : { key: 'reasonExecutionRecovery', params: { diagnostic: recoveryStopDiagnostic('execution', decision.state) } }
+    if (decision.action === 'stop') {
+      const reason: AgentLocalizedText = {
+        key: 'reasonExecutionRecovery',
+        params: { diagnostic: recoveryStopDiagnostic('execution', decision.state, EXECUTION_RECOVERY_LIMITS) },
+      }
       ctx.episodicCompactor.recordStep(
         {
           step: ctx.stepCount,
@@ -302,7 +305,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     emitLocalizedLog(
       ctx.emitLog,
       'info',
-      { key: 'executionRecoveryAttempt', params: { used: decision.state.totalFailures, limit: MAX_FAILURES_PER_RECOVERY_CATEGORY } },
+      { key: 'executionRecoveryAttempt', params: { used: decision.state.totalFailures, limit: EXECUTION_RECOVERY_LIMITS.total } },
       toolRes.logDetail,
       { category: 'system_alert', toolName: parsedTool.tool, target: targetParam },
     )

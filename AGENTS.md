@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.19 · 2026-09-25` — Repository facts and verified commands.
+`v1.20 · 2026-09-26` — Repository facts and verified commands.
 
 ## Scope
 
@@ -37,7 +37,7 @@ Run from repository root in PowerShell. On 2026-09-25 on Windows (Node 24, Ollam
 - Ollama HTTP from Main goes through `electron/core/infrastructure/http/ollamaTransport.ts` (http or https per configured host); defaults live in `shared/domain/ollamaHost.ts` and `shared/domain/settings/appSettingsDefaults.ts`.
 - Sidecar vectors record their `embedding_model` per chunk; search embeds the query once per stored model.
 - Main Ollama generation uses `ollamaGenerationScheduler` at concurrency 1; model inventory uses `/api/tags`.
-- Coding Agent uses `/api/chat` with native tool calls and a persisted assistant/tool transcript; Main executes each call through the existing security gates. The full-task live reference is `qwen3.8:27b`.
+- Coding Agent uses `/api/chat` with native tool calls and an append-only persisted transcript (system prompt frozen per session, task once, turn context appended); Main executes each call through the security gates and returns every outcome as the tool message. Runs edit the workspace in place and save a restorable checkpoint in `.onlyrag/checkpoints` (`agent:restore-checkpoint`). Sampling follows the Modelfile unless `modelSamplingOverrides` is set. The 2026-09-26 audit is `docs/coding-agent-audit-2026-09-26.md`; qwen3-coder:30b verified the full task (8/8), the qwen3.8:27b rerun is pending (`PROJECT_STATUS.json`).
 - The UI terminal and agent shell tools use `PersistentPowerShellSession`; sessions retain shell state per workspace and are disposed with active tasks.
 
 ## Repository specifics

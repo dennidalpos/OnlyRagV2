@@ -45,3 +45,29 @@ describe('offline-strict capability policy', () => {
     expect(authorizeOfflineStrict(request({ capability: 'filesystem', operation: 'write', toolName: 'write_file' })).auditId).toContain('policy-session-42')
   })
 })
+
+describe('package manager egress detection', () => {
+  it('recognises the install forms models actually write', () => {
+    for (const command of [
+      'npm i',
+      'npm ci',
+      'npm install --no-audit --no-fund',
+      'pnpm add zod',
+      'yarn',
+      'pip install requests',
+      'python -m pip install -r requirements.txt',
+      'iwr https://x',
+      'git submodule update --init',
+      'cargo add serde',
+      'go get example.com/x',
+    ]) {
+      expect(shellCommandHasEgress(command), command).toBe(true)
+    }
+  })
+
+  it('leaves local builds and tests alone', () => {
+    for (const command of ['npm run build', 'npm test', 'npx vitest run', 'npx tsc --noEmit', 'python -m pytest', 'git status']) {
+      expect(shellCommandHasEgress(command), command).toBe(false)
+    }
+  })
+})

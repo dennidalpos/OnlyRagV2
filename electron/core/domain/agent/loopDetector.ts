@@ -78,6 +78,10 @@ export class AgentActionLoopDetector {
   private workspaceEpoch = 0
   /** Workspace epoch at the last failure of each check, keyed by fingerprint. */
   private failedCheckEpoch = new Map<string, number>()
+  /** Bumped only by successful non-check mutations (file edits, deletes, downloads...). */
+  private editEpoch = 0
+  /** `editEpoch` when each entry of `signatureHistory` was recorded. */
+  private signatureEditEpochs: number[] = []
   private readonly maxRepeatsAllowed: number
   private readonly maxHistoryLength = 20
 
@@ -117,6 +121,7 @@ export class AgentActionLoopDetector {
 
     const isCheck = CHECK_TOOLS.has(toolCall.tool)
     if (STATE_CHANGING_TOOLS.has(toolCall.tool) && (succeeded || isCheck)) this.workspaceEpoch++
+    if (!isCheck && succeeded && STATE_CHANGING_TOOLS.has(toolCall.tool)) this.editEpoch++
     if (!isCheck) return
     if (succeeded) this.failedCheckEpoch.delete(signature)
     else this.failedCheckEpoch.set(signature, this.workspaceEpoch)
@@ -146,6 +151,7 @@ export class AgentActionLoopDetector {
   public recordAndCheck(toolCall: AgentToolCall): LoopCheckResult {
     const signature = this.generateFingerprint(toolCall)
     this.signatureHistory.push(signature)
+    this.signatureEditEpochs.push(this.editEpoch)
 
     const target = this.extractTarget(toolCall)
     this.targetHistory.push({ tool: toolCall.tool, target })
@@ -188,13 +194,7 @@ export class AgentActionLoopDetector {
               `[CRITICAL SHELL-TOOL CONFUSION LOOP: "${matchedKeyword}" PASSED AS SHELL COMMAND ${consecutiveToolKeywordCmds + 1} TIMES]`,
               `"${matchedKeyword}" is a STRUCTURED TOOL — it is NOT a shell executable.`,
               `You MUST stop passing it to run_command immediately.`,
-              `Directives:`,
-              `1. Invoke "${matchedKeyword}" as a JSON tool call (NOT inside run_command).`,
-              `2. Correct format:`,
-              `\`\`\`json`,
-              `{ "tool": "${matchedKeyword}", "parameters": { ... }, "explanation": "..." }`,
-              `\`\`\``,
-              `3. Do NOT wrap tool calls inside run_command, shell, or any terminal string.`,
+              `Call the "${matchedKeyword}" tool directly with its own arguments instead of passing its name to run_command.`,
             ].join('\n'),
           }
         }
@@ -202,8 +202,13 @@ export class AgentActionLoopDetector {
     }
 
     // 1. Exact parameter repeat check
+    // A build or test re-run after a successful edit is the normal fix cycle (edit, build, edit,
+    // build), not a repeat: for checks only runs since the last edit count as duplicates.
     const recentSignatures = this.signatureHistory.slice(-5)
-    const duplicateCount = recentSignatures.filter((sig) => sig === signature).length
+    const recentEpochs = this.signatureEditEpochs.slice(-5)
+    const duplicateCount = recentSignatures.filter(
+      (sig, index) => sig === signature && (!CHECK_TOOLS.has(toolCall.tool) || recentEpochs[index] === this.editEpoch),
+    ).length
 
     // Block unchanged failing check to avoid wasting execution budget
     if (this.isUnchangedFailingCheck(toolCall, signature)) {
@@ -343,6 +348,7 @@ export class AgentActionLoopDetector {
   /** Resets history for a specific target or all targets. */
   public resetTarget(target?: string): void {
     this.signatureHistory = []
+    this.signatureEditEpochs = []
     if (!target) {
       this.targetHistory = []
       return
@@ -355,6 +361,8 @@ export class AgentActionLoopDetector {
    */
   public reset(): void {
     this.signatureHistory = []
+    this.signatureEditEpochs = []
+    this.editEpoch = 0
     this.targetHistory = []
     this.actionSequence = []
     this.outcomeBySignature.clear()

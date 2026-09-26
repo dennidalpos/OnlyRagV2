@@ -244,8 +244,10 @@ export interface AppSettings {
   includeCodingAgentDebugPayloads?: boolean
   /** Audit log generations retained on disk. */
   codingAgentDebugRetentionFiles?: number
-  /** Per-model binary thinking preferences. */
-  modelThinkingPreferences?: Record<string, boolean>
+  /** Per-model thinking preference: on/off, or a reasoning level the model reports in /api/show. */
+  modelThinkingPreferences?: Record<string, OllamaThinkValue>
+  /** Per-model sampling overrides. Unset keys keep the model's Modelfile defaults. */
+  modelSamplingOverrides?: Record<string, OllamaSamplingOverrides>
   enablePrePlanInterview?: boolean
   verifyBeforeFinish?: boolean
   agentSessionTimeoutMinutes?: number
@@ -532,6 +534,16 @@ export interface OllamaModelMetrics {
   family?: string
   sizeBytes?: number
   digest?: string
+  /** `think` values reported by /api/show (e.g. `[false, "low", "medium"]`) and the model's own default. */
+  thinking?: OllamaThinkingSupport
+}
+
+/** One value Ollama accepts for `think`: a boolean switch or a named reasoning level. */
+export type OllamaThinkValue = boolean | string
+
+export interface OllamaThinkingSupport {
+  values: OllamaThinkValue[]
+  default?: OllamaThinkValue
 }
 
 export interface OllamaModelUpdateInfo {
@@ -575,12 +587,19 @@ export interface OllamaStreamDoneEvent {
   operationId: string
 }
 
-export interface OllamaGenerationOptions {
-  num_ctx?: number
+/** Sampling and threading options sent to Ollama only when the user set them; otherwise the Modelfile decides. */
+export interface OllamaSamplingOverrides {
   temperature?: number
   top_p?: number
+  top_k?: number
+  min_p?: number
   repeat_penalty?: number
+  presence_penalty?: number
   num_thread?: number
+}
+
+export interface OllamaGenerationOptions extends OllamaSamplingOverrides {
+  num_ctx?: number
   keep_alive?: string
   /** Effective, already policy-gated binary thinking choice. */
   think?: boolean

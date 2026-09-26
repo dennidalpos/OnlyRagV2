@@ -74,7 +74,7 @@ describe('runToolGates network-approved policy', () => {
     })
 
     expect(requestApproval).not.toHaveBeenCalled()
-    expect(result).toEqual({ outcome: 'denied' })
+    expect(result).toEqual({ outcome: 'denied', feedback: expect.stringContaining('[FSM PERMISSION DENIED]') })
   })
 
   it('combines Guided mutation and network consent into one review', async () => {
@@ -127,7 +127,7 @@ describe('runToolGates structured command safety', () => {
       parsedTool: { tool: 'run_command', parameters: { command: `Remove-Item -Recurse -Force ${hostRoot}` } },
     })
 
-    expect(result).toEqual({ outcome: 'denied' })
+    expect(result).toEqual({ outcome: 'denied', feedback: expect.stringContaining('[COMMAND SAFETY DENIED]') })
     expect(requestApproval).not.toHaveBeenCalled()
   })
 })

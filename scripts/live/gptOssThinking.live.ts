@@ -27,10 +27,11 @@ describe.skipIf(!model)('live: GPT-OSS level-only thinking', () => {
     expect(resolution).toMatchObject({ mode: 'level-only', installedModel: model, enabled: false, think: false })
   })
 
-  it('shows only the compatibility note in Settings, with no on/off switch', () => {
+  it('shows the reported levels in Settings, with no on/off switch', () => {
     const markup = renderToStaticMarkup(createElement(ModelThinkingControl, { modelName: model!, metrics, settings, onUpdateSettings: () => {} }))
 
-    expect(markup).toContain(italian.settings.thinkingLevelOnlyNote)
+    expect(markup).toContain(italian.settings.thinkingModelDefault)
+    expect(markup).not.toContain(`>${italian.settings.thinkingOff}<`)
     expect(markup).not.toContain('role="switch"')
   })
 
@@ -41,7 +42,7 @@ describe.skipIf(!model)('live: GPT-OSS level-only thinking', () => {
     const answer = await AgentStreamTransport.streamCompletion({
       targetModel: model!,
       prompt: 'Reply with exactly the word OK and nothing else.',
-      runtimeOpts: { num_ctx: 4096, temperature: 0, top_p: 0.9, repeat_penalty: 1.1, num_predict: 512, stop: [], maxContextChars: 12000 },
+      runtimeOpts: { num_ctx: 4096, temperature: 0, num_predict: 512, maxContextChars: 12000 },
       ollamaEndpoint: host,
       think: false,
       isCancelled: () => false,

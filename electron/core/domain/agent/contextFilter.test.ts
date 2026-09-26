@@ -100,3 +100,10 @@ describe('contextFilter domain logic & AppSec protection', () => {
     expect(sysPath.error).toContain('protected system directory')
   })
 })
+
+describe('isSecretFile and committed templates', () => {
+  it('protects real env files but lets the agent read and write their templates', () => {
+    for (const name of ['.env', '.env.local', '.env.production']) expect(isSecretFile(name), name).toBe(true)
+    for (const name of ['.env.example', '.env.sample', '.env.template', '.envrc.md', 'src/.environment.ts']) expect(isSecretFile(name), name).toBe(false)
+  })
+})

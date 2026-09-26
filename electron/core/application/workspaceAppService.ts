@@ -61,7 +61,8 @@ export class WorkspaceAppService {
   }
 
   grepSearch(dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean) {
-    return this.repo.grepSearch(dirPath, query, isRegex, caseInsensitive)
+    // The editor's search box shows no results for a pattern that does not compile.
+    return this.repo.grepSearch(dirPath, query, isRegex, caseInsensitive).catch(() => [])
   }
 
   async searchWeb(query: string, maxResults?: number) {

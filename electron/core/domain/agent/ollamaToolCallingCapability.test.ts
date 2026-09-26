@@ -1,24 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import {
-  resolveToolCallingRoute,
-  supportsNativeToolCalling,
-  supportsNativeToolCallingByFamily,
-} from '../../../../shared/domain/agent/ollamaToolCallingCapability'
+import { supportsNativeToolCalling, supportsNativeToolCallingByFamily } from '../../../../shared/domain/agent/ollamaToolCallingCapability'
 
 describe('ollamaToolCallingCapability', () => {
-  describe('resolveToolCallingRoute (session handshake)', () => {
-    it('probes when Ollama omits capabilities, then uses the observed protocol', () => {
-      expect(resolveToolCallingRoute('custom:latest', { 'custom:latest': [] })).toEqual({ capable: true, probe: true })
-      expect(resolveToolCallingRoute('custom:latest', { 'custom:latest': [] }, 'text')).toEqual({ capable: false, probe: false })
-      expect(resolveToolCallingRoute('custom:latest', { 'custom:latest': [] }, 'native')).toEqual({ capable: true, probe: false })
-    })
-
-    it('keeps non-empty Ollama capability metadata authoritative over observations', () => {
-      expect(resolveToolCallingRoute('known:latest', { 'known:latest': ['completion'] }, 'native')).toEqual({ capable: false, probe: false })
-      expect(resolveToolCallingRoute('known:latest', { 'known:latest': ['completion', 'tools'] }, 'text')).toEqual({ capable: true, probe: false })
-    })
-  })
-
   describe('supportsNativeToolCallingByFamily (allow-list fallback)', () => {
     it('should recognize known tool-calling-capable families', () => {
       expect(supportsNativeToolCallingByFamily('llama3.1:8b')).toBe(true)

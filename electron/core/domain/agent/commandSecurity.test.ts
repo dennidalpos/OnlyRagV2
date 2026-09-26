@@ -46,8 +46,9 @@ describe('commandSecurity Domain Unit Tests', () => {
     expect(res3.isAllowed).toBe(true)
     expect(res3.sanitizedCommand).toBe('Get-ChildItem')
 
+    // Creating a directory inside the workspace cannot lose data, so it runs without approval.
     const res4 = checkCommandSecurity('mkdir -p src/components/test', workspace)
-    expect(res4).toMatchObject({ isAllowed: true, requiresApproval: true })
+    expect(res4).toMatchObject({ isAllowed: true, requiresApproval: false })
     expect(res4.sanitizedCommand).toBe('New-Item -ItemType Directory -Force -Path "src/components/test"')
   })
 

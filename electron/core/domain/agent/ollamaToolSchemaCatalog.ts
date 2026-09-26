@@ -1,3 +1,11 @@
+/** One JSON Schema property. `items` and `enum` let the model see nested shapes and closed value sets. */
+export interface OllamaToolProperty {
+  type: string
+  description: string
+  enum?: string[]
+  items?: { type: 'object'; properties: Record<string, { type: string; description: string }>; required: string[] }
+}
+
 export interface OllamaToolSchema {
   type: 'function'
   function: {
@@ -5,20 +13,20 @@ export interface OllamaToolSchema {
     description: string
     parameters: {
       type: 'object'
-      properties: Record<string, { type: string; description: string }>
+      properties: Record<string, OllamaToolProperty>
       required: string[]
     }
   }
 }
 
-function tool(name: string, description: string, properties: Record<string, { type: string; description: string }>, required: string[] = []): OllamaToolSchema {
+function tool(name: string, description: string, properties: Record<string, OllamaToolProperty>, required: string[] = []): OllamaToolSchema {
   return { type: 'function', function: { name, description, parameters: { type: 'object', properties, required } } }
 }
 
 export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
   tool(
     'read_file',
-    'Read the contents of a file, optionally sliced by line range.',
+    'Read a text file. Returns its content, its line count and, for a line range, the lines shown. Read a file before editing it; for a large file read the range you need.',
     {
       filePath: { type: 'string', description: 'Path to the file to read.' },
       startLine: { type: 'integer', description: 'Optional 1-based start line.' },
@@ -54,7 +62,7 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
   ),
   tool(
     'grep_search',
-    'Search file contents in a directory for a text or regex pattern.',
+    'Search file contents for a text or regex pattern and return matching lines with their file and line number. Use it to find where something is defined or used before reading whole files.',
     {
       query: { type: 'string', description: 'Search text or regex pattern.' },
       dirPath: { type: 'string', description: 'Directory to search within.' },
@@ -82,14 +90,10 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
   ),
   tool(
     'write_file',
-    'Create a new file, or replace a file previously read at a specific version.',
+    'Create a new file with its complete content, or replace an existing file you have read in full. To change part of an existing file, use replace_file_content instead. The application tracks file versions itself: an overwrite of a file changed since you read it is refused.',
     {
-      filePath: { type: 'string', description: 'Path of the file to write.' },
-      content: { type: 'string', description: 'Full file content to write.' },
-      expectedContentHash: {
-        type: 'string',
-        description: 'FILE VERSION returned by read_file. Required when the target already exists; omit only for a new file.',
-      },
+      filePath: { type: 'string', description: 'Path of the file to write, relative to the workspace root.' },
+      content: { type: 'string', description: 'The complete file content. Never a partial snippet or a placeholder.' },
     },
     ['filePath', 'content'],
   ),
@@ -121,30 +125,30 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
   ),
   tool(
     'replace_file_content',
-    'Replace a single exact chunk of text in a file with new content.',
+    'Replace one exact chunk of an existing file. targetContent must match the file character for character (including indentation) and occur exactly once; include a few surrounding lines to make it unique.',
     {
       filePath: { type: 'string', description: 'Path of the file to edit.' },
-      targetContent: { type: 'string', description: 'Exact existing text chunk to find and replace.' },
-      replacementContent: { type: 'string', description: 'New text to replace the target chunk with.' },
-      expectedContentHash: {
-        type: 'string',
-        description: 'Optional FILE VERSION returned by read_file; rejects the edit if any content changed since that read.',
-      },
+      targetContent: { type: 'string', description: 'Exact existing text to replace, copied from the file without line-number prefixes.' },
+      replacementContent: { type: 'string', description: 'Text that replaces targetContent.' },
     },
     ['filePath', 'targetContent', 'replacementContent'],
   ),
   tool(
     'multi_replace_file_content',
-    'Apply multiple exact-chunk text replacements to a single file in one call.',
+    'Apply several exact-chunk replacements to one file in a single call. Each targetContent must occur exactly once; they are applied in order.',
     {
       filePath: { type: 'string', description: 'Path of the file to edit.' },
       replacements: {
         type: 'array',
-        description: 'List of {targetContent, replacementContent} chunk replacements to apply.',
-      },
-      expectedContentHash: {
-        type: 'string',
-        description: 'Optional FILE VERSION returned by read_file; rejects the edit if any content changed since that read.',
+        description: 'The replacements to apply, in order.',
+        items: {
+          type: 'object',
+          properties: {
+            targetContent: { type: 'string', description: 'Exact existing text to replace.' },
+            replacementContent: { type: 'string', description: 'Text that replaces it.' },
+          },
+          required: ['targetContent', 'replacementContent'],
+        },
       },
     },
     ['filePath', 'replacements'],
@@ -168,7 +172,7 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
   ),
   tool(
     'run_command',
-    'Execute a shell/terminal command in the workspace.',
+    'Run one PowerShell command in the workspace and return its exit code and output (the end of long output is kept). The shell keeps its working directory between calls. Use non-interactive flags; do not start servers or watchers that never exit.',
     {
       command: { type: 'string', description: 'The shell command to execute.' },
       timeoutSeconds: { type: 'integer', description: 'Optional timeout override in seconds (5-900). Installs and scaffolding already get a longer default.' },
@@ -200,7 +204,6 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
     },
     ['commitMessage'],
   ),
-  tool('rollback_workspace', 'Revert all file modifications made during this session back to their pre-session state.', {}),
   tool(
     'rollback_last_step',
     'Undo only the file changes made by the immediately preceding step, leaving every earlier step in this session untouched. Use this instead of rollback_workspace when only the last action was wrong.',
@@ -227,7 +230,7 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
     'Update the status of one milestone in the execution plan. Call this as soon as a milestone is started, completed and verified, or found to be blocked.',
     {
       milestoneId: { type: 'string', description: 'Milestone id (e.g. "m-2") or a distinctive part of its title.' },
-      status: { type: 'string', description: 'New status: pending, in_progress, verified, or failed.' },
+      status: { type: 'string', description: 'New milestone status.', enum: ['pending', 'in_progress', 'verified', 'failed'] },
       notes: { type: 'string', description: 'Optional short note recorded against the milestone.' },
     },
     ['milestoneId', 'status'],
@@ -296,7 +299,7 @@ function exampleValueFor(paramName: string, type: string): string {
 }
 
 /** What to send back to a model whose tool call was rejected by parameter validation. */
-export function buildToolSchemaCorrectionDirective(toolName: string, errors: readonly string[] = []): string {
+export function buildToolSchemaCorrectionDirective(toolName: string, errors: readonly string[] = [], nativeToolCalling = false): string {
   const schema = findToolSchema(toolName)
   const why = errors.length > 0 ? errors.map((e) => `- ${e}`).join('\n') : '- The call was missing or malformed.'
 
@@ -306,7 +309,7 @@ export function buildToolSchemaCorrectionDirective(toolName: string, errors: rea
       `[TOOL CALL REJECTED: UNKNOWN TOOL "${toolName}"]`,
       why,
       `Available tools: ${known}.`,
-      `Emit one JSON tool call using an exact name from that list.`,
+      nativeToolCalling ? 'Call one of those tools by its exact name.' : `Emit one JSON tool call using an exact name from that list.`,
     ].join('\n')
   }
 
@@ -314,6 +317,18 @@ export function buildToolSchemaCorrectionDirective(toolName: string, errors: rea
   const required = parameters.required
   const optional = Object.keys(parameters.properties).filter((name) => !required.includes(name))
   const describe = (name: string) => `  - "${name}" (${parameters.properties[name].type}): ${parameters.properties[name].description}`
+
+  if (nativeToolCalling) {
+    return [
+      `[TOOL CALL REJECTED: "${toolName}" PARAMETERS INVALID]`,
+      why,
+      required.length > 0 ? `Mandatory parameters:\n${required.map(describe).join('\n')}` : 'This tool takes no mandatory parameters.',
+      optional.length > 0 ? `Optional parameters:\n${optional.map(describe).join('\n')}` : '',
+      `Nothing was executed. Call ${toolName} again with corrected arguments.`,
+    ]
+      .filter((line) => line !== '')
+      .join('\n')
+  }
 
   const exampleBody = required.length > 0 ? required : Object.keys(parameters.properties).slice(0, 1)
   const exampleParams = exampleBody.map((name) => `    "${name}": ${exampleValueFor(name, parameters.properties[name].type)}`).join(',\n')

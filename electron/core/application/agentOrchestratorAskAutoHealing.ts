@@ -67,16 +67,28 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
     /\b(which (library|framework|styling|animation)|what (library|framework)|quale (libreria|framework)|quali (librerie|framework)|preferisci|prefer to|prefer)\b/i
   const VAGUE_WHAT_NEXT_REGEX = /\b(what next|what should (?:we|i) do|how should (?:we|i) proceed|what to do next|how to proceed|interrupted)\b/i
 
+  // Things only the user can provide: network access, credentials, accounts, licences. After a user or
+  // policy denial the question is the only way forward too. Redirecting these produced a deadlock in
+  // the gpt-oss tracker run (network question answered "proceed", then every write refused).
+  const BLOCKER_REGEX =
+    /\b(network|internet|offline|connectivity|rete|connessione|credentials?|credenziali|api[ _-]?keys?|secrets?|tokens?|passwords?|accounts?|login|licen[cs]es?|licenz[ae])\b/i
+  const recentDenial = ctx.episodicCompactor
+    .getEpisodes()
+    .slice(-3)
+    .some((episode) => episode.status === 'BLOCKED' && /user denied|policy|safety denied/i.test(episode.summary || ''))
+  const isGenuineBlocker = BLOCKER_REGEX.test(question) || recentDenial
+
   const isPermissionOrProceedQuestion = PERMISSION_REGEX.test(question)
   const isTrivialPreferenceQuestion = isPermissionOrProceedQuestion || TRIVIAL_PREFERENCE_REGEX.test(question)
 
   const isVagueClarification =
-    ctx.hasRecentToolFailure ||
-    ctx.errorCountInHistory > 0 ||
-    hasCancellationInHistory ||
-    isTrivialPreferenceQuestion ||
-    ctx.stepCount === 1 ||
-    VAGUE_WHAT_NEXT_REGEX.test(question)
+    !isGenuineBlocker &&
+    (ctx.hasRecentToolFailure ||
+      ctx.errorCountInHistory > 0 ||
+      hasCancellationInHistory ||
+      isTrivialPreferenceQuestion ||
+      ctx.stepCount === 1 ||
+      VAGUE_WHAT_NEXT_REGEX.test(question))
 
   if (ctx.agentMode === 'auto' && isVagueClarification && ctx.stepCount < ctx.maxSteps && ctx.progress.tryAskRedirect()) {
     const feedback =

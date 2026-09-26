@@ -1,3 +1,4 @@
+import type { AppSettings } from '../../../shared/types'
 import path from 'node:path'
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import {
@@ -142,8 +143,8 @@ function reportRedelivery(
       step: ctx.stepCount,
       tool: ctx.parsedTool.tool,
       target: evidencePath,
-      status: 'BLOCKED',
-      summary: `Write accepted — milestone ${milestone.id} was already complete before it`,
+      status: 'SUCCESS',
+      summary: `Write applied to a file of milestone ${milestone.id}, which was already complete`,
     },
     directive,
   )
@@ -343,6 +344,11 @@ export function promoteMilestonesProvenBy(
 }
 
 /** The single directive this turn's plan block carries, or the ordinary focus block. */
+/** Package installs reach the registry: only the network-approved policy (or the legacy unset one) can run them. */
+export function installsAllowed(mode: AppSettings['capabilityPolicyMode']): boolean {
+  return mode === undefined || mode === 'network-approved'
+}
+
 export function resolvePlanDirectiveForTurn(
   workspacePath: string | null | undefined,
   goalPlanner: GoalDecompositionPlanner,
@@ -352,6 +358,8 @@ export function resolvePlanDirectiveForTurn(
   lastFailureOutputOf: (command: string) => string | null = () => null,
   /** Recent full tool outputs, where a pending package.json rewrite order is found. */
   recentFullLogs: readonly { step: number; output: string }[] = [],
+  /** Capability policy of the run: without registry access the arbiter never orders an install. */
+  capabilityPolicyMode?: AppSettings['capabilityPolicyMode'],
 ): PlanDirectiveDecision {
   if (!workspacePath) return { kind: 'focus', blockDirective: null, closureStepDirective: null }
 
@@ -391,9 +399,12 @@ export function resolvePlanDirectiveForTurn(
     deliverableStatusOf: (m) => resolveMilestoneDeliverableStatus(m, probe),
     // Only ever non-empty for a project that declares dependencies: a workspace with no
     // manifest offers nothing to install, and reporting "0 missing" would be noise.
-    missingDependencies: declared.length > 0 ? agentToolFileRepository.missingFromNodeModules(workspacePath, declared) : [],
+    // An order the policy then blocks is a guaranteed failed step (about 37 blocked installs under
+    // offline-strict in tracker-rerun-01), so dependency directives exist only where installs can run.
+    missingDependencies:
+      installsAllowed(capabilityPolicyMode) && declared.length > 0 ? agentToolFileRepository.missingFromNodeModules(workspacePath, declared) : [],
     // A bounded synchronous AST walk, the same order of cost as the repo map this turn already builds.
-    undeclaredDependencies: scanUndeclaredImports(workspacePath),
+    undeclaredDependencies: installsAllowed(capabilityPolicyMode) ? scanUndeclaredImports(workspacePath) : [],
     // Read back from the session's own trajectory rather than kept as a second piece of state: the episodes are already recorded, already persisted, and already say which installs failed and which later succeeded.
     packagesWithFailedInstall: packagesWithFailedInstall(episodes),
     pendingManifestDirective: pendingManifestDirective(recentFullLogs, episodes),

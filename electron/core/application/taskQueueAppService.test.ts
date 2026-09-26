@@ -61,11 +61,11 @@ describe('TaskQueueAppService serial execution invariant', () => {
     ).resolves.toMatchObject({ success: true, runId: identity.runId, queuePosition: 0 })
 
     await vi.waitFor(() => {
+      // In place: the orchestrator receives the user's own workspace, not a temporary copy.
       expect(runAgentOrchestratorLoop).toHaveBeenCalledWith(
-        expect.objectContaining({ identity, sessionId: identity.conversationId }),
+        expect.objectContaining({ identity, sessionId: identity.conversationId, workspacePath }),
         noRenderer,
         identity.runId,
-        expect.objectContaining({ sourcePath: workspacePath }),
       )
     })
   })
@@ -136,7 +136,6 @@ describe('TaskQueueAppService serial execution invariant', () => {
         expect.objectContaining({ workspacePath: scratchPath, isStandaloneMode: true }),
         noRenderer,
         identity.runId,
-        undefined,
       )
     })
   })

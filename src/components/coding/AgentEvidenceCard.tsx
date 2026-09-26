@@ -5,13 +5,33 @@ import { useTranslation } from '../../i18n'
 
 interface AgentEvidenceCardProps {
   prompt: ExecutedPrompt
+  /** Workspace the run edited; required to restore its checkpoint. */
+  workspacePath?: string | null
   onOpenFile?: (file: WorkspaceFile) => void
   onOpenRightTab?: (tab: 'editor' | 'terminal' | 'git_diff' | 'plan') => void
 }
 
-export const AgentEvidenceCard: React.FC<AgentEvidenceCardProps> = ({ prompt, onOpenFile, onOpenRightTab }) => {
+export const AgentEvidenceCard: React.FC<AgentEvidenceCardProps> = ({ prompt, workspacePath, onOpenFile, onOpenRightTab }) => {
   const { t } = useTranslation()
   const evidence = prompt.evidence
+  const [restoreState, setRestoreState] = React.useState<{ status: 'idle' | 'confirm' | 'running' | 'done' | 'failed'; message?: string }>({ status: 'idle' })
+  const checkpointId = evidence?.checkpointId
+  const restoreCheckpoint = async () => {
+    if (!workspacePath || !checkpointId) return
+    setRestoreState({ status: 'running' })
+    try {
+      const api = window.electronAPI
+      if (!api) throw new Error(t('coding.checkpointRestoreFailed'))
+      const result = await api.restoreAgentCheckpoint({ workspacePath, checkpointId })
+      setRestoreState(
+        result.success
+          ? { status: 'done', message: t('coding.checkpointRestored', { count: result.restoredCount }) }
+          : { status: 'failed', message: result.errors.join('\n') || t('coding.checkpointRestoreFailed') },
+      )
+    } catch (error: unknown) {
+      setRestoreState({ status: 'failed', message: error instanceof Error ? error.message : String(error) })
+    }
+  }
   const changedFiles = evidence?.changedFiles || []
   const verification = evidence?.verification
   const verificationLabel =
@@ -25,7 +45,9 @@ export const AgentEvidenceCard: React.FC<AgentEvidenceCardProps> = ({ prompt, on
       ? t('coding.evidenceRolledBack')
       : evidence?.cancellationStatus === 'residual_effects'
         ? t('coding.evidenceResiduals')
-        : t('coding.evidenceNotCancelled')
+        : evidence?.cancellationStatus === 'kept'
+          ? t('coding.evidenceKept')
+          : t('coding.evidenceNotCancelled')
   const isSuccessful = prompt.completionStatus === 'verified' || prompt.outcome === 'success'
 
   return (
@@ -87,6 +109,49 @@ export const AgentEvidenceCard: React.FC<AgentEvidenceCardProps> = ({ prompt, on
           <div className="text-slate-300">{cancellationLabel}</div>
           {evidence?.rollbackRestoredFiles !== undefined && (
             <div className="mt-1 text-[11px] text-slate-400">{t('coding.evidenceRollbackCount', { count: evidence.rollbackRestoredFiles })}</div>
+          )}
+          {checkpointId && workspacePath && (
+            <div className="mt-2 space-y-1">
+              {restoreState.status === 'idle' && (
+                <button
+                  type="button"
+                  onClick={() => setRestoreState({ status: 'confirm' })}
+                  className="rounded-md border border-sky-700 px-2 py-1 text-[11px] font-semibold text-sky-200 hover:bg-sky-900/40"
+                >
+                  {t('coding.checkpointRestore')}
+                </button>
+              )}
+              {restoreState.status === 'confirm' && (
+                <div className="space-y-1">
+                  <div className="text-[11px] text-amber-200">{t('coding.checkpointRestoreConfirm')}</div>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => void restoreCheckpoint()}
+                      className="rounded-md bg-sky-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-sky-500"
+                    >
+                      {t('coding.checkpointRestore')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRestoreState({ status: 'idle' })}
+                      className="rounded-md border border-slate-600 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
+                    >
+                      {t('common.cancel')}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {restoreState.status === 'running' && <div className="text-[11px] text-slate-400">{t('coding.checkpointRestoring')}</div>}
+              {(restoreState.status === 'done' || restoreState.status === 'failed') && (
+                <div
+                  role="status"
+                  className={restoreState.status === 'done' ? 'text-[11px] text-emerald-300' : 'whitespace-pre-wrap text-[11px] text-rose-300'}
+                >
+                  {restoreState.message}
+                </div>
+              )}
+            </div>
           )}
         </div>
 

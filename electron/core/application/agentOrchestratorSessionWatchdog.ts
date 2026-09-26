@@ -50,6 +50,16 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
     const timeoutSummary = `Sessione terminata automaticamente: superato il limite di ${Math.round(SESSION_TIMEOUT_MS / 60000)} minuti.`
     logger.log('WARN', 'AgentOrchestratorApp', `[SESSION TIMEOUT] ${timeoutSummary} SessionId: ${sessionId}`)
     emitLog('info', `⏱️ Session Timeout: ${timeoutSummary}`)
+    // Reported before the session is marked cancelled: emitDone is suppressed for inactive sessions,
+    // so the Renderer never learned that a timed-out run had ended. The work stays on disk.
+    const checkpointId = agentToolExecutorService.checkpointJournal(session.workspacePath, session.id)
+    emitDone(false, timeoutSummary, 'blocked', {
+      changedFiles: session.changedFiles || [],
+      verification: session.lastVerification,
+      cancellationStatus: 'kept',
+      nonRollbackEffects: [...(session.nonRollbackEffects || [])],
+      ...(checkpointId ? { checkpointId } : {}),
+    })
     session.isCancelled = true
     session.abortController?.abort()
     session.completionStatus = 'blocked'
@@ -59,8 +69,6 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
       session.pendingApprovalResolve = undefined
     }
     codingAgentLogger.logSessionEnd(sessionId, stepCountBox.value, false, timeoutSummary)
-    emitDone(false, timeoutSummary, 'blocked')
-    agentToolExecutorService.rollbackJournal()
     await persistCurrentState('timeout', 'blocked')
     finalizeSession()
   }, SESSION_TIMEOUT_MS)

@@ -54,7 +54,7 @@ describe('selectModelForTurn — context ceiling', () => {
   it('leaves the hardware window alone when the model can hold it', () => {
     const selection = selectModelForTurn(contextWith(metricsWith(131072)))
     expect(selection.contextCeiling).toBe(131072)
-    expect(selection.runtimeOpts.num_ctx).toBe(32768)
+    expect(selection.runtimeOpts.num_ctx).toBe(65536)
     expect(logs.filter((l) => l.includes('Contesto limitato'))).toHaveLength(0)
   })
 
@@ -76,13 +76,13 @@ describe('selectModelForTurn — context ceiling', () => {
   it('falls back to the hardware window when Ollama reports no context length', () => {
     const selection = selectModelForTurn(contextWith(metricsWith(undefined)))
     expect(selection.contextCeiling).toBeNull()
-    expect(selection.runtimeOpts.num_ctx).toBe(32768)
+    expect(selection.runtimeOpts.num_ctx).toBe(65536)
   })
 
   it('falls back to the hardware window when the model is absent from the metrics map', () => {
     const selection = selectModelForTurn(contextWith({}))
     expect(selection.contextCeiling).toBeNull()
-    expect(selection.runtimeOpts.num_ctx).toBe(32768)
+    expect(selection.runtimeOpts.num_ctx).toBe(65536)
   })
 
   it('keeps the bootstrap model when settings change during an execution', () => {

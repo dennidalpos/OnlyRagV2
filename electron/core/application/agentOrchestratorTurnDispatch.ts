@@ -1,5 +1,5 @@
 import { selectToolSchemas } from '../domain/agent/ollamaToolSchemaCatalog'
-import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
+import { AgentStreamTransport, DEFAULT_STREAM_STALL_MS } from '../infrastructure/http/agentStreamTransport'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { selectModelForTurn, assembleTurnPrompt, freezeContextWindow, decideContextReuse } from './agentOrchestratorPromptAssembly'
@@ -10,10 +10,64 @@ import { recordRecoveryFailure, recoveryStopDiagnostic, type RecoveryFailureStat
 import { CODING_MODEL_KEEP_ALIVE } from '../domain/agent/hardwareProfileResolver'
 import { enrichOllamaGenerationTelemetry, type OllamaStreamTelemetry } from '../domain/agent/ollamaSessionRuntime'
 import { ollamaAppService } from './ollamaAppService'
-import { calculateAvailableOutputTokens, countPromptTokens } from '../../../shared/domain/agent/contextWindowCalculator'
-import { resolveOllamaThinkingPreference } from '../../../shared/domain/agent/ollamaThinkingPolicy'
-import { appendAssistantTurn, boundedChatMessages } from './agentChatTranscript'
-import type { AgentChatTurn } from '../infrastructure/http/agentStreamTransport'
+import { countPromptTokens } from '../../../shared/domain/agent/contextWindowCalculator'
+import { resolveAgentThinkValue } from '../../../shared/domain/agent/ollamaThinkingPolicy'
+import { appendAssistantTurn, buildChatRequest, composeSessionSystemPrompt } from './agentChatTranscript'
+import type { AgentChatMessage, AgentChatTurn } from '../infrastructure/http/agentStreamTransport'
+
+/** Largest share of the prompt budget the frozen system message may take with its optional context sections. */
+const SYSTEM_PROMPT_BUDGET_SHARE = 0.45
+/** Below this, a turn cannot hold a file write plus a short thought; the request is refused instead. */
+const MIN_OUTPUT_TOKENS = 1024
+
+/** Output room held back from the prompt budget: a quarter of the window, between 2k and 16k tokens. */
+function outputReserveTokens(numCtx: number): number {
+  return Math.min(16384, Math.max(2048, Math.floor(numCtx * 0.25)))
+}
+
+/**
+ * The local tokenizer (o200k over the JSON messages) is only an estimate of the model's tokenizer. When
+ * Ollama reported more prompt tokens than estimated on the previous turn, later estimates are scaled
+ * up by that ratio (never down, at most 1.5x), so the output budget is never computed from an optimistic count.
+ */
+function calibratedPromptTokens(ctx: TurnDispatchContext, messages: readonly AgentChatMessage[]): number {
+  const estimate = countPromptTokens(JSON.stringify(messages))
+  const ratio = ctx.session.promptTokenRatio ?? 1
+  ctx.session.lastPromptTokenEstimate = estimate
+  return Math.ceil(estimate * ratio)
+}
+
+/** Output a long tool call (a whole file) may take, used to size the stream's silence limit. */
+const TOOL_CALL_TOKEN_ALLOWANCE = 4096
+const MAX_STREAM_STALL_MS = 30 * 60 * 1000
+
+/**
+ * Ollama withholds a tool call's text until the call is complete, so a model writing a large file
+ * sends nothing for minutes. A fixed 5-minute limit killed such a turn twice (qwen3-coder:30b at
+ * 3.95 tokens/s, 1193 tokens, live run of 2026-09-26). The limit follows the speed this model
+ * actually showed in this session: long enough for TOOL_CALL_TOKEN_ALLOWANCE tokens, within 5-30 min.
+ */
+export function streamStallTimeoutMs(telemetry: readonly { completionTokens?: number; evalDurationMs?: number }[] | undefined): number {
+  const measured = [...(telemetry || [])].reverse().find((entry) => (entry.completionTokens ?? 0) >= 20 && (entry.evalDurationMs ?? 0) > 0)
+  if (!measured) return 10 * 60 * 1000
+  const tokensPerSecond = (measured.completionTokens as number) / ((measured.evalDurationMs as number) / 1000)
+  return Math.min(MAX_STREAM_STALL_MS, Math.max(DEFAULT_STREAM_STALL_MS, Math.ceil((TOOL_CALL_TOKEN_ALLOWANCE / tokensPerSecond) * 1000)))
+}
+
+/** Model-output failures the model can fix itself: sent back as feedback instead of retried verbatim. */
+function modelOutputCorrection(errorMessage: string): string | null {
+  if (/incomplete \(length\)/i.test(errorMessage)) {
+    return [
+      '[APPLICATION FEEDBACK] Your previous response reached the output token limit before a complete tool call was produced, so nothing was executed.',
+      'Keep reasoning short. Write large files in parts: write_file a first section, then extend it with replace_file_content.',
+    ].join('\n')
+  }
+  const invalidArguments = errorMessage.match(/Invalid Ollama tool arguments: (.*)/i)
+  if (invalidArguments) {
+    return `[APPLICATION FEEDBACK] Your previous tool call was not executed: its arguments were not a valid JSON object (${invalidArguments[1].slice(0, 200)}). Call the tool again with a JSON object matching its schema.`
+  }
+  return null
+}
 
 async function dispatchToLlm(
   ctx: TurnDispatchContext,
@@ -26,22 +80,51 @@ async function dispatchToLlm(
   let generationTelemetry: OllamaStreamTelemetry | undefined
   const toolCatalog = selectToolSchemas(toolPolicy.allowedTools)
   const schemaTokens = countPromptTokens(JSON.stringify(toolCatalog))
-  const maxPromptTokens = Math.max(1, selection.runtimeOpts.num_ctx - schemaTokens - 1024 - 256)
-  const corePrompt = [assembled.segments.baseSystemPrompt, assembled.segments.planSection, assembled.segments.skillsSection, assembled.turnSuffix]
-    .filter(Boolean)
-    .join('\n\n')
-  const chat = boundedChatMessages(
-    corePrompt,
-    [assembled.segments.pinnedBlock, assembled.segments.activeFileBlock, assembled.segments.attachedBlock, assembled.segments.mapBlock],
-    ctx.userTask,
-    ctx.session.chatMessages || [],
+  const numCtx = selection.runtimeOpts.num_ctx
+  const maxPromptTokens = Math.max(1, numCtx - schemaTokens - outputReserveTokens(numCtx))
+  // The system message is composed once per session (see composeSessionSystemPrompt): a per-turn
+  // rebuild made Ollama re-evaluate the whole prompt every step (91 s for 13k tokens on 2026-09-25).
+  if (!ctx.session.nativeSystemPrompt) {
+    const systemCore = [assembled.segments.baseSystemPrompt, assembled.segments.skillsSection].filter((part) => part.trim()).join('\n\n')
+    ctx.session.nativeSystemPrompt = composeSessionSystemPrompt(
+      systemCore,
+      [assembled.segments.pinnedBlock, assembled.segments.activeFileBlock, assembled.segments.attachedBlock, assembled.segments.mapBlock],
+      Math.floor(maxPromptTokens * SYSTEM_PROMPT_BUDGET_SHARE),
+    )
+  }
+  const turnContext = [assembled.segments.planSection, assembled.turnSuffix].filter((part) => part.trim()).join('\n\n')
+  const chat = buildChatRequest({
+    systemPrompt: ctx.session.nativeSystemPrompt,
+    userTask: ctx.userTask,
+    history: ctx.session.chatMessages || [],
+    turnContext,
     maxPromptTokens,
-    wasCompacted || ctx.session.forceContextCompaction,
-  )
-  const outputCapacity = selection.runtimeOpts.num_ctx - schemaTokens - countPromptTokens(JSON.stringify(chat.messages)) - 256
-  if (outputCapacity < 512) return { error: `Ollama chat context exceeds the ${selection.runtimeOpts.num_ctx}-token hardware budget.` }
-  selection.runtimeOpts.num_predict = Math.min(selection.runtimeOpts.num_predict, outputCapacity)
+    forceCompact: ctx.session.forceContextCompaction,
+  })
+  const manualCompaction = Boolean(ctx.session.forceContextCompaction)
+  ctx.session.forceContextCompaction = false
+  const promptTokens = schemaTokens + calibratedPromptTokens(ctx, chat.messages)
+  // num_predict takes whatever the window has left: a thinking model needs room to reason and still
+  // emit the call, and a cap at the window edge avoids Ollama's context shift mid-generation.
+  const outputCapacity = numCtx - promptTokens - 256
+  if (outputCapacity < MIN_OUTPUT_TOKENS) return { error: `Ollama chat context exceeds the ${numCtx}-token window.` }
+  selection.runtimeOpts.num_predict = outputCapacity
   ctx.session.chatMessages = chat.retainedHistory
+  if (ctx.isSessionActive() && ctx.session.rendererEvents?.isAvailable()) {
+    const promptBudgetTokens = Math.max(1, numCtx - outputReserveTokens(numCtx))
+    ctx.session.rendererEvents.send('agent:context-budget', {
+      ...ctx.session.identity,
+      model: selection.targetModel,
+      contextWindowTokens: numCtx,
+      outputReserveTokens: outputCapacity,
+      promptBudgetTokens,
+      originalPromptTokens: schemaTokens + countPromptTokens(JSON.stringify([...(ctx.session.chatMessages || []), ...chat.messages.slice(0, 2)])),
+      promptTokens,
+      utilizationPercent: Math.min(100, Math.round((promptTokens / promptBudgetTokens) * 100)),
+      wasCompacted: chat.trimmed,
+      manualCompaction,
+    })
+  }
   const stream = () =>
     AgentStreamTransport.streamCompletion({
       targetModel: selection.targetModel,
@@ -62,7 +145,7 @@ async function dispatchToLlm(
           ctx.session.rendererEvents.send('agent:stream-thought', { ...ctx.session.identity, step: ctx.stepCount, chunk })
         }
       },
-      think: resolveOllamaThinkingPreference(selection.targetModel, ctx.settings, ctx.modelMetrics).think,
+      think: resolveAgentThinkValue(selection.targetModel, ctx.settings, ctx.modelMetrics),
       isCancelled: () => !ctx.isSessionActive(),
       signal: ctx.session.abortController?.signal,
       onCancelHandle: (abort) => {
@@ -71,6 +154,7 @@ async function dispatchToLlm(
       onGenerationTelemetry: (telemetry) => {
         generationTelemetry = telemetry
       },
+      stallTimeoutMs: streamStallTimeoutMs(ctx.session.ollamaGenerationTelemetry),
     })
   let transportFailure: RecoveryFailureState | undefined
   while (true) {
@@ -80,6 +164,9 @@ async function dispatchToLlm(
       const nativeTurn = typeof response === 'string' ? undefined : response
       if (nativeTurn) ctx.session.chatMessages = appendAssistantTurn(ctx.session.chatMessages || [], nativeTurn)
       if (generationTelemetry) {
+        const estimate = ctx.session.lastPromptTokenEstimate
+        const reported = generationTelemetry.promptTokens
+        if (estimate && reported && reported > estimate) ctx.session.promptTokenRatio = Math.min(1.5, reported / estimate)
         const running = await ollamaAppService.getRunningModels(ctx.settings.ollamaHost)
         const loaded = running.models.find((model) => model.name === selection.targetModel || model.model === selection.targetModel)
         ctx.session.ollamaGenerationTelemetry = [
@@ -95,6 +182,14 @@ async function dispatchToLlm(
 
       const fatal = /not pulled|not reachable|not running/i.test(message)
       if (fatal) return { error: message }
+
+      const correction = modelOutputCorrection(message)
+      if (correction) {
+        const feedback: AgentChatMessage = { role: 'user', content: correction }
+        ctx.session.chatMessages = [...(ctx.session.chatMessages || []), feedback]
+        // Appended, like everything in the transcript, so the retry still extends the cached prefix.
+        chat.messages.push(feedback)
+      }
 
       const signature = message.toLowerCase().replace(/\d+/g, '#').slice(0, 240)
       const decision = recordRecoveryFailure(transportFailure, signature)
@@ -117,28 +212,6 @@ export async function collectTurnContext(ctx: TurnDispatchContext): Promise<Prep
   const selection = selectModelForTurn(ctx)
   freezeContextWindow(ctx, selection.runtimeOpts)
   const { assembled, compactionResult, turnPrompt, toolPolicy } = await assembleTurnPrompt(ctx, selection, compiledHistoryBlock)
-  selection.runtimeOpts.num_predict = calculateAvailableOutputTokens(turnPrompt, selection.runtimeOpts.num_ctx)
-  if (ctx.session.ollamaRuntimeProfile?.model === selection.targetModel) {
-    ctx.session.ollamaRuntimeProfile.options.num_predict = selection.runtimeOpts.num_predict
-  }
-
-  if (ctx.isSessionActive() && ctx.session.rendererEvents?.isAvailable()) {
-    const promptTokens = countPromptTokens(turnPrompt)
-    const promptBudgetTokens = Math.max(1, selection.runtimeOpts.num_ctx - selection.runtimeOpts.num_predict)
-    ctx.session.rendererEvents.send('agent:context-budget', {
-      ...ctx.session.identity,
-      model: selection.targetModel,
-      contextWindowTokens: selection.runtimeOpts.num_ctx,
-      outputReserveTokens: selection.runtimeOpts.num_predict,
-      promptBudgetTokens,
-      originalPromptTokens: countPromptTokens(assembled.prompt),
-      promptTokens,
-      utilizationPercent: Math.min(100, Math.round((promptTokens / promptBudgetTokens) * 100)),
-      wasCompacted: compactionResult.wasCompacted,
-      manualCompaction: Boolean(ctx.session.forceContextCompaction),
-    })
-  }
-
   const contextReuseDecision = decideContextReuse(ctx, selection, assembled, turnPrompt, compactionResult.wasCompacted)
   return {
     selection,
@@ -176,7 +249,7 @@ export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: Pr
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, 'Task cancelled by user.')
     }
-    agentToolExecutorService.rollbackJournal()
+    agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.sessionId)
     ctx.finalizeSession()
     return { outcome: 'return', result: { success: false, summary: terminalSummary, completionStatus } }
   }

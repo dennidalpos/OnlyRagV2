@@ -160,3 +160,24 @@ describe('factory defaults', () => {
     expect(PromptCompiler.getDefaultTemplate('coding:directives')).toBe(CODING_CORE_DIRECTIVES)
   })
 })
+
+describe('coding rules follow the capability policy', () => {
+  const base = { defaultModel: '', ocrEngine: 'native_cuda' as const, ollamaHost: 'http://localhost:11434' }
+
+  it('does not order web research or browser previews the policy would refuse', () => {
+    const offline = PromptCompiler.compileCodingPrompt({ workspacePath: 'D:/p' }, { ...base, capabilityPolicyMode: 'offline-strict' }, true).prompt
+    expect(offline).not.toContain('web_search')
+    expect(offline).not.toContain('open_in_browser')
+    expect(offline).toContain('Never start a non-exiting dev server')
+
+    const approved = PromptCompiler.compileCodingPrompt({ workspacePath: 'D:/p' }, { ...base, capabilityPolicyMode: 'network-approved' }, true).prompt
+    expect(approved).toContain('web_search')
+    expect(approved).toContain('open_in_browser')
+  })
+
+  it('sends the task only as a user message on the native path', () => {
+    const native = PromptCompiler.compileCodingPrompt({ userTask: 'Build a todo app' }, base, true).prompt
+    expect(native).not.toContain('Build a todo app')
+    expect(PromptCompiler.compileCodingPrompt({ userTask: 'Build a todo app' }, base, false).prompt).toContain('Build a todo app')
+  })
+})

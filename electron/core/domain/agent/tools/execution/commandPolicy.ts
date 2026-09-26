@@ -19,31 +19,40 @@ export function isLongRunningCommand(command: string): boolean {
   )
 }
 
+/** `--watch`/`--watchAll` unless turned off (`--watch=false`), and tsc's `-w` (npm's `-w` selects a workspace). */
+const WATCH_FLAG = /(?:^|\s)--watch(?:all)?(?:=true)?(?=\s|$)|\btsc\b.*\s-w(?=\s|$)/
+
 /** Detects a command that starts a dev/watch server or otherwise never exits on its own. */
 function isBlockingDevServerSubcommand(subcmd: string): boolean {
   const cmd = subcmd.trim().toLowerCase()
   if (!cmd) return false
 
-  if (/^(npm|pnpm|yarn|bun)\s+(install|i|add)\b/.test(cmd)) return false
+  if (/^(npm|pnpm|yarn|bun)\s+(install|i|add|ci)\b/.test(cmd)) return false
+  // Checked before the one-shot tools below: `tsc --watch` and `jest --watchAll` never exit.
+  if (WATCH_FLAG.test(cmd)) return true
 
   if (
     /^(npm|pnpm|yarn|bun)\s+(run\s+)?(build|test|lint|typecheck|check|format)\b/.test(cmd) ||
-    /^(npx\s+)?(tsc|eslint|prettier|vitest\s+run|jest\s+--runInBand)\b/.test(cmd) ||
-    /^(npx\s+)?vite\s+build\b/.test(cmd) ||
-    /^(npx\s+)?next\s+build\b/.test(cmd)
+    /^(npx\s+)?(tsc|eslint|prettier|vitest|jest)\b/.test(cmd) ||
+    /^(npx\s+)?vite\s+(build|optimize)\b/.test(cmd) ||
+    /^(npx\s+)?next\s+(build|lint)\b/.test(cmd)
   )
     return false
 
   return (
     /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|serve|preview)\b/.test(cmd) ||
-    /^(npx\s+)?vite(\.js|\.cmd|\.exe)?(\s+(dev|serve|preview))?$/i.test(cmd) ||
+    /^(npx\s+)?vite(\.js|\.cmd|\.exe)?(\s|$)/.test(cmd) ||
     /\bnext\s+(dev|start)\b/.test(cmd) ||
     /\bng\s+serve\b/.test(cmd) ||
     /\bwebpack(-dev-server)?\s+serve\b/.test(cmd) ||
-    /\bnodemon\b/.test(cmd) ||
+    /\b(nodemon|live-server|http-server|uvicorn|gunicorn)\b/.test(cmd) ||
+    /^(npx\s+)?serve(\s|$)/.test(cmd) ||
+    /\bdotnet\s+(run|watch)\b/.test(cmd) ||
     /\bflask\s+run\b/.test(cmd) ||
+    /\bmanage\.py\s+runserver\b/.test(cmd) ||
+    /\bphp\s+-s\b/.test(cmd) ||
     /-m\s+http\.server\b/.test(cmd) ||
-    /--watch(all)?\b/.test(cmd)
+    /^node\s+\S*server\S*\.[cm]?[jt]s\b/.test(cmd)
   )
 }
 

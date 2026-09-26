@@ -4,9 +4,13 @@ import { logger } from '../logging/logger'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export interface FileBackupEntry {
-  originalContent: string | null // null if file was newly created during the session
+  /** Bytes before the first change; null if the file was created during the session. Buffers keep binary files intact. */
+  originalContent: Buffer | string | null
   modifiedTimestamp: number
 }
+
+/** Files snapshotted when a whole directory is about to be deleted; beyond it the deletion is not journalled in full. */
+const MAX_DIRECTORY_SNAPSHOT_FILES = 2000
 
 export interface RollbackResult {
   restoredCount: number
@@ -52,8 +56,11 @@ export class AtomicWorkspaceJournal {
       if (fs.existsSync(resolved)) {
         const st = fs.statSync(resolved)
         if (st.isFile()) {
-          const content = fs.readFileSync(resolved, 'utf-8')
-          map.set(resolved, { originalContent: content, modifiedTimestamp: Date.now() })
+          map.set(resolved, { originalContent: fs.readFileSync(resolved), modifiedTimestamp: Date.now() })
+        } else if (st.isDirectory()) {
+          // A directory about to be deleted: every file under it is part of the baseline, so the
+          // deletion can be undone file by file.
+          this.snapshotDirectoryInto(map, resolved)
         }
       } else {
         map.set(resolved, { originalContent: null, modifiedTimestamp: Date.now() })
@@ -61,6 +68,30 @@ export class AtomicWorkspaceJournal {
     } catch (err: unknown) {
       logger.log('WARN', 'AtomicWorkspaceJournal', `Could not snapshot ${resolved}: ${errorMessage(err)}`)
     }
+  }
+
+  private snapshotDirectoryInto(map: Map<string, FileBackupEntry>, directory: string): void {
+    const pending = [directory]
+    let files = 0
+    while (pending.length > 0 && files < MAX_DIRECTORY_SNAPSHOT_FILES) {
+      const current = pending.pop() as string
+      for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+        const full = path.join(current, entry.name)
+        if (entry.isSymbolicLink()) continue
+        if (entry.isDirectory()) pending.push(full)
+        else if (entry.isFile() && !map.has(full) && files++ < MAX_DIRECTORY_SNAPSHOT_FILES) {
+          map.set(full, { originalContent: fs.readFileSync(full), modifiedTimestamp: Date.now() })
+        }
+      }
+    }
+    if (files >= MAX_DIRECTORY_SNAPSHOT_FILES) {
+      logger.log('WARN', 'AtomicWorkspaceJournal', `Directory snapshot of ${directory} stopped at ${MAX_DIRECTORY_SNAPSHOT_FILES} files.`)
+    }
+  }
+
+  /** The session baseline, for a persistent checkpoint (see agentCheckpointStore.ts). */
+  public get sessionBaseline(): ReadonlyMap<string, FileBackupEntry> {
+    return this.backupMap
   }
 
   /** Marks the end of the current agent step: whatever was snapshotted since the previous endStep() call becomes the undoable "last step" (even if empty, meaning that step touched no files), and a fresh step baseline starts accumulating. */
@@ -89,7 +120,7 @@ export class AtomicWorkspaceJournal {
           if (!fs.existsSync(parentDir)) {
             fs.mkdirSync(parentDir, { recursive: true })
           }
-          fs.writeFileSync(filePath, entry.originalContent, 'utf-8')
+          fs.writeFileSync(filePath, entry.originalContent)
         }
         restoredCount++
       } catch (err: unknown) {

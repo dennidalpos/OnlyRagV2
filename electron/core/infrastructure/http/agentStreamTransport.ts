@@ -7,6 +7,8 @@ import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
 import { resolveOllamaUrl, requestOllama } from './ollamaTransport'
 import { normalizeOllamaHost } from '../../../../shared/domain/ollamaHost'
 import type { OllamaStreamTelemetry } from '../../domain/agent/ollamaSessionRuntime'
+import type { OllamaThinkValue } from '../../../../shared/types'
+import { pickSamplingOverrides } from '../../../../shared/domain/agent/ollamaSamplingOptions'
 
 export interface StreamSession {
   targetModel: string
@@ -16,8 +18,8 @@ export interface StreamSession {
   ollamaEndpoint?: string
   onTokenChunk?: (chunk: string) => void
   onThoughtChunk?: (chunk: string) => void
-  /** Effective, policy-gated binary thinking choice. Defaults to false. */
-  think?: boolean
+  /** Effective `think` value (switch or level). Undefined omits the field, so the model's own default applies. */
+  think?: OllamaThinkValue
   isCancelled: () => boolean
   signal?: AbortSignal
   onCancelHandle?: (abort: () => void) => void
@@ -32,7 +34,12 @@ export interface StreamSession {
   onContextReceived?: (context: number[], respondingModel: string) => void
   onToolProtocolObserved?: (protocol: ObservedToolCallingProtocol) => void
   onGenerationTelemetry?: (telemetry: OllamaStreamTelemetry) => void
+  /** Silence tolerated on the native chat stream before it is treated as stalled (default 5 min). */
+  stallTimeoutMs?: number
 }
+
+/** Default silence limit before a chat stream counts as stalled. */
+export const DEFAULT_STREAM_STALL_MS = 300000
 
 export interface AgentChatToolCall {
   type: 'function'
@@ -51,6 +58,23 @@ export interface AgentChatTurn {
   content: string
   thinking: string
   toolCalls: AgentChatToolCall[]
+}
+
+/**
+ * The `options` object for an agent request: the context window, the output cap and only the sampling
+ * keys the user overrode. No stop sequences: native tool calling needs none, and Qwen documents
+ * stopword templates as unsafe for reasoning models.
+ */
+export function ollamaRequestOptions(runtimeOpts: OllamaRuntimeOptions): Record<string, number> {
+  return {
+    num_ctx: runtimeOpts.num_ctx,
+    ...pickSamplingOverrides(runtimeOpts),
+    ...(runtimeOpts.num_predict ? { num_predict: runtimeOpts.num_predict } : {}),
+  }
+}
+
+function thinkField(think: OllamaThinkValue | undefined): { think?: OllamaThinkValue } {
+  return think === undefined ? {} : { think }
 }
 
 function durationMs(value: unknown): number | undefined {
@@ -120,18 +144,10 @@ export class AgentStreamTransport {
         model: targetModel,
         prompt,
         stream: true,
-        think: session.think === true,
+        ...thinkField(session.think),
         keep_alive: keepAlive || '30m',
         ...(previousContext && previousContext.length > 0 ? { context: previousContext } : {}),
-        options: {
-          num_ctx: runtimeOpts.num_ctx,
-          temperature: runtimeOpts.temperature,
-          top_p: runtimeOpts.top_p,
-          repeat_penalty: runtimeOpts.repeat_penalty,
-          ...(runtimeOpts.num_thread ? { num_thread: runtimeOpts.num_thread } : {}),
-          ...(runtimeOpts.num_predict ? { num_predict: runtimeOpts.num_predict } : {}),
-          ...(runtimeOpts.stop?.length ? { stop: runtimeOpts.stop } : {}),
-        },
+        options: ollamaRequestOptions(runtimeOpts),
       })
 
       let responseTimer: NodeJS.Timeout | null = setTimeout(() => {
@@ -279,17 +295,9 @@ export class AgentStreamTransport {
         messages: session.messages ?? [{ role: 'user', content: prompt }],
         tools: toolCatalog,
         stream: true,
-        think: session.think === true,
+        ...thinkField(session.think),
         keep_alive: keepAlive || '30m',
-        options: {
-          num_ctx: runtimeOpts.num_ctx,
-          temperature: runtimeOpts.temperature,
-          top_p: runtimeOpts.top_p,
-          repeat_penalty: runtimeOpts.repeat_penalty,
-          ...(runtimeOpts.num_thread ? { num_thread: runtimeOpts.num_thread } : {}),
-          ...(runtimeOpts.num_predict ? { num_predict: runtimeOpts.num_predict } : {}),
-          ...(runtimeOpts.stop?.length ? { stop: runtimeOpts.stop } : {}),
-        },
+        options: ollamaRequestOptions(runtimeOpts),
       })
 
       let responseTimer: NodeJS.Timeout | null = setTimeout(() => {
@@ -300,9 +308,10 @@ export class AgentStreamTransport {
       const requestStartedAt = Date.now()
       const resetTokenStallTimer = () => {
         if (tokenStallTimer) clearTimeout(tokenStallTimer)
+        const stallMs = session.stallTimeoutMs ?? DEFAULT_STREAM_STALL_MS
         tokenStallTimer = setTimeout(() => {
-          req.destroy(new Error(`Ollama chat stream stalled: no progress received for 5m from model '${targetModel}'.`))
-        }, 300000)
+          req.destroy(new Error(`Ollama chat stream stalled: no progress received for ${Math.round(stallMs / 60000)}m from model '${targetModel}'.`))
+        }, stallMs)
       }
       const cleanupTimers = () => {
         if (responseTimer) {

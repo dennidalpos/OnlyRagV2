@@ -47,12 +47,7 @@ export function validateRestoredOllamaRuntime(
     !finite(options.num_predict) ||
     options.num_predict! <= 0 ||
     !finite(options.maxContextChars) ||
-    options.maxContextChars! <= 0 ||
-    !finite(options.temperature) ||
-    !finite(options.top_p) ||
-    !finite(options.repeat_penalty) ||
-    !Array.isArray(options.stop) ||
-    options.stop.some((value) => typeof value !== 'string')
+    options.maxContextChars! <= 0
   ) {
     return 'Persisted Ollama runtime profile is invalid.'
   }

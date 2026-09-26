@@ -80,8 +80,8 @@ export async function executeRunTestsTool(
     const statusLine = parsed.framework === 'unknown' ? parsed.summary : `${parsed.success ? '✅' : '❌'} ${parsed.summary}`
 
     const outputForHistory = res.timedOut
-      ? `[TEST RUN TIMED OUT]\nCommand: "${sanitizedCmd}"${detectionNote}\nTest command exceeded ${TEST_TIMEOUT_MS / 1000}s and was terminated.\nPartial output:\n${rawOutput.slice(0, 3000)}`
-      : `[TEST RUN RESULT]\nCommand: "${sanitizedCmd}"${detectionNote}\n${statusLine}\n\nOutput:\n${rawOutput.slice(0, 4000)}`
+      ? `[TEST RUN TIMED OUT]\nCommand: "${sanitizedCmd}"${detectionNote}\nTest command exceeded ${TEST_TIMEOUT_MS / 1000}s and was terminated.\nPartial output:\n${DiagnosticOutputReducer.keepHeadAndTail(rawOutput, 3000)}`
+      : `[TEST RUN RESULT]\nCommand: "${sanitizedCmd}"${detectionNote}\n${statusLine}\n\nOutput:\n${DiagnosticOutputReducer.keepHeadAndTail(rawOutput, 4000)}`
 
     const message: NonNullable<ToolExecutionResult['localized']>['message'] = res.timedOut
       ? { key: 'toolTestsTimedOut', params: { seconds: TEST_TIMEOUT_MS / 1000 } }

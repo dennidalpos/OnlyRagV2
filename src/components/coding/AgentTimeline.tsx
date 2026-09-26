@@ -188,7 +188,9 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
           )}
         </div>
       )}
-      {!isExecuting && latestCompletedPrompt && <AgentEvidenceCard prompt={latestCompletedPrompt} onOpenFile={onOpenFile} onOpenRightTab={onOpenRightTab} />}
+      {!isExecuting && latestCompletedPrompt && (
+        <AgentEvidenceCard prompt={latestCompletedPrompt} workspacePath={workspacePath} onOpenFile={onOpenFile} onOpenRightTab={onOpenRightTab} />
+      )}
       <div ref={bottomRef} />
     </div>
   )

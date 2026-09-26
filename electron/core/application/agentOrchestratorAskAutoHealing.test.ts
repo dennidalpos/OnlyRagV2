@@ -63,3 +63,33 @@ describe('handleAskTool version questions', () => {
     expect(ctx.emitDone).toHaveBeenCalledWith(true, 'Which version of react should I use?')
   })
 })
+
+describe('handleAskTool genuine blockers in AUTO', () => {
+  it('hands a network question to the user even after a tool failure, instead of redirecting it', async () => {
+    const ctx = askContext('Could you enable network access so I can install the dependencies?', { hasRecentToolFailure: true, errorCountInHistory: 2 })
+
+    const outcome = await handleAskTool(ctx)
+
+    expect(outcome.outcome).toBe('return')
+    expect(ctx.closeApplicationRun).toHaveBeenCalledWith(expect.objectContaining({ reason: { key: 'reasonAskDecision' } }))
+    expect(ctx.guardEvents).toEqual([])
+  })
+
+  it('treats a question right after a user denial as the way forward', async () => {
+    const episodicCompactor = new EpisodicMemoryCompactor()
+    episodicCompactor.recordStep({ step: 4, tool: 'run_command', status: 'BLOCKED', summary: 'User denied contextual approval' }, '[USER DENIED] ...')
+    const ctx = askContext('How should I proceed?', { episodicCompactor, hasRecentToolFailure: true })
+
+    const outcome = await handleAskTool(ctx)
+
+    expect(outcome.outcome).toBe('return')
+    expect(ctx.guardEvents).toEqual([])
+  })
+
+  it('still redirects a lazy what-next question after an ordinary failure', async () => {
+    const ctx = askContext('What should I do next?', { hasRecentToolFailure: true })
+
+    expect(await handleAskTool(ctx)).toEqual({ outcome: 'continue' })
+    expect(ctx.guardEvents.map((event) => event.guard)).toEqual(['ask_redirect'])
+  })
+})

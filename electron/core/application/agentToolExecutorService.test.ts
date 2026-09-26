@@ -1056,10 +1056,12 @@ async def async_handler():
   itWithPowerShell(
     'should run an explicit run_tests command override and return a structured pass/fail summary (AGT8)',
     async () => {
+      // A script file, not `node -e`: inline code needs the user's approval, which run_tests never asks for.
+      fs.writeFileSync(path.join(tempDir, 'fake-tests.js'), "console.log('Tests  5 passed (5)')\n")
       const res = await agentToolExecutorService.executeTool(
         {
           tool: 'run_tests',
-          parameters: { command: 'node -e "console.log(\'Tests  5 passed (5)\')"' },
+          parameters: { command: 'node fake-tests.js' },
         },
         tempDir,
         settings,

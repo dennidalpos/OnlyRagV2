@@ -63,10 +63,14 @@ export class PromptCompiler {
       isCustom = isCustom || resolvedChild.isCustom
     }
 
+    const policy = settings?.capabilityPolicyMode
     const view: Record<string, unknown> = {
       ...variables,
       nativeToolCalling: capabilities.includes('tools'),
       nativeVision: capabilities.includes('vision'),
+      // Rules may only name tools the capability policy lets the run use (see turnToolPolicy.ts).
+      webResearch: policy === undefined || policy === 'network-approved',
+      browserPreview: policy !== 'offline-strict',
     }
 
     const prompt = collapseBlankRuns(renderPromptTemplate(resolvedRoot.template, view, partials)).trim()
@@ -187,6 +191,8 @@ export function compilePromptWithSampleVars(
     ...samples,
     nativeToolCalling: isNativeTool,
     nativeVision: true,
+    webResearch: true,
+    browserPreview: true,
   }
 
   try {

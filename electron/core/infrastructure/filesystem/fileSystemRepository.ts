@@ -4,7 +4,7 @@ import * as ts from 'typescript'
 import { logger } from '../logging/logger'
 import { contentVersion } from './fileContentVersion'
 import { scriptKindForPath } from '../../domain/agent/sourceScriptKind'
-import { isIgnoredPath, validatePathSafety as domainValidatePathSafety } from '../../domain/agent/contextFilter'
+import { isIgnoredPath, isSecretFile, validatePathSafety as domainValidatePathSafety } from '../../domain/agent/contextFilter'
 import { MAX_FILE_READ_BYTES, MAX_PROJECT_MAP_DEPTH, MAX_SEARCH_FILE_BYTES, MAX_SEARCH_MATCHES } from '../../domain/agent/ioLimits'
 import { errorCode, errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
@@ -220,7 +220,7 @@ export class FileSystemRepository {
         if (!targetContent) continue
 
         if (existing.includes(targetContent)) {
-          existing = existing.replace(targetContent, replacementContent)
+          existing = existing.replace(targetContent, () => replacementContent)
           replacedCount++
         } else {
           // Normalize CRLF to LF and retry fuzzy replacement
@@ -229,7 +229,7 @@ export class FileSystemRepository {
           const normReplacement = replacementContent.replace(/\r\n/g, '\n')
 
           if (normExisting.includes(normTarget)) {
-            existing = normExisting.replace(normTarget, normReplacement)
+            existing = normExisting.replace(normTarget, () => normReplacement)
             replacedCount++
           } else {
             return {
@@ -302,8 +302,8 @@ export class FileSystemRepository {
         const regex = new RegExp(query, flags)
         matcher = (line: string) => regex.test(line)
       } catch (regErr: unknown) {
-        logger.log('WARN', 'WorkspaceRepo', `Invalid regex pattern '${query}': ${errorMessage(regErr)}`)
-        return []
+        // Reported, not swallowed: an empty list read as "no matches" and sent the agent looking elsewhere.
+        throw new Error(`Invalid regular expression: ${errorMessage(regErr)}. Fix the pattern, or set isRegex to false to search the literal text.`)
       }
     } else {
       const q = caseInsensitive ? query.toLowerCase() : query
@@ -317,6 +317,8 @@ export class FileSystemRepository {
         for (const entry of entries) {
           if (results.length >= MAX_SEARCH_MATCHES) break
           if (IGNORED_NAMES.has(entry.name)) continue
+          // Links can lead outside the workspace, and secret files stay unreadable as with read_file.
+          if (entry.isSymbolicLink() || isSecretFile(entry.name)) continue
 
           const fullPath = path.join(currentDir, entry.name)
           if (entry.isDirectory()) {

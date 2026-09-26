@@ -19,6 +19,7 @@ import { buildExplicitFirstCommandDirective } from '../domain/agent/planDirectiv
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorRunContext'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
+import { resolveModelSamplingOverrides } from '../../../shared/domain/agent/ollamaSamplingOptions'
 import { resolveTurnToolPolicy, resolveVersionConflictTurnPolicy, type EditTargetState, type TurnToolPolicy } from '../domain/agent/turnToolPolicy'
 import { normalizeOllamaHost } from '../../../shared/domain/ollamaHost'
 import { resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
@@ -46,10 +47,17 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   const targetModelToolCallingCapable = true
   ctx.session.ollamaContextModel = undefined
 
+  // Only the context window is pinned per session. Sampling comes from the user's current per-model
+  // overrides; with none, the Modelfile defaults apply (checkpoints written before 2026-09-26 carried
+  // a fixed 0.1/0.9/1.1 profile that is deliberately dropped here).
   const pinnedRuntime = ctx.session.ollamaRuntimeProfile
-  const runtimeOpts = pinnedRuntime
-    ? { ...pinnedRuntime.options, stop: [...pinnedRuntime.options.stop] }
-    : HardwareProfileResolver.resolveOllamaOptions('Auto', { ...hardwareFacts })
+  const baseOpts = pinnedRuntime ? pinnedRuntime.options : HardwareProfileResolver.resolveOllamaOptions('Auto', { ...hardwareFacts })
+  const runtimeOpts: OllamaRuntimeOptions = {
+    num_ctx: baseOpts.num_ctx,
+    num_predict: baseOpts.num_predict,
+    maxContextChars: baseOpts.maxContextChars,
+    ...resolveModelSamplingOverrides(targetModel, ctx.settings.modelSamplingOverrides),
+  }
 
   if (pinnedRuntime) {
     return {
@@ -93,7 +101,7 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
     model: targetModel,
     host: normalizeOllamaHost(ctx.settings.ollamaHost),
     digest: ctx.modelMetrics?.[targetModel]?.digest,
-    options: { ...runtimeOpts, stop: [...runtimeOpts.stop] },
+    options: { num_ctx: runtimeOpts.num_ctx, num_predict: runtimeOpts.num_predict, maxContextChars: runtimeOpts.maxContextChars },
   }
 
   return {
@@ -233,6 +241,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     ctx.episodicCompactor.getEpisodes(),
     (command) => ctx.episodicCompactor.lastFailureOutputFor('run_command', command),
     ctx.episodicCompactor.getRecentFullLogs(),
+    ctx.settings.capabilityPolicyMode,
   )
   const progressPlanBlock = [buildExplicitFirstCommandDirective(ctx.userTask, ctx.stepCount === 1), ctx.goalPlanner.compileProgressPrompt({ directive })]
     .filter(Boolean)
@@ -258,6 +267,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
         userTask: ctx.userTask,
         requiredTools: directive.requiredTools,
         agentMode: ctx.agentMode,
+        capabilityPolicyMode: ctx.settings.capabilityPolicyMode,
       })
   emitLocalizedLog(ctx.emitLog, 'info', {
     key: 'toolPolicy',

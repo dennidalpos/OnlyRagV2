@@ -7,6 +7,11 @@ import { logger } from '../logging/logger'
 import { SkillDefinition, SkillMetadata, SkillOriginType } from '../../domain/skills/skillTypes'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
+/** Electron's userData, or the repository-local `userdata_dev` store when running headless. */
+function userDataRoot(): string {
+  return app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(process.cwd(), 'userdata_dev')
+}
+
 export function calculateSkillChecksum(content: string): string {
   const normalized = content.replace(/\r\n/g, '\n').trim()
   return crypto.createHash('sha256').update(normalized, 'utf-8').digest('hex').slice(0, 16)
@@ -130,7 +135,7 @@ export class SkillRepository {
 
   private getStateFilePath(): string {
     if (this.stateFilePath) return this.stateFilePath
-    const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(process.cwd(), 'userdata_dev')
+    const baseDir = userDataRoot()
     return path.join(baseDir, 'active_skills.json')
   }
 
@@ -181,7 +186,10 @@ export class SkillRepository {
     const scannedDirs: { dir: string; isWorkspace: boolean }[] = []
 
     // 1. Global skills directory first
-    const globalSkillsDir = app && typeof app.getPath === 'function' ? path.join(app.getPath('userData'), 'skills') : path.join(process.cwd(), 'skills')
+    // Headless (tests, live harness) global skills live under userdata_dev like every other user store,
+    // never in the repository's own skills/ folder: those are OnlyRag's development rules, and they
+    // leaked into user projects' prompts (react19-modern-patterns in the 2026-09-25 live run).
+    const globalSkillsDir = path.join(userDataRoot(), 'skills')
 
     if (fs.existsSync(globalSkillsDir)) {
       scannedDirs.push({ dir: globalSkillsDir, isWorkspace: false })
@@ -290,9 +298,7 @@ export class SkillRepository {
       .toLowerCase()
       .replace(/[^a-z0-9-_]/g, '-')
     const baseDir =
-      workspaceRoot !== undefined && workspaceRoot !== null
-        ? path.join(workspaceRoot, 'skills', cleanName)
-        : path.join(app && typeof app.getPath === 'function' ? app.getPath('userData') : process.cwd(), 'skills', cleanName)
+      workspaceRoot !== undefined && workspaceRoot !== null ? path.join(workspaceRoot, 'skills', cleanName) : path.join(userDataRoot(), 'skills', cleanName)
 
     try {
       await fs.promises.mkdir(baseDir, { recursive: true })

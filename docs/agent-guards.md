@@ -10,8 +10,8 @@ I guardrail garantiscono la sicurezza dell'ambiente locale, la coerenza delle mo
 | --- | --- | --- |
 | Risposta in sola prosa con lavoro aperto | 2 richieste di tool | Chiusura con `model_silence` |
 | Chiamata tool non conforme allo schema | 1 correzione | Chiusura con `schema_budget` |
-| Errore di esecuzione del tool | 1 correzione (azzerata da modifica riuscita o comando andato a buon fine) | Chiusura con `execution_budget` |
-| `run_command`/`run_tests` fallito riproposto identico | Blocco immediato (non consuma budget esecuzione) | Trattato come blocco di loop (`loop_unchanged_failure`) |
+| Errore di esecuzione del tool | 3 errori identici o 6 consecutivi (azzerati da modifica riuscita o comando andato a buon fine); timeout e prompt interattivi sono errori come gli altri | Chiusura con `execution_budget` |
+| `run_command`/`run_tests` fallito riproposto identico senza modifiche nel mezzo | Blocco immediato (non consuma budget esecuzione) | Trattato come blocco di loop (`loop_unchanged_failure`). Dopo una modifica riuscita la stessa verifica non conta come ripetizione |
 | Ripetizione di azione già riuscita | 3 avvisi `redundant_success` | Conteggiato come blocco di loop |
 | Blocco di loop | 2 avvisi, poi 1 blocco su 2 forza l'avanzamento milestone (`force_advance`) | A 20 blocchi senza budget step: arresto `stagnation_abort` |
 | Chiamata bloccata che la direttiva del piano ordina | Il guard cede: il comando di `verification_due`, o una scrittura diversa dalle precedenti sul file in `rewriteTargets` della direttiva ([`agentOrchestratorFinishAndLoopGuards.ts`](../electron/core/application/agentOrchestratorFinishAndLoopGuards.ts)) | Una ripetizione identica (`exact_repeat`) resta bloccata |

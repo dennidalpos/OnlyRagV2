@@ -101,10 +101,8 @@ export function buildVersionRealityDirective(findings: VersionRealityFindings): 
     return [
       `\n\n[THESE VERSIONS ARE MAJOR RELEASES BEHIND — THE REGISTRY WAS ASKED]`,
       ...shown.map((o) => `- ${o.name}: you declared ${o.declared}, npm currently publishes ${o.latest}`),
-      `You cannot know current versions from memory, so these numbers come from the registry itself. An old major is where "cannot find module", peer conflicts and unparseable type definitions come from.`,
-      `Directives:`,
-      `1. Your next tool call MUST be "write_file" on "package.json", with the complete file and ${shown.length === 1 ? 'that range' : 'those ranges'} updated to the version${shown.length === 1 ? '' : 's'} named above.`,
-      `2. Do NOT run an install first. While the manifest still declares the old range, installing reinstalls exactly what is already there. The install matters only after the file is written.`,
+      `These numbers come from the registry itself. An old major still installs, but it is a common source of "cannot find module", peer conflicts and unparseable type definitions.`,
+      `Consider updating ${shown.length === 1 ? 'that range' : 'those ranges'} in package.json before installing, unless the task asks for the older version.`,
     ].join('\n')
   }
 

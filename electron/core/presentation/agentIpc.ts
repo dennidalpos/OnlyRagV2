@@ -1,7 +1,7 @@
 import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { taskQueueAppService } from '../application/taskQueueAppService'
-import { requestActiveAgentContextCompaction, respondToApproval } from '../application/agentOrchestratorAppService'
+import { requestActiveAgentContextCompaction, respondToApproval, restoreRunCheckpoint } from '../application/agentOrchestratorAppService'
 import { agentSessionStateAppService } from '../application/agentSessionStateAppService'
 import { analyzeLogs } from '../application/logDiagnosticsAppService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
@@ -105,6 +105,8 @@ export function registerAgentIpcHandlers(rendererEvents: RendererEventSink) {
   })
 
   /** Seeds the approved plan's milestones into persisted session state before task execution starts, so runAgentOrchestratorLoop's restore-from-savedState path loads them into GoalDecompositionPlanner as its starting state. */
+  ipcMain.handle('agent:restore-checkpoint', async (_, { workspacePath, checkpointId }) => restoreRunCheckpoint(workspacePath, checkpointId))
+
   ipcMain.handle('agent:plan-seed', async (_, { sessionId, workspacePath, planMilestones, userTask, planRevisionId }) => {
     return agentSessionStateAppService.seedPlanMilestones(sessionId, workspacePath, planMilestones, userTask, planRevisionId)
   })

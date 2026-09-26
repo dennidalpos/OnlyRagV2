@@ -210,6 +210,7 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
   }),
   'agent:plan-cancel': identity,
   'agent:get-plan-state': obj({ sessionId: short, workspacePath: optionalPath, planRevisionId: optionalString }),
+  'agent:restore-checkpoint': obj({ workspacePath: path, checkpointId: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/) }),
   'agent:plan-seed': obj({
     sessionId: short,
     workspacePath: path.nullable(),

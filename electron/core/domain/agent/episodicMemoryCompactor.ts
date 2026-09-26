@@ -49,6 +49,8 @@ export class EpisodicMemoryCompactor {
   private episodes: EpisodicStepRecord[] = []
   private recentFullLogs: EpisodicFullLog[] = []
   private failureLogs: EpisodicFullLog[] = []
+  /** Untruncated application feedback per step, so the native transcript can return it as the tool result. */
+  private stepFeedback = new Map<number, string[]>()
   private readonly maxRecentDetailedSteps: number
 
   constructor(maxRecentDetailedSteps: number = 6) {
@@ -63,6 +65,10 @@ export class EpisodicMemoryCompactor {
   }
 
   public recordStep(record: EpisodicStepRecord, rawOutput: string): void {
+    if (rawOutput.trim()) {
+      this.stepFeedback.set(record.step, [...(this.stepFeedback.get(record.step) || []), rawOutput])
+      for (const step of this.stepFeedback.keys()) if (step < record.step - 5) this.stepFeedback.delete(step)
+    }
     this.episodes.push(record)
     if (this.episodes.length > 100) {
       this.episodes.splice(1, this.episodes.length - 100)
@@ -233,7 +239,14 @@ export class EpisodicMemoryCompactor {
     }
   }
 
+  /** Every feedback text recorded for one step, oldest first, or undefined when none was recorded. */
+  public feedbackForStep(step: number): string | undefined {
+    const entries = this.stepFeedback.get(step)
+    return entries?.length ? entries.join('\n\n') : undefined
+  }
+
   public reset(): void {
+    this.stepFeedback.clear()
     this.episodes = []
     this.recentFullLogs = []
     this.failureLogs = []

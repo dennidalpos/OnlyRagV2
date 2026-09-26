@@ -1,3 +1,4 @@
+import path from 'node:path'
 import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import { logger } from '../infrastructure/logging/logger'
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
@@ -16,13 +17,14 @@ import type { AgentRunContext } from './agentOrchestratorRunContext'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import type { AgentRunIdentity } from '../../../shared/types'
-import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
 import { evaluateAgentCodingPreflight } from './agentCodingPreflight'
 import { workspaceAppService } from './workspaceAppService'
 import { ollamaAppService } from './ollamaAppService'
+import { hardwareProbe } from '../infrastructure/diagnostics/hardwareProbe'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 import { appendToolResponse } from './agentChatTranscript'
+import { restoreAgentCheckpoint } from '../infrastructure/filesystem/agentCheckpointStore'
 import type { AgentChatToolCall } from '../infrastructure/http/agentStreamTransport'
 import type { PreparedAgentTurn, TurnDispatchData } from './agentOrchestratorRunContext'
 
@@ -65,23 +67,16 @@ function cleanupSession(session: AgentSession) {
     }
     session.activeChildProcess = null
   }
-  let rollbackRestoredFiles = 0
-  const rollbackErrors: string[] = []
+  // Cancelling keeps the work on disk: undoing it is the user's explicit choice (checkpoint restore),
+  // not a side effect of pressing Stop.
+  let checkpointId: string | null = null
   try {
-    const rollback = agentToolExecutorService.rollbackJournal()
-    rollbackRestoredFiles = rollback.restoredCount
-    rollbackErrors.push(...rollback.errors)
+    checkpointId = agentToolExecutorService.checkpointJournal(session.workspacePath, session.id)
   } catch (err: unknown) {
-    rollbackErrors.push(errorMessage(err) || String(err))
-    logger.log('WARN', 'AgentOrchestrator', `Failed rolling back journal during cleanup: ${errorMessage(err)}`)
-  }
-  try {
-    session.workspaceTransaction?.dispose()
-  } catch (err: unknown) {
-    logger.log('WARN', 'AgentOrchestrator', `Failed discarding isolated workspace during cleanup: ${errorMessage(err)}`)
+    logger.log('WARN', 'AgentOrchestrator', `Failed saving the run checkpoint during cleanup: ${errorMessage(err)}`)
   }
   if (session.rendererEvents?.isAvailable()) {
-    const nonRollbackEffects = [...(session.nonRollbackEffects || []), ...rollbackErrors.map((error) => `rollback_workspace: ${error}`)]
+    const nonRollbackEffects = [...(session.nonRollbackEffects || [])]
     session.rendererEvents.send('agent:log', {
       ...session.identity,
       id: `${Date.now()}-cancelled`,
@@ -97,9 +92,9 @@ function cleanupSession(session: AgentSession) {
       evidence: {
         changedFiles: session.changedFiles || [],
         verification: session.lastVerification,
-        cancellationStatus: nonRollbackEffects.length > 0 ? 'residual_effects' : 'rolled_back',
-        rollbackRestoredFiles,
+        cancellationStatus: 'kept',
         nonRollbackEffects,
+        ...(checkpointId ? { checkpointId } : {}),
       },
     })
   }
@@ -122,12 +117,27 @@ export function cancelActiveAgentTask(targetRunId?: string) {
   }
 }
 
+/**
+ * Restores a run's checkpoint on the user's request. Refused while a run is editing the same
+ * workspace, since both would write the same files.
+ */
+export function restoreRunCheckpoint(workspacePath: string, checkpointId: string): { success: boolean; restoredCount: number; errors: string[] } {
+  const target = path.resolve(workspacePath)
+  for (const session of activeAgentSessions.values()) {
+    if (session.workspacePath && path.resolve(session.workspacePath) === target && !session.isCancelled) {
+      return { success: false, restoredCount: 0, errors: ['An agent run is still working in this workspace; stop it before restoring.'] }
+    }
+  }
+  return restoreAgentCheckpoint(target, checkpointId)
+}
+
 /** Applies manual prompt compaction to the next turn without altering Renderer audit logs. */
 export function requestActiveAgentContextCompaction(target: AgentRunIdentity | string): boolean {
   const runId = typeof target === 'string' ? target : target.runId
   const session = activeAgentSessions.get(runId)
   if (!session || (typeof target !== 'string' && !matchesAgentRunIdentity(session.identity, target))) return false
   session.forceContextCompaction = true
+  session.nativeSystemPrompt = undefined
   session.ollamaContextTokens = undefined
   session.ollamaContextModel = undefined
   session.ollamaContextStableSection = undefined
@@ -151,7 +161,6 @@ export async function runAgentOrchestratorLoop(
   payload: AgentTaskPayload,
   rendererEvents: RendererEventSink | null,
   customSessionId?: string,
-  workspaceTransaction?: DisposableAgentWorkspace,
 ): Promise<AgentTaskResult> {
   if (!payload.userTask || !payload.userTask.trim()) {
     return { success: false, summary: 'Task prompt empty', error: 'Task prompt is required', completionStatus: 'blocked' }
@@ -175,7 +184,7 @@ export async function runAgentOrchestratorLoop(
     rendererEvents,
     activeCancelHandle: null,
     activeChildProcess: null,
-    workspaceTransaction,
+    workspacePath: payload.workspacePath,
     forceContextCompaction: Boolean(payload.forceContextCompaction),
   }
   activeAgentSessions.set(runId, session)
@@ -302,7 +311,11 @@ export async function runAgentOrchestratorLoop(
     return { success: false, summary: errorMsg, completionStatus: 'blocked' }
   }
 
-  void ollamaAppService.preloadModel(codingModel, settings.ollamaHost).catch(() => {})
+  // No warm-up request: a preload without the session's num_ctx made Ollama load the model twice,
+  // once with its default window and again at the first turn's window.
+  // The context window depends on the GPU tier; before the first diagnostics run the cache is empty
+  // and the host was sized as GPU-less (16k instead of 64k in the live run of 2026-09-26).
+  if (!hardwareProbe.getCachedGpuInfo()) await hardwareProbe.detectGpu().catch(() => null)
 
   session.changedFiles ||= []
   session.nonRollbackEffects ||= []
@@ -334,7 +347,6 @@ export async function runAgentOrchestratorLoop(
         },
         nonRollbackEffects: session.nonRollbackEffects,
         requestApproval,
-        workspaceTransaction,
         signal: session.abortController?.signal,
       },
       request,
@@ -448,7 +460,11 @@ export async function runAgentOrchestratorLoop(
       compiledHistoryBlock,
     })
     if (interpretation.outcome === 'continue') {
-      recordNativeResult('The requested action was not executed. Review the latest application feedback before continuing.')
+      const feedback = episodicCompactor.feedbackForStep(stepCountBox.value) ?? 'The requested action was not executed. Choose a different next step.'
+      if (nativeCall) recordNativeResult(feedback)
+      // A prose-only reply has no call to answer: the feedback becomes the next user message, so the
+      // transcript never ends on an assistant message the model would merely continue.
+      else if (turnData.nativeMode) session.chatMessages = [...(session.chatMessages || []), { role: 'user', content: feedback }]
       setExecutionPhase('collect_context')
       continue
     }
@@ -474,10 +490,9 @@ export async function runAgentOrchestratorLoop(
       allowedToolsForTurn: preparedTurn.toolPolicy.allowedTools,
       requiredReadPath: preparedTurn.toolPolicy.requiredReadPath,
       runOwnedPaths: Array.from(sessionChangedFiles.keys()),
-      isIsolatedWorkspace: Boolean(workspaceTransaction),
     })
     if (gateResult.outcome === 'denied') {
-      recordNativeResult(gateResult.feedback || 'Tool call denied by policy or user.')
+      recordNativeResult(gateResult.feedback)
       if (settings.enableCodingAgentDebugLog && gateResult.feedback) {
         codingAgentLogger.logToolResult(sessionId, stepCountBox.value, parsedTool.tool, gateResult.feedback)
       }
@@ -512,7 +527,9 @@ export async function runAgentOrchestratorLoop(
         maxStepsLabel,
         signal: session.abortController?.signal,
       })
-      recordNativeResult('Plan update processed. Read the current plan state before continuing.')
+      recordNativeResult(
+        episodicCompactor.feedbackForStep(stepCountBox.value) ?? 'Plan update processed. The current plan state is in the latest user message.',
+      )
       setExecutionPhase('collect_context')
       continue
     }

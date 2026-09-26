@@ -114,7 +114,7 @@ type PromptEvidence = NonNullable<ExecutedPrompt['evidence']>
 
 function normalizePromptEvidence(value: unknown, fallbackTimestamp: string): PromptEvidence | undefined {
   const raw = asRecord(value)
-  const cancellationStatus = oneOf(raw?.cancellationStatus, ['not_cancelled', 'rolled_back', 'residual_effects'] as const)
+  const cancellationStatus = oneOf(raw?.cancellationStatus, ['not_cancelled', 'rolled_back', 'residual_effects', 'kept'] as const)
   if (!raw || !cancellationStatus) return undefined
   const verification = asRecord(raw.verification)
   const verificationStatus = oneOf(verification?.status, ['verified', 'failed', 'unavailable'] as const)
@@ -133,6 +133,7 @@ function normalizePromptEvidence(value: unknown, fallbackTimestamp: string): Pro
     cancellationStatus,
     rollbackRestoredFiles: Number.isFinite(raw.rollbackRestoredFiles) ? Math.max(0, Number(raw.rollbackRestoredFiles)) : undefined,
     nonRollbackEffects: stringsOf(raw.nonRollbackEffects),
+    ...(typeof raw.checkpointId === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(raw.checkpointId) ? { checkpointId: raw.checkpointId } : {}),
   }
 }
 

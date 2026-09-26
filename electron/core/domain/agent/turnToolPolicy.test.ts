@@ -33,3 +33,42 @@ describe('Coding Agent tool policy', () => {
     })
   })
 })
+
+describe('capability policy in the tool catalogue', () => {
+  it('never offers a tool the policy refuses on every call', () => {
+    const offline = resolveTurnToolPolicy({
+      directiveKind: 'focus',
+      editTargetState: 'unknown',
+      userTask: 'Build',
+      agentMode: 'auto',
+      capabilityPolicyMode: 'offline-strict',
+    })
+    expect(offline.allowedTools).not.toEqual(expect.arrayContaining(['web_search']))
+    for (const tool of ['web_search', 'fetch_web_content', 'download_file', 'ensure_tool', 'open_in_browser']) expect(offline.allowedTools).not.toContain(tool)
+    expect(offline.allowedTools).toEqual(expect.arrayContaining(['read_file', 'write_file', 'run_command', 'run_tests', 'finish']))
+
+    const local = resolveTurnToolPolicy({
+      directiveKind: 'focus',
+      editTargetState: 'unknown',
+      userTask: 'Build',
+      agentMode: 'auto',
+      capabilityPolicyMode: 'local-only',
+    })
+    expect(local.allowedTools).not.toContain('web_search')
+    expect(local.allowedTools).toContain('open_in_browser')
+
+    const approved = resolveTurnToolPolicy({
+      directiveKind: 'focus',
+      editTargetState: 'unknown',
+      userTask: 'Build',
+      agentMode: 'auto',
+      capabilityPolicyMode: 'network-approved',
+    })
+    expect(approved.allowedTools).toEqual(expect.arrayContaining(['web_search', 'fetch_web_content', 'open_in_browser']))
+  })
+
+  it('offers git_commit for an Italian commit request too', () => {
+    const policy = resolveTurnToolPolicy({ directiveKind: 'focus', editTargetState: 'unknown', userTask: 'Correggi il bug e committa', agentMode: 'auto' })
+    expect(policy.allowedTools).toContain('git_commit')
+  })
+})

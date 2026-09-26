@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net'
 import { AgentStreamTransport } from './agentStreamTransport'
 import { parseAgentToolCall } from '../../domain/agent/toolParser'
 import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../../domain/agent/ollamaToolSchemaCatalog'
-import { AGENT_STOP_SEQUENCES, type OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
+import type { OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
 
 /** The request body the mock Ollama server received. */
 interface CapturedOllamaBody {
@@ -13,16 +13,13 @@ interface CapturedOllamaBody {
   stream: boolean
   context?: number[]
   prompt: string
+  think?: unknown
   options: { num_predict?: number; stop?: string[]; num_ctx?: number }
 }
 
 const runtimeOpts: OllamaRuntimeOptions = {
   num_ctx: 8192,
-  temperature: 0.1,
-  top_p: 0.9,
-  repeat_penalty: 1.1,
   num_predict: 6144,
-  stop: AGENT_STOP_SEQUENCES,
   maxContextChars: 28000,
 }
 
@@ -482,9 +479,7 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
       isCancelled: () => false,
     })
 
-    expect(capturedBody.options.num_predict).toBe(6144)
-    expect(capturedBody.options.stop).toEqual(AGENT_STOP_SEQUENCES)
-    expect(capturedBody.options.num_ctx).toBe(8192)
+    expect(capturedBody.options).toEqual({ num_ctx: 8192, num_predict: 6144 })
   })
 
   it('rejects a text tool response truncated by num_predict', async () => {
@@ -505,7 +500,7 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
     ).rejects.toThrow(/incomplete \(length\)/)
   })
 
-  it('should forward num_predict and the stop sequences on the native tool-calling /api/chat path too', async () => {
+  it('sends only num_ctx, num_predict and user sampling overrides on the native /api/chat path', async () => {
     let capturedBody = {} as CapturedOllamaBody
     const mock = await startMockOllama((req, res) => {
       let raw = ''
@@ -529,8 +524,22 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
       toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
     })
 
-    expect(capturedBody.options.num_predict).toBe(6144)
-    expect(capturedBody.options.stop).toEqual(AGENT_STOP_SEQUENCES)
+    expect(capturedBody.options).toEqual({ num_ctx: 8192, num_predict: 6144 })
+    expect(capturedBody).not.toHaveProperty('think')
+
+    await AgentStreamTransport.streamCompletion({
+      targetModel: 'qwen3.8:27b',
+      prompt: 'Read app.py',
+      runtimeOpts: { ...runtimeOpts, temperature: 0.6, top_k: 20 },
+      ollamaEndpoint: mock.baseUrl,
+      isCancelled: () => false,
+      toolCallingCapable: true,
+      toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
+      think: 'low',
+    })
+
+    expect(capturedBody.options).toEqual({ num_ctx: 8192, num_predict: 6144, temperature: 0.6, top_k: 20 })
+    expect(capturedBody.think).toBe('low')
   })
 
   it('should stream thinking deltas via onThoughtChunk on /api/generate path', async () => {

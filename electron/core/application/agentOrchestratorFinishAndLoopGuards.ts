@@ -48,7 +48,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
         : 'Task completed successfully.'
 
   if (ctx.agentMode === 'ask') {
-    agentToolExecutorService.commitJournal()
+    agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.sessionId)
     ctx.emitLog('info', `Task Finished: ${summary}`, summary, { category: 'final_report' })
     ctx.emitDone(true, summary)
     if (ctx.settings.enableCodingAgentDebugLog) {
@@ -150,6 +150,7 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
     ctx.episodicCompactor.getEpisodes(),
     (command) => ctx.episodicCompactor.lastFailureOutputFor('run_command', command),
     ctx.episodicCompactor.getRecentFullLogs(),
+    ctx.settings.capabilityPolicyMode,
   )
 
   // Replace advisory text with single clear directive to avoid conflicting instructions.

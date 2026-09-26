@@ -305,7 +305,7 @@ export class ProcessToolService {
     directives: string,
     healingTail: string,
   ): ToolExecutionResult {
-    const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nCommand: "${command}" (Exit Code: ${result.code}${result.timedOut ? ' - TIMED OUT' : ''}${result.interruptedByPrompt ? ' - INTERACTIVE PROMPT DETECTED' : ''})\nCaptured Error Stack Trace & Failure Output:\n\`\`\`\n${rawOutput.slice(0, 4000)}\n\`\`\`${directives}\n\n${healingTail}`
+    const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nCommand: "${command}" (Exit Code: ${result.code}${result.timedOut ? ' - TIMED OUT' : ''}${result.interruptedByPrompt ? ' - INTERACTIVE PROMPT DETECTED' : ''})\nCaptured Error Stack Trace & Failure Output:\n\`\`\`\n${DiagnosticOutputReducer.keepHeadAndTail(rawOutput, 4000)}\n\`\`\`${directives}\n\n${healingTail}`
     const message = { key: 'toolCommandFailed' } as const
     return {
       outcome: 'failure',
@@ -500,10 +500,10 @@ export class ProcessToolService {
         .getShellSession(workspacePath)
         .execute(executableCommand, (chunk) => onTerminalOutput?.(chunk.trim()), onProcessSpawned, timeoutMs, signal)
       const rawOutput = DiagnosticOutputReducer.composeCommandOutput(result.stdout, result.stderr, result.code)
-      const lowerOutput = rawOutput.toLowerCase()
-      const isCancelled = ['operation cancelled', 'operation canceled', 'user cancelled', 'user canceled', 'aborted'].some((marker) =>
-        lowerOutput.includes(marker),
-      )
+      // A generator that was cancelled prints the notice as its own line ("✖ Operation cancelled").
+      // Matching anywhere in the text turned passing test runs into failures whenever a test name
+      // or log line merely contained "aborted".
+      const isCancelled = /^[^\w\n]*(?:operation|user) cancel{1,2}ed\b/im.test(rawOutput)
 
       return {
         command,

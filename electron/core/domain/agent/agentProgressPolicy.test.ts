@@ -101,17 +101,25 @@ describe('AgentProgressPolicy prose and schema budgets', () => {
 })
 
 describe('AgentProgressPolicy execution budget and steps without mutation', () => {
-  it('allows one execution correction, then stops, and restarts after proven recovery', () => {
+  it('stops on the third identical execution failure and restarts after proven recovery', () => {
     const policy = new AgentProgressPolicy()
     expect(policy.onExecutionFailure('read_file:a:missing').action).toBe('correct')
     policy.clearExecutionFailures()
     expect(policy.onExecutionFailure('read_file:a:missing').action).toBe('correct')
-    expect(policy.onExecutionFailure('read_file:b:missing').action).toBe('stop')
-    expect(policy.executionFailuresSpent).toBe(2)
+    expect(policy.onExecutionFailure('read_file:a:missing').action).toBe('correct')
+    expect(policy.onExecutionFailure('read_file:a:missing').action).toBe('stop')
+    expect(policy.executionFailuresSpent).toBe(3)
+  })
+
+  it('lets different failures follow each other while the model debugs, up to six in a row', () => {
+    const policy = new AgentProgressPolicy()
+    const decisions = ['build', 'replace', 'build', 'replace', 'build', 'replace'].map((kind, index) => policy.onExecutionFailure(`${kind}:${index}`).action)
+    expect(decisions).toEqual(['correct', 'correct', 'correct', 'correct', 'correct', 'stop'])
   })
 
   it('restores the persisted failure budgets on resume', () => {
     const first = new AgentProgressPolicy()
+    first.onExecutionFailure('run_command:npm test:exit 1')
     first.onExecutionFailure('run_command:npm test:exit 1')
     const resumed = new AgentProgressPolicy(first.snapshot())
     expect(resumed.onExecutionFailure('run_command:npm test:exit 1').action).toBe('stop')

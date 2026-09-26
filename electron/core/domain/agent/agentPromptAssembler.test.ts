@@ -105,7 +105,10 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
 
     expect(withProse.prompt).toContain('AVAILABLE AGENT TOOLS')
     expect(nativeToolCalling.prompt).not.toContain('AVAILABLE AGENT TOOLS')
-    expect(nativeToolCalling.prompt).toContain('Fix typo in index.html')
+    // Native requests carry the task once, as the first user message (buildChatRequest), so the
+    // system prompt stays identical across follow-up runs and Ollama can reuse its cached prefix.
+    expect(nativeToolCalling.segments.baseSystemPrompt).not.toContain('Fix typo in index.html')
+    expect(withProse.segments.baseSystemPrompt).toContain('Fix typo in index.html')
   })
 
   it('renders only the application-selected tools for text fallback models', () => {

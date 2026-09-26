@@ -86,7 +86,7 @@ describe('agentOrchestratorSessionSetup', () => {
     // Fail-closed: a payload without settings must not unlock the terminal or file writes.
     expect(settings.allowFileModifications).toBe(false)
     expect(settings.allowTerminalExecution).toBe(false)
-    expect(settings.capabilityPolicyMode).toBe('offline-strict')
+    expect(settings.capabilityPolicyMode).toBe('network-approved')
   })
 
   it('should format attached context and pinned files blocks', () => {

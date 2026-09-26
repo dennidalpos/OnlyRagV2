@@ -22,7 +22,8 @@ export interface AgentVerificationEvidence {
   detail?: string
 }
 
-export type AgentCancellationStatus = 'not_cancelled' | 'rolled_back' | 'residual_effects'
+/** `kept`: the run stopped and its file changes stayed on disk, restorable from `checkpointId`. */
+export type AgentCancellationStatus = 'not_cancelled' | 'rolled_back' | 'residual_effects' | 'kept'
 
 /** Structured facts rendered by the final Agent Coding evidence card. */
 /** Every orchestration safeguard that can nudge, re-plan or stop an agent run. */
@@ -63,6 +64,8 @@ export interface AgentCompletionEvidence {
   nonRollbackEffects: string[]
   /** Guards that fired during the run, oldest first (bounded). */
   guardEvents?: AgentGuardEvent[]
+  /** Checkpoint holding the files as they were before the run (agent:restore-checkpoint). */
+  checkpointId?: string
 }
 
 /**

@@ -1,5 +1,4 @@
 import fs from 'node:fs'
-import { execFileSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -94,7 +93,7 @@ describe('application-owned agent closure', () => {
         model: 'qwen2.5-coder:7b',
         host: 'http://127.0.0.1:11434',
         digest: 'sha256:test',
-        options: { num_ctx: 8192, num_predict: 2048, maxContextChars: 24000, temperature: 0.1, top_p: 0.9, repeat_penalty: 1.1, stop: [] },
+        options: { num_ctx: 8192, num_predict: 2048, maxContextChars: 24000 },
       },
       recordVerificationEvidence: (evidence) => {
         ctx.lastVerification = evidence
@@ -165,64 +164,6 @@ describe('application-owned agent closure', () => {
     expect(outcome).toMatchObject({ outcome: 'closed', result: { success: false, completionStatus: 'unverifiable' } })
     if (outcome.outcome === 'closed') expect(outcome.result.summary).toContain('non provano il comportamento end-to-end')
     expect(persistCurrentState).toHaveBeenCalledWith('finish', 'unverifiable')
-  })
-
-  it('publishes an isolated workspace only after the final approval', async () => {
-    vi.mocked(runProjectVerification).mockResolvedValue({
-      hasVerificationCommand: true,
-      status: 'verified',
-      passed: true,
-      command: 'npm test',
-      evidenceLevel: 'behavioral',
-    })
-    const { ctx } = makeContext({ milestoneStatus: 'verified' })
-    const transaction = {
-      sourcePath: 'C:/workspace',
-      preview: vi.fn(() => ({ changedPaths: ['src/app.ts'], createdCount: 0, deletedCount: 0, modifiedCount: 1 })),
-      publish: vi.fn(() => ({ success: true, changedPaths: ['src/app.ts'] })),
-      dispose: vi.fn(),
-    }
-    ctx.workspaceTransaction = transaction as never
-    ctx.requestApproval = vi.fn(async () => ({ approved: true }))
-
-    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: { key: 'reasonFinish' } })
-
-    expect(outcome).toMatchObject({ outcome: 'closed', result: { completionStatus: 'verified' } })
-    expect(ctx.requestApproval).toHaveBeenCalledWith(expect.objectContaining({ type: 'publish_workspace', target: 'C:/workspace' }))
-    expect(transaction.publish).toHaveBeenCalledOnce()
-    expect(transaction.dispose).toHaveBeenCalledOnce()
-  })
-
-  it('re-previews and separately approves the source Git commit after publication', async () => {
-    vi.mocked(runProjectVerification).mockResolvedValue({
-      hasVerificationCommand: true,
-      status: 'verified',
-      passed: true,
-      command: 'npm test',
-      evidenceLevel: 'behavioral',
-    })
-    const { ctx, filePath } = makeContext({ milestoneStatus: 'verified' })
-    execFileSync('git', ['init'], { cwd: workspacePath })
-    execFileSync('git', ['config', 'user.email', 'test@example.invalid'], { cwd: workspacePath })
-    execFileSync('git', ['config', 'user.name', 'OnlyRag Test'], { cwd: workspacePath })
-    execFileSync('git', ['add', '--', 'src/app.ts'], { cwd: workspacePath })
-    execFileSync('git', ['commit', '-m', 'baseline'], { cwd: workspacePath })
-    const transaction = {
-      sourcePath: workspacePath,
-      preview: vi.fn(() => ({ changedPaths: ['src/app.ts'], createdCount: 0, deletedCount: 0, modifiedCount: 1 })),
-      publish: vi.fn(() => {
-        fs.writeFileSync(filePath, 'export const value = 2\n')
-        return { success: true, changedPaths: ['src/app.ts'] }
-      }),
-      dispose: vi.fn(),
-    }
-    ctx.workspaceTransaction = transaction as never
-    ctx.requestApproval = vi.fn(async () => ({ approved: true }))
-
-    await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: { key: 'reasonFinish' } })
-
-    expect(ctx.requestApproval).toHaveBeenCalledTimes(2)
-    expect(execFileSync('git', ['log', '-1', '--format=%s'], { cwd: workspacePath, encoding: 'utf8' }).trim()).toBe('Agent Coding: publish reviewed changes')
   })
 
   it('keeps partial delivery and the failure reason when verification blocks closure', async () => {

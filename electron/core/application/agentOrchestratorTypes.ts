@@ -3,7 +3,6 @@ import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import type { ObservedToolCallingProtocol } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 import type { AgentCompletionStatus, AgentRunIdentity, AgentVerificationEvidence } from '../../../shared/types'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
-import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 import { type AgentLocalizedText, formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 import type { AgentChatMessage } from '../infrastructure/http/agentStreamTransport'
@@ -43,6 +42,14 @@ export interface AgentSession {
   timeoutHandle?: NodeJS.Timeout | null
   /** Native Ollama assistant/tool turns. The current bounded task context is supplied separately. */
   chatMessages?: AgentChatMessage[]
+  /** Workspace the run edits in place; checkpoints are saved inside it. */
+  workspacePath?: string | null
+  /** System message frozen at the first native turn, so consecutive requests share a cacheable prefix. */
+  nativeSystemPrompt?: string
+  /** Local prompt-token estimate of the last request, compared with Ollama's reported count. */
+  lastPromptTokenEstimate?: number
+  /** Reported/estimated prompt tokens (1 to 1.5), applied to later estimates. */
+  promptTokenRatio?: number
   /** Ollama `context` continuation cache (AGT1): the token array + the exact stable/history baseline it corresponds to, so the next turn can detect whether a tail-append delta can be sent instead of the full prompt. */
   ollamaContextTokens?: number[]
   ollamaContextModel?: string
@@ -69,6 +76,4 @@ export interface AgentSession {
   nonRollbackEffects?: string[]
   /** User-requested aggressive prompt compaction; the Renderer audit timeline is unaffected. */
   forceContextCompaction?: boolean
-  /** Isolated workspace owned by this run; discarded after cancellation or completion. */
-  workspaceTransaction?: DisposableAgentWorkspace
 }

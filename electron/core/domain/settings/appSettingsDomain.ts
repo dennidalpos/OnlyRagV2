@@ -1,4 +1,5 @@
-import type { AppSettings } from '../../../../shared/types'
+import type { AppSettings, OllamaThinkValue } from '../../../../shared/types'
+import { sanitizeModelSamplingOverrides } from '../../../../shared/domain/agent/ollamaSamplingOptions'
 import { PROMPT_NODE_IDS, type PromptNodeId } from '../../../../shared/domain/agent/promptHierarchyRegistry'
 import { normalizeAgentStepBudget } from '../../../../shared/domain/agent/agentStepBudget'
 import { DEFAULT_APP_SETTINGS } from '../../../../shared/domain/settings/appSettingsDefaults'
@@ -17,13 +18,14 @@ export function sanitizeModelContextLengths(raw: unknown): Record<string, number
   return Object.keys(result).length > 0 ? result : undefined
 }
 
-export function sanitizeModelThinkingPreferences(raw: unknown): Record<string, boolean> {
+export function sanitizeModelThinkingPreferences(raw: unknown): Record<string, OllamaThinkValue> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
-  const result: Record<string, boolean> = {}
+  const result: Record<string, OllamaThinkValue> = {}
   for (const [model, value] of Object.entries(raw as Record<string, unknown>)) {
     const normalizedModel = model.trim()
-    if (!normalizedModel || normalizedModel.length > 200 || typeof value !== 'boolean') continue
-    result[normalizedModel] = value
+    if (!normalizedModel || normalizedModel.length > 200) continue
+    if (typeof value === 'boolean') result[normalizedModel] = value
+    else if (typeof value === 'string' && /^[a-z][a-z0-9_-]{0,31}$/i.test(value.trim())) result[normalizedModel] = value.trim()
   }
   return result
 }
@@ -88,6 +90,7 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     modelThinkingPreferences: sanitizeModelThinkingPreferences(raw.modelThinkingPreferences),
     hasCompletedInitialSetup: typeof raw.hasCompletedInitialSetup === 'boolean' ? raw.hasCompletedInitialSetup : defaults.hasCompletedInitialSetup,
     modelContextLengths: sanitizeModelContextLengths(raw.modelContextLengths),
+    modelSamplingOverrides: sanitizeModelSamplingOverrides(raw.modelSamplingOverrides),
   }
 
   // Optional string models

@@ -13,13 +13,11 @@ import type { EmitLog } from './agentOrchestratorTypes'
 import type { ToolResultMutableFlags } from './agentOrchestratorRunContext'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest, ApplicationClosureTrigger } from './agentOrchestratorApplicationClosureTypes'
 import type { AgentExecutionPhase } from '../domain/agent/agentExecutionPhase'
-import { MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
+import { EXECUTION_RECOVERY_LIMITS, MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
 import { redactSecrets } from '../../logRedactor'
-import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
 import type { ApprovalResponse } from './agentOrchestratorTypes'
-import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
 import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
 import {
   type AgentLocalizedLine,
@@ -52,7 +50,6 @@ export interface ApplicationClosureContext {
   recordVerificationEvidence?: (evidence: AgentVerificationEvidence) => void
   nonRollbackEffects?: readonly string[]
   requestApproval?: (approvalPayload: AgentApprovalPayload) => Promise<ApprovalResponse>
-  workspaceTransaction?: DisposableAgentWorkspace
   signal?: AbortSignal
 }
 
@@ -98,7 +95,7 @@ function diagnosticLines(
   if (verification?.detail) lines.push({ key: 'diagnosticVerificationDetail', params: { detail: verification.detail } })
   lines.push(
     { key: 'diagnosticSchemaRecovery', params: { used: ctx.state.progress.schemaFailuresSpent ?? 0, limit: MAX_FAILURES_PER_RECOVERY_CATEGORY } },
-    { key: 'diagnosticExecutionRecovery', params: { used: ctx.state.progress.executionFailuresSpent ?? 0, limit: MAX_FAILURES_PER_RECOVERY_CATEGORY } },
+    { key: 'diagnosticExecutionRecovery', params: { used: ctx.state.progress.executionFailuresSpent ?? 0, limit: EXECUTION_RECOVERY_LIMITS.total } },
     { key: 'diagnosticVerificationFixes', params: { used: ctx.state.verificationFixCycles ?? 0, limit: MAX_VERIFICATION_FIX_CYCLES } },
   )
   if (ctx.state.guardEvents.length > 0) lines.push({ key: 'diagnosticGuards', params: { guards: summarizeGuardEvents(ctx.state.guardEvents) } })
@@ -195,34 +192,6 @@ function closureSummaryLines(
     lines.push(blank, { key: 'closureNoChanges' })
   }
   return lines
-}
-
-async function offerPublishedWorkspaceCommit(
-  transaction: DisposableAgentWorkspace,
-  changedPaths: readonly string[],
-  requestApproval: NonNullable<ApplicationClosureContext['requestApproval']>,
-  emitLog: EmitLog,
-): Promise<void> {
-  if (!gitCliRepository.getStatusAndDiff(transaction.sourcePath).isGitRepo) return
-  try {
-    const preview = gitCliRepository.previewCommit(transaction.sourcePath, changedPaths)
-    const message = 'Agent Coding: publish reviewed changes'
-    const approval = await requestApproval({
-      type: 'git_commit',
-      target: message,
-      contentOrCmd: message,
-      parameters: { commitPaths: preview.paths, commitDiff: preview.diffText, commitDiffHash: preview.diffHash },
-    })
-    if (!approval.approved) {
-      emitLog('info', 'Commit delle modifiche pubblicate rifiutato; i file restano nel workspace.')
-      return
-    }
-    gitCliRepository.commit(transaction.sourcePath, message, preview.paths, preview.diffHash)
-    emitLog('info', `Commit creato per ${preview.paths.length} path pubblicati.`, undefined, { category: 'file_mutation' })
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
-    emitLog('info', `Commit delle modifiche pubblicate non creato: ${message}`, undefined, { category: 'system_alert' })
-  }
 }
 
 /** Single application-owned terminal gate for agent runs. */
@@ -326,32 +295,6 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
     }
   }
 
-  const transaction = ctx.workspaceTransaction
-  if (transaction && status !== 'blocked' && ctx.requestApproval) {
-    const preview = transaction.preview()
-    if (preview.changedPaths.length > 0) {
-      const approval = await ctx.requestApproval({
-        type: 'publish_workspace',
-        target: transaction.sourcePath,
-        contentOrCmd: `${preview.changedPaths.length} path(s): ${preview.changedPaths.slice(0, 20).join(', ')}`,
-        parameters: { ...preview, sourcePath: transaction.sourcePath },
-      })
-      if (!approval.approved) {
-        status = 'blocked'
-        evidence = { key: 'evidencePublishRejected' }
-      } else {
-        const publication = transaction.publish()
-        if (!publication.success) {
-          status = 'blocked'
-          evidence = publication.error ? { key: 'evidencePublishBlocked', params: { error: publication.error } } : { key: 'evidencePublishBlockedUnknown' }
-        } else {
-          ctx.emitLog('info', `Workspace pubblicato: ${publication.changedPaths.length} path(s).`, undefined, { category: 'file_mutation' })
-          await offerPublishedWorkspaceCommit(transaction, publication.changedPaths, ctx.requestApproval, ctx.emitLog)
-        }
-      }
-    }
-  }
-
   const tracker = ctx.buildSessionTracker()
   const summaryLines = closureSummaryLines(status, request, tracker, evidence)
   const summary = renderAgentLines(summaryLines)
@@ -373,7 +316,8 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
     ...(ctx.state.guardEvents.length > 0 ? { guardEvents: [...ctx.state.guardEvents] } : {}),
   }
   ctx.setExecutionPhase('outcome')
-  agentToolExecutorService.commitJournal()
+  const checkpointId = agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.sessionId)
+  if (checkpointId) completionEvidence.checkpointId = checkpointId
   const success = status === 'verified'
   const closureMessage: AgentLocalizedText = { key: 'closureMessage', params: { status } }
   ctx.emitLog('info', formatAgentTextIt(closureMessage), summary, {
@@ -393,11 +337,6 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
   await ctx.persistCurrentState(terminationReasonFor(request.trigger, status), status)
   if (ctx.workspacePath) {
     await agentSessionStateRepository.saveSessionTrackerMarkdown(ctx.workspacePath, ctx.buildSessionTracker(summary))
-  }
-  try {
-    transaction?.dispose()
-  } catch {
-    // The source workspace has either been published or left untouched.
   }
   ctx.finalizeSession()
   return { outcome: 'closed', result: { success, summary, completionStatus: status, evidence: completionEvidence } }

@@ -9,6 +9,8 @@ export interface TurnToolPolicyInput {
   userTask: string
   requiredTools?: readonly SupportedToolName[]
   agentMode?: 'ask' | 'guided' | 'auto'
+  /** Tools the capability policy always refuses are not offered at all (see POLICY_UNAVAILABLE_TOOLS). */
+  capabilityPolicyMode?: 'offline-strict' | 'local-only' | 'network-approved'
 }
 
 export interface TurnToolPolicy {
@@ -44,20 +46,36 @@ const WORK_TOOLS: readonly SupportedToolName[] = [
   'run_command',
   'run_tests',
   'ensure_tool',
-  'rollback_workspace',
   'rollback_last_step',
   'open_in_browser',
   'validate_visual_artifact',
   'update_plan',
 ]
 
+/**
+ * Tools whose every call the capability policy refuses. Offering them only produced blocked steps,
+ * and two blocked steps in a row end a run: they are left out of the catalogue instead.
+ */
+const POLICY_UNAVAILABLE_TOOLS: Record<NonNullable<TurnToolPolicyInput['capabilityPolicyMode']>, readonly SupportedToolName[]> = {
+  'offline-strict': ['web_search', 'fetch_web_content', 'download_file', 'ensure_tool', 'open_in_browser', 'validate_visual_artifact'],
+  'local-only': ['web_search', 'download_file', 'ensure_tool'],
+  'network-approved': [],
+}
+
+function withoutPolicyUnavailable(tools: readonly SupportedToolName[], mode: TurnToolPolicyInput['capabilityPolicyMode']): SupportedToolName[] {
+  const unavailable = mode ? POLICY_UNAVAILABLE_TOOLS[mode] : []
+  return tools.filter((tool) => !unavailable.includes(tool))
+}
+
 /** The model chooses the next tool; Main still decides whether each concrete call may run. */
 export function resolveTurnToolPolicy(input: TurnToolPolicyInput): TurnToolPolicy {
   if (input.directiveKind === 'session_closure') return { allowedTools: ['finish'], rationale: 'verified work is ready for a terminal report' }
-  if (input.agentMode === 'ask') return { allowedTools: [...READ_TOOLS, 'ask', 'finish'], rationale: 'Ask mode is read-only' }
+  if (input.agentMode === 'ask') {
+    return { allowedTools: withoutPolicyUnavailable([...READ_TOOLS, 'ask', 'finish'], input.capabilityPolicyMode), rationale: 'Ask mode is read-only' }
+  }
 
-  const allowedTools: SupportedToolName[] = [...WORK_TOOLS, 'ask', 'finish']
-  if (/\bcommit\b/i.test(input.userTask)) allowedTools.push('git_commit')
+  const allowedTools = withoutPolicyUnavailable([...WORK_TOOLS, 'ask', 'finish'], input.capabilityPolicyMode)
+  if (/\bcommit/i.test(input.userTask)) allowedTools.push('git_commit')
   return { allowedTools, rationale: 'the model may choose a relevant tool; every call remains subject to Main policy' }
 }
 

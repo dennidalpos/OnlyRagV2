@@ -19,6 +19,18 @@ export class DiagnosticOutputReducer {
     return stripAnsi(text)
   }
 
+  /**
+   * Bounds command output for the model. Build and test tools print the failure summary last, so the
+   * tail gets the larger share; the omitted middle is stated, never silent.
+   */
+  public static keepHeadAndTail(text: string, maxChars: number): string {
+    if (text.length <= maxChars) return text
+    const tailChars = Math.floor(maxChars * 0.6)
+    const headChars = Math.max(0, maxChars - tailChars - 80)
+    const omitted = text.length - headChars - tailChars
+    return `${text.slice(0, headChars)}\n[... ${omitted} characters omitted ...]\n${text.slice(-tailChars)}`
+  }
+
   /** Joins a command's two output streams into the single text the model gets to read. */
   public static composeCommandOutput(stdout?: string, stderr?: string, exitCode?: number | null): string {
     const out = (stdout || '').trim()

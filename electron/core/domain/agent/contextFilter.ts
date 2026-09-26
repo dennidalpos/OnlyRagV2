@@ -112,7 +112,8 @@ export function isSecretFile(filePath: string): boolean {
   if (!filePath) return false
   const baseName = path.basename(filePath).toLowerCase().trim()
   if (SECRET_FILENAMES.has(baseName)) return true
-  if (baseName.startsWith('.env')) return true
+  // .env, .env.local, .env.production... hold secrets; templates committed on purpose do not.
+  if ((baseName === '.env' || baseName.startsWith('.env.')) && !/\.(?:example|sample|template|dist|defaults)$/.test(baseName)) return true
 
   const ext = path.extname(baseName)
   if (ext && (ext === '.pem' || ext === '.key' || ext === '.p12' || ext === '.pfx' || ext === '.asc' || ext === '.ppk')) {

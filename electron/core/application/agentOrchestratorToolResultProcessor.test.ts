@@ -179,12 +179,18 @@ describe('file version recovery', () => {
       expect(applied.toolCall.parameters.expectedContentHash).toBe(contentVersion('export const value = 1\n'))
       // Not consumed: a proposal the gate later refuses must not cost the model its read.
       expect(applyVersionedReadEvidence(edit, state).toolCall.parameters.expectedContentHash).toBe(contentVersion('export const value = 1\n'))
-      // An explicit hash from the model wins, and an unseen file gets none.
+      // The application's record wins over a hash the model supplies (models invent them), and an
+      // unseen file gets none: the model's value is dropped, so the write meets a version conflict.
       expect(
-        applyVersionedReadEvidence({ ...edit, parameters: { ...edit.parameters, expectedContentHash: 'sha256:own' } }, state).toolCall.parameters
+        applyVersionedReadEvidence({ ...edit, parameters: { ...edit.parameters, expectedContentHash: 'sha256:invented' } }, state).toolCall.parameters
           .expectedContentHash,
-      ).toBe('sha256:own')
-      expect(applyVersionedReadEvidence({ ...edit, parameters: { ...edit.parameters, filePath: 'Other.tsx' } }, state).consumed).toBe(false)
+      ).toBe(contentVersion('export const value = 1\n'))
+      const unseen = applyVersionedReadEvidence(
+        { ...edit, parameters: { ...edit.parameters, filePath: 'Other.tsx', expectedContentHash: 'sha256:invented' } },
+        state,
+      )
+      expect(unseen.consumed).toBe(false)
+      expect(unseen.toolCall.parameters).not.toHaveProperty('expectedContentHash')
 
       fs.writeFileSync(filePath, 'export const userValue = 3\n')
       const result = new FileSystemRepository().writeFileVersioned(
@@ -412,5 +418,40 @@ describe('plan follows a write under another script extension', () => {
     } finally {
       fs.rmSync(workspace, { recursive: true, force: true })
     }
+  })
+})
+
+describe('partial views never authorize a whole-file overwrite', () => {
+  it('lets a targeted replace use a ranged read, but not write_file', () => {
+    const state = { progress: new AgentProgressPolicy(), versionEvidence: {} } as unknown as ResponseInterpreterState
+    const version = 'sha256:' + 'a'.repeat(64)
+    updateVersionConflictRecovery({
+      state,
+      parsedTool: { tool: 'read_file', parameters: { filePath: 'src/big.ts', startLine: 1, endLine: 40 } },
+      toolRes: {
+        outcome: 'success',
+        outputForHistory: `[UNTRUSTED FILE CONTENT: src/big.ts (Lines 1-40 of 900)]\n[FILE VERSION: ${version}]\n...`,
+        logMessage: 'read',
+      },
+    })
+
+    const replace = applyVersionedReadEvidence(
+      { tool: 'replace_file_content', parameters: { filePath: 'src/big.ts', targetContent: 'a', replacementContent: 'b' } },
+      state,
+    )
+    expect(replace.toolCall.parameters.expectedContentHash).toBe(version)
+    const overwrite = applyVersionedReadEvidence({ tool: 'write_file', parameters: { filePath: 'src/big.ts', content: 'only what I saw' } }, state)
+    expect(overwrite.toolCall.parameters).not.toHaveProperty('expectedContentHash')
+  })
+
+  it('treats a full read that the transcript had to cut as partial too', () => {
+    const state = { progress: new AgentProgressPolicy(), versionEvidence: {} } as unknown as ResponseInterpreterState
+    const version = 'sha256:' + 'b'.repeat(64)
+    updateVersionConflictRecovery({
+      state,
+      parsedTool: { tool: 'read_file', parameters: { filePath: 'src/huge.ts' } },
+      toolRes: { outcome: 'success', outputForHistory: `[FILE VERSION: ${version}]\n${'x'.repeat(9000)}`, logMessage: 'read' },
+    })
+    expect(applyVersionedReadEvidence({ tool: 'write_file', parameters: { filePath: 'src/huge.ts', content: 'x' } }, state).consumed).toBe(false)
   })
 })

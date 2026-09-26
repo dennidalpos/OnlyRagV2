@@ -43,3 +43,21 @@ describe('fuzzyPatchEngine', () => {
     expect(res.syntaxError).toContain('JSON Syntax Error')
   })
 })
+
+describe('JSON with comments', () => {
+  it('accepts comments and trailing commas where the owning tool reads JSONC', () => {
+    const tsconfig = '{\n  // Vite template\n  "compilerOptions": { "strict": true, },\n}\n'
+    expect(validateAST('tsconfig.json', tsconfig).isValid).toBe(true)
+    expect(validateAST('tsconfig.app.json', tsconfig).isValid).toBe(true)
+    expect(validateAST('.vscode/settings.json', tsconfig).isValid).toBe(true)
+  })
+
+  it('keeps package.json strict, since npm parses it as plain JSON, but tolerates a BOM', () => {
+    expect(validateAST('package.json', '{ // comment\n "name": "x" }').isValid).toBe(false)
+    expect(validateAST('package.json', '\uFEFF{ "name": "x" }').isValid).toBe(true)
+  })
+
+  it('still reports a real syntax error in a JSONC file', () => {
+    expect(validateAST('tsconfig.json', '{ "compilerOptions": { "strict": true }').isValid).toBe(false)
+  })
+})

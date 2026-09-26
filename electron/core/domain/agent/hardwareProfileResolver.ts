@@ -1,27 +1,17 @@
-import os from 'node:os'
 import { APPROX_CHARS_PER_TOKEN } from '../../../../shared/domain/agent/charsPerToken'
-import { resolveMaxContextTokens, type DeclaredHardwareProfile } from '../../../../shared/domain/hardware/hardwareProfileTiers'
+import { resolveEffectiveTier, resolveMaxContextTokens, type DeclaredHardwareProfile } from '../../../../shared/domain/hardware/hardwareProfileTiers'
+import type { OllamaSamplingOverrides } from '../../../../shared/types'
 
-export interface OllamaRuntimeOptions {
+/**
+ * Per-session Ollama options. Sampling and thread keys come only from the user's per-model
+ * overrides: unset, Ollama applies the model's Modelfile defaults (and picks physical cores).
+ */
+export interface OllamaRuntimeOptions extends OllamaSamplingOverrides {
   num_ctx: number
-  temperature: number
-  top_p: number
-  repeat_penalty: number
-  num_thread?: number
   /** Hard cap on generated tokens per turn. */
   num_predict: number
-  /** Stop sequences. */
-  stop: string[]
   maxContextChars: number
 }
-
-/** Shared across all hardware tiers — see OllamaRuntimeOptions.stop. */
-export const AGENT_STOP_SEQUENCES: string[] = [
-  '\n### COMPLETE EXECUTION TRAJECTORY',
-  '\n### RECENT DETAILED TOOL OUTPUTS',
-  '\n#### [Step ',
-  '\nCURRENT TURN STATUS:',
-]
 
 export interface HardwareEnvironment {
   hasGpu?: boolean
@@ -47,21 +37,19 @@ export class HardwareProfileResolver {
   }
   /** Resolves optimal Ollama runtime options from user settings and hardware diagnostics. */
   static resolveOllamaOptions(profile: DeclaredHardwareProfile = 'Auto', env?: HardwareEnvironment): OllamaRuntimeOptions {
-    const cpuCores = env?.cpuCount || os.cpus()?.length || 4
-    const safeCpuThreads = Math.max(1, cpuCores - 1)
-
     // Sizing and RAM-aware scaling is delegated to resolveMaxContextTokens in hardwareProfileTiers.ts
-    // (single source of truth across Electron domain, Recommendation Engine, and React UI).
-    const numCtx = resolveMaxContextTokens(profile, env)
+    // (single source of truth across Electron domain, Recommendation Engine, and React UI), then
+    // raised for the agent alone: Ollama recommends at least 64k tokens for agents and coding tools
+    // (docs.ollama.com/context-length), and a 32 GB host holds a 4-bit ~30B model plus a 64k KV cache.
+    const sharedCtx = resolveMaxContextTokens(profile, env)
+    const ramGB = env?.systemRamGB ?? 0
+    // Installed memory reads slightly under its nominal size (a 32 GB host reports 31.9 GB).
+    const agentCtx = ramGB >= 30 ? (resolveEffectiveTier(profile, env) === 'legacy' ? 32768 : 65536) : sharedCtx
+    const numCtx = Math.max(sharedCtx, agentCtx)
 
     return {
       num_ctx: numCtx,
-      temperature: 0.1,
-      top_p: 0.9,
-      repeat_penalty: 1.1,
-      num_thread: safeCpuThreads,
       num_predict: HardwareProfileResolver.deriveNumPredict(numCtx),
-      stop: [...AGENT_STOP_SEQUENCES],
       maxContextChars: HardwareProfileResolver.deriveMaxContextChars(numCtx),
     }
   }

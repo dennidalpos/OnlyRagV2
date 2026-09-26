@@ -1,7 +1,7 @@
 import type { AgentGuardId } from '../../../../shared/types'
 import type { AgentLocalizedText } from '../../../../shared/domain/agent/agentMainText'
 import type { RepeatOutcomeKind } from './loopDetector'
-import { recordRecoveryFailure, type RecoveryDecision, type RecoveryFailureState } from './recoveryBudget'
+import { EXECUTION_RECOVERY_LIMITS, recordRecoveryFailure, type RecoveryDecision, type RecoveryFailureState } from './recoveryBudget'
 
 /** Non-progress thresholds bounding stalls and loops for an agent run. */
 export const PROGRESS_BUDGET = {
@@ -143,7 +143,7 @@ export class AgentProgressPolicy {
 
   /** A tool execution that failed and is eligible for the execution budget (one correction, then stop). */
   onExecutionFailure(signature: string): RecoveryDecision {
-    const decision = recordRecoveryFailure(this.executionFailure, signature)
+    const decision = recordRecoveryFailure(this.executionFailure, signature, EXECUTION_RECOVERY_LIMITS)
     this.executionFailure = decision.state
     return decision
   }

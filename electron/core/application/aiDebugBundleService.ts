@@ -7,7 +7,7 @@ import { DEV_TOOL_ALLOWLIST, extractVersion } from '../domain/agent/devToolchain
 import stripAnsi from 'strip-ansi'
 import type { AppSettings } from '../../../shared/types'
 import { redactSecrets } from '../../logRedactor'
-import { MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
+import { EXECUTION_RECOVERY_LIMITS, MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
 import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/agent/codingAgentDebugPolicy'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
@@ -142,7 +142,7 @@ export class AiDebugBundleService {
     const recovery = sessionState?.recoveryFailures
     const recoverySummary = [
       `- **Schema:** ${recovery?.schema?.totalFailures || 0}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}`,
-      `- **Execution:** ${recovery?.execution?.totalFailures || 0}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}`,
+      `- **Execution:** ${recovery?.execution?.totalFailures || 0}/${EXECUTION_RECOVERY_LIMITS.total}`,
       `- **Verification:** ${recovery?.verificationFixCycles || 0}/${MAX_VERIFICATION_FIX_CYCLES}`,
     ].join('\n')
     const verificationSummary = lastVerification

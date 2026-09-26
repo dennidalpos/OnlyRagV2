@@ -32,13 +32,13 @@ export interface ToolGateContext {
   allowedToolsForTurn?: readonly SupportedToolName[]
   requiredReadPath?: string
   runOwnedPaths?: readonly string[]
-  isIsolatedWorkspace?: boolean
 }
 
 export type ToolGateResult =
   | {
       outcome: 'denied'
-      feedback?: string
+      /** Why the call was refused, sent back to the model as the tool result. */
+      feedback: string
       /** Set when the application's turn policy (not the user) refused the call: it spends a step without progress. */
       policyDenial?: 'turn_policy'
     }
@@ -66,16 +66,17 @@ const MUTATING_TOOLS_REQUIRING_GUIDED_APPROVAL = [
 ]
 
 /** Always-Confirm Gate: git_commit rewrites shared git history, a harder-to-reverse action than an in-workspace file edit, so it ALWAYS requires explicit user approval regardless of agent mode (unlike write_file/delete_file, which execute autonomously in AGENT mo */
-async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | null> {
+async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | { denied: string }> {
   const { parsedTool, episodicCompactor, emitLog, requestApproval, stepCount } = ctx
   let preview
   try {
     preview = agentToolExecutorService.previewGitCommit(ctx.workspacePath || process.cwd(), ctx.runOwnedPaths)
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
-    episodicCompactor.recordStep({ step: stepCount, tool: 'git_commit', status: 'BLOCKED', summary: message }, message)
+    const feedback = `[GIT COMMIT NOT POSSIBLE] ${message}`
+    episodicCompactor.recordStep({ step: stepCount, tool: 'git_commit', status: 'BLOCKED', summary: message }, feedback)
     emitLocalizedLog(emitLog, 'info', { key: 'gitCommitBlocked', params: { error: message } })
-    return null
+    return { denied: feedback }
   }
   const commitParameters = {
     ...parsedTool.parameters,
@@ -90,10 +91,11 @@ async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | null
     parameters: commitParameters,
   })
   if (!approval.approved) {
-    const feedback = `[USER DENIED] L'utente ha rifiutato il git_commit proposto. Non ripetere questo esatto commit; proponi un'alternativa o chiedi chiarimenti.`
+    const feedback =
+      '[USER DENIED] The user declined this git_commit. Do not propose the same commit again; continue without committing or ask the user what they want instead.'
     episodicCompactor.recordStep({ step: stepCount, tool: 'git_commit', status: 'BLOCKED', summary: 'User denied git_commit approval' }, feedback)
     emitLocalizedLog(emitLog, 'info', { key: 'gitCommitDenied' })
-    return null
+    return { denied: feedback }
   }
   return { ...parsedTool, parameters: commitParameters }
 }
@@ -120,16 +122,16 @@ type ContextualConsent = {
 }
 
 /** Collects every approval reason for one action and asks exactly once. */
-async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualConsent | 'denied' | undefined> {
+async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualConsent | { denied: string } | undefined> {
   let toolCall = ctx.parsedTool
   let commandApprovalGranted = false
   if (toolCall.tool === 'run_command') {
     const security = checkCommandSecurity(String(toolCall.parameters.command || ''), ctx.workspacePath)
     if (!security.isAllowed) {
-      const feedback = `[COMMAND SAFETY DENIED] ${security.blockedReason || 'Command rejected.'}`
+      const feedback = `[COMMAND SAFETY DENIED] ${security.blockedReason || 'Command rejected.'} The command was not run. Rewrite it as a simpler command, or use the dedicated file tools instead of the shell.`
       ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'run_command', status: 'BLOCKED', summary: feedback }, feedback)
       emitLocalizedLog(ctx.emitLog, 'info', { key: 'commandBlocked', params: { reason: security.blockedReason || { key: 'commandUnsafe' } } })
-      return 'denied'
+      return { denied: feedback }
     }
     commandApprovalGranted = Boolean(security.requiresApproval)
     toolCall = { ...toolCall, parameters: { ...toolCall.parameters, command: security.sanitizedCommand } }
@@ -165,10 +167,10 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
     ].filter((reason): reason is AgentApprovalReason => Boolean(reason)),
   })
   if (!approval.approved) {
-    const feedback = `[USER DENIED] L'utente ha rifiutato l'azione proposta (${toolCall.tool} su "${target}").`
+    const feedback = `[USER DENIED] The user declined ${toolCall.tool} on "${target}". It was not executed. Do not retry the same call; continue another way, or use "ask" if the task cannot proceed without it.`
     ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: toolCall.tool, status: 'BLOCKED', summary: 'User denied contextual approval' }, feedback)
     emitLocalizedLog(ctx.emitLog, 'info', { key: 'actionDenied', params: { tool: toolCall.tool } })
-    return 'denied'
+    return { denied: feedback }
   }
   return {
     toolCallForExecution: agentToolExecutorService.reconcileHunkApproval(toolCall, approval.approvedHunkIndices, ctx.workspacePath),
@@ -177,7 +179,7 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
   }
 }
 
-function denyFsm(ctx: ToolGateContext) {
+function denyFsm(ctx: ToolGateContext): string {
   const { parsedTool, fsmMode, episodicCompactor, emitLog, stepCount } = ctx
   const allowedToolsList = fsmMode.filterAllowedTools([parsedTool.tool]).join(', ') || 'read-only tools only'
   const feedback = `[FSM PERMISSION DENIED] Tool "${parsedTool.tool}" is not permitted in ${fsmMode.getMode()} mode. Allowed tools: ${allowedToolsList}. Switch to GUIDED or AUTO mode to execute mutating operations.`
@@ -186,6 +188,7 @@ function denyFsm(ctx: ToolGateContext) {
     feedback,
   )
   emitLocalizedLog(emitLog, 'info', { key: 'modeToolBlocked', params: { mode: fsmMode.getMode(), tool: parsedTool.tool } })
+  return feedback
 }
 
 /** Applies phase constraints, strict Ask read-only permissions, contextual consent, and the always-on git_commit gate. */
@@ -230,26 +233,15 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
   // Ask is a hard read-only boundary. Network or command consent must never turn a
   // disallowed mutating tool into an executable one.
   if (ctx.agentMode === 'ask' && !ctx.fsmMode.isToolAllowed(ctx.parsedTool.tool)) {
-    denyFsm(ctx)
-    return { outcome: 'denied' }
+    return { outcome: 'denied', feedback: denyFsm(ctx) }
   }
 
   let approvalGranted = false
   let toolCallForExecution: AgentToolCall = ctx.parsedTool
   let policyConsent: { requested: boolean; granted: boolean; consentId: string } | undefined
   let commandApprovalGranted = false
-  if (ctx.isIsolatedWorkspace && ctx.parsedTool.tool === 'git_commit') {
-    const feedback =
-      '[ISOLATED WORKSPACE] Git commits are disabled during an isolated run. Publish the reviewed workspace changes first, then commit them from the user workspace.'
-    ctx.episodicCompactor.recordStep(
-      { step: ctx.stepCount, tool: 'git_commit', status: 'BLOCKED', summary: 'Git commit deferred until workspace publication' },
-      feedback,
-    )
-    emitLocalizedLog(ctx.emitLog, 'info', { key: 'gitCommitDeferred' })
-    return { outcome: 'denied' }
-  }
   const contextualConsent = await gateContextualConsent(ctx)
-  if (contextualConsent === 'denied') return { outcome: 'denied' }
+  if (contextualConsent && 'denied' in contextualConsent) return { outcome: 'denied', feedback: contextualConsent.denied }
   if (contextualConsent) {
     approvalGranted = true
     toolCallForExecution = contextualConsent.toolCallForExecution
@@ -259,14 +251,13 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
 
   if (ctx.parsedTool.tool === 'git_commit') {
     const approvedCommit = await gateGitCommit(ctx)
-    if (!approvedCommit) return { outcome: 'denied' }
+    if ('denied' in approvedCommit) return { outcome: 'denied', feedback: approvedCommit.denied }
     toolCallForExecution = approvedCommit
     approvalGranted = true
   }
 
   if (!approvalGranted && !ctx.fsmMode.isToolAllowed(ctx.parsedTool.tool)) {
-    denyFsm(ctx)
-    return { outcome: 'denied' }
+    return { outcome: 'denied', feedback: denyFsm(ctx) }
   }
 
   return { outcome: 'allowed', toolCallForExecution, policyConsent, commandApprovalGranted }

@@ -70,8 +70,9 @@ export function partialDeliveryDirective(milestoneId: string, writtenPath: strin
 }
 
 /**
- * Directive emitted when a write re-delivers an already complete milestone.
- * Directs model to the active milestone waiting for deliverables rather than rewriting completed files.
+ * Note appended when a write touches a file of a milestone whose deliverables were already present.
+ * Editing a delivered file is ordinary work (a build fix, a version bump the registry check asked
+ * for), so this only states the plan facts; it never orders the model to stop editing.
  */
 export function redeliveredMilestoneDirective(
   milestoneId: string,
@@ -79,23 +80,11 @@ export function redeliveredMilestoneDirective(
   nextNeed: { milestoneId: string; missingPaths: readonly string[] } | null,
 ): string {
   const lines = [
-    `[MILESTONE ${milestoneId} WAS ALREADY COMPLETE — THIS REWRITE CHANGED NOTHING IN THE PLAN]`,
-    `"${rewrittenPath}" was already on disk with real content before this write, and every file milestone ${milestoneId} names was already present. Rewriting it cannot advance the plan, and it cannot make ${milestoneId} verified either — only a passing verification can do that.`,
-    `Directives:`,
+    `[PLAN NOTE] "${rewrittenPath}" belongs to milestone ${milestoneId}, whose files were already on disk; the write was applied. Only a passing verification marks a milestone verified.`,
   ]
-
   if (nextNeed) {
     const list = nextNeed.missingPaths.map((p) => `"${p}"`).join(', ')
-    lines.push(
-      `1. Stop editing "${rewrittenPath}". Write ${list} next: ${nextNeed.milestoneId} is the active milestone and ${nextNeed.missingPaths.length === 1 ? 'that file does' : 'those files do'} not exist yet.`,
-      `2. Do not rewrite a file that is already correct in order to look busy. If you believe "${rewrittenPath}" is genuinely wrong, say what is wrong with it in your explanation before changing it.`,
-    )
-  } else {
-    lines.push(
-      `1. Stop editing "${rewrittenPath}". Move to the next milestone in the checklist that is not yet verified.`,
-      `2. Do not rewrite a file that is already correct in order to look busy.`,
-    )
+    lines.push(`The active milestone ${nextNeed.milestoneId} still needs ${list}, which ${nextNeed.missingPaths.length === 1 ? 'does' : 'do'} not exist yet.`)
   }
-
   return lines.join('\n')
 }

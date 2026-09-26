@@ -78,11 +78,13 @@ jobs:
           $ErrorActionPreference = 'Stop'
           # Failing tests become annotations (github-actions reporter); on any failure the output tail is
           # annotated too (e.g. a coverage threshold), so the cause is readable without job-log access.
+          $env:NO_COLOR = '1'
           $coverageLog = Join-Path $env:RUNNER_TEMP 'coverage-output.log'
           npm run test:coverage -- --reporter=github-actions 2>&1 | Tee-Object -FilePath $coverageLog
           $exitCode = $LASTEXITCODE
           if ($exitCode -ne 0) {
-            $tail = (Get-Content -LiteralPath $coverageLog -Tail 40) -join '%0A'
+            $lines = Get-Content -LiteralPath $coverageLog | Where-Object { $_ -notmatch '^[\s\p{P}x*]*$' }
+            $tail = ($lines | Select-Object -Last 40) -join '%0A'
             Write-Output "::error title=Coverage gate::$tail"
             throw "Coverage gate failed with exit code $exitCode."
           }

@@ -39,7 +39,8 @@ describe('PersistentPowerShellSession Unit Tests', () => {
   })
 
   itWithPowerShell('reports the directory a cd left the shell in', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-shell-cwd-'))
+    // Long form: PowerShell reports the long path, while a runner's TEMP may be an 8.3 short name (RUNNER~1).
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-shell-cwd-')))
     fs.mkdirSync(path.join(root, 'src'))
     try {
       // Started outside root: the shell process keeps its start directory until it exits, and

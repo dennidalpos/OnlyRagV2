@@ -14,17 +14,6 @@ export function toIsoTimestamp(value: unknown, fallback: string): string {
   return fallback
 }
 
-/**
- * Titles earlier versions persisted for a session nobody named, in whichever language was active.
- * They read as untitled, so the renderer can show its own localized default.
- */
-const LEGACY_UNTITLED_TITLES = new Set(['Nuova Sessione', 'New Session'])
-
-export function isUntitledSessionTitle(title: string): boolean {
-  const clean = title.trim()
-  return !clean || LEGACY_UNTITLED_TITLES.has(clean) || clean.startsWith('Session ')
-}
-
 /** Session title derived from the first executed prompt, truncated for the sidebar; empty when there is nothing to derive it from. */
 export function deriveSessionTitle(prompt: string): string {
   const clean = prompt.replace(/\s+/g, ' ').trim()
@@ -203,7 +192,7 @@ export function normalizeSession(value: unknown): CodingSession | null {
     : []
 
   const title = typeof raw.title === 'string' ? raw.title : ''
-  const hasCustomTitle = !isUntitledSessionTitle(title)
+  const hasCustomTitle = title.trim() !== ''
 
   return {
     id: sessionId,

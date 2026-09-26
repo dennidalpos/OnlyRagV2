@@ -28,6 +28,15 @@ I guardrail garantiscono la sicurezza dell'ambiente locale, la coerenza delle mo
 - Una chiusura da guard di stop (`request.guard`) imposta sempre lo stato `blocked`: il task interrotto non viene mai contrassegnato come verificato o proposto per la pubblicazione.
 - Le verifiche di progetto tracciano il comando canonico (`canonicalCommand`): `npm test`, `npm t` e `npm run test` sono considerati equivalenti.
 
+## Consigli e ordini
+
+Un turno porta al massimo un ordine, quello di [`planDirectiveArbiter.ts`](../electron/core/domain/agent/planDirectiveArbiter.ts) nel contesto del turno. Le diagnostiche restituiscono un `DiagnosticAdvice` ([`diagnosticAdvice.ts`](../electron/core/domain/agent/diagnosticAdvice.ts)): intestazione, fatti osservati, prossima chiamata suggerita e vincoli successivi.
+
+- Nel risultato del tool il consiglio è reso da `renderAdvice` sotto l'etichetta "Suggested fix (advice; ...)", senza la formulazione riservata agli ordini (`ORDER_MARKER`: `Directives:` o `MUST`).
+- Solo l'arbitro lo rende come ordine con `renderOrder`, direttamente o dentro la direttiva di verifica fallita (`buildVerificationFailingDirective` in `verificationAttemptTracker.ts`, chiamata solo dall'arbitro); `parseRenderedAdvice` ricostruisce il consiglio dal testo salvato nella trascrizione.
+- Restituiscono già consigli: diagnostica compilatore e build, fallimenti dei test, realtà delle versioni e manifest in sospeso, risoluzione moduli, `ETARGET` e conflitti di risoluzione npm, downgrade di installazione, scritture ridondanti e i testi di dipendenza mancante e auto-healing di `processToolService.ts`.
+- Contengono ancora ordini nel risultato del tool (migrazione aperta in `PROJECT_STATUS.json`, AGENT-DIRECTIVE-AUTHORITY-03): interventi di `loopDetector`, gate di integrità dipendenze e dichiarazioni di import, promozione e verifica milestone, `verificationGatePolicy`, `transactionalExecutionGuard`, rifiuto directory di `write_file`, blocchi dev server e tool-as-shell di `processToolService`, avvisi del circuit breaker, guard di finish e loop e strumenti di ricerca web.
+
 ## Compare-and-swap e integrità file
 
 - Le mutazioni su file esistenti richiedono la versione letta in precedenza (`fileVersionEvidence.ts`, massimo 64 hash per sessione).

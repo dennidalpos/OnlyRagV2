@@ -15,10 +15,10 @@ Application e Domain non importano `electron` né `node:fs`: usano le porte in [
 
 [`electron/main.ts`](../electron/main.ts):
 
-1. imposta il nome app e protegge la singola istanza;
+1. importa per primo [`appIdentity.ts`](../electron/appIdentity.ts), che fissa il nome app (`onlyrag-v2`) e, con `ONLYRAG_E2E_TEST=1` e `ONLYRAG_E2E_USER_DATA`, una `userData` isolata prima che il logger apra `logs/app.log`; poi protegge la singola istanza;
 2. crea una `BrowserWindow` con `nodeIntegration: false`, `contextIsolation: true` e `sandbox: true`;
 3. registra gli handler IPC;
-4. avvia il Sidecar fuori dalla modalità smoke;
+4. avvia il Sidecar, tranne nelle run E2E; in modalità smoke (`--smoke-test`) registra `[SMOKE_TEST_PASS]` ed esce prima di creare la finestra;
 5. su `before-quit` annulla task, pulisce residui e arresta il Sidecar.
 
 `TaskRunner` distingue i documenti sorgente dai residui temporanei registrati: annullamento, quit e crash preservano sempre i sorgenti e possono eliminare solo `temporaryResiduePath`.

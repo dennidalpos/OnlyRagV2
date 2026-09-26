@@ -1,18 +1,10 @@
+// Must stay the first import: it fixes the app name and userData before any module reads them.
+import { isElectronE2ETest } from './appIdentity'
 import { app, BrowserWindow } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { isAllowedAppNavigation, isAllowedExternalUrl } from './navigationPolicy'
-
-// Ensure canonical app name across dev and packaged runs to align userData (%APPDATA%/onlyrag-v2)
-app.name = 'onlyrag-v2'
-
-const isElectronE2ETest = process.env.ONLYRAG_E2E_TEST === '1'
-const e2eUserDataPath = process.env.ONLYRAG_E2E_USER_DATA?.trim()
-if (isElectronE2ETest && e2eUserDataPath) {
-  app.setPath('userData', path.resolve(e2eUserDataPath))
-  app.setPath('appData', path.dirname(path.resolve(e2eUserDataPath)))
-}
 
 const isSingleInstance = app.requestSingleInstanceLock()
 if (!isSingleInstance && !process.env.ONLYRAG_SMOKE_TEST && !process.argv.includes('--smoke-test')) {
@@ -46,8 +38,6 @@ import { registerSettingsIpcHandlers } from './core/presentation/settingsIpc'
 import { registerArtifactIpcHandlers } from './core/presentation/artifactIpc'
 import { setTrustedIpcWindowProvider } from './core/presentation/secureIpcMain'
 import { systemAppService } from './core/application/systemAppService'
-
-logger.rebindToUserData(app.getPath('userData'))
 
 process.env.DIST = path.join(__dirname, '../dist')
 process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(__dirname, '../public')

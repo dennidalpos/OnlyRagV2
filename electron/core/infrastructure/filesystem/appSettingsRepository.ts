@@ -1,6 +1,5 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { app } from 'electron'
 import { userDataRoot } from './userDataRoot'
 import { logger } from '../logging/logger'
 import type { AppSettings } from '../../../../shared/types'
@@ -52,41 +51,16 @@ export class AppSettingsRepository {
    */
   public async loadSettingsOrThrow(): Promise<AppSettings | null> {
     const filePath = this.getStateFilePath()
-    let targetPath = filePath
-
-    if (!fs.existsSync(targetPath)) {
-      // Cross-folder fallback: check if settings exist under alternate AppData folder (OnlyRag V2 <-> onlyrag-v2)
-      try {
-        const appDataDir = app && typeof app.getPath === 'function' ? app.getPath('appData') : undefined
-        if (appDataDir) {
-          const alternateNames = ['OnlyRag V2', 'onlyrag-v2']
-          for (const alt of alternateNames) {
-            const candidate = path.join(appDataDir, alt, SETTINGS_FILE_NAME)
-            if (candidate !== targetPath && fs.existsSync(candidate)) {
-              logger.log('INFO', 'AppSettingsRepo', `Migrating existing settings from fallback location: ${candidate} -> ${targetPath}`)
-              targetPath = candidate
-              break
-            }
-          }
-        }
-      } catch {}
-    }
-
-    if (!fs.existsSync(targetPath)) {
+    if (!fs.existsSync(filePath)) {
       return null
     }
 
     try {
-      const raw = await fs.promises.readFile(targetPath, 'utf-8')
-      const parsed = JSON.parse(raw)
-      const settings = decodeSettingsFile(parsed)
-      if (targetPath !== filePath) {
-        await this.saveSettings(settings)
-      }
-      return settings
+      const raw = await fs.promises.readFile(filePath, 'utf-8')
+      return decodeSettingsFile(JSON.parse(raw))
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
-      logger.log('WARN', 'AppSettingsRepo', `Failed reading settings from ${targetPath}: ${message}`)
+      logger.log('WARN', 'AppSettingsRepo', `Failed reading settings from ${filePath}: ${message}`)
       throw new Error(`Settings file is unreadable: ${message}`)
     }
   }

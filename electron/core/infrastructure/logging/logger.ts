@@ -26,17 +26,6 @@ class SystemDiagnosticsLogger {
     return this.logFilePath
   }
 
-  /** Rebind after main.ts has applied the canonical app name or an isolated E2E userData path. */
-  public rebindToUserData(baseDir: string): void {
-    const nextLogDir = path.join(baseDir, 'logs')
-    fs.mkdirSync(nextLogDir, { recursive: true })
-    const nextLogFilePath = path.join(nextLogDir, 'app.log')
-    if (nextLogFilePath === this.logFilePath) return
-    this.logFilePath = nextLogFilePath
-    this.rotateLogsIfNeeded()
-    this.log('INFO', 'Logger', `System Diagnostics Logger rebound to canonical userData. Log path: ${this.logFilePath}`)
-  }
-
   private rotateLogsIfNeeded(): void {
     try {
       if (!fs.existsSync(this.logFilePath)) return

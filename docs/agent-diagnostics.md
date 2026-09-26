@@ -24,13 +24,13 @@ Prima di persistere una modifica, il codice viene analizzato con il parser AST d
 
 ## Diagnostica compilatore e build
 
-[`compilerDiagnosticDirective.ts`](../electron/core/domain/agent/compilerDiagnosticDirective.ts) intercetta errori di compilazione e build senza codice TypeScript standard:
+[`compilerDiagnosticDirective.ts`](../electron/core/domain/agent/compilerDiagnosticDirective.ts) intercetta errori di compilazione e build senza codice TypeScript standard. Ogni correzione torna al modello come consiglio nel risultato del tool; solo l'arbitro del piano la ripete come ordine del turno ([agent-guards.md](agent-guards.md#consigli-e-ordini)):
 
 - **CSS & PostCSS**: `@import` CSS non risolti vengono sostituiti con il nome del pacchetto o rimossi; gli errori di sintassi PostCSS vengono segnalati direttamente.
 - **`@import` che carica JavaScript**: se PostCSS segue un `@import` dentro il file JS di un pacchetto (`node_modules/tailwindcss/lib/index.js: Unknown word`), la direttiva indica la riga di import e non il foglio di stile; con Tailwind 3 sostituisce `@import "tailwindcss";` (sintassi Tailwind 4) con `@tailwind base; @tailwind components; @tailwind utilities;`.
 - **Risoluzione moduli Vite**: import relativi non trovati vengono instradati per la creazione o rimossi se opzionali.
 - **File vicini già presenti**: prima di creare un modulo mancante, la diagnostica cerca anche nelle cartelle `components/` e `pages/` dell'importatore e corregge lo specifier quando trova il file.
-- **Export mancanti del bundler**: `"x" is not exported by "a.jsx"` di Rollup e `[MISSING_EXPORT]` di Rolldown (Vite 8, con l'importatore solo nel code frame) ordinano di scrivere il modulo esportatore aggiungendo l'export mancante; per `default` indicano il componente già esportato con nome (`export default App`).
+- **Export mancanti del bundler**: `"x" is not exported by "a.jsx"` di Rollup e `[MISSING_EXPORT]` di Rolldown (Vite 8, con l'importatore solo nel code frame) suggeriscono di scrivere il modulo esportatore aggiungendo l'export mancante; per `default` indicano il componente già esportato con nome (`export default App`).
 - **Script npm mancanti**: riscrive gli script che invocano binari non installati o ne richiede l'installazione mirata.
 
 ## Gestione dipendenze e package.json

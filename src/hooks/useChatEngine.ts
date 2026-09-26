@@ -28,10 +28,9 @@ const createDefaultGreetingMessage = (): ChatMessage => ({
   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
 })
 
-/** Untitled conversations, including the Italian and English defaults earlier versions stored as titles. */
+/** An untitled conversation stores an empty title; the view shows the localized default for it. */
 export function isUntitledConversationTitle(title: string | undefined): boolean {
-  const clean = (title ?? '').trim()
-  return !clean || clean === 'Nuova Conversazione' || clean === 'New Chat'
+  return !(title ?? '').trim()
 }
 
 function loadInitialConversations(): ChatConversation[] {
@@ -40,7 +39,7 @@ function loadInitialConversations(): ChatConversation[] {
     if (raw) {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return (parsed as ChatConversation[]).map((conv) => (isUntitledConversationTitle(conv.title) ? { ...conv, title: '' } : conv))
+        return parsed as ChatConversation[]
       }
     }
   } catch (e) {

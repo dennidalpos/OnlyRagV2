@@ -10,7 +10,7 @@ function buildSession(id: string, workspacePath: string | null, overrides: Parti
   return {
     id,
     workspacePath,
-    title: 'Nuova Sessione',
+    title: '',
     createdAt: nowIso,
     updatedAt: nowIso,
     actionLogs: [],

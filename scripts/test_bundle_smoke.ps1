@@ -30,6 +30,8 @@ if (Test-Path Variable:\PSNativeCommandUseErrorActionPreference) {
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+$smokeUserData = Join-Path ([System.IO.Path]::GetTempPath()) ("onlyrag-smoke-" + [guid]::NewGuid().ToString("N"))
+
 try {
     $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
     Push-Location $rootDir
@@ -83,6 +85,9 @@ try {
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
     $psi.EnvironmentVariables["ONLYRAG_SMOKE_TEST"] = "1"
+    # Isolated userData: the run neither reads nor writes the developer's or the packaged app's data.
+    $psi.EnvironmentVariables["ONLYRAG_E2E_TEST"] = "1"
+    $psi.EnvironmentVariables["ONLYRAG_E2E_USER_DATA"] = $smokeUserData
     $psi.EnvironmentVariables["ELECTRON_ENABLE_LOGGING"] = "1"
 
     $proc = [System.Diagnostics.Process]::Start($psi)
@@ -102,23 +107,10 @@ try {
         throw "[FAIL] Electron main process terminato con exit code $($proc.ExitCode).`nStdout:`n$stdout`nStderr:`n$stderr"
     }
 
-    # 4. Verifica della presenza del marker di conferma in app.log
-    $appData = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::ApplicationData)
-    $appLog = Join-Path $appData "onlyrag-v2\logs\app.log"
-    $verifiedInLog = $false
-
-    if (Test-Path $appLog) {
-        $recentLines = Get-Content -Path $appLog -Tail 30
-        foreach ($line in $recentLines) {
-            if ($line -match "\[SMOKE_TEST_PASS\]") {
-                $verifiedInLog = $true
-                break
-            }
-        }
-    }
-
-    if (-not $verifiedInLog -and -not ($stdout -match "\[SMOKE_TEST_PASS\]")) {
-        throw "[FAIL] Processo uscito con code 0 ma nessun marcatore [SMOKE_TEST_PASS] rilevato nei log o in stdout."
+    # 4. Il marker deve trovarsi nell'app.log della userData isolata di questa esecuzione.
+    $appLog = Join-Path $smokeUserData "logs\app.log"
+    if (-not (Test-Path -LiteralPath $appLog) -or -not (Select-String -LiteralPath $appLog -Pattern "\[SMOKE_TEST_PASS\]" -Quiet)) {
+        throw "[FAIL] Processo uscito con code 0 ma nessun marcatore [SMOKE_TEST_PASS] in $appLog.`nStdout:`n$stdout"
     }
 
     if ($Fast -and -not $Full) {
@@ -136,4 +128,7 @@ try {
     exit 1
 } finally {
     Pop-Location
+    if (Test-Path -LiteralPath $smokeUserData) {
+        Remove-Item -LiteralPath $smokeUserData -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }

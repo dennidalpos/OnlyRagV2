@@ -10,6 +10,8 @@
 
 Setup: `npm run setup:dev`.
 
+Electron 43 non scarica il runtime durante `npm ci`: il setup e la CI eseguono `node node_modules/electron/install.js`, perché smoke test ed E2E avviano direttamente `node_modules/electron/dist/electron.exe`. La CI (`.github/workflows/ci.yml`, `windows-latest`) esegue `quality:static`, `scripts/lint_format.ps1 -Fast -SkipTests` (smoke del bundle incluso), `test:coverage` e `scripts/test_sidecar_health.ps1 -Fast` con una `.venv` creata da `sidecar/requirements-dev.txt`.
+
 ## Comandi principali
 
 | Scopo | Comando |
@@ -39,7 +41,7 @@ Target Vitest: `npx vitest run <path>`.
 - `setup_dev_environment.ps1`: Node, Python, virtualenv e dipendenze.
 - `audit_codebase.ps1`: typecheck, test, dead code e grafo.
 - `build_package.ps1`: Sidecar PyInstaller, bundle e installer NSIS.
-- `test_bundle_smoke.ps1`: avvio isolato del bundle e marker smoke.
+- `test_bundle_smoke.ps1`: avvio del bundle con una `userData` temporanea (rimossa a fine esecuzione) e marker smoke cercato nel suo `logs/app.log`.
 - `clean_repo.ps1` e `clean_workspace.ps1`: pulizie separate con target espliciti.
 
 I comandi distruttivi (`clean:full`) richiedono attenzione: possono rimuovere dati utente locali.

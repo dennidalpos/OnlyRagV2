@@ -17,9 +17,9 @@ describe('SessionHistoryDomain Unit Tests', () => {
     expect(deriveSessionTitle('   ')).toBe('')
   })
 
-  it('stores an untitled session as an empty title, whatever default an older version persisted', () => {
-    for (const legacy of ['Nuova Sessione', 'New Session', 'Session 3', '  ']) {
-      expect(normalizeSession({ id: 'untitled', title: legacy, actionLogs: [] })?.title).toBe('')
+  it('stores an untitled session as an empty title', () => {
+    for (const untitled of ['', '  ', undefined]) {
+      expect(normalizeSession({ id: 'untitled', title: untitled, actionLogs: [] })?.title).toBe('')
     }
     expect(normalizeSession({ id: 'named', title: 'Sprint 42', actionLogs: [] })?.title).toBe('Sprint 42')
   })
@@ -28,7 +28,7 @@ describe('SessionHistoryDomain Unit Tests', () => {
     const normalized = normalizeSession({
       id: 'session-legacy-1',
       workspacePath: 'D:/projects/demo',
-      title: 'Nuova Sessione',
+      title: '',
       createdAt: '14:32',
       updatedAt: '14:40',
       actionLogs: [

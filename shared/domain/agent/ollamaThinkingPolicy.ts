@@ -12,6 +12,8 @@ export interface OllamaThinkingResolution {
   levels: string[]
   /** The model's own `think` default from /api/show, when reported. */
   modelDefault?: OllamaThinkValue
+  /** The reasoning level the user picked, when thinking is enabled through a level rather than `true`. */
+  level?: string
 }
 
 type ThinkingSupport = Omit<OllamaThinkingResolution, 'enabled' | 'think'>
@@ -74,7 +76,7 @@ export function resolveOllamaThinkingPreference(
   const support = resolveOllamaThinkingMode(model, modelMetrics)
   const preference = acceptedPreference(support, settings.modelThinkingPreferences, model)
   const enabled = support.mode === 'binary' && preference !== undefined && preference !== false
-  return { ...support, enabled, think: enabled }
+  return { ...support, enabled, think: enabled, ...(enabled && typeof preference === 'string' ? { level: preference } : {}) }
 }
 
 /**
@@ -109,6 +111,9 @@ export function updateModelThinkingPreference(
  * reasoning off, and `think: false` left gpt-oss:20b with empty content under a schema (827 output
  * tokens, `done_reason=stop`, 2026-09-24): it gets its lowest level instead, which returns JSON.
  */
-export function resolveStructuredThinkValue(resolution: Pick<OllamaThinkingResolution, 'mode' | 'think' | 'levels'>): OllamaThinkValue {
-  return resolution.mode === 'level-only' ? (resolution.levels[0] ?? 'low') : resolution.think
+export function resolveStructuredThinkValue(resolution: Pick<OllamaThinkingResolution, 'mode' | 'think' | 'levels' | 'level'>): OllamaThinkValue {
+  if (resolution.mode === 'level-only') return resolution.levels[0] ?? 'low'
+  // A chosen level is sent as that level: `true` would run the model's default ("medium" for
+  // qwen3.8:27b), which timed out plan generation twice at about 2 tok/s on 2026-09-26.
+  return resolution.think && resolution.level ? resolution.level : resolution.think
 }

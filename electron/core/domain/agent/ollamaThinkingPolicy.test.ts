@@ -94,4 +94,12 @@ describe('thinking levels reported by /api/show', () => {
     expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('gpt-oss:20b', {}, reported))).toBe('low')
     expect(updateModelThinkingPreference({ 'qwen3.8:27b': 'low' }, 'qwen3.8:27b', undefined)).toEqual({})
   })
+
+  it('sends the chosen level to structured generation, not the model default', () => {
+    const settings = (value: string | boolean) => ({ modelThinkingPreferences: { 'qwen3.8:27b': value } })
+    expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('qwen3.8:27b', settings('low'), reported))).toBe('low')
+    expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('qwen3.8:27b', settings(true), reported))).toBe(true)
+    expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('qwen3.8:27b', settings(false), reported))).toBe(false)
+    expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('qwen3.8:27b', {}, reported))).toBe(false)
+  })
 })

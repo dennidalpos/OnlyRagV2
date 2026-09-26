@@ -52,7 +52,8 @@ describe('PersistentPowerShellSession Unit Tests', () => {
   })
 
   itWithPowerShell('reports the directory a cd left the shell in', async () => {
-    // Long form: PowerShell reports the long path, while a runner's TEMP may be an 8.3 short name (RUNNER~1).
+    // Compared resolved: a runner's TEMP may be an 8.3 short name (RUNNER~1), and the directory is
+    // reported in the spelling of the workspace, here os.tmpdir().
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-shell-cwd-')))
     fs.mkdirSync(path.join(root, 'src'))
     try {
@@ -60,10 +61,10 @@ describe('PersistentPowerShellSession Unit Tests', () => {
       // Windows refuses to delete a directory a live process stands in.
       session = new PersistentPowerShellSession(os.tmpdir())
       await session.execute(`Set-Location -LiteralPath '${root}'`)
-      expect(path.resolve(session.currentDirectory)).toBe(path.resolve(root))
+      expect(fs.realpathSync.native(session.currentDirectory)).toBe(root)
 
       await session.execute('Set-Location src')
-      expect(path.resolve(session.currentDirectory)).toBe(path.resolve(root, 'src'))
+      expect(fs.realpathSync.native(session.currentDirectory)).toBe(path.join(root, 'src'))
     } finally {
       session?.dispose()
       session = null

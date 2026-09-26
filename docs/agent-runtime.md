@@ -19,7 +19,7 @@ complexity check -> [interview -> plan] -> collect_context -> propose_action
 
 - Intervista e generazione piano usano `/api/chat` non-streaming con JSON Schema e `num_predict` calcolato sullo spazio libero residuo.
 - `AgentPlan` strutturato (`formatVersion: 2`) è l'unica sorgente eseguibile; la resa Markdown è solo una vista per l'utente.
-- Se il modello accetta solo livelli di reasoning (es. `gpt-oss:20b`), le richieste strutturate inviano il livello più basso riportato da `/api/show` (`resolveStructuredThinkValue` in [`ollamaThinkingPolicy.ts`](../shared/domain/agent/ollamaThinkingPolicy.ts)) per evitare payload vuoti con JSON Schema.
+- Se il modello accetta solo livelli di reasoning (es. `gpt-oss:20b`), le richieste strutturate inviano il livello più basso riportato da `/api/show` (`resolveStructuredThinkValue` in [`ollamaThinkingPolicy.ts`](../shared/domain/agent/ollamaThinkingPolicy.ts)) per evitare payload vuoti con JSON Schema. Per un modello commutabile inviano `false` senza preferenza e, se l'utente ha scelto un livello (es. `low` per `qwen3.8:27b`), quel livello e non `true`, che applicherebbe il default del modello. La richiesta strutturata ha un timeout fisso di 10 minuti (`ollamaHttpClient.generateStructuredNow`).
 - Risposte strutturate invalide registrano `done_reason`, token impiegati e diagnostica dei delimitatori di testo.
 
 ## Ciclo di esecuzione

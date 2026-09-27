@@ -19,7 +19,6 @@ import {
 } from '../domain/agent/milestoneVerificationPromotion'
 import { scanCommandTouchedFiles } from '../infrastructure/filesystem/commandTouchedFilesScanner'
 import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
-import { compileSessionStopSummary } from '../domain/agent/sessionDebtTracker'
 import { isBrowserRenderableTarget } from '../domain/agent/browserPreviewVerification'
 import { checkVerificationCommandSafety } from '../../../shared/domain/agent/verificationCommandSafety'
 import { resolvePlanDirective, userFirstCommandDecision } from '../domain/agent/planDirectiveArbiter'
@@ -50,7 +49,6 @@ import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorRunContext'
 import { emitLocalizedLog } from './agentOrchestratorTypes'
-import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 import { renderAdviceSteps } from '../domain/agent/diagnosticAdvice'
 
 /** Returns a `return` outcome once the progress policy's no-mutation budget is spent. */
@@ -61,23 +59,10 @@ export async function runCircuitBreaker(ctx: ToolResultProcessingContext, isMuta
   // The circuit breaker is forcing a pause/intervention due to stagnation/looping
   emitLocalizedLog(ctx.emitLog, 'info', { key: 'circuitBreakerTriggered', params: { reason: cbRes.reason } })
 
-  // What the USER gets.
-  const milestones = ctx.goalPlanner.getMilestones()
-  const userSummary = compileSessionStopSummary({
-    reason: formatAgentTextIt(cbRes.reason),
-    stepCount: ctx.stepCount,
-    completed: milestones.filter((m) => m.status === 'verified').map((m) => `${m.id}: ${m.title}`),
-    outstanding: milestones
-      .filter((m) => m.status !== 'verified' && !isCompletionMilestoneTitle(m))
-      .map((m) => `${m.id}: ${m.title}${m.status === 'failed' ? ' (fallita)' : ''}`),
-    modifiedFiles: Array.from(ctx.sessionChangedFiles.keys()),
-  })
-
   const closure = await ctx.closeApplicationRun({
     trigger: 'guard_stop',
     guard: cbRes.guard,
     reason: cbRes.reason,
-    modelSummary: userSummary,
   })
   return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
 }

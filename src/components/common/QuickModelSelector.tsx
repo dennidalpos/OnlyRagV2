@@ -3,7 +3,6 @@ import { ChevronDown, Check, Sparkles, Loader2 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
 import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
-import { buildOllamaModelOptions } from '../../services/ollamaModelOptions'
 
 export interface QuickModelSelectorProps {
   /** Currently active model name for this functional feature */
@@ -61,7 +60,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
     }
   }, [isOpen])
 
-  const allCandidateModels = buildOllamaModelOptions(installedModels, currentModel)
+  const allCandidateModels = [...new Set(installedModels)]
 
   return (
     <div className={`relative inline-block text-left ${className}`} ref={dropdownRef}>
@@ -113,10 +112,16 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
             </span>
           </div>
 
+          {currentModel && !isInstalled && (
+            <p className="px-3 py-2 text-[11px] text-amber-300 bg-amber-950/30" role="status">
+              {t('uiShell.modelNotInstalled')}: <span className="font-mono">{currentModel}</span>
+            </p>
+          )}
+
           {/* Model Options List */}
           <div className="max-h-60 overflow-y-auto py-1 space-y-0.5 custom-scrollbar">
+            {allCandidateModels.length === 0 && <p className="px-3 py-2 text-xs text-slate-400">{t('uiShell.noOllamaModels')}</p>}
             {allCandidateModels.map((modelName) => {
-              const installed = isOllamaModelInstalled(modelName, installedModels)
               const isSelected = modelName === currentModel
               const isOptionUpdating = downloadProgress.isDownloading && downloadProgress.modelName === modelName
 
@@ -160,13 +165,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
                         {downloadProgress.percent}%
                       </span>
                     ) : (
-                      <span
-                        className={`text-[10px] font-sans px-1.5 py-0.5 rounded ${
-                          installed ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/40' : 'bg-slate-900 text-slate-500 border border-slate-800'
-                        }`}
-                      >
-                        {installed ? '✓' : '⬇'}
-                      </span>
+                      <span className="text-[10px] font-sans px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/40">✓</span>
                     )}
                   </div>
                 </button>

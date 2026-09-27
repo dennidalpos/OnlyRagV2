@@ -38,6 +38,11 @@ export interface StreamSession {
 /** Default silence limit before a chat stream counts as stalled. */
 export const DEFAULT_STREAM_STALL_MS = 300000
 
+/** Ollama can withhold response headers while completing a native tool call. */
+export function initialResponseTimeoutMs(stallTimeoutMs?: number): number {
+  return Math.max(10 * 60 * 1000, stallTimeoutMs ?? DEFAULT_STREAM_STALL_MS)
+}
+
 export interface AgentChatToolCall {
   type: 'function'
   function: { index: number; name: string; arguments: Record<string, unknown> }
@@ -121,9 +126,10 @@ export class AgentStreamTransport {
         options: ollamaRequestOptions(runtimeOpts),
       })
 
+      const initialTimeoutMs = initialResponseTimeoutMs(session.stallTimeoutMs)
       let responseTimer: NodeJS.Timeout | null = setTimeout(() => {
-        req.destroy(new Error(`Ollama chat initial response timeout (10m): model '${targetModel}' loading stalled.`))
-      }, 600000)
+        req.destroy(new Error(`Ollama chat initial response timeout (${Math.round(initialTimeoutMs / 60000)}m): no response from model '${targetModel}'.`))
+      }, initialTimeoutMs)
 
       let tokenStallTimer: NodeJS.Timeout | null = null
       const requestStartedAt = Date.now()

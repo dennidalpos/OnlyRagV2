@@ -288,7 +288,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
       logger.log('WARN', 'AgentOrchestratorAppService', `Failed reading SESSION_TRACKER.md: ${errorMessage(err)}`)
     }
   }
-  const effectiveAttachedContext = policy.includeAttachedRag ? [debtTrackerBlock, ctx.attachedContext].filter(Boolean).join('\n\n') : ''
+  const effectiveAttachedContext = policy.includeAttachedRag ? ctx.attachedContext : ''
 
   // Skipped outright rather than assembled and discarded: generateCompactRepoMap walks the
   // workspace tree on every turn, so this is latency as well as context.
@@ -322,7 +322,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     settings: ctx.settings,
     runtimeOpts: selection.runtimeOpts,
   })
-  return { assembled, toolPolicy }
+  return { assembled, toolPolicy, debtTrackerBlock }
 }
 
 /** Keeps the selected per-model context stable; prompt size is handled by transcript trimming, not ctx resizing. */

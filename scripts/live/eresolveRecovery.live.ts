@@ -54,7 +54,7 @@ function installedVersion(pkg: string): string | null {
 
 describe('live: eresolve recovery', () => {
   it('resolves a peer-version conflict instead of asking or forcing', async () => {
-    const settings = loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 16 } as never)
+    const settings = loadRealSettings({ maxToolCallSteps: 16 })
     seedConflictingWorkspace()
 
     const result = await runAgentOrchestratorLoop(

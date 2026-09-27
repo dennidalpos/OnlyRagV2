@@ -3,8 +3,8 @@
 Il flusso operativo è coordinato da [`agentOrchestratorAppService.ts`](../electron/core/application/agentOrchestratorAppService.ts). Il modello propone azioni; Main autorizza, esegue, verifica e stabilisce la chiusura.
 
 ```text
-complexity check -> [interview -> plan] -> collect_context -> propose_action
-                                                     -> apply_action -> verify -> outcome
+Esegui -> collect_context -> propose_action -> apply_action -> verify -> outcome
+Pianifica -> [interview -> plan -> approval] -> run in selected mode
 ```
 
 ## Modalità operative
@@ -13,7 +13,8 @@ complexity check -> [interview -> plan] -> collect_context -> propose_action
 - **Guided** (default): richiede revisione e conferma per ogni mutazione (scrittura, rimozione, comandi shell).
 - **Auto**: autorizza l'esecuzione autonoma locale; i gate per commit, installazione pacchetti e accesso di rete restano sempre attivi.
 - Richieste colloquiali di creazione (es. "fammi un sito") attivano gli strumenti di scrittura solo dietro approvazione in Guided; richieste di sola consultazione restano read-only.
-- Task complessi entrano automaticamente nel flusso di pianificazione (`automaticPlanningPolicy.ts`). In Guided il piano attende revisione; in Auto viene avviato subito. Task brevi e mirati partono direttamente.
+- **Esegui** avvia sempre la run nella modalità selezionata. **Pianifica** è un'azione esplicita in Guided e Auto: apre l'eventuale intervista e il piano, poi richiede l'approvazione prima dell'esecuzione nella modalità scelta. In Ask non è disponibile.
+- File e terminale sono abilitati nelle nuove configurazioni; disattivazioni esplicite già salvate restano valide. La rete richiede approvazione per default e tutti i gate di sicurezza della run restano attivi.
 
 ## Pianificazione e intervista
 
@@ -51,9 +52,12 @@ complexity check -> [interview -> plan] -> collect_context -> propose_action
 
 - Ogni comando ed evento trasporta l'identità immutabile `{ runId, conversationId, planRevisionId, workspaceId }`. Il Renderer accetta solo eventi della run attiva.
 - Timeout e annullamento condividono un `AbortSignal`; la cancellazione blocca l'elaborazione di eventi successivi. Nessuno dei due annulla le modifiche: entrambi salvano il checkpoint e il timeout notifica la fine della run al Renderer.
-- Il timeout predefinito della sessione è 120 minuti, configurabile nelle impostazioni. Il trasporto chat attende fino a 10 minuti la prima risposta di un modello in caricamento. Il silenzio tollerato nello stream segue la velocità misurata nella sessione (il tempo per circa 4096 token, fra 5 e 30 minuti), perché Ollama non trasmette una tool call finché non è completa.
+- Il timeout predefinito della sessione è 120 minuti, configurabile nelle impostazioni. Prima degli header HTTP, il trasporto attende almeno 10 minuti e, se maggiore, usa il limite di silenzio adattivo calcolato dalla velocità misurata nella sessione. Lo stesso limite adattivo vale dopo gli header (il tempo per circa 4096 token, fra 5 e 30 minuti), perché Ollama può trattenere una tool call fino al completamento. Il timeout iniziale indica assenza di risposta HTTP, non necessariamente caricamento del modello.
 - **Budget di ragionamento**: un turno può ragionare al massimo per un decimo del timeout di sessione, fra 5 e 30 minuti (`reasoningBudgetMs` in [`agentOrchestratorTurnDispatch.ts`](../electron/core/application/agentOrchestratorTurnDispatch.ts)), prima di produrre testo o una tool call. Oltre il limite il trasporto chiude la richiesta e Ollama smette di generare. Il ragionamento tagliato non entra nella trascrizione, e il modello riceve un feedback che chiede il prossimo passo con un ragionamento breve. Il silenzio che segue il ragionamento, mentre Ollama compone una tool call, non conta. Due tagli nello stesso turno chiudono la run con `transport_budget`. Il limite nasce da un turno di qwen3.8:27b che ha ragionato per 159 dei 180 minuti di sessione.
 - Stato di sessione e storico stanno in `<workspace>/.onlyrag/sessions`; senza un workspace utilizzabile in `userData/sessions` (`userdata_dev/sessions` senza Electron, quindi anche nei test), mai nella cartella home dell'utente ([`userDataRoot.ts`](../electron/core/infrastructure/filesystem/userDataRoot.ts)).
+- Il file `<workspace>/.onlyrag/assistant/SESSION_TRACKER.md` usa il formato 2 con sezioni stabili `completed_tasks`, `modified_files`, `unresolved_issues` e `next_steps`. Le intestazioni sono identificatori indipendenti dalla lingua dell'interfaccia. Nei turni `focus` il blocco del tracker viene riletto dal disco e inserito nel contesto variabile del turno; il messaggio di sistema resta congelato per conservare la cache del prompt. Il parser legge anche il vecchio formato numerato in inglese; il riepilogo della chiusura viene costruito dai dati del tracker tramite le chiavi localizzate `closure*`. Quando un guard ferma la run, usa questo stesso riepilogo e non aggiunge una seconda sintesi italiana fissa.
+- Quando tutte le milestone operative sono verificate e non restano tool call pendenti, l'applicazione esegue direttamente il gate finale di evidenza, anche all'ultimo step disponibile. Non attende un turno LLM dedicato al solo riepilogo: la run live qwen3.8:27b del 2026-09-27 aveva verificato 8/8 milestone e superato build e test, ma quel turno aggiuntivo si è fermato dopo due timeout di 10 minuti (`transport_budget`). Il successivo run `closure-20260927` si è fermato con 0/8 milestone dopo un build fallito e due timeout iniziali, quindi non ha ancora confermato questa chiusura in live.
+- La run live del 2026-09-27 ha esercitato le direttive riviste su un task completo: 8/8 milestone verificate, due consigli `execution_budget` seguiti da prosecuzione, senza ordini concorrenti osservati. La richiesta di preview è stata bloccata dalla policy di rete, senza impedire build e test. Questo chiude la verifica live di AGENT-DIRECTIVE-AUTHORITY-03.
 - La trascrizione nativa viene salvata con lo stato della sessione. Dopo un'interruzione, le chiamate rimaste senza risultato sono marcate come non eseguite prima di riprendere la conversazione.
 - Al completamento, la timeline espone evidenze persistite: file modificati, esito dell'ultima verifica ed eventuali effetti esterni.
 - I log Main per selezione del contesto, policy del turno e interpretazione delle chiamate tool portano una chiave `localized`; il Renderer li mostra nella lingua attiva e conserva nel messaggio persistito il testo italiano. `Task Finished:` resta invariato perché la timeline lo interpreta come prefisso strutturale.

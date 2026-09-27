@@ -1,6 +1,7 @@
 import React from 'react'
 import type { AgentCapabilityProfile } from '../../types'
 import { useTranslation } from '../../i18n'
+import { AppSelect } from '../common/AppSelect'
 
 interface AgentCapabilityProfileControlsProps {
   profile: AgentCapabilityProfile
@@ -15,7 +16,7 @@ export const AgentCapabilityProfileControls: React.FC<AgentCapabilityProfileCont
     <fieldset disabled={disabled} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
       <legend className="px-1 text-[10px] font-bold uppercase tracking-wider text-cyan-300">{t('planInterview.runPermissions')}</legend>
       <div className="grid gap-2 sm:grid-cols-2 text-xs">
-        <label className="flex items-center gap-2 text-slate-200">
+        <label className="flex items-center gap-2 text-slate-200" title={t('planInterview.fileChangesHint')}>
           <input
             type="checkbox"
             checked={profile.allowFileModifications}
@@ -23,7 +24,7 @@ export const AgentCapabilityProfileControls: React.FC<AgentCapabilityProfileCont
           />
           {t('planInterview.fileChanges')}
         </label>
-        <label className="flex items-center gap-2 text-slate-200">
+        <label className="flex items-center gap-2 text-slate-200" title={t('planInterview.terminalCommandsHint')}>
           <input
             type="checkbox"
             checked={profile.allowTerminalExecution}
@@ -31,19 +32,19 @@ export const AgentCapabilityProfileControls: React.FC<AgentCapabilityProfileCont
           />
           {t('planInterview.terminalCommands')}
         </label>
-        <label className="grid gap-1 text-slate-300">
+        <label className="grid gap-1 text-slate-300" title={t('planInterview.networkHint')}>
           {t('planInterview.network')}
-          <select
+          <AppSelect
             value={profile.capabilityPolicyMode}
             onChange={(event) => onChange({ ...profile, capabilityPolicyMode: event.target.value as AgentCapabilityProfile['capabilityPolicyMode'] })}
-            className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+            compact
           >
             <option value="offline-strict">{t('planInterview.networkBlocked')}</option>
             <option value="local-only">{t('planInterview.networkLocal')}</option>
             <option value="network-approved">{t('planInterview.networkApproved')}</option>
-          </select>
+          </AppSelect>
         </label>
-        <label className="grid gap-1 text-slate-300">
+        <label className="grid gap-1 text-slate-300" title={t('planInterview.stepBudgetHint')}>
           {t('planInterview.stepBudget')}
           <input
             type="number"

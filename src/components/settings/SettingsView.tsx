@@ -1,3 +1,4 @@
+import { AppSelect } from '../common/AppSelect'
 import React, { useState, useEffect } from 'react'
 import { DiagnosticsData, AppSettings, RunningModelInfo } from '../../types'
 import {
@@ -363,6 +364,18 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
 
           {/* Ollama Model Management Panel */}
           <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
+              <span>
+                {t('settings.ollamaLibraryHint')} <code className="font-mono text-cyan-300">ollama pull &lt;{t('settings.modelNamePlaceholder')}&gt;</code>
+              </span>
+              <button
+                type="button"
+                onClick={() => void window.electronAPI?.openExternalUrl({ url: 'https://ollama.com/library' })}
+                className="text-cyan-300 hover:text-cyan-200 underline cursor-pointer focus-ring rounded"
+              >
+                {t('settings.ollamaLibrary')}
+              </button>
+            </div>
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
               <div className="flex items-center gap-2.5">
                 <Download className="w-5 h-5 text-cyan-400" />
@@ -664,7 +677,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4">
               <label className="flex items-center gap-2 text-xs text-slate-400">
                 {t('settings.codingAgentDebugRetention')}
-                <select
+                <AppSelect
                   value={settings.codingAgentDebugRetentionFiles || 2}
                   onChange={(event) => onUpdateSettings({ codingAgentDebugRetentionFiles: Number(event.target.value) })}
                   className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200"
@@ -674,7 +687,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                       {count}
                     </option>
                   ))}
-                </select>
+                </AppSelect>
               </label>
               <button
                 type="button"

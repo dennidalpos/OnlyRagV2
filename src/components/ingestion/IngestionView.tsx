@@ -1,3 +1,4 @@
+import { AppSelect } from '../common/AppSelect'
 import React, { useRef, useMemo, useEffect, useState, Suspense, lazy } from 'react'
 import {
   FileText,
@@ -546,7 +547,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
                   {ing.viewMode === 'page' ? (
                     <div className="flex items-center gap-1.5 px-2 font-mono text-xs text-slate-200">
                       <span>{t('ingestion.singlePage')}</span>
-                      <select
+                      <AppSelect
                         value={activePageNum}
                         onChange={(e) => ing.scrollToPage(Number(e.target.value))}
                         aria-label={t('ingestion.pageNavigation')}
@@ -557,7 +558,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
                             {p}
                           </option>
                         ))}
-                      </select>
+                      </AppSelect>
                       <span>/ {totalPages}</span>
                     </div>
                   ) : (

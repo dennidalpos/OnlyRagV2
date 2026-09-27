@@ -137,6 +137,45 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.completionStatus).toBe('blocked')
   })
 
+  it('closes a verified plan from application evidence without requesting another model turn', async () => {
+    const sessionId = 'verified-plan-closure'
+    await agentSessionStateRepository.seedPlanMilestones(
+      sessionId,
+      tempDir,
+      [{ id: 'm-1', title: 'Document the project', status: 'verified', notes: 'Documentation checked.' }],
+      'Document the project',
+    )
+
+    const result = await runAgentOrchestratorLoop({ userTask: 'Document the project', agentMode: 'auto', workspacePath: tempDir, sessionId }, null)
+
+    expect(AgentStreamTransport.streamCompletion).not.toHaveBeenCalled()
+    expect(result.completionStatus).toBe('unverifiable')
+    expect(result.summary).toContain('Tutte le milestone operative sono verificate')
+  })
+
+  it('puts the persisted session tracker in the changing turn context', async () => {
+    const sessionId = 'tracker-turn-context'
+    await agentSessionStateRepository.seedPlanMilestones(
+      sessionId,
+      tempDir,
+      [
+        { id: 'm-1', title: 'Review the existing files', status: 'pending' },
+        { id: 'm-2', title: 'Create `src/app.ts`', filePaths: ['src/app.ts'], status: 'pending' },
+      ],
+      'Complete the remaining work',
+    )
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce(toolTurn('update_plan', { milestoneId: 'm-1', status: 'verified', notes: 'Reviewed.' }))
+      .mockResolvedValueOnce(toolTurn('finish', { summary: 'Done.' }))
+
+    await runAgentOrchestratorLoop({ userTask: 'Complete the remaining work', agentMode: 'auto', workspacePath: tempDir, sessionId }, null)
+
+    const calls = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls
+    expect(calls[0][0].messages.at(-1)?.content).not.toContain('completed_tasks:')
+    expect(calls[1][0].messages[0].content).not.toContain('completed_tasks:')
+    expect(calls[1][0].messages.at(-1)?.content).toContain('completed_tasks:\n- [x] m-1: Review the existing files')
+  })
+
   it('should route finish through the application evidence gate and persist the model report', async () => {
     vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(toolTurn('finish', { summary: 'All tasks done perfectly.' }))
 
@@ -153,7 +192,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.completionStatus).toBe('unverifiable')
     expect(res.summary).toContain('All tasks done perfectly.')
     const tracker = fs.readFileSync(path.join(tempDir, '.onlyrag', 'assistant', 'SESSION_TRACKER.md'), 'utf-8')
-    expect(tracker).toContain('## 5. Raw Agent Summary')
+    expect(tracker).toContain('## agent_summary')
     expect(tracker).toContain('All tasks done perfectly.')
   })
 

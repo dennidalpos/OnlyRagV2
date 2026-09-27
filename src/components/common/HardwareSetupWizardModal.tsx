@@ -10,11 +10,12 @@ import {
 } from '../../services/hardwareRecommendationEngine'
 import { Cpu, ChevronRight, ChevronLeft, X, Check, Sparkles, Download } from 'lucide-react'
 import { useTranslation } from '../../i18n'
+import { translate } from '../../i18n/I18nContext'
 import { WizardStepHardware } from '../wizard/WizardStepHardware'
 import { WizardStepRecommendedModels } from '../wizard/WizardStepRecommendedModels'
 import { WizardStepSummaryAndDownload } from '../wizard/WizardStepSummaryAndDownload'
 import { logger } from '../../lib/logger'
-import { buildHardwareWizardModelOptions, buildHardwareWizardModelSuite } from '../../../shared/domain/hardware/hardwareModelCatalog'
+import { buildHardwareWizardModelSuite } from '../../../shared/domain/hardware/hardwareModelCatalog'
 import { resolveAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
 import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
 import { buildSetupModelContextPreferences } from '../../../shared/domain/settings/setupModelContextPreferences'
@@ -44,6 +45,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
 }) => {
   const { t } = useTranslation()
   const [step, setStep] = useState<number>(1)
+  const [pendingOneClick, setPendingOneClick] = useState(false)
   const enableSoundEffects = settings.enableSoundEffects !== false
   const recommendations: HardwareRecommendations = analyzeHardwareAndRecommend(diagnostics)
   const hardwareContext = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics))
@@ -52,8 +54,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const downloadedModels = diagnostics?.ollama.models ?? []
   const isRemoteOllama = isRemoteOllamaMode(settings)
 
-  const recommendedSuite = buildHardwareWizardModelSuite(recommendations.profileTier)
-  const wizardModelOptions = buildHardwareWizardModelOptions()
+  const recommendedSuite = buildHardwareWizardModelSuite()
 
   const [selectedCoding, setSelectedCoding] = useState<string>(settings.codingModel || settings.defaultModel || recommendedSuite.coding)
   const [selectedChat, setSelectedChat] = useState<string>(settings.chatModel || recommendedSuite.chat)
@@ -105,11 +106,17 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       setIsPullingModels(false)
       isCancelledRef.current = false
       setStep(1)
+      setPendingOneClick(false)
     }
     prevIsOpenRef.current = isOpen
   }, [isOpen, settings])
 
   const handleCloseWithSave = useCallback(() => {
+    if (isPullingModels) return
+    if (pendingOneClick) {
+      onClose()
+      return
+    }
     onUpdateSettings({
       defaultModel: selectedCoding || settings.defaultModel,
       codingModel: selectedCoding || settings.codingModel,
@@ -145,18 +152,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     hardwareContext,
     settings,
     onClose,
+    pendingOneClick,
+    isPullingModels,
   ])
-
-  useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isPullingModels) {
-        handleCloseWithSave()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, isPullingModels, handleCloseWithSave])
 
   useEffect(() => {
     if (!window.electronAPI?.onOllamaPullProgress) return
@@ -195,7 +193,10 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const missingModels = uniqueSelectedModels.filter((m) => !isModelDownloaded(m.trim())).filter((m) => !skippedModels.includes(m.trim()))
 
   useEffect(() => {
-    if (step === 3 && missingModels.length > 0 && window.electronAPI?.checkDiskSpace) {
+    setDiskCheck(null)
+    if (step === 3 && missingModels.length > 0 && !window.electronAPI?.checkDiskSpace) {
+      setDiskCheck({ allowed: false, requiredGB: 0, freeGB: 0, missingGB: 0, error: translate('hardwareWizard.diskCheckUnavailable') })
+    } else if (step === 3 && missingModels.length > 0 && window.electronAPI?.checkDiskSpace) {
       setIsCheckingDisk(true)
       window.electronAPI
         .checkDiskSpace({ models: missingModels })
@@ -205,6 +206,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
         })
         .catch((err) => {
           logger.error('HardwareWizard', `Disk space check failed: ${err?.message || err}`)
+          setDiskCheck({ allowed: false, requiredGB: 0, freeGB: 0, missingGB: 0, error: errorMessage(err) })
           setIsCheckingDisk(false)
         })
     }
@@ -349,9 +351,12 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   }
 
   const handleAutoApplyRecommended = () => {
+    setPendingOneClick(true)
     setSelectedCoding(recommendedSuite.coding)
     setSelectedChat(recommendedSuite.chat)
     setSelectedTranslation(recommendedSuite.translation)
+    setSelectedMedical('')
+    setSelectedLegal('')
     setSelectedVision(recommendedSuite.vision)
     setSelectedEmbedding(recommendedSuite.embedding)
     setOcrEngine('native_cuda')
@@ -359,27 +364,11 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     setFailedModelIndex(null)
     setSkippedModels([])
     setDiskCheck(null)
-    onUpdateSettings({
-      defaultModel: recommendedSuite.coding,
-      codingModel: recommendedSuite.coding,
-      chatModel: recommendedSuite.chat,
-      translationModel: recommendedSuite.translation,
-      visionModel: recommendedSuite.vision,
-      embeddingModel: recommendedSuite.embedding,
-      modelContextLengths: buildSetupModelContextPreferences(
-        [recommendedSuite.coding, recommendedSuite.chat, recommendedSuite.translation, recommendedSuite.vision],
-        settings.modelContextLengths,
-        hardwareContext,
-      ),
-      ocrEngine: 'native_cuda',
-      enableSoundEffects,
-      ...capabilityProfile,
-      hasCompletedInitialSetup: true,
-    })
     setStep(3)
   }
 
   const handleFinalSave = () => {
+    setPendingOneClick(false)
     onUpdateSettings({
       defaultModel: selectedCoding,
       codingModel: selectedCoding,
@@ -405,7 +394,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleCloseWithSave}
+      dismissible={!isPullingModels}
       labelledById="wizard-modal-title"
       panelClassName="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-3xl max-h-[92vh] flex flex-col overflow-hidden"
     >
@@ -431,8 +421,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           <button
             type="button"
             onClick={handleCloseWithSave}
-            aria-label={t('hardwareWizard.saveAndExit')}
-            title={t('hardwareWizard.saveAndExitTooltip')}
+            aria-label={pendingOneClick ? t('common.cancel') : t('hardwareWizard.saveAndExit')}
+            title={pendingOneClick ? t('common.cancel') : t('hardwareWizard.saveAndExitTooltip')}
+            disabled={isPullingModels}
             className="p-2 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-colors focus-ring active:scale-95 cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -508,8 +499,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           <WizardStepRecommendedModels
             downloadedModels={downloadedModels}
             getModelFit={getModelFit}
-            recommendedModels={recommendedSuite}
-            modelOptions={wizardModelOptions}
             selectedCoding={selectedCoding}
             onChangeCoding={setSelectedCoding}
             selectedChat={selectedChat}
@@ -577,7 +566,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             disabled={isPullingModels}
             className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-medium rounded-xl transition-all border border-slate-800 focus-ring active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
-            {t('hardwareWizard.saveAndExit')}
+            {pendingOneClick ? t('common.cancel') : t('hardwareWizard.saveAndExit')}
           </button>
 
           {step < 3 ? (
@@ -598,7 +587,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                   handleFinalSave()
                 }
               }}
-              disabled={isPullingModels || !isAllSlotsPopulated}
+              disabled={isPullingModels || !isAllSlotsPopulated || (missingModels.length > 0 && (isCheckingDisk || !diskCheck?.allowed))}
               className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 focus-ring shadow-lg shadow-emerald-950/40 active:scale-95 disabled:cursor-not-allowed cursor-pointer"
             >
               {isPullingModels ? (

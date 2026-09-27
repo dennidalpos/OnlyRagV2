@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ArrowUp, ArrowDown, RotateCcw, ListPlus, Pin, X, FileText, Minimize2, Layers, Sparkles, Loader2 } from 'lucide-react'
+import { ArrowUp, ArrowDown, MessageSquarePlus, ListPlus, Pin, X, FileText, Minimize2, Layers, Sparkles, Loader2, ListTodo } from 'lucide-react'
 import { IngestedDocument, WorkspaceFile, AgentChangeMetrics, AgentMode, AgentContextBudgetBreakdown } from '../../types'
 import type { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
@@ -11,6 +11,7 @@ interface PromptComposerProps {
   agentPrompt: string
   setAgentPrompt: (prompt: string) => void
   onExecute: () => void
+  onPlanTask: () => void
   isExecuting: boolean
   queueLength: number
   agentMode: AgentMode
@@ -24,9 +25,6 @@ interface PromptComposerProps {
   onToggleAttachDoc: (docId: string) => void
   pinnedFiles?: Map<string, WorkspaceFile>
   onTogglePinFile?: (file: WorkspaceFile) => void
-  onOpenSkillHubModal?: () => void
-  onOpenPromptModal?: () => void
-  onOpenDiagnosticsModal?: () => void
   onOpenPromptHistorySearch?: () => void
   promptQueue?: QueuedPrompt[]
   onRemoveFromQueue?: (id: string) => void
@@ -46,6 +44,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   agentPrompt,
   setAgentPrompt,
   onExecute,
+  onPlanTask,
   isExecuting,
   queueLength,
   agentMode,
@@ -59,9 +58,6 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   onToggleAttachDoc,
   pinnedFiles = new Map(),
   onTogglePinFile,
-  onOpenSkillHubModal,
-  onOpenPromptModal,
-  onOpenDiagnosticsModal,
   onOpenPromptHistorySearch,
   promptQueue = [],
   onRemoveFromQueue,
@@ -239,9 +235,6 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               ingestedDocs={ingestedDocs}
               attachedDocIds={attachedDocIds}
               onToggleAttachDoc={onToggleAttachDoc}
-              onOpenSkillHubModal={onOpenSkillHubModal}
-              onOpenPromptModal={onOpenPromptModal}
-              onOpenDiagnosticsModal={onOpenDiagnosticsModal}
               onOpenPromptHistorySearch={onOpenPromptHistorySearch}
               autoInstallHubSkills={autoInstallHubSkills}
               onToggleAutoInstallSkills={onToggleAutoInstallSkills}
@@ -265,11 +258,11 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               <button
                 type="button"
                 onClick={onResetSession}
-                aria-label={t('common.reset')}
-                title={t('common.reset')}
+                aria-label={t('coding.newChat')}
+                title={t('coding.newChat')}
                 className="p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer focus-ring"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <MessageSquarePlus className="w-3.5 h-3.5" />
               </button>
             )}
 
@@ -319,6 +312,20 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
           {/* Right: Mode Selector + Action Buttons (Send / Stop / Queue) */}
           <div className="flex items-center gap-1.5 shrink-0 min-w-0">
             <AgentModeSelector agentMode={agentMode} setAgentMode={setAgentMode} />
+
+            {agentMode !== 'ask' && !isExecuting && (
+              <button
+                type="button"
+                onClick={onPlanTask}
+                disabled={!agentPrompt.trim() || isModelUpdating}
+                aria-label={t('coding.planTask')}
+                title={t('coding.planTask')}
+                className="px-2 py-1 rounded-lg border border-amber-700/60 bg-amber-950/50 text-amber-200 text-[11px] font-semibold hover:bg-amber-900/50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer focus-ring flex items-center gap-1"
+              >
+                <ListTodo className="w-3.5 h-3.5" />
+                {t('coding.planTask')}
+              </button>
+            )}
 
             {/* Action Buttons: Accoda / Send / Stop */}
             {isExecuting ? (

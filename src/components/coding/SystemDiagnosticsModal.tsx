@@ -1,10 +1,9 @@
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
-import { X, Cpu, Wrench, ScanLine, Activity, CheckCircle2, AlertCircle, Terminal, FileCode, Folder, Layers, Check, Loader2, Sparkles } from 'lucide-react'
+import { X, Cpu, Wrench, Activity, CheckCircle2, AlertCircle, Terminal, FileCode, Folder, Layers, Check, Loader2, Sparkles } from 'lucide-react'
 import { AppSettings, AgentActionLog, type GuestOsInfo } from '../../types'
 import { formatClockTime } from '../../lib/timeFormat'
 import { logger } from '../../lib/logger'
-import { SlmDiagnosticsPanel } from './SlmDiagnosticsPanel'
 import { useTranslation } from '../../i18n'
 
 interface SystemDiagnosticsModalProps {
@@ -39,11 +38,9 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
   activeSkills = [],
 }) => {
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState<'system' | 'telemetry' | 'slm_logs'>('system')
+  const [activeTab, setActiveTab] = useState<'system' | 'telemetry'>('system')
   const [isCopyingDebugBundle, setIsCopyingDebugBundle] = useState<boolean>(false)
   const [isCopied, setIsCopied] = useState<boolean>(false)
-
-  // ESC Key Listener for Accessibility
 
   const handleCopyAiDebugBundle = async () => {
     if (isCopyingDebugBundle) return
@@ -165,17 +162,6 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
           <Activity className="w-3.5 h-3.5" />
           <span>{t('systemDiagnostics.tabTelemetry')}</span>
         </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('slm_logs')}
-          className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'slm_logs' ? 'border-amber-400 text-amber-300' : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <ScanLine className="w-3.5 h-3.5" />
-          <span>{t('systemDiagnostics.tabSlmLogs')}</span>
-        </button>
       </div>
 
       {/* Body Content */}
@@ -188,7 +174,7 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                   <Layers className="w-4 h-4 text-cyan-400" /> {t('systemDiagnostics.hardwareHost')}
                 </span>
                 <span className="text-[11px] font-mono text-cyan-300 bg-cyan-950/60 border border-cyan-800 px-2 py-0.5 rounded-lg">
-                  {guestOsInfo?.platform || 'Windows'} (UTF-8)
+                  {guestOsInfo?.platform || '—'} (UTF-8)
                 </span>
               </div>
 
@@ -220,7 +206,7 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                   <span className="text-slate-400">Git</span>
                   <span className={`text-[10px] font-bold flex items-center gap-1 ${hasGit ? 'text-emerald-400' : 'text-slate-500'}`}>
                     {hasGit ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                    {hasGit ? 'OK' : 'N/A'}
+                    {hasGit == null ? '…' : hasGit ? 'OK' : 'N/A'}
                   </span>
                 </div>
 
@@ -228,7 +214,7 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                   <span className="text-slate-400">Node</span>
                   <span className={`text-[10px] font-bold flex items-center gap-1 ${hasNode ? 'text-emerald-400' : 'text-slate-500'}`}>
                     {hasNode ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                    {hasNode ? 'OK' : 'N/A'}
+                    {hasNode == null ? '…' : hasNode ? 'OK' : 'N/A'}
                   </span>
                 </div>
 
@@ -236,15 +222,17 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                   <span className="text-slate-400">Python</span>
                   <span className={`text-[10px] font-bold flex items-center gap-1 ${hasPy ? 'text-emerald-400' : 'text-slate-500'}`}>
                     {hasPy ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                    {hasPy ? 'OK' : 'N/A'}
+                    {hasPy == null ? '…' : hasPy ? 'OK' : 'N/A'}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between p-2 bg-slate-900/80 rounded-xl border border-slate-800">
                   <span className="text-slate-400">Ollama</span>
-                  <span className={`text-[10px] font-bold flex items-center gap-1 ${hasOllama ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <span
+                    className={`text-[10px] font-bold flex items-center gap-1 ${hasOllama === true ? 'text-emerald-400' : hasOllama === false ? 'text-rose-400' : 'text-slate-400'}`}
+                  >
                     {hasOllama ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                    {hasOllama ? 'OK' : 'OFF'}
+                    {hasOllama == null ? '…' : hasOllama ? 'OK' : 'OFF'}
                   </span>
                 </div>
               </div>
@@ -312,12 +300,6 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                 </span>
               </div>
             </div>
-          </div>
-        )}
-
-        {activeTab === 'slm_logs' && (
-          <div className="space-y-4">
-            <SlmDiagnosticsPanel />
           </div>
         )}
       </div>

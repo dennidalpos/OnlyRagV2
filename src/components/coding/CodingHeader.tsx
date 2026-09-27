@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react'
-import { Code, Sparkles, Cpu, CheckCircle2, AlertCircle, Wrench, Sliders } from 'lucide-react'
+import React from 'react'
+import { Code, Sparkles, CheckCircle2, AlertCircle, Wrench, Sliders } from 'lucide-react'
 import { AppSettings, type GuestOsInfo } from '../../types'
 
 import { QuickModelSelector } from '../common/QuickModelSelector'
@@ -30,30 +30,11 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
   onOpenPromptModal,
 }) => {
   const { t } = useTranslation()
-  const [isSystemPopoverOpen, setIsSystemPopoverOpen] = useState<boolean>(false)
-  const popoverRef = useRef<HTMLDivElement>(null)
-
-  // Handle outside click to close popover
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setIsSystemPopoverOpen(false)
-      }
-    }
-    if (isSystemPopoverOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isSystemPopoverOpen])
-
   const hasGit = guestOsInfo?.tools.git
   const hasNode = guestOsInfo?.tools.node
-  const hasPy = guestOsInfo?.tools.python
   const hasOllama = guestOsInfo?.tools.ollama
 
-  const allCoreToolsAvailable = hasGit !== false && hasNode !== false && hasOllama !== false
+  const allCoreToolsAvailable = hasGit === true && hasNode === true && hasOllama === true
 
   return (
     <header className="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between z-10 shrink-0 select-text font-sans">
@@ -118,10 +99,10 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         </button>
 
         {/* System & Toolchain Status Trigger */}
-        <div className="relative" ref={popoverRef}>
+        <div>
           <button
             type="button"
-            onClick={() => setIsSystemPopoverOpen(!isSystemPopoverOpen)}
+            onClick={onOpenDiagnosticsModal}
             aria-label={t('uiShell.toolchainStatus')}
             title={t('uiShell.toolchainStatusHint')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-colors focus-ring ${
@@ -134,39 +115,6 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
             <span className="font-mono text-[10px]">OS Tools</span>
             {allCoreToolsAvailable ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <AlertCircle className="w-3 h-3 text-amber-400 animate-pulse" />}
           </button>
-
-          {/* Toolchain Flyout Card */}
-          {isSystemPopoverOpen && (
-            <div className="absolute right-0 mt-2 w-64 rounded-xl bg-slate-950 border border-slate-800 shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-100">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
-                <span className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
-                  <Cpu className="w-3.5 h-3.5 text-cyan-400" /> Toolchain di Sistema
-                </span>
-                <button type="button" onClick={onOpenDiagnosticsModal} className="text-[10px] text-cyan-400 hover:underline cursor-pointer">
-                  {t('uiShell.details')}
-                </button>
-              </div>
-
-              <div className="space-y-1.5 text-xs font-mono">
-                <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
-                  <span className="text-slate-400">Git</span>
-                  <span className={`text-[10px] font-bold ${hasGit ? 'text-emerald-400' : 'text-rose-400'}`}>{hasGit ? 'OK' : 'Mancante'}</span>
-                </div>
-                <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
-                  <span className="text-slate-400">Node</span>
-                  <span className={`text-[10px] font-bold ${hasNode ? 'text-emerald-400' : 'text-rose-400'}`}>{hasNode ? 'OK' : 'Mancante'}</span>
-                </div>
-                <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
-                  <span className="text-slate-400">Python</span>
-                  <span className={`text-[10px] font-bold ${hasPy ? 'text-emerald-400' : 'text-rose-400'}`}>{hasPy ? 'OK' : 'Mancante'}</span>
-                </div>
-                <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
-                  <span className="text-slate-400">Ollama</span>
-                  <span className={`text-[10px] font-bold ${hasOllama ? 'text-emerald-400' : 'text-rose-400'}`}>{hasOllama ? 'OK' : 'Mancante'}</span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </header>

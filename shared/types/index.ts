@@ -747,21 +747,3 @@ export interface RunningModelInfo {
   /** Context currently allocated by Ollama from `/api/ps`. */
   context_length?: number
 }
-
-export interface SlmAnomalyRecord {
-  anomaly_type: string
-  severity: 'WARNING' | 'ERROR' | 'CRITICAL'
-  log_file: string
-  line_number: number
-  snippet: string
-  count: number
-  remediation?: string
-}
-
-export interface SlmLogDiagnosticReport {
-  scanned_files: string[]
-  total_lines_scanned: number
-  anomalies: SlmAnomalyRecord[]
-  has_critical: boolean
-  summary: string
-}

@@ -104,6 +104,7 @@ async function dispatchToLlm(
   selection: ModelSelection,
   assembled: PreparedAgentTurn['assembled'],
   toolPolicy: TurnToolPolicy,
+  debtTrackerBlock: string,
 ): Promise<{ nativeTurn: AgentChatTurn; usedModel: string } | { error: string }> {
   let generationTelemetry: OllamaStreamTelemetry | undefined
   const toolCatalog = selectToolSchemas(toolPolicy.allowedTools)
@@ -120,7 +121,7 @@ async function dispatchToLlm(
       Math.floor(maxPromptTokens * SYSTEM_PROMPT_BUDGET_SHARE),
     )
   }
-  const turnContext = [assembled.segments.planSection, assembled.turnSuffix].filter((part) => part.trim()).join('\n\n')
+  const turnContext = [assembled.segments.planSection, debtTrackerBlock, assembled.turnSuffix].filter((part) => part.trim()).join('\n\n')
   const chat = buildChatRequest({
     systemPrompt: ctx.session.nativeSystemPrompt,
     userTask: ctx.initialUserTask,
@@ -241,10 +242,11 @@ export async function collectTurnContext(ctx: TurnDispatchContext): Promise<Prep
 
   const selection = selectModelForTurn(ctx)
   freezeContextWindow(ctx, selection.runtimeOpts)
-  const { assembled, toolPolicy } = await assembleTurnPrompt(ctx, selection)
+  const { assembled, toolPolicy, debtTrackerBlock } = await assembleTurnPrompt(ctx, selection)
   return {
     selection,
     assembled,
+    debtTrackerBlock,
     hasRecentToolFailure,
     errorCountInHistory,
     compiledHistoryBlock,
@@ -254,14 +256,14 @@ export async function collectTurnContext(ctx: TurnDispatchContext): Promise<Prep
 
 /** Requests exactly one current-turn proposal from the selected model. */
 export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: PreparedAgentTurn): Promise<TurnDispatchOutcome> {
-  const { selection, assembled, toolPolicy } = prepared
+  const { selection, assembled, toolPolicy, debtTrackerBlock } = prepared
   ctx.emitLog(
     'tool_call',
     `[Step ${ctx.stepCount}/${ctx.maxStepsLabel}] Consulting LLM (${selection.targetModel}) [ctx:${selection.runtimeOpts.num_ctx}${
       ctx.fsmMode.getMode() !== 'AUTO' ? ` | Mode:${ctx.fsmMode.getMode()}` : ''
     }]...`,
   )
-  const dispatchResult = await dispatchToLlm(ctx, selection, assembled, toolPolicy)
+  const dispatchResult = await dispatchToLlm(ctx, selection, assembled, toolPolicy, debtTrackerBlock)
 
   if (!ctx.isSessionActive()) {
     const completionStatus = ctx.session.completionStatus || 'cancelled'

@@ -1,7 +1,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CodingSession } from '../types'
+import { z } from 'zod'
+import type { AgentPlan, CodingSession } from '../types'
 import { useSessionHistory } from './useSessionHistory'
 
 type History = ReturnType<typeof useSessionHistory>
@@ -57,5 +58,39 @@ describe('useSessionHistory persistence', () => {
     await act(async () => Promise.resolve())
     expect(saveCodingSession).toHaveBeenCalledWith(expect.objectContaining({ actionLogs: [{ id: 'last-log' }] }))
     root = createRoot(container)
+  })
+
+  it('persists a plan revision with JSON-safe action logs', async () => {
+    const sessionId = history.activeSessionId
+    const plan: AgentPlan = {
+      formatVersion: 2,
+      id: 'plan-1',
+      version: 1,
+      prompt: 'Build the page',
+      objective: 'Build the page',
+      decisions: [],
+      retainedEvidence: [],
+      milestones: [{ id: 'step-1', title: 'Create the page', status: 'pending' }],
+      supersededWork: [],
+      status: 'approved',
+      createdAt: new Date().toISOString(),
+    }
+
+    await act(async () => {
+      history.updateSessionContent(sessionId, {
+        actionLogs: [{ id: 'log-1', timestamp: '10:00:00', type: 'info', message: 'Automatic planning started', detail: undefined }],
+      })
+    })
+
+    let persisted = false
+    await act(async () => {
+      persisted = await history.persistSessionPlan(sessionId, plan)
+    })
+
+    expect(persisted).toBe(true)
+    expect(saveCodingSession).toHaveBeenCalledTimes(1)
+    const payload = saveCodingSession.mock.calls[0][0]
+    expect(z.json().safeParse(payload.actionLogs[0]).success).toBe(true)
+    expect(payload.plans?.[0]).toEqual(plan)
   })
 })

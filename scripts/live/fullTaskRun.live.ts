@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { respondToApproval, runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
 import type { RendererEventSink } from '../../electron/core/domain/ports/rendererEventSink'
 import type { AgentApprovalRequest } from '../../shared/types'
-import { liveWorkspacePath, loadRealSettings, reportRun, resetWorkspace, seedGeneratedPlan } from './agentLiveHarness'
+import { LIVE_CODING_MODEL, liveWorkspacePath, loadRealSettings, reportRun, resetWorkspace, seedGeneratedPlan } from './agentLiveHarness'
 
-const MODEL = process.env.ONLYRAG_LIVE_MODEL || 'qwen3.8:27b'
+const MODEL = LIVE_CODING_MODEL
 const RUN_LABEL = process.env.ONLYRAG_LIVE_RUN || 'default'
 const SAFE_RUN = `${MODEL}-${RUN_LABEL}`.replace(/[^a-z0-9_-]+/gi, '-')
 const WORKSPACE = liveWorkspacePath(`fulltask_${SAFE_RUN}`)
@@ -70,7 +70,13 @@ Ensure the application is fully runnable, usable and responsive before moving to
 
 describe('live: full task run', () => {
   it('plans and executes the original audit task against a real model', async () => {
-    const settings = loadRealSettings({ codingModel: MODEL, agentSessionTimeoutMinutes: 180, capabilityPolicyMode: 'network-approved' })
+    const settings = loadRealSettings({ agentSessionTimeoutMinutes: 180, capabilityPolicyMode: 'network-approved', maxToolCallSteps: 50 })
+    const requestedContext = process.env.ONLYRAG_LIVE_CONTEXT_TOKENS
+    if (requestedContext !== undefined) {
+      const numCtx = Number(requestedContext)
+      if (!Number.isSafeInteger(numCtx) || numCtx < 4096) throw new Error('ONLYRAG_LIVE_CONTEXT_TOKENS must be an integer of at least 4096.')
+      settings.modelContextLengths = { ...settings.modelContextLengths, [MODEL]: numCtx }
+    }
     resetWorkspace(WORKSPACE)
 
     const seeded = await seedGeneratedPlan({

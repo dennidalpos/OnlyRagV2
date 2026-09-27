@@ -121,6 +121,7 @@ export interface TurnDispatchData {
 export interface PreparedAgentTurn {
   selection: ModelSelection
   assembled: AssembledPrompt
+  debtTrackerBlock: string
   hasRecentToolFailure: boolean
   errorCountInHistory: number
   compiledHistoryBlock: string

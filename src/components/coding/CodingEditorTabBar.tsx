@@ -1,9 +1,9 @@
-import React, { useState } from 'react'
-import { FileCode2, X, Split, Save, Terminal, FileText, GitBranch, ScanLine, Eye, MoreHorizontal } from 'lucide-react'
+import React from 'react'
+import { FileCode2, X, Split, Save, Terminal, FileText, GitBranch, Eye } from 'lucide-react'
 import { WorkspaceFile } from '../../types'
 import { useTranslation } from '../../i18n'
 
-export type CodingRightTab = 'editor' | 'terminal' | 'git_diff' | 'plan' | 'slm_diagnostics' | 'artifacts'
+export type CodingRightTab = 'editor' | 'terminal' | 'git_diff' | 'plan' | 'artifacts'
 
 interface CodingEditorTabBarProps {
   openFiles: WorkspaceFile[]
@@ -37,7 +37,6 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
   planIsInProgress = false,
 }) => {
   const { t } = useTranslation()
-  const [showAdvancedTabs, setShowAdvancedTabs] = useState(false)
 
   return (
     <div className="h-11 bg-slate-900/60 border-b border-slate-800 px-3 flex items-center justify-between text-xs shrink-0 select-none overflow-x-auto font-sans">
@@ -98,53 +97,19 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
 
           <button
             type="button"
-            aria-expanded={showAdvancedTabs}
-            onClick={() => setShowAdvancedTabs((visible) => !visible)}
+            role="tab"
+            aria-selected={activeTab === 'terminal'}
+            onClick={() => onSelectTab('terminal')}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer border ${
-              showAdvancedTabs || activeTab === 'terminal' || activeTab === 'slm_diagnostics'
-                ? 'bg-slate-900 text-slate-200 border-slate-700'
+              activeTab === 'terminal'
+                ? 'bg-slate-900 text-cyan-300 border-cyan-500/40'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border-transparent'
             }`}
-            title={t('common.viewDetails')}
+            title={t('uiShell.terminalTabTitle')}
           >
-            <MoreHorizontal className="w-3.5 h-3.5" />
-            <span>{t('common.viewDetails')}</span>
+            <Terminal className="w-3.5 h-3.5" />
+            <span>{t('uiShell.terminalTab')}</span>
           </button>
-
-          {showAdvancedTabs && (
-            <>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === 'terminal'}
-                onClick={() => onSelectTab('terminal')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer border ${
-                  activeTab === 'terminal'
-                    ? 'bg-slate-900 text-cyan-300 border-cyan-500/40'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border-transparent'
-                }`}
-                title={t('uiShell.terminalTabTitle')}
-              >
-                <Terminal className="w-3.5 h-3.5" />
-                <span>{t('uiShell.terminalTab')}</span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === 'slm_diagnostics'}
-                onClick={() => onSelectTab('slm_diagnostics')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer border ${
-                  activeTab === 'slm_diagnostics'
-                    ? 'bg-slate-900 text-amber-300 border-amber-500/40'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border-transparent'
-                }`}
-                title={t('uiShell.diagnosticsTabTitle')}
-              >
-                <ScanLine className="w-3.5 h-3.5" />
-                <span>{t('uiShell.diagnosticsTab')}</span>
-              </button>
-            </>
-          )}
         </div>
 
         {/* File Tabs */}

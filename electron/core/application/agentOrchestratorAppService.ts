@@ -28,6 +28,7 @@ import { restoreAgentCheckpoint } from '../infrastructure/filesystem/agentCheckp
 import type { AgentChatToolCall } from '../infrastructure/http/agentStreamTransport'
 import type { PreparedAgentTurn, TurnDispatchData } from './agentOrchestratorRunContext'
 import { emitLocalizedLog } from './agentOrchestratorTypes'
+import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
 
 export type { AgentSession }
 
@@ -405,7 +406,13 @@ export async function runAgentOrchestratorLoop(
   const PERSIST_EVERY_N_STEPS = 5
 
   const pendingNativeCalls: Array<{ call: AgentChatToolCall; prepared: PreparedAgentTurn; data: TurnDispatchData }> = []
-  while (stepCountBox.value < MAX_STEPS && isSessionActive()) {
+  while (isSessionActive()) {
+    const operationalMilestones = goalPlanner.getMilestones().filter((milestone) => !isCompletionMilestoneTitle(milestone))
+    if (pendingNativeCalls.length === 0 && operationalMilestones.length > 0 && operationalMilestones.every((milestone) => milestone.status === 'verified')) {
+      const closure = await closeApplicationRun({ trigger: 'finish', reason: { key: 'reasonPlanVerified' } })
+      if (closure.outcome === 'closed') return closure.result
+    }
+    if (stepCountBox.value >= MAX_STEPS) break
     stepCountBox.value++
     setExecutionPhase('collect_context')
     // Re-fitted every turn: the manifest the skills must agree with is usually written during the run.

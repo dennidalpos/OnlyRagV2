@@ -571,7 +571,7 @@ def create_semantic_chunks(filename: str, full_markdown: str) -> List[Tuple[int,
         if not current_buffer:
             return
         curr_section_header = ' > '.join([h for h in header_path if h])
-        context_prefix = f"[Documento: {filename} | Sezione: {curr_section_header}]\n"
+        context_prefix = f"[Document: {filename} | Section: {curr_section_header}]\n"
         buf_text = "\n".join(current_buffer).strip()
         current_buffer = []
         if not buf_text:
@@ -612,6 +612,6 @@ def create_semantic_chunks(filename: str, full_markdown: str) -> List[Tuple[int,
 
     if not raw_chunks:
         fallback_text = full_markdown.strip() or f"# {filename}\n\nDocument content ingested."
-        raw_chunks = [(0, f"[Documento: {filename} | Sezione: Document Content]\n{fallback_text}", filename)]
+        raw_chunks = [(0, f"[Document: {filename} | Section: Document Content]\n{fallback_text}", filename)]
 
     return raw_chunks

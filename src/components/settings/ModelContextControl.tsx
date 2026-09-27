@@ -39,17 +39,6 @@ export const ModelContextControl: React.FC<ModelContextControlProps> = ({ model,
             {choice === maximum ? 'MAX' : `${choice / 1024}K`}
           </button>
         ))}
-        <button
-          type="button"
-          onClick={() => {
-            const modelContextLengths = { ...(settings.modelContextLengths || {}) }
-            delete modelContextLengths[model]
-            onUpdateSettings({ modelContextLengths })
-          }}
-          className="rounded px-1.5 py-0.5 bg-slate-700 text-slate-200"
-        >
-          Auto
-        </button>
       </span>
     </label>
   )

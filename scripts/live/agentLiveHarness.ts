@@ -13,6 +13,7 @@ import { decodeSettingsFile } from '../../electron/core/infrastructure/filesyste
 
 /** One dedicated folder for every live workspace and snapshot, so runs never scatter directories on the Desktop. */
 export const LIVE_RUN_ROOT = process.env.ONLYRAG_LIVE_ROOT || path.join(os.homedir(), 'OnlyRag-Live')
+export const LIVE_CODING_MODEL = 'qwen3.8:27b'
 const LIVE_RUN_SNAPSHOT_ROOT = path.join(LIVE_RUN_ROOT, 'snapshots')
 /** Audit entries with paths, URLs and error details kept (credentials still removed); local live runs only. */
 const LIVE_UNREDACTED_AUDIT_PATH = path.join(LIVE_RUN_ROOT, 'audit', 'coding_agent_audit.unredacted.log')
@@ -59,8 +60,8 @@ export function snapshotLiveAuditLogs(args: {
   return runDir
 }
 
-/** The settings file the packaged app writes, so a live run uses the model you actually use. */
-export function loadRealSettings(overrides: Partial<AppSettings> = {}): AppSettings {
+/** Load the packaged app settings while pinning every Coding Agent live run to one model. */
+export function loadRealSettings(overrides: Omit<Partial<AppSettings>, 'codingModel'> = {}): AppSettings {
   const appData = process.env.APPDATA || path.join(process.env.USERPROFILE || '', 'AppData', 'Roaming')
   const settingsPath = path.join(appData, 'onlyrag-v2', 'settings.json')
   if (!fs.existsSync(settingsPath)) {
@@ -73,7 +74,7 @@ export function loadRealSettings(overrides: Partial<AppSettings> = {}): AppSetti
   codingAgentLogger.mirrorUnredactedTo(LIVE_UNREDACTED_AUDIT_PATH)
   // The file is the versioned envelope { version, settings }: spreading it raw ran rerun-20260926e on
   // defaults (25 steps instead of the user's 50) with every user setting ignored.
-  return { ...decodeSettingsFile(JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))), ...diagnostics, ...overrides }
+  return { ...decodeSettingsFile(JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))), ...diagnostics, ...overrides, codingModel: LIVE_CODING_MODEL }
 }
 
 /** Empties a workspace directory without deleting the directory itself (it may be open elsewhere). */

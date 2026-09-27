@@ -1,38 +1,4 @@
 import type { RunningModelDetails } from '../../types'
-import {
-  COMPACT_CODING_CATALOG,
-  WORKHORSE_CODING_CATALOG,
-  REASONING_CODING_CATALOG,
-  LARGE_CODING_CATALOG,
-  CHAT_TIER_CATALOG,
-  TRANSLATION_TIER_CATALOG,
-  MEDICAL_TIER_CATALOG,
-  LEGAL_TIER_CATALOG,
-  VISION_TIER_CATALOG,
-  EMBEDDING_TIER_CATALOG,
-  parseCatalogSizeGB,
-  type RawModelCatalogEntry,
-} from './hardwareModelCatalog'
-
-/**
- * Derives approximate weights from catalog entries.
- */
-export const CATALOG_DERIVED_WEIGHTS_GB: Record<string, number> = Object.fromEntries(
-  (
-    [
-      ...COMPACT_CODING_CATALOG,
-      ...WORKHORSE_CODING_CATALOG,
-      ...REASONING_CODING_CATALOG,
-      ...LARGE_CODING_CATALOG,
-      ...CHAT_TIER_CATALOG,
-      ...TRANSLATION_TIER_CATALOG,
-      ...MEDICAL_TIER_CATALOG,
-      ...LEGAL_TIER_CATALOG,
-      ...VISION_TIER_CATALOG,
-      ...EMBEDDING_TIER_CATALOG,
-    ] as RawModelCatalogEntry[]
-  ).map((entry) => [entry.modelName.toLowerCase(), parseCatalogSizeGB(entry.sizeBytesApprox)]),
-)
 
 export const KNOWN_WEIGHT_ALIASES_GB: Record<string, number> = {
   'all-minilm': 0.12,
@@ -116,16 +82,13 @@ export function estimateModelWeightGB(modelName: string, details?: RunningModelD
   if (!lower || lower === 'local' || lower === 'none') return 4.5
 
   // Prefer real Ollama-reported metadata (parameter_size, quantization_level) when available.
-  // The static table below remains as a fallback for models that haven't been queried yet.
+  // Known weights and tag-size heuristics cover models that have not been queried yet.
   if (details) {
     const fromMetadata = estimateWeightFromMetadata(details)
     if (fromMetadata !== null && fromMetadata > 0) return fromMetadata
   }
 
-  const knownWeightsGB: Record<string, number> = {
-    ...CATALOG_DERIVED_WEIGHTS_GB,
-    ...KNOWN_WEIGHT_ALIASES_GB,
-  }
+  const knownWeightsGB = KNOWN_WEIGHT_ALIASES_GB
 
   // Most-specific-key-wins resolution.
   if (knownWeightsGB[lower] !== undefined) return knownWeightsGB[lower]

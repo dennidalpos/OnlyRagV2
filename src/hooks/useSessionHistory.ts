@@ -67,7 +67,10 @@ export function useSessionHistory(workspacePath: string | null) {
     const previous = persistenceChainsRef.current.get(session.id) || Promise.resolve()
     const save = previous.then(async () => {
       try {
-        const saved = await saveCodingSession(session)
+        // IPC validates log entries as JSON; optional undefined fields are removed by the
+        // same serialization used by the session history store on disk.
+        const payload = JSON.parse(JSON.stringify(session)) as CodingSession
+        const saved = await saveCodingSession(payload)
         if (saved && saved.title !== session.title) {
           const current = sessionsRef.current
           sessionsRef.current = current.map((item) => (item.id === saved.id ? { ...item, title: saved.title } : item))

@@ -1,40 +1,3 @@
-/** What a session that stopped with residual work has to be able to tell the user. */
-export interface SessionStopReport {
-  /** Why the run ended, in plain words. Never an internal directive aimed at the model. */
-  reason: string
-  stepCount: number
-  /** Milestone lines already formatted by the caller ("m-2: Create vite.config.ts"). */
-  completed: readonly string[]
-  outstanding: readonly string[]
-  modifiedFiles: readonly string[]
-}
-
-const MAX_LISTED_ITEMS = 8
-
-function listSection(heading: string, items: readonly string[]): string[] {
-  if (items.length === 0) return []
-  const shown = items.slice(0, MAX_LISTED_ITEMS).map((item) => `- ${item}`)
-  if (items.length > MAX_LISTED_ITEMS) shown.push(`- …and ${items.length - MAX_LISTED_ITEMS} more`)
-  return ['', heading, ...shown]
-}
-
-/** The report a user gets when a session is stopped by a guard rather than by the model's own `finish` call. */
-export function compileSessionStopSummary(report: SessionStopReport): string {
-  const lines: string[] = [`⛔ Sessione interrotta automaticamente al passo ${report.stepCount}.`, '', `Motivo: ${report.reason}`]
-
-  lines.push(
-    ...listSection(`✅ Completato (${report.completed.length}):`, report.completed),
-    ...listSection(`⏳ Rimasto aperto (${report.outstanding.length}):`, report.outstanding),
-    ...listSection(`📄 File creati o modificati (${report.modifiedFiles.length}):`, report.modifiedFiles),
-  )
-
-  if (report.completed.length === 0 && report.modifiedFiles.length === 0) {
-    lines.push('', 'Nessuna modifica è stata scritta sul workspace durante questa sessione.')
-  }
-
-  return lines.join('\n')
-}
-
 export interface SessionReportData {
   sessionId?: string
   lastUpdated?: string
@@ -81,40 +44,24 @@ export class SessionDebtTracker {
 
   public compileTrackerMarkdown(): string {
     const timestamp = this.data.lastUpdated || new Date().toISOString()
-    const lines: string[] = ['# SESSION TRACKER & UNRESOLVED DEBT REPORT', `*Last Updated:* ${timestamp}`, '', '## 1. Functional Changes & Completed Tasks']
+    const lines: string[] = ['# SESSION_TRACKER', 'format: 2', `updated_at: ${timestamp}`, '', '## completed_tasks']
+    this.data.completedTasks.forEach((task) => lines.push(`- [x] ${task}`))
 
-    if (this.data.completedTasks.length === 0) {
-      lines.push('- No tasks completed yet.')
-    } else {
-      this.data.completedTasks.forEach((task) => lines.push(`- [x] ${task}`))
-    }
+    lines.push('', '## modified_files')
+    this.data.modifiedFiles.forEach((file) => lines.push(`- \`${file}\``))
 
-    lines.push('', '## 2. Modified & Created Files')
-    if (this.data.modifiedFiles.length === 0) {
-      lines.push('- None.')
-    } else {
-      this.data.modifiedFiles.forEach((file) => lines.push(`- \`${file}\``))
-    }
-
-    lines.push('', '## 3. Unresolved Issues, Errors & Known Debt')
+    lines.push('', '## unresolved_issues')
     if (this.data.unresolvedIssues.length > 0) {
-      this.data.unresolvedIssues.forEach((issue) => lines.push(`- [!] **BLOCKER/DEBT:** ${issue}`))
+      this.data.unresolvedIssues.forEach((issue) => lines.push(`- [!] ${issue}`))
     } else if (this.data.nextSteps.length > 0) {
-      // "None reported (all verified)" used to print whenever no milestone carried the `failed` status — which is not the same thing as being done.
-      lines.push(`- [!] No explicit blocker was recorded, but ${this.data.nextSteps.length} milestone(s) are still open — see section 4.`)
-    } else {
-      lines.push('- None reported (all verified).')
+      lines.push(`- [!] open_milestones: ${this.data.nextSteps.length}`)
     }
 
-    lines.push('', '## 4. Next Recommended Steps')
-    if (this.data.nextSteps.length === 0) {
-      lines.push('- No immediate follow-ups.')
-    } else {
-      this.data.nextSteps.forEach((step) => lines.push(`- [ ] ${step}`))
-    }
+    lines.push('', '## next_steps')
+    this.data.nextSteps.forEach((step) => lines.push(`- [ ] ${step}`))
 
     if (this.data.summaryText) {
-      lines.push('', '## 5. Raw Agent Summary', this.data.summaryText)
+      lines.push('', '## agent_summary', this.data.summaryText)
     }
 
     return lines.join('\n')
@@ -126,15 +73,15 @@ export class SessionDebtTracker {
       return ''
     }
 
-    const lines: string[] = ['### PERSISTENT SESSION TRACKER (Previous Turn History & Debt)']
+    const lines: string[] = ['### SESSION_TRACKER']
 
     if (this.data.unresolvedIssues.length > 0) {
-      lines.push('⚠️ **KNOWN UNRESOLVED BUGS / DEBT FROM PREVIOUS TURN:**')
+      lines.push('unresolved_issues:')
       this.data.unresolvedIssues.forEach((issue) => lines.push(`- [!] ${issue}`))
     }
 
     if (this.data.completedTasks.length > 0) {
-      lines.push('✅ **PREVIOUSLY COMPLETED WORK:**')
+      lines.push('completed_tasks:')
       this.data.completedTasks.forEach((task) => lines.push(`- [x] ${task}`))
     }
 
@@ -158,19 +105,20 @@ export class SessionDebtTracker {
 
     for (const rawLine of lines) {
       const line = rawLine.trim()
-      if (line.startsWith('## 1.')) {
+      if (currentSection === 'raw') continue
+      if (line === '## completed_tasks' || line.startsWith('## 1.')) {
         currentSection = 'completed'
         continue
-      } else if (line.startsWith('## 2.')) {
+      } else if (line === '## modified_files' || line.startsWith('## 2.')) {
         currentSection = 'files'
         continue
-      } else if (line.startsWith('## 3.')) {
+      } else if (line === '## unresolved_issues' || line.startsWith('## 3.')) {
         currentSection = 'unresolved'
         continue
-      } else if (line.startsWith('## 4.')) {
+      } else if (line === '## next_steps' || line.startsWith('## 4.')) {
         currentSection = 'next'
         continue
-      } else if (line.startsWith('## 5.')) {
+      } else if (line === '## agent_summary' || line.startsWith('## 5.')) {
         currentSection = 'raw'
         continue
       }
@@ -184,7 +132,9 @@ export class SessionDebtTracker {
         } else if (currentSection === 'files') {
           modifiedFiles.push(item.replace(/`/g, ''))
         } else if (currentSection === 'unresolved') {
-          unresolvedIssues.push(item.replace(/^\*\*BLOCKER\/DEBT:\*\*\s*/i, ''))
+          if (!item.startsWith('open_milestones:') && !item.startsWith('No explicit blocker was recorded')) {
+            unresolvedIssues.push(item.replace(/^\*\*BLOCKER\/DEBT:\*\*\s*/i, ''))
+          }
         } else if (currentSection === 'next') {
           nextSteps.push(item)
         }

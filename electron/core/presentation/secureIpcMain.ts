@@ -188,7 +188,6 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
   'agent:approval-response': obj({ identity, approved: z.boolean(), approvedHunkIndices: z.array(z.number().int().nonnegative()).optional() }),
   'agent:compact-context': identity,
   'agent:get-queue-status': null,
-  'agent:logs-analyze': obj({ extraPaths: z.array(path).optional() }).optional(),
   'agent:plan-interview': obj({
     prompt: string,
     model: optionalString,

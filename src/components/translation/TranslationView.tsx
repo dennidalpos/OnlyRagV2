@@ -1,3 +1,4 @@
+import { AppSelect } from '../common/AppSelect'
 import React, { useState } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
 import {
@@ -216,7 +217,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
               <div className="p-4 border-b border-slate-800 bg-slate-900/40 flex flex-wrap items-center justify-between text-xs gap-3 shrink-0">
                 <div className="flex items-center gap-2.5 flex-1 min-w-[280px]">
                   <span className="text-slate-400 font-bold uppercase text-[11px] shrink-0">{t('translation.sourceDocTitle')}:</span>
-                  <select
+                  <AppSelect
                     aria-label={t('translation.selectDocPlaceholder')}
                     value={tr.selectedDoc?.id || ''}
                     disabled={tr.isTranslating}
@@ -232,7 +233,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                         {doc.filename} ({doc.numPages} {t('ingestion.pages')})
                       </option>
                     ))}
-                  </select>
+                  </AppSelect>
                   <button
                     type="button"
                     onClick={tr.fetchDocuments}
@@ -262,7 +263,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                           : t('translation.allView')}
                       </button>
                       {tr.pageViewMode === 'page' && (
-                        <select
+                        <AppSelect
                           value={tr.currentPage}
                           onChange={(e) => tr.setCurrentPage(Number(e.target.value))}
                           disabled={tr.isTranslating}
@@ -274,7 +275,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                               {p}
                             </option>
                           ))}
-                        </select>
+                        </AppSelect>
                       )}
                     </div>
                   )}
@@ -282,7 +283,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                   <label className="sr-only" htmlFor="source-lang-select">
                     {t('translation.sourceLang')}
                   </label>
-                  <select
+                  <AppSelect
                     id="source-lang-select"
                     aria-label={t('translation.sourceLang')}
                     value={tr.sourceLang}
@@ -295,7 +296,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                         {lang}
                       </option>
                     ))}
-                  </select>
+                  </AppSelect>
 
                   <button
                     type="button"
@@ -311,7 +312,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                   <label className="sr-only" htmlFor="target-lang-select">
                     {t('translation.targetLang')}
                   </label>
-                  <select
+                  <AppSelect
                     id="target-lang-select"
                     aria-label={t('translation.targetLang')}
                     value={tr.targetLang}
@@ -324,7 +325,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                         {lang}
                       </option>
                     ))}
-                  </select>
+                  </AppSelect>
                 </div>
               </div>
 

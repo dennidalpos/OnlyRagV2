@@ -5,10 +5,10 @@ import { normalizeAgentStepBudget } from './agentStepBudget'
 export function resolveAgentCapabilityProfile(input?: Partial<AppSettings | AgentCapabilityProfile> | null): AgentCapabilityProfile {
   const steps = input?.maxToolCallSteps
   return {
-    allowFileModifications: input?.allowFileModifications === true,
-    allowTerminalExecution: input?.allowTerminalExecution === true,
+    allowFileModifications: input?.allowFileModifications !== false,
+    allowTerminalExecution: input?.allowTerminalExecution !== false,
     capabilityPolicyMode:
-      input?.capabilityPolicyMode === 'local-only' || input?.capabilityPolicyMode === 'network-approved' ? input.capabilityPolicyMode : 'offline-strict',
+      input?.capabilityPolicyMode === 'local-only' || input?.capabilityPolicyMode === 'offline-strict' ? input.capabilityPolicyMode : 'network-approved',
     maxToolCallSteps: normalizeAgentStepBudget(steps),
   }
 }

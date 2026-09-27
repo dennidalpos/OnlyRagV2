@@ -3,11 +3,11 @@ import { DEFAULT_AGENT_STEP_BUDGET } from './agentStepBudget'
 import { resolveAgentCapabilityProfile } from './agentCapabilityProfile'
 
 describe('Agent capability profile', () => {
-  it('uses a finite restrictive profile when settings are absent', () => {
+  it('enables local tools and requires network approval when settings are absent', () => {
     expect(resolveAgentCapabilityProfile()).toEqual({
-      allowFileModifications: false,
-      allowTerminalExecution: false,
-      capabilityPolicyMode: 'offline-strict',
+      allowFileModifications: true,
+      allowTerminalExecution: true,
+      capabilityPolicyMode: 'network-approved',
       maxToolCallSteps: DEFAULT_AGENT_STEP_BUDGET,
     })
   })
@@ -25,6 +25,16 @@ describe('Agent capability profile', () => {
       allowTerminalExecution: true,
       capabilityPolicyMode: 'network-approved',
       maxToolCallSteps: 200,
+    })
+  })
+
+  it('preserves explicit local tool restrictions', () => {
+    expect(
+      resolveAgentCapabilityProfile({ allowFileModifications: false, allowTerminalExecution: false, capabilityPolicyMode: 'offline-strict' }),
+    ).toMatchObject({
+      allowFileModifications: false,
+      allowTerminalExecution: false,
+      capabilityPolicyMode: 'offline-strict',
     })
   })
 

@@ -1,3 +1,4 @@
+import { AppSelect } from '../common/AppSelect'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Modal } from '../common/Modal'
 import { DiagnosticsData, LogEntry } from '../../types'
@@ -331,7 +332,7 @@ ${logs
         </div>
 
         {/* Level Filter Dropdown */}
-        <select
+        <AppSelect
           aria-label="Filter logs by level"
           value={selectedLevel}
           onChange={(e) => setSelectedLevel(e.target.value)}
@@ -342,11 +343,11 @@ ${logs
           <option value="WARN">WARN</option>
           <option value="ERROR">ERROR</option>
           <option value="DEBUG">DEBUG</option>
-        </select>
+        </AppSelect>
 
         {/* Category Filter Dropdown */}
         {categories.length > 0 && (
-          <select
+          <AppSelect
             aria-label="Filter logs by category"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
@@ -358,7 +359,7 @@ ${logs
                 {cat}
               </option>
             ))}
-          </select>
+          </AppSelect>
         )}
 
         <div className="flex items-center gap-1.5">

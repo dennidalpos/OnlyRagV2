@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildOllamaModelOptions } from './ollamaModelOptions'
+import { buildOllamaModelOptions, findInstalledOllamaOption } from './ollamaModelOptions'
+
+describe('findInstalledOllamaOption', () => {
+  it('resolves latest aliases but never invents a tag', () => {
+    expect(findInstalledOllamaOption(['nomic-embed-text:latest'], 'nomic-embed-text')).toBe('nomic-embed-text:latest')
+    expect(findInstalledOllamaOption(['qwen2.5-coder:7b'], 'qwen2.5-coder:3b')).toBeNull()
+  })
+})
 
 describe('buildOllamaModelOptions', () => {
   it('keeps every model reported by Ollama without applying a preset or intent filter', () => {

@@ -46,7 +46,7 @@ describe('live: version downgrade guard', () => {
         workspacePath: WORKSPACE,
         agentMode: 'auto',
         sessionId: SESSION,
-        settings: loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 6 } as never),
+        settings: loadRealSettings({ maxToolCallSteps: 6 }),
       },
       null,
     )
@@ -77,7 +77,7 @@ describe('live: version downgrade guard', () => {
         workspacePath: WORKSPACE,
         agentMode: 'auto',
         sessionId: `${SESSION}-etarget`,
-        settings: loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 6 } as never),
+        settings: loadRealSettings({ maxToolCallSteps: 6 }),
       },
       null,
     )

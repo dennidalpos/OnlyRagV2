@@ -3,6 +3,13 @@ export function getOllamaModelIdentity(model: string): string {
   return normalized.includes(':') ? normalized : `${normalized}:latest`
 }
 
+/** Resolve a saved tag to one the connected Ollama host actually reported. */
+export function findInstalledOllamaOption(models: readonly string[], savedModel: string): string | null {
+  if (!savedModel.trim()) return null
+  const identity = getOllamaModelIdentity(savedModel)
+  return models.find((model) => getOllamaModelIdentity(model) === identity) ?? null
+}
+
 export function buildOllamaModelOptions(models: readonly string[], currentModel?: string, preferredModels: readonly string[] = []): string[] {
   const options = new Set<string>()
   const identities = new Set<string>()

@@ -73,7 +73,7 @@ describe('live: TS2305 export recovery', () => {
         workspacePath: WORKSPACE,
         agentMode: 'auto',
         sessionId: SESSION,
-        settings: loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 12 } as never),
+        settings: loadRealSettings({ maxToolCallSteps: 12 }),
       },
       null,
     )

@@ -641,7 +641,7 @@ def test_semantic_chunks_oversized_line_splitting():
     for idx, c_text, header in chunks:
         assert len(c_text) < 1500
         assert "LargeDoc" in header
-        assert "[Documento: LargeDoc.md | Sezione:" in c_text
+        assert "[Document: LargeDoc.md | Section:" in c_text
 
 
 def test_reciprocal_rank_fusion_k60():

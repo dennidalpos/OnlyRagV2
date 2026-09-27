@@ -1,18 +1,14 @@
 import React from 'react'
 import { Code, MessageSquare, Eye, Activity, Sparkles } from 'lucide-react'
 import { useTranslation } from '../../i18n'
-import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
+import { findInstalledOllamaOption } from '../../services/ollamaModelOptions'
 import type { ModelFitVerdict } from '../../services/hardwareRecommendationEngine'
-import type { HardwareWizardModelOptions, HardwareWizardModelSuite } from '../../../shared/domain/hardware/hardwareModelCatalog'
-import { buildOllamaModelOptions } from '../../services/ollamaModelOptions'
 import { ModelSelect } from '../settings/ModelSelect'
 
 export interface WizardStepRecommendedModelsProps {
   downloadedModels: string[]
   /** Per-model VRAM verdict for the detected host, rendered inline on every option. */
   getModelFit: (modelName: string) => ModelFitVerdict
-  recommendedModels: HardwareWizardModelSuite
-  modelOptions: HardwareWizardModelOptions
   // Coding
   selectedCoding: string
   onChangeCoding: (model: string) => void
@@ -38,8 +34,6 @@ export interface WizardStepRecommendedModelsProps {
 export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsProps> = ({
   downloadedModels,
   getModelFit,
-  recommendedModels,
-  modelOptions,
   selectedCoding,
   onChangeCoding,
   selectedChat,
@@ -57,11 +51,10 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
 }) => {
   const { t } = useTranslation()
 
-  const isModelInstalled = (name: string) => isOllamaModelInstalled(name, downloadedModels)
+  const installedOption = (name: string) => findInstalledOllamaOption(downloadedModels, name)
 
-  const buildOptions = (currentValue: string | undefined, catalog: string[], recommendation: string) => {
-    return buildOllamaModelOptions([...catalog, ...downloadedModels], currentValue, [recommendation])
-  }
+  const buildOptions = () => [...new Set(downloadedModels)]
+  const unavailable = (name: string | undefined) => (name && !installedOption(name) ? name : undefined)
 
   // A native <option> renders text only, so the VRAM verdict is appended to the label rather
   // than drawn as a styled badge.
@@ -82,11 +75,9 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
   }
 
   const renderOption = (name: string) => {
-    const installed = isModelInstalled(name)
-    const state = installed ? `✓ ${name} [${t('common.ready')}]` : `⬇ ${name} [${t('common.download')}]`
     return (
       <option key={name} value={name}>
-        {`${state}${renderVramBadge(name)}`}
+        {`✓ ${name} [${t('common.ready')}]${renderVramBadge(name)}`}
       </option>
     )
   }
@@ -113,8 +104,15 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-cyan-300">{t('wizardModels.codingModel')}</span>
               <span className="text-[10px] text-cyan-400 font-mono">Workhorse</span>
             </div>
-            <ModelSelect ariaLabel={t('wizardModels.selectCoding')} value={selectedCoding} onChange={(e) => onChangeCoding(e.target.value)}>
-              {buildOptions(selectedCoding, modelOptions.coding, recommendedModels.coding).map((m) => renderOption(m))}
+            <ModelSelect
+              ariaLabel={t('wizardModels.selectCoding')}
+              value={installedOption(selectedCoding) || selectedCoding}
+              unavailableModel={unavailable(selectedCoding)}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
+              onChange={(e) => onChangeCoding(e.target.value)}
+            >
+              <option value="">{t('uiShell.selectLocalModel')}</option>
+              {buildOptions().map((m) => renderOption(m))}
             </ModelSelect>
           </div>
         </div>
@@ -134,8 +132,15 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-purple-300">{t('wizardModels.chatModel')}</span>
               <span className="text-[10px] text-purple-400 font-mono">{t('wizardModels.chatTag')}</span>
             </div>
-            <ModelSelect ariaLabel={t('wizardModels.selectChat')} value={selectedChat} onChange={(e) => onChangeChat(e.target.value)}>
-              {buildOptions(selectedChat, modelOptions.chat, recommendedModels.chat).map((m) => renderOption(m))}
+            <ModelSelect
+              ariaLabel={t('wizardModels.selectChat')}
+              value={installedOption(selectedChat) || selectedChat}
+              unavailableModel={unavailable(selectedChat)}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
+              onChange={(e) => onChangeChat(e.target.value)}
+            >
+              <option value="">{t('uiShell.selectLocalModel')}</option>
+              {buildOptions().map((m) => renderOption(m))}
             </ModelSelect>
           </div>
 
@@ -145,8 +150,15 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-sky-300">{t('wizardModels.translationModel')}</span>
               <span className="text-[10px] text-sky-400 font-mono">{t('wizardModels.translationTag')}</span>
             </div>
-            <ModelSelect ariaLabel={t('wizardModels.selectTranslation')} value={selectedTranslation} onChange={(e) => onChangeTranslation(e.target.value)}>
-              {buildOptions(selectedTranslation, modelOptions.translation, recommendedModels.translation).map((m) => renderOption(m))}
+            <ModelSelect
+              ariaLabel={t('wizardModels.selectTranslation')}
+              value={installedOption(selectedTranslation) || selectedTranslation}
+              unavailableModel={unavailable(selectedTranslation)}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
+              onChange={(e) => onChangeTranslation(e.target.value)}
+            >
+              <option value="">{t('uiShell.selectLocalModel')}</option>
+              {buildOptions().map((m) => renderOption(m))}
             </ModelSelect>
           </div>
         </div>
@@ -166,8 +178,15 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-amber-300">{t('wizardModels.visionModel')}</span>
               <span className="text-[10px] text-amber-400 font-mono">{t('wizardModels.visionTag')}</span>
             </div>
-            <ModelSelect ariaLabel={t('wizardModels.selectVision')} value={selectedVision} onChange={(e) => onChangeVision(e.target.value)}>
-              {buildOptions(selectedVision, modelOptions.vision, recommendedModels.vision).map((m) => renderOption(m))}
+            <ModelSelect
+              ariaLabel={t('wizardModels.selectVision')}
+              value={installedOption(selectedVision) || selectedVision}
+              unavailableModel={unavailable(selectedVision)}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
+              onChange={(e) => onChangeVision(e.target.value)}
+            >
+              <option value="">{t('uiShell.selectLocalModel')}</option>
+              {buildOptions().map((m) => renderOption(m))}
             </ModelSelect>
           </div>
 
@@ -177,8 +196,15 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-purple-300">{t('wizardModels.embeddingModel')}</span>
               <span className="text-[10px] text-purple-400 font-mono">{t('wizardModels.embeddingTag')}</span>
             </div>
-            <ModelSelect ariaLabel={t('wizardModels.selectEmbedding')} value={selectedEmbedding} onChange={(e) => onChangeEmbedding(e.target.value)}>
-              {buildOptions(selectedEmbedding, modelOptions.embedding, recommendedModels.embedding).map((m) => renderOption(m))}
+            <ModelSelect
+              ariaLabel={t('wizardModels.selectEmbedding')}
+              value={installedOption(selectedEmbedding) || selectedEmbedding}
+              unavailableModel={unavailable(selectedEmbedding)}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
+              onChange={(e) => onChangeEmbedding(e.target.value)}
+            >
+              <option value="">{t('uiShell.selectLocalModel')}</option>
+              {buildOptions().map((m) => renderOption(m))}
             </ModelSelect>
           </div>
         </div>
@@ -200,11 +226,13 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
             </div>
             <ModelSelect
               ariaLabel={t('wizardModels.selectMedical')}
-              value={selectedMedical || ''}
+              value={installedOption(selectedMedical || '') || selectedMedical || ''}
+              unavailableModel={unavailable(selectedMedical)}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
               onChange={(e) => onChangeMedical(e.target.value || undefined)}
             >
               <option value="">{t('wizardModels.useChatModel')}</option>
-              {buildOptions(selectedMedical, modelOptions.medical, '').map((m) => renderOption(m))}
+              {buildOptions().map((m) => renderOption(m))}
             </ModelSelect>
           </div>
 
@@ -214,9 +242,15 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               <span className="font-bold text-amber-300">{t('wizardModels.legalModel')}</span>
               <span className="text-[10px] text-amber-400 font-mono">{t('wizardModels.legalTag')}</span>
             </div>
-            <ModelSelect ariaLabel={t('wizardModels.selectLegal')} value={selectedLegal || ''} onChange={(e) => onChangeLegal(e.target.value || undefined)}>
+            <ModelSelect
+              ariaLabel={t('wizardModels.selectLegal')}
+              value={installedOption(selectedLegal || '') || selectedLegal || ''}
+              unavailableModel={unavailable(selectedLegal)}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
+              onChange={(e) => onChangeLegal(e.target.value || undefined)}
+            >
               <option value="">{t('wizardModels.useChatModel')}</option>
-              {buildOptions(selectedLegal, modelOptions.legal, '').map((m) => renderOption(m))}
+              {buildOptions().map((m) => renderOption(m))}
             </ModelSelect>
           </div>
         </div>

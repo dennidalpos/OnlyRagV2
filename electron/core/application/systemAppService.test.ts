@@ -4,7 +4,7 @@ import { SystemAppService } from './systemAppService'
 describe('SystemAppService Unit Tests', () => {
   const service = new SystemAppService()
 
-  it('should accurately estimate model sizes for different tiers and families', () => {
+  it('estimates positive and increasing download sizes without a preset catalog', () => {
     // Small embeddings
     const nomicBytes = service.estimateModelSizeBytes('nomic-embed-text')
     expect(nomicBytes).toBe(Math.round(0.27 * 1024 * 1024 * 1024))
@@ -14,18 +14,18 @@ describe('SystemAppService Unit Tests', () => {
 
     // Fast lightweight models
     const llama1bBytes = service.estimateModelSizeBytes('llama3.2:1b')
-    expect(llama1bBytes).toBe(Math.round(1.3 * 1024 * 1024 * 1024))
+    expect(llama1bBytes).toBeGreaterThan(0)
 
     const llama3bBytes = service.estimateModelSizeBytes('llama3.2:3b')
-    expect(llama3bBytes).toBe(Math.round(2.0 * 1024 * 1024 * 1024))
+    expect(llama3bBytes).toBeGreaterThan(llama1bBytes)
 
     // Workhorse models
     const qwen7bBytes = service.estimateModelSizeBytes('qwen2.5-coder:7b')
-    expect(qwen7bBytes).toBe(Math.round(4.7 * 1024 * 1024 * 1024))
+    expect(qwen7bBytes).toBeGreaterThan(llama3bBytes)
 
     // Large models
     const qwen14bBytes = service.estimateModelSizeBytes('qwen2.5-coder:14b')
-    expect(qwen14bBytes).toBe(Math.round(9.0 * 1024 * 1024 * 1024))
+    expect(qwen14bBytes).toBeGreaterThan(qwen7bBytes)
   })
 
   it('should validate download space against free disk space', () => {

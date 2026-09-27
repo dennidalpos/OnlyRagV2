@@ -1,3 +1,4 @@
+import { AppSelect } from '../../common/AppSelect'
 import React, { useState } from 'react'
 import { Modal } from '../../common/Modal'
 import { X, Plus, Globe, AlertCircle } from 'lucide-react'
@@ -116,7 +117,7 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({ isOpen, on
           <label htmlFor="hub-type-select" className="block text-xs font-semibold text-slate-300 mb-1">
             {t('skills.hubType')}
           </label>
-          <select
+          <AppSelect
             id="hub-type-select"
             value={type}
             onChange={(e) => setType(e.target.value as HubSourceType)}
@@ -124,7 +125,7 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({ isOpen, on
           >
             <option value="json-catalog">JSON Catalog (hub.json / API)</option>
             <option value="github-repo">GitHub Repo / SKILL.md Raw</option>
-          </select>
+          </AppSelect>
         </div>
 
         <div>

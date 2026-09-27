@@ -5,9 +5,9 @@ import type { UserInterviewAnswer } from '../../shared/types'
 import { shouldRunPlanInterview } from '../../shared/domain/agent/planInterviewPolicy'
 import { agentInterviewAppService } from '../../electron/core/application/agentInterviewAppService'
 import { planGenerationAppService } from '../../electron/core/application/planGenerationAppService'
-import { liveWorkspacePath, loadRealSettings, resetWorkspace } from './agentLiveHarness'
+import { LIVE_CODING_MODEL, liveWorkspacePath, loadRealSettings, resetWorkspace } from './agentLiveHarness'
 
-const MODEL = process.env.ONLYRAG_LIVE_MODEL || 'qwen2.5-coder:7b'
+const MODEL = LIVE_CODING_MODEL
 const SAFE_MODEL = MODEL.replace(/[^a-z0-9_-]+/gi, '-')
 const WORKSPACE = liveWorkspacePath(`interview_${SAFE_MODEL}`)
 
@@ -34,7 +34,7 @@ describe('live: interview qualification', () => {
     expect(shouldRunPlanInterview(clear)).toBe(false)
     expect(shouldRunPlanInterview(ambiguous)).toBe(true)
 
-    const settings = loadRealSettings({ codingModel: MODEL })
+    const settings = loadRealSettings()
     const interview = await agentInterviewAppService.conductInterview(ambiguous, MODEL, settings, WORKSPACE)
     expect(interview.status, interview.error).toBe('clarification_required')
     expect(interview.questions.length).toBeGreaterThan(0)

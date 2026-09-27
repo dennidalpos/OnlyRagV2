@@ -120,7 +120,8 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
             onClick={() => setIsDropdownOpen((prev) => !prev)}
             aria-haspopup="listbox"
             aria-expanded={isDropdownOpen}
-            className="flex-1 flex items-center justify-between px-3.5 py-2.5 bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-cyan-500/50 rounded-xl text-xs text-slate-200 font-medium transition-all cursor-pointer shadow-sm text-left group"
+            aria-label={t('skills.hubTitle')}
+            className="flex-1 flex items-center justify-between px-3.5 py-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-700 hover:border-cyan-500/50 rounded-xl text-xs text-slate-200 font-medium transition-all cursor-pointer shadow-sm text-left group focus-ring"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               {getSourceIcon(selectedSource?.type, selectedSource?.isBuiltin)}
@@ -159,7 +160,7 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
         {isDropdownOpen && (
           <div
             role="listbox"
-            className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-800/60 backdrop-blur-md animate-in fade-in slide-in-from-top-1 duration-150"
+            className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-slate-950 border border-slate-800 rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-800/60 animate-in fade-in slide-in-from-top-1 duration-150"
           >
             {[
               {

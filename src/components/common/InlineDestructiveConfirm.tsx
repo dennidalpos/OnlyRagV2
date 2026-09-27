@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useId, useState } from 'react'
 import { Trash2, Check, X, type LucideIcon } from 'lucide-react'
 import { useTranslation } from '../../i18n'
+import { Modal } from './Modal'
 
-/** In-place confirmation that keeps the destructive target visible. */
+/** Confirmation rendered outside scrollable cards so actions remain fully visible. */
 
 export interface InlineDestructiveConfirmProps {
   onConfirm: () => void
@@ -29,24 +30,10 @@ export const InlineDestructiveConfirm: React.FC<InlineDestructiveConfirmProps> =
   const { t } = useTranslation()
   const triggerLabel = actionLabel || t('common.delete')
   const [isConfirming, setIsConfirming] = useState(false)
-  const confirmButtonRef = useRef<HTMLButtonElement>(null)
+  const titleId = useId()
 
-  useEffect(() => {
-    if (!isConfirming) return
-    confirmButtonRef.current?.focus()
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation()
-        setIsConfirming(false)
-      }
-    }
-    // Let Escape cancel confirmation before ancestor handlers close their container.
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isConfirming])
-
-  if (!isConfirming) {
-    return (
+  return (
+    <>
       <button
         type="button"
         onClick={(event) => {
@@ -60,40 +47,42 @@ export const InlineDestructiveConfirm: React.FC<InlineDestructiveConfirmProps> =
       >
         <Icon className={iconClassName} />
       </button>
-    )
-  }
-
-  return (
-    <div className={`flex items-center gap-1.5 shrink-0 ${className}`} onClick={(event) => event.stopPropagation()}>
-      {hint && <span className="text-[9px] text-slate-400 leading-tight max-w-[11rem] text-right">{hint}</span>}
-      <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-        <button
-          ref={confirmButtonRef}
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation()
-            setIsConfirming(false)
-            onConfirm()
-          }}
-          title={t('common.confirm')}
-          aria-label={`${t('common.confirm')} — ${itemLabel}`}
-          className="p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors focus-ring active:scale-95"
-        >
-          <Check className="w-3 h-3" />
-        </button>
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation()
-            setIsConfirming(false)
-          }}
-          title={t('common.cancel')}
-          aria-label={t('common.cancel')}
-          className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors focus-ring"
-        >
-          <X className="w-3 h-3" />
-        </button>
-      </div>
-    </div>
+      <Modal
+        isOpen={isConfirming}
+        onClose={() => setIsConfirming(false)}
+        labelledById={titleId}
+        layer="nested"
+        panelClassName="max-w-sm bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 space-y-4"
+      >
+        <h2 id={titleId} className="text-sm font-semibold text-slate-100">
+          {triggerLabel} {itemLabel}?
+        </h2>
+        {hint && <p className="text-xs text-slate-300 leading-relaxed">{hint}</p>}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setIsConfirming(false)}
+            className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 text-xs focus-ring flex items-center gap-1"
+          >
+            <X className="w-3 h-3" />
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              setIsConfirming(false)
+              onConfirm()
+            }}
+            title={t('common.confirm')}
+            aria-label={`${t('common.confirm')} — ${itemLabel}`}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors focus-ring active:scale-95 text-xs flex items-center gap-1"
+          >
+            <Check className="w-3 h-3" />
+            {t('common.confirm')}
+          </button>
+        </div>
+      </Modal>
+    </>
   )
 }

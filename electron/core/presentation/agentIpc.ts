@@ -3,7 +3,6 @@ import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { taskQueueAppService } from '../application/taskQueueAppService'
 import { requestActiveAgentContextCompaction, respondToApproval, restoreRunCheckpoint } from '../application/agentOrchestratorAppService'
 import { agentSessionStateAppService } from '../application/agentSessionStateAppService'
-import { analyzeLogs } from '../application/logDiagnosticsAppService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import { ollamaAppService } from '../application/ollamaAppService'
@@ -48,11 +47,6 @@ export function registerAgentIpcHandlers(rendererEvents: RendererEventSink) {
 
   ipcMain.handle('agent:get-queue-status', async () => {
     return taskQueueAppService.getQueueStatus()
-  })
-
-  /** SLM Agent Studio: trigger log anomaly diagnostics analysis. */
-  ipcMain.handle('agent:logs-analyze', async (_, payload) => {
-    return analyzeLogs(payload?.extraPaths)
   })
 
   /**

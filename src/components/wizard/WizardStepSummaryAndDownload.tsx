@@ -61,17 +61,17 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
       {/* Summary Box */}
       <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
         <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-          <ShieldCheck className="w-4.5 h-4.5 text-emerald-400" /> Riepilogo Suite Modelli
+          <ShieldCheck className="w-4.5 h-4.5 text-emerald-400" /> {t('hardwareWizard.summaryTitle')}
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
           <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center">
-            <span className="text-cyan-300 font-medium">💻 Coding Workhorse:</span>
+            <span className="text-cyan-300 font-medium">{t('hardwareWizard.summaryCoding')}</span>
             <span className="font-mono text-slate-200 font-semibold">{selectedCoding || t('common.none')}</span>
           </div>
 
           <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center">
-            <span className="text-purple-300 font-medium">💬 RAG Chat:</span>
+            <span className="text-purple-300 font-medium">{t('hardwareWizard.summaryChat')}</span>
             <span className="font-mono text-slate-200 font-semibold">{selectedChat || t('common.none')}</span>
           </div>
 
@@ -81,7 +81,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
           </div>
 
           <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center">
-            <span className="text-amber-300 font-medium">👁️ Vision OCR:</span>
+            <span className="text-amber-300 font-medium">{t('hardwareWizard.summaryVision')}</span>
             <span className="font-mono text-slate-200 font-semibold">{selectedVision || t('common.none')}</span>
           </div>
 
@@ -133,7 +133,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
                 return (
                   <div key={m} className="flex items-center justify-between gap-2 py-0.5 border-b border-slate-800/40 last:border-0">
                     <span className="truncate">• {m}</span>
-                    {approxSize && <span className="text-[10px] text-slate-400 shrink-0 font-sans">~{approxSize} GB</span>}
+                    {approxSize && <span className="text-[10px] text-slate-400 shrink-0 font-sans">~{approxSize}</span>}
                   </div>
                 )
               })}
@@ -149,13 +149,13 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
           ) : diskCheck && !diskCheck.allowed ? (
             <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800 text-xs text-rose-300 space-y-1">
               <div className="flex items-center gap-1.5 font-bold">
-                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" /> Spazio su disco insufficiente
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                {diskCheck.error ? t('hardwareWizard.diskCheckFailed') : t('hardwareWizard.insufficientDiskSpace')}
               </div>
-              <p>
-                Richiesti ~{diskCheck.requiredGB} GB, disponibili {diskCheck.freeGB} GB.
-                {diskCheck.error && ` (${diskCheck.error})`}
-              </p>
+              <p>{diskCheck.error || t('hardwareWizard.diskRequiredDetail', { required: diskCheck.requiredGB, free: diskCheck.freeGB })}</p>
             </div>
+          ) : diskCheck ? (
+            <p className="text-[11px] text-slate-300">{t('hardwareWizard.diskRequiredDetail', { required: diskCheck.requiredGB, free: diskCheck.freeGB })}</p>
           ) : null}
 
           {/* Pulling progress / cancel banner */}
@@ -224,7 +224,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
           <Check className="w-5 h-5 text-emerald-400 shrink-0" />
           <div>
             <div className="font-bold">{t('uiShell.allModelsInstalled')}</div>
-            <div className="text-[11px] text-emerald-400/80">Puoi completare la configurazione e iniziare subito a utilizzare OnlyRag.</div>
+            <div className="text-[11px] text-emerald-400/80">{t('hardwareWizard.readyToFinish')}</div>
           </div>
         </div>
       )}

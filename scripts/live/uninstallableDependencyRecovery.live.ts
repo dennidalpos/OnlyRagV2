@@ -52,7 +52,7 @@ describe('live: uninstallable dependency recovery', () => {
         workspacePath: WORKSPACE,
         agentMode: 'auto',
         sessionId: SESSION,
-        settings: loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 10 } as never),
+        settings: loadRealSettings({ maxToolCallSteps: 10 }),
       },
       liveWindow,
     )

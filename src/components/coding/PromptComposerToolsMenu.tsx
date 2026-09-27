@@ -1,5 +1,5 @@
 import React from 'react'
-import { Plus, Sliders, X, FileText, Sparkles, ChevronRight, Cpu, History } from 'lucide-react'
+import { Plus, Sliders, X, FileText, Sparkles, ChevronRight, History } from 'lucide-react'
 import { IngestedDocument } from '../../types'
 import { useTranslation } from '../../i18n'
 
@@ -11,9 +11,6 @@ interface PromptComposerToolsMenuProps {
   ingestedDocs: IngestedDocument[]
   attachedDocIds: Set<string>
   onToggleAttachDoc: (docId: string) => void
-  onOpenSkillHubModal?: () => void
-  onOpenPromptModal?: () => void
-  onOpenDiagnosticsModal?: () => void
   onOpenPromptHistorySearch?: () => void
   autoInstallHubSkills?: 'disabled' | 'prompt'
   onToggleAutoInstallSkills?: () => void
@@ -27,9 +24,6 @@ export const PromptComposerToolsMenu: React.FC<PromptComposerToolsMenuProps> = (
   ingestedDocs,
   attachedDocIds,
   onToggleAttachDoc,
-  onOpenSkillHubModal,
-  onOpenPromptModal,
-  onOpenDiagnosticsModal,
   onOpenPromptHistorySearch,
   autoInstallHubSkills = 'disabled',
   onToggleAutoInstallSkills,
@@ -123,54 +117,6 @@ export const PromptComposerToolsMenu: React.FC<PromptComposerToolsMenuProps> = (
           {/* Section 2: Studio Tools & Modals */}
           <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Strumenti Studio</div>
-
-            {onOpenPromptModal && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose()
-                  onOpenPromptModal()
-                }}
-                className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  <Sliders className="w-3.5 h-3.5 text-cyan-400" /> {t('common.systemPrompt')}
-                </span>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-            )}
-
-            {onOpenSkillHubModal && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose()
-                  onOpenSkillHubModal()
-                }}
-                className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> {t('skills.hubTitle')}
-                </span>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-            )}
-
-            {onOpenDiagnosticsModal && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose()
-                  onOpenDiagnosticsModal()
-                }}
-                className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  <Cpu className="w-3.5 h-3.5 text-cyan-400" /> Diagnostica & Toolchain
-                </span>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-            )}
 
             {onOpenPromptHistorySearch && (
               <button

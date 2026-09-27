@@ -7,36 +7,10 @@ import {
   type HardwareFacts,
   type HardwareProfileTier,
 } from '../../shared/domain/hardware/hardwareProfileTiers'
-import {
-  COMPACT_CODING_CATALOG,
-  WORKHORSE_CODING_CATALOG,
-  REASONING_CODING_CATALOG,
-  LARGE_CODING_CATALOG,
-  CHAT_TIER_CATALOG,
-  TRANSLATION_TIER_CATALOG,
-  MEDICAL_TIER_CATALOG,
-  LEGAL_TIER_CATALOG,
-  VISION_TIER_CATALOG,
-  EMBEDDING_TIER_CATALOG,
-  type RawModelCatalogEntry,
-} from '../../shared/domain/hardware/hardwareModelCatalog'
 
 export type { HardwareFacts } from '../../shared/domain/hardware/hardwareProfileTiers'
 export { estimateModelWeightGB }
 import { estimateModelWeightGB } from '../../shared/domain/hardware/modelWeightEstimator'
-
-export interface ModelRecommendation {
-  modelName: string
-  displayName: string
-  family: string
-  sizeBytesApprox: string
-  description: string
-  isRecommended: boolean
-  footprintGB?: number
-  isHardwareCompatible?: boolean
-  compatibilityStatus?: 'optimal_vram' | 'tight_vram' | 'exceeds_vram'
-  compatibilityWarning?: string
-}
 
 export interface HardwareRecommendations {
   profileTier: HardwareProfileTier
@@ -44,14 +18,6 @@ export interface HardwareRecommendations {
   gpuSummary: string
   ramSummary: string
   safeVramBudgetGB: number
-  /** Coding models assessed for current hardware. */
-  codingModels: ModelRecommendation[]
-  chatTierModels: ModelRecommendation[]
-  translationTierModels: ModelRecommendation[]
-  medicalTierModels: ModelRecommendation[]
-  legalTierModels: ModelRecommendation[]
-  visionTierModels: ModelRecommendation[]
-  embeddingTierModels: ModelRecommendation[]
 }
 
 /** Approximate memory/disk footprint string for model. */
@@ -183,13 +149,10 @@ export function buildModelFitLookup(diagnostics: DiagnosticsData | null): (model
 export { isOllamaModelInstalled } from '../../shared/domain/agent/modelTagMatcher'
 
 /**
- * Analyzes detected host hardware and calculates calibrated, non-saturated model assignments
- * strictly bound by net usable VRAM budget: VRAM_Disponibile_Reale = (VRAM_Totale * 0.75) - 1.5 GB.
+ * Summarizes detected host hardware. Model fit is evaluated for actual Ollama tags on demand.
  */
 export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null): HardwareRecommendations {
-  const { profileTier, profileName, vramTotalMB, systemRamGB, safeVramBudgetGB, gpuSummary, ramSummary } = resolveHardwareProfile(diagnostics)
-
-  const enrich = buildModelEnricher(diagnostics, vramTotalMB, systemRamGB, profileTier)
+  const { profileTier, profileName, safeVramBudgetGB, gpuSummary, ramSummary } = resolveHardwareProfile(diagnostics)
 
   return {
     profileTier,
@@ -197,13 +160,6 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     gpuSummary,
     ramSummary,
     safeVramBudgetGB,
-    codingModels: buildCodingModelCatalog().map((item) => enrich(item)),
-    chatTierModels: CHAT_TIER_CATALOG.map((item) => enrich(item)),
-    translationTierModels: TRANSLATION_TIER_CATALOG.map((item) => enrich(item)),
-    medicalTierModels: MEDICAL_TIER_CATALOG.map((item) => enrich(item)),
-    legalTierModels: LEGAL_TIER_CATALOG.map((item) => enrich(item)),
-    visionTierModels: VISION_TIER_CATALOG.map((item) => enrich(item)),
-    embeddingTierModels: EMBEDDING_TIER_CATALOG.map((item) => enrich(item)),
   }
 }
 
@@ -263,45 +219,4 @@ function formatProfileName(tier: HardwareProfileTier, vramGB: number, systemRamG
     default:
       return `Extreme Workstation (${specs})`
   }
-}
-
-/** Builds the enrichment function that turns a static RawModelCatalogEntry into a fully assessed ModelRecommendation for the current hardware (AGT6: extracted from analyzeHardwareAndRecommend's inline `enrich` closure). */
-function buildModelEnricher(diagnostics: DiagnosticsData | null, vramTotalMB: number, systemRamGB: number, profileTier: HardwareProfileTier) {
-  return (item: RawModelCatalogEntry): ModelRecommendation => {
-    const assessment = assessModelHardwareCompatibility(item.modelName, vramTotalMB, systemRamGB, 4096, diagnostics?.ollama.modelDetails?.[item.modelName])
-    const isRecommendedByProfile = item.recommendedForProfiles.includes(profileTier)
-    const isRecommended = isRecommendedByProfile
-
-    return {
-      modelName: item.modelName,
-      displayName: item.displayName,
-      family: item.family,
-      sizeBytesApprox: item.sizeBytesApprox,
-      description: item.description,
-      isRecommended,
-      footprintGB: assessment.footprintGB,
-      isHardwareCompatible: assessment.isCompatible,
-      compatibilityStatus: assessment.compatibilityStatus,
-      compatibilityWarning: assessment.warning,
-    }
-  }
-}
-
-/** Builds the single coding-model list from the four legacy tier catalogs. */
-function buildCodingModelCatalog(): RawModelCatalogEntry[] {
-  const byName = new Map<string, RawModelCatalogEntry>()
-  const order: string[] = []
-
-  for (const item of WORKHORSE_CODING_CATALOG) {
-    if (byName.has(item.modelName)) continue
-    byName.set(item.modelName, item)
-    order.push(item.modelName)
-  }
-  for (const item of [...COMPACT_CODING_CATALOG, ...REASONING_CODING_CATALOG, ...LARGE_CODING_CATALOG]) {
-    if (byName.has(item.modelName)) continue
-    byName.set(item.modelName, { ...item, recommendedForProfiles: [] })
-    order.push(item.modelName)
-  }
-
-  return order.map((name) => byName.get(name) as RawModelCatalogEntry)
 }

@@ -167,6 +167,7 @@ function closureSummaryLines(
   request: ApplicationClosureRequest,
   tracker: SessionDebtTracker,
   evidence: AgentLocalizedText,
+  stepCount: number,
 ): AgentLocalizedLine[] {
   const data = tracker.getData()
   const blank = { text: '' }
@@ -176,6 +177,7 @@ function closureSummaryLines(
     { key: 'closureReason', params: { reason: request.reason } },
     { key: 'closureEvidence', params: { evidence } },
   ]
+  if (request.guard) lines.push({ key: 'closureStoppedAtStep', params: { step: stepCount } })
   if (request.modelSummary?.trim()) {
     lines.push(blank, { key: 'closureModelSummary', params: { summary: request.modelSummary.trim() } })
   }
@@ -297,7 +299,7 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
   }
 
   const tracker = ctx.buildSessionTracker()
-  const summaryLines = closureSummaryLines(status, request, tracker, evidence)
+  const summaryLines = closureSummaryLines(status, request, tracker, evidence, ctx.stepCount)
   const summary = renderAgentLines(summaryLines)
   if (!ctx.lastVerification && status === 'unverifiable') {
     const unavailable: AgentVerificationEvidence = {

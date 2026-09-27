@@ -135,20 +135,20 @@ export const WizardStepHardware: React.FC<WizardStepHardwareProps> = ({
         )}
       </div>
 
-      {/* Quick 1-Click Auto-Apply Recommended Setup */}
+      {/* Starter setup reviewed before any download or save. */}
       <div className="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <span className="font-bold text-xs text-cyan-300 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> {t('hardwareWizard.autoApplyRecommended')}
           </span>
-          <p className="text-[11px] text-slate-400">{t('hardwareWizard.step1Subtitle')}</p>
+          <p className="text-[11px] text-slate-400">{t('hardwareWizard.starterSetupHint')}</p>
         </div>
         <button
           type="button"
           onClick={onAutoApply}
           className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring shrink-0 shadow-md shadow-cyan-950/40 active:scale-95"
         >
-          {t('hardwareWizard.autoApplyRecommended')} (1-Click)
+          {t('hardwareWizard.autoApplyRecommended')}
         </button>
       </div>
     </div>

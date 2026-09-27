@@ -34,6 +34,7 @@ export type CodingAgentLeftPanelModel = Pick<
   | 'handleNewSession'
   | 'compactContext'
   | 'workspacePath'
+  | 'isStandaloneMode'
   | 'activeSession'
   | 'handleSelectWorkspaceFolder'
   | 'changeMetrics'
@@ -51,8 +52,7 @@ interface CodingAgentLeftPanelProps {
   diagnostics?: DiagnosticsData | null
   hasPendingUnconsolidatedMilestones: boolean
   onExecute: () => void
-  onOpenSkillHubModal: () => void
-  onOpenDiagnosticsModal?: () => void
+  onPlanTask: () => void
   onOpenPromptHistorySearch?: () => void
   autoScroll: boolean
   onToggleAutoScroll: () => void
@@ -71,8 +71,7 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
   diagnostics,
   hasPendingUnconsolidatedMilestones,
   onExecute,
-  onOpenSkillHubModal,
-  onOpenDiagnosticsModal,
+  onPlanTask,
   onOpenPromptHistorySearch,
   autoScroll,
   onToggleAutoScroll,
@@ -98,6 +97,7 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
           streamingText={c.streamingText}
           currentStatusText={c.currentStatusText}
           onExecute={onExecute}
+          onPlanTask={onPlanTask}
           hasPendingUnconsolidatedMilestones={hasPendingUnconsolidatedMilestones}
           onCancel={c.handleCancelAgent}
           pinnedFiles={c.pinnedFiles}
@@ -114,9 +114,6 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
           promptQueue={c.promptQueue}
           onRemoveFromQueue={c.removeFromPromptQueue}
           onEditPromptInQueue={c.editPromptInQueue}
-          onOpenPromptModal={() => c.setIsPromptModalOpen(true)}
-          onOpenSkillHubModal={onOpenSkillHubModal}
-          onOpenDiagnosticsModal={onOpenDiagnosticsModal}
           onOpenPromptHistorySearch={onOpenPromptHistorySearch}
           onResetSession={() => {
             planApproval.resetPlanHistory()
@@ -124,6 +121,7 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
           }}
           onCompactContext={c.compactContext}
           workspacePath={c.workspacePath}
+          isStandaloneMode={c.isStandaloneMode}
           activeSession={c.activeSession}
           onSelectWorkspaceFolder={c.handleSelectWorkspaceFolder}
           changeMetrics={c.changeMetrics}

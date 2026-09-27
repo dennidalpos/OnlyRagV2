@@ -28,6 +28,7 @@ interface AgentActionLogPanelProps {
   streamingText?: string
   currentStatusText?: string
   onExecute: () => void
+  onPlanTask: () => void
   onCancel: () => void
   pinnedFiles: Map<string, WorkspaceFile>
   onTogglePinFile?: (file: WorkspaceFile) => void
@@ -43,14 +44,12 @@ interface AgentActionLogPanelProps {
   promptQueue?: QueuedPrompt[]
   onRemoveFromQueue?: (id: string) => void
   onEditPromptInQueue?: (id: string, newPrompt: string) => void
-  onOpenPromptModal?: () => void
-  onOpenSkillHubModal?: () => void
-  onOpenDiagnosticsModal?: () => void
   onOpenPromptHistorySearch?: () => void
   onResetSession?: () => void
   onCompactContext?: () => void
   hasPendingUnconsolidatedMilestones?: boolean
   workspacePath?: string | null
+  isStandaloneMode?: boolean
   activeSession?: CodingSession | null
   onSelectWorkspaceFolder?: () => void
   changeMetrics?: AgentChangeMetrics
@@ -76,6 +75,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   streamingText = '',
   currentStatusText = '',
   onExecute,
+  onPlanTask,
   onCancel,
   pinnedFiles,
   onTogglePinFile,
@@ -89,14 +89,12 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   promptQueue = [],
   onRemoveFromQueue,
   onEditPromptInQueue,
-  onOpenPromptModal,
-  onOpenSkillHubModal,
-  onOpenDiagnosticsModal,
   onOpenPromptHistorySearch,
   onResetSession,
   onCompactContext,
   hasPendingUnconsolidatedMilestones = false,
   workspacePath,
+  isStandaloneMode,
   activeSession,
   onSelectWorkspaceFolder,
   changeMetrics,
@@ -137,6 +135,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
     <div className="h-full flex flex-col bg-slate-950 text-slate-200 overflow-hidden select-text relative">
       <AgentSessionHeaderBar
         workspacePath={workspacePath}
+        isStandaloneMode={isStandaloneMode}
         onSelectWorkspaceFolder={onSelectWorkspaceFolder}
         showWorkspaceSidebar={showWorkspaceSidebar}
         onToggleWorkspaceSidebar={onToggleWorkspaceSidebar}
@@ -174,6 +173,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         agentPrompt={agentPrompt}
         setAgentPrompt={setAgentPrompt}
         onExecute={onExecute}
+        onPlanTask={onPlanTask}
         isExecuting={isExecuting}
         queueLength={promptQueue.length}
         agentMode={agentMode}
@@ -187,9 +187,6 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         onToggleAttachDoc={onToggleAttachDoc}
         pinnedFiles={pinnedFiles}
         onTogglePinFile={onTogglePinFile}
-        onOpenSkillHubModal={onOpenSkillHubModal}
-        onOpenPromptModal={onOpenPromptModal}
-        onOpenDiagnosticsModal={onOpenDiagnosticsModal}
         onOpenPromptHistorySearch={onOpenPromptHistorySearch}
         promptQueue={promptQueue}
         onRemoveFromQueue={onRemoveFromQueue}

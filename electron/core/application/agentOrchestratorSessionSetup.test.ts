@@ -83,9 +83,9 @@ describe('agentOrchestratorSessionSetup', () => {
     // No guessed model: the preflight reports a missing one instead of pulling a model nobody chose.
     expect(settings.defaultModel).toBe('')
     expect(settings.codingModel || '').toBe('')
-    // Fail-closed: a payload without settings must not unlock the terminal or file writes.
-    expect(settings.allowFileModifications).toBe(false)
-    expect(settings.allowTerminalExecution).toBe(false)
+    // New configurations enable local tools while network access remains approval-gated.
+    expect(settings.allowFileModifications).toBe(true)
+    expect(settings.allowTerminalExecution).toBe(true)
     expect(settings.capabilityPolicyMode).toBe('network-approved')
   })
 

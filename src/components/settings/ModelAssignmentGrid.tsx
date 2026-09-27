@@ -2,18 +2,14 @@ import React from 'react'
 import { Code, MessageSquare, Languages, FileText, Database, Eye, Activity, Scale } from 'lucide-react'
 import { DiagnosticsData, AppSettings } from '../../types'
 import { useTranslation } from '../../i18n'
-import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
 import { resolveVerificationStatus } from '../../services/codingModelMatrix'
-import { buildHardwareWizardModelOptions, CODING_CATALOG_MODEL_NAMES } from '../../../shared/domain/hardware/hardwareModelCatalog'
 import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
 import { extractHardwareFacts } from '../../services/hardwareRecommendationEngine'
-import { buildOllamaModelOptions } from '../../services/ollamaModelOptions'
+import { findInstalledOllamaOption } from '../../services/ollamaModelOptions'
 import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
 import { ModelBadgeStrip } from './ModelBadgeStrip'
 import { ModelContextControl } from './ModelContextControl'
 import { ModelSelect } from './ModelSelect'
-
-const CATALOG_MODELS = Object.values(buildHardwareWizardModelOptions()).flat()
 
 interface ModelAssignmentGridProps {
   diagnostics: DiagnosticsData | null
@@ -31,29 +27,25 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
   const translationModel = settings.translationModel || ''
   const visionModel = settings.visionModel || ''
   const embeddingModel = settings.embeddingModel || ''
-  const modelPool = [...CATALOG_MODELS, ...models]
 
-  const isModelInstalled = (name: string) => isOllamaModelInstalled(name, models)
+  const installedOption = (name: string) => findInstalledOllamaOption(models, name)
 
   const renderBadges = (modelName: string) => {
     if (!modelName) return null
     const status = resolveVerificationStatus({
       modelName,
-      isCatalogued: CODING_CATALOG_MODEL_NAMES.has(modelName),
       capabilities: metrics[modelName]?.capabilities,
     })
     return <ModelBadgeStrip modelName={modelName} status={status} metrics={metrics[modelName]} className="pt-0.5" />
   }
 
-  const buildModelOptions = (currentValue: string) => {
-    return buildOllamaModelOptions(modelPool, currentValue)
-  }
+  const buildModelOptions = () => [...new Set(models)]
+  const unavailable = (name: string) => (name && !installedOption(name) ? name : undefined)
 
-  const renderOption = (name: string, label: string) => {
-    const installed = isModelInstalled(name)
+  const renderOption = (name: string) => {
     return (
       <option key={name} value={name}>
-        {installed ? `✓ ${label} [${t('common.ready')}]` : `⬇ ${label} [${t('common.download')}]`}
+        {`✓ ${name} [${t('common.ready')}]`}
       </option>
     )
   }
@@ -91,7 +83,9 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
             </div>
             <ModelSelect
               ariaLabel={t('uiShell.selectCodingModel')}
-              value={codingModel}
+              value={installedOption(codingModel) || codingModel}
+              unavailableModel={unavailable(codingModel)}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
               onChange={(e) => {
                 onUpdateSettings({
                   codingModel: e.target.value,
@@ -99,7 +93,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
               }}
             >
               {renderEmptyOption()}
-              {buildModelOptions(codingModel).map((m) => renderOption(m, m))}
+              {buildModelOptions().map(renderOption)}
             </ModelSelect>
             {renderBadges(codingModel)}
             {codingModel && (
@@ -132,9 +126,15 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-purple-300 block">{t('settings.chatModel')}:</label>
-            <ModelSelect ariaLabel="Select RAG & Chat model" value={chatModel} onChange={(e) => onUpdateSettings({ chatModel: e.target.value })}>
+            <ModelSelect
+              ariaLabel="Select RAG & Chat model"
+              value={installedOption(chatModel) || chatModel}
+              unavailableModel={unavailable(chatModel)}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
+              onChange={(e) => onUpdateSettings({ chatModel: e.target.value })}
+            >
               {renderEmptyOption()}
-              {buildModelOptions(chatModel).map((m) => renderOption(m, m))}
+              {buildModelOptions().map(renderOption)}
             </ModelSelect>
             {chatModel && (
               <ModelContextControl
@@ -164,11 +164,13 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
             <label className="text-xs font-semibold text-sky-300 block">{t('settings.translationModel')}:</label>
             <ModelSelect
               ariaLabel="Select Document Translation model"
-              value={translationModel}
+              value={installedOption(translationModel) || translationModel}
+              unavailableModel={unavailable(translationModel)}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
               onChange={(e) => onUpdateSettings({ translationModel: e.target.value })}
             >
               {renderEmptyOption()}
-              {buildModelOptions(translationModel).map((m) => renderOption(m, m))}
+              {buildModelOptions().map(renderOption)}
             </ModelSelect>
             {translationModel && (
               <ModelContextControl
@@ -204,9 +206,15 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
               </span>
               <span className="text-[10px] text-slate-400 font-mono">Vision OCR</span>
             </div>
-            <ModelSelect ariaLabel="Select Vision & OCR model" value={visionModel} onChange={(e) => onUpdateSettings({ visionModel: e.target.value })}>
+            <ModelSelect
+              ariaLabel="Select Vision & OCR model"
+              value={installedOption(visionModel) || visionModel}
+              unavailableModel={unavailable(visionModel)}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
+              onChange={(e) => onUpdateSettings({ visionModel: e.target.value })}
+            >
               {renderEmptyOption()}
-              {buildModelOptions(visionModel).map((m) => renderOption(m, m))}
+              {buildModelOptions().map(renderOption)}
             </ModelSelect>
             {visionModel && (
               <ModelContextControl
@@ -229,11 +237,13 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
             </div>
             <ModelSelect
               ariaLabel="Select Vector Store Embedding model"
-              value={embeddingModel}
+              value={installedOption(embeddingModel) || embeddingModel}
+              unavailableModel={unavailable(embeddingModel)}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
               onChange={(e) => onUpdateSettings({ embeddingModel: e.target.value })}
             >
               {renderEmptyOption()}
-              {buildModelOptions(embeddingModel).map((m) => renderOption(m, m))}
+              {buildModelOptions().map(renderOption)}
             </ModelSelect>
           </div>
         </div>
@@ -262,11 +272,13 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
             </div>
             <ModelSelect
               ariaLabel="Select Medical & Clinical model"
-              value={settings.medicalModel || ''}
+              value={installedOption(settings.medicalModel || '') || settings.medicalModel || ''}
+              unavailableModel={unavailable(settings.medicalModel || '')}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
               onChange={(e) => onUpdateSettings({ medicalModel: e.target.value })}
             >
               <option value="">{`-- ${t('common.none')} (${t('settings.chatModel')}) --`}</option>
-              {buildModelOptions(settings.medicalModel || '').map((m) => renderOption(m, m))}
+              {buildModelOptions().map(renderOption)}
             </ModelSelect>
           </div>
 
@@ -280,11 +292,13 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
             </div>
             <ModelSelect
               ariaLabel="Select Legal & Compliance model"
-              value={settings.legalModel || ''}
+              value={installedOption(settings.legalModel || '') || settings.legalModel || ''}
+              unavailableModel={unavailable(settings.legalModel || '')}
+              unavailableLabel={t('uiShell.modelNotInstalled')}
               onChange={(e) => onUpdateSettings({ legalModel: e.target.value })}
             >
               <option value="">{`-- ${t('common.none')} (${t('settings.chatModel')}) --`}</option>
-              {buildModelOptions(settings.legalModel || '').map((m) => renderOption(m, m))}
+              {buildModelOptions().map(renderOption)}
             </ModelSelect>
           </div>
         </div>

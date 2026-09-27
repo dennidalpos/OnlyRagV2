@@ -43,7 +43,6 @@ export function declaresToolCalling(capabilities: readonly string[] | undefined)
 /** Resolves the badge a model should carry. */
 export function resolveVerificationStatus(args: {
   modelName: string
-  isCatalogued: boolean
   /** From `/api/tags`; undefined when the model is not installed. */
   capabilities?: readonly string[]
 }): ModelVerificationStatus {
@@ -58,7 +57,7 @@ export function resolveVerificationStatus(args: {
     return 'unsupported'
   }
 
-  return args.isCatalogued ? 'compatible' : 'unknown'
+  return args.capabilities !== undefined ? 'compatible' : 'unknown'
 }
 
 /** The evidence behind a `verified` badge, for the tooltip. Null for every other status. */

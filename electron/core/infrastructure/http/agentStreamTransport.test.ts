@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { AgentStreamTransport, type AgentChatMessage } from './agentStreamTransport'
+import { AgentStreamTransport, initialResponseTimeoutMs, type AgentChatMessage } from './agentStreamTransport'
 import { REASONING_BUDGET_ERROR } from '../../domain/agent/ollamaSessionRuntime'
 import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../../domain/agent/ollamaToolSchemaCatalog'
 import type { OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
@@ -50,6 +50,11 @@ function recordingOllama(records: readonly unknown[], seen: { path?: string; bod
 
 describe('AgentStreamTransport', () => {
   let activeServer: http.Server | null = null
+
+  it('allows a slow native tool call to use the measured stream silence budget before response headers', () => {
+    expect(initialResponseTimeoutMs()).toBe(10 * 60 * 1000)
+    expect(initialResponseTimeoutMs(30 * 60 * 1000)).toBe(30 * 60 * 1000)
+  })
 
   afterEach(() => {
     if (activeServer) {

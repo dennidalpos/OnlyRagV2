@@ -12,7 +12,7 @@ Il controllo statico verifica la presenza degli schemi, non la copertura di ogni
 
 | Prefisso | Canali registrati |
 | --- | --- |
-| `agent` | `approval-response`, `cancel-task`, `compact-context`, `export-ai-debug-bundle`, `get-plan-state`, `get-queue-status`, `logs-analyze`, `plan-cancel`, `plan-enrich-prompt`, `plan-generate`, `plan-interview`, `plan-seed`, `start-task` |
+| `agent` | `approval-response`, `cancel-task`, `compact-context`, `export-ai-debug-bundle`, `get-plan-state`, `get-queue-status`, `plan-cancel`, `plan-enrich-prompt`, `plan-generate`, `plan-interview`, `plan-seed`, `start-task` |
 | `artifacts` | `delete`, `get`, `list`, `save` |
 | `diagnostics` | `clear-logs`, `clear-agent-audit-log`, `get-log-filepath`, `get-logs`, `log-telemetry`, `open-logs-folder`, `run` |
 | `dialog` | `open-directory`, `open-file` |

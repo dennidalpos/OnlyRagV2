@@ -29,7 +29,7 @@ function seedExistingWorkspace(): void {
 describe('live: pre-seeded workspace', () => {
   it('adds the existing project build to the generated plan', async () => {
     seedExistingWorkspace()
-    const settings = loadRealSettings({ codingModel: 'qwen2.5-coder:7b' } as never)
+    const settings = loadRealSettings()
 
     const seeded = await seedGeneratedPlan({
       sessionId: SESSION,

@@ -1,3 +1,4 @@
+import { AppSelect } from '../common/AppSelect'
 import React from 'react'
 import { FileCheck2, Folder, ArrowLeftRight, Play, Loader2, AlertCircle, CheckCircle2, AlertTriangle, Info, X, FileText } from 'lucide-react'
 import { AppSettings } from '../../types'
@@ -76,7 +77,7 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
                 <p className="leading-relaxed">{t('translation.inplaceNoCompatibleDocs')}</p>
               </div>
             ) : (
-              <select
+              <AppSelect
                 id="inplace-doc-select"
                 value={inp.selectedDoc?.id || ''}
                 disabled={inp.isTranslating}
@@ -92,7 +93,7 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
                     [{doc.fileType.toUpperCase()}] {doc.filename} ({doc.numPages > 0 ? `${doc.numPages} pag.` : ''} • {(doc.fileSize / 1024).toFixed(0)} KB)
                   </option>
                 ))}
-              </select>
+              </AppSelect>
             )}
           </div>
 
@@ -102,7 +103,7 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
               <label htmlFor="inplace-source-lang" className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
                 {t('translation.sourceLang')}
               </label>
-              <select
+              <AppSelect
                 id="inplace-source-lang"
                 value={inp.sourceLang}
                 disabled={inp.isTranslating}
@@ -114,7 +115,7 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
                     {lang}
                   </option>
                 ))}
-              </select>
+              </AppSelect>
             </div>
 
             <div className="relative">
@@ -134,7 +135,7 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
                   <span>{t('translation.swapLanguages')}</span>
                 </button>
               </div>
-              <select
+              <AppSelect
                 id="inplace-target-lang"
                 value={inp.targetLang}
                 disabled={inp.isTranslating}
@@ -146,7 +147,7 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
                     {lang}
                   </option>
                 ))}
-              </select>
+              </AppSelect>
             </div>
           </div>
 

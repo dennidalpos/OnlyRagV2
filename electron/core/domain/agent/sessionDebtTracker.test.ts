@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SessionDebtTracker, compileSessionStopSummary } from './sessionDebtTracker'
+import { SessionDebtTracker } from './sessionDebtTracker'
 
 describe('SessionDebtTracker Domain Unit Tests', () => {
   it('should initialize empty debt tracker report', () => {
@@ -19,12 +19,12 @@ describe('SessionDebtTracker Domain Unit Tests', () => {
     })
 
     const markdown = tracker.compileTrackerMarkdown()
-    expect(markdown).toContain('# SESSION TRACKER & UNRESOLVED DEBT REPORT')
+    expect(markdown).toContain('# SESSION_TRACKER\nformat: 2')
     expect(markdown).toContain('- [x] Built authentication endpoint')
-    expect(markdown).toContain('- [!] **BLOCKER/DEBT:** OAuth refresh token expiration bug not fixed in this turn')
+    expect(markdown).toContain('- [!] OAuth refresh token expiration bug not fixed in this turn')
 
     const promptBlock = tracker.compilePromptBlock()
-    expect(promptBlock).toContain('PERSISTENT SESSION TRACKER')
+    expect(promptBlock).toContain('SESSION_TRACKER')
     expect(promptBlock).toContain('OAuth refresh token expiration bug')
   })
 
@@ -77,6 +77,21 @@ describe('SessionDebtTracker Domain Unit Tests', () => {
     expect(data.unresolvedIssues).toContain('Rate limit error on secondary API endpoint')
     expect(data.nextSteps).toContain('Add exponential backoff retry logic')
   })
+
+  it('reads old open-milestone notices as status rather than unresolved bugs', () => {
+    const legacy = [
+      '## 3. Unresolved Issues, Errors & Known Debt',
+      '- [!] No explicit blocker was recorded, but 2 milestone(s) are still open — see section 4.',
+      '## 4. Next Recommended Steps',
+      '- [ ] m-2: Add tests',
+      '## 5. Raw Agent Summary',
+      '## 3. Unresolved Issues, Errors & Known Debt',
+      '- [!] This belongs to the agent summary, not the tracker',
+    ].join('\n')
+    const data = SessionDebtTracker.parseTrackerMarkdown(legacy).getData()
+    expect(data.unresolvedIssues).toEqual([])
+    expect(data.nextSteps).toEqual(['m-2: Add tests'])
+  })
 })
 
 describe('open work is reported as debt', () => {
@@ -89,11 +104,11 @@ describe('open work is reported as debt', () => {
     })
 
     const markdown = tracker.compileTrackerMarkdown()
-    expect(markdown).not.toContain('None reported (all verified)')
-    expect(markdown).toContain('2 milestone(s) are still open')
+    expect(markdown).toContain('- [!] open_milestones: 2')
+    expect(SessionDebtTracker.parseTrackerMarkdown(markdown).getData().unresolvedIssues).toEqual([])
   })
 
-  it('still says all verified when nothing is open and nothing failed', () => {
+  it('leaves the unresolved section empty when nothing is open and nothing failed', () => {
     const tracker = new SessionDebtTracker({
       completedTasks: ['m-1: done'],
       unresolvedIssues: [],
@@ -101,7 +116,7 @@ describe('open work is reported as debt', () => {
       nextSteps: [],
     })
 
-    expect(tracker.compileTrackerMarkdown()).toContain('None reported (all verified)')
+    expect(tracker.compileTrackerMarkdown()).toContain('## unresolved_issues\n\n## next_steps')
   })
 
   it('an explicit blocker still outranks the open-milestone note', () => {
@@ -113,51 +128,7 @@ describe('open work is reported as debt', () => {
     })
 
     const markdown = tracker.compileTrackerMarkdown()
-    expect(markdown).toContain('BLOCKER/DEBT:** m-4: build fails')
-    expect(markdown).not.toContain('still open')
-  })
-})
-
-describe('compileSessionStopSummary', () => {
-  it('accounts for the run instead of repeating an instruction meant for the model', () => {
-    const summary = compileSessionStopSummary({
-      reason: 'No-mutation stagnation streak limit reached (12 read/inspect steps without file changes).',
-      stepCount: 45,
-      completed: ['m-2: Create vite.config.ts'],
-      outstanding: ['m-1: Create package.json', 'm-3: Create src/App.tsx'],
-      modifiedFiles: ['src/App.tsx', 'package.json'],
-    })
-
-    expect(summary).toContain('passo 45')
-    expect(summary).toContain('stagnation streak limit reached')
-    expect(summary).toContain('m-2: Create vite.config.ts')
-    expect(summary).toContain('m-1: Create package.json')
-    expect(summary).toContain('src/App.tsx')
-    // The old summary was this sentence and nothing else.
-    expect(summary).not.toContain('Forcing execution pause')
-  })
-
-  it('caps long lists so the report stays readable', () => {
-    const summary = compileSessionStopSummary({
-      reason: 'stuck',
-      stepCount: 90,
-      completed: [],
-      outstanding: Array.from({ length: 15 }, (_, i) => `m-${i + 1}: task`),
-      modifiedFiles: [],
-    })
-
-    expect(summary).toContain('…and 7 more')
-  })
-
-  it('says plainly when a run wrote nothing at all', () => {
-    const summary = compileSessionStopSummary({
-      reason: 'Repeated tool failure limit reached (5 consecutive failures).',
-      stepCount: 12,
-      completed: [],
-      outstanding: ['m-1: Create package.json'],
-      modifiedFiles: [],
-    })
-
-    expect(summary).toContain('Nessuna modifica')
+    expect(markdown).toContain('- [!] m-4: build fails')
+    expect(markdown).not.toContain('open_milestones:')
   })
 })

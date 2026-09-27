@@ -240,6 +240,7 @@ describe('application-owned agent closure', () => {
     ]
     expect(ctx.state.guardEvents).toEqual(expected)
     expect(outcome).toMatchObject({ outcome: 'closed', result: { evidence: { guardEvents: expected } } })
+    if (outcome.outcome === 'closed') expect(outcome.result.summary).toContain('Sessione interrotta automaticamente al passo 7.')
     expect(emitDone).toHaveBeenCalledWith(false, expect.any(String), 'blocked', expect.objectContaining({ guardEvents: expected }))
     expect(emitLog).toHaveBeenCalledWith(
       'info',

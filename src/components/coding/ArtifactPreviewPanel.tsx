@@ -1,3 +1,4 @@
+import { AppSelect } from '../common/AppSelect'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Code2, Eye, Plus, Save, Trash2 } from 'lucide-react'
 import type { ArtifactKind, ArtifactRecord } from '../../types'
@@ -151,7 +152,7 @@ export const ArtifactPreviewPanel: React.FC<ArtifactPreviewPanelProps> = ({ work
                 className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs"
                 aria-label={t('codingPanels.artifactName')}
               />
-              <select
+              <AppSelect
                 value={kind}
                 onChange={(event) => setKind(event.target.value as ArtifactKind)}
                 className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs"
@@ -160,7 +161,7 @@ export const ArtifactPreviewPanel: React.FC<ArtifactPreviewPanelProps> = ({ work
                 <option value="html">HTML</option>
                 <option value="svg">SVG</option>
                 <option value="markdown">Markdown</option>
-              </select>
+              </AppSelect>
             </div>
             <div className="flex-1 min-h-0 grid grid-cols-2 gap-px bg-slate-800">
               <textarea

@@ -7,7 +7,7 @@ Solo vincoli non ovvi che devono restare coerenti con il codice.
 | Main e Renderer comunicano solo via Preload/IPC, con un contratto unico tipizzato e payload a oggetto. | Riduce la superficie privilegiata del Renderer; preload, handler e tipi Renderer non possono divergere. | `shared/ipc/ipcContract.ts`, `electron/preload.ts`, `electron/core/presentation/`. |
 | Una sola generazione Ollama Main alla volta. | Evita interferenze e pressione concorrente su VRAM/RAM. | `ollamaGenerationScheduler.ts`. |
 | Il piano eseguibile è JSON strutturato; Markdown è derivato. | Evita perdita di decisioni e milestone durante il parsing. | `planGenerationAppService.ts`, `AgentPlan`. |
-| Agent Coding usa Ask, Guided e Auto con una sola azione Esegui. | Separa analisi read-only, revisione predefinita e autonomia locale; i task complessi pianificano automaticamente. | `AgentModeSelector.tsx`, `automaticPlanningPolicy.ts`, `agentRuntimeMode.ts`. |
+| Agent Coding usa Ask, Guided e Auto: Esegui avvia direttamente, Pianifica richiede una scelta esplicita in Guided e Auto. | L'utente decide se preparare e approvare un piano; la run usa poi la modalità scelta. | `AgentModeSelector.tsx`, `CodingAgentView.tsx`, `agentRuntimeMode.ts`. |
 | Gli edit esistenti richiedono la versione letta e commit atomico. | Evita di sovrascrivere modifiche esterne. | `versionedFileMutation.ts`, `fileSystemRepository.ts`, `atomicWorkspaceJournal.ts`. |
 | Una milestone richiede deliverable e prova coerenti. | Il testo del modello non è evidenza. | `milestoneDeliverableResolver.ts`, `milestoneVerificationPromotion.ts`. |
 | Fallback embedding esplicito. | Un vettore CPU degradato non deve sembrare equivalente a uno Ollama. | `embeddings.py`, stato `indexed_fallback`. |

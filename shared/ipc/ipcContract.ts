@@ -47,7 +47,6 @@ import type {
   SkillHubSource,
   SkillInstallApprovalRequest,
   SkillSaveInput,
-  SlmLogDiagnosticReport,
   TaskQueueStatus,
   TranslateProgressPayload,
   UserInterviewAnswer,
@@ -152,8 +151,6 @@ export interface IpcInvokeContract {
   'agent:approval-response': { payload: { identity: AgentRunIdentity; approved: boolean; approvedHunkIndices?: number[] }; result: boolean }
   'agent:compact-context': { payload: AgentRunIdentity; result: boolean }
   'agent:get-queue-status': { payload: void; result: TaskQueueStatus }
-  /** SLM Agent Studio: log anomaly scan over the Main logs and any extra paths. */
-  'agent:logs-analyze': { payload: { extraPaths?: string[] }; result: SlmLogDiagnosticReport }
   /** Pre-flight Clarification Interview before the plan is drafted. */
   'agent:plan-interview': {
     payload: {
@@ -329,7 +326,6 @@ export const IPC_INVOKE_METHODS = {
   respondToAgentApproval: 'agent:approval-response',
   compactAgentContext: 'agent:compact-context',
   getAgentQueueStatus: 'agent:get-queue-status',
-  agentLogsAnalyze: 'agent:logs-analyze',
   agentPlanInterview: 'agent:plan-interview',
   agentPlanEnrichPrompt: 'agent:plan-enrich-prompt',
   agentPlanGenerate: 'agent:plan-generate',

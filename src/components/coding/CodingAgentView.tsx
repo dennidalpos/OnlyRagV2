@@ -19,12 +19,10 @@ import { CodingEditorContent } from './CodingEditorContent'
 import { CodingTerminal } from './CodingTerminal'
 import { GitDiffPanel } from './GitDiffPanel'
 import { PlanPanel } from './PlanPanel'
-import { SlmDiagnosticsPanel } from './SlmDiagnosticsPanel'
 import { SystemDiagnosticsModal } from './SystemDiagnosticsModal'
 import { ArtifactPreviewPanel } from './ArtifactPreviewPanel'
 import type { AgentMode } from '../../types'
 import { logger } from '../../lib/logger'
-import { shouldAutomaticallyPlanCodingTask } from '../../../shared/domain/agent/automaticPlanningPolicy'
 import { resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
 
 export type { AgentMode }
@@ -108,8 +106,8 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
       plannedExecutionModeRef.current = mode
       setActiveRightTab('plan')
       c.setAgentPrompt('')
-      c.addActionLog('info', 'Automatic planning started for a complex task.', undefined, { category: 'generic_info' })
-      logger.info('CodingAgentView', `Automatic planning started for ${mode} mode (prompt length: ${prompt.length}).`)
+      c.addActionLog('info', 'Planning started by the user.', undefined, { category: 'generic_info' })
+      logger.info('CodingAgentView', `Planning started for ${mode} mode (prompt length: ${prompt.length}).`)
       await planApproval.startPlanFlow(prompt, undefined, c.currentStep)
     }
 
@@ -119,32 +117,16 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
       }
     }, [planApproval.isGeneratingPlan, planApproval.isInterviewActive, planApproval.currentPlan?.status])
 
-    useEffect(() => {
-      if (
-        plannedExecutionModeRef.current === 'auto' &&
-        planApproval.currentPlan?.status === 'ready' &&
-        !planApproval.isApprovingPlan &&
-        !planApproval.isGeneratingPlan &&
-        !planApproval.isInterviewActive
-      ) {
-        void planApproval.handleApprovePlan()
-      }
-    }, [
-      planApproval.currentPlan?.status,
-      planApproval.handleApprovePlan,
-      planApproval.isApprovingPlan,
-      planApproval.isGeneratingPlan,
-      planApproval.isInterviewActive,
-    ])
-
     const handleInitiateTaskExecution = () => {
       const prompt = c.agentPrompt.trim()
       if (!prompt) return
-      if (shouldAutomaticallyPlanCodingTask(prompt, c.agentMode)) {
-        void handleGeneratePlanFromPrompt(prompt, c.agentMode as Exclude<AgentMode, 'ask'>)
-        return
-      }
       void c.handleAgentExecute()
+    }
+
+    const handlePlanTask = () => {
+      const prompt = c.agentPrompt.trim()
+      if (!prompt || c.agentMode === 'ask' || c.isExecuting) return
+      void handleGeneratePlanFromPrompt(prompt, c.agentMode)
     }
 
     const handleSelectTab = (tab: CodingRightTab) => {
@@ -242,8 +224,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
             diagnostics={diagnostics}
             hasPendingUnconsolidatedMilestones={hasPendingUnconsolidatedMilestones}
             onExecute={handleInitiateTaskExecution}
-            onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
-            onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
+            onPlanTask={handlePlanTask}
             onOpenPromptHistorySearch={() => setIsPromptHistorySearchOpen(true)}
             autoScroll={autoScroll}
             onToggleAutoScroll={() => setAutoScroll((prev) => !prev)}
@@ -370,8 +351,6 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
                   completedStepCount={c.currentStep}
                 />
               )}
-
-              {activeRightTab === 'slm_diagnostics' && <SlmDiagnosticsPanel />}
 
               {activeRightTab === 'artifacts' && <ArtifactPreviewPanel workspacePath={c.workspacePath} />}
             </div>

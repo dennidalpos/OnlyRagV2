@@ -280,7 +280,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   let debtTrackerBlock = ''
   if (ctx.workspacePath && policy.includeAttachedRag) {
     try {
-      const trackerContent = agentSessionStateRepository.loadSessionTrackerMarkdown(ctx.workspacePath)
+      const trackerContent = agentSessionStateRepository.loadSessionTrackerMarkdown(ctx.workspacePath, ctx.sessionId)
       if (trackerContent) {
         debtTrackerBlock = SessionDebtTracker.parseTrackerMarkdown(trackerContent).compilePromptBlock()
       }

@@ -53,7 +53,7 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
     emitLocalizedLog(emitLog, 'info', { key: 'sessionTimeout', params: { minutes: Math.round(SESSION_TIMEOUT_MS / 60000) } })
     // Reported before the session is marked cancelled: emitDone is suppressed for inactive sessions,
     // so the Renderer never learned that a timed-out run had ended. The work stays on disk.
-    const checkpointId = agentToolExecutorService.checkpointJournal(session.workspacePath, session.id)
+    const checkpointId = agentToolExecutorService.checkpointJournal(session.workspacePath, session.id, session.identity.conversationId)
     emitDone(false, timeoutSummary, 'blocked', {
       changedFiles: session.changedFiles || [],
       verification: session.lastVerification,

@@ -77,7 +77,7 @@ function cleanupSession(session: AgentSession) {
   // not a side effect of pressing Stop.
   let checkpointId: string | null = null
   try {
-    checkpointId = agentToolExecutorService.checkpointJournal(session.workspacePath, session.id)
+    checkpointId = agentToolExecutorService.checkpointJournal(session.workspacePath, session.id, session.identity.conversationId)
   } catch (err: unknown) {
     logger.log('WARN', 'AgentOrchestrator', `Failed saving the run checkpoint during cleanup: ${errorMessage(err)}`)
   }

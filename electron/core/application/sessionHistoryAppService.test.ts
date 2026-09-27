@@ -24,23 +24,36 @@ vi.mock('./sidecarAppService', () => ({
     removePromptHistoryForSessions: vi.fn().mockResolvedValue({ success: true }),
   },
 }))
+vi.mock('../infrastructure/filesystem/agentCheckpointStore', () => ({
+  deleteConversationCheckpoints: vi.fn(),
+}))
 
 import { sessionHistoryAppService } from './sessionHistoryAppService'
 import { sessionHistoryRepository } from '../infrastructure/filesystem/sessionHistoryRepository'
 import { sidecarAppService } from './sidecarAppService'
+import { deleteConversationCheckpoints } from '../infrastructure/filesystem/agentCheckpointStore'
+import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 
 describe('SessionHistoryAppService prompt-history index fan-out', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(sessionHistoryRepository.listSessions).mockResolvedValue([])
     vi.mocked(sessionHistoryRepository.deleteSession).mockResolvedValue(true)
     vi.mocked(sessionHistoryRepository.clearSessions).mockResolvedValue(true)
+    vi.mocked(agentSessionStateRepository.clearSessionState).mockResolvedValue(true)
+    vi.mocked(agentSessionStateRepository.clearAllSessionStates).mockResolvedValue(true)
   })
 
   it('deleteSession should also remove the deleted session from the prompt-history index', async () => {
+    vi.mocked(sessionHistoryRepository.listSessions).mockResolvedValue([
+      { id: 'session-1', workspacePath: '/repo/a', executedPrompts: [{ evidence: { checkpointId: 'run-1' } }] },
+    ] as never)
     const result = await sessionHistoryAppService.deleteSession('session-1', '/repo/a')
 
     expect(result).toBe(true)
     expect(sessionHistoryRepository.deleteSession).toHaveBeenCalledWith('session-1', '/repo/a')
+    expect(agentSessionStateRepository.clearSessionState).toHaveBeenCalledWith('session-1', '/repo/a')
+    expect(deleteConversationCheckpoints).toHaveBeenCalledWith('/repo/a', 'session-1', ['run-1'])
     expect(sidecarAppService.removePromptHistoryForSessions).toHaveBeenCalledWith(['session-1'])
   })
 

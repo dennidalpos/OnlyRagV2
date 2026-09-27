@@ -58,6 +58,7 @@ import {
 } from '../domain/agent/tools/execution/commandPolicy'
 import { toolExecutionResultSchema, type ClassifiedToolExecutionResult, type ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
 import { validateWorkspaceRealpath } from '../infrastructure/filesystem/workspaceRealpathGuard'
+import { workspaceMetadataChildPath } from '../infrastructure/filesystem/workspaceMetadataDirectory'
 import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
 import { toolLog } from '../domain/agent/tools/toolExecutionContracts'
 export type { ClassifiedToolExecutionResult, ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
@@ -226,8 +227,8 @@ export class AgentToolExecutorService {
    * changed is saved as a checkpoint the user can restore later. Returns its id, or null when the
    * run changed no file (or there is no workspace to hold it).
    */
-  public checkpointJournal(workspacePath: string | null | undefined, runId: string): string | null {
-    const checkpointId = workspacePath ? saveAgentCheckpoint(workspacePath, agentCheckpointId(runId), this.journal.sessionBaseline) : null
+  public checkpointJournal(workspacePath: string | null | undefined, runId: string, conversationId = runId): string | null {
+    const checkpointId = workspacePath ? saveAgentCheckpoint(workspacePath, agentCheckpointId(runId), this.journal.sessionBaseline, conversationId) : null
     this.journal.commit()
     return checkpointId
   }
@@ -270,6 +271,15 @@ export class AgentToolExecutorService {
           outcome: 'rejected',
           outputForHistory: `Security Violation: ${check.error}`,
           ...toolLog('toolEditPathRejected', { tool: parsedTool.tool, error: String(check.error) }),
+          isTerminal: true,
+        }
+      }
+      const relative = path.relative(root, check.safePath)
+      if (relative.split(path.sep).some((segment) => segment.toLowerCase() === '.onlyrag')) {
+        return {
+          outcome: 'rejected',
+          outputForHistory: 'OnlyRag metadata is managed by the application.',
+          ...toolLog('toolEditPathRejected', { tool: parsedTool.tool, error: 'OnlyRag metadata is application-owned' }),
           isTerminal: true,
         }
       }
@@ -694,7 +704,7 @@ export class AgentToolExecutorService {
             isTerminal: true,
           }
         }
-        const outputDirectory = path.join(workspacePath, '.onlyrag', 'visual-validation')
+        const outputDirectory = workspaceMetadataChildPath(workspacePath, 'visual-validation')
         documentIoRepository.ensureDirectory(outputDirectory)
         const evidence = await this.visualValidationRunner.captureEvidence(parameters, workspacePath, outputDirectory, signal)
         const result =

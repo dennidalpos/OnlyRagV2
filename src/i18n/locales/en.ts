@@ -864,7 +864,7 @@ export const en: TranslationSchema = {
     inUse: 'In Use',
     openRootFolder: 'Open the root folder in File Explorer',
     renameDisplayName: 'Rename display name',
-    removeProjectHint: 'Removes only app history and references. Files on disk are not touched.',
+    removeProjectHint: 'Removes the project from the list. Chats and local data remain available when you reopen it.',
     renameSession: 'Rename session',
     projectFiles: 'Project Files ({count})',
     reloadFileTree: 'Reload the file tree from disk',

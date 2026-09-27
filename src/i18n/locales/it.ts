@@ -871,7 +871,7 @@ export const it = {
     inUse: 'In Uso',
     openRootFolder: 'Apri cartella root in Esplora Risorse',
     renameDisplayName: 'Rinomina nome visualizzato',
-    removeProjectHint: 'Rimuove solo cronologia e riferimenti app. I file su disco non vengono toccati.',
+    removeProjectHint: 'Rimuove il progetto dall’elenco. Chat e dati locali restano disponibili se lo riapri.',
     renameSession: 'Rinomina sessione',
     projectFiles: 'File Progetto ({count})',
     reloadFileTree: 'Ricarica albero file da disco',

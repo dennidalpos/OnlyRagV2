@@ -1,11 +1,5 @@
-import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
-import path from 'node:path'
 import type { WorkspaceProject } from '../../../shared/types'
-import { logger } from '../infrastructure/logging/logger'
 import { projectRegistryRepository } from '../infrastructure/filesystem/projectRegistryRepository'
-import { sessionHistoryAppService } from './sessionHistoryAppService'
-import { sidecarAppService } from './sidecarAppService'
-import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 /**
  * Use cases for the main-process-owned project registry: the durable list of every project
@@ -32,39 +26,7 @@ export class ProjectRegistryAppService {
   }
 
   async removeProject(projectPath: string): Promise<boolean> {
-    // 1. Purge all sessions, runtime states, audit log records, and prompt history for this project
-    try {
-      await sessionHistoryAppService.clearSessions(projectPath)
-    } catch (err: unknown) {
-      logger.log('WARN', 'ProjectRegistryAppService', `Could not clear sessions for ${projectPath}: ${errorMessage(err)}`)
-    }
-
-    // 2. Purge semantic prompt index in LanceDB
-    try {
-      await sidecarAppService.removePromptHistoryForProject(projectPath)
-    } catch (err: unknown) {
-      logger.log('WARN', 'ProjectRegistryAppService', `Could not purge prompt history for ${projectPath}: ${errorMessage(err)}`)
-    }
-
-    // 3. Remove from the global project registry store
-    const removed = await projectRegistryRepository.remove(projectPath)
-
-    // 4. Safely clean up the internal .onlyrag folder inside the removed workspace directory,
-    // ensuring zero application residue (sessions, tracker, logs) while NEVER touching user repo files.
-    if (projectPath && typeof projectPath === 'string' && projectPath.trim().length > 0) {
-      try {
-        const onlyragDir = path.join(projectPath, '.onlyrag')
-        // Strict guard: ensure path ends with '.onlyrag', is strictly a child directory, and exists
-        if (path.basename(onlyragDir) === '.onlyrag' && onlyragDir !== projectPath && documentIoRepository.exists(onlyragDir)) {
-          await documentIoRepository.removeDirectory(onlyragDir)
-          logger.log('INFO', 'ProjectRegistryAppService', `Purged internal .onlyrag metadata at ${onlyragDir}`)
-        }
-      } catch (err: unknown) {
-        logger.log('WARN', 'ProjectRegistryAppService', `Could not purge .onlyrag directory: ${errorMessage(err)}`)
-      }
-    }
-
-    return removed
+    return projectRegistryRepository.remove(projectPath)
   }
 }
 

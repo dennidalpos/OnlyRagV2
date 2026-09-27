@@ -56,7 +56,7 @@ describe('SessionHistoryRepository Unit Tests', () => {
     expect(saved).not.toBeNull()
     // The title is derived from the first executed prompt when the user never renamed it.
     expect(saved?.title).toBe('Aggiungi i test di regressione')
-    expect(fs.existsSync(path.join(tempDir, '.onlyrag', 'sessions', 'session_history.json'))).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, '.onlyrag', 'sessions', 'history.json'))).toBe(true)
 
     const listed = await sessionHistoryRepository.listSessions(tempDir)
     expect(listed).toHaveLength(1)

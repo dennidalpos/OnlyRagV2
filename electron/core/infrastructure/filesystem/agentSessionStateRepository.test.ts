@@ -4,6 +4,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { agentSessionStateRepository, SavedAgentSessionState } from './agentSessionStateRepository'
+import { workspaceMetadataTrackerPath } from './workspaceMetadataDirectory'
 
 describe('AgentSessionStateRepository Unit Tests', () => {
   let tempDir: string
@@ -179,7 +180,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     const savedTracker = await agentSessionStateRepository.saveSessionTrackerMarkdown(tempDir, tracker)
     expect(savedTracker).toBe(true)
 
-    const trackerPath = path.join(tempDir, '.onlyrag', 'assistant', 'SESSION_TRACKER.md')
+    const trackerPath = workspaceMetadataTrackerPath(tempDir, 'tracker-session')
     expect(fs.existsSync(trackerPath)).toBe(true)
 
     const content = fs.readFileSync(trackerPath, 'utf-8')
@@ -194,6 +195,18 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(reparsed.getData().nextSteps).toContain('m-2: Add middleware')
     expect(reparsed.getData().modifiedFiles).toContain('src/auth.ts')
     expect(reparsed.compilePromptBlock()).toContain('m-3: Unit tests failing')
+  })
+
+  it('keeps each conversation tracker separate in the same project', async () => {
+    await agentSessionStateRepository.saveSessionTrackerMarkdown(tempDir, new SessionDebtTracker({ sessionId: 'first', completedTasks: ['first task'] }))
+    await agentSessionStateRepository.saveSessionTrackerMarkdown(tempDir, new SessionDebtTracker({ sessionId: 'second', completedTasks: ['second task'] }))
+
+    expect(agentSessionStateRepository.loadSessionTrackerMarkdown(tempDir, 'first')).toContain('first task')
+    expect(agentSessionStateRepository.loadSessionTrackerMarkdown(tempDir, 'first')).not.toContain('second task')
+    expect(agentSessionStateRepository.loadSessionTrackerMarkdown(tempDir, 'second')).toContain('second task')
+    await agentSessionStateRepository.clearSessionState('first', tempDir)
+    expect(agentSessionStateRepository.loadSessionTrackerMarkdown(tempDir, 'first')).toBeNull()
+    expect(agentSessionStateRepository.loadSessionTrackerMarkdown(tempDir, 'second')).toContain('second task')
   })
 
   it('should seed a brand new minimal session state when none exists yet', async () => {

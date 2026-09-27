@@ -8,6 +8,7 @@ import type { SavedAgentSessionState } from '../../electron/core/infrastructure/
 import { planGenerationAppService } from '../../electron/core/application/planGenerationAppService'
 import { agentInterviewAppService } from '../../electron/core/application/agentInterviewAppService'
 import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
+import { workspaceMetadataStatePath } from '../../electron/core/infrastructure/filesystem/workspaceMetadataDirectory'
 import { codingAgentLogger } from '../../electron/core/infrastructure/logging/codingAgentLogger'
 import { decodeSettingsFile } from '../../electron/core/infrastructure/filesystem/appSettingsRepository'
 
@@ -161,7 +162,7 @@ export function listWorkspaceFiles(workspacePath: string): string[] {
 
 /** The state the orchestrator itself persisted for this run. */
 function readSessionState(workspacePath: string, sessionId: string): Partial<SavedAgentSessionState> {
-  const statePath = path.join(workspacePath, '.onlyrag', 'sessions', `.agent_state_${sessionId}.json`)
+  const statePath = workspaceMetadataStatePath(workspacePath, sessionId)
   if (!fs.existsSync(statePath)) return {}
   try {
     return JSON.parse(fs.readFileSync(statePath, 'utf-8')) as Partial<SavedAgentSessionState>

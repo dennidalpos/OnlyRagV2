@@ -19,6 +19,7 @@ import { REASONING_BUDGET_ERROR } from '../domain/agent/ollamaSessionRuntime'
 import { buildDefaultAgentSettings } from './agentOrchestratorSessionSetup'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
+import { workspaceMetadataStatePath, workspaceMetadataTrackerPath } from '../infrastructure/filesystem/workspaceMetadataDirectory'
 import type { AppSettings } from '../../../shared/types'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 
@@ -179,6 +180,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   it('should route finish through the application evidence gate and persist the model report', async () => {
+    const sessionId = 'model-report'
     vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(toolTurn('finish', { summary: 'All tasks done perfectly.' }))
 
     const res = await runAgentOrchestratorLoop(
@@ -186,6 +188,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         userTask: 'Create test project',
         agentMode: 'auto',
         workspacePath: tempDir,
+        sessionId,
       },
       null,
     )
@@ -193,7 +196,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.success).toBe(false)
     expect(res.completionStatus).toBe('unverifiable')
     expect(res.summary).toContain('All tasks done perfectly.')
-    const tracker = fs.readFileSync(path.join(tempDir, '.onlyrag', 'assistant', 'SESSION_TRACKER.md'), 'utf-8')
+    const tracker = fs.readFileSync(workspaceMetadataTrackerPath(tempDir, sessionId), 'utf-8')
     expect(tracker).toContain('## agent_summary')
     expect(tracker).toContain('All tasks done perfectly.')
   })
@@ -325,7 +328,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const calls = mockWin.send.mock.calls as Array<[string, { statusText?: string }]>
     const statuses = calls.filter(([channel]) => channel === 'agent:step-update').map(([, data]) => data.statusText)
     expect(statuses).toEqual(expect.arrayContaining(['Raccolta contesto', 'Proposta corrente', 'Applicazione', 'Verifica', 'Esito']))
-    const saved = JSON.parse(fs.readFileSync(path.join(tempDir, '.onlyrag', 'sessions', `.agent_state_${sessionId}.json`), 'utf-8'))
+    const saved = JSON.parse(fs.readFileSync(workspaceMetadataStatePath(tempDir, sessionId), 'utf-8'))
     expect(saved.executionPhase).toBe('outcome')
   })
 
@@ -432,7 +435,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     await agentSessionStateRepository.seedPlanMilestones(sessionId, tempDir, [{ id: 'm-ask', title: 'Fix app.ts', status: 'pending' }], 'Fix app.ts')
 
     const res = await runAgentOrchestratorLoop({ userTask: 'Fix app.ts', agentMode: 'auto', workspacePath: tempDir, sessionId }, null)
-    const saved = JSON.parse(fs.readFileSync(path.join(tempDir, '.onlyrag', 'sessions', `.agent_state_${sessionId}.json`), 'utf-8'))
+    const saved = JSON.parse(fs.readFileSync(workspaceMetadataStatePath(tempDir, sessionId), 'utf-8'))
 
     expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(3)
     expect(res.completionStatus).toBe('blocked')
@@ -800,10 +803,10 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       planRevisionId: 'plan-verify-unsafe:v1',
       workspaceId: `workspace:${tempDir}`,
     }
-    const sessionDir = path.join(tempDir, '.onlyrag', 'sessions')
-    fs.mkdirSync(sessionDir, { recursive: true })
+    const statePath = workspaceMetadataStatePath(tempDir, sessionId)
+    fs.mkdirSync(path.dirname(statePath), { recursive: true })
     fs.writeFileSync(
-      path.join(sessionDir, `.agent_state_${sessionId}.json`),
+      statePath,
       JSON.stringify({
         sessionId,
         runIdentity: identity,
@@ -831,7 +834,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     await runAgentOrchestratorLoop({ identity, userTask: 'Build the app', agentMode: 'auto', workspacePath: tempDir, sessionId }, null)
 
     expect(fs.existsSync(path.join(tempDir, 'legacy.txt'))).toBe(false)
-    const saved = JSON.parse(fs.readFileSync(path.join(sessionDir, `.agent_state_${sessionId}.json`), 'utf-8'))
+    const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
     const m1 = saved.planMilestones.find((m: { id: string }) => m.id === 'm-1')
     expect(m1.status).not.toBe('verified')
     expect(m1.notes).toContain('refused')

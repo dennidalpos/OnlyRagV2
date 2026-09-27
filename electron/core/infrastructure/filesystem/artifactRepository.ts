@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { ensureWorkspaceMetadataDirectory } from './workspaceMetadataDirectory'
+import { workspaceMetadataChildPath } from './workspaceMetadataDirectory'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import type { ArtifactRecord, ArtifactSaveInput } from '../../../../shared/types'
@@ -11,7 +11,7 @@ export class ArtifactRepository {
   private getDirectory(workspacePath: string): string {
     if (!workspacePath || !path.isAbsolute(workspacePath)) throw new Error('Workspace path must be absolute')
     if (!fs.existsSync(workspacePath) || !fs.statSync(workspacePath).isDirectory()) throw new Error('Workspace does not exist')
-    return path.join(ensureWorkspaceMetadataDirectory(workspacePath), 'artifacts')
+    return workspaceMetadataChildPath(workspacePath, 'artifacts')
   }
 
   private getFilePath(workspacePath: string, id: string): string {

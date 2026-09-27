@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { ensureWorkspaceMetadataDirectory } from './workspaceMetadataDirectory'
+import { workspaceMetadataChildPath } from './workspaceMetadataDirectory'
 import path from 'node:path'
 import { isPathWithinRoot } from '../../domain/agent/pathContainment'
 import type { FileBackupEntry } from './atomicWorkspaceJournal'
@@ -11,8 +11,9 @@ import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 const MAX_CHECKPOINTS = 10
 
 interface CheckpointManifest {
-  version: 1
+  version: 1 | 2
   checkpointId: string
+  conversationId?: string
   createdAt: string
   /** Workspace-relative paths with their pre-run state: a blob file name, or null for a file the run created. */
   files: { path: string; blob: string | null }[]
@@ -25,7 +26,7 @@ export interface CheckpointRestoreResult {
 }
 
 function checkpointsRoot(workspacePath: string): string {
-  return path.join(workspacePath, '.onlyrag', 'checkpoints')
+  return workspaceMetadataChildPath(workspacePath, 'checkpoints')
 }
 
 function safeCheckpointId(checkpointId: string): string | null {
@@ -51,13 +52,18 @@ function pruneOldCheckpoints(root: string): void {
  * roll everything back) and this checkpoint is how the user returns to the state before the run.
  * Only files inside the workspace are recorded. Returns null when the run changed no file.
  */
-export function saveAgentCheckpoint(workspacePath: string, checkpointId: string, baseline: ReadonlyMap<string, FileBackupEntry>): string | null {
+export function saveAgentCheckpoint(
+  workspacePath: string,
+  checkpointId: string,
+  baseline: ReadonlyMap<string, FileBackupEntry>,
+  conversationId?: string,
+): string | null {
   const id = safeCheckpointId(checkpointId)
   if (!id || baseline.size === 0) return null
   const root = path.resolve(workspacePath)
   const directory = path.join(checkpointsRoot(root), id)
   try {
-    ensureWorkspaceMetadataDirectory(root)
+    if (fs.existsSync(directory) && !fs.lstatSync(directory).isDirectory()) throw new Error('Unsafe checkpoint directory')
     fs.mkdirSync(directory, { recursive: true })
     const files: CheckpointManifest['files'] = []
     let blobIndex = 0
@@ -78,13 +84,36 @@ export function saveAgentCheckpoint(workspacePath: string, checkpointId: string,
       fs.rmSync(directory, { recursive: true, force: true })
       return null
     }
-    const manifest: CheckpointManifest = { version: 1, checkpointId: id, createdAt: new Date().toISOString(), files }
+    const manifest: CheckpointManifest = { version: 2, checkpointId: id, conversationId, createdAt: new Date().toISOString(), files }
     fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8')
     pruneOldCheckpoints(checkpointsRoot(root))
     return id
   } catch (error: unknown) {
     logger.log('ERROR', 'AgentCheckpointStore', `Checkpoint ${id} not saved: ${errorMessage(error)}`)
     return null
+  }
+}
+
+/** Removes checkpoints owned by a deleted conversation, including referenced v1 checkpoints. */
+export function deleteConversationCheckpoints(workspacePath: string, conversationId: string, referencedIds: readonly string[]): void {
+  const root = checkpointsRoot(workspacePath)
+  if (!fs.existsSync(root)) return
+  const referenced = new Set(referencedIds)
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !safeCheckpointId(entry.name)) continue
+    const directory = path.join(root, entry.name)
+    if (referenced.has(entry.name)) {
+      fs.rmSync(directory, { recursive: true, force: true })
+      continue
+    }
+    let manifest: CheckpointManifest
+    try {
+      manifest = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf-8')) as CheckpointManifest
+    } catch (error: unknown) {
+      logger.log('WARN', 'AgentCheckpointStore', `Checkpoint ownership unavailable for ${entry.name}: ${errorMessage(error)}`)
+      continue
+    }
+    if (manifest.version === 2 && manifest.conversationId === conversationId) fs.rmSync(directory, { recursive: true, force: true })
   }
 }
 
@@ -106,8 +135,14 @@ export function restoreAgentCheckpoint(workspacePath: string, checkpointId: stri
   for (const file of Array.isArray(manifest.files) ? manifest.files : []) {
     // The manifest lives in the workspace, so it is validated like any untrusted path.
     const check = typeof file?.path === 'string' ? validateWorkspaceRealpath(file.path, root) : { safePath: null, error: 'Invalid entry' }
-    if (!check.safePath || (file.blob !== null && !/^\d+\.bin$/.test(String(file.blob)))) {
-      errors.push(`Skipped ${String(file?.path)}: ${check.error || 'invalid blob reference'}`)
+    const internal =
+      check.safePath &&
+      path
+        .relative(root, check.safePath)
+        .split(path.sep)
+        .some((segment) => segment.toLowerCase() === '.onlyrag')
+    if (!check.safePath || internal || (file.blob !== null && !/^\d+\.bin$/.test(String(file.blob)))) {
+      errors.push(`Skipped ${String(file?.path)}: ${internal ? 'application-owned metadata' : check.error || 'invalid blob reference'}`)
       continue
     }
     try {

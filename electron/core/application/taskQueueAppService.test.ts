@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { execFileSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 
 vi.mock('./agentOrchestratorAppService', () => ({
@@ -68,6 +69,26 @@ describe('TaskQueueAppService serial execution invariant', () => {
         identity.runId,
       )
     })
+  })
+
+  it('initializes metadata before a new project run and keeps generated files outside it', async () => {
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-new-project-'))
+    workspaces.push(workspacePath)
+    execFileSync('git', ['init', '-q', workspacePath])
+    vi.mocked(runAgentOrchestratorLoop).mockImplementationOnce(async () => {
+      expect(fs.existsSync(path.join(workspacePath, '.onlyrag', 'layout.json'))).toBe(true)
+      fs.writeFileSync(path.join(workspacePath, 'index.html'), '<main>Created</main>')
+      return { success: true, summary: 'created' }
+    })
+
+    const result = await new TaskQueueAppService().scheduleAgentTask(
+      { sessionId: 'new-project', userTask: 'Create a project', agentMode: 'auto', workspacePath },
+      noRenderer,
+    )
+    expect(result.success).toBe(true)
+    await vi.waitFor(() => expect(fs.existsSync(path.join(workspacePath, 'index.html'))).toBe(true))
+    expect(fs.existsSync(path.join(workspacePath, '.onlyrag', 'index.html'))).toBe(false)
+    expect(execFileSync('git', ['check-ignore', '.onlyrag/layout.json'], { cwd: workspacePath, encoding: 'utf-8' }).trim()).toBe('.onlyrag/layout.json')
   })
 
   it('returns a queued run ID and cancels only that queued run', async () => {

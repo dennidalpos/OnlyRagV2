@@ -74,6 +74,19 @@ describe('AgentToolExecutorService Unit Tests', () => {
     expect(readRes.outputForHistory).toContain('Hello AI Agent')
   })
 
+  it('keeps application metadata out of Agent Coding file tools', async () => {
+    for (const tool of [
+      { tool: 'write_file', parameters: { filePath: '.onlyrag/sessions/history.json', content: '{}' } },
+      { tool: 'create_directory', parameters: { dirPath: '.onlyrag/custom' } },
+      { tool: 'delete_file', parameters: { filePath: '.onlyrag/layout.json' } },
+    ] as const) {
+      const result = await agentToolExecutorService.executeTool(tool, tempDir, settings)
+      expect(result.outcome).toBe('rejected')
+      expect(result.outputForHistory).toContain('managed by the application')
+    }
+    expect(fs.existsSync(path.join(tempDir, '.onlyrag'))).toBe(false)
+  })
+
   it('lists a directory given to read_file and reports a missing file with its parent listing', async () => {
     fs.mkdirSync(path.join(tempDir, 'src'))
     fs.writeFileSync(path.join(tempDir, 'src', 'App.jsx'), 'export default function App() {}\n', 'utf-8')

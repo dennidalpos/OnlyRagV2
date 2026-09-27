@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { ensureWorkspaceMetadataDirectory } from './workspaceMetadataDirectory'
+import { workspaceMetadataHistoryPath } from './workspaceMetadataDirectory'
 import path from 'node:path'
 import { logger } from '../logging/logger'
 import type { CodingSession } from '../../../../shared/types'
@@ -8,7 +8,8 @@ import { safeAtomicWrite } from './safeAtomicFileWriter'
 import { userDataSessionsDir } from './userDataRoot'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
-const HISTORY_FILE_NAME = 'session_history.json'
+const HISTORY_FILE_NAME = 'history.json'
+const FALLBACK_HISTORY_FILE_NAME = 'session_history.json'
 const STORE_VERSION = 1
 
 interface SessionHistoryStore {
@@ -29,6 +30,10 @@ export class SessionHistoryRepository {
     return this.customFallbackDir || userDataSessionsDir()
   }
 
+  private historyFilePath(dir: string): string {
+    return path.join(dir, dir === this.getFallbackDir() ? FALLBACK_HISTORY_FILE_NAME : HISTORY_FILE_NAME)
+  }
+
   private async runExclusive<T>(operation: () => Promise<T>): Promise<T> {
     const previous = this.mutationTail
     let release: (() => void) | undefined
@@ -45,7 +50,7 @@ export class SessionHistoryRepository {
 
   private getStorageDir(workspacePath?: string | null): string {
     if (workspacePath && fs.existsSync(workspacePath)) {
-      const stateDir = path.join(ensureWorkspaceMetadataDirectory(workspacePath), 'sessions')
+      const stateDir = path.dirname(workspaceMetadataHistoryPath(workspacePath))
       if (!fs.existsSync(stateDir)) {
         try {
           fs.mkdirSync(stateDir, { recursive: true })
@@ -71,14 +76,14 @@ export class SessionHistoryRepository {
   private getCandidateStorageDirs(workspacePath?: string | null): string[] {
     const dirs: string[] = []
     if (workspacePath && fs.existsSync(workspacePath)) {
-      dirs.push(path.join(workspacePath, '.onlyrag', 'sessions'))
+      dirs.push(path.dirname(workspaceMetadataHistoryPath(workspacePath)))
     }
     dirs.push(this.getFallbackDir())
     return dirs
   }
 
   private async readStoreAtDir(dir: string): Promise<CodingSession[]> {
-    const filePath = path.join(dir, HISTORY_FILE_NAME)
+    const filePath = this.historyFilePath(dir)
     if (!fs.existsSync(filePath)) return []
     try {
       const raw = await fs.promises.readFile(filePath, 'utf-8')
@@ -92,7 +97,7 @@ export class SessionHistoryRepository {
   }
 
   private async writeStoreAtDir(dir: string, sessions: CodingSession[]): Promise<boolean> {
-    const filePath = path.join(dir, HISTORY_FILE_NAME)
+    const filePath = this.historyFilePath(dir)
     try {
       const payload: SessionHistoryStore = { version: STORE_VERSION, sessions }
       return await safeAtomicWrite(filePath, JSON.stringify(payload, null, 2))
@@ -168,7 +173,7 @@ export class SessionHistoryRepository {
       const normalizedTarget = workspacePath ? path.normalize(workspacePath).toLowerCase() : null
 
       if (workspacePath && fs.existsSync(workspacePath)) {
-        const workspaceDir = path.join(workspacePath, '.onlyrag', 'sessions')
+        const workspaceDir = path.dirname(workspaceMetadataHistoryPath(workspacePath))
         if (fs.existsSync(workspaceDir)) {
           await this.writeStoreAtDir(workspaceDir, [])
         }

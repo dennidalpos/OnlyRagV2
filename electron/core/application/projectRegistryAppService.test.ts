@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { workspaceMetadataStatePath, workspaceMetadataTrackerPath } from '../infrastructure/filesystem/workspaceMetadataDirectory'
 
 vi.mock('../infrastructure/filesystem/projectRegistryRepository', () => ({
   projectRegistryRepository: {
@@ -29,37 +30,39 @@ describe('ProjectRegistryAppService project removal and purge fan-out', () => {
     vi.clearAllMocks()
   })
 
-  it('removeProject should clear sessions, purge prompt history, and unregister project', async () => {
+  it('removeProject only unregisters the project', async () => {
     vi.mocked(projectRegistryRepository.remove).mockResolvedValue(true)
 
     const result = await projectRegistryAppService.removeProject('/repo/a')
 
     expect(result).toBe(true)
-    expect(sessionHistoryAppService.clearSessions).toHaveBeenCalledWith('/repo/a')
-    expect(sidecarAppService.removePromptHistoryForProject).toHaveBeenCalledWith('/repo/a')
+    expect(sessionHistoryAppService.clearSessions).not.toHaveBeenCalled()
+    expect(sidecarAppService.removePromptHistoryForProject).not.toHaveBeenCalled()
     expect(projectRegistryRepository.remove).toHaveBeenCalledWith('/repo/a')
   })
 
-  it('removeProject should safely purge internal .onlyrag metadata without deleting user workspace folder', async () => {
+  it('removeProject keeps .onlyrag and user files for reopening', async () => {
     vi.mocked(projectRegistryRepository.remove).mockResolvedValue(true)
 
-    // Create a real temp workspace with user file and .onlyrag metadata folder
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-proj-test-'))
     const userFile = path.join(tempDir, 'App.tsx')
     const onlyragDir = path.join(tempDir, '.onlyrag')
-    const sessionFile = path.join(onlyragDir, 'sessions.json')
+    const sessionFile = workspaceMetadataStatePath(tempDir, 'chat-1')
+    const trackerFile = workspaceMetadataTrackerPath(tempDir, 'chat-1')
 
     fs.writeFileSync(userFile, 'export default function App() {}', 'utf-8')
-    fs.mkdirSync(onlyragDir, { recursive: true })
+    fs.mkdirSync(path.dirname(sessionFile), { recursive: true })
     fs.writeFileSync(sessionFile, '{}', 'utf-8')
+    fs.writeFileSync(trackerFile, '# chat-1', 'utf-8')
 
     expect(fs.existsSync(userFile)).toBe(true)
     expect(fs.existsSync(onlyragDir)).toBe(true)
 
     await projectRegistryAppService.removeProject(tempDir)
 
-    // Verify .onlyrag was purged, but user project and source files are 100% intact!
-    expect(fs.existsSync(onlyragDir)).toBe(false)
+    expect(fs.existsSync(onlyragDir)).toBe(true)
+    expect(fs.existsSync(sessionFile)).toBe(true)
+    expect(fs.readFileSync(workspaceMetadataTrackerPath(tempDir, 'chat-1'), 'utf-8')).toBe('# chat-1')
     expect(fs.existsSync(userFile)).toBe(true)
     expect(fs.existsSync(tempDir)).toBe(true)
 

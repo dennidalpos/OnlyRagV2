@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { ensureWorkspaceMetadataDirectory } from './workspaceMetadataDirectory'
+import { workspaceMetadataSessionDirectory, workspaceMetadataStatePath, workspaceMetadataTrackerPath } from './workspaceMetadataDirectory'
 import path from 'node:path'
 import { logger } from '../logging/logger'
 import type { AgentMode } from '../../domain/agent/agentTypes'
@@ -80,34 +80,10 @@ function normalizePersistedMode(raw: unknown): SavedAgentSessionState {
 }
 
 export class AgentSessionStateRepository {
-  private getStorageDir(workspacePath?: string | null): string {
-    if (workspacePath && fs.existsSync(workspacePath)) {
-      const stateDir = path.join(ensureWorkspaceMetadataDirectory(workspacePath), 'sessions')
-      if (!fs.existsSync(stateDir)) {
-        try {
-          fs.mkdirSync(stateDir, { recursive: true })
-        } catch (err: unknown) {
-          logger.log('WARN', 'AgentSessionStateRepo', `Could not create .onlyrag/sessions dir in workspace: ${errorMessage(err)}`)
-        }
-      }
-      if (fs.existsSync(stateDir)) return stateDir
-    }
-
-    const fallbackDir = userDataSessionsDir()
-    if (!fs.existsSync(fallbackDir)) {
-      try {
-        fs.mkdirSync(fallbackDir, { recursive: true })
-      } catch (err: unknown) {
-        logger.log('WARN', 'AgentSessionStateRepo', `Could not create fallback session dir: ${errorMessage(err)}`)
-      }
-    }
-    return fallbackDir
-  }
-
   private getStateFilePath(sessionId: string, workspacePath?: string | null): string {
+    if (workspacePath && fs.existsSync(workspacePath)) return workspaceMetadataStatePath(workspacePath, sessionId)
     const safeSessionId = sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')
-    const dir = this.getStorageDir(workspacePath)
-    return path.join(dir, `.agent_state_${safeSessionId}.json`)
+    return path.join(userDataSessionsDir(), `.agent_state_${safeSessionId}.json`)
   }
 
   public async saveSessionState(state: SavedAgentSessionState): Promise<boolean> {
@@ -121,15 +97,14 @@ export class AgentSessionStateRepository {
     }
   }
 
-  /** Writes .onlyrag/assistant/SESSION_TRACKER.md. */
+  /** Writes the tracker owned by this conversation. */
   public async saveSessionTrackerMarkdown(workspacePath: string | null, tracker: SessionDebtTracker): Promise<boolean> {
     if (!workspacePath || !fs.existsSync(workspacePath)) return false
     try {
-      const assistantDir = path.join(ensureWorkspaceMetadataDirectory(workspacePath), 'assistant')
-      if (!fs.existsSync(assistantDir)) {
-        await fs.promises.mkdir(assistantDir, { recursive: true })
-      }
-      const trackerPath = path.join(assistantDir, 'SESSION_TRACKER.md')
+      const sessionId = tracker.getData().sessionId
+      if (!sessionId) throw new Error('Session tracker has no owner')
+      const trackerPath = workspaceMetadataTrackerPath(workspacePath, sessionId)
+      await fs.promises.mkdir(path.dirname(trackerPath), { recursive: true })
       const markdown = tracker.compileTrackerMarkdown()
       return await safeAtomicWrite(trackerPath, markdown)
     } catch (err: unknown) {
@@ -139,9 +114,9 @@ export class AgentSessionStateRepository {
   }
 
   /** Reads back SESSION_TRACKER.md's raw markdown, or null if the workspace has none yet. */
-  public loadSessionTrackerMarkdown(workspacePath: string): string | null {
+  public loadSessionTrackerMarkdown(workspacePath: string, sessionId: string): string | null {
     try {
-      const trackerPath = path.join(workspacePath, '.onlyrag', 'assistant', 'SESSION_TRACKER.md')
+      const trackerPath = workspaceMetadataTrackerPath(workspacePath, sessionId)
       if (!fs.existsSync(trackerPath)) return null
       return fs.readFileSync(trackerPath, 'utf-8')
     } catch (err: unknown) {
@@ -205,12 +180,11 @@ export class AgentSessionStateRepository {
 
   public async clearSessionState(sessionId: string, workspacePath?: string | null): Promise<boolean> {
     try {
-      const filePath = this.getStateFilePath(sessionId, workspacePath)
-      if (fs.existsSync(filePath)) {
-        await fs.promises.unlink(filePath)
+      if (workspacePath && fs.existsSync(workspacePath)) {
+        await fs.promises.rm(workspaceMetadataSessionDirectory(workspacePath, sessionId), { recursive: true, force: true })
       }
       const fallbackPath = path.join(userDataSessionsDir(), `.agent_state_${sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`)
-      if (fs.existsSync(fallbackPath)) {
+      if (fs.existsSync(fallbackPath) && (!workspacePath || JSON.parse(await fs.promises.readFile(fallbackPath, 'utf-8')).workspacePath === workspacePath)) {
         await fs.promises.unlink(fallbackPath)
       }
       return true
@@ -222,19 +196,24 @@ export class AgentSessionStateRepository {
 
   public async clearAllSessionStates(workspacePath?: string | null): Promise<boolean> {
     try {
-      const dirs = [this.getStorageDir(workspacePath), userDataSessionsDir()]
-      for (const dir of dirs) {
-        if (fs.existsSync(dir)) {
-          const files = await fs.promises.readdir(dir)
-          for (const file of files) {
-            if (file.startsWith('.agent_state_') && file.endsWith('.json')) {
-              try {
-                await fs.promises.unlink(path.join(dir, file))
-              } catch (unlinkErr: unknown) {
-                logger.log('WARN', 'AgentSessionStateRepo', `Failed deleting state file ${file}: ${errorMessage(unlinkErr)}`)
-              }
+      if (workspacePath && fs.existsSync(workspacePath)) {
+        const sessionsDir = path.dirname(workspaceMetadataStatePath(workspacePath, 'probe'))
+        const root = path.dirname(sessionsDir)
+        if (fs.existsSync(root)) {
+          for (const entry of await fs.promises.readdir(root, { withFileTypes: true })) {
+            if (entry.isDirectory() && /^[a-f0-9]{64}$/.test(entry.name)) {
+              await fs.promises.rm(path.join(root, entry.name), { recursive: true, force: true })
             }
           }
+        }
+      }
+      const fallbackDir = userDataSessionsDir()
+      if (fs.existsSync(fallbackDir)) {
+        for (const file of await fs.promises.readdir(fallbackDir)) {
+          if (!file.startsWith('.agent_state_') || !file.endsWith('.json')) continue
+          const filePath = path.join(fallbackDir, file)
+          const state = JSON.parse(await fs.promises.readFile(filePath, 'utf-8')) as { workspacePath?: string | null }
+          if (!workspacePath || state.workspacePath === workspacePath) await fs.promises.unlink(filePath)
         }
       }
       return true

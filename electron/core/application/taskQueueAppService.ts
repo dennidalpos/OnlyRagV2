@@ -9,6 +9,7 @@ import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunId
 import type { AgentRunIdentity } from '../../../shared/types'
 import { standaloneScratchWorkspace } from '../infrastructure/filesystem/standaloneScratchWorkspace'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
+import { ensureWorkspaceMetadataDirectory } from '../infrastructure/filesystem/workspaceMetadataDirectory'
 import path from 'node:path'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
@@ -70,6 +71,7 @@ export class TaskQueueAppService {
           error: `Workspace directory does not exist: ${boundWorkspacePath}`,
         }
       }
+      ensureWorkspaceMetadataDirectory(boundWorkspacePath)
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       return { success: false, summary: 'Agent workspace is unavailable', error: message }

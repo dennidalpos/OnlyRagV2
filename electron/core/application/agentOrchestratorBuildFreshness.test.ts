@@ -224,6 +224,7 @@ describe('the project "test" script is a verification even when it is not the pr
     const ctx = makeContext('npm test', flags)
     ctx.goalPlanner = {
       ...ctx.goalPlanner,
+      getActiveMilestone: () => smoke,
       getMilestones: () => [smoke],
       updateMilestone: (id: string, status: string) => {
         updates.push(`${id}:${status}`)

@@ -77,7 +77,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
       sessionId,
       runIdentity: session.identity,
       workspacePath,
-      agentMode,
+      agentMode: session.currentAgentMode ?? agentMode,
       stepCount: stepCountBox.value,
       maxSteps: MAX_STEPS === Infinity ? 999 : MAX_STEPS,
       episodes: episodicCompactor.getEpisodes(),

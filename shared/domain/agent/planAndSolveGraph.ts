@@ -1,4 +1,4 @@
-import { extractDeliverablePaths, resolveDeclaredFilePaths, AWAITING_VERIFICATION_MARKER } from './milestoneDeliverableResolver'
+import { extractDeliverablePaths, resolveDeclaredFilePaths } from './milestoneDeliverableResolver'
 import { selectPromptMilestoneWindow } from './planPromptWindow'
 import { buildActiveInterventionActions } from './activeInterventionActions'
 import type { PlanMilestone } from './planMilestone'
@@ -86,20 +86,11 @@ export class GoalDecompositionPlanner {
     return this.milestones.length > 0
   }
 
-  public getActiveMilestone(isDeliverableSatisfied?: (milestone: PlanMilestone) => boolean): PlanMilestone | undefined {
-    const inProgressUnsatisfied = this.milestones.find((milestone) => {
-      if (milestone.status !== 'in_progress' || isCompletionMilestoneTitle(milestone)) return false
-      if (isDeliverableSatisfied) return !isDeliverableSatisfied(milestone)
-      return !milestone.notes?.includes(AWAITING_VERIFICATION_MARKER)
-    })
-    if (inProgressUnsatisfied) return inProgressUnsatisfied
-
-    const nextPending = this.milestones.find((milestone) => milestone.status === 'pending' && !isCompletionMilestoneTitle(milestone))
-    if (nextPending) return nextPending
-
-    const anyInProgress = this.milestones.find((milestone) => milestone.status === 'in_progress' && !isCompletionMilestoneTitle(milestone))
-    if (anyInProgress) return anyInProgress
-
+  public getActiveMilestone(): PlanMilestone | undefined {
+    const firstOpen = this.milestones.find(
+      (milestone) => (milestone.status === 'pending' || milestone.status === 'in_progress') && !isCompletionMilestoneTitle(milestone),
+    )
+    if (firstOpen) return firstOpen
     return this.milestones.find((milestone) => milestone.status === 'pending' || milestone.status === 'in_progress')
   }
 
@@ -111,6 +102,15 @@ export class GoalDecompositionPlanner {
   public updateMilestone(idOrIndex: string | number, status: PlanMilestone['status'], notes?: string): boolean {
     const target = this.findMilestone(idOrIndex)
     if (!target) return false
+
+    if (
+      !isCompletionMilestoneTitle(target) &&
+      target.status !== 'verified' &&
+      target.status !== 'failed' &&
+      status !== target.status &&
+      this.getActiveMilestone()?.id !== target.id
+    )
+      return false
 
     const previousStatus = target.status
     target.status = status
@@ -255,7 +255,7 @@ export class GoalDecompositionPlanner {
     } else {
       const closureStep =
         context?.directive?.closureStepDirective ||
-        '2. Once the required files for this milestone are created or updated, invoke "update_plan" to mark it verified or proceed directly to the next milestone.'
+        '2. Complete and verify this milestone with "update_plan" or its declared check before starting the next one.'
       lines.push(
         [
           '\n[CURRENT ACTIVE MICRO-TASK FOCUS]',

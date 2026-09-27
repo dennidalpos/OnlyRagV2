@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import type { RendererEventSink } from '../domain/ports/rendererEventSink'
-import type { AgentCompletionStatus, AgentRunIdentity, AgentVerificationEvidence } from '../../../shared/types'
+import type { AgentApprovalPayload, AgentCompletionStatus, AgentExecutionMode, AgentRunIdentity, AgentVerificationEvidence } from '../../../shared/types'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 import { type AgentLocalizedText, formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
@@ -51,6 +51,9 @@ export interface AgentSession {
   promptTokenRatio?: number
   /** Set while the loop is paused inside an approval gate (see `requestApproval` in runAgentOrchestratorLoop), so an in-flight `agent:approval-response` and a cancellation/timeout racing against it both resolve the same pending Promise exactly once instead of leavi */
   pendingApprovalResolve?: (response: ApprovalResponse) => void
+  pendingApprovalReasons?: AgentApprovalPayload['reasons']
+  currentAgentMode?: AgentExecutionMode
+  updateActiveRun?: (update: { mode?: AgentExecutionMode; numCtx?: number }) => { approvalResolved: boolean; numCtx?: number }
   /** Registered after bootstrap so user cancellation can persist its terminal cause. */
   persistCancellation?: () => Promise<void>
   /** Terminal state set by cancellation/timeout before an in-flight operation unwinds. */

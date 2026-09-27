@@ -109,6 +109,40 @@ export function useCodingAgentExecution({
     setActiveRunIdentity(identity)
   }, [])
 
+  const changeAgentMode = useCallback(
+    (mode: AgentMode) => {
+      setAgentMode(mode)
+      const identity = activeRunIdentityRef.current
+      if (!identity || !window.electronAPI?.updateActiveAgentRun) return
+      const approvalAtChange = pendingApproval
+      void window.electronAPI
+        .updateActiveAgentRun({ identity, mode })
+        .then((result) => {
+          if (result.approvalResolved) setPendingApproval((current) => (current === approvalAtChange ? null : current))
+        })
+        .catch((error: unknown) => logger.error('useCodingAgentExecution', `Failed updating active mode: ${errorMessage(error)}`))
+    },
+    [pendingApproval, setPendingApproval],
+  )
+
+  const activeContextModel = currentLiveModel || resolveConfiguredModel('coding', settings)
+  const preferredContext = settings?.modelContextLengths?.[activeContextModel]
+  useEffect(() => {
+    const identity = activeRunIdentityRef.current
+    if (!isExecuting || !identity || currentStep === 0 || !window.electronAPI?.updateActiveAgentRun) return
+    void window.electronAPI
+      .updateActiveAgentRun({ identity, mode: agentMode })
+      .catch((error: unknown) => logger.error('useCodingAgentExecution', `Failed syncing active mode: ${errorMessage(error)}`))
+  }, [isExecuting, activeRunIdentity, currentStep, agentMode])
+
+  useEffect(() => {
+    const identity = activeRunIdentityRef.current
+    if (!isExecuting || !identity || preferredContext === undefined || !window.electronAPI?.updateActiveAgentRun) return
+    void window.electronAPI
+      .updateActiveAgentRun({ identity, numCtx: preferredContext })
+      .catch((error: unknown) => logger.error('useCodingAgentExecution', `Failed updating active context: ${errorMessage(error)}`))
+  }, [isExecuting, activeRunIdentity, activeContextModel, preferredContext, currentStep])
+
   useEffect(() => {
     if (!isExecuting) setCapabilityProfile(resolveAgentCapabilityProfile(settings))
   }, [isExecuting, settings])
@@ -546,7 +580,7 @@ export function useCodingAgentExecution({
 
   return {
     agentMode,
-    setAgentMode,
+    setAgentMode: changeAgentMode,
     isPromptModalOpen,
     setIsPromptModalOpen,
     agentPrompt,

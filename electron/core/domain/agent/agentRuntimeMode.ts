@@ -120,6 +120,10 @@ export class AgentRuntimeModeFsm {
     return this.currentMode
   }
 
+  public setMode(mode: AgentMode): void {
+    this.currentMode = this.normalizeMode(mode)
+  }
+
   public isToolAllowed(toolName: string): boolean {
     const config = MODE_PERMISSIONS[this.currentMode]
     return config.allowedTools.has(toolName as SupportedToolName)

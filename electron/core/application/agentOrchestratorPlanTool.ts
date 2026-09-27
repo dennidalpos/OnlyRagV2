@@ -53,12 +53,17 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
   let planLog: string
   let updateFailed = false
 
+  const targetMilestone = goalPlanner.findMilestone(milestoneRef)
+  const activeMilestone = goalPlanner.getActiveMilestone()
   if (!goalPlanner.hasPlan()) {
     updateFailed = true
     planFeedback = `[UPDATE_PLAN REJECTED] There is no execution plan in this session yet, so milestone '${milestoneRef}' cannot be updated. Produce a plan checklist first, or continue executing tools directly.`
     planLog = 'update_plan rejected: no active execution plan'
+  } else if (targetMilestone && targetMilestone.status !== 'verified' && targetMilestone.status !== 'failed' && activeMilestone?.id !== targetMilestone.id) {
+    updateFailed = true
+    planFeedback = `[UPDATE_PLAN REJECTED: OUT OF ORDER] Complete and verify milestone '${activeMilestone?.id}' before updating '${targetMilestone.id}'. Work on one milestone at a time.`
+    planLog = `update_plan rejected: '${targetMilestone.id}' is not the active milestone`
   } else {
-    const targetMilestone = goalPlanner.findMilestone(milestoneRef)
     let effectiveStatus = nextStatus
     let effectiveNotes = notes
     let verificationRanLog: string | null = null

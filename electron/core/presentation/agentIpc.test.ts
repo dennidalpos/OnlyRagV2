@@ -23,7 +23,7 @@ vi.mock('../application/taskQueueAppService', () => ({
     getQueueStatus: vi.fn(),
   },
 }))
-vi.mock('../application/agentOrchestratorAppService', () => ({ respondToApproval: vi.fn() }))
+vi.mock('../application/agentOrchestratorAppService', () => ({ respondToApproval: vi.fn(), updateActiveAgentRun: vi.fn() }))
 vi.mock('../application/sidecarAppService', () => ({ sidecarAppService: {} }))
 vi.mock('../application/planGenerationAppService', () => ({
   planGenerationAppService: {
@@ -42,7 +42,7 @@ vi.mock('../application/agentSessionStateAppService', () => ({
 }))
 
 import { agentSessionStateAppService } from '../application/agentSessionStateAppService'
-import { respondToApproval } from '../application/agentOrchestratorAppService'
+import { respondToApproval, updateActiveAgentRun } from '../application/agentOrchestratorAppService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import { taskQueueAppService } from '../application/taskQueueAppService'
@@ -105,6 +105,18 @@ describe('agent IPC session-state facade', () => {
     expect(() => handler({ sender: trustedContents, senderFrame: {} }, { runId: 'x' })).toThrow('Untrusted IPC sender')
     expect(() => handler(trustedEvent, 'not an identity')).toThrow('Invalid IPC payload')
     expect(taskQueueAppService.cancelTask).not.toHaveBeenCalled()
+  })
+
+  it('validates and forwards active run mode and context changes', async () => {
+    const handler = handlers.get('agent:update-active-run')!
+    const update = { identity: runIdentity, mode: 'auto', numCtx: 32768 }
+    vi.mocked(updateActiveAgentRun).mockReturnValue({ updated: true, approvalResolved: false, numCtx: 32768 })
+
+    await expect(handler(trustedEvent, update)).resolves.toEqual({ updated: true, approvalResolved: false, numCtx: 32768 })
+    expect(updateActiveAgentRun).toHaveBeenCalledWith(update)
+    expect(() => handler(trustedEvent, { ...update, numCtx: -1 })).toThrow('Invalid IPC payload')
+    expect(() => handler(trustedEvent, { ...update, mode: 'unsafe' })).toThrow('Invalid IPC payload')
+    expect(updateActiveAgentRun).toHaveBeenCalledTimes(1)
   })
 
   it('accepts exactly one versioned active-file context and rejects legacy contextFiles', () => {

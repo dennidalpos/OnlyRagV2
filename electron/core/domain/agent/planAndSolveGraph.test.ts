@@ -74,7 +74,7 @@ describe('GoalDecompositionPlanner', () => {
     expect(prompt).not.toContain('[CURRENT ACTIVE MICRO-TASK FOCUS]')
   })
 
-  it('advances past a verified artifact awaiting later verification', () => {
+  it('keeps an artifact awaiting verification active until it is verified', () => {
     const planner = new GoalDecompositionPlanner()
     planner.initializePlan([
       {
@@ -86,6 +86,9 @@ describe('GoalDecompositionPlanner', () => {
       { id: 'm-2', title: 'Create src/styles/globals.css', status: 'pending' },
     ])
 
+    expect(planner.getActiveMilestone()?.id).toBe('m-1')
+    expect(planner.updateMilestone('m-2', 'in_progress')).toBe(false)
+    expect(planner.updateMilestone('m-1', 'verified')).toBe(true)
     expect(planner.getActiveMilestone()?.id).toBe('m-2')
   })
 

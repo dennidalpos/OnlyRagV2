@@ -13,7 +13,7 @@ Run from repository root in PowerShell. On 2026-09-26 on Windows (Node 24, Pytho
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (276 files, 2187 tests on 2026-09-27; 27 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Fast suite | `npm run test:fast` (278 files, 2201 tests on 2026-09-27; 27 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
 | Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (137 tests; after a Sidecar schema change, `npm run generate:openapi` refreshes `sidecar/contracts/openapi-2.5.0.json`) |
 | Legacy chunk prefix migration | Set `ONLYRAG_DATA_DIR` to the actual app userData, then run `.venv\Scripts\python.exe scripts/migrate_chunk_context.py` to preview and add `--apply` to migrate; app userData preview found 0 chunks; an isolated Ollama-backed index previewed and migrated 1 legacy chunk with verified backup rollback. |
 | Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 9 guard scenarios) |

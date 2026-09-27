@@ -55,7 +55,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
       onSessionPlansChange: c.updateActiveSessionPlans,
       onPersistPlan: c.persistActiveSessionPlan,
       onPlanApproved: (approvedPlan) => {
-        const executionMode = plannedExecutionModeRef.current
+        const executionMode = c.agentMode === 'ask' ? plannedExecutionModeRef.current : c.agentMode
         void c.handleAgentExecute(approvedPlan.prompt, executionMode, `${approvedPlan.id}:v${approvedPlan.version}`, approvedPlan.capabilityProfile)
       },
     })

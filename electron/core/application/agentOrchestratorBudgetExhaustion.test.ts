@@ -66,6 +66,7 @@ function makeDeps(plan: PlanMilestone[], logs: string[] = []) {
     workspacePath: tempDir,
     goalPlanner: {
       getMilestones: () => plan,
+      getActiveMilestone: () => plan.find((m) => m.status === 'pending' || m.status === 'in_progress'),
       updateMilestone: (id: string, status: PlanMilestone['status'], notes?: string) => {
         const target = plan.find((m) => m.id === id)
         if (!target) return false
@@ -99,15 +100,16 @@ describe('milestone promotion on the live-full-task workspace', () => {
     expect(selectMilestonesAwaitingVerification(makeDeps(plan), 'npm run build').map((m) => m.id)).toEqual(LIVE_MILESTONE_TITLES.map(([id]) => id))
   })
 
-  it('promotes the historical plan with the application-owned check', () => {
+  it('promotes only the active milestone with the application-owned check', () => {
     writeLiveWorkspace(LIVE_WRITTEN_FILES)
     const plan = livePlan()
     const logs: string[] = []
 
-    expect(promoteMilestonesProvenBy(makeDeps(plan, logs), 'npm run build')).toBe(14)
-    expect(plan.every((m) => m.status === 'verified')).toBe(true)
-    expect(plan.every((m) => Object.keys(m.fileEvidence || {}).length > 0)).toBe(true)
-    expect(logs.join('\n')).toContain('14 milestone verificate')
+    expect(promoteMilestonesProvenBy(makeDeps(plan, logs), 'npm run build')).toBe(1)
+    expect(plan[0].status).toBe('verified')
+    expect(plan.slice(1).every((m) => m.status === 'in_progress')).toBe(true)
+    expect(Object.keys(plan[0].fileEvidence || {}).length).toBeGreaterThan(0)
+    expect(logs.join('\n')).toContain('1 milestone verificate')
   })
 
   it('requires both the associated command and the declared artifact', () => {

@@ -83,10 +83,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
 
   const completedItemsCount = parsedChecklist.filter((item) => item.completed).length
 
-  // Determine active item based on in_progress status or the first unfinished item when executing
-  const inProgressIndex = parsedChecklist.findIndex((item) => item.status === 'in_progress')
-  const firstUnfinishedIndex = parsedChecklist.findIndex((item) => !item.completed)
-  const activeIndex = isExecuting ? (inProgressIndex !== -1 ? inProgressIndex : firstUnfinishedIndex) : -1
+  const activeIndex = isExecuting ? parsedChecklist.findIndex((item) => !item.completed && item.status !== 'failed') : -1
 
   const progressPercent = totalItems > 0 ? Math.round((completedItemsCount / totalItems) * 100) : 0
   const schedulerState =

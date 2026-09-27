@@ -50,7 +50,7 @@ export const PlanPanelChecklistView: React.FC<PlanPanelChecklistViewProps> = ({
       <div className="space-y-2 pt-1">
         {parsedChecklist.map((item, idx) => {
           const isChecked = item.completed
-          const isActive = isExecuting && !isChecked && (item.status === 'in_progress' || idx === activeIndex)
+          const isActive = isExecuting && !isChecked && idx === activeIndex
 
           return (
             <div

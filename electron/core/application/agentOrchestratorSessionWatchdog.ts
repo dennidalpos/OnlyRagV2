@@ -68,6 +68,7 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
     if (session.pendingApprovalResolve) {
       session.pendingApprovalResolve({ approved: false })
       session.pendingApprovalResolve = undefined
+      session.pendingApprovalReasons = undefined
     }
     codingAgentLogger.logSessionEnd(sessionId, stepCountBox.value, false, timeoutSummary)
     await persistCurrentState('timeout', 'blocked')
@@ -82,6 +83,7 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
         return
       }
       session.pendingApprovalResolve = resolve
+      session.pendingApprovalReasons = approvalPayload.reasons
       session.rendererEvents.send('agent:approval-request', {
         ...session.identity,
         sessionId: session.id,

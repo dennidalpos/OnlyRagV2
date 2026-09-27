@@ -29,6 +29,9 @@ import type { AgentChatToolCall } from '../infrastructure/http/agentStreamTransp
 import type { PreparedAgentTurn, TurnDispatchData } from './agentOrchestratorRunContext'
 import { emitLocalizedLog } from './agentOrchestratorTypes'
 import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
+import type { AgentExecutionMode } from '../../../shared/types'
+import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
+import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 
 export type { AgentSession }
 
@@ -44,6 +47,7 @@ function cleanupSession(session: AgentSession) {
   if (session.pendingApprovalResolve) {
     session.pendingApprovalResolve({ approved: false })
     session.pendingApprovalResolve = undefined
+    session.pendingApprovalReasons = undefined
   }
   if (session.timeoutHandle) {
     clearTimeout(session.timeoutHandle)
@@ -151,8 +155,22 @@ export function respondToApproval(target: AgentRunIdentity | string, approved: b
   if (!session || !session.pendingApprovalResolve) return false
   const resolve = session.pendingApprovalResolve
   session.pendingApprovalResolve = undefined
+  session.pendingApprovalReasons = undefined
   resolve({ approved, approvedHunkIndices })
   return true
+}
+
+/** Applies UI changes to the matching active run; queued and completed runs are untouched. */
+export function updateActiveAgentRun(update: { identity: AgentRunIdentity; mode?: AgentExecutionMode; numCtx?: number }): {
+  updated: boolean
+  approvalResolved: boolean
+  numCtx?: number
+} {
+  const session = activeAgentSessions.get(update.identity.runId)
+  if (!session || !matchesAgentRunIdentity(session.identity, update.identity) || session.isCancelled || !session.updateActiveRun) {
+    return { updated: false, approvalResolved: false }
+  }
+  return { updated: true, ...session.updateActiveRun(update) }
 }
 
 export async function runAgentOrchestratorLoop(
@@ -402,6 +420,44 @@ export async function runAgentOrchestratorLoop(
     },
   }
 
+  session.updateActiveRun = ({ mode, numCtx }) => {
+    let approvalResolved = false
+    if (mode && mode !== run.agentMode) {
+      run.agentMode = mode
+      session.currentAgentMode = mode
+      fsmMode.setMode(mode)
+      session.nativeSystemPrompt = undefined
+      const reasons = session.pendingApprovalReasons
+      if (session.pendingApprovalResolve && (mode === 'ask' || (mode === 'auto' && reasons?.length === 1 && reasons[0] === 'guided_review'))) {
+        const resolve = session.pendingApprovalResolve
+        session.pendingApprovalResolve = undefined
+        session.pendingApprovalReasons = undefined
+        resolve({ approved: mode === 'auto' })
+        approvalResolved = true
+      }
+      emitLog('info', `Execution mode changed to ${mode.toUpperCase()} for the active run.`)
+    }
+    let appliedContext: number | undefined
+    if (numCtx !== undefined) {
+      const model = session.ollamaRuntimeProfile?.model || codingModel
+      settings.modelContextLengths = { ...settings.modelContextLengths, [model]: numCtx }
+      const profile = session.ollamaRuntimeProfile
+      if (profile) {
+        const effective = resolveModelContextLength(model, settings.modelContextLengths, profile.options.num_ctx, modelMetrics[model]?.contextLength)
+        if (effective !== profile.options.num_ctx) {
+          profile.options.num_ctx = effective
+          profile.options.num_predict = HardwareProfileResolver.deriveNumPredict(effective)
+          profile.options.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(effective)
+          sessionNumCtxBox.value = effective
+          session.nativeSystemPrompt = undefined
+          emitLog('info', `Context window changed to ${effective} tokens for ${model}; the next model request will use it.`)
+        }
+        appliedContext = effective
+      }
+    }
+    return { approvalResolved, ...(appliedContext !== undefined ? { numCtx: appliedContext } : {}) }
+  }
+
   // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
   const PERSIST_EVERY_N_STEPS = 5
 
@@ -485,7 +541,7 @@ export async function runAgentOrchestratorLoop(
     setExecutionPhase('apply_action')
     const gateResult = await runToolGates({
       parsedTool,
-      agentMode,
+      agentMode: run.agentMode,
       fsmMode,
       workspacePath,
       stepCount: stepCountBox.value,

@@ -1,7 +1,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentRunIdentity, AgentTaskRequest, WorkspaceFile } from '../../types'
+import type { AgentRunIdentity, AgentTaskRequest, AppSettings, WorkspaceFile } from '../../types'
+import { DEFAULT_APP_SETTINGS } from '../../../shared/domain/settings/appSettingsDefaults'
 import { useAgentActionLog } from './useAgentActionLog'
 import { useCodingAgentExecution, type UseCodingAgentExecutionOptions } from './useCodingAgentExecution'
 
@@ -17,6 +18,7 @@ describe('useCodingAgentExecution', () => {
   let execution: Execution
   let doneListener: ((result: { success: boolean; summary: string } & AgentRunIdentity) => void) | undefined
   const startAgentTask = vi.fn(async (request: AgentTaskRequest) => ({ success: true, summary: '', runId: request.identity.runId, queuePosition: 0 }))
+  const updateActiveAgentRun = vi.fn(async () => ({ updated: true, approvalResolved: false }))
 
   function Harness(props: HarnessProps) {
     const actionLog = useAgentActionLog()
@@ -45,10 +47,12 @@ describe('useCodingAgentExecution', () => {
   beforeEach(async () => {
     vi.useFakeTimers()
     startAgentTask.mockClear()
+    updateActiveAgentRun.mockClear()
     doneListener = undefined
     const unsubscribe = () => () => {}
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       startAgentTask,
+      updateActiveAgentRun,
       cancelAgentTask: vi.fn(async () => ({ success: true })),
       onAgentLog: unsubscribe,
       onAgentStreamToken: unsubscribe,
@@ -93,6 +97,21 @@ describe('useCodingAgentExecution', () => {
     const dequeued = startAgentTask.mock.calls[1][0]
     expect(dequeued).toMatchObject({ userTask: 'Queued task', agentMode: 'auto', sessionId: 'session-2', activeFile: { path: 'C:/w/b.ts' } })
     expect(laterSession.beginExecutedPrompt).toHaveBeenCalledWith('session-2', 'Queued task', 'auto')
+  })
+
+  it('sends mode and context changes to the active run', async () => {
+    const initialSettings: AppSettings = { ...DEFAULT_APP_SETTINGS, codingModel: 'qwen3.5:4b', modelContextLengths: { 'qwen3.5:4b': 32768 } }
+    await act(async () => root.render(<Harness {...props({ settings: initialSettings })} />))
+    await act(async () => execution.handleAgentExecute('Build the app'))
+    const identity = startAgentTask.mock.calls[0][0].identity
+    expect(updateActiveAgentRun).toHaveBeenCalledWith({ identity, numCtx: 32768 })
+
+    await act(async () => execution.setAgentMode('auto'))
+    expect(updateActiveAgentRun).toHaveBeenCalledWith({ identity, mode: 'auto' })
+
+    const changedSettings = { ...initialSettings, modelContextLengths: { 'qwen3.5:4b': 16384 } }
+    await act(async () => root.render(<Harness {...props({ settings: changedSettings })} />))
+    expect(updateActiveAgentRun).toHaveBeenCalledWith({ identity, numCtx: 16384 })
   })
 
   it('does not start the next queued prompt after a cancelled run', async () => {

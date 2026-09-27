@@ -154,33 +154,24 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, muta
   const probe = createWorkspaceDeliverableProbe(workspacePath)
   let advancedAny = false
 
-  for (const milestone of ctx.goalPlanner.getMilestones()) {
-    if (milestone.status === 'verified' || milestone.status === 'failed' || isCompletionMilestoneTitle(milestone)) {
-      continue
-    }
-
+  const milestone = ctx.goalPlanner.getActiveMilestone()
+  if (milestone && !isCompletionMilestoneTitle(milestone)) {
     const evidencePath = mutatedPaths.find((candidate) => isDeliverableOfMilestone(milestone, candidate))
-    if (!evidencePath) continue
-
-    const status = resolveMilestoneDeliverableStatus(milestone, probe)
-    if (status === 'satisfied') {
-      // Awaiting verification note indicates milestone was complete before this write (re-delivery).
-      const wasAlreadySatisfied = Boolean(milestone.notes && milestone.notes.includes(AWAITING_VERIFICATION_MARKER))
-      ctx.goalPlanner.updateMilestone(milestone.id, 'in_progress', awaitingVerificationNote(evidencePath))
-      emitLocalizedLog(ctx.emitLog, 'info', { key: 'milestoneAwaitingVerification', params: { id: milestone.id, path: evidencePath } })
-      if (wasAlreadySatisfied) reportRedelivery(ctx, milestone, evidencePath, probe)
-      advancedAny = true
-      continue
-    }
-
-    if (milestone.status === 'pending') {
-      ctx.goalPlanner.updateMilestone(milestone.id, 'in_progress')
-      advancedAny = true
-    }
-
-    // Emits partial delivery directive when other required milestone deliverables are still missing.
-    if (status === 'unsatisfied') {
-      reportPartialDelivery(ctx, milestone, evidencePath, probe)
+    if (evidencePath) {
+      const status = resolveMilestoneDeliverableStatus(milestone, probe)
+      if (status === 'satisfied') {
+        const wasAlreadySatisfied = Boolean(milestone.notes && milestone.notes.includes(AWAITING_VERIFICATION_MARKER))
+        ctx.goalPlanner.updateMilestone(milestone.id, 'in_progress', awaitingVerificationNote(evidencePath))
+        emitLocalizedLog(ctx.emitLog, 'info', { key: 'milestoneAwaitingVerification', params: { id: milestone.id, path: evidencePath } })
+        if (wasAlreadySatisfied) reportRedelivery(ctx, milestone, evidencePath, probe)
+        advancedAny = true
+      } else {
+        if (milestone.status === 'pending') {
+          ctx.goalPlanner.updateMilestone(milestone.id, 'in_progress')
+          advancedAny = true
+        }
+        if (status === 'unsatisfied') reportPartialDelivery(ctx, milestone, evidencePath, probe)
+      }
     }
   }
 
@@ -324,7 +315,8 @@ export function promoteMilestonesProvenBy(
   deps: Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner' | 'emitLog'>,
   verificationCommand: string,
 ): number {
-  const proven = selectMilestonesAwaitingVerification(deps, verificationCommand)
+  const active = deps.goalPlanner.getActiveMilestone()
+  const proven = selectMilestonesAwaitingVerification(deps, verificationCommand).filter((milestone) => milestone.id === active?.id)
   if (proven.length === 0) return 0
 
   for (const milestone of proven) {

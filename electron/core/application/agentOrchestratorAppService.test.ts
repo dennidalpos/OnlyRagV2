@@ -9,6 +9,7 @@ import {
   cancelActiveAgentTask,
   requestActiveAgentContextCompaction,
   respondToApproval,
+  updateActiveAgentRun,
 } from './agentOrchestratorAppService'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import type { AgentChatTurn } from '../infrastructure/http/agentStreamTransport'
@@ -19,6 +20,7 @@ import { buildDefaultAgentSettings } from './agentOrchestratorSessionSetup'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import type { AppSettings } from '../../../shared/types'
+import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 
 // The production fallback is fail-closed; these loop tests exercise tool execution, so they opt in.
 const TOOL_ENABLED_SETTINGS: AppSettings = {
@@ -539,6 +541,77 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.summary).toContain('Write approved and applied.')
     expect(res.summary).not.toContain('FSM PERMISSION DENIED')
     expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(true)
+  })
+
+  it('applies Auto to an active Guided run and resolves only its Guided review', async () => {
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce(toolTurn('write_file', { filePath: 'index.ts', content: 'export const value = 1' }))
+      .mockResolvedValueOnce(toolTurn('finish', { summary: 'Applied.' }))
+    const mockWin = createMockWindow()
+    const sessionId = 'guided-to-auto-session'
+    const identity = createAgentRunIdentity({ runId: sessionId, conversationId: sessionId, workspacePath: tempDir })
+    const resultPromise = runAgentOrchestratorLoop(
+      { identity, sessionId, userTask: 'Create index.ts', agentMode: 'guided', workspacePath: tempDir },
+      mockWin.window,
+    )
+    await vi.waitFor(() => expect(mockWin.send).toHaveBeenCalledWith('agent:approval-request', expect.objectContaining({ reasons: ['guided_review'] })))
+
+    expect(updateActiveAgentRun({ identity, mode: 'auto' })).toEqual({ updated: true, approvalResolved: true })
+    expect((await resultPromise).summary).toContain('Applied.')
+    expect(fs.readFileSync(path.join(tempDir, 'index.ts'), 'utf-8')).toBe('export const value = 1')
+    expect(mockWin.send.mock.calls.filter(([channel]) => channel === 'agent:approval-request')).toHaveLength(1)
+  })
+
+  it('does not bypass external consent when switching an active run to Auto', async () => {
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(
+      toolTurn('download_file', { url: 'https://example.test/file', filePath: 'file.txt' }),
+    )
+    const mockWin = createMockWindow()
+    const sessionId = 'guided-network-approval-session'
+    const identity = createAgentRunIdentity({ runId: sessionId, conversationId: sessionId, workspacePath: tempDir })
+    const resultPromise = runAgentOrchestratorLoop(
+      { identity, sessionId, userTask: 'Download a file', agentMode: 'guided', workspacePath: tempDir },
+      mockWin.window,
+    )
+    await vi.waitFor(() =>
+      expect(mockWin.send).toHaveBeenCalledWith('agent:approval-request', expect.objectContaining({ reasons: ['network_access', 'guided_review'] })),
+    )
+    expect(updateActiveAgentRun({ identity, mode: 'auto' })).toEqual({ updated: true, approvalResolved: false })
+    expect(updateActiveAgentRun({ identity: { ...identity, workspaceId: 'other-workspace' }, mode: 'ask' }).updated).toBe(false)
+    cancelActiveAgentTask(sessionId)
+    await resultPromise
+    expect(fs.existsSync(path.join(tempDir, 'file.txt'))).toBe(false)
+  })
+
+  it('uses a context preference changed during the run on the next model turn', async () => {
+    let releaseFirstTurn: ((turn: AgentChatTurn) => void) | undefined
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockImplementationOnce(
+        () =>
+          new Promise<AgentChatTurn>((resolve) => {
+            releaseFirstTurn = resolve
+          }),
+      )
+      .mockResolvedValueOnce(toolTurn('finish', { summary: 'Done.' }))
+    const sessionId = 'live-context-session'
+    const identity = createAgentRunIdentity({ runId: sessionId, conversationId: sessionId, workspacePath: tempDir })
+    const resultPromise = runAgentOrchestratorLoop(
+      {
+        identity,
+        sessionId,
+        userTask: 'Inspect the workspace',
+        agentMode: 'auto',
+        workspacePath: tempDir,
+        settings: { ...TOOL_ENABLED_SETTINGS, codingModel: 'qwen2.5-coder:7b', modelContextLengths: { 'qwen2.5-coder:7b': 32768 } },
+      },
+      null,
+    )
+    await vi.waitFor(() => expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[0][0].runtimeOpts.num_ctx).toBe(32768)
+    expect(updateActiveAgentRun({ identity, numCtx: 16384 })).toEqual({ updated: true, approvalResolved: false, numCtx: 16384 })
+    releaseFirstTurn?.(toolTurn('list_dir', { path: '.' }))
+    await resultPromise
+    expect(vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[1][0].runtimeOpts.num_ctx).toBe(16384)
   })
 
   it('routes a colloquial Italian build request to Guided write approval on the first turn', async () => {

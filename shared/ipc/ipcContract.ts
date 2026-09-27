@@ -13,6 +13,7 @@ import type {
   AgentPlan,
   AgentPlanState,
   AgentRunIdentity,
+  AgentExecutionMode,
   AgentTaskRequest,
   AppSettings,
   ArtifactRecord,
@@ -150,6 +151,10 @@ export interface IpcInvokeContract {
   /** Answers a pending `agent:approval-request`, resuming the paused orchestrator step. */
   'agent:approval-response': { payload: { identity: AgentRunIdentity; approved: boolean; approvedHunkIndices?: number[] }; result: boolean }
   'agent:compact-context': { payload: AgentRunIdentity; result: boolean }
+  'agent:update-active-run': {
+    payload: { identity: AgentRunIdentity; mode?: AgentExecutionMode; numCtx?: number }
+    result: { updated: boolean; approvalResolved: boolean; numCtx?: number }
+  }
   'agent:get-queue-status': { payload: void; result: TaskQueueStatus }
   /** Pre-flight Clarification Interview before the plan is drafted. */
   'agent:plan-interview': {
@@ -325,6 +330,7 @@ export const IPC_INVOKE_METHODS = {
   cancelAgentTask: 'agent:cancel-task',
   respondToAgentApproval: 'agent:approval-response',
   compactAgentContext: 'agent:compact-context',
+  updateActiveAgentRun: 'agent:update-active-run',
   getAgentQueueStatus: 'agent:get-queue-status',
   agentPlanInterview: 'agent:plan-interview',
   agentPlanEnrichPrompt: 'agent:plan-enrich-prompt',

@@ -1,7 +1,7 @@
 import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { taskQueueAppService } from '../application/taskQueueAppService'
-import { requestActiveAgentContextCompaction, respondToApproval, restoreRunCheckpoint } from '../application/agentOrchestratorAppService'
+import { requestActiveAgentContextCompaction, respondToApproval, restoreRunCheckpoint, updateActiveAgentRun } from '../application/agentOrchestratorAppService'
 import { agentSessionStateAppService } from '../application/agentSessionStateAppService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
@@ -44,6 +44,8 @@ export function registerAgentIpcHandlers(rendererEvents: RendererEventSink) {
   ipcMain.handle('agent:compact-context', async (_, identity) => {
     return requestActiveAgentContextCompaction(identity)
   })
+
+  ipcMain.handle('agent:update-active-run', async (_, update) => updateActiveAgentRun(update))
 
   ipcMain.handle('agent:get-queue-status', async () => {
     return taskQueueAppService.getQueueStatus()

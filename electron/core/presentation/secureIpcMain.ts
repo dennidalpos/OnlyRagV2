@@ -187,6 +187,11 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
   'agent:cancel-task': identity,
   'agent:approval-response': obj({ identity, approved: z.boolean(), approvedHunkIndices: z.array(z.number().int().nonnegative()).optional() }),
   'agent:compact-context': identity,
+  'agent:update-active-run': obj({
+    identity,
+    mode: z.enum(['ask', 'guided', 'auto']).optional(),
+    numCtx: z.number().int().min(2048).max(1_000_000).optional(),
+  }),
   'agent:get-queue-status': null,
   'agent:plan-interview': obj({
     prompt: string,

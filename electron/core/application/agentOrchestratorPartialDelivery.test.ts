@@ -84,6 +84,20 @@ describe('partial delivery — the model is told which file it still owes', () =
     expect(planner.findMilestone('m-6')?.status).toBe('in_progress')
   })
 
+  it('keeps later milestones pending when one write touches their files', async () => {
+    fs.writeFileSync(path.join(tempDir, 'first.ts'), 'export const first = true\n')
+    fs.writeFileSync(path.join(tempDir, 'second.ts'), 'export const second = true\n')
+    const planner = plannerWith([
+      { id: 'm-1', title: 'Create `first.ts`', status: 'pending' },
+      { id: 'm-2', title: 'Create `second.ts`', status: 'pending' },
+    ])
+
+    await recordMutationSideEffects(makeContext(planner), 'second.ts')
+
+    expect(planner.findMilestone('m-1')?.status).toBe('in_progress')
+    expect(planner.findMilestone('m-2')?.status).toBe('pending')
+  })
+
   it('stays silent for a milestone the write has nothing to do with', async () => {
     fs.writeFileSync(path.join(tempDir, 'postcss.config.js'), 'module.exports = {}\n')
     const planner = plannerWith([{ id: 'm-9', title: 'Create `src/components/Navbar.tsx`', status: 'in_progress' }])

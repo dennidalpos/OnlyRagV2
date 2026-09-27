@@ -75,7 +75,7 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
   // If operational work remains, give prose-only output two chances to turn into an action.
   if (ctx.agentMode !== 'ask' && hasOperationalWork && ctx.stepCount < ctx.maxSteps && ctx.state.progress.tryProseRetry()) {
     recordGuardEvent(ctx.state.guardEvents, 'model_silence', 'advise', ctx.stepCount)
-    const feedback = `[ACTION REQUIRED: NO TOOL INVOCATION DETECTED]\nYour previous response was purely descriptive while operational work is still open. Invoke one concrete tool for the current milestone. When the work is actually complete, provide the final report as prose: the application will run the final evidence gate and close the session.`
+    const feedback = `[ACTION REQUIRED: NO NATIVE TOOL CALL DETECTED]\nYour previous response contained no native tool_calls. A JSON object embedded in prose or a Markdown code block is only text and will not execute. Invoke one tool through the provided function-calling interface for the current milestone. When the work is actually complete, provide the final report as prose: the application will run the final evidence gate and close the session.`
     ctx.episodicCompactor.recordStep(
       { step: ctx.stepCount, tool: 'no_tool_detected', status: 'BLOCKED', summary: 'No tool call found in conversational response' },
       feedback,

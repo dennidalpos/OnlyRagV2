@@ -965,6 +965,56 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     // session-1787497654743-4enx closed "Status: COMPLETED" at step 86 after three responses that did not parse as tool calls, with four milestones abandoned, four never started and finish never invoked — so the whole Definition of Done gate was skipped and the resu
     const prose: AgentChatTurn = { content: 'Everything looks complete to me, the application should work now.', thinking: '', toolCalls: [] }
 
+    it('executes the exact JSON envelope emitted by qwen2.5-coder through the normal tool path', async () => {
+      const textCall: AgentChatTurn = {
+        content: '{"name":"write_file","arguments":{"filePath":"app.js","content":"ready"}}',
+        thinking: '',
+        toolCalls: [],
+      }
+      scriptTurns(textCall, prose, prose, prose)
+
+      await runAgentOrchestratorLoop(
+        { userTask: 'Create app.js', agentMode: 'auto', workspacePath: tempDir, settings: { ...TOOL_ENABLED_SETTINGS, codingModel: 'qwen2.5-coder:7b' } },
+        null,
+      )
+
+      expect(fs.readFileSync(path.join(tempDir, 'app.js'), 'utf8')).toBe('ready')
+      const retry = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[1][0]
+      expect(retry.messages.some((message) => message.role === 'assistant' && message.tool_calls?.[0]?.function.name === 'write_file')).toBe(true)
+      expect(retry.messages.some((message) => message.role === 'tool' && message.tool_name === 'write_file')).toBe(true)
+    })
+
+    it('leaves the same JSON envelope inert for other models', async () => {
+      const textCall: AgentChatTurn = {
+        content: '{"name":"write_file","arguments":{"filePath":"app.js","content":"ready"}}',
+        thinking: '',
+        toolCalls: [],
+      }
+      scriptTurns(textCall, prose, prose)
+
+      await runAgentOrchestratorLoop({ userTask: 'Create app.js', agentMode: 'auto', workspacePath: tempDir }, null)
+
+      expect(fs.existsSync(path.join(tempDir, 'app.js'))).toBe(false)
+    })
+
+    it('explains that a JSON tool-shaped code block is not a native call', async () => {
+      const textCall: AgentChatTurn = {
+        content: 'I will create the file.\n```json\n{"name":"write_file","arguments":{"filePath":"app.js","content":"ready"}}\n```',
+        thinking: '',
+        toolCalls: [],
+      }
+      scriptTurns(textCall, prose, prose)
+
+      await runAgentOrchestratorLoop(
+        { userTask: 'Create app.js', agentMode: 'auto', workspacePath: tempDir, settings: { ...TOOL_ENABLED_SETTINGS, codingModel: 'qwen2.5-coder:7b' } },
+        null,
+      )
+
+      const retry = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[1][0]
+      expect(retry.messages.some((message) => message.role === 'user' && message.content.includes('JSON object embedded in prose'))).toBe(true)
+      expect(fs.existsSync(path.join(tempDir, 'app.js'))).toBe(false)
+    })
+
     it('closes the session as FAILED rather than COMPLETED', async () => {
       vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
       scriptTurns(verificationWriteTurn, prose, prose, prose)

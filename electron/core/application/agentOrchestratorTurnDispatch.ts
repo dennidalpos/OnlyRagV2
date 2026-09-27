@@ -13,6 +13,7 @@ import { ollamaAppService } from './ollamaAppService'
 import { countPromptTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 import { resolveAgentThinkValue } from '../../../shared/domain/agent/ollamaThinkingPolicy'
 import { appendAssistantTurn, buildChatRequest, composeSessionSystemPrompt } from './agentChatTranscript'
+import { parseExactJsonToolCall } from '../domain/agent/toolParser'
 import type { AgentChatMessage, AgentChatTurn } from '../infrastructure/http/agentStreamTransport'
 
 /** Largest share of the prompt budget the frozen system message may take with its optional context sections. */
@@ -191,7 +192,16 @@ async function dispatchToLlm(
   let transportFailure: RecoveryFailureState | undefined
   while (true) {
     try {
-      const nativeTurn = await stream()
+      const response = await stream()
+      // This installed qwen2.5-coder tag declares tools but emits a single exact JSON envelope
+      // in content. Recover only that unambiguous shape; all calls still pass the ordinary gates.
+      const textCall =
+        selection.targetModel === 'qwen2.5-coder:7b' && ctx.agentMode !== 'ask' && response.toolCalls.length === 0
+          ? parseExactJsonToolCall(response.content, toolPolicy.allowedTools)
+          : null
+      const nativeTurn = textCall
+        ? { ...response, toolCalls: [{ type: 'function' as const, function: { index: 0, name: textCall.tool, arguments: textCall.parameters } }] }
+        : response
       ctx.session.activeCancelHandle = null
       ctx.session.chatMessages = appendAssistantTurn(ctx.session.chatMessages || [], nativeTurn)
       if (generationTelemetry) {

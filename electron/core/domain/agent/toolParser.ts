@@ -1,4 +1,5 @@
-import type { AgentToolCall } from './agentTypes'
+import type { AgentToolCall, SupportedToolName } from './agentTypes'
+import { OLLAMA_TOOL_SCHEMA_CATALOG } from './ollamaToolSchemaCatalog'
 import { validateAndSanitize, normalizeToolName } from './toolSchemaValidator'
 
 export type { AgentToolCall }
@@ -25,4 +26,25 @@ export function parseNativeToolCall(name: string, args: Record<string, unknown>,
     return null
   }
   return validation.sanitizedToolCall
+}
+
+/** Accepts only a complete JSON tool envelope from the observed qwen2.5-coder compatibility path. */
+export function parseExactJsonToolCall(content: string, allowedTools: readonly SupportedToolName[]): AgentToolCall | null {
+  const text = content.trim()
+  if (!text.startsWith('{') || !text.endsWith('}')) return null
+
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError) return null
+    throw error
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const envelope = value as Record<string, unknown>
+  if (Object.keys(envelope).length !== 2 || typeof envelope.name !== 'string' || !allowedTools.includes(envelope.name as SupportedToolName)) return null
+  if (!envelope.arguments || typeof envelope.arguments !== 'object' || Array.isArray(envelope.arguments)) return null
+  const schema = OLLAMA_TOOL_SCHEMA_CATALOG.find((tool) => tool.function.name === envelope.name)
+  if (!schema || !schema.function.parameters.required.every((key) => Object.hasOwn(envelope.arguments as object, key))) return null
+  return parseNativeToolCall(envelope.name, envelope.arguments as Record<string, unknown>)
 }

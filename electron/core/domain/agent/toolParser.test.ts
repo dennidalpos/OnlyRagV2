@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseNativeToolCall, type ToolCallRejection } from './toolParser'
+import { parseExactJsonToolCall, parseNativeToolCall, type ToolCallRejection } from './toolParser'
 
 describe('parseNativeToolCall', () => {
   it('normalizes tool name and parameter aliases', () => {
@@ -88,5 +88,25 @@ describe('parseNativeToolCall', () => {
     expect(parseNativeToolCall('read_file', { filePath: 'src/App.tsx' }, (rejection) => rejections.push(rejection))?.tool).toBe('read_file')
     expect(rejections).toHaveLength(0)
     expect(parseNativeToolCall('write_file', {})).toBeNull()
+  })
+})
+
+describe('parseExactJsonToolCall', () => {
+  const allowed = ['write_file', 'read_file'] as const
+
+  it('accepts one complete, schema-valid envelope for an offered tool', () => {
+    expect(parseExactJsonToolCall('{"name":"write_file","arguments":{"filePath":"app.js","content":"ready"}}', allowed)).toMatchObject({
+      tool: 'write_file',
+      parameters: { filePath: 'app.js', content: 'ready' },
+    })
+  })
+
+  it('rejects prose, code fences, extra fields, unavailable tools and invalid arguments', () => {
+    expect(parseExactJsonToolCall('I will write this:\n{"name":"write_file","arguments":{"filePath":"app.js","content":"ready"}}', allowed)).toBeNull()
+    expect(parseExactJsonToolCall('```json\n{"name":"write_file","arguments":{"filePath":"app.js","content":"ready"}}\n```', allowed)).toBeNull()
+    expect(parseExactJsonToolCall('{"name":"write_file","arguments":{"filePath":"app.js","content":"ready"},"extra":true}', allowed)).toBeNull()
+    expect(parseExactJsonToolCall('{"name":"delete_file","arguments":{"filePath":"app.js"}}', allowed)).toBeNull()
+    expect(parseExactJsonToolCall('{"name":"write_file","arguments":{"filePath":"app.js"}}', allowed)).toBeNull()
+    expect(parseExactJsonToolCall('{"name":"write_file","arguments":', allowed)).toBeNull()
   })
 })

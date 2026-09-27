@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { IngestedDocument, AppSettings, DiagnosticsData, TranslateProgressPayload } from '../types'
+import { IngestedDocument, AppSettings, DiagnosticsData, OllamaThinkValue, TranslateProgressPayload } from '../types'
 import { electronApi } from '../services/electronApi'
 import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../constants/promptConfig'
@@ -14,7 +14,7 @@ import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
 import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
 import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 import { useOllamaGenerationState } from './useOllamaGenerationState'
-import { resolveOllamaThinkingPreference } from '../../shared/domain/agent/ollamaThinkingPolicy'
+import { chosenThinkValue, resolveOllamaThinkingPreference } from '../../shared/domain/agent/ollamaThinkingPolicy'
 import { resolveConfiguredModel } from '../../shared/domain/settings/configuredModel'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
 import type { OnMount } from '@monaco-editor/react'
@@ -162,13 +162,13 @@ function useTranslationBase(
   }
 
   /** Model, context window and thinking flag for the configured translation model; null when no model is configured. */
-  const resolveGenerationOptions = (): { model: string; numCtx: number; think: boolean } | null => {
+  const resolveGenerationOptions = (): { model: string; numCtx: number; think: OllamaThinkValue } | null => {
     const model = resolveConfiguredModel('translation', settings)
     if (!model) return null
     return {
       model,
       numCtx: resolveModelContextLength(model, settings?.modelContextLengths, hardwareDefault, modelMetrics[model]?.contextLength),
-      think: resolveOllamaThinkingPreference(model, settings || {}, modelMetrics).think,
+      think: chosenThinkValue(resolveOllamaThinkingPreference(model, settings || {}, modelMetrics)),
     }
   }
 

@@ -1008,6 +1008,12 @@
                 "type": "boolean"
               },
               {
+                "maxLength": 32,
+                "minLength": 1,
+                "pattern": ".*\\S.*",
+                "type": "string"
+              },
+              {
                 "type": "null"
               }
             ],

@@ -2,7 +2,7 @@ import json
 import os
 import re
 import time
-from typing import Any, Dict, Generator, Iterator, List, Tuple, Optional
+from typing import Any, Dict, Generator, Iterator, List, Tuple, Optional, Union
 import docx
 import httpx
 import pymupdf
@@ -166,6 +166,9 @@ def _batch_runs(runs: List["docx.text.run.Run"], max_chars: int = _TRANSLATE_BAT
 
 import ftfy
 
+# Ollama `think`: the switch, or a reasoning level such as "low" chosen in Settings.
+ThinkValue = Union[bool, str]
+
 _TRANSLATE_MAX_ATTEMPTS = 2
 _TRANSLATE_RETRY_DELAY_SECONDS = 3.0
 
@@ -243,7 +246,7 @@ def _should_skip_translation(s: str) -> bool:
     return False
 
 
-def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model: str, is_batch: bool = False, expected_items: int = 1, num_ctx: Optional[int] = None, think: bool = False) -> str:
+def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model: str, is_batch: bool = False, expected_items: int = 1, num_ctx: Optional[int] = None, think: ThinkValue = False) -> str:
     if is_batch:
         system_content = (
             f"You are an automated professional document translation engine.\n"
@@ -284,7 +287,7 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
         "model": model,
         "messages": messages,
         "stream": False,
-        "think": bool(think),
+        "think": think if isinstance(think, str) else bool(think),
         "options": {"temperature": 0.0}
     }
     if num_ctx is not None:
@@ -384,13 +387,13 @@ def _clean_translated_segment(text: str, source_text: str = "") -> str:
     return cleaned.strip() or source_text
 
 
-def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_lang: str, model: str, num_ctx: Optional[int] = None, think: bool = False) -> List[str]:
+def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_lang: str, model: str, num_ctx: Optional[int] = None, think: ThinkValue = False) -> List[str]:
     """Translates batched texts via structured XML segment Ollama call with individual fallback."""
     if not texts:
         return []
     ollama_options = {"num_ctx": num_ctx} if num_ctx is not None else {}
     if think:
-        ollama_options["think"] = True
+        ollama_options["think"] = think
 
     clean_texts = [
         _smart_decode_pdf_text(t).strip()
@@ -473,7 +476,7 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
     return results
 
 
-def _translate_batch(runs: List["docx.text.run.Run"], source_lang: str, target_lang: str, model: str, num_ctx: Optional[int] = None, think: bool = False) -> None:
+def _translate_batch(runs: List["docx.text.run.Run"], source_lang: str, target_lang: str, model: str, num_ctx: Optional[int] = None, think: ThinkValue = False) -> None:
     """Translates one batch of runs in place (see _translate_texts_with_fallback for the
     batching/fallback contract)."""
     translated = _translate_texts_with_fallback([run.text for run in runs], source_lang, target_lang, model, num_ctx, think)
@@ -648,7 +651,7 @@ def _batch_by_char_count(lengths: List[int], max_chars: int = _TRANSLATE_BATCH_M
     return batches
 
 
-def _translate_pdf_blocks(blocks: List[Dict[str, Any]], source_lang: str, target_lang: str, model: str, num_ctx: Optional[int] = None, think: bool = False) -> None:
+def _translate_pdf_blocks(blocks: List[Dict[str, Any]], source_lang: str, target_lang: str, model: str, num_ctx: Optional[int] = None, think: ThinkValue = False) -> None:
     """Translates block texts in place (mutates each block's 'text'), batching consecutive
     blocks under _TRANSLATE_BATCH_MAX_CHARS chars per call via _translate_texts_with_fallback."""
     lengths = [len(b["text"]) for b in blocks]
@@ -795,7 +798,7 @@ def _event(payload: Dict[str, Any]) -> str:
 
 def _translate_docx_events(
     doc_id: str, file_path: str, filename: str, out_file_path: str,
-    source_lang: str, target_lang: str, model: str, num_ctx: Optional[int], think: bool, task_id: Optional[str],
+    source_lang: str, target_lang: str, model: str, num_ctx: Optional[int], think: ThinkValue, task_id: Optional[str],
 ) -> Generator[str, None, int]:
     docx_doc = docx.Document(file_path)
     runs = _collect_docx_runs(docx_doc)
@@ -815,7 +818,7 @@ def _translate_docx_events(
 
 def _translate_pdf_events(
     doc_id: str, file_path: str, filename: str, out_file_path: str,
-    source_lang: str, target_lang: str, model: str, num_ctx: Optional[int], think: bool, task_id: Optional[str],
+    source_lang: str, target_lang: str, model: str, num_ctx: Optional[int], think: ThinkValue, task_id: Optional[str],
 ) -> Generator[str, None, int]:
     """Fine-mode PDF translation: each original text block is permanently redacted and the
     translation reinserted in the same bbox with an auto-fitted font size."""
@@ -860,7 +863,7 @@ def translate_document_stream(
     model: str,
     target_dir: Optional[str] = None,
     num_ctx: Optional[int] = None,
-    think: bool = False,
+    think: ThinkValue = False,
     task_id: Optional[str] = None,
 ) -> Iterator[str]:
     """Translates a document validated by prepare_translation into a new file (next to the source

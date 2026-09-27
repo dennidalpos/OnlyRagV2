@@ -75,3 +75,6 @@ export function enrichOllamaGenerationTelemetry(telemetry: OllamaStreamTelemetry
     loadedContextLength: loaded?.context_length,
   }
 }
+
+/** Prefix of the error that ends an agent turn whose reasoning outlasted its budget (`reasoningBudgetMs`). */
+export const REASONING_BUDGET_ERROR = 'Ollama reasoning exceeded the turn budget'

@@ -1,6 +1,6 @@
 import http from 'node:http'
 import { logger } from '../logging/logger'
-import type { VectorSearchResult } from '../../../../shared/types'
+import type { OllamaThinkValue, VectorSearchResult } from '../../../../shared/types'
 import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
@@ -22,7 +22,8 @@ export interface SidecarTranslateStreamPayload {
   model?: string
   target_dir?: string
   num_ctx?: number
-  think?: boolean
+  /** The switch, or a reasoning level such as "low". */
+  think?: OllamaThinkValue
   task_id: string
 }
 

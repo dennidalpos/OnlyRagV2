@@ -7,6 +7,7 @@ import type {
   OllamaSamplingOverrides,
   OllamaThinkingSupport,
   OllamaThinkValue,
+  UntrustedJson,
 } from '../../../../shared/types'
 import { pickSamplingOverrides } from '../../../../shared/domain/agent/ollamaSamplingOptions'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
@@ -556,7 +557,7 @@ export class OllamaHttpClient {
         model,
         prompt,
         stream: true,
-        think: customOptions?.think === true,
+        think: typeof customOptions?.think === 'string' ? customOptions.think : customOptions?.think === true,
         keep_alive: customOptions?.keep_alive,
         options: {
           num_ctx: customOptions?.num_ctx || 16384,
@@ -662,7 +663,9 @@ export class OllamaHttpClient {
         { role: 'user', content: request.userContent },
       ],
       format: request.format,
-      stream: false,
+      // Streamed, so the socket timeout below measures silence: a slow model thinking for more than
+      // 10 minutes lost two plans in a row when the whole answer arrived at once (2026-09-26).
+      stream: true,
       think: typeof request.think === 'string' ? request.think : request.think === true,
       keep_alive: request.keepAlive || '30m',
       options: {
@@ -692,23 +695,43 @@ export class OllamaHttpClient {
           },
         },
         (res) => {
-          let raw = ''
-          res.on('data', (chunk) => {
-            raw += chunk.toString()
+          res.setEncoding('utf8')
+          if (res.statusCode !== 200) {
+            let errBody = ''
+            res.on('data', (chunk: string) => {
+              errBody += chunk
+            })
+            res.on('end', () => finish({ status: 'transport_error', content: '', error: `Ollama HTTP ${res.statusCode}: ${errBody.slice(0, 200)}` }))
+            return
+          }
+          let buffer = ''
+          let content = ''
+          let thinking = ''
+          let final: UntrustedJson | undefined
+          let streamError: string | undefined
+          const onLine = (parsed: UntrustedJson) => {
+            if (typeof parsed?.error === 'string') streamError = parsed.error
+            if (typeof parsed?.message?.content === 'string') content += parsed.message.content
+            if (typeof parsed?.message?.thinking === 'string') thinking += parsed.message.thinking
+            if (parsed?.done === true) final = parsed
+          }
+          res.on('data', (chunk: string) => {
+            buffer = consumeNdjsonChunk(buffer, chunk, onLine)
           })
+          res.on('error', (err) => finish({ status: 'transport_error', content: '', error: err.message }))
           res.on('end', () => {
-            if (res.statusCode !== 200) {
-              finish({ status: 'transport_error', content: '', error: `Ollama HTTP ${res.statusCode}: ${raw.slice(0, 200)}` })
-              return
-            }
             try {
-              const parsed = JSON.parse(raw)
-              const content = typeof parsed?.message?.content === 'string' ? parsed.message.content : ''
+              if (buffer.trim()) onLine(JSON.parse(buffer))
+              if (streamError) {
+                finish({ status: 'transport_error', content: '', error: `Ollama error: ${streamError.slice(0, 200)}` })
+                return
+              }
+              const parsed = final
               const telemetry = {
                 ...(typeof parsed?.done_reason === 'string' ? { doneReason: parsed.done_reason } : {}),
                 ...(typeof parsed?.prompt_eval_count === 'number' ? { promptEvalCount: parsed.prompt_eval_count } : {}),
                 ...(typeof parsed?.eval_count === 'number' ? { evalCount: parsed.eval_count } : {}),
-                ...(typeof parsed?.message?.thinking === 'string' ? { thinkingChars: parsed.message.thinking.length } : {}),
+                ...(thinking ? { thinkingChars: thinking.length } : {}),
               }
               if (parsed?.done !== true || parsed?.done_reason === 'length') {
                 const metrics = [
@@ -739,9 +762,10 @@ export class OllamaHttpClient {
         const message = err.code === 'ECONNREFUSED' ? 'Ollama service is not running locally (http://127.0.0.1:11434).' : err.message
         finish({ status: 'transport_error', content: '', error: message })
       })
+      // No output for 10 minutes: a model still loading, or a stalled stream. Length is bounded by num_predict.
       req.setTimeout(600000, () => {
         req.destroy()
-        finish({ status: 'transport_error', content: '', error: 'Structured generation timeout' })
+        finish({ status: 'transport_error', content: '', error: 'Structured generation timeout: no output for 10 minutes' })
       })
       req.write(postData)
       req.end()

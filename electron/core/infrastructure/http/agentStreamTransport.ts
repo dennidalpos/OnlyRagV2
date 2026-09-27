@@ -5,7 +5,7 @@ import { consumeNdjsonChunk } from './ndjsonStreamParser'
 import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
 import { resolveOllamaUrl, requestOllama } from './ollamaTransport'
 import { normalizeOllamaHost } from '../../../../shared/domain/ollamaHost'
-import type { OllamaStreamTelemetry } from '../../domain/agent/ollamaSessionRuntime'
+import { REASONING_BUDGET_ERROR, type OllamaStreamTelemetry } from '../../domain/agent/ollamaSessionRuntime'
 import type { OllamaThinkValue } from '../../../../shared/types'
 import { pickSamplingOverrides } from '../../../../shared/domain/agent/ollamaSamplingOptions'
 
@@ -28,6 +28,11 @@ export interface StreamSession {
   onGenerationTelemetry?: (telemetry: OllamaStreamTelemetry) => void
   /** Silence tolerated on the chat stream before it is treated as stalled (default 5 min). */
   stallTimeoutMs?: number
+  /**
+   * Longest reasoning tolerated before the first content or tool call; the turn is then cut with
+   * REASONING_BUDGET_ERROR. Thinking tokens keep the stream alive, so the stall limit never ends it.
+   */
+  reasoningBudgetMs?: number
 }
 
 /** Default silence limit before a chat stream counts as stalled. */
@@ -180,6 +185,8 @@ export class AgentStreamTransport {
           let sawDone = false
           let doneReason: string | undefined
           let completedTelemetry: OllamaStreamTelemetry | undefined
+          let reasoningStartedAt: number | undefined
+          let reasoningCut = false
 
           res.on('data', (chunk) => {
             if (isCancelled()) {
@@ -198,6 +205,19 @@ export class AgentStreamTransport {
                   onThoughtChunk(thinkingDelta)
                 }
                 if (thinkingDelta) fullThinking += thinkingDelta
+                if (thinkingDelta && session.reasoningBudgetMs && !reasoningCut && !fullText && toolCalls.length === 0) {
+                  reasoningStartedAt ??= Date.now()
+                  if (Date.now() - reasoningStartedAt > session.reasoningBudgetMs) {
+                    reasoningCut = true
+                    cleanupTimers()
+                    req.destroy(
+                      new Error(
+                        `${REASONING_BUDGET_ERROR}: ${Math.round(session.reasoningBudgetMs / 60000)} min of thinking (${fullThinking.length} chars) without an answer or a tool call from model '${targetModel}'.`,
+                      ),
+                    )
+                    return
+                  }
+                }
                 const contentDelta = parsed?.message?.content
                 if (contentDelta) {
                   fullText += contentDelta

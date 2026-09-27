@@ -36,7 +36,8 @@ export const sidecarTranslatePayloadSchema = z
     model: modelName.optional(),
     targetDir: boundedPath.optional(),
     numCtx: contextTokens.optional(),
-    think: z.boolean().optional(),
+    // The switch, or a reasoning level such as "low".
+    think: z.union([z.boolean(), nonBlank.max(32)]).optional(),
   })
   .strict()
 

@@ -610,8 +610,8 @@ export interface OllamaSamplingOverrides {
 export interface OllamaGenerationOptions extends OllamaSamplingOverrides {
   num_ctx?: number
   keep_alive?: string
-  /** Effective, already policy-gated binary thinking choice. */
-  think?: boolean
+  /** Effective, already policy-gated thinking choice: the switch, or the level the user picked. */
+  think?: OllamaThinkValue
 }
 
 // ---------------------------------------------------------------------------

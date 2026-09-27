@@ -80,6 +80,14 @@ export function resolveOllamaThinkingPreference(
 }
 
 /**
+ * The `think` value to send for a resolved preference: the chosen level when the user picked one,
+ * otherwise the switch. `true` would run the model's default level ("medium" for qwen3.8:27b).
+ */
+export function chosenThinkValue(resolution: Pick<OllamaThinkingResolution, 'think' | 'level'>): OllamaThinkValue {
+  return resolution.think && resolution.level ? resolution.level : resolution.think
+}
+
+/**
  * The `think` value for a Coding Agent turn. An explicit per-model preference wins; without one the
  * field is omitted (undefined), so Ollama applies the model's own default, as its docs describe for
  * `think: null`. Models without thinking support never receive the field.
@@ -113,7 +121,6 @@ export function updateModelThinkingPreference(
  */
 export function resolveStructuredThinkValue(resolution: Pick<OllamaThinkingResolution, 'mode' | 'think' | 'levels' | 'level'>): OllamaThinkValue {
   if (resolution.mode === 'level-only') return resolution.levels[0] ?? 'low'
-  // A chosen level is sent as that level: `true` would run the model's default ("medium" for
-  // qwen3.8:27b), which timed out plan generation twice at about 2 tok/s on 2026-09-26.
-  return resolution.think && resolution.level ? resolution.level : resolution.think
+  // `true` instead of the chosen level timed out plan generation twice at about 2 tok/s on 2026-09-26.
+  return chosenThinkValue(resolution)
 }

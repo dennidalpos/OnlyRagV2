@@ -143,7 +143,8 @@ describe('OllamaHttpClient — /api/tags Consolidation Unit Tests', () => {
 describe('OllamaHttpClient — structured chat responses', () => {
   let server: http.Server
   let client: OllamaHttpClient
-  let responseBody: Record<string, unknown>
+  /** One object is sent as a single unterminated line; an array as one NDJSON line per chunk. */
+  let responseBody: Record<string, unknown> | Record<string, unknown>[]
   let capturedRequest: Record<string, unknown> | null
 
   beforeEach(async () => {
@@ -159,8 +160,15 @@ describe('OllamaHttpClient — structured chat responses', () => {
           })
           req.on('end', () => {
             capturedRequest = JSON.parse(raw)
-            res.writeHead(200, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify(responseBody))
+            res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+            if (!Array.isArray(responseBody)) {
+              res.end(JSON.stringify(responseBody))
+              return
+            }
+            for (const line of responseBody)
+              res.write(`${JSON.stringify(line)}
+`)
+            res.end()
           })
         },
       },
@@ -202,7 +210,7 @@ describe('OllamaHttpClient — structured chat responses', () => {
     })
     expect(capturedRequest).toMatchObject({
       model: 'qwen2.5-coder:1.5b',
-      stream: false,
+      stream: true,
       messages: [
         { role: 'system', content: 'Return the requested shape.' },
         { role: 'user', content: '{"request":"inspect"}' },
@@ -228,6 +236,29 @@ describe('OllamaHttpClient — structured chat responses', () => {
     responseBody = { done: true, message: { content: '{"result":"ok"}', thinking: 'brief' } }
     await client.generateStructured({ ...request(), think: 'low' })
     expect(capturedRequest?.think).toBe('low')
+  })
+
+  it('joins streamed thinking and content and reads the telemetry from the final line', async () => {
+    responseBody = [
+      { message: { thinking: 'first ' } },
+      { message: { thinking: 'second' } },
+      { message: { content: '{"result":' } },
+      { message: { content: '"ok"}' } },
+      { done: true, done_reason: 'stop', prompt_eval_count: 7, eval_count: 5, message: { content: '' } },
+    ]
+    expect(await client.generateStructured(request())).toEqual({
+      status: 'complete',
+      content: '{"result":"ok"}',
+      doneReason: 'stop',
+      promptEvalCount: 7,
+      evalCount: 5,
+      thinkingChars: 12,
+    })
+  })
+
+  it('reports an error line in the stream as a transport error', async () => {
+    responseBody = [{ message: { content: '{' } }, { error: 'model runner has unexpectedly stopped' }]
+    expect(await client.generateStructured(request())).toMatchObject({ status: 'transport_error', error: expect.stringContaining('unexpectedly stopped') })
   })
 
   it('reports missing completion and length truncation as incomplete', async () => {
@@ -324,7 +355,7 @@ describe('OllamaHttpClient — stream failures', () => {
 
   afterEach(() => server.close())
 
-  it('sends the top-level thinking choice and streams only final content', async () => {
+  it.each([true, 'low'])('sends the top-level thinking choice (%s) and streams only final content', async (think) => {
     let capturedRequest: Record<string, unknown> | undefined
     const mock = await createMockOllamaServer([
       {
@@ -350,11 +381,11 @@ describe('OllamaHttpClient — stream failures', () => {
       'hello',
       (chunk) => chunks.push(chunk),
       () => {},
-      { think: true },
+      { think },
       mock.baseUrl,
     )
     expect(result.success).toBe(true)
-    expect(capturedRequest?.think).toBe(true)
+    expect(capturedRequest?.think).toBe(think)
     expect(chunks).toEqual(['answer'])
   })
 

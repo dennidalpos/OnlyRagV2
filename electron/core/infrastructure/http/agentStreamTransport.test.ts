@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { AgentStreamTransport, type AgentChatMessage } from './agentStreamTransport'
+import { REASONING_BUDGET_ERROR } from '../../domain/agent/ollamaSessionRuntime'
 import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../../domain/agent/ollamaToolSchemaCatalog'
 import type { OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
 
@@ -365,5 +366,72 @@ describe('AgentStreamTransport', () => {
     expect(turn).toMatchObject({ content: '', thinking: 'Evaluating tool... ' })
     expect(turn.toolCalls[0].function).toMatchObject({ name: 'read_file', arguments: { filePath: 'index.ts' } })
     expect(seen.body?.think).toBe(true)
+  })
+
+  /** A mock Ollama that sends one record per delay step, then ends; `closed` resolves when the client hangs up first. */
+  function pacedOllama(steps: readonly { afterMs: number; record: unknown }[]) {
+    let clientClosed: () => void = () => {}
+    const closed = new Promise<void>((resolve) => {
+      clientClosed = resolve
+    })
+    const started = startMockOllama((req, res) => {
+      req.resume()
+      req.on('end', async () => {
+        res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+        res.on('close', () => {
+          if (!res.writableEnded) clientClosed()
+        })
+        for (const step of steps) {
+          await new Promise((resolve) => setTimeout(resolve, step.afterMs))
+          if (res.destroyed) return
+          res.write(`${JSON.stringify(step.record)}\n`)
+        }
+        res.end()
+      })
+    })
+    return { started, closed }
+  }
+
+  const thought = (text: string) => ({ afterMs: 25, record: { message: { role: 'assistant', thinking: text }, done: false } })
+  const readCall = {
+    message: { role: 'assistant', content: '', tool_calls: [{ function: { name: 'read_file', arguments: { filePath: 'a.ts' } } }] },
+    done: true,
+  }
+
+  it('cuts a turn that keeps reasoning past its budget and closes the request, so Ollama stops generating', async () => {
+    const mock = pacedOllama([...Array.from({ length: 40 }, () => thought('still thinking ')), { afterMs: 25, record: readCall }])
+    const { server, baseUrl } = await mock.started
+    activeServer = server
+
+    await expect(
+      AgentStreamTransport.streamCompletion({
+        targetModel: 'qwen3.8:27b',
+        messages: userMessage('Scaffold the app'),
+        toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
+        runtimeOpts,
+        ollamaEndpoint: baseUrl,
+        isCancelled: () => false,
+        reasoningBudgetMs: 150,
+      }),
+    ).rejects.toThrow(REASONING_BUDGET_ERROR)
+    await mock.closed
+  })
+
+  it('does not count the silent tool-call generation that follows the reasoning', async () => {
+    // Ollama withholds a tool call until it is complete: after the last thought the stream is silent.
+    const mock = pacedOllama([thought('plan '), thought('done'), { afterMs: 300, record: readCall }])
+    const { server, baseUrl } = await mock.started
+    activeServer = server
+
+    const turn = await AgentStreamTransport.streamCompletion({
+      targetModel: 'qwen3.8:27b',
+      messages: userMessage('Read a.ts'),
+      toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
+      runtimeOpts,
+      ollamaEndpoint: baseUrl,
+      isCancelled: () => false,
+      reasoningBudgetMs: 150,
+    })
+    expect(turn.toolCalls[0].function.name).toBe('read_file')
   })
 })

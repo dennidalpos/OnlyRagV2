@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  chosenThinkValue,
   resolveAgentThinkValue,
   resolveOllamaThinkingMode,
   resolveOllamaThinkingPreference,
@@ -101,5 +102,13 @@ describe('thinking levels reported by /api/show', () => {
     expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('qwen3.8:27b', settings(true), reported))).toBe(true)
     expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('qwen3.8:27b', settings(false), reported))).toBe(false)
     expect(resolveStructuredThinkValue(resolveOllamaThinkingPreference('qwen3.8:27b', {}, reported))).toBe(false)
+  })
+
+  it('sends the chosen level to chat and translation, and never a level for a disabled or level-only model', () => {
+    const settings = (model: string, value: string | boolean) => ({ modelThinkingPreferences: { [model]: value } })
+    expect(chosenThinkValue(resolveOllamaThinkingPreference('qwen3.8:27b', settings('qwen3.8:27b', 'low'), reported))).toBe('low')
+    expect(chosenThinkValue(resolveOllamaThinkingPreference('qwen3.8:27b', settings('qwen3.8:27b', true), reported))).toBe(true)
+    expect(chosenThinkValue(resolveOllamaThinkingPreference('qwen3.8:27b', settings('qwen3.8:27b', false), reported))).toBe(false)
+    expect(chosenThinkValue(resolveOllamaThinkingPreference('gpt-oss:20b', settings('gpt-oss:20b', 'high'), reported))).toBe(false)
   })
 })

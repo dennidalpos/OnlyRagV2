@@ -103,7 +103,8 @@ const generationOptions = z
     repeat_penalty: optionalNumber,
     num_thread: optionalNumber,
     keep_alive: optionalString,
-    think: optionalBoolean,
+    // The switch, or a reasoning level such as "low".
+    think: z.union([z.boolean(), z.string().trim().min(1).max(32)]).optional(),
   })
   .strict()
   .optional()

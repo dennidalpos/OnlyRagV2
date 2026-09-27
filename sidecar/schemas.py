@@ -1,5 +1,5 @@
-from typing import Any, Dict, Literal, Optional, List
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing import Annotated, Any, Dict, Literal, Optional, List, Union
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
 NON_BLANK = r".*\S.*"
 MODEL_NAME = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
@@ -108,7 +108,8 @@ class TranslateInplaceRequest(StrictRequest):
     model: str = Field(..., min_length=1, max_length=200, pattern=NON_BLANK)
     target_dir: Optional[str] = PATH_VALUE
     num_ctx: Optional[int] = CONTEXT_TOKENS
-    think: Optional[bool] = False
+    # The switch, or a reasoning level such as "low".
+    think: Optional[Union[StrictBool, Annotated[str, Field(min_length=1, max_length=32, pattern=NON_BLANK)]]] = False
     task_id: Optional[str] = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
 
 class PagePreviewResponse(BaseModel):

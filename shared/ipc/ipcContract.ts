@@ -36,6 +36,7 @@ import type {
   OllamaPullProgressEvent,
   OllamaStreamChunkEvent,
   OllamaStreamDoneEvent,
+  OllamaThinkValue,
   PagePreviewData,
   PlanGenerationResult,
   PlanMilestone,
@@ -103,7 +104,7 @@ export interface IpcInvokeContract {
   }
   'ingest:update': { payload: { docId: string; markdownContent: string }; result: DocumentResult }
   'ingest:translate-inplace': {
-    payload: { docId: string; sourceLang: string; targetLang: string; model?: string; targetDir?: string; numCtx?: number; think?: boolean }
+    payload: { docId: string; sourceLang: string; targetLang: string; model?: string; targetDir?: string; numCtx?: number; think?: OllamaThinkValue }
     result: DocumentResult
   }
   'ingest:page-preview': { payload: { docId: string; pageNumber: number }; result: PagePreviewData | null }

@@ -14,6 +14,7 @@ import { AgentStreamTransport } from '../infrastructure/http/agentStreamTranspor
 import type { AgentChatTurn } from '../infrastructure/http/agentStreamTransport'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
+import { REASONING_BUDGET_ERROR } from '../domain/agent/ollamaSessionRuntime'
 import { buildDefaultAgentSettings } from './agentOrchestratorSessionSetup'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
@@ -180,6 +181,21 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       expect.objectContaining({ tool_name: 'read_file', content: expect.stringContaining('first file') }),
       expect.objectContaining({ tool_name: 'read_file', content: expect.stringContaining('second file') }),
     ])
+  })
+
+  it('asks again with brief reasoning after a turn is cut for reasoning past its budget', async () => {
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockRejectedValueOnce(new Error(`${REASONING_BUDGET_ERROR}: 12 min of thinking (40000 chars) without an answer or a tool call from model 'm'.`))
+      .mockResolvedValueOnce({ content: 'The workspace is empty.', thinking: '', toolCalls: [] })
+
+    const result = await runAgentOrchestratorLoop({ userTask: 'Describe the workspace', agentMode: 'ask', workspacePath: tempDir }, null)
+
+    expect(result.success).toBe(true)
+    const [first, retry] = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls.map(([request]) => request)
+    // A tenth of the default 120-minute session.
+    expect(first.reasoningBudgetMs).toBe(12 * 60 * 1000)
+    const last = retry.messages[retry.messages.length - 1]
+    expect(last).toMatchObject({ role: 'user', content: expect.stringContaining('reasoned past the time budget') })
   })
 
   it('continues the conversation on a follow-up run, with the current model instead of the pinned one', async () => {

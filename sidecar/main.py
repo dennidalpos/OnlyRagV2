@@ -186,7 +186,7 @@ async def translate_document_inplace_stream_endpoint(doc_id: str, req: Translate
             model=req.model,
             target_dir=req.target_dir,
             num_ctx=req.num_ctx,
-            think=bool(req.think),
+            think=req.think if isinstance(req.think, str) else bool(req.think),
             task_id=req.task_id,
         ),
         media_type="application/x-ndjson",

@@ -10,7 +10,7 @@ import { taskRunner } from '../infrastructure/process/taskRunner'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import { sidecarHttpClient, type SidecarDocumentRecord, type SidecarDocumentSummary } from '../infrastructure/http/sidecarHttpClient'
 import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
-import type { IngestedDocument, IngestedDocumentContent, PromptHistorySearchResult, VectorSearchResult } from '../../../shared/types'
+import type { IngestedDocument, IngestedDocumentContent, OllamaThinkValue, PromptHistorySearchResult, VectorSearchResult } from '../../../shared/types'
 import type { IpcEventContract } from '../../../shared/ipc/ipcContract'
 import { toIngestionProgressPayload, toTranslateProgressPayload } from '../domain/sidecarContract'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
@@ -145,7 +145,15 @@ export class SidecarAppService {
     return { success: false, error: result.error || 'Failed to update document' }
   }
 
-  async translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string, targetDir?: string, numCtx?: number, think?: boolean) {
+  async translateDocumentInplace(
+    docId: string,
+    sourceLang: string,
+    targetLang: string,
+    model?: string,
+    targetDir?: string,
+    numCtx?: number,
+    think?: OllamaThinkValue,
+  ) {
     if (!docId || typeof docId !== 'string') {
       return { success: false, error: 'Invalid document ID' }
     }
@@ -161,7 +169,7 @@ export class SidecarAppService {
           model: model || undefined,
           target_dir: targetDir || undefined,
           num_ctx: numCtx || undefined,
-          think: think === true,
+          think: typeof think === 'string' ? think : think === true,
           task_id: taskId,
         },
         (event) => this.relayProgress('ingest:translate-progress', toTranslateProgressPayload(event, taskId), event.type),

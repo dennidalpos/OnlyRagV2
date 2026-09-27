@@ -14,7 +14,7 @@ import { resolveModelContextLength } from '../../shared/domain/settings/modelCon
 import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
 import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 import { useOllamaGenerationState } from './useOllamaGenerationState'
-import { resolveOllamaThinkingPreference } from '../../shared/domain/agent/ollamaThinkingPolicy'
+import { chosenThinkValue, resolveOllamaThinkingPreference } from '../../shared/domain/agent/ollamaThinkingPolicy'
 import { noConfiguredModelMessage, resolveConfiguredModel } from '../../shared/domain/settings/configuredModel'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
 
@@ -504,7 +504,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
                 num_ctx: budget.maxNumCtx,
                 num_thread: resolveChatThreadCount(hardwareFacts.cpuCount),
                 keep_alive: budget.keepAlive,
-                think: resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics).think,
+                think: chosenThinkValue(resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics)),
               },
               host: settings.ollamaHost,
               operationId,

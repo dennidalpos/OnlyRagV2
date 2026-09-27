@@ -112,6 +112,26 @@ def test_call_ollama_translate_sends_binary_thinking_choice(monkeypatch):
     assert sent[0]["think"] is True
 
 
+def test_translation_sends_the_chosen_reasoning_level_not_true(monkeypatch):
+    # `true` would run the model's default level ("medium" for qwen3.8:27b), not the one chosen in Settings.
+    from schemas import TranslateInplaceRequest
+
+    sent = []
+
+    class FakeHttpxClient:
+        def post(self, url, json=None, timeout=None):
+            sent.append(json)
+            return _FakeResponse(200, {"message": {"content": "translated"}})
+
+    monkeypatch.setattr(translator_module, "httpx_client", FakeHttpxClient())
+    assert translator_module._translate_texts_with_fallback(["hello"], "English", "Italian", "qwen3.8:27b", think="low") == ["translated"]
+    assert sent[0]["think"] == "low"
+
+    request = TranslateInplaceRequest(source_lang="English", target_lang="Italian", model="qwen3.8:27b", think="low")
+    assert request.think == "low"
+    assert TranslateInplaceRequest(source_lang="English", target_lang="Italian", model="qwen3.8:27b", think=True).think is True
+
+
 def test_call_ollama_translate_gives_up_after_max_attempts_on_repeated_timeout(monkeypatch):
     import httpx
 

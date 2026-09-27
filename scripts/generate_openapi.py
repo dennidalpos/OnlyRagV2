@@ -19,6 +19,8 @@ def main() -> None:
     output.write_text(
         json.dumps(app.openapi(), indent=2, ensure_ascii=False, sort_keys=True) + "\n",
         encoding="utf-8",
+        # LF on every host, as .gitattributes and Biome expect.
+        newline="\n",
     )
     print(f"Generated {output.relative_to(ROOT)}")
 

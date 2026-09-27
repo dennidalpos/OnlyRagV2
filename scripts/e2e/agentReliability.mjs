@@ -110,7 +110,8 @@ const ollamaServer = http.createServer(async (request, response) => {
     return
   }
   if (request.method === 'POST' && url.pathname === '/api/chat') {
-    if (body.stream === false) {
+    // Structured requests (interview, plan) carry a JSON schema in `format`; agent turns never do.
+    if (body.format) {
       sendJson(response, 200, { message: { role: 'assistant', content: '{}' }, done: true, done_reason: 'stop' })
       return
     }

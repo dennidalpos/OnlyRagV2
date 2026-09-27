@@ -71,4 +71,10 @@ describe('ollama IPC stream facade', () => {
       'stream-1',
     )
   })
+
+  it('accepts a reasoning level as the thinking choice', async () => {
+    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+    await handlers.get('ollama:generate-stream')?.(trustedEvent, { model: 'model', prompt: 'prompt', options: { think: 'low' }, operationId: 'stream-2' })
+    expect(vi.mocked(ollamaAppService.generateStream).mock.calls[0][4]).toEqual({ think: 'low' })
+  })
 })

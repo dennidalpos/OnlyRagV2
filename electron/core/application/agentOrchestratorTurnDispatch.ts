@@ -8,7 +8,7 @@ import { emitLocalizedLog } from './agentOrchestratorTypes'
 import type { TurnToolPolicy } from '../domain/agent/turnToolPolicy'
 import { recordRecoveryFailure, recoveryStopDiagnostic, type RecoveryFailureState } from '../domain/agent/recoveryBudget'
 import { CODING_MODEL_KEEP_ALIVE } from '../domain/agent/hardwareProfileResolver'
-import { enrichOllamaGenerationTelemetry, type OllamaStreamTelemetry } from '../domain/agent/ollamaSessionRuntime'
+import { enrichOllamaGenerationTelemetry, REASONING_BUDGET_ERROR, type OllamaStreamTelemetry } from '../domain/agent/ollamaSessionRuntime'
 import { ollamaAppService } from './ollamaAppService'
 import { countPromptTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 import { resolveAgentThinkValue } from '../../../shared/domain/agent/ollamaThinkingPolicy'
@@ -54,6 +54,20 @@ export function streamStallTimeoutMs(telemetry: readonly { completionTokens?: nu
   return Math.min(MAX_STREAM_STALL_MS, Math.max(DEFAULT_STREAM_STALL_MS, Math.ceil((TOOL_CALL_TOKEN_ALLOWANCE / tokensPerSecond) * 1000)))
 }
 
+/** Share of the session one turn may spend reasoning before it must answer or call a tool. */
+const REASONING_SESSION_SHARE = 0.1
+
+/**
+ * A single qwen3.8:27b turn (thinking "low", 1.77 tokens/s) reasoned for 159 of the 180 session
+ * minutes before writing six files (live run of 2026-09-26): neither num_predict nor the stall limit
+ * ended it, because thinking tokens kept the stream alive. A turn now gets a tenth of the session
+ * timeout, within 5-30 min, whatever the model and hardware.
+ */
+export function reasoningBudgetMs(sessionTimeoutMinutes: number | undefined): number {
+  const sessionMs = Math.max(5, sessionTimeoutMinutes || 120) * 60 * 1000
+  return Math.min(30 * 60 * 1000, Math.max(5 * 60 * 1000, Math.round(sessionMs * REASONING_SESSION_SHARE)))
+}
+
 /** The chat request as the debug log records it: the transcript in order, then this turn's tool names (last, so consecutive turns share a prefix the log can elide). */
 function renderChatRequestForLog(messages: readonly AgentChatMessage[], toolNames: readonly string[]): string {
   const rendered = messages.map((message) => {
@@ -70,6 +84,12 @@ function modelOutputCorrection(errorMessage: string): string | null {
     return [
       '[APPLICATION FEEDBACK] Your previous response reached the output token limit before a complete tool call was produced, so nothing was executed.',
       'Keep reasoning short. Write large files in parts: write_file a first section, then extend it with replace_file_content.',
+    ].join('\n')
+  }
+  if (errorMessage.startsWith(REASONING_BUDGET_ERROR)) {
+    return [
+      '[APPLICATION FEEDBACK] Your previous response reasoned past the time budget of a turn without an answer or a tool call, so it was stopped and nothing was executed.',
+      'Pick the next single step and call its tool with brief reasoning. Write large files in parts: write_file a first section, then extend it with replace_file_content.',
     ].join('\n')
   }
   const invalidArguments = errorMessage.match(/Invalid Ollama tool arguments: (.*)/i)
@@ -165,6 +185,7 @@ async function dispatchToLlm(
         generationTelemetry = telemetry
       },
       stallTimeoutMs: streamStallTimeoutMs(ctx.session.ollamaGenerationTelemetry),
+      reasoningBudgetMs: reasoningBudgetMs(ctx.settings.agentSessionTimeoutMinutes),
     })
   let transportFailure: RecoveryFailureState | undefined
   while (true) {

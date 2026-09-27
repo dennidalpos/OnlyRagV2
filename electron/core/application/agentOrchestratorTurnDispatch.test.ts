@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { streamStallTimeoutMs } from './agentOrchestratorTurnDispatch'
+import { reasoningBudgetMs, streamStallTimeoutMs } from './agentOrchestratorTurnDispatch'
 
 describe('streamStallTimeoutMs', () => {
   it('waits 10 minutes before the model speed is known', () => {
@@ -25,5 +25,15 @@ describe('streamStallTimeoutMs', () => {
       { completionTokens: 400, evalDurationMs: 200_000 },
     ]
     expect(streamStallTimeoutMs(telemetry)).toBeGreaterThan(5 * 60 * 1000)
+  })
+})
+
+describe('reasoningBudgetMs', () => {
+  it('gives one turn a tenth of the session timeout, within 5-30 minutes', () => {
+    // The 180-minute live session lost 159 minutes to a single qwen3.8:27b reasoning turn (2026-09-26).
+    expect(reasoningBudgetMs(180)).toBe(18 * 60 * 1000)
+    expect(reasoningBudgetMs(undefined)).toBe(12 * 60 * 1000)
+    expect(reasoningBudgetMs(10)).toBe(5 * 60 * 1000)
+    expect(reasoningBudgetMs(600)).toBe(30 * 60 * 1000)
   })
 })

@@ -74,7 +74,11 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
       const verifyCmd = targetMilestone.verificationCommand
       // Re-checked here and not only at plan ingestion: a plan can arrive from a restored session or from the user editing the checklist in the UI, and executing a mutating "verification" is what rewrote the agent's own source in session-1787497654743-4enx.
       const safety = checkVerificationCommandSafety(verifyCmd)
-      const secCheck = safety.isSafe ? checkCommandSecurity(verifyCmd, workspacePath) : null
+      const secCheck = !safety.isSafe
+        ? null
+        : settings.fullAccess
+          ? { isAllowed: true, requiresApproval: false, sanitizedCommand: verifyCmd }
+          : checkCommandSecurity(verifyCmd, workspacePath)
 
       if (!safety.isSafe) {
         refusedVerification = {

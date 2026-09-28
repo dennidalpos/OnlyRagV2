@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { execFileSync } from 'node:child_process'
 import { gitCliRepository } from './gitCliRepository'
 
 describe('GitCliRepository Unit Tests', () => {
@@ -43,5 +44,17 @@ describe('GitCliRepository Unit Tests', () => {
     expect(resWithUntracked.isGitRepo).toBe(true)
     expect(resWithUntracked.statusLines.some((l) => l.includes('hello.txt'))).toBe(true)
     expect(resWithUntracked.diffText).toContain('Hello World')
+  })
+
+  it('previews staged and untracked changes together for Full access commits', () => {
+    gitCliRepository.init(tempDir)
+    fs.writeFileSync(path.join(tempDir, 'staged.txt'), 'staged')
+    fs.writeFileSync(path.join(tempDir, 'untracked.txt'), 'untracked')
+    execFileSync('git', ['add', '--', 'staged.txt'], { cwd: tempDir })
+
+    const preview = gitCliRepository.previewAllCommit(tempDir)
+    expect(preview.paths).toEqual(['staged.txt', 'untracked.txt'])
+    expect(preview.diffText).toContain('staged')
+    expect(preview.diffText).toContain('untracked')
   })
 })

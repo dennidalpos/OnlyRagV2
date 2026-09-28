@@ -11,9 +11,10 @@ export function executeListDirectoryTool(
   parameters: AgentToolCall['parameters'],
   workspacePath: string | null | undefined,
   repository: ListDirectoryRepository,
+  fullAccess = false,
 ): ToolExecutionResult {
   const dirPath = parameters.dirPath || workspacePath || '.'
-  const pathCheck = validatePathSafety(dirPath, workspacePath)
+  const pathCheck = validatePathSafety(dirPath, workspacePath, fullAccess)
   if (!pathCheck.safePath) {
     return {
       outcome: 'rejected',

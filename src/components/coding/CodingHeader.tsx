@@ -1,5 +1,5 @@
 import React from 'react'
-import { Code, Sparkles, CheckCircle2, AlertCircle, Wrench, Sliders } from 'lucide-react'
+import { Code, Sparkles, CheckCircle2, AlertCircle, Wrench, Sliders, Shield } from 'lucide-react'
 import { AppSettings, type GuestOsInfo } from '../../types'
 
 import { QuickModelSelector } from '../common/QuickModelSelector'
@@ -16,6 +16,7 @@ interface CodingHeaderProps {
   onOpenDiagnosticsModal?: () => void
   onOpenSkillHubModal?: () => void
   onOpenPromptModal?: () => void
+  onOpenPermissionsModal?: () => void
 }
 
 export const CodingHeader: React.FC<CodingHeaderProps> = ({
@@ -28,6 +29,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
   onOpenDiagnosticsModal,
   onOpenSkillHubModal,
   onOpenPromptModal,
+  onOpenPermissionsModal,
 }) => {
   const { t } = useTranslation()
   const hasGit = guestOsInfo?.tools.git
@@ -50,6 +52,15 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
 
       {/* Right: Quick Model Selector, System Prompt, Skills & Toolchain Popover */}
       <div className="flex items-center gap-2.5 text-xs">
+        <button
+          type="button"
+          onClick={onOpenPermissionsModal}
+          aria-label={t('settings.agentPermissionsOpen')}
+          title={t('settings.agentPermissionsOpen')}
+          className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 text-cyan-300 text-xs font-semibold rounded-xl focus-ring flex items-center gap-1.5"
+        >
+          <Shield className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t('settings.agentPermissionsOpen')}</span>
+        </button>
         {/* Quick Coding Model Selector */}
         <QuickModelSelector
           currentModel={activeModel || settings?.codingModel || ''}

@@ -634,6 +634,16 @@ export const it = {
     modelsWeightsSection: 'Modelli AI & Assegnazione per Modulo',
     ollamaManagementDesc: 'Scarica o elimina modelli locali in Ollama.',
     agentLimitsSection: 'Agente di Sviluppo, Limiti & Debug',
+    agentPermissionsSection: 'Permessi Agent Coding',
+    agentPermissionsOpen: 'Permessi agente',
+    agentPermissionsDefaults: 'Predefiniti per le nuove run',
+    agentPermissionsPlan: 'Piano corrente',
+    agentPermissionsPlanUnavailable: 'Apri un piano pronto per modificarne i permessi.',
+    agentPermissionsSave: 'Salva permessi del piano',
+    agentPermissionsSaveFailed: 'Salvataggio dei permessi non riuscito.',
+    agentFullAccess: 'Full access e installazioni libere',
+    agentFullAccessWarning:
+      'L’agente può leggere e modificare file fuori dal progetto, eseguire comandi, installare e creare commit con tutte le modifiche Git del progetto senza conferme. I privilegi restano quelli dell’utente del sistema operativo. I checkpoint coprono solo i file tracciati nel workspace; modifiche esterne e comandi shell non hanno un ripristino garantito.',
   },
   about: {
     title: 'Informazioni su OnlyRag V2',

@@ -169,6 +169,17 @@ describe('coding rules follow the capability policy', () => {
     expect(approved).toContain('open_in_browser')
   })
 
+  it('describes external paths and approval-free execution only for Full access runs', () => {
+    const full = { ...base, fullAccess: true }
+    const guided = PromptCompiler.compileCodingPrompt({ workspacePath: 'D:/p', agentMode: 'GUIDED' }, full).prompt
+    expect(guided).toContain('absolute paths are allowed')
+    expect(guided).toContain('including installs and operations outside the workspace')
+
+    const ask = PromptCompiler.compileCodingPrompt({ workspacePath: 'D:/p', agentMode: 'ASK' }, full).prompt
+    expect(ask).toContain('ASK is strictly read-only')
+    expect(ask).not.toContain('absolute paths are allowed')
+  })
+
   it('sends the task only as a user message', () => {
     expect(PromptCompiler.compileCodingPrompt({ userTask: 'Build a todo app' }, base).prompt).not.toContain('Build a todo app')
   })

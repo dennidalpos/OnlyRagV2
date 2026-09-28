@@ -18,9 +18,10 @@ export function executeFileInfoTool(
   parameters: AgentToolCall['parameters'],
   workspacePath: string | null | undefined,
   repository: FileInfoRepository,
+  fullAccess = false,
 ): ToolExecutionResult {
   const targetPath = parameters.filePath
-  const pathCheck = validatePathSafety(targetPath, workspacePath)
+  const pathCheck = validatePathSafety(targetPath, workspacePath, fullAccess)
   if (!pathCheck.safePath) {
     return {
       outcome: 'rejected',

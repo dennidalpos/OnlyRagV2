@@ -1,4 +1,4 @@
-import { workspaceAppService } from './workspaceAppService'
+import { allWindowsEventSink } from '../infrastructure/electron/rendererEventSinks'
 import { saveAgentCheckpoint } from '../infrastructure/filesystem/agentCheckpointStore'
 import { FsToolService } from './fsToolService'
 import { ProcessToolService } from './processToolService'
@@ -84,10 +84,16 @@ export class AgentToolExecutorService {
   ) {
     this.visualValidationRunner = visualValidationRunner
     this.fsToolService = new FsToolService({
-      repository: workspaceAppService,
+      repository: {
+        deleteFile: async (filePath) => {
+          const result = await this.repo.deleteFile(filePath)
+          if (result.success) allWindowsEventSink.send('workspace:file-deleted', { filePath })
+          return result
+        },
+      },
       readRepository: this.repo,
       symbolsRepository: this.repo,
-      searchRepository: workspaceAppService,
+      searchRepository: { grepSearch: (dirPath, query, isRegex, caseInsensitive) => this.repo.grepSearch(dirPath, query, isRegex, caseInsensitive) },
       directoryRepository: agentToolFileRepository,
       journal: this.journal,
       readContent: (absolutePath) => this.readContentSafely(absolutePath),
@@ -145,6 +151,7 @@ export class AgentToolExecutorService {
     this.gitToolService = new GitToolService({
       run: (directory, command, timeoutMs) => gitCliRepository.run(directory, command, timeoutMs),
       previewCommit: (directory, paths) => gitCliRepository.previewCommit(directory, paths),
+      previewAllCommit: (directory) => gitCliRepository.previewAllCommit(directory),
       commit: (directory, message, paths, expectedDiffHash) => gitCliRepository.commit(directory, message, paths, expectedDiffHash),
       markCommitBoundary: () => {
         this.journal.commit()
@@ -234,8 +241,8 @@ export class AgentToolExecutorService {
   }
 
   /** Stages and commits all changes in `cwd` via execFileSync (argv array, no shell) -- safe against injection via the commit message without needing to escape it for a shell string. */
-  public previewGitCommit(cwd: string, observedPaths: readonly string[] = []) {
-    return this.gitToolService.previewCommit(cwd, [...this.journal.trackedPaths, ...observedPaths])
+  public previewGitCommit(cwd: string, observedPaths: readonly string[] = [], fullAccess = false) {
+    return fullAccess ? this.gitToolService.previewAllCommit(cwd) : this.gitToolService.previewCommit(cwd, [...this.journal.trackedPaths, ...observedPaths])
   }
 
   private mutationPathBlock(parsedTool: AgentToolCall, workspacePath: string | null | undefined): ToolExecutionResult | null {
@@ -423,20 +430,34 @@ export class AgentToolExecutorService {
     allowedToolsForTurn?: readonly SupportedToolName[],
     commandApprovalGranted = false,
   ): Promise<ClassifiedToolExecutionResult> {
-    const result = await this.dispatchTool(
-      parsedTool,
-      workspacePath,
-      settings,
-      onTerminalOutput,
-      onProcessSpawned,
-      activeSkillGuidelines,
-      signal,
-      policyConsent,
-      policySessionId,
-      allowedToolsForTurn,
-      commandApprovalGranted,
-    )
-    return toolExecutionResultSchema.parse(result)
+    const fullAccess = settings.fullAccess === true
+    this.repo.setFullAccess(fullAccess)
+    this.fsToolService.setFullAccess(fullAccess)
+    this.webToolService.setFullAccess(fullAccess)
+    this.browserToolService.setFullAccess(fullAccess)
+    this.gitToolService.setFullAccess(fullAccess)
+    try {
+      const result = await this.dispatchTool(
+        parsedTool,
+        workspacePath,
+        settings,
+        onTerminalOutput,
+        onProcessSpawned,
+        activeSkillGuidelines,
+        signal,
+        policyConsent,
+        policySessionId,
+        allowedToolsForTurn,
+        commandApprovalGranted,
+      )
+      return toolExecutionResultSchema.parse(result)
+    } finally {
+      this.repo.setFullAccess(false)
+      this.fsToolService.setFullAccess(false)
+      this.webToolService.setFullAccess(false)
+      this.browserToolService.setFullAccess(false)
+      this.gitToolService.setFullAccess(false)
+    }
   }
 
   private async dispatchTool(
@@ -454,6 +475,8 @@ export class AgentToolExecutorService {
   ): Promise<ToolExecutionResult> {
     const { tool, parameters } = parsedTool
 
+    const fullAccess = settings.fullAccess === true
+
     if (allowedToolsForTurn && !allowedToolsForTurn.includes(tool)) {
       return {
         outcome: 'rejected',
@@ -463,10 +486,10 @@ export class AgentToolExecutorService {
       }
     }
 
-    const mutationPathBlock = this.mutationPathBlock(parsedTool, workspacePath)
+    const mutationPathBlock = fullAccess ? null : this.mutationPathBlock(parsedTool, workspacePath)
     if (mutationPathBlock) return mutationPathBlock
 
-    const policyBlock = await this.policyBlock(parsedTool, workspacePath, settings, policyConsent, policySessionId)
+    const policyBlock = fullAccess ? null : await this.policyBlock(parsedTool, workspacePath, settings, policyConsent, policySessionId)
     if (policyBlock) return policyBlock
 
     switch (tool) {
@@ -487,7 +510,14 @@ export class AgentToolExecutorService {
       }
 
       case 'ensure_tool': {
-        return this.processToolService.executeEnsureTool(parameters, workspacePath, settings.allowTerminalExecution, signal, onTerminalOutput, onProcessSpawned)
+        return this.processToolService.executeEnsureTool(
+          parameters,
+          workspacePath,
+          fullAccess || settings.allowTerminalExecution,
+          signal,
+          onTerminalOutput,
+          onProcessSpawned,
+        )
       }
 
       case 'grep_search': {
@@ -539,7 +569,7 @@ export class AgentToolExecutorService {
       }
 
       case 'run_command': {
-        if (settings.allowTerminalExecution === false) {
+        if (!fullAccess && settings.allowTerminalExecution === false) {
           const message = { key: 'toolTerminalDisabled' } as const
           return {
             outcome: 'blocked',
@@ -561,13 +591,13 @@ export class AgentToolExecutorService {
           }
         }
 
-        const installPreconditionFailure = await this.processToolService.validateInstallPreconditions(cmd, workspacePath)
+        const installPreconditionFailure = fullAccess ? null : await this.processToolService.validateInstallPreconditions(cmd, workspacePath)
         if (installPreconditionFailure) return installPreconditionFailure
 
-        const preconditionFailure = this.processToolService.validateRunCommandPreconditions(cmd)
+        const preconditionFailure = fullAccess ? null : this.processToolService.validateRunCommandPreconditions(cmd)
         if (preconditionFailure) return preconditionFailure
 
-        const redundantInstall = await this.processToolService.validateRedundantInstall(cmd, workspacePath)
+        const redundantInstall = fullAccess ? null : await this.processToolService.validateRedundantInstall(cmd, workspacePath)
         if (redundantInstall) return redundantInstall
 
         const execution = await this.processToolService.executeRunCommand(
@@ -578,6 +608,7 @@ export class AgentToolExecutorService {
           onTerminalOutput,
           onProcessSpawned,
           commandApprovalGranted,
+          fullAccess,
         )
         if (!('result' in execution)) return execution
 
@@ -651,10 +682,11 @@ export class AgentToolExecutorService {
         return this.processToolService.executeRunTests(
           parameters.command,
           workspacePath,
-          settings.allowTerminalExecution,
+          fullAccess || settings.allowTerminalExecution,
           onTerminalOutput,
           onProcessSpawned,
           signal,
+          fullAccess,
         )
       }
 
@@ -706,7 +738,7 @@ export class AgentToolExecutorService {
         }
         const outputDirectory = workspaceMetadataChildPath(workspacePath, 'visual-validation')
         documentIoRepository.ensureDirectory(outputDirectory)
-        const evidence = await this.visualValidationRunner.captureEvidence(parameters, workspacePath, outputDirectory, signal)
+        const evidence = await this.visualValidationRunner.captureEvidence(parameters, workspacePath, outputDirectory, signal, fullAccess)
         const result =
           'status' in evidence && evidence.status === 'UNAVAILABLE'
             ? visualValidationResultSchema.parse({

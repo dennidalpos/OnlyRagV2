@@ -29,6 +29,7 @@ export interface ToolGateContext {
   emitLog: EmitLog
   requestApproval: RequestApproval
   capabilityPolicyMode: AppSettings['capabilityPolicyMode']
+  fullAccess?: boolean
   allowedToolsForTurn?: readonly SupportedToolName[]
   requiredReadPath?: string
   runOwnedPaths?: readonly string[]
@@ -65,12 +66,12 @@ const MUTATING_TOOLS_REQUIRING_GUIDED_APPROVAL = [
   'rollback_last_step',
 ]
 
-/** Always-Confirm Gate: git_commit rewrites shared git history, a harder-to-reverse action than an in-workspace file edit, so it ALWAYS requires explicit user approval regardless of agent mode (unlike write_file/delete_file, which execute autonomously in AGENT mo */
-async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | { denied: string }> {
+/** Previews git_commit and requests approval unless Full access is active. */
+async function gateGitCommit(ctx: ToolGateContext, fullAccess = false): Promise<AgentToolCall | { denied: string }> {
   const { parsedTool, episodicCompactor, emitLog, requestApproval, stepCount } = ctx
   let preview
   try {
-    preview = agentToolExecutorService.previewGitCommit(ctx.workspacePath || process.cwd(), ctx.runOwnedPaths)
+    preview = agentToolExecutorService.previewGitCommit(ctx.workspacePath || process.cwd(), ctx.runOwnedPaths, fullAccess)
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     const feedback = `[GIT COMMIT NOT POSSIBLE] ${message}`
@@ -84,12 +85,14 @@ async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | { de
     commitDiff: preview.diffText,
     commitDiffHash: preview.diffHash,
   }
-  const approval = await requestApproval({
-    type: 'git_commit',
-    target: parsedTool.parameters.commitMessage || 'Git Commit',
-    contentOrCmd: parsedTool.parameters.commitMessage || '',
-    parameters: commitParameters,
-  })
+  const approval = fullAccess
+    ? { approved: true }
+    : await requestApproval({
+        type: 'git_commit',
+        target: parsedTool.parameters.commitMessage || 'Git Commit',
+        contentOrCmd: parsedTool.parameters.commitMessage || '',
+        parameters: commitParameters,
+      })
   if (!approval.approved) {
     const feedback =
       '[USER DENIED] The user declined this git_commit. Do not propose the same commit again; continue without committing or ask the user what they want instead.'
@@ -198,7 +201,7 @@ function denyFsm(ctx: ToolGateContext): string {
   return feedback
 }
 
-/** Applies phase constraints, strict Ask read-only permissions, contextual consent, and the always-on git_commit gate. */
+/** Applies phase constraints, Ask read-only permissions, and contextual consent. */
 export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult> {
   if (ctx.requiredReadPath) {
     const requested = String(ctx.parsedTool.parameters.filePath || '')
@@ -224,6 +227,14 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
       emitLocalizedLog(ctx.emitLog, 'info', { key: 'shellReadAsReadFile', params: { path: filePath, command: String(ctx.parsedTool.parameters.command) } })
       return { outcome: 'allowed', toolCallForExecution: { tool: 'read_file', parameters: { filePath } } }
     }
+  }
+
+  if (ctx.fullAccess && ctx.agentMode !== 'ask') {
+    if (ctx.parsedTool.tool === 'git_commit') {
+      const commit = await gateGitCommit(ctx, true)
+      return 'denied' in commit ? { outcome: 'denied', feedback: commit.denied } : { outcome: 'allowed', toolCallForExecution: commit }
+    }
+    return { outcome: 'allowed', toolCallForExecution: ctx.parsedTool }
   }
 
   if (ctx.allowedToolsForTurn && !ctx.allowedToolsForTurn.includes(ctx.parsedTool.tool)) {

@@ -136,6 +136,11 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
     expect(resPrivateC.safeUrl).toBeNull()
   })
 
+  it('allows local network URLs only when Full access is explicit', () => {
+    expect(client.validateUrlSafety('http://127.0.0.1:3000/api').safeUrl).toBeNull()
+    expect(client.validateUrlSafety('http://127.0.0.1:3000/api', true).safeUrl?.hostname).toBe('127.0.0.1')
+  })
+
   it('fetches a page and converts it to markdown', async () => {
     const response = createMockResponse(200)
     const request = createMockRequest()

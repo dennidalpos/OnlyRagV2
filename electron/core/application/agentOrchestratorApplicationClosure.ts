@@ -216,7 +216,7 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
 
   if (shouldRunVerification) {
     emitLocalizedLog(ctx.emitLog, 'info', { key: 'finalVerificationStarted' })
-    run = await runProjectVerification(ctx.workspacePath, (chunk) => ctx.emitLog('terminal', chunk), ctx.signal)
+    run = await runProjectVerification(ctx.workspacePath, (chunk) => ctx.emitLog('terminal', chunk), ctx.signal, ctx.settings.fullAccess === true)
     const verificationEvidence = toVerificationEvidence(run)
     ctx.recordVerificationEvidence?.(verificationEvidence)
     ctx.lastVerification = verificationEvidence

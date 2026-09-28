@@ -19,9 +19,10 @@ export async function executeExtractCodeSymbolsTool(
   parameters: AgentToolCall['parameters'],
   workspacePath: string | null | undefined,
   repository: CodeSymbolsRepository,
+  fullAccess = false,
 ): Promise<ToolExecutionResult> {
   const targetPath = parameters.filePath
-  const pathCheck = validatePathSafety(targetPath, workspacePath)
+  const pathCheck = validatePathSafety(targetPath, workspacePath, fullAccess)
   if (!pathCheck.safePath) {
     return {
       outcome: 'rejected',

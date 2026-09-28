@@ -76,9 +76,10 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   const agentMode = payload.agentMode || 'guided'
   const workspacePath = resolveWorkspacePath(payload)
   const isStandaloneMode = Boolean(payload.isStandaloneMode)
-  const settings = payload.capabilityProfile
+  const profileSettings = payload.capabilityProfile
     ? applyAgentCapabilityProfile(payload.settings || buildDefaultAgentSettings(), payload.capabilityProfile)
     : payload.settings || buildDefaultAgentSettings()
+  const settings = agentMode === 'ask' && profileSettings.fullAccess ? { ...profileSettings, fullAccess: false } : profileSettings
 
   const attachedContext = buildAttachedContextBlock(payload)
   const pinnedFilesContextStr = buildPinnedFilesContextBlock(payload)
@@ -129,6 +130,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     autoInstallHubSkills: settings.autoInstallHubSkills,
     autoInstallMinScore: settings.autoInstallMinScore,
     onConfirmInstall: (candidate: SkillInstallCandidate) => {
+      if (settings.fullAccess && agentMode !== 'ask') return Promise.resolve(true)
       emitLocalizedLog(emitLog, 'info', {
         key: 'skillInstallConfirm',
         params: { skill: candidate.skillName, hub: candidate.hubName, score: candidate.score.toFixed(1) },

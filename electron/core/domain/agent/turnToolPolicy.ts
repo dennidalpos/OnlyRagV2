@@ -11,6 +11,7 @@ export interface TurnToolPolicyInput {
   agentMode?: 'ask' | 'guided' | 'auto'
   /** Tools the capability policy always refuses are not offered at all (see POLICY_UNAVAILABLE_TOOLS). */
   capabilityPolicyMode?: 'offline-strict' | 'local-only' | 'network-approved'
+  fullAccess?: boolean
 }
 
 export interface TurnToolPolicy {
@@ -71,11 +72,14 @@ function withoutPolicyUnavailable(tools: readonly SupportedToolName[], mode: Tur
 export function resolveTurnToolPolicy(input: TurnToolPolicyInput): TurnToolPolicy {
   if (input.directiveKind === 'session_closure') return { allowedTools: ['finish'], rationale: 'verified work is ready for a terminal report' }
   if (input.agentMode === 'ask') {
-    return { allowedTools: withoutPolicyUnavailable([...READ_TOOLS, 'ask', 'finish'], input.capabilityPolicyMode), rationale: 'Ask mode is read-only' }
+    return {
+      allowedTools: withoutPolicyUnavailable([...READ_TOOLS, 'ask', 'finish'], input.fullAccess ? 'network-approved' : input.capabilityPolicyMode),
+      rationale: 'Ask mode is read-only',
+    }
   }
 
-  const allowedTools = withoutPolicyUnavailable([...WORK_TOOLS, 'ask', 'finish'], input.capabilityPolicyMode)
-  if (/\bcommit/i.test(input.userTask)) allowedTools.push('git_commit')
+  const allowedTools = withoutPolicyUnavailable([...WORK_TOOLS, 'ask', 'finish'], input.fullAccess ? 'network-approved' : input.capabilityPolicyMode)
+  if (input.fullAccess || /\bcommit/i.test(input.userTask)) allowedTools.push('git_commit')
   return { allowedTools, rationale: 'the model may choose a relevant tool; every call remains subject to Main policy' }
 }
 

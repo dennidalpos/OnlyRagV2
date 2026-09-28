@@ -549,6 +549,7 @@ export async function runAgentOrchestratorLoop(
       emitLog,
       requestApproval,
       capabilityPolicyMode: settings.capabilityPolicyMode,
+      fullAccess: settings.fullAccess === true,
       allowedToolsForTurn: preparedTurn.toolPolicy.allowedTools,
       requiredReadPath: preparedTurn.toolPolicy.requiredReadPath,
       runOwnedPaths: Array.from(sessionChangedFiles.keys()),
@@ -612,9 +613,11 @@ export async function runAgentOrchestratorLoop(
       sessionId,
       // A call the gate substituted (a shell read run as read_file) was authorized by the gate
       // itself; re-checking it against the proposed tool's phase would deny what the gate allowed.
-      toolCallForExecution.tool === parsedTool.tool
-        ? preparedTurn.toolPolicy.allowedTools
-        : [...preparedTurn.toolPolicy.allowedTools, toolCallForExecution.tool],
+      settings.fullAccess && run.agentMode !== 'ask'
+        ? undefined
+        : toolCallForExecution.tool === parsedTool.tool
+          ? preparedTurn.toolPolicy.allowedTools
+          : [...preparedTurn.toolPolicy.allowedTools, toolCallForExecution.tool],
       gateResult.commandApprovalGranted,
     )
     recordNativeResult(toolRes.outputForHistory)

@@ -18,6 +18,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   enableSkillRouter: false,
   allowFileModifications: true,
   allowTerminalExecution: true,
+  fullAccess: false,
   capabilityPolicyMode: 'network-approved',
   maxToolCallSteps: DEFAULT_AGENT_STEP_BUDGET,
   enableCodingAgentDebugLog: false,

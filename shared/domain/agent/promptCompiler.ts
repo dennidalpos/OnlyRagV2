@@ -56,9 +56,10 @@ export class PromptCompiler {
       // sections for the retired text protocol keep rendering their native variant.
       nativeToolCalling: true,
       nativeVision: capabilities.includes('vision'),
+      fullAccess: settings?.fullAccess === true && variables.agentMode !== 'ASK',
       // Rules may only name tools the capability policy lets the run use (see turnToolPolicy.ts).
-      webResearch: policy === 'network-approved',
-      browserPreview: policy !== 'offline-strict',
+      webResearch: settings?.fullAccess === true || policy === 'network-approved',
+      browserPreview: settings?.fullAccess === true || policy !== 'offline-strict',
     }
 
     const prompt = collapseBlankRuns(renderPromptTemplate(resolvedRoot.template, view, partials)).trim()

@@ -61,26 +61,31 @@ interface DeleteFileDependencies {
 
 /** Application service for filesystem tools extracted from the legacy executor. */
 export class FsToolService {
+  private fullAccess = false
   constructor(private readonly dependencies: DeleteFileDependencies) {}
 
+  setFullAccess(value: boolean): void {
+    this.fullAccess = value
+  }
+
   executeReadFile(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): Promise<ToolExecutionResult> {
-    return executeReadFileTool(parameters, workspacePath, this.dependencies.readRepository!, this.dependencies.directoryRepository)
+    return executeReadFileTool(parameters, workspacePath, this.dependencies.readRepository!, this.dependencies.directoryRepository, this.fullAccess)
   }
 
   executeExtractCodeSymbols(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): Promise<ToolExecutionResult> {
-    return executeExtractCodeSymbolsTool(parameters, workspacePath, this.dependencies.symbolsRepository!)
+    return executeExtractCodeSymbolsTool(parameters, workspacePath, this.dependencies.symbolsRepository!, this.fullAccess)
   }
 
   executeListDirectory(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): ToolExecutionResult {
-    return executeListDirectoryTool(parameters, workspacePath, this.dependencies.directoryRepository)
+    return executeListDirectoryTool(parameters, workspacePath, this.dependencies.directoryRepository, this.fullAccess)
   }
 
   executeListFilesRecursive(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): ToolExecutionResult {
-    return executeListFilesRecursiveTool(parameters, workspacePath, this.dependencies.recursiveRepository!)
+    return executeListFilesRecursiveTool(parameters, workspacePath, this.dependencies.recursiveRepository!, this.fullAccess)
   }
 
   executeFileInfo(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): ToolExecutionResult {
-    return executeFileInfoTool(parameters, workspacePath, this.dependencies.directoryRepository)
+    return executeFileInfoTool(parameters, workspacePath, this.dependencies.directoryRepository, this.fullAccess)
   }
 
   async executeWriteFile(
@@ -89,7 +94,7 @@ export class FsToolService {
     allowFileModifications: boolean | undefined,
     activeSkillGuidelines: string,
   ): Promise<ToolExecutionResult> {
-    if (allowFileModifications === false) {
+    if (!this.fullAccess && allowFileModifications === false) {
       return { outcome: 'blocked', outputForHistory: 'Direct file write disabled in Settings.', ...toolLog('toolWriteDisabled') }
     }
     return executeWriteFileTool(
@@ -99,6 +104,7 @@ export class FsToolService {
       this.dependencies.skillAdherence!,
       this.dependencies.buildSkillRefusal!,
       this.dependencies.writeFileDependencies!,
+      this.fullAccess,
     )
   }
 
@@ -108,7 +114,7 @@ export class FsToolService {
     allowFileModifications: boolean | undefined,
     activeSkillGuidelines: string,
   ): Promise<ToolExecutionResult> {
-    if (allowFileModifications === false) {
+    if (!this.fullAccess && allowFileModifications === false) {
       return { outcome: 'blocked', outputForHistory: 'Direct file modification disabled in Settings.', ...toolLog('toolModifyDisabled') }
     }
     return executeReplaceFileContentTool(
@@ -122,6 +128,7 @@ export class FsToolService {
       this.dependencies.buildChangeStats,
       this.dependencies.contentVersion || ((content) => content),
       async (absolutePath) => (workspacePath && (await this.dependencies.checkWrittenFile?.(workspacePath, absolutePath))) || '',
+      this.fullAccess,
     )
   }
 
@@ -131,7 +138,7 @@ export class FsToolService {
     allowFileModifications: boolean | undefined,
     activeSkillGuidelines: string,
   ): Promise<ToolExecutionResult> {
-    if (allowFileModifications === false) {
+    if (!this.fullAccess && allowFileModifications === false) {
       return { outcome: 'blocked', outputForHistory: 'Direct file modification disabled in Settings.', ...toolLog('toolModifyDisabled') }
     }
     return executeMultiReplaceFileContentTool(
@@ -145,6 +152,7 @@ export class FsToolService {
       this.dependencies.buildChangeStats,
       this.dependencies.contentVersion || ((content) => content),
       async (absolutePath) => (workspacePath && (await this.dependencies.checkWrittenFile?.(workspacePath, absolutePath))) || '',
+      this.fullAccess,
     )
   }
 
@@ -153,12 +161,12 @@ export class FsToolService {
     workspacePath: string | null | undefined,
     allowFileModifications: boolean | undefined,
   ): Promise<ToolExecutionResult> {
-    if (allowFileModifications === false) {
+    if (!this.fullAccess && allowFileModifications === false) {
       return { outcome: 'blocked', outputForHistory: 'Direct file deletion disabled in Settings.', ...toolLog('toolDeleteDisabled') }
     }
 
     const filePath = parameters.filePath
-    const pathCheck = validatePathSafety(filePath, workspacePath)
+    const pathCheck = validatePathSafety(filePath, workspacePath, this.fullAccess)
     if (!pathCheck.safePath) {
       return {
         outcome: 'rejected',
@@ -195,12 +203,12 @@ export class FsToolService {
     workspacePath: string | null | undefined,
     allowFileModifications: boolean | undefined,
   ): ToolExecutionResult {
-    if (allowFileModifications === false) {
+    if (!this.fullAccess && allowFileModifications === false) {
       return { outcome: 'blocked', outputForHistory: 'Directory creation disabled in Settings.', ...toolLog('toolDirectoryDisabled') }
     }
 
     const dirPath = parameters.dirPath || parameters.filePath
-    const pathCheck = validatePathSafety(dirPath, workspacePath)
+    const pathCheck = validatePathSafety(dirPath, workspacePath, this.fullAccess)
     if (!pathCheck.safePath) {
       return {
         outcome: 'rejected',
@@ -231,14 +239,14 @@ export class FsToolService {
     workspacePath: string | null | undefined,
     allowFileModifications: boolean | undefined,
   ): ToolExecutionResult {
-    if (allowFileModifications === false) {
+    if (!this.fullAccess && allowFileModifications === false) {
       return { outcome: 'blocked', outputForHistory: 'File copy disabled in Settings.', ...toolLog('toolCopyDisabled') }
     }
 
     const sourcePath = parameters.sourcePath || parameters.filePath
     const targetPath = parameters.targetPath || parameters.destination
-    const sourceCheck = validatePathSafety(sourcePath, workspacePath)
-    const targetCheck = validatePathSafety(targetPath, workspacePath)
+    const sourceCheck = validatePathSafety(sourcePath, workspacePath, this.fullAccess)
+    const targetCheck = validatePathSafety(targetPath, workspacePath, this.fullAccess)
 
     if (!sourceCheck.safePath || !targetCheck.safePath) {
       return {
@@ -272,14 +280,14 @@ export class FsToolService {
     workspacePath: string | null | undefined,
     allowFileModifications: boolean | undefined,
   ): ToolExecutionResult {
-    if (allowFileModifications === false) {
+    if (!this.fullAccess && allowFileModifications === false) {
       return { outcome: 'blocked', outputForHistory: 'File move/rename disabled in Settings.', ...toolLog('toolMoveDisabled') }
     }
 
     const sourcePath = parameters.sourcePath || parameters.filePath
     const targetPath = parameters.targetPath || parameters.destination
-    const sourceCheck = validatePathSafety(sourcePath, workspacePath)
-    const targetCheck = validatePathSafety(targetPath, workspacePath)
+    const sourceCheck = validatePathSafety(sourcePath, workspacePath, this.fullAccess)
+    const targetCheck = validatePathSafety(targetPath, workspacePath, this.fullAccess)
 
     if (!sourceCheck.safePath || !targetCheck.safePath) {
       return {
@@ -314,7 +322,7 @@ export class FsToolService {
     const targetDir = parameters.dirPath || workspacePath || '.'
     const isRegex = Boolean(parameters.isRegex)
     const caseInsensitive = parameters.caseInsensitive !== false
-    const pathCheck = validatePathSafety(targetDir, workspacePath)
+    const pathCheck = validatePathSafety(targetDir, workspacePath, this.fullAccess)
 
     if (!pathCheck.safePath) {
       return {

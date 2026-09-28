@@ -21,14 +21,19 @@ interface WebToolDependencies {
 
 /** Application service for guarded download execution and artifact provenance. */
 export class WebToolService {
+  private fullAccess = false
   constructor(private readonly dependencies: WebToolDependencies) {}
+
+  setFullAccess(value: boolean): void {
+    this.fullAccess = value
+  }
 
   executeSearch(query: string, maxResults: number, signal: AbortSignal | undefined): Promise<ToolExecutionResult> {
     return executeWebSearch(query, maxResults, (searchQuery, limit) => webClient.searchWeb(searchQuery, limit, signal))
   }
 
   executeFetch(url: string, signal: AbortSignal | undefined): Promise<ToolExecutionResult> {
-    return executeWebContentFetch(url, (targetUrl) => webClient.fetchWebContent(targetUrl, 16000, signal))
+    return executeWebContentFetch(url, (targetUrl) => webClient.fetchWebContent(targetUrl, 16000, signal, 0, this.fullAccess))
   }
 
   async executeDownloadFile(
@@ -37,13 +42,13 @@ export class WebToolService {
     allowFileModifications: boolean | undefined,
     signal: AbortSignal | undefined,
   ): Promise<ToolExecutionResult> {
-    if (allowFileModifications === false) {
+    if (!this.fullAccess && allowFileModifications === false) {
       return { outcome: 'blocked', outputForHistory: 'Direct file download disabled in Settings.', ...toolLog('toolDownloadDisabled') }
     }
 
     const url = parameters.url
     const filePath = parameters.filePath
-    const pathCheck = validatePathSafety(filePath, workspacePath)
+    const pathCheck = validatePathSafety(filePath, workspacePath, this.fullAccess)
     if (!pathCheck.safePath) {
       return {
         outcome: 'rejected',
@@ -58,7 +63,7 @@ export class WebToolService {
     this.dependencies.recordBeforeModification(pathCheck.safePath)
     const downloadFile =
       this.dependencies.downloadFile ||
-      ((targetUrl, targetPath, workspaceRoot, abortSignal) => webClient.downloadFile(targetUrl, targetPath, workspaceRoot, abortSignal))
+      ((targetUrl, targetPath, workspaceRoot, abortSignal) => webClient.downloadFile(targetUrl, targetPath, workspaceRoot, abortSignal, 0, this.fullAccess))
     const result = await downloadFile(url, pathCheck.safePath, workspacePath, signal)
     if (!result.success) {
       return {

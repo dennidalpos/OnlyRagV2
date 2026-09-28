@@ -69,12 +69,12 @@ export class VisualValidationRunner {
     private readonly statFile: (filePath: string) => { isFile(): boolean } = (filePath) => ({ isFile: () => documentIoRepository.isFile(filePath) }),
   ) {}
 
-  async launchArtifact(input: unknown, workspacePath: string | null | undefined): Promise<VisualValidationLaunchResult> {
+  async launchArtifact(input: unknown, workspacePath: string | null | undefined, fullAccess = false): Promise<VisualValidationLaunchResult> {
     const parsed = visualValidationRequestSchema.safeParse(input)
     const artifactPath = parsed.success ? parsed.data.artifactPath : String((input as { artifactPath?: unknown })?.artifactPath || '')
     if (!parsed.success) return { status: 'UNAVAILABLE', artifactPath, error: 'Invalid visual validation request.' }
 
-    const pathCheck = validatePathSafety(parsed.data.artifactPath, workspacePath)
+    const pathCheck = validatePathSafety(parsed.data.artifactPath, workspacePath, fullAccess)
     if (!pathCheck.safePath) return { status: 'UNAVAILABLE', artifactPath: parsed.data.artifactPath, error: `Security Violation: ${pathCheck.error}` }
     if (!this.fileExists(pathCheck.safePath)) return { status: 'UNAVAILABLE', artifactPath: parsed.data.artifactPath, error: 'Artifact does not exist.' }
     if (!this.statFile(pathCheck.safePath).isFile())
@@ -130,8 +130,9 @@ export class VisualValidationRunner {
     workspacePath: string | null | undefined,
     outputDirectory: string,
     signal?: AbortSignal,
+    fullAccess = false,
   ): Promise<VisualValidationEvidence | { status: 'UNAVAILABLE'; error: string }> {
-    const launch = await this.launchArtifact(input, workspacePath)
+    const launch = await this.launchArtifact(input, workspacePath, fullAccess)
     if (launch.status !== 'ready') return launch
     const request = visualValidationRequestSchema.parse(input)
     const outputPath = path.join(outputDirectory, 'preview.png')

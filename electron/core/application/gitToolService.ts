@@ -7,13 +7,19 @@ import type { ToolExecutionResult } from '../domain/agent/tools/toolExecutionCon
 interface GitToolDependencies {
   run: GitRun
   previewCommit(cwd: string, paths: readonly string[]): GitCommitPreview
+  previewAllCommit(cwd: string): GitCommitPreview
   commit(cwd: string, message: string, paths: readonly string[], expectedDiffHash: string): string
   markCommitBoundary(): void
 }
 
 /** Application service for Git tool operations. */
 export class GitToolService {
+  private fullAccess = false
   constructor(private readonly dependencies: GitToolDependencies) {}
+
+  setFullAccess(value: boolean): void {
+    this.fullAccess = value
+  }
 
   executeStatus(workspacePath: string | null | undefined): ToolExecutionResult {
     return executeGitStatus(workspacePath || process.cwd(), this.dependencies.run)
@@ -22,7 +28,7 @@ export class GitToolService {
   executeDiff(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): ToolExecutionResult {
     const cwd = workspacePath || process.cwd()
     const targetPath = parameters.filePath
-    const pathCheck = targetPath ? validatePathSafety(targetPath, workspacePath) : null
+    const pathCheck = targetPath ? validatePathSafety(targetPath, workspacePath, this.fullAccess) : null
     return executeGitDiff(cwd, targetPath, Boolean(parameters.staged), pathCheck, this.dependencies.run)
   }
 
@@ -39,6 +45,10 @@ export class GitToolService {
 
   previewCommit(cwd: string, paths: readonly string[]): GitCommitPreview {
     return this.dependencies.previewCommit(cwd, paths)
+  }
+
+  previewAllCommit(cwd: string): GitCommitPreview {
+    return this.dependencies.previewAllCommit(cwd)
   }
 
   commit(cwd: string, commitMessage: string, paths: readonly string[], expectedDiffHash: string): GitCommitResult {

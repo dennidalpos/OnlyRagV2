@@ -152,7 +152,7 @@ export function parseDuckDuckGoHtmlResults(html: string, maxResults: number = 8)
 export class WebClient {
   private userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 OnlyRagV2/1.0'
 
-  public validateUrlSafety(urlStr: string): { safeUrl: URL | null; error?: string } {
+  public validateUrlSafety(urlStr: string, fullAccess = false): { safeUrl: URL | null; error?: string } {
     if (!urlStr || typeof urlStr !== 'string') {
       return { safeUrl: null, error: 'Empty or invalid URL' }
     }
@@ -161,6 +161,7 @@ export class WebClient {
       if (u.protocol !== 'http:' && u.protocol !== 'https:') {
         return { safeUrl: null, error: `Forbidden protocol '${u.protocol}'. Only HTTP and HTTPS are permitted.` }
       }
+      if (fullAccess) return { safeUrl: u }
 
       // URL keeps IPv6 literals bracketed ("[::1]"), so compare the bare address.
       const host = u.hostname
@@ -254,9 +255,10 @@ export class WebClient {
     maxChars: number = 16000,
     signal?: AbortSignal,
     redirectCount = 0,
+    fullAccess = false,
   ): Promise<{ success: boolean; content?: string; rawHtml?: string; title?: string; error?: string }> {
     if (signal?.aborted) return { success: false, error: 'Request cancelled by AbortSignal' }
-    const urlCheck = this.validateUrlSafety(urlStr)
+    const urlCheck = this.validateUrlSafety(urlStr, fullAccess)
     if (!urlCheck.safeUrl) {
       return { success: false, error: urlCheck.error }
     }
@@ -275,7 +277,7 @@ export class WebClient {
             'Accept-Language': 'it,en-US;q=0.9,en;q=0.8',
           },
           timeout: 15000,
-          lookup: publicOnlyLookup,
+          lookup: fullAccess ? undefined : publicOnlyLookup,
         },
         (res) => {
           // Each hop is re-validated by the recursive call; the hop count is bounded.
@@ -285,7 +287,7 @@ export class WebClient {
               return resolve({ success: false, error: `Fetch exceeded ${MAX_FETCH_REDIRECTS} redirect hops.` })
             }
             const redirectUrl = new URL(res.headers.location, targetUrl).toString()
-            return this.fetchWebContent(redirectUrl, maxChars, signal, redirectCount + 1).then(resolve)
+            return this.fetchWebContent(redirectUrl, maxChars, signal, redirectCount + 1, fullAccess).then(resolve)
           }
 
           if (res.statusCode && res.statusCode >= 400) {
@@ -344,14 +346,15 @@ export class WebClient {
     workspaceRoot?: string | null,
     signal?: AbortSignal,
     redirectCount = 0,
+    fullAccess = false,
   ): Promise<{ success: boolean; downloadedBytes?: number; error?: string }> {
     if (signal?.aborted) return { success: false, error: 'Download cancelled by AbortSignal' }
-    const urlCheck = this.validateUrlSafety(urlStr)
+    const urlCheck = this.validateUrlSafety(urlStr, fullAccess)
     if (!urlCheck.safeUrl) {
       return { success: false, error: urlCheck.error }
     }
 
-    const pathCheck = validatePathSafety(targetFilePath, workspaceRoot)
+    const pathCheck = validatePathSafety(targetFilePath, workspaceRoot, fullAccess)
     if (!pathCheck.safePath) {
       return { success: false, error: pathCheck.error }
     }
@@ -398,7 +401,7 @@ export class WebClient {
             'User-Agent': this.userAgent,
           },
           timeout: 60000,
-          lookup: publicOnlyLookup,
+          lookup: fullAccess ? undefined : publicOnlyLookup,
         },
         (res) => {
           if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
@@ -409,20 +412,20 @@ export class WebClient {
               return resolve({ success: false, error: `Download exceeded ${MAX_DOWNLOAD_REDIRECTS} redirect hops.` })
             }
             const redirectUrl = new URL(res.headers.location, urlCheck.safeUrl!).toString()
-            return this.downloadFile(redirectUrl, targetFilePath, workspaceRoot, signal, redirectCount + 1).then(resolve)
+            return this.downloadFile(redirectUrl, targetFilePath, workspaceRoot, signal, redirectCount + 1, fullAccess).then(resolve)
           }
 
           if (res.statusCode && res.statusCode >= 400) {
             return cleanupAndFail(`HTTP ${res.statusCode} ${res.statusMessage || ''}`, false)
           }
 
-          if (!downloadMimeAllowed(res.headers['content-type'])) {
+          if (!fullAccess && !downloadMimeAllowed(res.headers['content-type'])) {
             return cleanupAndFail(`Download MIME type is not allowed: ${res.headers['content-type']}`, true)
           }
 
           res.on('data', (chunk) => {
             downloadedBytes += chunk.length
-            if (downloadedBytes === chunk.length && !downloadMimeAllowed(res.headers['content-type'], Buffer.from(chunk))) {
+            if (!fullAccess && downloadedBytes === chunk.length && !downloadMimeAllowed(res.headers['content-type'], Buffer.from(chunk))) {
               cleanupAndFail('Download content does not match declared MIME type.', true)
               return
             }

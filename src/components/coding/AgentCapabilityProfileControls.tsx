@@ -15,10 +15,18 @@ export const AgentCapabilityProfileControls: React.FC<AgentCapabilityProfileCont
   return (
     <fieldset disabled={disabled} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
       <legend className="px-1 text-[10px] font-bold uppercase tracking-wider text-cyan-300">{t('planInterview.runPermissions')}</legend>
+      <label className="flex items-center gap-2 text-xs font-semibold text-amber-200">
+        <input type="checkbox" checked={profile.fullAccess === true} onChange={(event) => onChange({ ...profile, fullAccess: event.target.checked })} />
+        {t('settings.agentFullAccess')}
+      </label>
+      <p className="text-[11px] text-amber-300" role="note">
+        {t('settings.agentFullAccessWarning')}
+      </p>
       <div className="grid gap-2 sm:grid-cols-2 text-xs">
         <label className="flex items-center gap-2 text-slate-200" title={t('planInterview.fileChangesHint')}>
           <input
             type="checkbox"
+            disabled={profile.fullAccess}
             checked={profile.allowFileModifications}
             onChange={(event) => onChange({ ...profile, allowFileModifications: event.target.checked })}
           />
@@ -27,6 +35,7 @@ export const AgentCapabilityProfileControls: React.FC<AgentCapabilityProfileCont
         <label className="flex items-center gap-2 text-slate-200" title={t('planInterview.terminalCommandsHint')}>
           <input
             type="checkbox"
+            disabled={profile.fullAccess}
             checked={profile.allowTerminalExecution}
             onChange={(event) => onChange({ ...profile, allowTerminalExecution: event.target.checked })}
           />
@@ -35,6 +44,7 @@ export const AgentCapabilityProfileControls: React.FC<AgentCapabilityProfileCont
         <label className="grid gap-1 text-slate-300" title={t('planInterview.networkHint')}>
           {t('planInterview.network')}
           <AppSelect
+            disabled={profile.fullAccess}
             value={profile.capabilityPolicyMode}
             onChange={(event) => onChange({ ...profile, capabilityPolicyMode: event.target.value as AgentCapabilityProfile['capabilityPolicyMode'] })}
             compact

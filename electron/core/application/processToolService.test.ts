@@ -42,6 +42,23 @@ describe('ProcessToolService run_command', () => {
     expect(execute).not.toHaveBeenCalled()
   })
 
+  it('passes a normally blocked command to the shell only with Full access', async () => {
+    const execute = vi.fn(async () => ({ stdout: 'simulated', stderr: '', code: 0 }))
+    const command = `Remove-Item -Recurse -Force ${hostRoot}`
+    const result = await createService(execute).executeRunCommand(
+      command,
+      path.join(hostRoot, 'workspace'),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      true,
+    )
+    expect(result).toMatchObject({ isFailure: false })
+    expect(execute).toHaveBeenCalledWith(command, expect.any(Function), undefined, expect.any(Number), undefined)
+  })
+
   it('requires a gate approval before spawning a confined mutation', async () => {
     const execute = vi.fn()
     const result = await createService(execute).executeRunCommand(

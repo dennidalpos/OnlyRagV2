@@ -165,7 +165,7 @@ export function isProtectedSystemDirectory(targetPath?: string | null): boolean 
 /**
  * Validates lexical path safety without rewriting opaque file or directory names.
  */
-export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null): { safePath: string | null; error?: string } {
+export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null, fullAccess = false): { safePath: string | null; error?: string } {
   if (!filePath || typeof filePath !== 'string' || !filePath.trim()) {
     return { safePath: null, error: 'Empty or invalid file path' }
   }
@@ -188,18 +188,18 @@ export function validatePathSafety(filePath?: string | null, workspaceRoot?: str
       resolvedPath = path.resolve(cleanPath)
     }
 
-    if (isSecretFile(resolvedPath)) {
+    if (!fullAccess && isSecretFile(resolvedPath)) {
       return { safePath: null, error: `Access forbidden: '${path.basename(resolvedPath)}' contains sensitive credentials/secrets.` }
     }
 
-    if (isProtectedSystemDirectory(resolvedPath)) {
+    if (!fullAccess && isProtectedSystemDirectory(resolvedPath)) {
       return {
         safePath: null,
         error: `Access forbidden: Path '${resolvedPath}' is inside a protected system directory (Program Files / Windows). Please select a user workspace directory.`,
       }
     }
 
-    if (resolvedRoot) {
+    if (resolvedRoot && !fullAccess) {
       if (!isPathWithinRoot(resolvedRoot, resolvedPath)) {
         return { safePath: null, error: `Directory Traversal Blocked: Path '${filePath}' is outside workspace root '${workspaceRoot}'.` }
       }

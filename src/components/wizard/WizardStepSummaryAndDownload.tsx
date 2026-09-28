@@ -2,8 +2,6 @@ import React from 'react'
 import { ShieldCheck, AlertTriangle, Download, Check, StopCircle } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { getModelApproxSize } from '../../services/hardwareRecommendationEngine'
-import type { AgentCapabilityProfile } from '../../types'
-import { AgentCapabilityProfileControls } from '../coding/AgentCapabilityProfileControls'
 
 export interface WizardStepSummaryAndDownloadProps {
   selectedCoding: string
@@ -26,8 +24,6 @@ export interface WizardStepSummaryAndDownloadProps {
   onRetryPull?: () => void
   onSkipCurrentPull?: () => void
   onFinishWithoutMissing?: () => void
-  capabilityProfile: AgentCapabilityProfile
-  onChangeCapabilityProfile: (profile: AgentCapabilityProfile) => void
 }
 
 export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownloadProps> = ({
@@ -51,8 +47,6 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
   onRetryPull,
   onSkipCurrentPull,
   onFinishWithoutMissing,
-  capabilityProfile,
-  onChangeCapabilityProfile,
 }) => {
   const { t } = useTranslation()
 
@@ -110,8 +104,6 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
           </div>
         </div>
       </div>
-
-      <AgentCapabilityProfileControls profile={capabilityProfile} onChange={onChangeCapabilityProfile} disabled={isPullingModels} />
 
       {/* Incomplete Warning */}
       {!isAllSlotsPopulated ? (

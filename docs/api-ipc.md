@@ -38,6 +38,8 @@ I comandi di esecuzione Agent Coding e tutti gli eventi `agent:*` della run incl
 
 Nel flusso Agent Coding la richiesta di approvazione `git_commit` include `commitDiff` e i soli `commitPaths` attribuiti alla run. Una richiesta del gate dei tool porta `reasons` (`workspace_mutation`, `network_access`, `external_installation`, `guided_review`): un'unica revisione copre tutti i motivi, e il modale li mostra nella lingua dell'interfaccia.
 
+`agent:start-task.capabilityProfile.fullAccess` è un booleano facoltativo, `false` per i piani precedenti. La run acquisisce il profilo all'avvio. Con `true`, Guided e Auto eseguono tool di file, shell, rete, installazione e commit senza gate di approvazione o limiti di percorso dell'app; `git_commit` include tutte le modifiche Git del progetto. Ask resta di sola lettura. Il sistema operativo continua ad applicare i propri permessi. I checkpoint persistenti coprono solo file del workspace, non le modifiche esterne o quelle eseguite dalla shell.
+
 Il payload di `workspace:write-file` porta anche `workspaceRoot`: il salvataggio editor applica lo stesso controllo realpath delle mutazioni Agent Coding.
 
 Le run Agent Coding di progetto lavorano nel workspace dell'utente; lo standalone opera nel workspace persistente dedicato `userData/agent-scratch`. `agent:restore-checkpoint` (`{ workspacePath, checkpointId }`) riporta i file modificati da una run allo stato precedente; viene rifiutato mentre una run lavora nello stesso workspace.

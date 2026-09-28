@@ -74,6 +74,7 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     ollamaHost: typeof raw.ollamaHost === 'string' && raw.ollamaHost.trim() ? raw.ollamaHost.trim() : defaults.ollamaHost,
     ollamaMode,
     capabilityPolicyMode,
+    fullAccess: raw.fullAccess === true,
     language,
     autoInstallHubSkills,
     autoInstallMinScore:

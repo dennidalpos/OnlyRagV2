@@ -47,6 +47,7 @@ export async function executeWriteFileTool(
   skillAdherence: (filePath: string, content: string, guidelines: string) => SkillAdherenceViolation | null,
   buildSkillRefusal: (filePath: string, violation: SkillAdherenceViolation) => string,
   dependencies: WriteFileDependencies,
+  fullAccess = false,
 ): Promise<ToolExecutionResult> {
   const filePath = parameters.filePath
   const content = parameters.content || ''
@@ -69,7 +70,7 @@ export async function executeWriteFileTool(
 
   if (targetKind === 'directory') {
     const dirPath = String(filePath)
-    const dirCheck = validatePathSafety(dirPath, workspacePath)
+    const dirCheck = validatePathSafety(dirPath, workspacePath, fullAccess)
     if (!dirCheck.safePath) {
       return {
         outcome: 'rejected',
@@ -94,7 +95,7 @@ export async function executeWriteFileTool(
     }
   }
 
-  const pathCheck = validatePathSafety(filePath, workspacePath)
+  const pathCheck = validatePathSafety(filePath, workspacePath, fullAccess)
   if (!pathCheck.safePath) {
     return {
       outcome: 'rejected',

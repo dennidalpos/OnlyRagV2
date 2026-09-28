@@ -15,10 +15,11 @@ export function executeListFilesRecursiveTool(
   parameters: AgentToolCall['parameters'],
   workspacePath: string | null | undefined,
   repository: RecursiveListingRepository,
+  fullAccess = false,
 ): ToolExecutionResult {
   const dirPath = parameters.dirPath || workspacePath || '.'
   const maxDepth = Math.max(1, Math.min(6, parameters.maxDepth || 3))
-  const pathCheck = validatePathSafety(dirPath, workspacePath)
+  const pathCheck = validatePathSafety(dirPath, workspacePath, fullAccess)
   if (!pathCheck.safePath) {
     return {
       outcome: 'rejected',

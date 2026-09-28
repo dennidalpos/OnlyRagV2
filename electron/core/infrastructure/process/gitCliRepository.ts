@@ -46,7 +46,7 @@ export class GitCliRepository {
 
   previewCommit(cwd: string, ownedPaths: readonly string[]): GitCommitPreview {
     const paths = this.normalizeOwnedPaths(cwd, ownedPaths)
-    if (paths.length === 0) throw new Error('No run-owned paths are available to commit.')
+    if (paths.length === 0) throw new Error('No selected paths are available to commit.')
 
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-git-index-'))
     const indexPath = path.join(tempDir, 'index')
@@ -66,17 +66,31 @@ export class GitCliRepository {
         timeout: 15000,
         stdio: ['pipe', 'pipe', 'pipe'],
       })
-      if (!diffText.trim()) throw new Error('Run-owned paths contain no changes to commit.')
+      if (!diffText.trim()) throw new Error('Selected paths contain no changes to commit.')
       return { paths, diffText, diffHash: createHash('sha256').update(diffText).digest('hex') }
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true })
     }
   }
 
+  previewAllCommit(cwd: string): GitCommitPreview {
+    const commands = [
+      ['diff', '--no-renames', '--name-only', '-z'],
+      ['diff', '--cached', '--no-renames', '--name-only', '-z'],
+      ['ls-files', '--others', '--exclude-standard', '-z'],
+    ]
+    const paths = commands.flatMap((args) =>
+      execFileSync('git', args, { cwd, encoding: 'utf-8', timeout: 15000, maxBuffer: GIT_DIFF_MAX_BUFFER, stdio: ['pipe', 'pipe', 'pipe'] })
+        .split('\0')
+        .filter(Boolean),
+    )
+    return this.previewCommit(cwd, paths)
+  }
+
   commit(cwd: string, message: string, ownedPaths: readonly string[], expectedDiffHash: string): string {
     const preview = this.previewCommit(cwd, ownedPaths)
     if (!expectedDiffHash || preview.diffHash !== expectedDiffHash) {
-      throw new Error('Run-owned changes changed after approval; review the updated diff before committing.')
+      throw new Error('Selected changes changed after the preview; review the updated diff before committing.')
     }
 
     execFileSync('git', ['add', '--', ...preview.paths], { cwd, encoding: 'utf-8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] })
@@ -89,7 +103,7 @@ export class GitCliRepository {
     })
     const stagedHash = createHash('sha256').update(stagedDiff).digest('hex')
     if (stagedHash !== expectedDiffHash) {
-      throw new Error('Staged changes differ from the approved diff; commit aborted.')
+      throw new Error('Staged changes differ from the previewed diff; commit aborted.')
     }
     return execFileSync('git', ['commit', '--only', '-m', message, '--', ...preview.paths], {
       cwd,

@@ -98,6 +98,7 @@ describe('PlanReviewCard', () => {
     expect(prepared.revision?.capabilityProfile).toEqual({
       allowFileModifications: true,
       allowTerminalExecution: true,
+      fullAccess: false,
       capabilityPolicyMode: 'network-approved',
       maxToolCallSteps: 200,
     })

@@ -718,6 +718,19 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.summary).toBe('Inspection complete.')
   })
 
+  it('keeps Ask read-only when Full access is selected', async () => {
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce(toolTurn('write_file', { filePath: 'ask-write.txt', content: 'blocked' }))
+      .mockResolvedValueOnce(toolTurn('finish', { summary: 'Inspection complete.' }))
+
+    await runAgentOrchestratorLoop(
+      { userTask: 'Inspect the codebase', agentMode: 'ask', workspacePath: tempDir, settings: { ...TOOL_ENABLED_SETTINGS, fullAccess: true } },
+      null,
+    )
+
+    expect(fs.existsSync(path.join(tempDir, 'ask-write.txt'))).toBe(false)
+  })
+
   it('should always pause for human approval on git_commit in Auto mode', async () => {
     const commitTurn = toolTurn('git_commit', { commitMessage: 'Add feature X' })
     const finishTurn = toolTurn('finish', { summary: 'Commit step handled.' })

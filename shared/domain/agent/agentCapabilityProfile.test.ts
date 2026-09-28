@@ -7,6 +7,7 @@ describe('Agent capability profile', () => {
     expect(resolveAgentCapabilityProfile()).toEqual({
       allowFileModifications: true,
       allowTerminalExecution: true,
+      fullAccess: false,
       capabilityPolicyMode: 'network-approved',
       maxToolCallSteps: DEFAULT_AGENT_STEP_BUDGET,
     })
@@ -23,6 +24,7 @@ describe('Agent capability profile', () => {
     ).toEqual({
       allowFileModifications: true,
       allowTerminalExecution: true,
+      fullAccess: false,
       capabilityPolicyMode: 'network-approved',
       maxToolCallSteps: 200,
     })
@@ -36,6 +38,11 @@ describe('Agent capability profile', () => {
       allowTerminalExecution: false,
       capabilityPolicyMode: 'offline-strict',
     })
+  })
+
+  it('keeps full access explicit and defaults old profiles to restricted access', () => {
+    expect(resolveAgentCapabilityProfile({ fullAccess: true }).fullAccess).toBe(true)
+    expect(resolveAgentCapabilityProfile({ allowFileModifications: true }).fullAccess).toBe(false)
   })
 
   it('preserves the unlimited sentinel and finite upper limit', () => {

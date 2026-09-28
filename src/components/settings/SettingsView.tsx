@@ -15,6 +15,7 @@ import {
   Volume2,
   Cpu,
   Layers,
+  Shield,
   Sparkles,
   Sliders,
   PowerOff,
@@ -45,6 +46,8 @@ import { buildOllamaModelOptions, getOllamaModelIdentity } from '../../services/
 import { ModelThinkingControl } from './ModelThinkingControl'
 import { ModelSamplingControl } from './ModelSamplingControl'
 import { CodingAgentDebugToggle } from './CodingAgentDebugToggle'
+import { AgentCapabilityProfileControls } from '../coding/AgentCapabilityProfileControls'
+import { resolveAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
 
 interface SettingsViewProps {
   diagnostics: DiagnosticsData | null
@@ -660,12 +663,27 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
         </section>
 
         {/* ========================================================================= */}
-        {/* SEZIONE 4: AGENTE, LIMITI DI ESECUZIONE & DEBUG                           */}
+        {/* SEZIONE 4: PERMESSI AGENT CODING                                          */}
+        {/* ========================================================================= */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2.5 px-1">
+            <Shield className="w-4.5 h-4.5 text-cyan-400" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">4. {t('settings.agentPermissionsSection')}</h2>
+          </div>
+
+          <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-3">
+            <p className="text-xs text-slate-400">{t('settings.agentPermissionsDefaults')}</p>
+            <AgentCapabilityProfileControls profile={resolveAgentCapabilityProfile(settings)} onChange={(profile) => onUpdateSettings(profile)} />
+          </div>
+        </section>
+
+        {/* ========================================================================= */}
+        {/* SEZIONE 5: AGENTE, LIMITI DI ESECUZIONE & DEBUG                           */}
         {/* ========================================================================= */}
         <section className="space-y-4">
           <div className="flex items-center gap-2.5 px-1">
             <Layers className="w-4.5 h-4.5 text-emerald-400" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">4. {t('settings.agentLimitsSection')}</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">5. {t('settings.agentLimitsSection')}</h2>
           </div>
 
           {/* Agent Execution Limits */}
@@ -705,7 +723,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
         </section>
 
         {/* ========================================================================= */}
-        {/* SEZIONE 5: INFORMAZIONI & RICONOSCIMENTI (ABOUT)                           */}
+        {/* SEZIONE 6: INFORMAZIONI & RICONOSCIMENTI (ABOUT)                           */}
         {/* ========================================================================= */}
         <div className="glass-panel rounded-xl p-5 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">

@@ -19,6 +19,7 @@ export async function executeRunTestsTool(
   onTerminalOutput?: (data: string) => void,
   onProcessSpawned?: (proc: ChildProcess) => void,
   signal?: AbortSignal,
+  fullAccess = false,
 ): Promise<ToolExecutionResult> {
   let execCmd = explicitCommand
   let detectionNote = ''
@@ -44,7 +45,7 @@ export async function executeRunTestsTool(
     detectionNote = ` (auto-detected: ${detected.source})`
   }
 
-  const secCheck = checkCommandSecurity(execCmd, workspacePath)
+  const secCheck = fullAccess ? { isAllowed: true, requiresApproval: false, sanitizedCommand: execCmd } : checkCommandSecurity(execCmd, workspacePath)
   if (!secCheck.isAllowed || secCheck.requiresApproval) {
     const message = { key: 'toolTestsBlocked', params: { command: execCmd } } as const
     return {

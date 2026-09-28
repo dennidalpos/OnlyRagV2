@@ -74,6 +74,35 @@ describe('AgentToolExecutorService Unit Tests', () => {
     expect(readRes.outputForHistory).toContain('Hello AI Agent')
   })
 
+  it('uses Full access for file tools outside the workspace without changing restricted runs', async () => {
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-full-access-'))
+    const outsidePath = path.join(outsideDir, '.env')
+    try {
+      const call = { tool: 'write_file' as const, parameters: { filePath: outsidePath, content: 'dummy=value' } }
+      const restricted = await agentToolExecutorService.executeTool(call, tempDir, settings)
+      expect(restricted.outcome).toBe('rejected')
+
+      const unrestricted = await agentToolExecutorService.executeTool(call, tempDir, { ...settings, fullAccess: true })
+      expect(unrestricted.outcome).toBe('success')
+      expect(fs.readFileSync(outsidePath, 'utf-8')).toBe('dummy=value')
+
+      const read = await agentToolExecutorService.executeTool({ tool: 'read_file', parameters: { filePath: outsidePath } }, tempDir, {
+        ...settings,
+        fullAccess: true,
+      })
+      expect(read.outputForHistory).toContain('dummy=value')
+
+      const deleteResult = await agentToolExecutorService.executeTool({ tool: 'delete_file', parameters: { filePath: outsidePath } }, tempDir, {
+        ...settings,
+        fullAccess: true,
+      })
+      expect(deleteResult.outcome).toBe('success')
+      expect(fs.existsSync(outsidePath)).toBe(false)
+    } finally {
+      fs.rmSync(outsideDir, { recursive: true, force: true })
+    }
+  })
+
   it('keeps application metadata out of Agent Coding file tools', async () => {
     for (const tool of [
       { tool: 'write_file', parameters: { filePath: '.onlyrag/sessions/history.json', content: '{}' } },
@@ -196,6 +225,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
       tempDir,
       path.join(tempDir, '.onlyrag', 'visual-validation'),
       undefined,
+      false,
     )
     expect(JSON.parse(result.outputForHistory)).toMatchObject({
       status: 'verified',

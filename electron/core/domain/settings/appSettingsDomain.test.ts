@@ -13,6 +13,7 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(defaults.allowFileModifications).toBe(true)
     expect(defaults.allowTerminalExecution).toBe(true)
     expect(defaults.capabilityPolicyMode).toBe('network-approved')
+    expect(defaults.fullAccess).toBe(false)
     expect(defaults.modelThinkingPreferences).toEqual({})
   })
 
@@ -25,6 +26,12 @@ describe('AppSettingsDomain Unit Tests', () => {
   it('preserves a valid capability policy mode and drops invalid values', () => {
     expect(sanitizeAppSettings({ capabilityPolicyMode: 'offline-strict' }).capabilityPolicyMode).toBe('offline-strict')
     expect(sanitizeAppSettings({ capabilityPolicyMode: 'auto' }).capabilityPolicyMode).toBe('network-approved')
+  })
+
+  it('requires an explicit boolean to enable full access', () => {
+    expect(sanitizeAppSettings({ fullAccess: true }).fullAccess).toBe(true)
+    expect(sanitizeAppSettings({ fullAccess: 'true' }).fullAccess).toBe(false)
+    expect(sanitizeAppSettings({}).fullAccess).toBe(false)
   })
 
   it('sanitizes independent per-model thinking preferences', () => {

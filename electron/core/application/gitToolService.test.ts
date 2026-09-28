@@ -5,6 +5,7 @@ describe('GitToolService', () => {
   const dependencies = (overrides: Partial<ConstructorParameters<typeof GitToolService>[0]> = {}) => ({
     run: vi.fn(() => ''),
     previewCommit: vi.fn(() => ({ paths: ['app.ts'], diffText: 'diff', diffHash: 'hash' })),
+    previewAllCommit: vi.fn(() => ({ paths: ['app.ts'], diffText: 'diff', diffHash: 'hash' })),
     commit: vi.fn(() => 'created'),
     markCommitBoundary: vi.fn(),
     ...overrides,

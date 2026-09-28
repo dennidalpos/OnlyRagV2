@@ -201,6 +201,7 @@ export function buildCurrentOperationContext(
   const constraints = [
     `mode=${ctx.fsmMode.getMode()}`,
     `workspace=${ctx.workspacePath || 'standalone'}`,
+    ctx.settings.fullAccess ? 'full access=enabled; files, commands, network and installs need no app approval' : '',
     `allowed tools=${toolPolicy.allowedTools.join(', ')}`,
     milestone?.notes ? `accepted decision=${milestone.notes}` : '',
   ].filter(Boolean)
@@ -228,7 +229,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     ctx.episodicCompactor.getEpisodes(),
     (command) => ctx.episodicCompactor.lastFailureOutputFor('run_command', command),
     ctx.episodicCompactor.getRecentFullLogs(),
-    ctx.settings.capabilityPolicyMode,
+    ctx.settings.fullAccess ? 'network-approved' : ctx.settings.capabilityPolicyMode,
     extractUserMandatedFirstCommand(ctx.userTask, ctx.stepCount === 1),
   )
   // The plan block carries the directive; without a plan the user's first command still reaches the model.
@@ -256,6 +257,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
         requiredTools: directive.requiredTools,
         agentMode: ctx.agentMode,
         capabilityPolicyMode: ctx.settings.capabilityPolicyMode,
+        fullAccess: ctx.settings.fullAccess === true,
       })
   emitLocalizedLog(ctx.emitLog, 'info', {
     key: 'toolPolicy',

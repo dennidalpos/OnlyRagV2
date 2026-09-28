@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Modal } from './Modal'
-import { AgentCapabilityProfile, AppSettings, DiagnosticsData } from '../../types'
+import { AppSettings, DiagnosticsData } from '../../types'
 import {
   analyzeHardwareAndRecommend,
   buildModelFitLookup,
@@ -16,7 +16,6 @@ import { WizardStepRecommendedModels } from '../wizard/WizardStepRecommendedMode
 import { WizardStepSummaryAndDownload } from '../wizard/WizardStepSummaryAndDownload'
 import { logger } from '../../lib/logger'
 import { buildHardwareWizardModelSuite } from '../../../shared/domain/hardware/hardwareModelCatalog'
-import { resolveAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
 import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
 import { buildSetupModelContextPreferences } from '../../../shared/domain/settings/setupModelContextPreferences'
 import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
@@ -65,7 +64,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const [selectedEmbedding, setSelectedEmbedding] = useState<string>(settings.embeddingModel || recommendedSuite.embedding)
 
   const [ocrEngine, setOcrEngine] = useState<'native_cuda' | 'vision_model'>(settings.ocrEngine || 'native_cuda')
-  const [capabilityProfile, setCapabilityProfile] = useState<AgentCapabilityProfile>(() => resolveAgentCapabilityProfile(settings))
 
   const [isInstallingOllama, setIsInstallingOllama] = useState(false)
   const [isPullingModels, setIsPullingModels] = useState(false)
@@ -99,7 +97,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       if (settings.visionModel) setSelectedVision(settings.visionModel)
       if (settings.embeddingModel) setSelectedEmbedding(settings.embeddingModel)
       if (settings.ocrEngine) setOcrEngine(settings.ocrEngine)
-      setCapabilityProfile(resolveAgentCapabilityProfile(settings))
       setPullErrorDetail(null)
       setFailedModelIndex(null)
       setSkippedModels([])
@@ -133,7 +130,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       ),
       ocrEngine,
       enableSoundEffects,
-      ...capabilityProfile,
       hasCompletedInitialSetup: true,
     })
     onClose()
@@ -148,7 +144,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     selectedEmbedding,
     ocrEngine,
     enableSoundEffects,
-    capabilityProfile,
     hardwareContext,
     settings,
     onClose,
@@ -385,7 +380,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       ),
       ocrEngine,
       enableSoundEffects,
-      ...capabilityProfile,
       hasCompletedInitialSetup: true,
     })
     onClose()
@@ -538,8 +532,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             onRetryPull={handleRetryPull}
             onSkipCurrentPull={handleSkipCurrentPull}
             onFinishWithoutMissing={handleFinalSave}
-            capabilityProfile={capabilityProfile}
-            onChangeCapabilityProfile={setCapabilityProfile}
           />
         )}
       </div>

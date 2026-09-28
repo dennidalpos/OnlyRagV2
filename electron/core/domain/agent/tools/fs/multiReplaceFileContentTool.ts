@@ -33,10 +33,11 @@ export async function executeMultiReplaceFileContentTool(
   contentVersion: (content: string) => string,
   /** Diagnostics for the file just written (the incremental typecheck), appended to the result. */
   checkWrittenFile: (absolutePath: string) => Promise<string> = async () => '',
+  fullAccess = false,
 ): Promise<ToolExecutionResult> {
   const filePath = parameters.filePath
   const replacements = (parameters.replacements || []) as Array<{ targetContent: string; replacementContent: string }>
-  const pathCheck = validatePathSafety(filePath, workspacePath)
+  const pathCheck = validatePathSafety(filePath, workspacePath, fullAccess)
   if (!pathCheck.safePath) {
     return {
       outcome: 'rejected',

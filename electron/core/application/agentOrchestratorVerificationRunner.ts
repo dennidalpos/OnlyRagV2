@@ -28,6 +28,7 @@ export async function runProjectVerification(
   workspacePath: string | null,
   onOutput?: (chunk: string) => void,
   signal?: AbortSignal,
+  fullAccess = false,
 ): Promise<VerificationRunResult> {
   if (!workspacePath) return { hasVerificationCommand: false, status: 'unverifiable' }
   if (signal?.aborted) return { hasVerificationCommand: false, status: 'unverifiable' }
@@ -58,7 +59,9 @@ export async function runProjectVerification(
   if (verifications.length === 0) return { hasVerificationCommand: false, status: 'unverifiable' }
 
   for (const verification of verifications) {
-    const security = checkCommandSecurity(verification.command, verification.projectRootPath)
+    const security = fullAccess
+      ? { isAllowed: true, requiresApproval: false, sanitizedCommand: verification.command }
+      : checkCommandSecurity(verification.command, verification.projectRootPath)
     if (!security.isAllowed || security.requiresApproval) {
       const result: VerificationRunResult = {
         hasVerificationCommand: true,

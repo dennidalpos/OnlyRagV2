@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Check, Pencil, Save, X } from 'lucide-react'
 import type { AgentCapabilityProfile, AgentPlan, PlanMilestone } from '../../types'
 import { resolveAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
-import { AgentCapabilityProfileControls } from './AgentCapabilityProfileControls'
 import { useTranslation, type TranslationKey } from '../../i18n'
 
 interface PlanReviewCardProps {
@@ -66,7 +65,6 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
   const [objective, setObjective] = useState(plan.objective)
   const [milestones, setMilestones] = useState<PlanMilestone[]>(plan.milestones)
   const [filePathInputs, setFilePathInputs] = useState(() => plan.milestones.map((milestone) => (milestone.filePaths || []).join(', ')))
-  const [capabilityProfile, setCapabilityProfile] = useState(() => resolveAgentCapabilityProfile(plan.capabilityProfile))
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -74,7 +72,6 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
     setObjective(plan.objective)
     setMilestones(plan.milestones)
     setFilePathInputs(plan.milestones.map((milestone) => (milestone.filePaths || []).join(', ')))
-    setCapabilityProfile(resolveAgentCapabilityProfile(plan.capabilityProfile))
     setError('')
   }, [plan.id, plan.version])
 
@@ -85,7 +82,6 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
     setObjective(plan.objective)
     setMilestones(plan.milestones)
     setFilePathInputs(plan.milestones.map((milestone) => (milestone.filePaths || []).join(', ')))
-    setCapabilityProfile(resolveAgentCapabilityProfile(plan.capabilityProfile))
     setError('')
     setIsEditing(false)
   }
@@ -95,7 +91,6 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
       plan,
       objective,
       milestones.map((milestone, index) => ({ ...milestone, filePaths: parseFilePaths(filePathInputs[index] || '') })),
-      capabilityProfile,
     )
     if (!prepared.revision) {
       setError(t(prepared.error || 'planReview.invalidRevision'))
@@ -208,7 +203,6 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
               </label>
             </div>
           ))}
-          <AgentCapabilityProfileControls profile={capabilityProfile} onChange={setCapabilityProfile} disabled={isSaving} />
           {error && (
             <p role="alert" className="text-[11px] text-rose-300">
               {error}

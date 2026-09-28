@@ -225,6 +225,8 @@ export interface AppSettings {
   embeddingModel?: string
   allowTerminalExecution?: boolean
   allowFileModifications?: boolean
+  /** Explicit opt-in for unrestricted Agent Coding tool access. */
+  fullAccess?: boolean
   /** Agent capability policy; sanitized settings always carry one (default network-approved). */
   capabilityPolicyMode: 'offline-strict' | 'local-only' | 'network-approved'
   ocrEngine: 'native_cuda' | 'vision_model'
@@ -266,6 +268,7 @@ export interface AppSettings {
 export interface AgentCapabilityProfile {
   allowFileModifications: boolean
   allowTerminalExecution: boolean
+  fullAccess?: boolean
   capabilityPolicyMode: 'offline-strict' | 'local-only' | 'network-approved'
   maxToolCallSteps: number
 }

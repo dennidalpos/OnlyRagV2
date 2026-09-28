@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { GripVertical } from 'lucide-react'
-import { AppSettings, DiagnosticsData } from '../../types'
+import { AppSettings, DiagnosticsData, type AgentCapabilityProfile } from '../../types'
 import { PromptConfigurationModal } from '../settings/PromptConfigurationModalLazy'
 import { WorkspaceExplorer } from './WorkspaceExplorer'
 import { CodingAgentLeftPanel } from './CodingAgentLeftPanel'
@@ -24,6 +24,9 @@ import { ArtifactPreviewPanel } from './ArtifactPreviewPanel'
 import type { AgentMode } from '../../types'
 import { logger } from '../../lib/logger'
 import { resolveConfiguredModel } from '../../../shared/domain/settings/configuredModel'
+import { resolveAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
+import { AgentCapabilityProfileControls } from './AgentCapabilityProfileControls'
+import { Modal } from '../common/Modal'
 
 export type { AgentMode }
 
@@ -79,6 +82,14 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
     const [isSkillHubOpen, setIsSkillHubOpen] = useState<boolean>(false)
     const [isPromptHistorySearchOpen, setIsPromptHistorySearchOpen] = useState<boolean>(false)
     const [isDiagnosticsModalOpen, setIsDiagnosticsModalOpen] = useState<boolean>(false)
+    const [isPermissionsOpen, setIsPermissionsOpen] = useState(false)
+    const [permissionsTab, setPermissionsTab] = useState<'defaults' | 'plan'>('defaults')
+    const [draftPlanProfile, setDraftPlanProfile] = useState<AgentCapabilityProfile>(() => resolveAgentCapabilityProfile(settings))
+    const [permissionsError, setPermissionsError] = useState(false)
+    useEffect(() => {
+      setDraftPlanProfile(resolveAgentCapabilityProfile(planApproval.currentPlan?.capabilityProfile))
+      setPermissionsError(false)
+    }, [planApproval.currentPlan?.id, planApproval.currentPlan?.version, planApproval.currentPlan?.capabilityProfile])
     const {
       activeRequest: activeSkillInstallRequest,
       approveInstall: approveSkillInstall,
@@ -154,6 +165,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
           onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
           onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
           onOpenPromptModal={() => c.setIsPromptModalOpen(true)}
+          onOpenPermissionsModal={() => setIsPermissionsOpen(true)}
         />
 
         {/* Main Workspace Split Layout */}
@@ -359,6 +371,72 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
 
         {/* Pending Approval Modal (Ask Mode) */}
         <PendingApprovalModal pendingApproval={c.pendingApproval} onApprove={c.handleApproveAction} onReject={c.handleRejectAction} />
+
+        <Modal
+          isOpen={isPermissionsOpen}
+          onClose={() => setIsPermissionsOpen(false)}
+          labelledById="agent-permissions-title"
+          panelClassName="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-xl w-full p-5 space-y-4"
+        >
+          <h2 id="agent-permissions-title" className="text-base font-bold text-slate-100">
+            {t('settings.agentPermissionsSection')}
+          </h2>
+          <div className="flex gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setPermissionsTab('defaults')}
+              className={`rounded-lg px-3 py-1.5 border ${permissionsTab === 'defaults' ? 'border-cyan-500 text-cyan-300' : 'border-slate-700 text-slate-400'}`}
+            >
+              {t('settings.agentPermissionsDefaults')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPermissionsTab('plan')}
+              className={`rounded-lg px-3 py-1.5 border ${permissionsTab === 'plan' ? 'border-cyan-500 text-cyan-300' : 'border-slate-700 text-slate-400'}`}
+            >
+              {t('settings.agentPermissionsPlan')}
+            </button>
+          </div>
+          {permissionsTab === 'defaults' && settings && onUpdateSettings && (
+            <AgentCapabilityProfileControls profile={resolveAgentCapabilityProfile(settings)} onChange={(profile) => onUpdateSettings(profile)} />
+          )}
+          {permissionsTab === 'plan' &&
+            (planApproval.currentPlan?.status === 'ready' ? (
+              <>
+                <AgentCapabilityProfileControls
+                  profile={draftPlanProfile}
+                  onChange={setDraftPlanProfile}
+                  disabled={c.isExecuting || planApproval.isSavingPlanReview}
+                />
+                {permissionsError && (
+                  <p role="alert" className="text-xs text-rose-300">
+                    {t('settings.agentPermissionsSaveFailed')}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  disabled={c.isExecuting || planApproval.isSavingPlanReview}
+                  onClick={() => {
+                    const currentPlan = planApproval.currentPlan
+                    if (!currentPlan) return
+                    void planApproval
+                      .savePlanReview({ ...currentPlan, capabilityProfile: resolveAgentCapabilityProfile(draftPlanProfile) })
+                      .then((saved) => setPermissionsError(!saved))
+                  }}
+                  className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-40"
+                >
+                  {t('settings.agentPermissionsSave')}
+                </button>
+              </>
+            ) : (
+              <p className="text-xs text-slate-400">{t('settings.agentPermissionsPlanUnavailable')}</p>
+            ))}
+          <div className="flex justify-end">
+            <button type="button" onClick={() => setIsPermissionsOpen(false)} className="text-xs text-slate-300">
+              {t('common.cancel')}
+            </button>
+          </div>
+        </Modal>
 
         {/* System Prompt Customization Modal */}
         {settings && onUpdateSettings && (

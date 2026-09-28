@@ -7,6 +7,7 @@ export function resolveAgentCapabilityProfile(input?: Partial<AppSettings | Agen
   return {
     allowFileModifications: input?.allowFileModifications !== false,
     allowTerminalExecution: input?.allowTerminalExecution !== false,
+    fullAccess: input?.fullAccess === true,
     capabilityPolicyMode:
       input?.capabilityPolicyMode === 'local-only' || input?.capabilityPolicyMode === 'offline-strict' ? input.capabilityPolicyMode : 'network-approved',
     maxToolCallSteps: normalizeAgentStepBudget(steps),

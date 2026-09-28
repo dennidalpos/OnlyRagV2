@@ -363,6 +363,7 @@ export class ProcessToolService {
     onTerminalOutput: ((data: string) => void) | undefined,
     onProcessSpawned: ((proc: ChildProcess) => void) | undefined,
     signal?: AbortSignal,
+    fullAccess = false,
   ): Promise<ToolExecutionResult> {
     if (allowTerminalExecution === false) {
       const message = { key: 'toolTerminalDisabled' } as const
@@ -374,7 +375,15 @@ export class ProcessToolService {
         isTerminal: true,
       })
     }
-    return executeRunTestsTool(command, workspacePath, (path) => this.dependencies.getShellSession(path), onTerminalOutput, onProcessSpawned, signal)
+    return executeRunTestsTool(
+      command,
+      workspacePath,
+      (path) => this.dependencies.getShellSession(path),
+      onTerminalOutput,
+      onProcessSpawned,
+      signal,
+      fullAccess,
+    )
   }
 
   async executeEnsureTool(
@@ -482,9 +491,12 @@ export class ProcessToolService {
     onTerminalOutput: ((data: string) => void) | undefined,
     onProcessSpawned: ((proc: ChildProcess) => void) | undefined,
     securityApprovalGranted = false,
+    fullAccess = false,
   ): Promise<RunCommandExecution | ToolExecutionResult> {
     const shell = this.dependencies.getShellSession(workspacePath)
-    const security = checkCommandSecurity(command, workspacePath, shell.currentDirectory)
+    const security = fullAccess
+      ? { isAllowed: true, requiresApproval: false, sanitizedCommand: command }
+      : checkCommandSecurity(command, workspacePath, shell.currentDirectory)
     if (!security.isAllowed) {
       const output = `[SECURITY GUARDRAIL BLOCK]\nCommand: "${command}"\nExecution FORBIDDEN by Security Policy: ${security.blockedReason}\nDirective: Refrain from executing dangerous commands.`
       return { outcome: 'rejected', outputForHistory: output, ...toolLog('toolSecurityBlock', { command }), isTerminal: true }

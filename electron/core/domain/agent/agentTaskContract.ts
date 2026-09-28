@@ -20,6 +20,7 @@ const capabilityProfileSchema = z
   .object({
     allowFileModifications: z.boolean(),
     allowTerminalExecution: z.boolean(),
+    fullAccess: z.boolean().optional(),
     capabilityPolicyMode: z.enum(['offline-strict', 'local-only', 'network-approved']),
     maxToolCallSteps: z.number().int().nonnegative(),
   })

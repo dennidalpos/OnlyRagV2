@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { recordToolPolicyDenial, runToolGates } from './agentOrchestratorToolGates'
+import { agentToolExecutorService } from './agentToolExecutorService'
 import { AgentProgressPolicy, PROGRESS_BUDGET } from '../domain/agent/agentProgressPolicy'
 import type { AgentGuardEvent } from '../../../shared/types'
 
@@ -133,6 +134,49 @@ describe('runToolGates structured command safety', () => {
 
     expect(result).toEqual({ outcome: 'denied', feedback: expect.stringContaining('[COMMAND SAFETY DENIED]') })
     expect(requestApproval).not.toHaveBeenCalled()
+  })
+})
+
+describe('runToolGates full access', () => {
+  const base = {
+    fsmMode: { isToolAllowed: vi.fn(() => true), filterAllowedTools: vi.fn(() => []), getMode: vi.fn(() => 'ASK') } as never,
+    workspacePath: path.join(hostRoot, 'workspace'),
+    stepCount: 1,
+    episodicCompactor: { recordStep: vi.fn() } as never,
+    capabilityPolicyMode: 'offline-strict' as const,
+    fullAccess: true,
+    emitLog: vi.fn(),
+    requestApproval: vi.fn(),
+    allowedToolsForTurn: ['read_file'] as const,
+  }
+
+  it('allows Guided commands and installations without application approval', async () => {
+    for (const parsedTool of [
+      { tool: 'run_command' as const, parameters: { command: `Remove-Item -Recurse -Force ${hostRoot}` } },
+      { tool: 'ensure_tool' as const, parameters: { toolName: 'git' } },
+    ]) {
+      const result = await runToolGates({ ...base, agentMode: 'guided', parsedTool })
+      expect(result).toMatchObject({ outcome: 'allowed', toolCallForExecution: parsedTool })
+    }
+    expect(base.requestApproval).not.toHaveBeenCalled()
+  })
+
+  it('keeps Ask read-only with full access selected', async () => {
+    const result = await runToolGates({ ...base, agentMode: 'ask', parsedTool: { tool: 'write_file', parameters: { filePath: 'x', content: 'x' } } })
+    expect(result.outcome).toBe('denied')
+    expect(base.requestApproval).not.toHaveBeenCalled()
+  })
+
+  it('prepares a commit without requesting approval', async () => {
+    const preview = vi.spyOn(agentToolExecutorService, 'previewGitCommit').mockReturnValue({ paths: ['a.txt'], diffText: 'diff', diffHash: 'hash' } as never)
+    try {
+      const result = await runToolGates({ ...base, agentMode: 'auto', parsedTool: { tool: 'git_commit', parameters: { commitMessage: 'test' } } })
+      expect(result).toMatchObject({ outcome: 'allowed', toolCallForExecution: { parameters: { commitPaths: ['a.txt'], commitDiff: 'diff' } } })
+      expect(preview).toHaveBeenCalledWith(base.workspacePath, undefined, true)
+      expect(base.requestApproval).not.toHaveBeenCalled()
+    } finally {
+      preview.mockRestore()
+    }
   })
 })
 

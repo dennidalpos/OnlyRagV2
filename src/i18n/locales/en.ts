@@ -629,6 +629,16 @@ export const en: TranslationSchema = {
     modelsWeightsSection: 'AI Models & Per-Module Assignment',
     ollamaManagementDesc: 'Download or delete models locally from Ollama.',
     agentLimitsSection: 'Coding Agent Limits & Debugging',
+    agentPermissionsSection: 'Agent Coding permissions',
+    agentPermissionsOpen: 'Agent permissions',
+    agentPermissionsDefaults: 'Defaults for new runs',
+    agentPermissionsPlan: 'Current plan',
+    agentPermissionsPlanUnavailable: 'Open a ready plan to edit its permissions.',
+    agentPermissionsSave: 'Save plan permissions',
+    agentPermissionsSaveFailed: 'Could not save plan permissions.',
+    agentFullAccess: 'Full access and free installation',
+    agentFullAccessWarning:
+      'The agent can read and change files outside the project, run commands, install, and commit all Git changes in the project without confirmation. Operating system privileges remain those of the current user. Checkpoints cover only tracked workspace files; external changes and shell commands have no guaranteed restore.',
   },
   about: {
     title: 'About OnlyRag V2',

@@ -8,8 +8,8 @@ import { isIgnoredPath, isSecretFile, validatePathSafety as domainValidatePathSa
 import { MAX_FILE_READ_BYTES, MAX_PROJECT_MAP_DEPTH, MAX_SEARCH_FILE_BYTES, MAX_SEARCH_MATCHES } from '../../domain/agent/ioLimits'
 import { errorCode, errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
-export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null): string | null {
-  const result = domainValidatePathSafety(filePath, workspaceRoot)
+export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null, fullAccess = false): string | null {
+  const result = domainValidatePathSafety(filePath, workspaceRoot, fullAccess)
   if (!result.safePath) {
     if (result.error) {
       logger.log('WARN', 'WorkspaceRepo', `Path safety validation rejected '${filePath}': ${result.error}`)
@@ -20,10 +20,15 @@ export function validatePathSafety(filePath?: string | null, workspaceRoot?: str
 }
 
 export class FileSystemRepository {
+  private fullAccess = false
   constructor(private readonly versionedCommitInterleave?: (filePath: string) => void) {}
 
+  setFullAccess(value: boolean): void {
+    this.fullAccess = value
+  }
+
   async listFiles(targetPath: string) {
-    const rootDir = validatePathSafety(targetPath)
+    const rootDir = validatePathSafety(targetPath, undefined, this.fullAccess)
     if (!rootDir) return []
 
     try {
@@ -34,7 +39,7 @@ export class FileSystemRepository {
       const result = []
 
       for (const entry of entries) {
-        if (isIgnoredPath(entry.name, entry.isDirectory())) continue
+        if (!this.fullAccess && isIgnoredPath(entry.name, entry.isDirectory())) continue
         const fullPath = path.join(rootDir, entry.name)
         let sizeBytes = 0
         if (!entry.isDirectory()) {
@@ -65,7 +70,7 @@ export class FileSystemRepository {
     startLine?: number,
     endLine?: number,
   ): Promise<{ success: boolean; content?: string; contentHash?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }> {
-    const resolved = validatePathSafety(filePath)
+    const resolved = validatePathSafety(filePath, undefined, this.fullAccess)
     if (!resolved) return { success: false, error: 'Invalid file path' }
 
     try {
@@ -102,7 +107,7 @@ export class FileSystemRepository {
   }
 
   async deleteFile(filePath: string): Promise<{ success: boolean; error?: string }> {
-    const resolved = validatePathSafety(filePath)
+    const resolved = validatePathSafety(filePath, undefined, this.fullAccess)
     if (!resolved) return { success: false, error: 'Invalid file path' }
 
     try {
@@ -124,7 +129,7 @@ export class FileSystemRepository {
   }
 
   async writeFile(filePath: string, content: string): Promise<{ success: boolean; error?: string }> {
-    const resolved = validatePathSafety(filePath)
+    const resolved = validatePathSafety(filePath, undefined, this.fullAccess)
     if (!resolved) return { success: false, error: 'Invalid file path' }
 
     try {
@@ -145,7 +150,7 @@ export class FileSystemRepository {
     expectedContentHash: string | undefined,
     recordCommittedWrite: (originalContent: string | null) => void,
   ): { success: boolean; error?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean } {
-    const resolved = validatePathSafety(filePath)
+    const resolved = validatePathSafety(filePath, undefined, this.fullAccess)
     if (!resolved) return { success: false, error: 'Invalid file path' }
 
     let tempPath: string | undefined
@@ -204,7 +209,7 @@ export class FileSystemRepository {
     filePath: string,
     replacements: { targetContent: string; replacementContent: string }[],
   ): Promise<{ success: boolean; replacedCount?: number; error?: string }> {
-    const resolved = validatePathSafety(filePath)
+    const resolved = validatePathSafety(filePath, undefined, this.fullAccess)
     if (!resolved) return { success: false, error: 'Invalid file path' }
 
     try {
@@ -261,9 +266,10 @@ export class FileSystemRepository {
     isRegex?: boolean,
     caseInsensitive?: boolean,
   ): Promise<{ filePath: string; relativePath: string; lineNumber: number; lineContent: string }[]> {
-    const rootDir = validatePathSafety(dirPath)
+    const rootDir = validatePathSafety(dirPath, undefined, this.fullAccess)
     if (!rootDir || !fs.existsSync(rootDir)) return []
     const safeRootDir = rootDir
+    const fullAccess = this.fullAccess
 
     const IGNORED_NAMES = new Set(['.git', 'node_modules', 'dist', 'dist-electron', '.venv', 'build', 'sidecar_dist', '__pycache__'])
     const BINARY_EXTENSIONS = new Set([
@@ -316,9 +322,9 @@ export class FileSystemRepository {
         const entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
         for (const entry of entries) {
           if (results.length >= MAX_SEARCH_MATCHES) break
-          if (IGNORED_NAMES.has(entry.name)) continue
+          if (!fullAccess && IGNORED_NAMES.has(entry.name)) continue
           // Links can lead outside the workspace, and secret files stay unreadable as with read_file.
-          if (entry.isSymbolicLink() || isSecretFile(entry.name)) continue
+          if (!fullAccess && (entry.isSymbolicLink() || isSecretFile(entry.name))) continue
 
           const fullPath = path.join(currentDir, entry.name)
           if (entry.isDirectory()) {
@@ -364,7 +370,7 @@ export class FileSystemRepository {
     filePath: string,
     filterKind?: string,
   ): Promise<{ success: boolean; symbols?: CodeSymbolItem[]; totalCount?: number; error?: string }> {
-    const resolved = validatePathSafety(filePath)
+    const resolved = validatePathSafety(filePath, undefined, this.fullAccess)
     if (!resolved) return { success: false, error: 'Invalid file path' }
 
     try {

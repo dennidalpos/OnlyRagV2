@@ -17,7 +17,12 @@ interface BrowserToolDependencies {
 
 /** Application service for safe local artifact and URL previews. */
 export class BrowserToolService {
+  private fullAccess = false
   constructor(private readonly dependencies: BrowserToolDependencies) {}
+
+  setFullAccess(value: boolean): void {
+    this.fullAccess = value
+  }
 
   async executeOpenInBrowser(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): Promise<ToolExecutionResult> {
     const filePath = parameters.filePath || parameters.path
@@ -41,7 +46,7 @@ export class BrowserToolService {
       }
 
       if (filePath) {
-        const pathCheck = validatePathSafety(filePath, workspacePath)
+        const pathCheck = validatePathSafety(filePath, workspacePath, this.fullAccess)
         if (!pathCheck.safePath) {
           return {
             outcome: 'rejected',
@@ -49,7 +54,7 @@ export class BrowserToolService {
             logMessage: `Open in Browser Rejected: ${pathCheck.error}`,
           }
         }
-        if (!PREVIEWABLE_EXTENSIONS.has(path.extname(pathCheck.safePath).toLowerCase())) {
+        if (!this.fullAccess && !PREVIEWABLE_EXTENSIONS.has(path.extname(pathCheck.safePath).toLowerCase())) {
           return {
             outcome: 'rejected',
             outputForHistory: `Security Violation: open_in_browser only previews ${[...PREVIEWABLE_EXTENSIONS].join(', ')} files, not ${path.basename(filePath)}.`,

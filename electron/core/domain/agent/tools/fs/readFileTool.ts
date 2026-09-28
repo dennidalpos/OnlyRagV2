@@ -40,10 +40,11 @@ function readFailureAsWorkspaceFact(
   safePath: string,
   workspacePath: string | null | undefined,
   repository: ListDirectoryRepository,
+  fullAccess = false,
 ): ToolExecutionResult | null {
   const entries = listingOrNull(repository, safePath)
   if (entries) {
-    const listing = executeListDirectoryTool({ dirPath: targetPath }, workspacePath, repository)
+    const listing = executeListDirectoryTool({ dirPath: targetPath }, workspacePath, repository, fullAccess)
     return {
       ...listing,
       outputForHistory: `[READ_FILE ON DIRECTORY: ${targetPath}] "${targetPath}" is a directory, so it was listed instead. Call read_file on one of its files.\n${listing.outputForHistory}`,
@@ -53,7 +54,7 @@ function readFailureAsWorkspaceFact(
   if (entries === undefined) return null
 
   const parentPath = path.dirname(safePath)
-  const parentCheck = validatePathSafety(parentPath, workspacePath)
+  const parentCheck = validatePathSafety(parentPath, workspacePath, fullAccess)
   const parentLabel = workspacePath ? path.relative(path.resolve(workspacePath), parentPath).replace(/\\/g, '/') || '.' : parentPath
   const parentEntries = parentCheck.safePath ? listingOrNull(repository, parentCheck.safePath) : undefined
   const parentListing = parentEntries
@@ -72,9 +73,10 @@ export async function executeReadFileTool(
   workspacePath: string | null | undefined,
   repository: ReadFileRepository,
   directoryRepository?: ListDirectoryRepository,
+  fullAccess = false,
 ): Promise<ToolExecutionResult> {
   const targetPath = parameters.filePath
-  const pathCheck = validatePathSafety(targetPath, workspacePath)
+  const pathCheck = validatePathSafety(targetPath, workspacePath, fullAccess)
   if (!pathCheck.safePath) {
     return {
       outcome: 'rejected',
@@ -103,7 +105,9 @@ export async function executeReadFileTool(
     }
   }
 
-  const workspaceFact = directoryRepository ? readFailureAsWorkspaceFact(String(targetPath), pathCheck.safePath, workspacePath, directoryRepository) : null
+  const workspaceFact = directoryRepository
+    ? readFailureAsWorkspaceFact(String(targetPath), pathCheck.safePath, workspacePath, directoryRepository, fullAccess)
+    : null
   if (workspaceFact) return workspaceFact
 
   return {

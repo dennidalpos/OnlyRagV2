@@ -167,6 +167,24 @@ describe('runToolGates full access', () => {
     expect(base.requestApproval).not.toHaveBeenCalled()
   })
 
+  it('blocks recursive cleanup after failed lint while preserving other Full access commands', async () => {
+    const episodes = [{ tool: 'run_command', target: 'npm run lint', status: 'FAILURE' }]
+    const recordStep = vi.fn()
+    const context = { ...base, agentMode: 'auto' as const, episodicCompactor: { getEpisodes: () => episodes, recordStep } as never }
+    for (const command of ['Remove-Item -Recurse -Force dist', 'rm -rf node_modules']) {
+      const result = await runToolGates({ ...context, parsedTool: { tool: 'run_command', parameters: { command } } })
+      expect(result).toMatchObject({ outcome: 'denied', feedback: expect.stringContaining('[LINT RECOVERY BLOCKED]') })
+    }
+    expect(recordStep).toHaveBeenCalledTimes(2)
+    expect(await runToolGates({ ...context, parsedTool: { tool: 'run_command', parameters: { command: 'npm run typecheck' } } })).toMatchObject({
+      outcome: 'allowed',
+    })
+    episodes[0].target = 'npx eslint .'
+    expect(await runToolGates({ ...context, parsedTool: { tool: 'run_command', parameters: { command: 'rmdir /s /q dist' } } })).toMatchObject({
+      outcome: 'denied',
+    })
+  })
+
   it('prepares a commit without requesting approval', async () => {
     const preview = vi.spyOn(agentToolExecutorService, 'previewGitCommit').mockReturnValue({ paths: ['a.txt'], diffText: 'diff', diffHash: 'hash' } as never)
     try {

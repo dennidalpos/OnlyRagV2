@@ -85,14 +85,15 @@ export function resolveVerificationCommands(manifest: WorkspaceManifest): Verifi
     }
   }
 
-  // Fall back to tsc --noEmit when tsconfig exists but no typecheck script is declared
+  // Fall back to the installed compiler before lint can become the primary check.
   const hasTypecheck = commands.some((c) => c.kind === 'typecheck')
-  if (!hasTypecheck && manifest.hasFile('tsconfig.json')) {
-    commands.push({
+  if (!hasTypecheck && manifest.hasFile('tsconfig.json') && manifest.hasFile('node_modules/typescript/bin/tsc')) {
+    const lintIndex = commands.findIndex((command) => command.kind === 'lint')
+    commands.splice(lintIndex < 0 ? commands.length : lintIndex, 0, {
       kind: 'typecheck',
-      command: 'npx tsc --noEmit',
+      command: 'node node_modules/typescript/bin/tsc --noEmit',
       coverage: 'whole-project',
-      source: 'tsconfig.json present, no typecheck script declared',
+      source: 'tsconfig.json and installed TypeScript compiler, no typecheck script declared',
     })
   }
 

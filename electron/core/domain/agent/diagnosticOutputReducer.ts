@@ -14,6 +14,30 @@ const FILE_LINE_REGEX =
   /(?:at\s+(?:.*?\()|at\s+|in\s+|^|\s)([a-zA-Z]:[\\/][^\s:]+\.(?:ts|tsx|js|jsx|py|json)|[a-zA-Z0-9_./\\-]+\.(?:ts|tsx|js|jsx|py|json)):(\d+)(?::(\d+))?/i
 
 export class DiagnosticOutputReducer {
+  /** Keeps the first actionable project error when generated output floods ESLint's report. */
+  public static summarizeLintFailure(output: string): string {
+    const lines = this.stripAnsi(output).split(/\r?\n/)
+    const generated = lines.some((line) => /[\\/](?:dist|build)[\\/]/i.test(line))
+    const firstProjectFile = lines.findIndex(
+      (line) => /(?:[\\/]src[\\/]|(?:^|[\\/])(?:eslint|vite|tailwind|postcss)\.config\.)/i.test(line) && /\.(?:[cm]?[jt]sx?)\s*$/i.test(line.trim()),
+    )
+    const firstFile = firstProjectFile >= 0 ? firstProjectFile : lines.findIndex((line) => /\.(?:[cm]?[jt]sx?)\s*$/i.test(line.trim()))
+    const excerpt = firstFile >= 0 ? lines.slice(firstFile, Math.min(firstFile + 5, lines.length)).join('\n') : lines.slice(0, 8).join('\n')
+    const summary = [...lines].reverse().find((line) => /\d+ problems? \(|\d+ errors?\b/i.test(line)) || ''
+    return [
+      '[ESLINT FAILURE SUMMARY]',
+      generated
+        ? 'Generated dist/build output appears in the lint report. Exclude it in the ESLint configuration or .eslintignore; do not delete it to repair lint.'
+        : '',
+      'First project diagnostic:',
+      excerpt,
+      summary,
+      'When passing a temporary ESLint option through npm, use npm run lint -- --ignore-pattern dist/**.',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
   public static stripAnsi(text: string): string {
     if (!text) return ''
     return stripAnsi(text)

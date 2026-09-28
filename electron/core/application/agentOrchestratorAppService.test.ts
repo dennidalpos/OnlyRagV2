@@ -140,7 +140,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.completionStatus).toBe('blocked')
   })
 
-  it('closes a verified plan from application evidence without requesting another model turn', async () => {
+  it('rejects a saved verified plan without check evidence before requesting another model turn', async () => {
     const sessionId = 'verified-plan-closure'
     await agentSessionStateRepository.seedPlanMilestones(
       sessionId,
@@ -151,12 +151,12 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     const result = await runAgentOrchestratorLoop({ userTask: 'Document the project', agentMode: 'auto', workspacePath: tempDir, sessionId }, null)
 
-    expect(AgentStreamTransport.streamCompletion).not.toHaveBeenCalled()
-    expect(result.completionStatus).toBe('unverifiable')
-    expect(result.summary).toContain('Tutte le milestone operative sono verificate')
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalled()
+    expect(result.completionStatus).toBe('blocked')
+    expect(result.summary).toContain('milestone')
   })
 
-  it('puts the persisted session tracker in the changing turn context', async () => {
+  it('puts a refused milestone promotion in the changing turn context', async () => {
     const sessionId = 'tracker-turn-context'
     await agentSessionStateRepository.seedPlanMilestones(
       sessionId,
@@ -176,7 +176,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const calls = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls
     expect(calls[0][0].messages.at(-1)?.content).not.toContain('completed_tasks:')
     expect(calls[1][0].messages[0].content).not.toContain('completed_tasks:')
-    expect(calls[1][0].messages.at(-1)?.content).toContain('completed_tasks:\n- [x] m-1: Review the existing files')
+    expect(calls[1][0].messages.at(-1)?.content).toContain('[UPDATE_PLAN REJECTED: VERIFICATION REFUSED]')
+    expect(calls[1][0].messages.at(-1)?.content).not.toContain('completed_tasks:\n- [x] m-1: Review the existing files')
   })
 
   it('should route finish through the application evidence gate and persist the model report', async () => {

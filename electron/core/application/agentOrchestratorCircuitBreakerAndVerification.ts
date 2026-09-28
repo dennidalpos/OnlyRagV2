@@ -9,7 +9,8 @@ import {
   findUnsatisfiedDeliverables,
   AWAITING_VERIFICATION_MARKER,
 } from '../../../shared/domain/agent/milestoneDeliverableResolver'
-import { captureMilestoneFileEvidence, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
+import { captureMilestoneFileEvidence, captureWorkspaceVersion, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
+import { unreachableUiDeliverables } from '../infrastructure/filesystem/workspaceUiReachability'
 import {
   awaitingVerificationNote,
   partialDeliveryDirective,
@@ -305,7 +306,9 @@ export function selectMilestonesAwaitingVerification(
 ): { id: string; title: string }[] {
   if (!deps.workspacePath) return []
   const probe = createWorkspaceDeliverableProbe(deps.workspacePath)
-  return selectMilestonesProvenByVerification(deps.goalPlanner.getMilestones(), verificationCommand, (m) => resolveMilestoneDeliverableStatus(m, probe))
+  return selectMilestonesProvenByVerification(deps.goalPlanner.getMilestones(), verificationCommand, (m) =>
+    unreachableUiDeliverables(deps.workspacePath!, m).length > 0 ? 'unsatisfied' : resolveMilestoneDeliverableStatus(m, probe),
+  )
 }
 
 /**
@@ -319,11 +322,15 @@ export function promoteMilestonesProvenBy(
   const proven = selectMilestonesAwaitingVerification(deps, verificationCommand).filter((milestone) => milestone.id === active?.id)
   if (proven.length === 0) return 0
 
+  const workspaceVersion = deps.workspacePath ? captureWorkspaceVersion(deps.workspacePath) : undefined
+  if (!workspaceVersion) return 0
+
   for (const milestone of proven) {
     const target = deps.goalPlanner.getMilestones().find((candidate) => candidate.id === milestone.id)
     if (target && deps.workspacePath) {
       const fileEvidence = captureMilestoneFileEvidence(deps.workspacePath, target)
       if (fileEvidence) target.fileEvidence = fileEvidence
+      target.verificationEvidence = { command: verificationCommand, passed: true, checkedAt: new Date().toISOString(), workspaceVersion }
     }
     deps.goalPlanner.updateMilestone(milestone.id, 'verified', promotionNote(verificationCommand))
   }
@@ -424,6 +431,7 @@ export function resolvePlanDirectiveForTurn(
     verificationFailureTargetFile: lastVerificationFailureOutput ? diagnosticFixTargetFile(lastVerificationFailureOutput, workspaceFacts) : null,
     verificationFailureTools: lastVerificationFailureOutput ? diagnosticFixRequiredTools(lastVerificationFailureOutput, workspaceFacts) : [],
     disconnectedEntrypoint: resolveDisconnectedEntrypoint(workspacePath, probe),
+    unreachableUiFiles: goalPlanner.getActiveMilestone() ? unreachableUiDeliverables(workspacePath, goalPlanner.getActiveMilestone()!) : [],
     packageTestScript: manifest.packageJson ? (manifest.packageJson.scripts?.test ?? null) : undefined,
     declaredPackages: declared,
     behaviorVerificationFailing: isBehaviorTestFailing(episodes),

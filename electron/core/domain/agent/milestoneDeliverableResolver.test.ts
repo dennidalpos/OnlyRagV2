@@ -4,6 +4,7 @@ import {
   findModuleExtensionAliases,
   isDeliverableOfMilestone,
   isPlaceholderContent,
+  resolveDeclaredFilePaths,
   resolveMilestoneDeliverableStatus,
   type DeliverableProbe,
 } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
@@ -52,6 +53,15 @@ describe('extractDeliverablePaths', () => {
 })
 
 describe('resolveMilestoneDeliverableStatus', () => {
+  it('treats a single leading slash in a plan as the workspace root', () => {
+    const milestone = { title: 'Install dependencies', filePaths: ['/package.json'] }
+    const probe = probeFrom({ 'package.json': '{"name":"dashboard"}' })
+
+    expect(resolveDeclaredFilePaths(milestone)).toEqual(['package.json'])
+    expect(resolveMilestoneDeliverableStatus(milestone, probe)).toBe('satisfied')
+    expect(resolveDeclaredFilePaths({ title: 'Remote path', filePaths: ['//server/package.json'] })).toEqual(['//server/package.json'])
+  })
+
   it('uses structured file declarations without parsing the title', () => {
     const milestone = { title: 'Finish the pending work', filePaths: ['src/task.ts'] }
     const probe = probeFrom({ 'src/task.ts': 'export const done = true' })

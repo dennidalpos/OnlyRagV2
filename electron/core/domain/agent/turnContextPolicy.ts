@@ -72,6 +72,7 @@ export function resolveTurnContextPolicy(kind: PlanDirectiveKind): TurnContextPo
       return codeFixOnly('adding the package.json "test" script — code context only')
 
     case 'entrypoint_disconnected':
+    case 'ui_module_disconnected':
       return {
         includeProjectMap: false,
         includeAttachedRag: false,

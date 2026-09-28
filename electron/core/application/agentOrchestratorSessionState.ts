@@ -14,7 +14,8 @@ import { agentSessionStateRepository } from '../infrastructure/filesystem/agentS
 import type { SavedAgentSessionState } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import { AgentExecutionPhaseController } from '../domain/agent/agentExecutionPhase'
-import { captureMilestoneFileEvidence, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
+import { captureMilestoneFileEvidence, captureWorkspaceVersion, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
+import { unreachableUiDeliverables } from '../infrastructure/filesystem/workspaceUiReachability'
 import { resolveDeclaredFilePaths, resolveMilestoneDeliverableStatus } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 
 import type { EmitLog } from './agentOrchestratorTypes'
@@ -93,10 +94,17 @@ export function selectSavedRunState(savedState: SavedAgentSessionState | null, r
 /** Rechecks persisted evidence before a resumed intervention can remain verified. */
 export function revalidateRestoredMilestones(milestones: readonly PlanMilestone[], workspacePath: string | null): PlanMilestone[] {
   const probe = workspacePath ? createWorkspaceDeliverableProbe(workspacePath) : null
+  const workspaceVersion = workspacePath ? captureWorkspaceVersion(workspacePath) : undefined
   return milestones.map((milestone) => {
     if (milestone.status !== 'verified') return milestone
+    if (!workspaceVersion || !milestone.verificationEvidence?.passed || milestone.verificationEvidence.workspaceVersion !== workspaceVersion) {
+      return { ...milestone, status: 'in_progress', notes: 'Persisted verification evidence is absent or stale; rerun the project check.' }
+    }
     if (probe && resolveMilestoneDeliverableStatus(milestone, probe) === 'unsatisfied') {
       return { ...milestone, status: 'pending', notes: 'Persisted file evidence is stale; deliverables must be restored.' }
+    }
+    if (workspacePath && unreachableUiDeliverables(workspacePath, milestone).length > 0) {
+      return { ...milestone, status: 'in_progress', notes: 'Persisted UI module is not reachable from the application entrypoint.' }
     }
     const declaredFiles = resolveDeclaredFilePaths(milestone)
     if (probe && declaredFiles.length > 0) {
@@ -110,9 +118,6 @@ export function revalidateRestoredMilestones(milestones: readonly PlanMilestone[
       if (!fingerprintMatches) {
         return { ...milestone, status: 'pending', notes: 'Persisted file evidence changed; rerun milestone verification.' }
       }
-    }
-    if (milestone.verificationCommand) {
-      return { ...milestone, status: 'in_progress', notes: 'Persisted command evidence is stale; rerun verification.' }
     }
     return milestone
   })
@@ -176,7 +181,7 @@ export async function initializeSessionState(params: SessionStateParams): Promis
       `🔄 Restored Session State [${sessionId}]: Continuing from Step ${stepCountBox.value} with ${episodicCompactor.episodeCount} prior steps in memory.`,
     )
   } else if (planSeed.length > 0) {
-    goalPlanner.loadMilestones(planSeed)
+    goalPlanner.loadMilestones(revalidateRestoredMilestones(planSeed, workspacePath))
     emitLocalizedLog(emitLog, 'info', { key: 'planMilestonesLoaded', params: { count: planSeed.length } })
   }
 

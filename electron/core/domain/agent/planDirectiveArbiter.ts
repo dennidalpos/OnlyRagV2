@@ -31,6 +31,7 @@ export type PlanDirectiveKind =
   | 'behavior_test_script_missing'
   | 'verification_failing'
   | 'entrypoint_disconnected'
+  | 'ui_module_disconnected'
   | 'unprovable_milestone'
   | 'focus'
 
@@ -81,6 +82,7 @@ export interface PlanDirectiveInput {
    * such page or the question does not apply. See entrypointIntegrity.ts.
    */
   disconnectedEntrypoint: { htmlPath: string; expectedEntry: string } | null
+  unreachableUiFiles?: readonly string[]
   /**
    * The package.json "test" script body: null when the manifest declares none, undefined when the
    * workspace has no package.json and the question does not apply.
@@ -294,6 +296,16 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
       kind: 'entrypoint_disconnected',
       blockDirective: buildEntrypointDirective(input.disconnectedEntrypoint.htmlPath, input.disconnectedEntrypoint.expectedEntry),
       closureStepDirective: null,
+    }
+  }
+
+  if (input.unreachableUiFiles?.length) {
+    const files = input.unreachableUiFiles.join(', ')
+    return {
+      kind: 'ui_module_disconnected',
+      blockDirective: `[UI MODULE NOT USED] ${files} exists but is not reachable from the HTML entrypoint. Connect the intended page or layout through the application router before running verification. Remove an unused duplicate only after confirming which module is active.`,
+      closureStepDirective: null,
+      rewriteTargets: input.unreachableUiFiles,
     }
   }
 

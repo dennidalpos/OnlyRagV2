@@ -149,7 +149,7 @@ describe('application-owned agent closure', () => {
     expect(finalizeSession).toHaveBeenCalledTimes(1)
   })
 
-  it('does not mistake a passing build for end-to-end behavioral proof', async () => {
+  it('accepts structural checks and reports that visual verification was not run', async () => {
     vi.mocked(runProjectVerification).mockResolvedValue({
       hasVerificationCommand: true,
       status: 'verified',
@@ -161,9 +161,54 @@ describe('application-owned agent closure', () => {
 
     const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: { key: 'reasonFinish' } })
 
-    expect(outcome).toMatchObject({ outcome: 'closed', result: { success: false, completionStatus: 'unverifiable' } })
-    if (outcome.outcome === 'closed') expect(outcome.result.summary).toContain('non provano il comportamento end-to-end')
-    expect(persistCurrentState).toHaveBeenCalledWith('finish', 'unverifiable')
+    expect(outcome).toMatchObject({ outcome: 'closed', result: { success: true, completionStatus: 'verified' } })
+    if (outcome.outcome === 'closed') expect(outcome.result.summary).toContain('Verifica visiva non eseguita')
+    expect(persistCurrentState).toHaveBeenCalledWith('finish', 'verified')
+  })
+
+  it('reruns a stale milestone check after later workspace changes', async () => {
+    vi.mocked(runProjectVerification).mockResolvedValue({
+      hasVerificationCommand: true,
+      status: 'verified',
+      passed: true,
+      command: 'npm run build',
+      verifiedCommands: ['npm run build'],
+      evidenceLevel: 'structural',
+    })
+    const { ctx, filePath } = makeContext({ milestoneStatus: 'verified', hasFileMutations: false })
+    ctx.goalPlanner.getMilestones()[0].verificationEvidence = {
+      command: 'npm run build',
+      passed: true,
+      checkedAt: '2026-01-01T00:00:00.000Z',
+      workspaceVersion: 'old',
+    }
+    fs.writeFileSync(filePath, 'export const value = 2\n')
+
+    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: { key: 'reasonFinish' } })
+
+    expect(runProjectVerification).toHaveBeenCalledOnce()
+    expect(outcome).toMatchObject({ outcome: 'closed', result: { completionStatus: 'verified' } })
+    expect(ctx.goalPlanner.getMilestones()[0].verificationEvidence?.workspaceVersion).not.toBe('old')
+  })
+
+  it('keeps a stale milestone open when final checks do not match its declared proof', async () => {
+    vi.mocked(runProjectVerification).mockResolvedValue({
+      hasVerificationCommand: true,
+      status: 'verified',
+      passed: true,
+      command: 'npm run build',
+      verifiedCommands: ['npm run build'],
+      evidenceLevel: 'structural',
+    })
+    const { ctx } = makeContext({ milestoneStatus: 'verified', hasFileMutations: false })
+    const milestone = ctx.goalPlanner.getMilestones()[0]
+    milestone.verificationCommand = 'npm run test'
+    milestone.verificationEvidence = { command: 'npm run test', passed: true, checkedAt: '2026-01-01T00:00:00.000Z', workspaceVersion: 'old' }
+
+    const outcome = await closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: { key: 'reasonFinish' } })
+
+    expect(outcome).toMatchObject({ outcome: 'closed', result: { completionStatus: 'blocked' } })
+    expect(milestone.status).toBe('in_progress')
   })
 
   it('keeps partial delivery and the failure reason when verification blocks closure', async () => {

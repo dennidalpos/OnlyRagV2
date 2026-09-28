@@ -59,6 +59,6 @@ describe('reader and resolver together, on the project the agent actually produc
     const commands = resolveVerificationCommands(readWorkspaceManifest(tempDir))
 
     // `dev` and `serve` are servers and must never be offered as proof the project builds.
-    expect(commands.map((c) => c.command)).toEqual(['npm run build', 'npx tsc --noEmit'])
+    expect(commands.map((c) => c.command)).toEqual(['npm run build'])
   })
 })

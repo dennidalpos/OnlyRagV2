@@ -692,6 +692,8 @@ export interface PlanMilestone {
   proposedVerificationCommand?: string
   /** Content hashes captured when file-backed evidence was verified. */
   fileEvidence?: Record<string, string>
+  /** Passing check tied to the workspace version at promotion time. */
+  verificationEvidence?: { command: string; passed: true; checkedAt: string; workspaceVersion: string }
   notes?: string
 }
 

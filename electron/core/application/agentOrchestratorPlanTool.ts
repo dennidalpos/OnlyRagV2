@@ -5,7 +5,10 @@ import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSo
 import { resolveMilestoneUpdate } from '../domain/agent/milestoneUpdateAuthority'
 import { promotionNote } from '../domain/agent/milestoneVerificationPromotion'
 import { findUnsatisfiedDeliverables, resolveMilestoneDeliverableStatus } from '../../../shared/domain/agent/milestoneDeliverableResolver'
-import { captureMilestoneFileEvidence, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
+import { captureMilestoneFileEvidence, captureWorkspaceVersion, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
+import { unreachableUiDeliverables } from '../infrastructure/filesystem/workspaceUiReachability'
+import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
+import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
@@ -70,8 +73,20 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
     /** Set when the milestone's declared proof was refused without being executed. */
     let refusedVerification: { command: string; note: string } | null = null
 
-    if (nextStatus === 'verified' && targetMilestone?.verificationCommand) {
+    const disconnected = nextStatus === 'verified' && targetMilestone && workspacePath ? unreachableUiDeliverables(workspacePath, targetMilestone) : []
+    if (disconnected.length > 0) {
+      refusedVerification = {
+        command: 'application entrypoint',
+        note: `The declared UI module is not used by the application: ${disconnected.join(', ')}. Connect it through the active route or layout before verification.`,
+      }
+    } else if (nextStatus === 'verified' && targetMilestone && !targetMilestone.verificationCommand) {
+      refusedVerification = {
+        command: 'project verification',
+        note: 'A file on disk is not verification evidence. Run the project check; the application promotes the active milestone only after it passes.',
+      }
+    } else if (nextStatus === 'verified' && targetMilestone?.verificationCommand) {
       const verifyCmd = targetMilestone.verificationCommand
+      const primary = workspacePath ? resolvePrimaryProfileVerificationTargets(discoverProjectProfile(workspacePath))[0] : undefined
       // Re-checked here and not only at plan ingestion: a plan can arrive from a restored session or from the user editing the checklist in the UI, and executing a mutating "verification" is what rewrote the agent's own source in session-1787497654743-4enx.
       const safety = checkVerificationCommandSafety(verifyCmd)
       const secCheck = !safety.isSafe
@@ -80,7 +95,12 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
           ? { isAllowed: true, requiresApproval: false, sanitizedCommand: verifyCmd }
           : checkCommandSecurity(verifyCmd, workspacePath)
 
-      if (!safety.isSafe) {
+      if (primary?.kind === 'typecheck' && /(?:^|\s)(?:eslint|npm run lint)\b/i.test(verifyCmd)) {
+        refusedVerification = {
+          command: verifyCmd,
+          note: `Lint alone is insufficient for this TypeScript project. Run ${primary.command} and the build before closing.`,
+        }
+      } else if (!safety.isSafe) {
         refusedVerification = {
           command: verifyCmd,
           note: unsafeVerificationNote(verifyCmd, safety.reason || 'it is not a check'),
@@ -92,11 +112,15 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
       } else if (secCheck) {
         const shell = agentToolExecutorService.getOrCreateShellSession(workspacePath)
         const verifyRes = await shell.execute(secCheck.sanitizedCommand, (chunk) => emitLog('terminal', chunk.trim()), undefined, 60000, ctx.signal)
-        const passed = verifyRes.code === 0 && !verifyRes.timedOut
+        const workspaceVersion = verifyRes.code === 0 && !verifyRes.timedOut && workspacePath ? captureWorkspaceVersion(workspacePath) : undefined
+        const passed = verifyRes.code === 0 && !verifyRes.timedOut && Boolean(workspaceVersion)
         effectiveStatus = passed ? 'verified' : 'failed'
         // Both streams, not whichever is non-empty: a failed verification writes its banner to stdout and its reason to stderr, and selecting one hands the model a note that says the milestone failed without saying why.
         const outputTail = DiagnosticOutputReducer.composeCommandOutput(verifyRes.stdout, verifyRes.stderr, verifyRes.code).slice(-1500)
         effectiveNotes = passed ? promotionNote(verifyCmd) : `Verification command failed (exit ${verifyRes.code}): ${verifyCmd}\n${outputTail}`
+        if (passed && workspaceVersion) {
+          targetMilestone.verificationEvidence = { command: verifyCmd, passed: true, checkedAt: new Date().toISOString(), workspaceVersion }
+        }
         verificationRanLog = passed ? `✅ Verification command passed: ${verifyCmd}` : `❌ Verification command failed (exit ${verifyRes.code}): ${verifyCmd}`
       }
     }

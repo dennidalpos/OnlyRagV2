@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { DEFAULT_IGNORED_DIRS } from '../../domain/agent/contextFilter'
 import { resolveDeclaredFilePaths, type DeliverableProbe, type DeliverableProbeResult } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planMilestone'
@@ -13,6 +14,7 @@ const MAX_INSPECTABLE_BYTES = 4096
 /** Indexing limits for shallow deliverable resolution. */
 const MAX_INDEXED_FILES = 400
 const MAX_INDEX_DEPTH = 6
+const SCRIPT_MODULE_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.mts', '.cjs', '.cts']
 
 /** Indexes workspace files by basename, prioritizing shortest relative paths. */
 function buildBasenameIndex(root: string): Map<string, string> {
@@ -29,7 +31,7 @@ function buildBasenameIndex(root: string): Map<string, string> {
     }
     for (const entry of entries) {
       if (seen >= MAX_INDEXED_FILES) return
-      if (DEFAULT_IGNORED_DIRS.has(entry.name)) continue
+      if (entry.name === '.onlyrag' || DEFAULT_IGNORED_DIRS.has(entry.name)) continue
       const full = path.join(dir, entry.name)
       if (entry.isDirectory()) {
         walk(full, depth + 1)
@@ -82,6 +84,15 @@ function buildWorkspaceDeliverableProbe(workspacePath: string, includeHash: bool
     const direct = inspect(resolved)
     if (direct.exists) return direct
 
+    const extension = path.extname(relativePath).toLowerCase()
+    if (SCRIPT_MODULE_EXTENSIONS.includes(extension)) {
+      const stem = relativePath.slice(0, -extension.length)
+      const aliases = SCRIPT_MODULE_EXTENSIONS.filter((candidate) => candidate !== extension)
+        .map((candidate) => inspect(path.resolve(root, stem + candidate)))
+        .filter((result) => result.exists)
+      if (aliases.length === 1) return aliases[0]
+    }
+
     // Bare filenames without directory paths fall back to shortest-path basename search
     // to match deliverables located in subdirectories (e.g. globals.css -> src/styles/globals.css).
     if (relativePath.includes('/') || relativePath.includes(path.sep)) return MISSING
@@ -94,6 +105,38 @@ function buildWorkspaceDeliverableProbe(workspacePath: string, includeHash: bool
 
 export function createWorkspaceDeliverableProbe(workspacePath: string): DeliverableProbe {
   return buildWorkspaceDeliverableProbe(workspacePath, false)
+}
+
+/** Bounded version of workspace files, excluding generated and agent-owned trees. */
+export function captureWorkspaceVersion(workspacePath: string): string | undefined {
+  const root = path.resolve(workspacePath)
+  const hash = createHash('sha256')
+  let visited = 0
+  const visit = (directory: string): boolean => {
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
+    } catch {
+      return false
+    }
+    for (const entry of entries) {
+      if (entry.name === '.onlyrag' || DEFAULT_IGNORED_DIRS.has(entry.name)) continue
+      const absolute = path.join(directory, entry.name)
+      if (entry.isDirectory()) {
+        if (!visit(absolute)) return false
+      } else if (entry.isFile()) {
+        if (++visited > 10_000) return false
+        try {
+          const stat = fs.statSync(absolute)
+          hash.update(`${path.relative(root, absolute).replace(/\\/g, '/')}\0${stat.size}\0${stat.mtimeMs}\n`)
+        } catch {
+          return false
+        }
+      }
+    }
+    return true
+  }
+  return visit(root) ? hash.digest('hex') : undefined
 }
 
 export function captureMilestoneFileEvidence(workspacePath: string, milestone: Pick<PlanMilestone, 'title' | 'filePaths'>): Record<string, string> | undefined {

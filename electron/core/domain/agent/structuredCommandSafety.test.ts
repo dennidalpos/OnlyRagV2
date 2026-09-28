@@ -1,6 +1,16 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { inspectStructuredCommand } from './structuredCommandSafety'
+import { inspectStructuredCommand, removesGeneratedDirectory } from './structuredCommandSafety'
+
+describe('recursive generated-directory removal', () => {
+  const root = path.join(path.parse(process.cwd()).root, 'workspace')
+  it('recognizes PowerShell, Unix and cmd-style removal but leaves unrelated paths alone', () => {
+    expect(removesGeneratedDirectory('rmdir /s /q dist && rmdir /s /q node_modules', root)).toBe(true)
+    expect(removesGeneratedDirectory('Remove-Item -Recurse -Force dist', root)).toBe(true)
+    expect(removesGeneratedDirectory('rm -rf node_modules', root)).toBe(true)
+    expect(removesGeneratedDirectory('Remove-Item -Recurse -Force src/old', root)).toBe(false)
+  })
+})
 
 // Host-native paths: the resolver uses node:path, so a literal C:\ is only absolute on Windows.
 const hostRoot = path.parse(process.cwd()).root

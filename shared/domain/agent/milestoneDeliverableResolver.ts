@@ -53,10 +53,16 @@ export function extractDeliverablePaths(title: string): string[] {
   return found
 }
 
+function normalizeDeclaredFilePath(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/').replace(/^\.\//, '')
+  // Plans may use one leading slash to mean the workspace root.
+  return normalized.replace(/^\/(?!\/)/, '')
+}
+
 export function resolveDeclaredFilePaths(input: string | MilestoneDeliverableDeclaration): string[] {
   if (typeof input === 'string') return extractDeliverablePaths(input)
   if (input.filePaths) {
-    return [...new Set(input.filePaths.map((filePath) => filePath.replace(/\\/g, '/').replace(/^\.\//, '')).filter(Boolean))]
+    return [...new Set(input.filePaths.map(normalizeDeclaredFilePath).filter(Boolean))]
   }
   return extractDeliverablePaths(input.title)
 }

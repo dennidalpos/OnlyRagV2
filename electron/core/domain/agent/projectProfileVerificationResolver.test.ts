@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { resolvePrimaryProfileVerificationTargets, resolveProfileVerificationTargets } from './projectProfileVerificationResolver'
+import {
+  resolvePrimaryProfileVerificationTargets,
+  resolveProfileVerificationTargets,
+  resolveRequiredProfileVerificationTargets,
+} from './projectProfileVerificationResolver'
 import type { ProjectProfile } from './projectProfileContract'
 
 const profile: ProjectProfile = {
@@ -40,5 +44,26 @@ describe('project profile verification resolver', () => {
 
   it('selects one strongest check per project', () => {
     expect(resolvePrimaryProfileVerificationTargets(profile).map((target) => target.projectId)).toEqual(['web', 'api'])
+  })
+
+  it('requires TypeScript validation as well as Vite build for closure', () => {
+    const web = profile.projects[0]
+    const checks: ProjectProfile = {
+      ...profile,
+      projects: [
+        {
+          ...web,
+          verificationCommands: [
+            { kind: 'build', command: 'npm run build', coverage: 'entry-reachable', source: 'vite build' },
+            { kind: 'typecheck', command: 'node node_modules/typescript/bin/tsc --noEmit', coverage: 'whole-project', source: 'installed compiler' },
+            { kind: 'lint', command: 'npm run lint', coverage: 'whole-project', source: 'eslint' },
+          ],
+        },
+      ],
+    }
+    expect(resolveRequiredProfileVerificationTargets(checks).map((target) => target.command)).toEqual([
+      'node node_modules/typescript/bin/tsc --noEmit',
+      'npm run build',
+    ])
   })
 })

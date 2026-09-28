@@ -2,9 +2,22 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { createWorkspaceDeliverableProbe } from './workspaceDeliverableProbe'
+import { captureWorkspaceVersion, createWorkspaceDeliverableProbe } from './workspaceDeliverableProbe'
 
 describe('createWorkspaceDeliverableProbe', () => {
+  it('changes workspace evidence for source edits but ignores agent state and build output', () => {
+    fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(tempDir, 'src', 'app.ts'), 'export const value = 1')
+    const before = captureWorkspaceVersion(tempDir)
+    fs.mkdirSync(path.join(tempDir, '.onlyrag'), { recursive: true })
+    fs.writeFileSync(path.join(tempDir, '.onlyrag', 'state.json'), '{}')
+    fs.mkdirSync(path.join(tempDir, 'dist'), { recursive: true })
+    fs.writeFileSync(path.join(tempDir, 'dist', 'app.js'), 'bundle')
+    expect(captureWorkspaceVersion(tempDir)).toBe(before)
+    fs.writeFileSync(path.join(tempDir, 'src', 'app.ts'), 'export const value = 1000')
+    expect(captureWorkspaceVersion(tempDir)).not.toBe(before)
+  })
+
   let tempDir: string
 
   beforeEach(() => {
@@ -36,6 +49,22 @@ describe('createWorkspaceDeliverableProbe', () => {
 
   it('reports a missing file as absent', () => {
     expect(createWorkspaceDeliverableProbe(tempDir)('src/pages/Tasks.tsx')).toEqual({ exists: false, contentLength: 0 })
+  })
+
+  it('finds a unique script module with a different extension in the same directory', () => {
+    fs.mkdirSync(path.join(tempDir, 'src', 'pages'), { recursive: true })
+    fs.writeFileSync(path.join(tempDir, 'src', 'pages', 'Tasks.tsx'), 'export const Tasks = () => null')
+
+    expect(createWorkspaceDeliverableProbe(tempDir)('src/pages/Tasks.jsx').exists).toBe(true)
+    expect(createWorkspaceDeliverableProbe(tempDir)('src/Tasks.jsx').exists).toBe(false)
+  })
+
+  it('rejects ambiguous script module aliases', () => {
+    fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(tempDir, 'src', 'App.jsx'), 'export const App = () => null')
+    fs.writeFileSync(path.join(tempDir, 'src', 'App.tsx'), 'export const App = () => null')
+
+    expect(createWorkspaceDeliverableProbe(tempDir)('src/App.js').exists).toBe(false)
   })
 
   it('reports a directory as absent so it never satisfies a file deliverable', () => {

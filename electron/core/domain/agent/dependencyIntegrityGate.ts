@@ -7,6 +7,7 @@ export interface MissingDependency {
   packageName: string
   /** Workspace-relative paths, deduplicated and sorted for a stable directive. */
   importedBy: string[]
+  peerOf?: string
 }
 
 export interface DependencyIntegrityVerdict {
@@ -30,24 +31,32 @@ function toWorkspaceRelative(filePath: string, workspacePath: string): string {
   return normalisedFile.startsWith(`${normalisedRoot}/`) ? normalisedFile.slice(normalisedRoot.length + 1) : normalisedFile
 }
 
-export function evaluateDependencyIntegrity(missingMap: MissingDependencyMap, workspacePath: string): DependencyIntegrityVerdict {
+export function evaluateDependencyIntegrity(
+  missingMap: MissingDependencyMap,
+  workspacePath: string,
+  peerProviders: Record<string, string> = {},
+): DependencyIntegrityVerdict {
   const missing: MissingDependency[] = Object.entries(missingMap || {})
     .filter(([packageName]) => packageName && !isTypesOnlyPackage(packageName))
     .map(([packageName, files]) => ({
       packageName,
       importedBy: Array.from(new Set((files || []).map((f) => toWorkspaceRelative(f, workspacePath)))).sort(),
+      ...(peerProviders[packageName] ? { peerOf: peerProviders[packageName] } : {}),
     }))
     .sort((a, b) => a.packageName.localeCompare(b.packageName))
 
   if (missing.length === 0) return { ok: true, missing: [] }
 
-  const lines = missing.map((m, index) => `${index + 1}. "${m.packageName}" — imported by ${m.importedBy.join(', ')}`)
+  const lines = missing.map(
+    (m, index) =>
+      `${index + 1}. "${m.packageName}" — ${m.peerOf ? `peer dependency of ${m.peerOf}; required by ${m.importedBy.join(', ')}` : `imported by ${m.importedBy.join(', ')}`}`,
+  )
 
   return {
     ok: false,
     missing,
     directive: renderAdviceSteps(
-      '[UNDECLARED DEPENDENCIES: THE PROJECT CANNOT BUILD]',
+      '[UNDECLARED DEPENDENCIES: THE PROJECT CHECK CANNOT PASS]',
       [`The code imports ${missing.length} package${missing.length === 1 ? '' : 's'} that package.json does not declare:`, ...lines],
       [
         'Either add each package to the "dependencies" of package.json and re-run the install, or rewrite the importing files to use what the project already declares.',

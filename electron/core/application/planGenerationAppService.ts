@@ -3,6 +3,7 @@ import { CODING_MODEL_KEEP_ALIVE, HardwareProfileResolver } from '../domain/agen
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import { compilePlanMilestones } from '../../../shared/domain/agent/planCompilation'
+import { resolveDeclaredFilePaths } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { collectProjectPlanningFacts } from './projectPlanningFacts'
 import { logger } from '../infrastructure/logging/logger'
@@ -105,7 +106,7 @@ function toMilestones(plan: PlanningPhaseResponse): PlanMilestone[] {
     id: `m-${index + 1}`,
     title: intervention.objective,
     status: 'pending',
-    filePaths: intervention.filePaths,
+    filePaths: resolveDeclaredFilePaths({ title: intervention.objective, filePaths: intervention.filePaths }),
     acceptanceCriteria: intervention.acceptanceCriteria,
     verificationCommand: intervention.verificationCommand,
     verificationReferences: intervention.verificationCommand ? [intervention.verificationCommand] : [],

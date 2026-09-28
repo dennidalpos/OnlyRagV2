@@ -320,3 +320,25 @@ export function inspectStructuredCommand(command: string, workspacePath?: string
   }
   return { allowed: true, requiresApproval }
 }
+
+/** Identifies recursive removal of generated folders using the existing shell command parser. */
+export function removesGeneratedDirectory(command: string, workspacePath: string | null, currentDirectory?: string): boolean {
+  if (!workspacePath) return false
+  const parsed = parseCommands(command)
+  if (!Array.isArray(parsed)) return false
+  const root = path.resolve(workspacePath)
+  const base = currentDirectory && isPathWithinRoot(root, path.resolve(currentDirectory)) ? currentDirectory : root
+  return parsed.some(({ name, args }) => {
+    const lower = args.map((arg) => arg.toLowerCase())
+    const recursive =
+      ((name === 'remove-item' || name === 'rm' || name === 'ri') && lower.some((arg) => ['-recurse', '-r', '-rf', '-fr'].includes(arg))) ||
+      ((name === 'rmdir' || name === 'rd') && lower.includes('/s'))
+    if (!recursive) return false
+    return args
+      .filter((arg) => !arg.startsWith('-') && !['/s', '/q'].includes(arg.toLowerCase()))
+      .some((target) => {
+        const resolved = path.resolve(base, target)
+        return ['dist', 'node_modules'].some((folder) => resolved.toLowerCase() === path.join(root, folder).toLowerCase())
+      })
+  })
+}

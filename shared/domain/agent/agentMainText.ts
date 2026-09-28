@@ -23,9 +23,8 @@ export const AGENT_MAIN_TEXT_IT = {
   evidenceOpenMilestones: '{outstanding} milestone operative aperte e {abandoned} abbandonate.',
   evidenceBehavioralPassed: 'Controllo comportamentale superato.',
   evidenceBehavioralPassedCommand: 'Controllo comportamentale superato: "{command}".',
-  evidenceStructuralPassed: 'Controllo strutturale superato; build, typecheck, lint e presenza dei file non provano il comportamento end-to-end.',
-  evidenceStructuralPassedCommand:
-    'Controllo strutturale superato: "{command}"; build, typecheck, lint e presenza dei file non provano il comportamento end-to-end.',
+  evidenceStructuralPassed: 'Controllo strutturale superato. Verifica visiva non eseguita.',
+  evidenceStructuralPassedCommand: 'Controllo strutturale superato: "{command}". Verifica visiva non eseguita.',
   evidenceVerificationDisabled: 'La verifica finale è disabilitata nelle impostazioni; nessuna prova comportamentale è stata raccolta.',
   evidenceNoBehavioralCheck: 'Il progetto non espone un controllo comportamentale eseguibile; il risultato non è stato dichiarato funzionante.',
   evidenceGuardStop: 'Run fermato dal guard "{guard}". {evidence}',

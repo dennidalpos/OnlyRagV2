@@ -14,6 +14,7 @@ import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import type { ApprovalResponse } from './agentOrchestratorTypes'
 import path from 'node:path'
 import { parseShellFileRead } from '../domain/agent/shellFileRead'
+import { removesGeneratedDirectory } from '../domain/agent/structuredCommandSafety'
 
 import { type EmitLog, emitLocalizedLog } from './agentOrchestratorTypes'
 
@@ -205,6 +206,26 @@ function denyFsm(ctx: ToolGateContext): string {
 
 /** Applies phase constraints, Ask read-only permissions, and contextual consent. */
 export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult> {
+  if (ctx.parsedTool.tool === 'run_command' && ctx.fullAccess && ctx.agentMode !== 'ask') {
+    const checks = (ctx.episodicCompactor.getEpisodes?.() ?? []).filter(
+      (episode) => episode.tool === 'run_command' && /^(?:npm run (?:lint|build|typecheck|test)|(?:npx )?eslint)\b/i.test(String(episode.target || '')),
+    )
+    const lastCheck = checks.at(-1)
+    const command = String(ctx.parsedTool.parameters.command || '')
+    if (
+      lastCheck?.status === 'FAILURE' &&
+      /^(?:npm run lint|(?:npx )?eslint)\b/i.test(String(lastCheck.target || '')) &&
+      removesGeneratedDirectory(command, ctx.workspacePath, agentToolExecutorService.currentShellDirectory(ctx.workspacePath))
+    ) {
+      const feedback =
+        '[LINT RECOVERY BLOCKED] Deleting dist or node_modules cannot repair source lint errors. Inspect the first project source diagnostic and exclude generated output from the lint configuration.'
+      ctx.episodicCompactor.recordStep(
+        { step: ctx.stepCount, tool: 'run_command', target: command, status: 'BLOCKED', summary: 'Unrelated recursive deletion after lint failure' },
+        feedback,
+      )
+      return { outcome: 'denied', feedback, policyDenial: 'turn_policy' }
+    }
+  }
   if (ctx.requiredReadPath) {
     const requested = String(ctx.parsedTool.parameters.filePath || '')
     const root = ctx.workspacePath ? path.resolve(ctx.workspacePath) : process.cwd()

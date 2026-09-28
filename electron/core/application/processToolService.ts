@@ -315,7 +315,10 @@ export class ProcessToolService {
     directives: string,
     healingTail: string,
   ): ToolExecutionResult {
-    const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nCommand: "${command}" (Exit Code: ${result.code}${result.timedOut ? ' - TIMED OUT' : ''}${result.interruptedByPrompt ? ' - INTERACTIVE PROMPT DETECTED' : ''})\nCaptured Error Stack Trace & Failure Output:\n\`\`\`\n${DiagnosticOutputReducer.keepHeadAndTail(rawOutput, 4000)}\n\`\`\`${directives}\n\n${healingTail}`
+    const boundedOutput = /(?:^|\s)(?:npm run lint|eslint\b)/i.test(command)
+      ? DiagnosticOutputReducer.summarizeLintFailure(rawOutput)
+      : DiagnosticOutputReducer.keepHeadAndTail(rawOutput, 4000)
+    const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nCommand: "${command}" (Exit Code: ${result.code}${result.timedOut ? ' - TIMED OUT' : ''}${result.interruptedByPrompt ? ' - INTERACTIVE PROMPT DETECTED' : ''})\nCaptured Error Stack Trace & Failure Output:\n\`\`\`\n${boundedOutput}\n\`\`\`${directives}\n\n${healingTail}`
     const message = { key: 'toolCommandFailed' } as const
     return {
       outcome: 'failure',

@@ -36,8 +36,13 @@ describe('resolveVerificationCommands', () => {
   })
 
   it('falls back to the compiler when a TypeScript project declares no typecheck script', () => {
-    const commands = resolveVerificationCommands(manifest({ build: 'vite build' }, ['tsconfig.json']))
-    expect(commands.map((c) => c.command)).toEqual(['npm run build', 'npx tsc --noEmit'])
+    const commands = resolveVerificationCommands(manifest({ build: 'vite build' }, ['tsconfig.json', 'node_modules/typescript/bin/tsc']))
+    expect(commands.map((c) => c.command)).toEqual(['npm run build', 'node node_modules/typescript/bin/tsc --noEmit'])
+  })
+
+  it('chooses an installed TypeScript compiler before a whole-project lint script', () => {
+    const primary = primaryOf(manifest({ build: 'vite build', lint: 'eslint .' }, ['tsconfig.json', 'node_modules/typescript/bin/tsc']))
+    expect(primary?.kind).toBe('typecheck')
   })
 
   it('prefers the declared typecheck script over the compiler fallback', () => {
@@ -132,9 +137,9 @@ describe('pickPrimaryVerification — coverage decides before kind', () => {
   })
 
   it('reaches the compiler through tsconfig when no script declares a typecheck', () => {
-    const primary = primaryOf(manifestOf({ build: 'vite build' }, ['tsconfig.json']))
+    const primary = primaryOf(manifestOf({ build: 'vite build' }, ['tsconfig.json', 'node_modules/typescript/bin/tsc']))
 
-    expect(primary?.command).toBe('npx tsc --noEmit')
+    expect(primary?.command).toBe('node node_modules/typescript/bin/tsc --noEmit')
     expect(primary?.coverage).toBe('whole-project')
   })
 

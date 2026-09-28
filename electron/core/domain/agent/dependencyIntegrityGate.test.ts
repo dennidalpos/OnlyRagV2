@@ -15,6 +15,13 @@ const O3TX_MISSING = {
 }
 
 describe('evaluateDependencyIntegrity', () => {
+  it('identifies ESLint plugin peers instead of claiming direct source imports', () => {
+    const verdict = evaluateDependencyIntegrity({ 'eslint-plugin-n': [`${WORKSPACE}\\.eslintrc.cjs`] }, WORKSPACE, {
+      'eslint-plugin-n': 'eslint-config-standard',
+    })
+    expect(verdict.missing[0].peerOf).toBe('eslint-config-standard')
+    expect(verdict.directive).toContain('peer dependency of eslint-config-standard')
+  })
   it('passes a project whose imports are all declared', () => {
     expect(evaluateDependencyIntegrity({}, WORKSPACE)).toEqual({ ok: true, missing: [] })
   })

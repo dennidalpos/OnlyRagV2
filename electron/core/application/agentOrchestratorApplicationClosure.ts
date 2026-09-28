@@ -27,6 +27,10 @@ import {
   renderAgentLines,
 } from '../../../shared/domain/agent/agentMainText'
 import { emitLocalizedLog } from './agentOrchestratorTypes'
+import { captureMilestoneFileEvidence, captureWorkspaceVersion, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
+import { unreachableUiDeliverables } from '../infrastructure/filesystem/workspaceUiReachability'
+import { resolveMilestoneDeliverableStatus } from '../../../shared/domain/agent/milestoneDeliverableResolver'
+import { requiresBehaviorEvidence, verificationEvidenceKind } from '../domain/agent/milestoneVerificationPromotion'
 
 export interface ApplicationClosureContext {
   workspacePath: string | null
@@ -154,6 +158,37 @@ function terminationReasonFor(trigger: ApplicationClosureTrigger, status: AgentC
   return 'model_silence'
 }
 
+function reconcileVerifiedMilestones(ctx: ApplicationClosureContext, run: VerificationRunResult | undefined): void {
+  if (!ctx.workspacePath) return
+  const workspaceVersion = captureWorkspaceVersion(ctx.workspacePath)
+  const probe = createWorkspaceDeliverableProbe(ctx.workspacePath)
+  const commands = run?.passed ? (run.verifiedCommands ?? (run.command ? [run.command] : [])) : []
+  for (const milestone of ctx.goalPlanner.getMilestones()) {
+    if (milestone.status !== 'verified' || isCompletionMilestoneTitle(milestone)) continue
+    const proofIsCurrent = Boolean(
+      workspaceVersion && milestone.verificationEvidence?.passed && milestone.verificationEvidence.workspaceVersion === workspaceVersion,
+    )
+    if (proofIsCurrent) continue
+    const command = commands.find(
+      (candidate) =>
+        (!milestone.verificationCommand || milestone.verificationCommand.trim().toLowerCase() === candidate.trim().toLowerCase()) &&
+        (!requiresBehaviorEvidence(milestone) || verificationEvidenceKind(candidate) === 'behavior'),
+    )
+    if (
+      workspaceVersion &&
+      command &&
+      resolveMilestoneDeliverableStatus(milestone, probe) === 'satisfied' &&
+      unreachableUiDeliverables(ctx.workspacePath, milestone).length === 0
+    ) {
+      milestone.verificationEvidence = { command, passed: true, checkedAt: new Date().toISOString(), workspaceVersion }
+      const fileEvidence = captureMilestoneFileEvidence(ctx.workspacePath, milestone)
+      if (fileEvidence) milestone.fileEvidence = fileEvidence
+    } else {
+      ctx.goalPlanner.updateMilestone(milestone.id, 'in_progress', 'Verification evidence is absent or stale; rerun the milestone check.')
+    }
+  }
+}
+
 const OUTCOME_KEYS: Record<AgentCompletionStatus, AgentMainTextKey> = {
   verified: 'closureOutcomeVerified',
   unverifiable: 'closureOutcomeUnverifiable',
@@ -212,7 +247,17 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
 
   let run: VerificationRunResult | undefined
   let evidenceLevel = priorEvidenceLevel(ctx)
-  const shouldRunVerification = ctx.settings.verifyBeforeFinish !== false && ctx.flags.hasFileMutations && evidenceLevel !== 'behavioral'
+  const workspaceVersion = ctx.workspacePath ? captureWorkspaceVersion(ctx.workspacePath) : undefined
+  const hasStaleMilestone = ctx.goalPlanner
+    .getMilestones()
+    .some(
+      (milestone) =>
+        milestone.status === 'verified' &&
+        !isCompletionMilestoneTitle(milestone) &&
+        (!milestone.verificationEvidence?.passed || milestone.verificationEvidence.workspaceVersion !== workspaceVersion),
+    )
+  const shouldRunVerification =
+    ctx.settings.verifyBeforeFinish !== false && (hasStaleMilestone || (ctx.flags.hasFileMutations && evidenceLevel !== 'behavioral'))
 
   if (shouldRunVerification) {
     emitLocalizedLog(ctx.emitLog, 'info', { key: 'finalVerificationStarted' })
@@ -256,6 +301,8 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
     }
   }
 
+  reconcileVerifiedMilestones(ctx, run)
+
   const operational = ctx.goalPlanner.getMilestones().filter((milestone) => !isCompletionMilestoneTitle(milestone))
   const outstanding = operational.filter((milestone) => milestone.status === 'pending' || milestone.status === 'in_progress')
   const abandoned = operational.filter((milestone) => milestone.status === 'failed')
@@ -275,7 +322,7 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
     status = 'verified'
     evidence = run?.command ? { key: 'evidenceBehavioralPassedCommand', params: { command: run.command } } : { key: 'evidenceBehavioralPassed' }
   } else if (evidenceLevel === 'structural') {
-    status = 'unverifiable'
+    status = 'verified'
     evidence = run?.command ? { key: 'evidenceStructuralPassedCommand', params: { command: run.command } } : { key: 'evidenceStructuralPassed' }
   } else if (ctx.settings.verifyBeforeFinish === false) {
     status = 'unverifiable'

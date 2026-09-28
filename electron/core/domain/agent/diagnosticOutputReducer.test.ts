@@ -2,6 +2,21 @@ import { describe, it, expect } from 'vitest'
 import { DiagnosticOutputReducer } from './diagnosticOutputReducer'
 
 describe('DiagnosticOutputReducer Unit Tests', () => {
+  it('summarizes lint flooded by generated files with the first source error', () => {
+    const output = [
+      'C:\\app\\dist\\assets\\bundle.js',
+      ...Array.from({ length: 60 }, () => '  1:1 error Missing space'),
+      'C:\\app\\src\\Tasks.tsx',
+      '  35:10 error unused variable',
+      '✖ 61 problems (61 errors, 0 warnings)',
+    ].join('\n')
+    const summary = DiagnosticOutputReducer.summarizeLintFailure(output)
+    expect(summary).toContain('src\\Tasks.tsx')
+    expect(summary).toContain('35:10 error unused variable')
+    expect(summary).toContain('Exclude it')
+    expect(summary).toContain('npm run lint -- --ignore-pattern')
+  })
+
   it('should strip ANSI escape sequences', () => {
     const rawWithAnsi = '\u001b[31mFAIL\u001b[0m \u001b[32msrc/test.ts\u001b[0m'
     const stripped = DiagnosticOutputReducer.stripAnsi(rawWithAnsi)

@@ -3,8 +3,9 @@ import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
 import { scanWorkspaceDependencies } from '../infrastructure/filesystem/dependencyScanner'
 import { evaluateDependencyIntegrity } from '../domain/agent/dependencyIntegrityGate'
-import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
+import { resolveRequiredProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { classifyProjectVerification, type ProjectVerificationStatus } from '../domain/agent/projectVerificationStatus'
+import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 
 /** Long enough for a cold `npm run build` on a small project, short enough to not hang a turn. */
 const VERIFICATION_TIMEOUT_MS = 180_000
@@ -36,7 +37,7 @@ export async function runProjectVerification(
   if (signal?.aborted) return { hasVerificationCommand: false, status: 'unverifiable' }
 
   const profile = discoverProjectProfile(workspacePath)
-  const verifications = resolvePrimaryProfileVerificationTargets(profile)
+  const verifications = resolveRequiredProfileVerificationTargets(profile)
   const verificationLabel = verifications.map((target) => `${target.projectRelativePath}: ${target.command}`).join(' && ')
   const evidenceLevel = verifications.length > 0 && verifications.every((target) => target.kind === 'test') ? ('behavioral' as const) : ('structural' as const)
 
@@ -44,7 +45,7 @@ export async function runProjectVerification(
   // saying which package and which file beats making the model infer it from a compiler error.
   const scan = await scanWorkspaceDependencies(workspacePath)
   if (scan.scanned) {
-    const integrity = evaluateDependencyIntegrity(scan.missing, workspacePath)
+    const integrity = evaluateDependencyIntegrity(scan.missing, workspacePath, scan.peerProviders)
     if (!integrity.ok) {
       const result: VerificationRunResult = {
         hasVerificationCommand: true,
@@ -87,7 +88,11 @@ export async function runProjectVerification(
         failureDetail:
           `Project: ${verification.projectRelativePath}\nCommand: ${verification.command} (from ${verification.source})\n` +
           `Exit code: ${res.code}${res.timedOut ? ' (timed out)' : ''}\n` +
-          `${(res.stdout || res.stderr || '').trim().slice(-OUTPUT_TAIL_CHARS)}`,
+          `${
+            verification.kind === 'lint'
+              ? DiagnosticOutputReducer.summarizeLintFailure(DiagnosticOutputReducer.composeCommandOutput(res.stdout, res.stderr, res.code))
+              : DiagnosticOutputReducer.keepHeadAndTail(DiagnosticOutputReducer.composeCommandOutput(res.stdout, res.stderr, res.code), OUTPUT_TAIL_CHARS)
+          }`,
         evidenceLevel,
       }
       return { ...result, status: classifyProjectVerification(result) }

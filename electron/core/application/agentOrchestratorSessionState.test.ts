@@ -55,9 +55,9 @@ describe('revalidateRestoredMilestones', () => {
       workspace,
     )
 
-    expect(restored.map((item) => item.status)).toEqual(['verified', 'pending', 'pending', 'in_progress'])
-    expect(restored[1].notes).toContain('changed')
-    expect(restored[3].notes).toContain('rerun verification')
+    expect(restored.map((item) => item.status)).toEqual(['in_progress', 'in_progress', 'in_progress', 'in_progress'])
+    expect(restored[1].notes).toContain('stale')
+    expect(restored[3].notes).toContain('rerun the project check')
   })
 
   it('invalidates legacy verified file evidence without a persisted fingerprint', () => {
@@ -67,8 +67,8 @@ describe('revalidateRestoredMilestones', () => {
 
     const [restored] = revalidateRestoredMilestones([{ id: 'm-1', title: 'Legacy file', status: 'verified', filePaths: ['legacy.ts'] }], workspace)
 
-    expect(restored.status).toBe('pending')
-    expect(restored.notes).toContain('changed')
+    expect(restored.status).toBe('in_progress')
+    expect(restored.notes).toContain('absent')
   })
 })
 

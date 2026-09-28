@@ -34,3 +34,20 @@ export function resolvePrimaryProfileVerificationTargets(profile: ProjectProfile
     ]
   })
 }
+
+/** Runs typecheck as well as an entry-reachable build for TypeScript projects. */
+export function resolveRequiredProfileVerificationTargets(profile: ProjectProfile): ProjectProfileVerificationTarget[] {
+  return profile.projects.flatMap((project) => {
+    const primary = pickPrimaryVerification(project.verificationCommands)
+    if (!primary) return []
+    const checks = [primary]
+    const build = project.verificationCommands.find((command) => command.kind === 'build')
+    if (project.toolchain.languages.includes('typescript') && build && build !== primary) checks.push(build)
+    return checks.map((verification) => ({
+      ...verification,
+      projectId: project.id,
+      projectRelativePath: project.relativePath,
+      projectRootPath: project.rootPath,
+    }))
+  })
+}

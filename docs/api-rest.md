@@ -25,6 +25,7 @@ Il server FastAPI ascolta su `127.0.0.1:8000`. Route e schemi sono definiti in [
 - Nessun modello di ripiego: `translate-inplace-stream` richiede `model` e `/ingest-path-stream` con `normalize_with_llm: true` richiede `normalization_model`; senza, la richiesta fallisce con `422`.
 - L'ingestion accetta `normalization_think` per la normalizzazione LLM opzionale; la traduzione documenti accetta `think`. Entrambi sono booleani e partono da `false`. Le risposte Ollama usano solo il contenuto finale, senza incorporare il campo separato `thinking`.
 - L'annullamento controlla i confini tra estrazione, embedding e scrittura LanceDB; eventuali chunk o record già avviati vengono rimossi prima della risposta `cancelled`.
+- `POST /tasks/cancel` accetta anche un ID arrivato prima della registrazione del task: la richiesta resta valida per 5 minuti. Le richieste non ancora associate a un task sono limitate a 1024 ID; oltre il limite viene scartata la più vecchia. Una risposta `success` conferma la registrazione della richiesta di annullamento, non l'esistenza di un task con quell'ID. Richieste ripetute per un task attivo o in attesa restano idempotenti.
 - Ingestion e re-indicizzazione usano embedding Ollama; in caso di errore possono registrare `status: indexed_fallback`.
 - La ricerca combina retrieval denso per modello, conteggio lessicale sui candidati e RRF, poi un cross-score lessicale locale. Non esiste un indice FTS/BM25 separato.
 - Il Sidecar gestisce LanceDB, OCR RapidOCR/Vision, traduzione PDF/DOCX, export e storico semantico.

@@ -32,6 +32,7 @@ const READ_TOOLS: readonly SupportedToolName[] = [
   'inspect_os_env',
   'web_search',
   'fetch_web_content',
+  'probe_local_http',
 ]
 
 const WORK_TOOLS: readonly SupportedToolName[] = [
@@ -46,6 +47,8 @@ const WORK_TOOLS: readonly SupportedToolName[] = [
   'download_file',
   'run_command',
   'run_tests',
+  'start_dev_server',
+  'stop_dev_server',
   'ensure_tool',
   'rollback_last_step',
   'open_in_browser',

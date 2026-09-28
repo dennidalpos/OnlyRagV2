@@ -187,6 +187,20 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
     },
   }),
   tool(
+    'start_dev_server',
+    'Start the current workspace package.json dev script as a managed background server. The script must listen on the HOST=127.0.0.1 and PORT assigned by the app. Use probe_local_http on the returned port, then stop_dev_server.',
+    {},
+  ),
+  tool(
+    'probe_local_http',
+    'GET an explicit HTTP(S) loopback URL on this workspace managed dev server port. Does not follow redirects.',
+    {
+      url: { type: 'string', description: 'URL on 127.0.0.1, localhost or ::1 with the managed port returned by start_dev_server.' },
+    },
+    ['url'],
+  ),
+  tool('stop_dev_server', 'Stop only the managed dev server started for the current workspace.', {}),
+  tool(
     'inspect_os_env',
     'Inspect the host OS environment (platform, CPU, memory) and the installed development toolchain (node, npm, pnpm, git, python) with versions.',
     {},

@@ -56,6 +56,8 @@ const MUTATING_TOOLS_REQUIRING_GUIDED_APPROVAL = [
   'move_file',
   'run_command',
   'run_tests',
+  'start_dev_server',
+  'stop_dev_server',
   'write_file',
   'replace_file_content',
   'multi_replace_file_content',
@@ -104,7 +106,7 @@ async function gateGitCommit(ctx: ToolGateContext, fullAccess = false): Promise<
 }
 
 function approvalTypeForTool(tool: string): AgentApprovalPayload['type'] {
-  if (tool === 'run_command' || tool === 'ensure_tool') return 'terminal_cmd'
+  if (tool === 'run_command' || tool === 'ensure_tool' || tool === 'start_dev_server' || tool === 'stop_dev_server') return 'terminal_cmd'
   if (['web_search', 'fetch_web_content', 'open_in_browser', 'validate_visual_artifact'].includes(tool)) return 'network_request'
   if (tool === 'download_file') return 'download_file'
   if (tool === 'delete_file') return 'delete_file'

@@ -44,4 +44,17 @@ describe('AgentToolExecutorService dispatcher contract', () => {
     expect(result.outputForHistory).toContain('Unrecognized or unsupported tool')
     expect(result.terminalCode).toBe('MODEL_UNSUITABLE')
   })
+
+  it('routes managed server failures and loopback probes through the tool result contract', async () => {
+    const calls = [
+      { tool: 'start_dev_server' as const, parameters: {} },
+      { tool: 'probe_local_http' as const, parameters: { url: 'https://example.com:443/' } },
+      { tool: 'stop_dev_server' as const, parameters: {} },
+    ]
+    for (const call of calls) {
+      const result = await executor.executeTool(call, workspacePath, settings)
+      expect(toolExecutionResultSchema.safeParse(result).success, call.tool).toBe(true)
+      expect(result.outcome, call.tool).toBe('failure')
+    }
+  })
 })

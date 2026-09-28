@@ -18,6 +18,8 @@ export interface VerificationRunResult {
   /** Undefined when nothing could be run. */
   passed?: boolean
   command?: string
+  /** Exact commands that passed; command above is a human-readable project label. */
+  verifiedCommands?: readonly string[]
   /** Failure detail for the model: the dependency directive, or the command's output tail. */
   failureDetail?: string
   /** A passing build/typecheck/lint is structural evidence, not end-to-end behaviour. */
@@ -92,5 +94,12 @@ export async function runProjectVerification(
     }
   }
 
-  return { hasVerificationCommand: true, passed: true, status: 'verified', command: verificationLabel, evidenceLevel }
+  return {
+    hasVerificationCommand: true,
+    passed: true,
+    status: 'verified',
+    command: verificationLabel,
+    verifiedCommands: verifications.map((verification) => verification.command),
+    evidenceLevel,
+  }
 }

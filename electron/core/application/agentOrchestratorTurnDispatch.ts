@@ -29,10 +29,10 @@ function outputReserveTokens(numCtx: number): number {
 /**
  * The local tokenizer (o200k over the JSON messages) is only an estimate of the model's tokenizer. When
  * Ollama reported more prompt tokens than estimated on the previous turn, later estimates are scaled
- * up by that ratio (never down, at most 1.5x), so the output budget is never computed from an optimistic count.
+ * up by that ratio (never down, at most 1.5x). Both counts include the tool schemas.
  */
-function calibratedPromptTokens(ctx: TurnDispatchContext, messages: readonly AgentChatMessage[]): number {
-  const estimate = countPromptTokens(JSON.stringify(messages))
+function calibratedPromptTokens(ctx: TurnDispatchContext, messages: readonly AgentChatMessage[], schemaTokens: number): number {
+  const estimate = schemaTokens + countPromptTokens(JSON.stringify(messages))
   const ratio = ctx.session.promptTokenRatio ?? 1
   ctx.session.lastPromptTokenEstimate = estimate
   return Math.ceil(estimate * ratio)
@@ -111,7 +111,8 @@ async function dispatchToLlm(
   const toolCatalog = selectToolSchemas(toolPolicy.allowedTools)
   const schemaTokens = countPromptTokens(JSON.stringify(toolCatalog))
   const numCtx = selection.runtimeOpts.num_ctx
-  const maxPromptTokens = Math.max(1, numCtx - schemaTokens - outputReserveTokens(numCtx))
+  const ratio = ctx.session.promptTokenRatio ?? 1
+  const maxPromptTokens = Math.max(1, Math.floor((numCtx - outputReserveTokens(numCtx) - 256) / ratio) - schemaTokens)
   // The system message is composed once per session (see composeSessionSystemPrompt): a per-turn
   // rebuild made Ollama re-evaluate the whole prompt every step (91 s for 13k tokens on 2026-09-25).
   if (!ctx.session.nativeSystemPrompt) {
@@ -133,7 +134,7 @@ async function dispatchToLlm(
   })
   const manualCompaction = Boolean(ctx.session.forceContextCompaction)
   ctx.session.forceContextCompaction = false
-  const promptTokens = schemaTokens + calibratedPromptTokens(ctx, chat.messages)
+  const promptTokens = calibratedPromptTokens(ctx, chat.messages, schemaTokens)
   // num_predict takes whatever the window has left: a thinking model needs room to reason and still
   // emit the call, and a cap at the window edge avoids Ollama's context shift mid-generation.
   const outputCapacity = numCtx - promptTokens - 256

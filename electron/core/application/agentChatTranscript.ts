@@ -61,6 +61,9 @@ export function buildChatRequest(input: {
   if (tokens() > maxPromptTokens) {
     const target = Math.floor(maxPromptTokens * HISTORY_TRIM_TARGET)
     while (assistantCount() > 1 && tokens() > target) dropOldestBatch(retainedHistory)
+    // A single recent tool batch can itself exceed a small context window. Keep its messages
+    // together or remove the whole batch; never send an orphaned tool result or an oversized prompt.
+    while (retainedHistory.length > 0 && tokens() > maxPromptTokens) dropOldestBatch(retainedHistory)
   }
   return {
     messages: [...base, ...retainedHistory, ...tail],

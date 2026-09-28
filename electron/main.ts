@@ -23,6 +23,7 @@ app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 
 import { logger } from './core/infrastructure/logging/logger'
 import { sidecarProcessManager } from './core/infrastructure/process/sidecarProcessManager'
+import { managedDevServerRepository } from './core/infrastructure/process/managedDevServerRepository'
 import { taskRunner } from './core/infrastructure/process/taskRunner'
 import { registerAgentIpcHandlers } from './core/presentation/agentIpc'
 import { registerWorkspaceIpcHandlers } from './core/presentation/workspaceIpc'
@@ -53,6 +54,7 @@ function fatalMainError(reason: unknown) {
   fatalShutdownStarted = true
   logger.log('ERROR', 'MainProcess', `Fatal Main error: ${reason instanceof Error ? reason.stack || reason.message : String(reason)}`)
   taskRunner.cancelAllTasks()
+  managedDevServerRepository.stopAll()
   sidecarProcessManager.stopPythonSidecar()
   app.exit(1)
 }
@@ -113,6 +115,7 @@ function createWindow() {
 app.on('before-quit', () => {
   logger.log('INFO', 'MainProcess', 'Application before-quit event triggered. Cleaning up active tasks & temp files...')
   taskRunner.cancelAllTasks()
+  managedDevServerRepository.stopAll()
   sidecarProcessManager.stopPythonSidecar()
   taskRunner.cleanTempResiduals().catch(() => {})
 })

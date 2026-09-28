@@ -74,7 +74,7 @@ describe('translation hooks', () => {
 
   it('swaps the language pair', async () => {
     await render({ defaultModel: 'model:latest' })
-    act(() => documentTranslation.handleSwapLanguages())
+    await act(async () => documentTranslation.handleSwapLanguages())
     expect([documentTranslation.sourceLang, documentTranslation.targetLang]).toEqual(['English', 'Italian'])
   })
 

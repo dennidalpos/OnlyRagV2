@@ -16,17 +16,28 @@ const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-electron-e2e-'))
 const userData = path.join(tempRoot, 'user-data')
 const workspaceRoot = path.join(tempRoot, 'workspace with spaces')
 const secondWorkspace = path.join(tempRoot, 'second-workspace')
+const legacyWorkspace = path.join(tempRoot, 'legacy-workspace')
 
 fs.mkdirSync(workspaceRoot, { recursive: true })
 fs.mkdirSync(secondWorkspace, { recursive: true })
+fs.mkdirSync(path.join(legacyWorkspace, '.onlyrag', 'sessions'), { recursive: true })
+fs.mkdirSync(path.join(legacyWorkspace, '.onlyrag', 'assistant'), { recursive: true })
 fs.writeFileSync(path.join(workspaceRoot, 'README.md'), '# Electron E2E\n', 'utf8')
 fs.writeFileSync(path.join(secondWorkspace, 'README.md'), '# Second project\n', 'utf8')
+const legacySessionId = 'legacy-chat'
+const legacyHistory = JSON.stringify({ version: 1, sessions: [{ id: legacySessionId, workspacePath: legacyWorkspace, title: 'Legacy chat' }] })
+const legacyState = JSON.stringify({ sessionId: legacySessionId, agentMode: 'guided' })
+const legacyTracker = '# SESSION_TRACKER\n## completed_tasks\n- [x] Legacy work'
+fs.writeFileSync(path.join(legacyWorkspace, '.onlyrag', 'sessions', 'session_history.json'), legacyHistory, 'utf8')
+fs.writeFileSync(path.join(legacyWorkspace, '.onlyrag', 'sessions', '.agent_state_legacy-chat.json'), legacyState, 'utf8')
+fs.writeFileSync(path.join(legacyWorkspace, '.onlyrag', 'assistant', 'SESSION_TRACKER.md'), legacyTracker, 'utf8')
 
 const serverState = {
   installedModels: [model],
   chatBehaviors: [],
   pendingResponses: new Set(),
   requestCount: 0,
+  chatRequests: [],
 }
 
 function readJsonBody(request) {
@@ -75,6 +86,15 @@ function releasePendingResponses() {
   serverState.pendingResponses.clear()
 }
 
+async function waitForHeldResponse() {
+  const deadline = Date.now() + 20_000
+  while (serverState.pendingResponses.size === 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  assert(serverState.pendingResponses.size > 0, 'Expected an active held model response')
+  return serverState.pendingResponses.values().next().value
+}
+
 const ollamaServer = http.createServer(async (request, response) => {
   const url = new URL(request.url || '/', 'http://127.0.0.1')
   if (request.method === 'GET' && url.pathname === '/api/tags') {
@@ -116,6 +136,7 @@ const ollamaServer = http.createServer(async (request, response) => {
       return
     }
     serverState.requestCount++
+    serverState.chatRequests.push(body)
     const behavior = serverState.chatBehaviors.shift() || { type: 'prose' }
     if (behavior.type === 'hold') {
       response.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
@@ -183,10 +204,11 @@ async function launchApplication() {
   const page = await application.firstWindow()
   await page.waitForFunction(() => Boolean(window.electronAPI), undefined, { timeout: 20_000 })
   await page.evaluate(() => {
-    window.__onlyragE2E = { logs: [], steps: [], done: [] }
+    window.__onlyragE2E = { logs: [], steps: [], done: [], approvals: [] }
     window.electronAPI.onAgentLog((event) => window.__onlyragE2E.logs.push(event))
     window.electronAPI.onAgentStepUpdate?.((event) => window.__onlyragE2E.steps.push(event))
     window.electronAPI.onAgentDone((event) => window.__onlyragE2E.done.push(event))
+    window.electronAPI.onAgentApprovalRequest((event) => window.__onlyragE2E.approvals.push(event))
   })
   return { application, page }
 }
@@ -218,8 +240,8 @@ async function waitForStep(page, runId, statusText) {
   }
 }
 
-async function waitForDone(page, runId) {
-  await page.waitForFunction((expectedRunId) => window.__onlyragE2E.done.some((event) => event.runId === expectedRunId), runId, { timeout: 20_000 })
+async function waitForDone(page, runId, timeout = 20_000) {
+  await page.waitForFunction((expectedRunId) => window.__onlyragE2E.done.some((event) => event.runId === expectedRunId), runId, { timeout })
   return page.evaluate((expectedRunId) => window.__onlyragE2E.done.find((event) => event.runId === expectedRunId), runId)
 }
 
@@ -269,7 +291,7 @@ try {
   assert(fs.existsSync(electronExe), `Missing Electron executable: ${electronExe}`)
   ;({ application, page } = await launchApplication())
 
-  console.log('[1/8] project and session switching')
+  console.log('[1/8] project and session switching, layout migration and removal')
   await api(page, 'registerProject', { projectPath: workspaceRoot, name: 'Workspace One' })
   await api(page, 'registerProject', { projectPath: secondWorkspace, name: 'Workspace Two' })
   const now = new Date().toISOString()
@@ -301,6 +323,99 @@ try {
   )
   assert.equal((await api(page, 'touchProject', { projectPath: workspaceRoot })).path, workspaceRoot)
   assert.equal((await api(page, 'touchProject', { projectPath: secondWorkspace })).path, secondWorkspace)
+
+  const metadata = path.join(workspaceRoot, '.onlyrag')
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(metadata, 'layout.json'), 'utf8')), { version: 2 })
+  assert.match(fs.readFileSync(path.join(metadata, '.gitignore'), 'utf8'), /\*/)
+  const sessionDir = (sessionId) => path.join(metadata, 'sessions', createHash('sha256').update(sessionId).digest('hex'))
+  await api(page, 'saveCodingSession', {
+    id: 'session-kept',
+    workspacePath: workspaceRoot,
+    title: 'Kept',
+    createdAt: now,
+    updatedAt: now,
+    actionLogs: [],
+    executedPrompts: [],
+  })
+  for (const sessionId of ['session-one', 'session-kept']) {
+    fs.mkdirSync(sessionDir(sessionId), { recursive: true })
+    fs.writeFileSync(path.join(sessionDir(sessionId), 'state.json'), JSON.stringify({ sessionId }), 'utf8')
+    fs.writeFileSync(path.join(sessionDir(sessionId), 'SESSION_TRACKER.md'), `# ${sessionId}`, 'utf8')
+  }
+  assert.equal(await api(page, 'deleteCodingSession', { sessionId: 'session-one', workspacePath: workspaceRoot }), true)
+  assert.equal(fs.existsSync(sessionDir('session-one')), false)
+  assert.equal(fs.readFileSync(path.join(sessionDir('session-kept'), 'SESSION_TRACKER.md'), 'utf8'), '# session-kept')
+  assert.deepEqual(
+    (await api(page, 'listCodingSessions', { workspacePath: workspaceRoot })).map((entry) => entry.id),
+    ['session-kept'],
+  )
+
+  assert.equal(await api(page, 'removeProjectFromRegistry', { projectPath: workspaceRoot }), true)
+  assert.equal(
+    (await api(page, 'listProjects')).some((project) => project.path === workspaceRoot),
+    false,
+  )
+  assert.equal(fs.existsSync(path.join(metadata, 'layout.json')), true)
+  assert.equal(fs.existsSync(path.join(workspaceRoot, 'README.md')), true)
+  await api(page, 'registerProject', { projectPath: workspaceRoot, name: 'Reopened Workspace' })
+  assert.equal((await api(page, 'listProjects')).find((project) => project.path === workspaceRoot)?.name, 'Reopened Workspace')
+  assert.deepEqual(
+    (await api(page, 'listCodingSessions', { workspacePath: workspaceRoot })).map((entry) => entry.id),
+    ['session-kept'],
+  )
+
+  await api(page, 'registerProject', { projectPath: legacyWorkspace, name: 'Legacy Workspace' })
+  assert.deepEqual(
+    (await api(page, 'listCodingSessions', { workspacePath: legacyWorkspace })).map((entry) => entry.id),
+    [legacySessionId],
+  )
+
+  const capturedProfile = {
+    allowTerminalExecution: true,
+    allowFileModifications: true,
+    fullAccess: true,
+    capabilityPolicyMode: 'network-approved',
+    maxToolCallSteps: 10,
+  }
+  await api(page, 'saveCodingSession', {
+    id: 'ready-plan-chat',
+    workspacePath: workspaceRoot,
+    title: 'Ready plan',
+    createdAt: now,
+    updatedAt: now,
+    actionLogs: [],
+    executedPrompts: [],
+    plans: [
+      {
+        formatVersion: 2,
+        id: 'ready-plan',
+        version: 1,
+        prompt: 'Create a local app',
+        objective: 'Create a local app',
+        decisions: [],
+        retainedEvidence: [],
+        supersededWork: [],
+        milestones: [],
+        status: 'ready',
+        createdAt: now,
+        capabilityProfile: capturedProfile,
+      },
+    ],
+  })
+  const restoredPlan = (await api(page, 'listCodingSessions', { workspacePath: workspaceRoot })).find((entry) => entry.id === 'ready-plan-chat')?.plans?.[0]
+  assert.deepEqual(restoredPlan?.capabilityProfile, capturedProfile)
+  const legacyMetadata = path.join(legacyWorkspace, '.onlyrag')
+  const migratedSession = path.join(legacyMetadata, 'sessions', createHash('sha256').update(legacySessionId).digest('hex'))
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(legacyMetadata, 'layout.json'), 'utf8')), { version: 2 })
+  assert.equal(fs.readFileSync(path.join(migratedSession, 'state.json'), 'utf8'), legacyState)
+  assert.equal(fs.readFileSync(path.join(migratedSession, 'SESSION_TRACKER.md'), 'utf8'), legacyTracker)
+  assert.equal(fs.readFileSync(path.join(legacyMetadata, 'migration-backup', 'v1', 'sessions', 'session_history.json'), 'utf8'), legacyHistory)
+  assert.equal(fs.readFileSync(path.join(legacyMetadata, 'migration-backup', 'v1', 'sessions', '.agent_state_legacy-chat.json'), 'utf8'), legacyState)
+  assert.equal(fs.existsSync(path.join(legacyMetadata, 'sessions', 'session_history.json')), false)
+  assert.deepEqual(
+    (await api(page, 'listCodingSessions', { workspacePath: legacyWorkspace })).map((entry) => entry.id),
+    [legacySessionId],
+  )
 
   console.log('[2/8] stale saves, spaced paths, and symlink escapes')
   const spacedFile = path.join(workspaceRoot, 'folder with spaces', 'note file.txt')
@@ -350,6 +465,58 @@ try {
   assert.equal(missingDone.completionStatus, 'blocked')
   assert.match(missingDone.summary, /preflight blocked: model/i)
   await waitForQueueIdle(page)
+
+  console.log('[access] restricted, Full access and Ask behavior in an isolated workspace')
+  const accessWorkspace = path.join(tempRoot, 'access-workspace')
+  const externalFile = path.join(tempRoot, 'external-probe.txt')
+  const askFile = path.join(accessWorkspace, 'ask-should-not-write.txt')
+  fs.mkdirSync(path.join(accessWorkspace, 'local-pkg'), { recursive: true })
+  fs.writeFileSync(path.join(accessWorkspace, 'package.json'), JSON.stringify({ name: 'access-probe', version: '1.0.0', private: true }), 'utf8')
+  fs.writeFileSync(path.join(accessWorkspace, 'local-pkg', 'package.json'), JSON.stringify({ name: 'local-probe', version: '1.0.0', main: 'index.js' }), 'utf8')
+  fs.writeFileSync(path.join(accessWorkspace, 'local-pkg', 'index.js'), 'module.exports = true\n', 'utf8')
+  const accessRun = {
+    workspacePath: accessWorkspace,
+    agentMode: 'auto',
+    userTask: 'Write the temporary probe file and install the local package.',
+    initialUserTask: 'Write the temporary probe file and install the local package.',
+    capabilityProfile: { ...capturedProfile, fullAccess: false, maxToolCallSteps: 3 },
+  }
+  serverState.chatBehaviors.push({ type: 'tool', name: 'write_file', arguments: { filePath: externalFile, content: 'restricted' } })
+  const restrictedIdentity = identity('restricted-external', accessWorkspace)
+  await startTask(page, restrictedIdentity, accessRun)
+  await waitForDone(page, restrictedIdentity.runId)
+  await waitForQueueIdle(page)
+  assert.equal(fs.existsSync(externalFile), false)
+
+  serverState.chatBehaviors.length = 0
+  serverState.chatBehaviors.push(
+    { type: 'tool', name: 'write_file', arguments: { filePath: externalFile, content: 'full access' } },
+    { type: 'tool', name: 'run_command', arguments: { command: 'npm install --offline --ignore-scripts --no-audit --no-fund ./local-pkg' } },
+    { type: 'prose', content: 'The temporary probe and local package are ready.' },
+  )
+  const fullIdentity = identity('full-access', accessWorkspace)
+  await startTask(page, fullIdentity, { ...accessRun, capabilityProfile: { ...capturedProfile, maxToolCallSteps: 5 } })
+  await waitForDone(page, fullIdentity.runId, 60_000)
+  await waitForQueueIdle(page)
+  assert.equal(fs.readFileSync(externalFile, 'utf8'), 'full access')
+  assert.equal(fs.existsSync(path.join(accessWorkspace, 'node_modules', 'local-probe', 'package.json')), true)
+  const accessApprovals = await page.evaluate(
+    (runId) => window.__onlyragE2E.logs.filter((event) => event.runId === runId && event.type === 'approval_request'),
+    fullIdentity.runId,
+  )
+  assert.deepEqual(accessApprovals, [])
+
+  serverState.chatBehaviors.length = 0
+  serverState.chatBehaviors.push({ type: 'tool', name: 'write_file', arguments: { filePath: askFile, content: 'should fail' } })
+  const askIdentity = identity('full-access-ask', accessWorkspace)
+  await startTask(page, askIdentity, {
+    ...accessRun,
+    agentMode: 'ask',
+    capabilityProfile: { ...capturedProfile, maxToolCallSteps: 2 },
+  })
+  await waitForDone(page, askIdentity.runId)
+  await waitForQueueIdle(page)
+  assert.equal(fs.existsSync(askFile), false)
 
   console.log('[5/8] queued prompts and targeted cancellation')
   serverState.chatBehaviors.push({ type: 'hold' })
@@ -409,6 +576,82 @@ try {
     await waitForQueueIdle(page)
   }
 
+  console.log('[active-run] mode, context, pending consent and queued identity through Electron IPC')
+  serverState.chatBehaviors.length = 0
+  serverState.chatBehaviors.push(
+    { type: 'tool', name: 'write_file', arguments: { filePath: 'active-run.txt', content: 'mode switched' } },
+    { type: 'hold' },
+    { type: 'hold' },
+  )
+  const liveIdentity = identity('active-mode-context', scratchPath)
+  const liveFile = path.join(scratchPath, 'active-run.txt')
+  const requestStart = serverState.chatRequests.length
+  await startTask(page, liveIdentity, {
+    workspacePath: scratchPath,
+    agentMode: 'guided',
+    userTask: 'Create active-run.txt and inspect the workspace.',
+    initialUserTask: 'Create active-run.txt and inspect the workspace.',
+    settings: { ...settings, modelContextLengths: { [model]: 16384 } },
+  })
+  await page.waitForFunction((runId) => window.__onlyragE2E.approvals.some((event) => event.runId === runId), liveIdentity.runId, { timeout: 20_000 })
+  const guidedApproval = await page.evaluate((runId) => window.__onlyragE2E.approvals.find((event) => event.runId === runId), liveIdentity.runId)
+  assert.deepEqual(guidedApproval.reasons, ['guided_review'])
+  assert.deepEqual(await api(page, 'updateActiveAgentRun', { identity: liveIdentity, mode: 'auto' }), {
+    updated: true,
+    approvalResolved: true,
+  })
+  const heldSecondTurn = await waitForHeldResponse()
+  assert.equal(fs.readFileSync(liveFile, 'utf8'), 'mode switched')
+  assert.equal(serverState.chatRequests[requestStart].options.num_ctx, 16384)
+  assert.equal(serverState.chatRequests[requestStart + 1].options.num_ctx, 16384)
+  assert.deepEqual(await api(page, 'updateActiveAgentRun', { identity: liveIdentity, numCtx: 8192 }), {
+    updated: true,
+    approvalResolved: false,
+    numCtx: 8192,
+  })
+  const queuedIdentityForUpdate = identity('active-update-queued', scratchPath)
+  assert.equal((await startTask(page, queuedIdentityForUpdate, { ...standaloneRun })).queuePosition, 1)
+  assert.deepEqual(await api(page, 'updateActiveAgentRun', { identity: queuedIdentityForUpdate, mode: 'auto', numCtx: 8192 }), {
+    updated: false,
+    approvalResolved: false,
+  })
+  assert.equal((await api(page, 'cancelAgentTask', queuedIdentityForUpdate)).success, true)
+  serverState.pendingResponses.delete(heldSecondTurn)
+  sendChatLine(heldSecondTurn, { role: 'assistant', content: '', tool_calls: [{ function: { name: 'list_dir', arguments: { path: '.' } } }] })
+  await waitForHeldResponse()
+  assert.equal(serverState.chatRequests[requestStart + 2].options.num_ctx, 8192)
+  assert.equal((await api(page, 'cancelAgentTask', liveIdentity)).success, true)
+  releasePendingResponses()
+  await waitForDone(page, liveIdentity.runId)
+  await waitForQueueIdle(page)
+  assert.deepEqual(await api(page, 'updateActiveAgentRun', { identity: liveIdentity, mode: 'guided' }), {
+    updated: false,
+    approvalResolved: false,
+  })
+
+  for (const [label, tool] of [
+    ['network', { name: 'download_file', arguments: { url: 'https://example.invalid/file', filePath: 'pending-network.txt' } }],
+    ['install', { name: 'run_command', arguments: { command: 'npm install left-pad' } }],
+  ]) {
+    serverState.chatBehaviors.length = 0
+    serverState.chatBehaviors.push({ type: 'tool', ...tool })
+    const consentIdentity = identity(`active-consent-${label}`, scratchPath)
+    await startTask(page, consentIdentity, {
+      workspacePath: scratchPath,
+      agentMode: 'guided',
+      userTask: `Request ${label} consent.`,
+      initialUserTask: `Request ${label} consent.`,
+      capabilityProfile: { ...capturedProfile, fullAccess: false },
+    })
+    await page.waitForFunction((runId) => window.__onlyragE2E.approvals.some((event) => event.runId === runId), consentIdentity.runId, { timeout: 20_000 })
+    const consent = await page.evaluate((runId) => window.__onlyragE2E.approvals.find((event) => event.runId === runId), consentIdentity.runId)
+    assert(consent.reasons.includes('network_access'))
+    assert.equal((await api(page, 'updateActiveAgentRun', { identity: consentIdentity, mode: 'auto' })).approvalResolved, false)
+    assert.equal((await api(page, 'cancelAgentTask', consentIdentity)).success, true)
+    await waitForDone(page, consentIdentity.runId)
+    await waitForQueueIdle(page)
+  }
+
   console.log('[7/8] dirty Git source isolation')
   const gitWorkspace = path.join(tempRoot, 'dirty git workspace')
   fs.mkdirSync(gitWorkspace, { recursive: true })
@@ -465,6 +708,95 @@ try {
     crashIdentity.runId,
   )
   assert(restoredLog)
+
+  console.log('[milestones] restored overlap advances only the first open milestone')
+  const overlapIdentity = identity('overlapping-milestones')
+  assert.equal(
+    await api(page, 'agentPlanSeed', {
+      sessionId: overlapIdentity.conversationId,
+      workspacePath: workspaceRoot,
+      planRevisionId: overlapIdentity.planRevisionId,
+      userTask: 'Verify the ordered plan.',
+      planMilestones: [
+        { id: 'm-1', title: 'Review the project', status: 'in_progress' },
+        { id: 'm-2', title: 'Check the result', status: 'in_progress' },
+        { id: 'm-3', title: 'Summarize the work', status: 'pending' },
+      ],
+    }),
+    true,
+  )
+  serverState.chatBehaviors.push(
+    { type: 'tool', name: 'update_plan', arguments: { milestoneId: 'm-2', status: 'verified' } },
+    { type: 'hold' },
+    { type: 'hold' },
+  )
+  await startTask(page, overlapIdentity, {
+    userTask: 'Verify the ordered plan.',
+    initialUserTask: 'Verify the ordered plan.',
+    agentMode: 'auto',
+  })
+  const overlapHold = await waitForHeldResponse()
+  const overlapBefore = await api(page, 'agentGetPlanState', {
+    sessionId: overlapIdentity.conversationId,
+    workspacePath: workspaceRoot,
+    planRevisionId: overlapIdentity.planRevisionId,
+  })
+  assert.deepEqual(
+    overlapBefore.planMilestones.map(({ status }) => status),
+    ['in_progress', 'in_progress', 'pending'],
+  )
+  serverState.pendingResponses.delete(overlapHold)
+  sendChatLine(overlapHold, {
+    role: 'assistant',
+    content: '',
+    tool_calls: [{ function: { name: 'update_plan', arguments: { milestoneId: 'm-1', status: 'verified' } } }],
+  })
+  await waitForHeldResponse()
+  const overlapAfter = await api(page, 'agentGetPlanState', {
+    sessionId: overlapIdentity.conversationId,
+    workspacePath: workspaceRoot,
+    planRevisionId: overlapIdentity.planRevisionId,
+  })
+  assert.deepEqual(
+    overlapAfter.planMilestones.map(({ status }) => status),
+    ['verified', 'in_progress', 'pending'],
+  )
+  assert.equal((await api(page, 'cancelAgentTask', overlapIdentity)).success, true)
+  releasePendingResponses()
+  await waitForDone(page, overlapIdentity.runId)
+  await waitForQueueIdle(page)
+
+  console.log('[tracker] a failed milestone reaches the next desktop model turn')
+  const debtIdentity = identity('tracker-unresolved')
+  assert.equal(
+    await api(page, 'agentPlanSeed', {
+      sessionId: debtIdentity.conversationId,
+      workspacePath: workspaceRoot,
+      planRevisionId: debtIdentity.planRevisionId,
+      userTask: 'Report unresolved work.',
+      planMilestones: [
+        { id: 'm-1', title: 'Check the build', status: 'in_progress' },
+        { id: 'm-2', title: 'Write `docs/result.md`', filePaths: ['docs/result.md'], status: 'pending' },
+      ],
+    }),
+    true,
+  )
+  serverState.chatBehaviors.push(
+    { type: 'tool', name: 'update_plan', arguments: { milestoneId: 'm-1', status: 'failed', notes: 'Build command exited with code 1.' } },
+    { type: 'hold' },
+  )
+  await startTask(page, debtIdentity, {
+    userTask: 'Report unresolved work.',
+    initialUserTask: 'Report unresolved work.',
+    agentMode: 'auto',
+  })
+  await waitForHeldResponse()
+  const debtTurn = serverState.chatRequests.at(-1).messages.at(-1).content
+  assert.match(debtTurn, /unresolved_issues:\n- \[!\] m-1: Check the build \(Build command exited with code 1\.\)/)
+  assert.equal((await api(page, 'cancelAgentTask', debtIdentity)).success, true)
+  releasePendingResponses()
+  await waitForDone(page, debtIdentity.runId)
+  await waitForQueueIdle(page)
 
   // The reliability scenarios above must finish without any safeguard stopping them.
   const reliabilityDone = await page.evaluate(() => window.__onlyragE2E.done)

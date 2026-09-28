@@ -159,6 +159,36 @@ describe('SessionHistoryDomain Unit Tests', () => {
     expect(normalized!.plans![1].interviewAnswers?.[0].provenance).toBe('accepted_recommendation')
   })
 
+  it('preserves a ready plan capability profile when persisted sessions are normalized', () => {
+    const profile = {
+      allowFileModifications: true,
+      allowTerminalExecution: true,
+      fullAccess: true,
+      capabilityPolicyMode: 'network-approved',
+      maxToolCallSteps: 25,
+    }
+    const session = normalizeSession({
+      id: 'profile-chat',
+      plans: [
+        {
+          formatVersion: 2,
+          id: 'ready-plan',
+          objective: 'Create an app',
+          decisions: [],
+          retainedEvidence: [],
+          milestones: [],
+          supersededWork: [],
+          status: 'ready',
+          capabilityProfile: profile,
+        },
+      ],
+    })
+    expect(session?.plans?.[0].capabilityProfile).toEqual(profile)
+    expect(
+      normalizeSession({ id: 'legacy-plan', plans: [{ ...session?.plans?.[0], capabilityProfile: undefined }] })?.plans?.[0].capabilityProfile,
+    ).toBeUndefined()
+  })
+
   it('should reject records without an id', () => {
     expect(normalizeSession({ title: 'Orphan' })).toBeNull()
     expect(normalizeSession(null)).toBeNull()

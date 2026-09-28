@@ -5,6 +5,9 @@ describe('findToolSchema', () => {
   it('returns the entry for a known tool and nothing for an unknown one', () => {
     expect(findToolSchema('write_file')?.function.name).toBe('write_file')
     expect(findToolSchema('validate_visual_artifact')?.function.name).toBe('validate_visual_artifact')
+    expect(findToolSchema('start_dev_server')?.function.parameters.required).toEqual([])
+    expect(findToolSchema('probe_local_http')?.function.parameters.required).toEqual(['url'])
+    expect(findToolSchema('stop_dev_server')?.function.parameters.required).toEqual([])
     expect(findToolSchema('teleport_file')).toBeUndefined()
   })
 })

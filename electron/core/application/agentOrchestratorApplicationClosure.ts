@@ -230,7 +230,9 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
     if (run.passed) {
       ctx.flags.hasVerifiedBuild = true
       evidenceLevel = evidenceLevelOf(run)
-      promoteMilestonesProvenBy(ctx, run.command || 'verification command')
+      for (const verifiedCommand of run.verifiedCommands ?? [run.command || 'verification command']) {
+        promoteMilestonesProvenBy(ctx, verifiedCommand)
+      }
     } else if (request.allowCorrection) {
       const decision = decideVerificationGate({
         hasVerificationCommand: run.hasVerificationCommand,

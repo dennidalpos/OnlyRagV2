@@ -58,6 +58,9 @@ const TOOL_NAME_PREFIXES = [
   'inspect_os_env',
   'ask',
   'finish',
+  'start_dev_server',
+  'probe_local_http',
+  'stop_dev_server',
 ]
 
 interface ProcessToolDependencies {
@@ -102,7 +105,7 @@ export class ProcessToolService {
         ],
         [
           `To verify the project builds correctly, use a one-shot command instead (e.g. "npm run build" or "tsc --noEmit").`,
-          `If the running app needs a visual check, tell the user it is ready to start manually: the start is theirs.`,
+          `For a live local preview, call start_dev_server for the workspace package.json dev script, probe_local_http on loopback, then stop_dev_server.`,
         ],
       )
       logger.log('WARN', 'ProcessToolService', `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${command}"`)

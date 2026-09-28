@@ -42,6 +42,21 @@ describe('native Ollama transcript', () => {
     expect(next.messages.at(-1)).toEqual({ role: 'user', content: 'Plan' })
   })
 
+  it('drops one oversized recent tool batch without leaving an orphaned result', () => {
+    const history = [
+      { role: 'user' as const, content: 'Previous turn context' },
+      { role: 'assistant' as const, content: '', tool_calls: [firstCall] },
+      { role: 'tool' as const, tool_name: 'read_file', content: 'large result '.repeat(3000) },
+    ]
+    const next = buildChatRequest({ systemPrompt: 'Rules', userTask: 'Fix the task', history, turnContext: 'Current plan', maxPromptTokens: 400 })
+    expect(next.messages).toEqual([
+      { role: 'system', content: 'Rules' },
+      { role: 'user', content: 'Fix the task' },
+      { role: 'user', content: 'Current plan' },
+    ])
+    expect(next.trimmed).toBe(true)
+  })
+
   it('makes every request an exact extension of the previous one, so even recurrent-layer models reuse their cache', () => {
     const systemPrompt = composeSessionSystemPrompt('Rules', ['Pinned file', 'Repo map'.repeat(5000)], 200)
     expect(systemPrompt).toBe('Rules\n\nPinned file')

@@ -223,6 +223,34 @@ describe('application-owned agent closure', () => {
     expect(persistCurrentState).toHaveBeenCalledWith('step_budget', 'blocked')
   })
 
+  it('credits the exact final verification command after a last-step edit', async () => {
+    vi.mocked(runProjectVerification).mockResolvedValue({
+      hasVerificationCommand: true,
+      status: 'verified',
+      passed: true,
+      command: '.: npm run build',
+      verifiedCommands: ['npm run build'],
+      evidenceLevel: 'structural',
+    })
+    const { ctx, persistCurrentState } = makeContext({ milestoneStatus: 'in_progress' })
+    ctx.goalPlanner.getMilestones()[0].verificationCommand = 'npm run build'
+
+    const outcome = await closeAgentRunFromEvidence(ctx, {
+      trigger: 'step_budget',
+      guard: 'step_budget',
+      reason: { key: 'reasonStepBudget', params: { max: 7 } },
+    })
+
+    expect(ctx.goalPlanner.getMilestones()[0].status).toBe('verified')
+    expect(ctx.lastVerification).toMatchObject({ status: 'verified', command: '.: npm run build' })
+    expect(outcome).toMatchObject({ outcome: 'closed', result: { success: false, completionStatus: 'blocked' } })
+    if (outcome.outcome === 'closed') {
+      expect(outcome.result.summary).toContain('Completato (1)')
+      expect(outcome.result.summary).not.toContain('Residuo (1)')
+    }
+    expect(persistCurrentState).toHaveBeenCalledWith('step_budget', 'blocked')
+  })
+
   it('records the stopping guard and reports every guard firing in the completion evidence', async () => {
     vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
     const { ctx, emitDone, emitLog } = makeContext({ milestoneStatus: 'in_progress' })

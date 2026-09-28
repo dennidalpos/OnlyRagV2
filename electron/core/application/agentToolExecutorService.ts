@@ -18,6 +18,7 @@ import { validatePathSafety } from '../domain/agent/contextFilter'
 import { AtomicWorkspaceJournal, RollbackResult } from '../infrastructure/filesystem/atomicWorkspaceJournal'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { PersistentPowerShellSession } from '../infrastructure/process/persistentPowerShellSession'
+import { managedDevServerRepository } from '../infrastructure/process/managedDevServerRepository'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
 import { declaredDependencies, findVersionReality, buildVersionRealityNote, type DeclaredDependency } from '../domain/agent/dependencyVersionReality'
 import { buildVersionAnswer, versionQuestionPackages } from '../domain/agent/versionQuestion'
@@ -675,6 +676,56 @@ export class AgentToolExecutorService {
           logDetail: rawOutput.slice(0, 1000),
           isTerminal: true,
           effectOutcome: 'confirmed',
+        }
+      }
+
+      case 'start_dev_server': {
+        if (!workspacePath) return { outcome: 'rejected', outputForHistory: 'A project workspace is required.', logMessage: 'Dev server unavailable.' }
+        if (!fullAccess && !settings.allowTerminalExecution) {
+          return { outcome: 'blocked', outputForHistory: 'Terminal execution is disabled.', logMessage: 'Dev server blocked.' }
+        }
+        try {
+          const started = await managedDevServerRepository.start(workspacePath)
+          return {
+            outcome: 'success',
+            outputForHistory: `Started the workspace package.json dev script as process ${started.pid} on http://127.0.0.1:${started.port}/. Probe this managed port to check the page.`,
+            logMessage: 'Managed dev server started.',
+            effectOutcome: 'confirmed',
+          }
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          return { outcome: 'failure', outputForHistory: message, logMessage: 'Dev server start failed.' }
+        }
+      }
+
+      case 'probe_local_http': {
+        if (!workspacePath) return { outcome: 'rejected', outputForHistory: 'A project workspace is required.', logMessage: 'Local probe unavailable.' }
+        try {
+          const result = await managedDevServerRepository.probe(workspacePath, parameters.url || '')
+          return {
+            outcome: 'success',
+            outputForHistory: `HTTP ${result.status}\n${result.body}${result.truncated ? '\n[RESPONSE TRUNCATED]' : ''}`,
+            logMessage: `Local HTTP probe returned ${result.status}.`,
+          }
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          return { outcome: 'failure', outputForHistory: message, logMessage: 'Local HTTP probe failed.' }
+        }
+      }
+
+      case 'stop_dev_server': {
+        if (!workspacePath) return { outcome: 'rejected', outputForHistory: 'A project workspace is required.', logMessage: 'Dev server unavailable.' }
+        try {
+          const stopped = managedDevServerRepository.stop(workspacePath)
+          return {
+            outcome: 'success',
+            outputForHistory: `Stopped managed dev server process ${stopped.pid}.\n${stopped.output}`,
+            logMessage: 'Managed dev server stopped.',
+            effectOutcome: 'confirmed',
+          }
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          return { outcome: 'failure', outputForHistory: message, logMessage: 'Dev server stop failed.' }
         }
       }
 

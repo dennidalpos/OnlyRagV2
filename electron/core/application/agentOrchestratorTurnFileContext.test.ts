@@ -15,6 +15,7 @@ import { buildCurrentOperationContext, latestUnresolvedFailure, readTurnFileCont
 import type { TurnDispatchContext } from './agentOrchestratorRunContext'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
+import { DEFAULT_APP_SETTINGS } from '../../../shared/domain/settings/appSettingsDefaults'
 
 /** The measurement behind this file: across four independent full-task runs in logs/coding_agent_audit.log the model issued 74 `write_file` calls and called `read_file` exactly zero times — and `replace_file_content` zero times as well. */
 
@@ -108,6 +109,7 @@ describe('buildCurrentOperationContext', () => {
     const ctx = {
       userTask: 'Fix the app',
       workspacePath: tempDir,
+      settings: DEFAULT_APP_SETTINGS,
       fsmMode: { getMode: () => 'AGENT' },
       goalPlanner: { getActiveMilestone: () => ({ title: 'Fix src/app.ts', notes: 'Keep the public API' }) },
       episodicCompactor: {

@@ -14,7 +14,7 @@ import { decodeSettingsFile } from '../../electron/core/infrastructure/filesyste
 
 /** One dedicated folder for every live workspace and snapshot, so runs never scatter directories on the Desktop. */
 export const LIVE_RUN_ROOT = process.env.ONLYRAG_LIVE_ROOT || path.join(os.homedir(), 'OnlyRag-Live')
-export const LIVE_CODING_MODEL = 'qwen3.8:27b'
+export const LIVE_CODING_MODEL = process.env.ONLYRAG_LIVE_MODEL?.trim() || 'qwen3.8:27b'
 const LIVE_RUN_SNAPSHOT_ROOT = path.join(LIVE_RUN_ROOT, 'snapshots')
 /** Audit entries with paths, URLs and error details kept (credentials still removed); local live runs only. */
 const LIVE_UNREDACTED_AUDIT_PATH = path.join(LIVE_RUN_ROOT, 'audit', 'coding_agent_audit.unredacted.log')
@@ -61,7 +61,7 @@ export function snapshotLiveAuditLogs(args: {
   return runDir
 }
 
-/** Load the packaged app settings while pinning every Coding Agent live run to one model. */
+/** Load the packaged app settings while selecting the live model only for this process. */
 export function loadRealSettings(overrides: Omit<Partial<AppSettings>, 'codingModel'> = {}): AppSettings {
   const appData = process.env.APPDATA || path.join(process.env.USERPROFILE || '', 'AppData', 'Roaming')
   const settingsPath = path.join(appData, 'onlyrag-v2', 'settings.json')

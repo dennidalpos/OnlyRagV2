@@ -16,6 +16,9 @@ describe('AgentRuntimeModeFsm', () => {
     expect(fsm.isToolAllowed('list_dir')).toBe(true)
     expect(fsm.isToolAllowed('write_file')).toBe(false)
     expect(fsm.isToolAllowed('run_command')).toBe(false)
+    expect(fsm.isToolAllowed('probe_local_http')).toBe(true)
+    expect(fsm.isToolAllowed('start_dev_server')).toBe(false)
+    expect(fsm.isToolAllowed('stop_dev_server')).toBe(false)
   })
 
   it('allows mutating tools in Guided mode for the approval gate to review', () => {
@@ -23,6 +26,8 @@ describe('AgentRuntimeModeFsm', () => {
     expect(fsm.getMode()).toBe('GUIDED')
     expect(fsm.isToolAllowed('replace_file_content')).toBe(true)
     expect(fsm.isToolAllowed('run_command')).toBe(true)
+    expect(fsm.isToolAllowed('start_dev_server')).toBe(true)
+    expect(fsm.isToolAllowed('stop_dev_server')).toBe(true)
   })
 
   it('allows all execution and diagnostic tools in Auto mode', () => {

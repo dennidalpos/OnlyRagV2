@@ -4,7 +4,19 @@ import { resolveTurnToolPolicy, resolveVersionConflictTurnPolicy } from './turnT
 describe('Coding Agent tool policy', () => {
   it('lets a coding run select exploration, editing, network and verification tools while Main still gates execution', () => {
     const policy = resolveTurnToolPolicy({ directiveKind: 'focus', editTargetState: 'unknown', userTask: 'Build an app', agentMode: 'auto' })
-    expect(policy.allowedTools).toEqual(expect.arrayContaining(['read_file', 'write_file', 'run_command', 'web_search', 'run_tests', 'finish']))
+    expect(policy.allowedTools).toEqual(
+      expect.arrayContaining([
+        'read_file',
+        'write_file',
+        'run_command',
+        'web_search',
+        'run_tests',
+        'start_dev_server',
+        'probe_local_http',
+        'stop_dev_server',
+        'finish',
+      ]),
+    )
     expect(policy.allowedTools).not.toContain('git_commit')
   })
 
@@ -18,6 +30,9 @@ describe('Coding Agent tool policy', () => {
     expect(policy.allowedTools).toContain('read_file')
     expect(policy.allowedTools).not.toContain('write_file')
     expect(policy.allowedTools).not.toContain('run_command')
+    expect(policy.allowedTools).toContain('probe_local_http')
+    expect(policy.allowedTools).not.toContain('start_dev_server')
+    expect(policy.allowedTools).not.toContain('stop_dev_server')
   })
 
   it('allows only finish after verified closure', () => {

@@ -173,6 +173,8 @@ const STATE_CHANGING_TOOLS = new Set([
   'download_file',
   'run_command',
   'run_tests',
+  'start_dev_server',
+  'stop_dev_server',
 ])
 
 /**

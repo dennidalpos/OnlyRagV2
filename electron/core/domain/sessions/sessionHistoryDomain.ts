@@ -1,4 +1,5 @@
 import type { AgentActionLog, AgentPlan, CodingSession, ExecutedPrompt } from '../../../../shared/types'
+import { resolveAgentCapabilityProfile } from '../../../../shared/domain/agent/agentCapabilityProfile'
 
 /** Prefix used by the agent action log for the entry that records the user prompt. */
 export const USER_PROMPT_LOG_PREFIX = 'User Prompt: '
@@ -77,6 +78,7 @@ function normalizePlan(value: unknown, fallbackTimestamp: string): AgentPlan | n
     !Array.isArray(raw.supersededWork)
   )
     return null
+  const capabilityProfile = asRecord(raw.capabilityProfile)
   return {
     formatVersion: 2,
     id: raw.id,
@@ -96,6 +98,7 @@ function normalizePlan(value: unknown, fallbackTimestamp: string): AgentPlan | n
     baseStepOffset: finiteOr(raw.baseStepOffset, undefined),
     milestones: raw.milestones as AgentPlan['milestones'],
     approvalError: optionalString(raw.approvalError),
+    ...(capabilityProfile ? { capabilityProfile: resolveAgentCapabilityProfile(capabilityProfile) } : {}),
   }
 }
 

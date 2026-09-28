@@ -459,6 +459,12 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       break
     }
 
+    case 'probe_local_http': {
+      if (typeof rawParams.url !== 'string' || !rawParams.url.trim()) errors.push("Missing required parameter 'url' for probe_local_http")
+      else rawParams.url = rawParams.url.trim()
+      break
+    }
+
     case 'extract_code_symbols': {
       if (!rawParams.filePath) {
         errors.push("Missing required parameter 'filePath' for extract_code_symbols")
@@ -561,6 +567,8 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
     case 'rollback_workspace':
     case 'rollback_last_step':
     case 'run_tests':
+    case 'start_dev_server':
+    case 'stop_dev_server':
     case 'finish':
       break
 

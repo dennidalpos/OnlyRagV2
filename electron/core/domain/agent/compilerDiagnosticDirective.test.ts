@@ -16,6 +16,8 @@ import {
   diagnosticFixRequiredTools,
   extractJsxInScriptFile,
   resolveRelativeImportPath,
+  extractPostCssEsmConfigFailure,
+  extractTailwindV4PostCssFailure,
 } from './compilerDiagnosticDirective'
 import { extractFailingTest } from './testFailureDiagnostic'
 import { ORDER_MARKER, renderAdvice, renderOrder } from './diagnosticAdvice'
@@ -834,6 +836,38 @@ describe('Rolldown unresolved import after distillation', () => {
     expect(distilled).toContain("Could not resolve './components/Dashboard' in src/App.jsx")
     expect(diagnosticFixTargetFile(UNRESOLVED)).toBe('src/components/Dashboard.jsx')
     expect(diagnosticFixTargetFile(distilled)).toBe('src/components/Dashboard.jsx')
+  })
+})
+
+describe('PostCSS ESM config failure', () => {
+  const POSTCSS_ESM_OUTPUT = [
+    'Failed to load PostCSS config: Error: module is not defined in ES module scope',
+    'This file is being treated as an ES module because package.json contains "type": "module".',
+    '    at file:///C:/Users/Utente/Desktop/test_app/postcss.config.js:1:1',
+  ].join('\n')
+
+  it('detects PostCSS CommonJS in ES module project', () => {
+    expect(extractPostCssEsmConfigFailure(POSTCSS_ESM_OUTPUT)).toBe('C:/Users/Utente/Desktop/test_app/postcss.config.js')
+    expect(diagnosticFixTargetFile(POSTCSS_ESM_OUTPUT)).toBe('C:/Users/Utente/Desktop/test_app/postcss.config.js')
+    const directive = buildDiagnosticFixDirective(POSTCSS_ESM_OUTPUT)
+    expect(directive).toContain('POSTCSS CONFIG USES COMMONJS IN AN ES MODULE PROJECT')
+    expect(directive).toContain('export default')
+  })
+})
+
+describe('Tailwind v4 PostCSS plugin failure', () => {
+  const TAILWIND_V4_OUTPUT = [
+    "[postcss] It looks like you're trying to use `tailwindcss` directly as a PostCSS plugin.",
+    "The PostCSS plugin has moved to a separate package, so you'll also need to install `@tailwindcss/postcss`.",
+  ].join('\n')
+
+  it('detects Tailwind v4 PostCSS plugin deprecation and prescribes package install', () => {
+    expect(extractTailwindV4PostCssFailure(TAILWIND_V4_OUTPUT)).toBe(true)
+    expect(diagnosticFixRequiredTools(TAILWIND_V4_OUTPUT)).toEqual(['run_command'])
+    expect(diagnosticFixTargetFile(TAILWIND_V4_OUTPUT)).toBe('postcss.config.js')
+    const directive = buildDiagnosticFixDirective(TAILWIND_V4_OUTPUT)
+    expect(directive).toContain('TAILWIND CSS V4 REQUIRES @tailwindcss/postcss')
+    expect(directive).toContain('npm install --save-dev @tailwindcss/postcss')
   })
 })
 

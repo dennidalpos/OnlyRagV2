@@ -353,5 +353,20 @@ describe('PlanGenerationAppService', () => {
       expect(result.milestones.flatMap((item) => item.filePaths || [])).not.toContain('index.html')
       expect(JSON.parse(vi.mocked(ollamaAppService.generateStructured).mock.calls.at(-1)![0].userContent).workspace).toBe('existing')
     })
+
+    it('appends a runnable verification milestone for greenfield workspace from proposed verification commands', async () => {
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('m-1', 'Build application', 'src/App.tsx')]))
+
+      const result = await planGenerationAppService.generatePlanText({
+        prompt: 'Create a React TypeScript web app',
+        settings,
+        workspacePath,
+      })
+
+      expect(result.status).toBe('success')
+      const verifyMilestone = result.milestones.find((item) => item.verificationCommand === 'npm run build')
+      expect(verifyMilestone).toBeDefined()
+      expect(verifyMilestone?.title).toContain('Verify the application')
+    })
   })
 })

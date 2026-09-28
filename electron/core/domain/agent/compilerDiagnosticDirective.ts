@@ -524,6 +524,43 @@ function buildUnresolvedCssImportAdvice(cssImport: UnresolvedCssImport, facts: D
   )
 }
 
+const POSTCSS_CONFIG_FILE = /(?:file:\/\/)?([a-zA-Z]:[\\/][^\s:)]*?postcss\.config\.js|\/[^\s:)]*?postcss\.config\.js|[\w./\\-]*postcss\.config\.js)/i
+const TAILWIND_V4_POSTCSS_PLUGIN = /It looks like you're trying to use `?tailwindcss`? directly as a PostCSS plugin/i
+
+export function extractPostCssEsmConfigFailure(output: string): string | null {
+  const text = (output || '').replace(ANSI_SEQUENCE, '')
+  if ((text.includes('Failed to load PostCSS config') || text.includes('module is not defined in ES module scope')) && POSTCSS_CONFIG_FILE.test(text)) {
+    const match = POSTCSS_CONFIG_FILE.exec(text)
+    return match ? match[1].replace(/^[/\\](?=[a-zA-Z]:)/, '').replace(/\\/g, '/') : 'postcss.config.js'
+  }
+  return null
+}
+
+export function extractTailwindV4PostCssFailure(output: string): boolean {
+  return TAILWIND_V4_POSTCSS_PLUGIN.test((output || '').replace(ANSI_SEQUENCE, ''))
+}
+
+function buildPostCssEsmConfigAdvice(file: string, facts: DiagnosticWorkspaceFacts): DiagnosticAdvice {
+  const relFile = facts.toWorkspaceRelative ? facts.toWorkspaceRelative(file) : file
+  return diagnosticAdvice(
+    `[POSTCSS CONFIG USES COMMONJS IN AN ES MODULE PROJECT — "${relFile}"]`,
+    [
+      `"package.json" declares "type": "module", but "${relFile}" uses CommonJS (\`module.exports\`). Node refuses CommonJS syntax in .js files in an ES module package.`,
+    ],
+    `"replace_file_content" on "${relFile}": change \`module.exports = {\` to \`export default {\`. Keep every other line.`,
+    ['Then run the build again.'],
+  )
+}
+
+function buildTailwindV4PostCssAdvice(): DiagnosticAdvice {
+  return diagnosticAdvice(
+    `[TAILWIND CSS V4 REQUIRES @tailwindcss/postcss]`,
+    [`Tailwind CSS v4 moved its PostCSS plugin into the "@tailwindcss/postcss" package. "tailwindcss" can no longer be used directly as a PostCSS plugin.`],
+    `"run_command" with: npm install --save-dev @tailwindcss/postcss`,
+    [`In "postcss.config.js" (or "postcss.config.cjs"), replace \`tailwindcss: {}\` with \`'@tailwindcss/postcss': {}\`.`, `Then run the build again.`],
+  )
+}
+
 /** A failing test whose code read a browser global, when the output reports no compiler error. */
 function browserGlobalTest(output: string): ReturnType<typeof extractFailingTest> {
   if (parseCompilerDiagnostics(output).length > 0) return null
@@ -538,6 +575,7 @@ function domEnvironmentInstalled(failing: NonNullable<ReturnType<typeof extractF
 
 /** Tools beyond the file edit that the directive built from this output orders. */
 export function diagnosticFixRequiredTools(output: string, facts: DiagnosticWorkspaceFacts = {}): SupportedToolName[] {
+  if (extractTailwindV4PostCssFailure(output)) return ['run_command']
   if (extractJsxInScriptFile(output)) return ['move_file']
   const browserTest = browserGlobalTest(output)
   if (browserTest && !domEnvironmentInstalled(browserTest, facts)) return ['run_command']
@@ -552,6 +590,9 @@ export function diagnosticFixTargetFile(output: string, facts: DiagnosticWorkspa
   const browserTest = browserGlobalTest(output)
   if (browserTest) return domEnvironmentInstalled(browserTest, facts) ? browserTest.file : null
   if (extractJsxInScriptFile(output)) return null
+  const postCssEsm = extractPostCssEsmConfigFailure(output)
+  if (postCssEsm) return facts.toWorkspaceRelative ? facts.toWorkspaceRelative(postCssEsm) : postCssEsm
+  if (extractTailwindV4PostCssFailure(output)) return 'postcss.config.js'
   const missingProgram = extractMissingScriptProgram(output)
   if (missingProgram) return VITE_REPLACEABLE.has(missingProgram.program) && facts.binaryInstalled?.('vite') ? 'package.json' : null
   const cssImport = extractUnresolvedCssImport(output)
@@ -591,6 +632,9 @@ export function buildDiagnosticFixAdvice(
 ): DiagnosticAdvice | null {
   const missingProgram = extractMissingScriptProgram(output)
   if (missingProgram) return buildMissingScriptProgramAdvice(missingProgram, facts)
+  const postCssEsm = extractPostCssEsmConfigFailure(output)
+  if (postCssEsm) return buildPostCssEsmConfigAdvice(postCssEsm, facts)
+  if (extractTailwindV4PostCssFailure(output)) return buildTailwindV4PostCssAdvice()
   const cssImport = extractUnresolvedCssImport(output)
   if (cssImport) return buildUnresolvedCssImportAdvice(cssImport, facts)
   const cssSyntax = extractCssSyntaxFailure(output)

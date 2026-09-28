@@ -227,7 +227,8 @@ export class PlanGenerationAppService {
     }
 
     if (generationError) logger.log('WARN', 'PlanGenerationAppService', `Plan generation failed: ${generationError}`)
-    const verification = profile ? resolvePrimaryProfileVerificationTargets(profile)[0]?.command : undefined
+    const verification =
+      (profile ? resolvePrimaryProfileVerificationTargets(profile)[0]?.command : undefined) || discovery.facts.verification.proposedCommands[0]
     const milestones = structuredPlan ? compilePlanMilestones(toMilestones(structuredPlan), verification, discovery.scaffold) : []
     if (!generationError && milestones.length === 0) generationError = 'Plan response contained no executable interventions'
 

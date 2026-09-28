@@ -62,6 +62,14 @@ describe('resolveMilestoneDeliverableStatus', () => {
     expect(resolveDeclaredFilePaths({ title: 'Remote path', filePaths: ['//server/package.json'] })).toEqual(['//server/package.json'])
   })
 
+  it('extracts clean path tokens when filePaths contains annotations or comma-separated files', () => {
+    const milestone = {
+      title: 'Set up environment',
+      filePaths: ['package.json (add react, @types/react, tailwindcss, postcss), tailwind.config.js'],
+    }
+    expect(resolveDeclaredFilePaths(milestone)).toEqual(['package.json', 'tailwind.config.js'])
+  })
+
   it('uses structured file declarations without parsing the title', () => {
     const milestone = { title: 'Finish the pending work', filePaths: ['src/task.ts'] }
     const probe = probeFrom({ 'src/task.ts': 'export const done = true' })

@@ -70,23 +70,24 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
     let effectiveStatus = nextStatus
     let effectiveNotes = notes
     let verificationRanLog: string | null = null
-    /** Set when the milestone's declared proof was refused without being executed. */
-    let refusedVerification: { command: string; note: string } | null = null
+    /** Set when the milestone's declared proof was refused without being executed, or failed execution. */
+    let refusedVerification: { command: string; note: string; failed?: boolean } | null = null
 
     const disconnected = nextStatus === 'verified' && targetMilestone && workspacePath ? unreachableUiDeliverables(workspacePath, targetMilestone) : []
+    const primary = workspacePath ? resolvePrimaryProfileVerificationTargets(discoverProjectProfile(workspacePath))[0] : undefined
+    const verifyCmd = targetMilestone?.verificationCommand || (nextStatus === 'verified' && primary?.command ? primary.command : undefined)
+
     if (disconnected.length > 0) {
       refusedVerification = {
         command: 'application entrypoint',
         note: `The declared UI module is not used by the application: ${disconnected.join(', ')}. Connect it through the active route or layout before verification.`,
       }
-    } else if (nextStatus === 'verified' && targetMilestone && !targetMilestone.verificationCommand) {
+    } else if (nextStatus === 'verified' && targetMilestone && !verifyCmd) {
       refusedVerification = {
         command: 'project verification',
         note: 'A file on disk is not verification evidence. Run the project check; the application promotes the active milestone only after it passes.',
       }
-    } else if (nextStatus === 'verified' && targetMilestone?.verificationCommand) {
-      const verifyCmd = targetMilestone.verificationCommand
-      const primary = workspacePath ? resolvePrimaryProfileVerificationTargets(discoverProjectProfile(workspacePath))[0] : undefined
+    } else if (nextStatus === 'verified' && targetMilestone && verifyCmd) {
       // Re-checked here and not only at plan ingestion: a plan can arrive from a restored session or from the user editing the checklist in the UI, and executing a mutating "verification" is what rewrote the agent's own source in session-1787497654743-4enx.
       const safety = checkVerificationCommandSafety(verifyCmd)
       const secCheck = !safety.isSafe
@@ -119,20 +120,30 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
         const outputTail = DiagnosticOutputReducer.composeCommandOutput(verifyRes.stdout, verifyRes.stderr, verifyRes.code).slice(-1500)
         effectiveNotes = passed ? promotionNote(verifyCmd) : `Verification command failed (exit ${verifyRes.code}): ${verifyCmd}\n${outputTail}`
         if (passed && workspaceVersion) {
+          targetMilestone.verificationCommand = verifyCmd
           targetMilestone.verificationEvidence = { command: verifyCmd, passed: true, checkedAt: new Date().toISOString(), workspaceVersion }
+        } else if (!passed) {
+          refusedVerification = {
+            command: verifyCmd,
+            note: `Verification command failed (exit ${verifyRes.code}): ${verifyCmd}\n${outputTail}\nFix the reported errors in the workspace before marking the milestone verified.`,
+            failed: true,
+          }
         }
         verificationRanLog = passed ? `✅ Verification command passed: ${verifyCmd}` : `❌ Verification command failed (exit ${verifyRes.code}): ${verifyCmd}`
       }
     }
 
-    // A refused proof is its own answer, handled before the status machinery: the milestone keeps the status it had, so routing this through resolveMilestoneUpdate would come back as a "no-op" rejection and the model would never learn that its declared verification
+    // A refused or failing proof is its own answer, handled before the status machinery: the milestone keeps the status it had, so routing this through resolveMilestoneUpdate would come back as a "no-op" or "contradicted" rejection and the model would never learn that its declared verification failed
     if (refusedVerification && targetMilestone) {
       updateFailed = true
       goalPlanner.updateMilestone(targetMilestone.id, targetMilestone.status, refusedVerification.note)
-      planFeedback =
-        `[UPDATE_PLAN REJECTED: VERIFICATION REFUSED] Milestone '${milestoneRef}' declares \`${refusedVerification.command}\` as its proof, and that command was NOT executed: ${refusedVerification.note}\n` +
-        `A verification command must be able to FAIL and must not write the workspace. Run a real check via run_command (a build, a test, a typecheck) and mark the milestone only after it passes.`
-      planLog = `🚫 Verifica rifiutata senza eseguirla: ${refusedVerification.command}`
+      planFeedback = refusedVerification.failed
+        ? `[UPDATE_PLAN REJECTED: VERIFICATION FAILED] Milestone '${milestoneRef}' verification \`${refusedVerification.command}\` failed:\n${refusedVerification.note}`
+        : `[UPDATE_PLAN REJECTED: VERIFICATION REFUSED] Milestone '${milestoneRef}' declares \`${refusedVerification.command}\` as its proof, and that command was NOT executed: ${refusedVerification.note}\n` +
+          `A verification command must be able to FAIL and must not write the workspace. Run a real check via run_command (a build, a test, a typecheck) and mark the milestone only after it passes.`
+      planLog = refusedVerification.failed
+        ? `❌ Verifica fallita: ${refusedVerification.command}`
+        : `🚫 Verifica rifiutata senza eseguirla: ${refusedVerification.command}`
     } else {
       // Evidence on disk outranks the model's self-report: see milestoneUpdateAuthority.ts.
       const probe = workspacePath ? createWorkspaceDeliverableProbe(workspacePath) : null

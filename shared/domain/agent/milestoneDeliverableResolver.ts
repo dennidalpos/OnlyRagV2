@@ -62,7 +62,14 @@ function normalizeDeclaredFilePath(filePath: string): string {
 export function resolveDeclaredFilePaths(input: string | MilestoneDeliverableDeclaration): string[] {
   if (typeof input === 'string') return extractDeliverablePaths(input)
   if (input.filePaths) {
-    return [...new Set(input.filePaths.map(normalizeDeclaredFilePath).filter(Boolean))]
+    const extracted = input.filePaths.flatMap((entry) => {
+      if (/[\s,()[\]{}]/.test(entry.trim())) {
+        const fromTokens = extractDeliverablePaths(entry)
+        if (fromTokens.length > 0) return fromTokens
+      }
+      return [normalizeDeclaredFilePath(entry)]
+    })
+    return [...new Set(extracted.filter(Boolean))]
   }
   return extractDeliverablePaths(input.title)
 }

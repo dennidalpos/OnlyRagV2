@@ -56,6 +56,19 @@ describe('collectProjectPlanningFacts', () => {
     expect(result.facts.verification).toEqual({ executableCommands: [], proposedCommands: ['cargo check'] })
   })
 
+  it('treats a workspace containing only OnlyRag session metadata as greenfield', () => {
+    const root = workspace()
+    const metadata = path.join(root, '.onlyrag', 'sessions')
+    fs.mkdirSync(metadata, { recursive: true })
+    fs.writeFileSync(path.join(metadata, 'history.json'), '{}')
+
+    const result = collectProjectPlanningFacts(root, 'Create a React app')
+
+    expect(result.facts).toMatchObject({ workspace: 'empty', hasFiles: false, acceptedGreenfieldStack: 'react-javascript' })
+    expect(result.scaffold.requirements.map((requirement) => requirement.path)).toContain('index.html')
+    expect(result.facts.relevantFiles).toEqual([])
+  })
+
   it('does not scaffold a manifest-less workspace that already contains files', () => {
     const root = workspace()
     fs.writeFileSync(path.join(root, 'app.py'), 'print("ready")')

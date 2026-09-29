@@ -44,6 +44,24 @@ describe('managed dev server tools', () => {
     }
   }, 20_000)
 
+  it('starts a plain Vite dev script on the assigned loopback port', async () => {
+    const root = fs.mkdtempSync(path.join(process.cwd(), 'node_modules', 'onlyrag-vite-preview-'))
+    const server = new ManagedDevServerRepository()
+    try {
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { dev: 'vite' } }), 'utf-8')
+      fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><title>Managed preview</title>', 'utf-8')
+
+      const started = await server.start(root)
+      const response = await server.probe(root, `http://127.0.0.1:${started.port}/`)
+
+      expect(response.status).toBe(200)
+      expect(response.body).toContain('Managed preview')
+    } finally {
+      server.stopAll()
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  }, 30_000)
+
   it('rejects a workspace without a dev script', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-no-dev-'))
     try {

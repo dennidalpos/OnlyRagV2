@@ -312,6 +312,21 @@ describe('PlanGenerationAppService', () => {
       expect(existing.milestones.flatMap((item) => item.filePaths || [])).not.toContain('index.html')
     })
 
+    it('keeps scaffold and smoke checks when the empty workspace contains OnlyRag session files', async () => {
+      const metadata = path.join(workspacePath, '.onlyrag', 'sessions')
+      fs.mkdirSync(metadata, { recursive: true })
+      fs.writeFileSync(path.join(metadata, 'history.json'), '{}')
+
+      const result = await planGenerationAppService.generatePlanText({ prompt: 'Create a React app', settings, workspacePath })
+      const files = result.milestones.flatMap((item) => item.filePaths || [])
+
+      expect(files).toContain('index.html')
+      expect(files).toContain('src/main.jsx')
+      expect(files).toContain('src/App.test.jsx')
+      expect(result.milestones.some((item) => item.verificationCommand === 'npm run build')).toBe(true)
+      expect(result.milestones.some((item) => item.proposedVerificationCommand === 'npm test')).toBe(true)
+    })
+
     it('maps a command-only setup intervention to the canonical greenfield scaffold', async () => {
       vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(
         complete([

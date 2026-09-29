@@ -156,6 +156,38 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(result.summary).toContain('milestone')
   })
 
+  itWithPowerShell('lets the model correct a failed check after automatic plan closure', async () => {
+    const sessionId = 'automatic-closure-correction'
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ scripts: { lint: 'node --version' } }))
+    await agentSessionStateRepository.seedPlanMilestones(
+      sessionId,
+      tempDir,
+      [{ id: 'm-1', title: 'Create `index.html`', filePaths: ['index.html'], status: 'pending', verificationCommand: 'npm run lint' }],
+      'Create the page',
+    )
+    vi.mocked(runProjectVerification)
+      .mockResolvedValueOnce({ hasVerificationCommand: true, status: 'failed', passed: false, command: 'npm run lint', failureDetail: 'Build entry missing' })
+      .mockResolvedValueOnce({
+        hasVerificationCommand: true,
+        status: 'verified',
+        passed: true,
+        command: 'npm run lint',
+        verifiedCommands: ['npm run lint'],
+        evidenceLevel: 'structural',
+      })
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce(toolTurn('write_file', { filePath: 'index.html', content: '<html><body>Ready</body></html>' }))
+      .mockResolvedValueOnce(toolTurn('update_plan', { milestoneId: 'm-1', status: 'verified' }))
+      .mockResolvedValueOnce(toolTurn('finish', { summary: 'Corrected.' }))
+
+    const result = await runAgentOrchestratorLoop({ userTask: 'Create the page', agentMode: 'auto', workspacePath: tempDir, sessionId }, null)
+
+    expect(runProjectVerification).toHaveBeenCalledTimes(2)
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(3)
+    expect(vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[2][0].messages.at(-1)?.content).toContain('Build entry missing')
+    expect(result.completionStatus).toBe('verified')
+  })
+
   it('puts a refused milestone promotion in the changing turn context', async () => {
     const sessionId = 'tracker-turn-context'
     await agentSessionStateRepository.seedPlanMilestones(

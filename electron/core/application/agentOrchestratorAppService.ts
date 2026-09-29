@@ -465,7 +465,7 @@ export async function runAgentOrchestratorLoop(
   while (isSessionActive()) {
     const operationalMilestones = goalPlanner.getMilestones().filter((milestone) => !isCompletionMilestoneTitle(milestone))
     if (pendingNativeCalls.length === 0 && operationalMilestones.length > 0 && operationalMilestones.every((milestone) => milestone.status === 'verified')) {
-      const closure = await closeApplicationRun({ trigger: 'finish', reason: { key: 'reasonPlanVerified' } })
+      const closure = await closeApplicationRun({ trigger: 'finish', reason: { key: 'reasonPlanVerified' }, allowCorrection: true })
       if (closure.outcome === 'closed') return closure.result
     }
     if (stepCountBox.value >= MAX_STEPS) break

@@ -31,16 +31,20 @@ describe('CompactSemanticRepoMapper Unit Tests', () => {
     expect(map).toContain('📄 app.ts ➔ { export function initApp, export class MainService }')
   })
 
-  it('should ignore node_modules, .git, and dist folders', () => {
+  it('should ignore dependencies and application-owned metadata', () => {
     const nodeModules = path.join(tempDir, 'node_modules')
     fs.mkdirSync(nodeModules)
     fs.writeFileSync(path.join(nodeModules, 'dummy.js'), 'console.log()')
+    const metadata = path.join(tempDir, '.onlyrag', 'sessions')
+    fs.mkdirSync(metadata, { recursive: true })
+    fs.writeFileSync(path.join(metadata, 'state.json'), '{}')
 
     fs.writeFileSync(path.join(tempDir, 'main.js'), 'function run() {}')
 
     const map = generateCompactRepoMap(tempDir)
 
     expect(map).not.toContain('node_modules')
+    expect(map).not.toContain('.onlyrag')
     expect(map).toContain('📄 main.js')
   })
 })

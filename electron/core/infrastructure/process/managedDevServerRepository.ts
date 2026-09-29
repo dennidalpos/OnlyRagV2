@@ -87,15 +87,17 @@ export class ManagedDevServerRepository {
 
     const port = await availablePort()
     const env = { ...process.env, HOST: LOOPBACK_HOST, PORT: String(port) }
+    const viteScript = /^vite(?:\s+(?:dev|serve))?$/.test(manifest.scripts.dev.trim())
+    const args = viteScript ? ['run', 'dev', '--', '--host', LOOPBACK_HOST, '--port', String(port), '--strictPort'] : ['run', 'dev']
     const windows = process.platform === 'win32'
     const child = windows
-      ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'npm run dev'], {
+      ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `npm ${args.join(' ')}`], {
           cwd: workspacePath,
           env,
           windowsHide: true,
           stdio: ['ignore', 'pipe', 'pipe'],
         })
-      : spawn('npm', ['run', 'dev'], {
+      : spawn('npm', args, {
           cwd: workspacePath,
           env,
           detached: true,

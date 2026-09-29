@@ -4,6 +4,7 @@ import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export const DEFAULT_IGNORED_DIRS = new Set([
   '.git',
+  '.onlyrag',
   'node_modules',
   'dist',
   'dist-electron',

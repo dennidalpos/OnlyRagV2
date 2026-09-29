@@ -185,6 +185,7 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
   'skills:uninstall': skillInWorkspace,
   'agent:start-task': agentTaskRequestSchema,
   'agent:cancel-task': identity,
+  'agent:read-browser-screenshot': obj({ workspacePath: path, runId: short, screenshotId: z.string().uuid() }),
   'agent:approval-response': obj({ identity, approved: z.boolean(), approvedHunkIndices: z.array(z.number().int().nonnegative()).optional() }),
   'agent:compact-context': identity,
   'agent:update-active-run': obj({

@@ -1008,6 +1008,7 @@ export const it = {
     reasoningStep: 'Passo di ragionamento: {text}',
     agentReasoning: 'Ragionamento agente',
     agentReasoningPending: 'Ragionamento agente...',
+    browserScreenshotUnavailable: 'Screenshot del browser non disponibile.',
   },
   modelBadges: {
     verified: 'Verificato',

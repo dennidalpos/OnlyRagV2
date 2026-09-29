@@ -31,6 +31,9 @@ describe('Coding Agent tool policy', () => {
     expect(policy.allowedTools).not.toContain('write_file')
     expect(policy.allowedTools).not.toContain('run_command')
     expect(policy.allowedTools).toContain('probe_local_http')
+    expect(policy.allowedTools).toEqual(expect.arrayContaining(['browser_navigate', 'browser_snapshot', 'browser_screenshot']))
+    expect(policy.allowedTools).not.toContain('browser_click')
+    expect(policy.allowedTools).not.toContain('browser_fill')
     expect(policy.allowedTools).not.toContain('start_dev_server')
     expect(policy.allowedTools).not.toContain('stop_dev_server')
   })
@@ -61,6 +64,9 @@ describe('capability policy in the tool catalogue', () => {
     expect(offline.allowedTools).not.toEqual(expect.arrayContaining(['web_search']))
     for (const tool of ['web_search', 'fetch_web_content', 'download_file', 'ensure_tool', 'open_in_browser']) expect(offline.allowedTools).not.toContain(tool)
     expect(offline.allowedTools).toEqual(expect.arrayContaining(['read_file', 'write_file', 'run_command', 'run_tests', 'finish']))
+    expect(offline.allowedTools).toEqual(
+      expect.arrayContaining(['browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_screenshot']),
+    )
 
     const local = resolveTurnToolPolicy({
       directiveKind: 'focus',

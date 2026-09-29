@@ -33,6 +33,9 @@ const READ_TOOLS: readonly SupportedToolName[] = [
   'web_search',
   'fetch_web_content',
   'probe_local_http',
+  'browser_navigate',
+  'browser_snapshot',
+  'browser_screenshot',
 ]
 
 const WORK_TOOLS: readonly SupportedToolName[] = [
@@ -53,6 +56,8 @@ const WORK_TOOLS: readonly SupportedToolName[] = [
   'rollback_last_step',
   'open_in_browser',
   'validate_visual_artifact',
+  'browser_click',
+  'browser_fill',
   'update_plan',
 ]
 

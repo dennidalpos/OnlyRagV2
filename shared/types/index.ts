@@ -181,6 +181,7 @@ export type AgentLogCategory =
   | 'test_run'
   | 'workspace_exploration'
   | 'web_research'
+  | 'browser_activity'
   | 'final_report'
   | 'agent_question'
   | 'system_alert'
@@ -204,6 +205,7 @@ export interface AgentActionLog extends Partial<AgentRunIdentity> {
     passedCount?: number
     failedCount?: number
   }
+  browserScreenshot?: { workspacePath: string; runId: string; screenshotId: string }
   /** Main-side text in message keys the renderer shows in the UI language; `message`/`detail` hold the Italian fallback. */
   localized?: AgentLocalizedLog
   meta?: Record<string, unknown>
@@ -362,6 +364,7 @@ export interface AgentApprovalRequest extends AgentRunIdentity {
     | 'download_file'
     | 'terminal_cmd'
     | 'network_request'
+    | 'browser_interaction'
     | 'git_commit'
     | 'publish_workspace'
   target: string

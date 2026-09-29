@@ -13,10 +13,11 @@ Run from repository root in PowerShell. On 2026-09-26 on Windows (Node 24, Pytho
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (283 files, 2272 tests on 2026-09-29; 27 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Fast suite | `npm run test:fast` (285 files, 2279 tests on 2026-09-29; 27 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
 | Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (140 tests on 2026-09-28; after a Sidecar schema change, `npm run generate:openapi` refreshes `sidecar/contracts/openapi-2.5.0.json`) |
 | Legacy chunk prefix migration | Set `ONLYRAG_DATA_DIR` to the actual app userData, then run `.venv\Scripts\python.exe scripts/migrate_chunk_context.py` to preview and add `--apply` to migrate; app userData preview found 0 chunks; an isolated Ollama-backed index previewed and migrated 1 legacy chunk with verified backup rollback. |
-| Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 9 guard + 2 plan/tracker + active-run mode/context/consent scenarios) |
+| Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 9 guard + 2 plan/tracker + active-run mode/context/consent scenarios; on 2026-09-29 build passed but the restored-overlap milestone assertion failed twice at `scripts/e2e/agentReliability.mjs:760`) |
+| Agent browser E2E | `npm run test:e2e:agent-browser` (managed local server, Playwright interactions, screenshot and blocked external traffic; passed 2026-09-29) |
 | Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |
 | Cold-start network E2E | `npm run test:e2e:cold-start` (Main and Renderer first launch) |
 | Settings bootstrap E2E | `npm run test:e2e:settings-bootstrap` |
@@ -42,6 +43,7 @@ Run from repository root in PowerShell. On 2026-09-26 on Windows (Node 24, Pytho
 - Coding Agent uses `/api/chat` with native tool calls and an append-only persisted transcript (system prompt frozen per session, the conversation's first task once, turn context appended; a follow-up run keeps the transcript and appends its request). For `qwen2.5-coder:7b` only, an entire schema-valid JSON tool envelope in message content is converted to a call because the installed model emits that shape despite declaring `tools`; prose and fenced examples are ignored. Main applies the same security gates and returns every outcome as the tool message. Runs edit the workspace in place and save a restorable checkpoint in `.onlyrag/checkpoints` (`agent:restore-checkpoint`). Sampling follows the Modelfile unless `modelSamplingOverrides` is set. The 2026-09-26 audit is `docs/coding-agent-audit-2026-09-26.md`; qwen3-coder:30b verified the full task (8/8); qwen3.8:27b verified 8/8 milestones in one 2026-09-27 live run but ended blocked on transport; a second run also stopped on transport before milestone verification (`PROJECT_STATUS.json`).
 - The UI terminal and agent shell tools use `PersistentPowerShellSession`; sessions retain shell state per workspace and are disposed with active tasks.
 - Managed dev servers run only the workspace `package.json` `dev` script. Main assigns `HOST=127.0.0.1` and `PORT`, rejects listeners reachable on other local addresses, and limits HTTP probes to that managed port; Main owns and stops the process.
+- Agent Coding's Playwright tools use a per-run headless context on that managed port. The page blocks external requests, WebSocket connections, popups, downloads, and all HTTP redirects; even `offline-strict` and Full access retain the managed-port boundary. Guided reviews each browser click or fill.
 
 ## Repository specifics
 

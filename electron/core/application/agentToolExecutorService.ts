@@ -5,6 +5,7 @@ import { ProcessToolService } from './processToolService'
 import { WebToolService } from './webToolService'
 import { RecoveryToolService } from './recoveryToolService'
 import { BrowserToolService } from './browserToolService'
+import { agentBrowserService } from '../infrastructure/process/agentBrowserService'
 import { VisualValidationRunner } from './visualValidationRunner'
 import { visualValidationResultSchema } from '../domain/agent/visualValidationContracts'
 import { DiagnosticsToolService } from './diagnosticsToolService'
@@ -172,6 +173,12 @@ export class AgentToolExecutorService {
     consent: CapabilityConsent,
     sessionId: string,
   ): Promise<ToolExecutionResult | null> {
+    const interactiveBrowserTool = ['browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_screenshot'].includes(parsedTool.tool)
+    const managedBrowserPort = interactiveBrowserTool && workspacePath ? managedDevServerRepository.runningPort(workspacePath) : null
+    if (interactiveBrowserTool && !managedBrowserPort) {
+      return { outcome: 'blocked', outputForHistory: 'Start the managed dev server before using the browser.', logMessage: 'Browser unavailable.' }
+    }
+    const managedBrowserTarget = managedBrowserPort ? `http://127.0.0.1:${managedBrowserPort}/` : undefined
     const networkTool = (
       {
         web_search: ['http-download', 'connect', parsedTool.parameters.query],
@@ -179,6 +186,11 @@ export class AgentToolExecutorService {
         download_file: ['http-download', 'download', parsedTool.parameters.url],
         open_in_browser: ['browser', 'open', parsedTool.parameters.url || parsedTool.parameters.filePath || parsedTool.parameters.path],
         validate_visual_artifact: ['browser', 'open', parsedTool.parameters.artifactPath],
+        browser_navigate: ['browser', 'open', managedBrowserTarget],
+        browser_snapshot: ['browser', 'read', managedBrowserTarget],
+        browser_click: ['browser', 'execute', managedBrowserTarget],
+        browser_fill: ['browser', 'execute', managedBrowserTarget],
+        browser_screenshot: ['browser', 'read', managedBrowserTarget],
         run_command: ['shell', 'execute', parsedTool.parameters.command],
         ensure_tool: ['http-download', 'download', parsedTool.parameters.toolName || parsedTool.parameters.tool || parsedTool.parameters.name],
       } as Record<string, [Capability, CapabilityOperation, unknown]>
@@ -418,6 +430,14 @@ export class AgentToolExecutorService {
     this.shellSessions.clear()
   }
 
+  public closeBrowserRun(runId: string): void {
+    void agentBrowserService.closeRun(runId).catch((error: unknown) => logger.log('WARN', 'AgentBrowser', `Failed to close run ${runId}: ${String(error)}`))
+  }
+
+  public async closeAllBrowserRuns(): Promise<void> {
+    await agentBrowserService.closeAll().catch((error: unknown) => logger.log('WARN', 'AgentBrowser', `Failed to close browser runs: ${String(error)}`))
+  }
+
   async executeTool(
     parsedTool: AgentToolCall,
     workspacePath: string | null | undefined,
@@ -430,6 +450,7 @@ export class AgentToolExecutorService {
     policySessionId: string = 'agent-execution',
     allowedToolsForTurn?: readonly SupportedToolName[],
     commandApprovalGranted = false,
+    browserRunId = policySessionId,
   ): Promise<ClassifiedToolExecutionResult> {
     const fullAccess = settings.fullAccess === true
     this.repo.setFullAccess(fullAccess)
@@ -450,6 +471,7 @@ export class AgentToolExecutorService {
         policySessionId,
         allowedToolsForTurn,
         commandApprovalGranted,
+        browserRunId,
       )
       return toolExecutionResultSchema.parse(result)
     } finally {
@@ -473,6 +495,7 @@ export class AgentToolExecutorService {
     policySessionId: string = 'agent-execution',
     allowedToolsForTurn?: readonly SupportedToolName[],
     commandApprovalGranted = false,
+    browserRunId = policySessionId,
   ): Promise<ToolExecutionResult> {
     const { tool, parameters } = parsedTool
 
@@ -716,6 +739,7 @@ export class AgentToolExecutorService {
       case 'stop_dev_server': {
         if (!workspacePath) return { outcome: 'rejected', outputForHistory: 'A project workspace is required.', logMessage: 'Dev server unavailable.' }
         try {
+          await agentBrowserService.closeWorkspace(workspacePath)
           const stopped = managedDevServerRepository.stop(workspacePath)
           return {
             outcome: 'success',
@@ -767,6 +791,31 @@ export class AgentToolExecutorService {
 
       case 'open_in_browser': {
         return this.browserToolService.executeOpenInBrowser(parameters, workspacePath)
+      }
+
+      case 'browser_navigate': {
+        if (!workspacePath) return { outcome: 'rejected', outputForHistory: 'A project workspace is required.', logMessage: 'Browser unavailable.' }
+        return agentBrowserService.navigate(browserRunId, workspacePath, String(parameters.path || ''), signal)
+      }
+
+      case 'browser_snapshot': {
+        return agentBrowserService.snapshot(browserRunId)
+      }
+
+      case 'browser_click':
+      case 'browser_fill': {
+        return agentBrowserService.interact(
+          browserRunId,
+          tool === 'browser_click' ? 'click' : 'fill',
+          parameters.locatorType as 'role' | 'label' | 'text' | 'testId' | 'css',
+          String(parameters.selector || ''),
+          typeof parameters.accessibleName === 'string' ? parameters.accessibleName : undefined,
+          tool === 'browser_fill' ? String(parameters.value || '') : undefined,
+        )
+      }
+
+      case 'browser_screenshot': {
+        return agentBrowserService.screenshot(browserRunId)
       }
 
       case 'validate_visual_artifact': {

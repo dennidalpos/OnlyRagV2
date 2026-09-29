@@ -12,6 +12,18 @@ const base = {
 }
 
 describe('network-approved capability policy', () => {
+  it('allows the managed local browser without external network consent', () => {
+    expect(
+      authorizeNetworkApproved({
+        ...base,
+        capability: 'browser',
+        operation: 'open',
+        toolName: 'browser_navigate',
+        target: 'http://127.0.0.1:43123/',
+        consent: { requested: false, granted: false },
+      }),
+    ).toMatchObject({ allowed: true, requiresConsent: false })
+  })
   it('denies network access without explicit consent', () => {
     expect(authorizeNetworkApproved({ ...base, consent: { requested: false, granted: false } })).toMatchObject({
       allowed: false,

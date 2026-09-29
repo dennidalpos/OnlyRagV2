@@ -36,6 +36,7 @@ export const toolExecutionResultSchema = z
       .optional(),
     noOpMutation: z.boolean().optional(),
     effectOutcome: z.enum(['none', 'confirmed', 'uncertain']).optional(),
+    browserScreenshot: z.object({ workspacePath: nonBlank, runId: nonBlank, screenshotId: nonBlank }).strict().optional(),
   })
   .strict()
 
@@ -52,6 +53,7 @@ export interface ToolExecutionResult {
   noOpMutation?: boolean
   /** Whether an externally visible effect is known after execution returns. */
   effectOutcome?: 'none' | 'confirmed' | 'uncertain'
+  browserScreenshot?: { workspacePath: string; runId: string; screenshotId: string }
 }
 
 export type ClassifiedToolExecutionResult = ToolExecutionResult

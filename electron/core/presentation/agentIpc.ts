@@ -9,6 +9,7 @@ import { ollamaAppService } from '../application/ollamaAppService'
 import { aiDebugBundleService } from '../application/aiDebugBundleService'
 import { skillInstallApprovalService } from '../application/skillInstallApprovalService'
 import { logger } from '../infrastructure/logging/logger'
+import { readAgentBrowserScreenshot } from '../infrastructure/process/agentBrowserService'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import { agentTaskRequestSchema } from '../domain/agent/agentTaskContract'
 import { sanitizeAppSettings } from '../domain/settings/appSettingsDomain'
@@ -31,6 +32,15 @@ export function registerAgentIpcHandlers(rendererEvents: RendererEventSink) {
 
   ipcMain.handle('agent:cancel-task', async (_, identity) => {
     return taskQueueAppService.cancelTask(identity)
+  })
+
+  ipcMain.handle('agent:read-browser-screenshot', async (_, { workspacePath, runId, screenshotId }) => {
+    try {
+      const imageBase64 = readAgentBrowserScreenshot(workspacePath, runId, screenshotId)
+      return imageBase64 ? { success: true, imageBase64 } : { success: false }
+    } catch {
+      return { success: false }
+    }
   })
 
   ipcMain.on('agent:skill-install-response', (_event, response) => {

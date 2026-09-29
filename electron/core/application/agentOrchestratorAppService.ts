@@ -38,6 +38,7 @@ export type { AgentSession }
 const activeAgentSessions = new Map<string, AgentSession>()
 
 function cleanupSession(session: AgentSession) {
+  agentToolExecutorService.closeBrowserRun(session.id)
   session.isCancelled = true
   session.abortController?.abort()
   session.completionStatus = 'cancelled'
@@ -215,7 +216,10 @@ export async function runAgentOrchestratorLoop(
     session,
     sessionId,
     isSessionActive,
-    deregisterSession: () => activeAgentSessions.delete(runId),
+    deregisterSession: () => {
+      agentToolExecutorService.closeBrowserRun(runId)
+      activeAgentSessions.delete(runId)
+    },
   })
   const {
     userTask,
@@ -619,6 +623,7 @@ export async function runAgentOrchestratorLoop(
           ? preparedTurn.toolPolicy.allowedTools
           : [...preparedTurn.toolPolicy.allowedTools, toolCallForExecution.tool],
       gateResult.commandApprovalGranted,
+      runId,
     )
     recordNativeResult(toolRes.outputForHistory)
     agentToolExecutorService.endJournalStep()

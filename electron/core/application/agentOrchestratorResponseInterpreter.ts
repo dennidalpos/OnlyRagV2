@@ -160,7 +160,7 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
     ctx.emitLog,
     'tool_call',
     { key: 'toolCallHeader', params: { step: ctx.stepCount, tool: parsedTool.tool } },
-    JSON.stringify(parsedTool.parameters, null, 2),
+    JSON.stringify(parsedTool.tool === 'browser_fill' ? { ...parsedTool.parameters, value: '[REDACTED]' } : parsedTool.parameters, null, 2),
   )
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, parsedTool.tool, parsedTool.parameters, parsedTool.explanation)

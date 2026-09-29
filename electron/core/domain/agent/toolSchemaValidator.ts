@@ -465,6 +465,32 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       break
     }
 
+    case 'browser_navigate': {
+      if (typeof rawParams.path !== 'string' || !rawParams.path.startsWith('/') || rawParams.path.startsWith('//') || rawParams.path.includes('\\')) {
+        errors.push("Parameter 'path' must be a local path beginning with a single /")
+      } else {
+        rawParams.path = rawParams.path.slice(0, 2048)
+      }
+      break
+    }
+
+    case 'browser_click':
+    case 'browser_fill': {
+      if (!['role', 'label', 'text', 'testId', 'css'].includes(String(rawParams.locatorType || ''))) {
+        errors.push("Parameter 'locatorType' must be role, label, text, testId, or css")
+      }
+      if (typeof rawParams.selector !== 'string' || !rawParams.selector.trim() || rawParams.selector.length > 512) {
+        errors.push("Parameter 'selector' must be non-empty and at most 512 characters")
+      }
+      if (rawParams.accessibleName !== undefined && (typeof rawParams.accessibleName !== 'string' || rawParams.accessibleName.length > 512)) {
+        errors.push("Parameter 'accessibleName' must be at most 512 characters")
+      }
+      if (tool === 'browser_fill' && (typeof rawParams.value !== 'string' || rawParams.value.length > 10000)) {
+        errors.push("Parameter 'value' must be text of at most 10000 characters")
+      }
+      break
+    }
+
     case 'extract_code_symbols': {
       if (!rawParams.filePath) {
         errors.push("Missing required parameter 'filePath' for extract_code_symbols")
@@ -569,6 +595,8 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
     case 'run_tests':
     case 'start_dev_server':
     case 'stop_dev_server':
+    case 'browser_snapshot':
+    case 'browser_screenshot':
     case 'finish':
       break
 

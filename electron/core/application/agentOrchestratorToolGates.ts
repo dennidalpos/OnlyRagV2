@@ -67,6 +67,8 @@ const MUTATING_TOOLS_REQUIRING_GUIDED_APPROVAL = [
   'ensure_tool',
   'rollback_workspace',
   'rollback_last_step',
+  'browser_click',
+  'browser_fill',
 ]
 
 /** Previews git_commit and requests approval unless Full access is active. */
@@ -107,6 +109,7 @@ async function gateGitCommit(ctx: ToolGateContext, fullAccess = false): Promise<
 }
 
 function approvalTypeForTool(tool: string): AgentApprovalPayload['type'] {
+  if (tool === 'browser_click' || tool === 'browser_fill') return 'browser_interaction'
   if (tool === 'run_command' || tool === 'ensure_tool' || tool === 'start_dev_server' || tool === 'stop_dev_server') return 'terminal_cmd'
   if (['web_search', 'fetch_web_content', 'open_in_browser', 'validate_visual_artifact'].includes(tool)) return 'network_request'
   if (tool === 'download_file') return 'download_file'
@@ -156,9 +159,17 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
   if (!commandApprovalGranted && !requiresNetwork && !requiresInstall && !requiresGuided) return undefined
 
   const toolName = String(toolCall.parameters.toolName || '')
+  const browserInteraction = toolCall.tool === 'browser_click' || toolCall.tool === 'browser_fill'
   const target =
-    toolCall.parameters.filePath || toolCall.parameters.command || toolCall.parameters.url || toolCall.parameters.query || toolName || 'Target Action'
+    (browserInteraction ? `${toolCall.parameters.locatorType}: ${toolCall.parameters.selector}` : undefined) ||
+    toolCall.parameters.filePath ||
+    toolCall.parameters.command ||
+    toolCall.parameters.url ||
+    toolCall.parameters.query ||
+    toolName ||
+    'Target Action'
   const contentOrCmd =
+    (browserInteraction ? (toolCall.tool === 'browser_click' ? 'Click the selected element' : 'Fill the selected field') : undefined) ||
     (requiresInstall ? buildInstallCommand(toolName) : undefined) ||
     toolCall.parameters.command ||
     toolCall.parameters.url ||
@@ -171,7 +182,9 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
     contentOrCmd,
     replacement: toolCall.parameters.replacementContent,
     replacements: toolCall.parameters.replacements,
-    parameters: toolCall.parameters,
+    parameters: browserInteraction
+      ? { locatorType: toolCall.parameters.locatorType, selector: toolCall.parameters.selector, accessibleName: toolCall.parameters.accessibleName }
+      : toolCall.parameters,
     reasons: [
       commandApprovalGranted && 'workspace_mutation',
       requiresNetwork && 'network_access',
@@ -252,7 +265,7 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
     }
   }
 
-  if (ctx.fullAccess && ctx.agentMode !== 'ask') {
+  if (ctx.fullAccess && ctx.agentMode !== 'ask' && !['browser_click', 'browser_fill'].includes(ctx.parsedTool.tool)) {
     if (ctx.parsedTool.tool === 'git_commit') {
       const commit = await gateGitCommit(ctx, true)
       return 'denied' in commit ? { outcome: 'denied', feedback: commit.denied } : { outcome: 'allowed', toolCallForExecution: commit }

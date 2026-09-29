@@ -3,6 +3,13 @@ import { rootConfigPathForMisplacedSourceFile, validateAndSanitize } from './too
 import type { AgentToolCall } from './agentTypes'
 
 describe('ToolSchemaValidator Unit Tests', () => {
+  it('validates the local browser path, locator and fill value', () => {
+    expect(validateAndSanitize({ tool: 'browser_navigate', parameters: { path: '/settings' } }).valid).toBe(true)
+    expect(validateAndSanitize({ tool: 'browser_navigate', parameters: { path: '//example.test' } }).valid).toBe(false)
+    expect(validateAndSanitize({ tool: 'browser_click', parameters: { locatorType: 'role', selector: 'button', accessibleName: 'Save' } }).valid).toBe(true)
+    expect(validateAndSanitize({ tool: 'browser_fill', parameters: { locatorType: 'css', selector: 'input' } }).valid).toBe(false)
+    expect(validateAndSanitize({ tool: 'browser_fill', parameters: { locatorType: 'script', selector: 'input', value: 'x' } }).valid).toBe(false)
+  })
   it('maps build configuration files out of a source directory without flattening a nested project', () => {
     expect(rootConfigPathForMisplacedSourceFile('src/tailwind.config.js')).toBe('tailwind.config.js')
     expect(rootConfigPathForMisplacedSourceFile('apps/web/src/index.html')).toBe('apps/web/index.html')

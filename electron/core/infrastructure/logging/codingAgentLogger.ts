@@ -304,16 +304,17 @@ ${rawResponse}
 
   public logToolCall(sessionId: string, step: number, tool: string, parameters: Record<string, UntrustedJson>, explanation?: string): void {
     this.metricsFor(sessionId).recordToolCall()
+    const safeParameters = tool === 'browser_fill' ? { ...parameters, value: '[REDACTED]' } : parameters
     const content = this.includesPayload(sessionId)
       ? `Session ID: ${sessionId} | Step: ${step}
 Invoked Tool: ${tool}
 Explanation: ${explanation || 'None provided'}
 Parameters:
-${JSON.stringify(parameters, null, 2)}`
+${JSON.stringify(safeParameters, null, 2)}`
       : `Session ID: ${sessionId} | Step: ${step}
 Invoked Tool: ${tool}
-Parameter Keys: ${Object.keys(parameters).sort().join(', ') || 'None'}
-${CodingAgentLogger.payloadSummary('Tool Parameters', JSON.stringify(parameters))}`
+Parameter Keys: ${Object.keys(safeParameters).sort().join(', ') || 'None'}
+${CodingAgentLogger.payloadSummary('Tool Parameters', JSON.stringify(safeParameters))}`
     this.writeEntry(`[STEP ${step} - TOOL EXECUTION INITIATED] ${tool}`, content)
   }
 

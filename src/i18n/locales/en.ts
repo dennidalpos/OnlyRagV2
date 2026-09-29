@@ -1224,6 +1224,7 @@ export const en: TranslationSchema = {
     reasoningStep: 'Reasoning step: {text}',
     agentReasoning: 'Agent reasoning',
     agentReasoningPending: 'Agent reasoning...',
+    browserScreenshotUnavailable: 'Browser screenshot unavailable.',
   },
   modelBadges: {
     verified: 'Verified',

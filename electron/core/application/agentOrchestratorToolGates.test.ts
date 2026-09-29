@@ -9,6 +9,24 @@ import type { AgentGuardEvent } from '../../../shared/types'
 const hostRoot = path.parse(process.cwd()).root
 
 describe('runToolGates network-approved policy', () => {
+  it('reviews each Guided browser interaction without exposing filled text in the approval payload', async () => {
+    const requestApproval = vi.fn().mockResolvedValue({ approved: true })
+    const call = { tool: 'browser_fill' as const, parameters: { locatorType: 'label', selector: 'Message', value: 'private123' } }
+    const result = await runToolGates({
+      parsedTool: call,
+      agentMode: 'guided',
+      fsmMode: { isToolAllowed: vi.fn(() => true) } as never,
+      workspacePath: path.join(hostRoot, 'workspace'),
+      stepCount: 1,
+      episodicCompactor: { recordStep: vi.fn() } as never,
+      capabilityPolicyMode: 'offline-strict',
+      emitLog: vi.fn(),
+      requestApproval,
+    })
+    expect(result).toMatchObject({ outcome: 'allowed', toolCallForExecution: call })
+    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({ type: 'browser_interaction', reasons: ['guided_review'] }))
+    expect(JSON.stringify(requestApproval.mock.calls[0][0])).not.toContain('private123')
+  })
   it('rejects a tool omitted from the current phase before approval or execution', async () => {
     const requestApproval = vi.fn()
     const recordStep = vi.fn()

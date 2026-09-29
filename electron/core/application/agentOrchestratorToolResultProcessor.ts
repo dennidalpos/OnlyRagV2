@@ -431,6 +431,8 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   } else if (['web_search', 'fetch_web_content', 'download_file'].includes(toolName)) {
     category = 'web_research'
     verb = toolName === 'web_search' ? 'Search' : toolName === 'fetch_web_content' ? 'Fetch' : 'Download'
+  } else if (toolName.startsWith('browser_')) {
+    category = 'browser_activity'
   }
 
   const testRunMeta =
@@ -448,6 +450,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     status: (isToolFailure ? 'failure' : 'success') as 'failure' | 'success',
     verb,
     testRun: testRunMeta,
+    ...(toolRes.browserScreenshot ? { browserScreenshot: toolRes.browserScreenshot } : {}),
     ...(toolRes.localized ? { localized: toolRes.localized } : {}),
   }
 

@@ -39,6 +39,7 @@ import { registerSettingsIpcHandlers } from './core/presentation/settingsIpc'
 import { registerArtifactIpcHandlers } from './core/presentation/artifactIpc'
 import { setTrustedIpcWindowProvider } from './core/presentation/secureIpcMain'
 import { systemAppService } from './core/application/systemAppService'
+import { agentToolExecutorService } from './core/application/agentToolExecutorService'
 
 process.env.DIST = path.join(__dirname, '../dist')
 process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(__dirname, '../public')
@@ -56,7 +57,7 @@ function fatalMainError(reason: unknown) {
   taskRunner.cancelAllTasks()
   managedDevServerRepository.stopAll()
   sidecarProcessManager.stopPythonSidecar()
-  app.exit(1)
+  void agentToolExecutorService.closeAllBrowserRuns().finally(() => app.exit(1))
 }
 process.on('uncaughtException', fatalMainError)
 process.on('unhandledRejection', fatalMainError)
@@ -112,12 +113,17 @@ function createWindow() {
   logger.log('INFO', 'MainProcess', 'Window created successfully.')
 }
 
-app.on('before-quit', () => {
+let quitCleanupStarted = false
+app.on('before-quit', (event) => {
+  if (quitCleanupStarted) return
+  quitCleanupStarted = true
+  event.preventDefault()
   logger.log('INFO', 'MainProcess', 'Application before-quit event triggered. Cleaning up active tasks & temp files...')
   taskRunner.cancelAllTasks()
   managedDevServerRepository.stopAll()
   sidecarProcessManager.stopPythonSidecar()
   taskRunner.cleanTempResiduals().catch(() => {})
+  void agentToolExecutorService.closeAllBrowserRuns().finally(() => app.quit())
 })
 
 app.on('window-all-closed', () => {

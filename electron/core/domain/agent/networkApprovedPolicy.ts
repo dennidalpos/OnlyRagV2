@@ -7,7 +7,7 @@ import {
   type CapabilityPolicyRequest,
   type CapabilityPolicyAuditStore,
 } from './capabilityPolicyContract'
-import { shellCommandHasEgress } from './offlineStrictPolicy'
+import { isManagedLocalBrowserRequest, shellCommandHasEgress } from './offlineStrictPolicy'
 
 function auditIdFor(request: CapabilityPolicyRequest): string {
   return `policy-${request.sessionId}-${request.toolName}-${request.operation}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 200)
@@ -23,6 +23,8 @@ export function authorizeNetworkApproved(input: CapabilityPolicyRequest): Capabi
   if (request.mode !== 'network-approved') {
     return result(request, false, false, 'Only network-approved authorization is implemented by this gateway')
   }
+
+  if (isManagedLocalBrowserRequest(request)) return result(request, true, false, 'Managed local browser needs no external network consent')
 
   const networkOperation =
     request.capability === 'http-download' ||

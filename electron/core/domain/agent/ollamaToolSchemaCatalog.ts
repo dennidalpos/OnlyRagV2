@@ -273,6 +273,41 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
     ['artifactPath'],
   ),
   tool(
+    'browser_navigate',
+    'Navigate the headless browser to a path on this workspace managed dev server. Start the dev server first.',
+    {
+      path: { type: 'string', description: 'A path starting with / on the managed dev server, such as /settings.' },
+    },
+    ['path'],
+  ),
+  tool(
+    'browser_snapshot',
+    'Read the current page URL, title, visible text and control labels, JavaScript errors, and failed HTTP responses. Input values are omitted.',
+    {},
+  ),
+  tool(
+    'browser_click',
+    'Click exactly one element in the current page. Guided mode asks the user to approve this action.',
+    {
+      locatorType: { type: 'string', description: 'Locator kind.', enum: ['role', 'label', 'text', 'testId', 'css'] },
+      selector: { type: 'string', description: 'Role name, label, visible text, test ID, or CSS selector.' },
+      accessibleName: { type: 'string', description: 'Accessible name when locatorType is role.' },
+    },
+    ['locatorType', 'selector'],
+  ),
+  tool(
+    'browser_fill',
+    'Fill exactly one editable field in the current page. Guided mode asks the user to approve this action.',
+    {
+      locatorType: { type: 'string', description: 'Locator kind.', enum: ['role', 'label', 'text', 'testId', 'css'] },
+      selector: { type: 'string', description: 'Role name, label, visible text, test ID, or CSS selector.' },
+      accessibleName: { type: 'string', description: 'Accessible name when locatorType is role.' },
+      value: { type: 'string', description: 'Text to enter. The result does not repeat this value.' },
+    },
+    ['locatorType', 'selector', 'value'],
+  ),
+  tool('browser_screenshot', 'Capture a PNG of the current headless browser page and show it in the Agent Coding timeline.', {}),
+  tool(
     'finish',
     'Signal that the task is complete and provide a final summary.',
     {

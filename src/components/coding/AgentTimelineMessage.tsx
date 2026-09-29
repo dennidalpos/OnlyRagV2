@@ -159,7 +159,28 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
     const { t } = useTranslation()
     const log = React.useMemo(() => localizeAgentLog(sourceLog, t), [sourceLog, t])
     const [isCopied, setIsCopied] = React.useState(false)
+    const [screenshotSrc, setScreenshotSrc] = React.useState<string | null>(null)
+    const [screenshotUnavailable, setScreenshotUnavailable] = React.useState(false)
     const resolved = React.useMemo(() => resolveLogCategory(log), [log])
+
+    React.useEffect(() => {
+      const artifact = log.browserScreenshot
+      if (!artifact) return
+      let active = true
+      void window.electronAPI
+        ?.readAgentBrowserScreenshot(artifact)
+        .then((result) => {
+          if (!active) return
+          if (result.success && result.imageBase64) setScreenshotSrc(`data:image/png;base64,${result.imageBase64}`)
+          else setScreenshotUnavailable(true)
+        })
+        .catch(() => {
+          if (active) setScreenshotUnavailable(true)
+        })
+      return () => {
+        active = false
+      }
+    }, [log.browserScreenshot])
 
     // 1. User Prompt Bubble
     if (resolved.category === 'user_prompt') {
@@ -458,6 +479,22 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
     }
 
     // 7. Web Research Badge
+    if (resolved.category === 'browser_activity') {
+      return (
+        <div className="rounded-lg border border-indigo-800/50 bg-slate-900/60 p-2.5 text-xs text-slate-200 space-y-2">
+          <div className="flex items-center gap-2 font-semibold">
+            <Globe className="w-3.5 h-3.5 text-indigo-400" />
+            {log.message}
+          </div>
+          {screenshotSrc && (
+            <img src={screenshotSrc} alt="Agent browser screenshot" className="max-h-72 w-auto rounded border border-slate-700 object-contain" />
+          )}
+          {screenshotUnavailable && <span className="text-amber-300">{t('agentTimeline.browserScreenshotUnavailable')}</span>}
+          {log.detail && <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-[10px] text-slate-400">{log.detail}</pre>}
+        </div>
+      )
+    }
+
     if (resolved.category === 'web_research') {
       const action = log.verb || 'Search'
       const queryOrUrl = log.target || log.message

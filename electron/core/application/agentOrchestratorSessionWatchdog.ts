@@ -63,6 +63,7 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
     })
     session.isCancelled = true
     session.abortController?.abort()
+    agentToolExecutorService.closeBrowserRun(session.id)
     session.completionStatus = 'blocked'
     session.terminalSummary = timeoutSummary
     if (session.pendingApprovalResolve) {

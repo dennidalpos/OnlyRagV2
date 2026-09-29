@@ -81,6 +81,10 @@ export function authorizeOfflineStrict(input: CapabilityPolicyRequest): Capabili
     return decision(request, false, 'Only offline-strict authorization is implemented by this gateway')
   }
 
+  if (request.capability === 'browser' && isManagedLocalBrowserRequest(request)) {
+    return decision(request, true, 'Managed local browser allowed in offline-strict mode')
+  }
+
   if (request.capability === 'http-download' || request.capability === 'browser') {
     return decision(request, false, 'Network egress is disabled in offline-strict mode')
   }
@@ -94,4 +98,18 @@ export function authorizeOfflineStrict(input: CapabilityPolicyRequest): Capabili
   }
 
   return decision(request, true, 'Local capability allowed in offline-strict mode')
+}
+
+export function isManagedLocalBrowserRequest(request: CapabilityPolicyRequest): boolean {
+  if (
+    request.capability !== 'browser' ||
+    !['browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_screenshot'].includes(request.toolName)
+  )
+    return false
+  try {
+    const target = new URL(request.target || '')
+    return target.protocol === 'http:' && target.hostname === '127.0.0.1' && Number(target.port) > 0 && !target.username && !target.password
+  } catch {
+    return false
+  }
 }

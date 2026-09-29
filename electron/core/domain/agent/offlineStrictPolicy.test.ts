@@ -30,6 +30,18 @@ describe('offline-strict capability policy', () => {
     expect(authorizeOfflineStrict(request({ capability: 'browser', operation: 'open', toolName: 'open_in_browser' })).allowed).toBe(false)
   })
 
+  it('allows only the managed local browser exception', () => {
+    expect(
+      authorizeOfflineStrict(request({ capability: 'browser', operation: 'open', toolName: 'browser_navigate', target: 'http://127.0.0.1:43123/' })).allowed,
+    ).toBe(true)
+    expect(
+      authorizeOfflineStrict(request({ capability: 'browser', operation: 'open', toolName: 'browser_navigate', target: 'http://example.test/' })).allowed,
+    ).toBe(false)
+    expect(
+      authorizeOfflineStrict(request({ capability: 'browser', operation: 'open', toolName: 'open_in_browser', target: 'http://127.0.0.1:43123/' })).allowed,
+    ).toBe(false)
+  })
+
   it('blocks network-capable shell commands but allows local commands', () => {
     expect(shellCommandHasEgress('Invoke-WebRequest https://example.test')).toBe(true)
     expect(shellCommandHasEgress('npm run typecheck')).toBe(false)

@@ -8,6 +8,8 @@ describe('findToolSchema', () => {
     expect(findToolSchema('start_dev_server')?.function.parameters.required).toEqual([])
     expect(findToolSchema('probe_local_http')?.function.parameters.required).toEqual(['url'])
     expect(findToolSchema('stop_dev_server')?.function.parameters.required).toEqual([])
+    expect(findToolSchema('browser_navigate')?.function.parameters.required).toEqual(['path'])
+    expect(findToolSchema('browser_fill')?.function.parameters.required).toEqual(['locatorType', 'selector', 'value'])
     expect(findToolSchema('teleport_file')).toBeUndefined()
   })
 })

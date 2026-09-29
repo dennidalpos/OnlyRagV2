@@ -148,6 +148,10 @@ export interface IpcInvokeContract {
   'system:open-path': { payload: { targetPath: string }; result: boolean }
   'agent:start-task': { payload: AgentTaskRequest; result: AgentDoneResult & { error?: string; runId?: string; queuePosition?: number } }
   'agent:cancel-task': { payload: AgentRunIdentity; result: { success: boolean; message?: string } }
+  'agent:read-browser-screenshot': {
+    payload: { workspacePath: string; runId: string; screenshotId: string }
+    result: { success: boolean; imageBase64?: string }
+  }
   /** Answers a pending `agent:approval-request`, resuming the paused orchestrator step. */
   'agent:approval-response': { payload: { identity: AgentRunIdentity; approved: boolean; approvedHunkIndices?: number[] }; result: boolean }
   'agent:compact-context': { payload: AgentRunIdentity; result: boolean }
@@ -328,6 +332,7 @@ export const IPC_INVOKE_METHODS = {
   openPath: 'system:open-path',
   startAgentTask: 'agent:start-task',
   cancelAgentTask: 'agent:cancel-task',
+  readAgentBrowserScreenshot: 'agent:read-browser-screenshot',
   respondToAgentApproval: 'agent:approval-response',
   compactAgentContext: 'agent:compact-context',
   updateActiveAgentRun: 'agent:update-active-run',

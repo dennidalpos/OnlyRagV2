@@ -20,6 +20,7 @@ export type AgentLogCategory =
   | 'test_run'
   | 'workspace_exploration'
   | 'web_research'
+  | 'browser_activity'
   | 'final_report'
   | 'agent_question'
   | 'system_alert'
@@ -45,6 +46,7 @@ export interface AgentLogEntry {
   }
   /** Message keys the renderer localizes; `message`/`detail` hold the Italian fallback. */
   localized?: AgentLocalizedLog
+  browserScreenshot?: { workspacePath: string; runId: string; screenshotId: string }
 }
 
 export interface AgentTaskResult {
@@ -95,6 +97,11 @@ export type SupportedToolName =
   | 'ask'
   | 'open_in_browser'
   | 'validate_visual_artifact'
+  | 'browser_navigate'
+  | 'browser_snapshot'
+  | 'browser_click'
+  | 'browser_fill'
+  | 'browser_screenshot'
   | 'finish'
 
 export interface AgentToolCall {

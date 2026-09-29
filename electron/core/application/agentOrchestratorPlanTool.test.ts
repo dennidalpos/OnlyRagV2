@@ -125,6 +125,40 @@ describe('handleUpdatePlanTool', () => {
     }
   })
 
+  it('keeps a styling milestone open when a build passes without a runnable browser preview', async () => {
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-visual-proof-'))
+    try {
+      fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'vite build' } }))
+      fs.mkdirSync(path.join(workspacePath, 'src'), { recursive: true })
+      fs.writeFileSync(path.join(workspacePath, 'src/styles.css'), 'body { margin: 0 }\n')
+      const goalPlanner = new GoalDecompositionPlanner()
+      goalPlanner.initializePlan([
+        { id: 'm-1', title: 'Configure Tailwind CSS', filePaths: ['src/styles.css'], status: 'in_progress', verificationCommand: 'npm run build' },
+      ])
+      vi.spyOn(agentToolExecutorService, 'getOrCreateShellSession').mockReturnValue({
+        execute: vi.fn(async () => ({ code: 0, stdout: '', stderr: '', timedOut: false })),
+      } as never)
+      const recordStep = vi.fn()
+      await handleUpdatePlanTool({
+        parsedTool: { tool: 'update_plan', parameters: { milestoneId: 'm-1', status: 'verified' } },
+        goalPlanner,
+        workspacePath,
+        emitLog: vi.fn(),
+        emitStepUpdate: vi.fn(),
+        episodicCompactor: { recordStep } as never,
+        persistCurrentState: vi.fn(async () => {}),
+        settings: { ...DEFAULT_APP_SETTINGS, fullAccess: true },
+        sessionId: 'session-1',
+        stepCount: 1,
+        maxStepsLabel: '50',
+      } as UpdatePlanToolContext)
+      expect(goalPlanner.findMilestone('m-1')?.status).toBe('in_progress')
+      expect(recordStep.mock.calls[0]?.[1]).toContain('Browser verification did not pass')
+    } finally {
+      fs.rmSync(workspacePath, { recursive: true, force: true })
+    }
+  })
+
   it('rejects updates to a later milestone until the active one is verified', async () => {
     const goalPlanner = new GoalDecompositionPlanner()
     goalPlanner.initializePlan([
@@ -194,6 +228,50 @@ describe('handleUpdatePlanTool', () => {
       expect(feedback).toContain('[UPDATE_PLAN REJECTED: VERIFICATION FAILED]')
       expect(feedback).toContain('module is not defined in ES module scope')
       expect(feedback).not.toContain('CONTRADICTED BY THE WORKSPACE')
+    } finally {
+      fs.rmSync(workspacePath, { recursive: true, force: true })
+    }
+  })
+
+  it('passes package export diagnostics to the model when update_plan runs a failing build', async () => {
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-package-export-proof-'))
+    try {
+      fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'react-scripts build' } }))
+      fs.mkdirSync(path.join(workspacePath, 'src'), { recursive: true })
+      fs.writeFileSync(path.join(workspacePath, 'src/App.js'), "import 'tailwindcss/tailwind.css'\n")
+      const goalPlanner = new GoalDecompositionPlanner()
+      goalPlanner.initializePlan([
+        { id: 'm-1', title: 'Create App.js', filePaths: ['src/App.js'], status: 'in_progress', verificationCommand: 'npm run build' },
+      ])
+      const mockShell = {
+        execute: vi.fn(async () => ({
+          code: 1,
+          stdout: '',
+          stderr: `Module not found: Error: "./tailwind.css" is not exported under the conditions ["import","webpack"] from package ${path.join(workspacePath, 'node_modules', 'tailwindcss')}`,
+          timedOut: false,
+        })),
+      }
+      vi.spyOn(agentToolExecutorService, 'getOrCreateShellSession').mockReturnValue(mockShell as never)
+      const recordStep = vi.fn()
+      await handleUpdatePlanTool({
+        parsedTool: { tool: 'update_plan', parameters: { milestoneId: 'm-1', status: 'verified' } },
+        goalPlanner,
+        workspacePath,
+        emitLog: vi.fn(),
+        emitStepUpdate: vi.fn(),
+        episodicCompactor: { recordStep } as never,
+        persistCurrentState: vi.fn(async () => {}),
+        settings: { ...DEFAULT_APP_SETTINGS, fullAccess: true },
+        sessionId: 'session-1',
+        stepCount: 1,
+        maxStepsLabel: '50',
+      } as UpdatePlanToolContext)
+
+      const feedback = recordStep.mock.calls[0]?.[1] as string
+      expect(feedback).toContain('[UPDATE_PLAN REJECTED: VERIFICATION FAILED]')
+      expect(feedback).toContain('Suggested fix (advice;')
+      expect(feedback).toContain('grep_search" with query "tailwindcss/tailwind.css"')
+      expect(goalPlanner.findMilestone('m-1')?.status).toBe('in_progress')
     } finally {
       fs.rmSync(workspacePath, { recursive: true, force: true })
     }

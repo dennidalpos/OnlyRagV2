@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { partialDeliveryDirective, promotionNote, redeliveredMilestoneDirective, selectMilestonesProvenByVerification } from './milestoneVerificationPromotion'
+import {
+  partialDeliveryDirective,
+  promotionNote,
+  redeliveredMilestoneDirective,
+  requiresVisualEvidence,
+  selectMilestonesProvenByVerification,
+  WEB_UI_SMOKE_VERIFICATION,
+} from './milestoneVerificationPromotion'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 
@@ -35,6 +42,29 @@ describe('selectMilestonesProvenByVerification', () => {
 
     expect(selectMilestonesProvenByVerification(plan, 'npm run build', statusMap()).map((m) => m.id)).toEqual(['m-1'])
     expect(selectMilestonesProvenByVerification(plan, 'npm test', statusMap()).map((m) => m.id)).toEqual(['m-1', 'm-2'])
+  })
+
+  it('requires rendered UI evidence for styling and navigation milestones even when a build passes', () => {
+    const plan = [
+      milestone('m-1', 'Create `index.html`'),
+      { ...milestone('m-2', 'Configure Tailwind CSS', 'pending', 'npm run build'), filePaths: ['tailwind.config.js'] },
+      {
+        ...milestone('m-3', 'Create `src/index.js`'),
+        verificationCommand: undefined,
+        acceptanceCriteria: ['Layout shell provides Dashboard and Tasks navigation.'],
+      },
+    ]
+    expect(requiresVisualEvidence(plan[1])).toBe(true)
+    expect(requiresVisualEvidence(plan[2])).toBe(true)
+    expect(selectMilestonesProvenByVerification(plan, 'npm run build', statusMap()).map((m) => m.id)).toEqual(['m-1'])
+    expect(selectMilestonesProvenByVerification(plan, WEB_UI_SMOKE_VERIFICATION, statusMap()).map((m) => m.id)).toEqual(['m-2', 'm-3'])
+  })
+
+  it('does not treat a test command alone as proof of responsive navigation', () => {
+    const plan = [milestone('m-1', 'Responsive Tasks navigation', 'in_progress', 'npm test')]
+    expect(selectMilestonesProvenByVerification(plan, 'npm test', statusMap())).toEqual([])
+    expect(selectMilestonesProvenByVerification(plan, WEB_UI_SMOKE_VERIFICATION, statusMap())).toEqual([])
+    expect(selectMilestonesProvenByVerification(plan, WEB_UI_SMOKE_VERIFICATION, statusMap(), ['npm test']).map((m) => m.id)).toEqual(['m-1'])
   })
 
   it('leaves alone a milestone that is already verified', () => {

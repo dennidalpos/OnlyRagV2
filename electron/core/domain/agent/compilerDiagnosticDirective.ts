@@ -291,6 +291,32 @@ export interface UnresolvedBundlerImport {
   specifier: string
 }
 
+export interface UnexportedPackageSubpath {
+  packageName: string
+  specifier: string
+}
+
+const PACKAGE_SUBPATH_NOT_EXPORTED =
+  /["']\.\/([^"']+)["'] is not exported under the conditions [^\r\n]* from package [^\r\n]*?node_modules[\\/]((?:@[^\\/\s]+[\\/])?[^\\/\s()]+)/
+
+/** Webpack reports the package path but omits the source file containing the import. */
+export function extractUnexportedPackageSubpath(output: string): UnexportedPackageSubpath | null {
+  const match = PACKAGE_SUBPATH_NOT_EXPORTED.exec((output || '').replace(ANSI_SEQUENCE, ''))
+  return match ? { packageName: match[2].replace(/\\/g, '/'), specifier: `${match[2].replace(/\\/g, '/')}/${match[1]}` } : null
+}
+
+function buildUnexportedPackageSubpathAdvice(failure: UnexportedPackageSubpath): DiagnosticAdvice {
+  return diagnosticAdvice(
+    `[PACKAGE SUBPATH IS NOT EXPORTED — "${failure.specifier}"]`,
+    [`The installed "${failure.packageName}" package does not export this file. Reinstalling the same package cannot make that import valid.`],
+    `"grep_search" with query "${failure.specifier}" to find the source file that imports it.`,
+    [
+      `Remove or replace that import in the source file. For Tailwind CSS, configure the project's stylesheet for the installed major version and bundler rather than importing a private package file from JavaScript.`,
+      `Then run the build again.`,
+    ],
+  )
+}
+
 /** Rolldown (Vite 8) and Vite's import analysis, which report a relative import without a tsc code. */
 const BUNDLER_UNRESOLVED: RegExp[] = [
   /Could not resolve ['"](\.{1,2}\/[^'"]+)['"] in (\S+?)(?::\d+(?::\d+)?)?\s*$/m,
@@ -575,6 +601,7 @@ function domEnvironmentInstalled(failing: NonNullable<ReturnType<typeof extractF
 
 /** Tools beyond the file edit that the directive built from this output orders. */
 export function diagnosticFixRequiredTools(output: string, facts: DiagnosticWorkspaceFacts = {}): SupportedToolName[] {
+  if (extractUnexportedPackageSubpath(output)) return ['grep_search']
   if (extractTailwindV4PostCssFailure(output)) return ['run_command']
   if (extractJsxInScriptFile(output)) return ['move_file']
   const browserTest = browserGlobalTest(output)
@@ -630,6 +657,8 @@ export function buildDiagnosticFixAdvice(
   resolveLocalModuleExports: (importingFile: string, specifier: string) => string[] = () => [],
   facts: DiagnosticWorkspaceFacts = {},
 ): DiagnosticAdvice | null {
+  const unexportedSubpath = extractUnexportedPackageSubpath(output)
+  if (unexportedSubpath) return buildUnexportedPackageSubpathAdvice(unexportedSubpath)
   const missingProgram = extractMissingScriptProgram(output)
   if (missingProgram) return buildMissingScriptProgramAdvice(missingProgram, facts)
   const postCssEsm = extractPostCssEsmConfigFailure(output)

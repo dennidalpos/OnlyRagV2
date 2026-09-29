@@ -4,6 +4,7 @@ import {
   extractMissingScriptProgram,
   extractBundlerMissingExport,
   extractUnresolvedBundlerImport,
+  extractUnexportedPackageSubpath,
   extractUnresolvedCssImport,
   buildDiagnosticFixAdvice,
   buildDeferredDiagnosticNote,
@@ -541,6 +542,27 @@ describe('an unresolvable stylesheet @import', () => {
     const directive = buildDiagnosticFixDirective(VITE_CSS, undefined, undefined, { toWorkspaceRelative: facts.toWorkspaceRelative })!
 
     expect(directive).toContain('@import "tailwindcss/tailwind.min.css"; removed')
+  })
+})
+
+describe('an unexported package subpath', () => {
+  const output = [
+    'Failed to compile.',
+    'Module not found: Error: "./tailwind.css" is not exported under the conditions ["import","webpack"] from package C:\\live\\app\\node_modules\\tailwindcss (see exports field in C:\\live\\app\\node_modules\\tailwindcss\\package.json)',
+  ].join('\n')
+
+  it('identifies the import without treating the installed package as missing', () => {
+    expect(extractUnexportedPackageSubpath(output)).toEqual({ packageName: 'tailwindcss', specifier: 'tailwindcss/tailwind.css' })
+    expect(extractUnexportedPackageSubpath('Module not found: Cannot find package tailwindcss')).toBeNull()
+    expect(diagnosticFixRequiredTools(output)).toEqual(['grep_search'])
+    expect(diagnosticFixTargetFile(output)).toBeNull()
+  })
+
+  it('points to the source import and keeps the stylesheet integration version-aware', () => {
+    const directive = buildDiagnosticFixDirective(output)!
+    expect(directive).toContain('grep_search" with query "tailwindcss/tailwind.css"')
+    expect(directive).toContain('does not export this file')
+    expect(directive).toContain('installed major version and bundler')
   })
 })
 

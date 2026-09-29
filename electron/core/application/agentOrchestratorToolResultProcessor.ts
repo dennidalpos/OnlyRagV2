@@ -5,7 +5,13 @@ import type { AgentToolCall, AgentLogEntry } from '../domain/agent/agentTypes'
 import type { ClassifiedToolExecutionResult } from './agentToolExecutorService'
 import { DiagnosticOutputReducer, extractErrorDiagnostics, formatDiagnosticPrompt } from '../domain/agent/diagnosticOutputReducer'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import { runCircuitBreaker, recordMutationSideEffects, recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
+import {
+  runCircuitBreaker,
+  recordMutationSideEffects,
+  recordCommandTouchedFiles,
+  trackVerification,
+  promoteMilestonesProvenBy,
+} from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ResponseInterpreterState, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorRunContext'
 import { emitLocalizedLog } from './agentOrchestratorTypes'
 import { TOOL_RESULT_MAX_CHARS } from './agentChatTranscript'
@@ -15,6 +21,10 @@ import { redactSecrets } from '../../logRedactor'
 import { findModuleExtensionAliases, resolveDeclaredFilePaths } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { fileVersionEvidenceKey, forgetFileVersion, knownFileVersion, recordFileVersion } from '../domain/agent/fileVersionEvidence'
 import { type AgentLocalizedText, formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
+import { requiresVisualEvidence, WEB_UI_SMOKE_VERIFICATION } from '../domain/agent/milestoneVerificationPromotion'
+import { verifyWebUi } from '../infrastructure/process/webUiSmokeVerifier'
+import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
+import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 
 export function isToolExecutionFailure(toolRes: ClassifiedToolExecutionResult): boolean {
   return toolRes.outcome !== 'success'
@@ -349,6 +359,29 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   }
   emitWorkspaceFileVersions(ctx, [toolRes.changeStats?.filePath, ...commandTouchedPaths, ...resolvedMutationPaths(ctx, isToolFailure)])
   trackVerification(ctx, isToolFailure)
+  const activeMilestone = ctx.goalPlanner.getActiveMilestone()
+  const command = String(parsedTool.parameters?.command || '').trim()
+  const primaryCommand =
+    !isToolFailure && parsedTool.tool === 'run_command' && ctx.workspacePath && activeMilestone && requiresVisualEvidence(activeMilestone)
+      ? resolvePrimaryProfileVerificationTargets(discoverProjectProfile(ctx.workspacePath))[0]?.command
+      : undefined
+  const visualProofCommand = activeMilestone?.verificationCommand || primaryCommand
+  if (
+    !isToolFailure &&
+    parsedTool.tool === 'run_command' &&
+    ctx.workspacePath &&
+    activeMilestone &&
+    requiresVisualEvidence(activeMilestone) &&
+    visualProofCommand?.trim().toLowerCase() === command.toLowerCase()
+  ) {
+    const smoke = await verifyWebUi(ctx.workspacePath, ctx.goalPlanner.getMilestones())
+    if (smoke.status === 'passed') {
+      promoteMilestonesProvenBy(ctx, WEB_UI_SMOKE_VERIFICATION, [command])
+      toolRes.outputForHistory += '\n[WEB UI SMOKE PASSED] Rendered page, JavaScript, responsive widths and requested UI checks passed.'
+    } else {
+      toolRes.outputForHistory += `\n[WEB UI SMOKE ${smoke.status.toUpperCase()}] ${smoke.detail || 'No runnable web preview was available.'}`
+    }
+  }
 
   const remappedMilestones = remapPlanAfterMove(ctx, isToolFailure)
   if (remappedMilestones.length > 0) {

@@ -73,6 +73,10 @@ export class ManagedDevServerRepository {
 
   constructor(private readonly startupTimeoutMs = 15_000) {}
 
+  runningPort(workspacePath: string): number | null {
+    return this.servers.get(workspaceKey(workspacePath))?.port ?? null
+  }
+
   async start(workspacePath: string): Promise<{ pid: number; port: number; output: string }> {
     const key = workspaceKey(workspacePath)
     if (this.servers.has(key)) throw new Error('A managed dev server is already running for this workspace.')

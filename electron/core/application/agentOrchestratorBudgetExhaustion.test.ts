@@ -6,6 +6,7 @@ import path from 'node:path'
 import { promoteMilestonesProvenBy, selectMilestonesAwaitingVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { ToolResultProcessingContext } from './agentOrchestratorRunContext'
+import { WEB_UI_SMOKE_VERIFICATION } from '../domain/agent/milestoneVerificationPromotion'
 
 /** Reproduction of live-full-task, 2026-08-25T12:11 — the run behind the tracker entry "nessuna milestone promossa a verified nonostante 16 file su disco". */
 
@@ -97,7 +98,16 @@ describe('milestone promotion on the live-full-task workspace', () => {
     writeLiveWorkspace(LIVE_WRITTEN_FILES)
     const plan = livePlan()
 
-    expect(selectMilestonesAwaitingVerification(makeDeps(plan), 'npm run build').map((m) => m.id)).toEqual(LIVE_MILESTONE_TITLES.map(([id]) => id))
+    expect(selectMilestonesAwaitingVerification(makeDeps(plan), 'npm run build').map((m) => m.id)).toEqual(['m-1', 'm-2', 'm-4', 'm-5', 'm-6', 'm-7', 'm-8'])
+    expect(selectMilestonesAwaitingVerification(makeDeps(plan), WEB_UI_SMOKE_VERIFICATION).map((m) => m.id)).toEqual([
+      'm-3',
+      'm-9',
+      'm-10',
+      'm-11',
+      'm-12',
+      'm-13',
+      'm-14',
+    ])
   })
 
   it('promotes only the active milestone with the application-owned check', () => {
@@ -121,7 +131,7 @@ describe('milestone promotion on the live-full-task workspace', () => {
       if (index !== 8 && index !== 9) milestone.verificationCommand = 'npm test'
     })
 
-    expect(selectMilestonesAwaitingVerification(makeDeps(plan), 'npm run build').map((m) => m.id)).toEqual(['m-9'])
+    expect(selectMilestonesAwaitingVerification(makeDeps(plan), WEB_UI_SMOKE_VERIFICATION).map((m) => m.id)).toEqual(['m-9'])
   })
 
   it('promotes nothing when the workspace holds only placeholders', () => {

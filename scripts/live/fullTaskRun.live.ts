@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { respondToApproval, runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
 import type { RendererEventSink } from '../../electron/core/domain/ports/rendererEventSink'
@@ -38,7 +40,18 @@ const MIN_VERIFIED_MILESTONE_RATIO = RUN9_VERIFIED_MILESTONES / RUN9_TOTAL_MILES
 /** A plan is generated per run, so its size is not fixed and the bar above is a ratio. */
 const MIN_PLAN_MILESTONES = 1
 
-const USER_TASK = `# 1 - Project setup and mobile-first foundation
+function readFirstSequencePrompt(filePath: string): string {
+  const source = fs.readFileSync(path.resolve(filePath), 'utf-8')
+  const separator = /\r?\n\r?\n-{3,}\r?\n/.exec(source)
+  if (!source.startsWith('# 1 -') || !separator || separator.index === 0) {
+    throw new Error('The live prompt file must start with task #1 followed by a horizontal separator.')
+  }
+  return source.slice(0, separator.index)
+}
+
+const USER_TASK = process.env.ONLYRAG_LIVE_PROMPT_FILE
+  ? readFirstSequencePrompt(process.env.ONLYRAG_LIVE_PROMPT_FILE)
+  : `# 1 - Project setup and mobile-first foundation
 
 Create a new application called Project Dashboard Task using React and Tailwind CSS.
 

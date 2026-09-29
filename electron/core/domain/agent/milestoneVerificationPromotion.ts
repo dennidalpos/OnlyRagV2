@@ -11,6 +11,15 @@ export interface PromotionCandidate {
   title: string
 }
 
+export const WEB_UI_SMOKE_VERIFICATION = 'web-ui smoke'
+
+/** Compilation cannot establish rendered layout, styling or navigation behavior. */
+export function requiresVisualEvidence(milestone: PlanMilestone): boolean {
+  return /\b(?:responsive|layout|navigation|sidebar|drawer|breakpoints?|touch targets?|overflow|clipping|spacing|typography|display|visual|css|tailwind|routing)\b/i.test(
+    [milestone.title, ...(milestone.acceptanceCriteria ?? [])].join(' '),
+  )
+}
+
 /**
  * Milestones a passing verification promotes to `verified`.
  * Excludes already verified, failed/abandoned, completion milestone, and unsatisfied deliverables.
@@ -19,16 +28,37 @@ export function selectMilestonesProvenByVerification(
   milestones: readonly PlanMilestone[],
   verificationCommand: string,
   deliverableStatusOf: (milestone: PlanMilestone) => MilestoneDeliverableStatus,
+  accompanyingPassedCommands: readonly string[] = [],
 ): PromotionCandidate[] {
   const executed = verificationCommand.trim().toLowerCase()
   return (
     milestones
       .filter((m) => m.status !== 'verified' && m.status !== 'failed')
       .filter((m) => !isCompletionMilestoneTitle(m))
-      .filter((m) => !m.verificationCommand || m.verificationCommand.trim().toLowerCase() === executed)
+      .filter((m) => executed !== WEB_UI_SMOKE_VERIFICATION || requiresVisualEvidence(m))
+      .filter(
+        (m) =>
+          !m.verificationCommand ||
+          m.verificationCommand.trim().toLowerCase() === executed ||
+          (requiresVisualEvidence(m) && executed === WEB_UI_SMOKE_VERIFICATION),
+      )
       // A milestone that promises behavior (e.g. a smoke test run by `npm test`) is not proven by a
       // build: its test file existing next to a green build says nothing about the test passing.
-      .filter((m) => !requiresBehaviorEvidence(m) || verificationEvidenceKind(verificationCommand) === 'behavior')
+      .filter(
+        (m) =>
+          !requiresBehaviorEvidence(m) ||
+          verificationEvidenceKind(verificationCommand) === 'behavior' ||
+          (requiresVisualEvidence(m) && executed === WEB_UI_SMOKE_VERIFICATION),
+      )
+      .filter(
+        (m) =>
+          executed !== WEB_UI_SMOKE_VERIFICATION ||
+          !requiresBehaviorEvidence(m) ||
+          accompanyingPassedCommands.some(
+            (command) => command.trim().toLowerCase() === (m.verificationCommand || m.proposedVerificationCommand)?.trim().toLowerCase(),
+          ),
+      )
+      .filter((m) => !requiresVisualEvidence(m) || verificationEvidenceKind(verificationCommand) === 'visual')
       .filter((m) => deliverableStatusOf(m) === 'satisfied')
       .map((m) => ({ id: m.id, title: m.title }))
   )
@@ -40,13 +70,15 @@ export function requiresBehaviorEvidence(milestone: PlanMilestone): boolean {
   return Boolean(declared) && verificationEvidenceKind(declared!) === 'behavior'
 }
 
-export function verificationEvidenceKind(verificationCommand: string): 'compilation' | 'behavior' {
+export function verificationEvidenceKind(verificationCommand: string): 'compilation' | 'behavior' | 'visual' {
+  if (verificationCommand.trim().toLowerCase() === WEB_UI_SMOKE_VERIFICATION) return 'visual'
   return /(^|[\s:&|])(test(?::\S+)?|pytest|vitest|jest|mocha)([\s:&|]|$)/i.test(verificationCommand) ? 'behavior' : 'compilation'
 }
 
 /** Records command evidence separately from the artifact prerequisite. */
 export function promotionNote(verificationCommand: string): string {
-  const evidence = verificationEvidenceKind(verificationCommand) === 'behavior' ? 'Behavior' : 'Compilation'
+  const kind = verificationEvidenceKind(verificationCommand)
+  const evidence = kind === 'visual' ? 'Visual' : kind === 'behavior' ? 'Behavior' : 'Compilation'
   return `${evidence} evidence: "${verificationCommand}" passed; every declared artifact is also present.`
 }
 

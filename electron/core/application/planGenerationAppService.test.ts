@@ -327,6 +327,30 @@ describe('PlanGenerationAppService', () => {
       expect(result.milestones.some((item) => item.proposedVerificationCommand === 'npm test')).toBe(true)
     })
 
+    it('regenerates a React plan that selects CRA against root entrypoints unless the user requested CRA', async () => {
+      const cra = complete([
+        {
+          ...intervention('m-1', 'Set up a new React application using Create React App', 'package.json'),
+          acceptanceCriteria: ['The app uses react-scripts and Tailwind CSS'],
+        },
+      ])
+      const compatible = complete([intervention('m-1', 'Set up a React application with Vite', 'package.json')])
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce(cra).mockResolvedValueOnce(compatible)
+
+      const result = await planGenerationAppService.generatePlanText({ prompt: 'Create a React application', settings, workspacePath })
+      expect(result.status).toBe('success')
+      expect(result.milestones.some((item) => item.title.includes('Vite'))).toBe(true)
+      expect(result.milestones.some((item) => item.title.includes('Create React App'))).toBe(false)
+      const correction = JSON.parse(vi.mocked(ollamaAppService.generateStructured).mock.calls[1][0].userContent)
+      expect(correction.schemaCorrection.validationError).toContain('root index.html and src/main.* entrypoints')
+
+      vi.mocked(ollamaAppService.generateStructured).mockClear()
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(cra)
+      const requested = await planGenerationAppService.generatePlanText({ prompt: 'Use Create React App for this project', settings, workspacePath })
+      expect(requested.status).toBe('success')
+      expect(ollamaAppService.generateStructured).toHaveBeenCalledOnce()
+    })
+
     it('maps a command-only setup intervention to the canonical greenfield scaffold', async () => {
       vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(
         complete([

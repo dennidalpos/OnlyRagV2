@@ -13,7 +13,7 @@ Run from repository root in PowerShell. On 2026-09-26 on Windows (Node 24, Pytho
 
 | Purpose | Command |
 | --- | --- |
-| Fast suite | `npm run test:fast` (282 files, 2234 tests on 2026-09-28; 27 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
+| Fast suite | `npm run test:fast` (283 files, 2272 tests on 2026-09-29; 27 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
 | Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (140 tests on 2026-09-28; after a Sidecar schema change, `npm run generate:openapi` refreshes `sidecar/contracts/openapi-2.5.0.json`) |
 | Legacy chunk prefix migration | Set `ONLYRAG_DATA_DIR` to the actual app userData, then run `.venv\Scripts\python.exe scripts/migrate_chunk_context.py` to preview and add `--apply` to migrate; app userData preview found 0 chunks; an isolated Ollama-backed index previewed and migrated 1 legacy chunk with verified backup rollback. |
 | Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 9 guard + 2 plan/tracker + active-run mode/context/consent scenarios) |
@@ -49,4 +49,5 @@ Run from repository root in PowerShell. On 2026-09-26 on Windows (Node 24, Pytho
 - Keep UTF-8 without BOM and avoid CRLF/LF-only diffs. `.gitattributes` checks every text file out with LF, as Biome requires, whatever `core.autocrlf` says; after a clone made before it existed, `git add --renormalize .` followed by `git reset` clears the phantom modifications.
 - A test outside the `dom` project that needs a DOM declares `// @vitest-environment happy-dom` on its first line.
 - `PROJECT_STATUS.json` is the canonical backlog; retain its `todos` string-array format and remove completed entries.
+- `scripts/live/fullTaskRun.live.ts` accepts `ONLYRAG_LIVE_PROMPT_FILE` to run the first separated prompt block; both 2026-09-29 exact-prompt 4B runs failed qualification (5/9, then 0/9 milestones). `scripts/live/webUiSmoke.live.ts` detected the first run's blank page and missing CSS; the second stopped before UI verification (`docs/verification.md`).
 - Work directly on `master`; do not create branches. Commit only when explicitly requested; push only when explicitly requested.

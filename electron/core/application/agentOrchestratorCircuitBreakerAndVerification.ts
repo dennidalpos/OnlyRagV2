@@ -10,7 +10,7 @@ import {
   AWAITING_VERIFICATION_MARKER,
 } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { captureMilestoneFileEvidence, captureWorkspaceVersion, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
-import { unreachableUiDeliverables } from '../infrastructure/filesystem/workspaceUiReachability'
+import { missingAcceptanceDirectories, unreachableUiDeliverables } from '../infrastructure/filesystem/workspaceUiReachability'
 import {
   awaitingVerificationNote,
   partialDeliveryDirective,
@@ -303,11 +303,18 @@ export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, comm
 export function selectMilestonesAwaitingVerification(
   deps: Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner'>,
   verificationCommand: string,
+  accompanyingPassedCommands: readonly string[] = [],
 ): { id: string; title: string }[] {
   if (!deps.workspacePath) return []
   const probe = createWorkspaceDeliverableProbe(deps.workspacePath)
-  return selectMilestonesProvenByVerification(deps.goalPlanner.getMilestones(), verificationCommand, (m) =>
-    unreachableUiDeliverables(deps.workspacePath!, m).length > 0 ? 'unsatisfied' : resolveMilestoneDeliverableStatus(m, probe),
+  return selectMilestonesProvenByVerification(
+    deps.goalPlanner.getMilestones(),
+    verificationCommand,
+    (m) =>
+      unreachableUiDeliverables(deps.workspacePath!, m).length > 0 || missingAcceptanceDirectories(deps.workspacePath!, m).length > 0
+        ? 'unsatisfied'
+        : resolveMilestoneDeliverableStatus(m, probe),
+    accompanyingPassedCommands,
   )
 }
 
@@ -317,9 +324,10 @@ export function selectMilestonesAwaitingVerification(
 export function promoteMilestonesProvenBy(
   deps: Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner' | 'emitLog'>,
   verificationCommand: string,
+  accompanyingPassedCommands: readonly string[] = [],
 ): number {
   const active = deps.goalPlanner.getActiveMilestone()
-  const proven = selectMilestonesAwaitingVerification(deps, verificationCommand).filter((milestone) => milestone.id === active?.id)
+  const proven = selectMilestonesAwaitingVerification(deps, verificationCommand, accompanyingPassedCommands).filter((milestone) => milestone.id === active?.id)
   if (proven.length === 0) return 0
 
   const workspaceVersion = deps.workspacePath ? captureWorkspaceVersion(deps.workspacePath) : undefined

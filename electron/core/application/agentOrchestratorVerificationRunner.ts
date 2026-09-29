@@ -6,6 +6,9 @@ import { evaluateDependencyIntegrity } from '../domain/agent/dependencyIntegrity
 import { resolveRequiredProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { classifyProjectVerification, type ProjectVerificationStatus } from '../domain/agent/projectVerificationStatus'
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
+import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
+import { WEB_UI_SMOKE_VERIFICATION } from '../domain/agent/milestoneVerificationPromotion'
+import { verifyWebUi } from '../infrastructure/process/webUiSmokeVerifier'
 
 /** Long enough for a cold `npm run build` on a small project, short enough to not hang a turn. */
 const VERIFICATION_TIMEOUT_MS = 180_000
@@ -32,6 +35,7 @@ export async function runProjectVerification(
   onOutput?: (chunk: string) => void,
   signal?: AbortSignal,
   fullAccess = false,
+  milestones: readonly PlanMilestone[] = [],
 ): Promise<VerificationRunResult> {
   if (!workspacePath) return { hasVerificationCommand: false, status: 'unverifiable' }
   if (signal?.aborted) return { hasVerificationCommand: false, status: 'unverifiable' }
@@ -99,12 +103,24 @@ export async function runProjectVerification(
     }
   }
 
+  const webUi = await verifyWebUi(workspacePath, milestones, signal)
+  if (webUi.status === 'failed' || webUi.status === 'unavailable') {
+    return {
+      hasVerificationCommand: true,
+      passed: false,
+      status: webUi.status === 'failed' ? 'failed' : 'unverifiable',
+      command: WEB_UI_SMOKE_VERIFICATION,
+      failureDetail: webUi.detail,
+      evidenceLevel,
+    }
+  }
+
   return {
     hasVerificationCommand: true,
     passed: true,
     status: 'verified',
     command: verificationLabel,
-    verifiedCommands: verifications.map((verification) => verification.command),
+    verifiedCommands: [...verifications.map((verification) => verification.command), ...(webUi.status === 'passed' ? [WEB_UI_SMOKE_VERIFICATION] : [])],
     evidenceLevel,
   }
 }

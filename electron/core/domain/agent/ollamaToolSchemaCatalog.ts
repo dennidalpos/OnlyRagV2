@@ -241,7 +241,7 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
   ),
   tool(
     'update_plan',
-    'Update the status of one milestone in the execution plan. Call this as soon as a milestone is started, completed and verified, or found to be blocked.',
+    'Update one milestone in the execution plan. Use in_progress when started, verified after successful verification, or failed when blocked; include the blocking reason in notes. Never use blocked as a status.',
     {
       milestoneId: { type: 'string', description: 'Milestone id (e.g. "m-2") or a distinctive part of its title.' },
       status: { type: 'string', description: 'New milestone status.', enum: ['pending', 'in_progress', 'verified', 'failed'] },

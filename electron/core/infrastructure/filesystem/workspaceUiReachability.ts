@@ -57,7 +57,7 @@ export function reachableUiModules(workspacePath: string): Set<string> | null {
 /** Names page/layout modules that exist but are not loaded by the application. */
 export function unreachableUiDeliverables(workspacePath: string, milestone: Pick<PlanMilestone, 'title' | 'filePaths'>): string[] {
   const declared = resolveDeclaredFilePaths(milestone).filter(
-    (file) => /^src\/(?:pages|components)\//i.test(file) && MODULE_EXTENSIONS.includes(path.extname(file).toLowerCase()),
+    (file) => (/^src\/(?:pages|components)\//i.test(file) || /^src\/index\.[^/]+$/i.test(file)) && MODULE_EXTENSIONS.includes(path.extname(file).toLowerCase()),
   )
   if (declared.length === 0) return []
   const reached = reachableUiModules(workspacePath)
@@ -70,4 +70,16 @@ export function unreachableUiDeliverables(workspacePath: string, milestone: Pick
     const aliases = MODULE_EXTENSIONS.map((candidate) => `${stem}${candidate}`).filter((candidate) => fs.existsSync(path.resolve(workspacePath, candidate)))
     return aliases.length !== 1 || !reached.has(aliases[0].toLowerCase())
   })
+}
+
+/** Checks literal source directories named by an architecture acceptance criterion. */
+export function missingAcceptanceDirectories(workspacePath: string, milestone: Pick<PlanMilestone, 'acceptanceCriteria'>): string[] {
+  return (milestone.acceptanceCriteria ?? [])
+    .filter((criterion) => /\bdirector(?:y|ies)\b|\bfolder\b/i.test(criterion))
+    .flatMap((criterion) => criterion.match(/\bsrc\/[A-Za-z0-9_/-]+/g) ?? [])
+    .map((relative) => relative.replace(/\/+$/, ''))
+    .filter((relative) => {
+      const absolute = path.join(workspacePath, relative)
+      return !fs.existsSync(absolute) || !fs.statSync(absolute).isDirectory()
+    })
 }

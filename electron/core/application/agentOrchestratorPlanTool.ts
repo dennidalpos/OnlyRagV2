@@ -1,16 +1,19 @@
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
+import { buildDiagnosticFixAdvice } from '../domain/agent/compilerDiagnosticDirective'
+import { renderAdvice } from '../domain/agent/diagnosticAdvice'
 import { checkVerificationCommandSafety, unsafeVerificationNote } from '../../../shared/domain/agent/verificationCommandSafety'
 import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import { resolveMilestoneUpdate } from '../domain/agent/milestoneUpdateAuthority'
-import { promotionNote } from '../domain/agent/milestoneVerificationPromotion'
+import { promotionNote, requiresVisualEvidence, WEB_UI_SMOKE_VERIFICATION } from '../domain/agent/milestoneVerificationPromotion'
 import { findUnsatisfiedDeliverables, resolveMilestoneDeliverableStatus } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { captureMilestoneFileEvidence, captureWorkspaceVersion, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
-import { unreachableUiDeliverables } from '../infrastructure/filesystem/workspaceUiReachability'
+import { missingAcceptanceDirectories, unreachableUiDeliverables } from '../infrastructure/filesystem/workspaceUiReachability'
 import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
 import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { agentToolExecutorService } from './agentToolExecutorService'
+import { verifyWebUi } from '../infrastructure/process/webUiSmokeVerifier'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import type { EmitLog } from './agentOrchestratorTypes'
@@ -74,10 +77,16 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
     let refusedVerification: { command: string; note: string; failed?: boolean } | null = null
 
     const disconnected = nextStatus === 'verified' && targetMilestone && workspacePath ? unreachableUiDeliverables(workspacePath, targetMilestone) : []
+    const missingDirectories = nextStatus === 'verified' && targetMilestone && workspacePath ? missingAcceptanceDirectories(workspacePath, targetMilestone) : []
     const primary = workspacePath ? resolvePrimaryProfileVerificationTargets(discoverProjectProfile(workspacePath))[0] : undefined
     const verifyCmd = targetMilestone?.verificationCommand || (nextStatus === 'verified' && primary?.command ? primary.command : undefined)
 
-    if (disconnected.length > 0) {
+    if (missingDirectories.length > 0) {
+      refusedVerification = {
+        command: 'acceptance criteria',
+        note: `Required source directories are missing: ${missingDirectories.join(', ')}. Create and connect them before verification.`,
+      }
+    } else if (disconnected.length > 0) {
       refusedVerification = {
         command: 'application entrypoint',
         note: `The declared UI module is not used by the application: ${disconnected.join(', ')}. Connect it through the active route or layout before verification.`,
@@ -115,17 +124,28 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
         const verifyRes = await shell.execute(secCheck.sanitizedCommand, (chunk) => emitLog('terminal', chunk.trim()), undefined, 60000, ctx.signal)
         const workspaceVersion = verifyRes.code === 0 && !verifyRes.timedOut && workspacePath ? captureWorkspaceVersion(workspacePath) : undefined
         const passed = verifyRes.code === 0 && !verifyRes.timedOut && Boolean(workspaceVersion)
-        effectiveStatus = passed ? 'verified' : 'failed'
+        const visual = passed && requiresVisualEvidence(targetMilestone) ? await verifyWebUi(workspacePath!, goalPlanner.getMilestones(), ctx.signal) : null
+        const visualPassed = !visual || visual.status === 'passed'
+        const proofCommand = visual ? WEB_UI_SMOKE_VERIFICATION : verifyCmd
+        effectiveStatus = passed && visualPassed ? 'verified' : 'failed'
         // Both streams, not whichever is non-empty: a failed verification writes its banner to stdout and its reason to stderr, and selecting one hands the model a note that says the milestone failed without saying why.
         const outputTail = DiagnosticOutputReducer.composeCommandOutput(verifyRes.stdout, verifyRes.stderr, verifyRes.code).slice(-1500)
-        effectiveNotes = passed ? promotionNote(verifyCmd) : `Verification command failed (exit ${verifyRes.code}): ${verifyCmd}\n${outputTail}`
-        if (passed && workspaceVersion) {
+        effectiveNotes =
+          passed && visualPassed ? promotionNote(proofCommand) : `Verification command failed (exit ${verifyRes.code}): ${verifyCmd}\n${outputTail}`
+        if (passed && visualPassed && workspaceVersion) {
           targetMilestone.verificationCommand = verifyCmd
-          targetMilestone.verificationEvidence = { command: verifyCmd, passed: true, checkedAt: new Date().toISOString(), workspaceVersion }
+          targetMilestone.verificationEvidence = { command: proofCommand, passed: true, checkedAt: new Date().toISOString(), workspaceVersion }
+        } else if (visual && !visualPassed) {
+          refusedVerification = {
+            command: WEB_UI_SMOKE_VERIFICATION,
+            note: `${visual.detail || 'Browser verification did not pass.'} Fix the rendered application before marking this milestone verified.`,
+            failed: true,
+          }
         } else if (!passed) {
+          const diagnostic = buildDiagnosticFixAdvice(outputTail)
           refusedVerification = {
             command: verifyCmd,
-            note: `Verification command failed (exit ${verifyRes.code}): ${verifyCmd}\n${outputTail}\nFix the reported errors in the workspace before marking the milestone verified.`,
+            note: `Verification command failed (exit ${verifyRes.code}): ${verifyCmd}\n${outputTail}\n${diagnostic ? renderAdvice(diagnostic) : 'Fix the reported errors in the workspace before marking the milestone verified.'}`,
             failed: true,
           }
         }

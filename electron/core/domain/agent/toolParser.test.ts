@@ -101,6 +101,14 @@ describe('parseExactJsonToolCall', () => {
     })
   })
 
+  it('accepts failed for a blocked milestone and rejects the unsupported blocked status', () => {
+    const planTools = ['update_plan'] as const
+    expect(
+      parseExactJsonToolCall('{"name":"update_plan","arguments":{"milestoneId":"m-4","status":"failed","notes":"Build failed"}}', planTools),
+    ).toMatchObject({ tool: 'update_plan', parameters: { milestoneId: 'm-4', status: 'failed' } })
+    expect(parseExactJsonToolCall('{"name":"update_plan","arguments":{"milestoneId":"m-4","status":"blocked"}}', planTools)).toBeNull()
+  })
+
   it('rejects prose, code fences, extra fields, unavailable tools and invalid arguments', () => {
     expect(parseExactJsonToolCall('I will write this:\n{"name":"write_file","arguments":{"filePath":"app.js","content":"ready"}}', allowed)).toBeNull()
     expect(parseExactJsonToolCall('```json\n{"name":"write_file","arguments":{"filePath":"app.js","content":"ready"}}\n```', allowed)).toBeNull()

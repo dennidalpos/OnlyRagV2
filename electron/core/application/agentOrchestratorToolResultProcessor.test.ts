@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -20,8 +20,53 @@ import { packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { resolvePlanDirective } from '../domain/agent/planDirectiveArbiter'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
+import { verifyWebUi } from '../infrastructure/process/webUiSmokeVerifier'
+
+vi.mock('../infrastructure/process/webUiSmokeVerifier', () => ({ verifyWebUi: vi.fn() }))
 
 describe('structured tool outcomes', () => {
+  it('returns browser runtime errors after a green primary build even without a milestone command', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-visual-feedback-'))
+    try {
+      fs.writeFileSync(path.join(workspace, 'package.json'), JSON.stringify({ scripts: { build: 'vite build', dev: 'vite' } }))
+      fs.writeFileSync(path.join(workspace, 'index.html'), '<script type="module" src="/src/main.jsx"></script>')
+      fs.mkdirSync(path.join(workspace, 'src'))
+      fs.writeFileSync(path.join(workspace, 'src/main.jsx'), 'document.body.textContent = "Hello"')
+      vi.mocked(verifyWebUi).mockResolvedValue({ status: 'failed', detail: 'JavaScript: Button is not defined' })
+      const goalPlanner = new GoalDecompositionPlanner()
+      goalPlanner.initializePlan([{ id: 'm-1', title: 'Configure Tailwind CSS layout', status: 'in_progress', filePaths: ['index.html'] }])
+      const toolRes = { outcome: 'success' as const, outputForHistory: 'Build passed', logMessage: 'Build passed' }
+      await runToolResultProcessing({
+        parsedTool: { tool: 'run_command', parameters: { command: 'npm run build' } },
+        toolRes,
+        toolStartedAtMs: Date.now(),
+        stepCount: 4,
+        workspacePath: workspace,
+        flags: { hasFileMutations: false, hasVerifiedBuild: false },
+        sessionChangedFiles: new Map(),
+        goalPlanner,
+        episodicCompactor: { recordStep: () => {} },
+        executionGuard: new TransactionalExecutionGuard(workspace),
+        loopDetector: new AgentActionLoopDetector(2),
+        state: { guardEvents: [], progress: new AgentProgressPolicy(), versionEvidence: {} },
+        sessionId: 'visual-feedback',
+        isSessionActive: () => false,
+        rendererEvents: null,
+        persistCurrentState: async () => {},
+        emitLog: () => {},
+        emitDone: () => {},
+        finalizeSession: () => {},
+        closeApplicationRun: async () => ({ outcome: 'continue' }),
+        settings: { enableCodingAgentDebugLog: false },
+      } as unknown as ToolResultProcessingContext)
+      expect(verifyWebUi).toHaveBeenCalledOnce()
+      expect(toolRes.outputForHistory).toContain('Button is not defined')
+      expect(goalPlanner.getMilestones()[0].status).toBe('in_progress')
+    } finally {
+      fs.rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
   it('passes a tool result localization key to the timeline without reading its English text', async () => {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-tool-log-'))
     const emitted: { message: string; key?: string }[] = []

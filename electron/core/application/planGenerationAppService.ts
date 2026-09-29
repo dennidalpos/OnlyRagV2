@@ -2,7 +2,7 @@ import os from 'node:os'
 import { CODING_MODEL_KEEP_ALIVE, HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
-import { compilePlanMilestones } from '../../../shared/domain/agent/planCompilation'
+import { compilePlanMilestones, type WorkspaceScaffoldFacts } from '../../../shared/domain/agent/planCompilation'
 import { resolveDeclaredFilePaths } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { collectProjectPlanningFacts } from './projectPlanningFacts'
@@ -31,6 +31,7 @@ Each intervention states observable behavior, one file at most, acceptance crite
 Every intervention must have a file path or an allowed verification command.
 For an existing workspace, change only relevant files and do not re-scaffold.
 For an empty workspace, use only the acceptedGreenfieldStack and scaffold requirements supplied in projectFacts.
+When those requirements name root index.html and src/main.*, use a compatible web bundler; do not choose Create React App or react-scripts unless the user explicitly requested them.
 Executable verification commands already exist and may be used in verificationCommand. Proposed commands are future checks only and must never be returned as verificationCommand.
 Never add analysis or inspection as interventions. Never invent verification commands or project infrastructure.
 Carry each pending prior intervention through sourceInterventionId or list it in supersededWork with a reason.
@@ -99,6 +100,18 @@ function normalizeFreshPlanReferences(plan: PlanningPhaseResponse, previousInter
     interventions: plan.interventions.map(({ sourceInterventionId: _ignored, ...intervention }) => intervention),
     supersededWork: [],
   }
+}
+
+function incompatibleGreenfieldScaffold(plan: PlanningPhaseResponse, scaffold: WorkspaceScaffoldFacts, request: string): string | undefined {
+  if (!scaffold.isGreenfield || /\b(?:create react app|react-scripts)\b/i.test(request)) return undefined
+  const requiredPaths = new Set(scaffold.requirements.map((requirement) => requirement.path))
+  if (!requiredPaths.has('index.html') || ![...requiredPaths].some((path) => /^src\/main\.[cm]?[jt]sx?$/.test(path))) return undefined
+  const incompatible = plan.interventions.find((intervention) =>
+    /\b(?:create react app|react-scripts)\b/i.test([intervention.objective, ...intervention.acceptanceCriteria].join(' ')),
+  )
+  return incompatible
+    ? `Plan intervention "${incompatible.objective}" selects Create React App/react-scripts, which does not use the required root index.html and src/main.* entrypoints. Choose a compatible web bundler and keep the scaffold requirements.`
+    : undefined
 }
 
 function toMilestones(plan: PlanningPhaseResponse): PlanMilestone[] {
@@ -213,7 +226,10 @@ export class PlanGenerationAppService {
           }
           const freshPlan = normalizeFreshPlanReferences(validated.data, previousInterventions)
           const sanitized = sanitizeVerificationCommands(freshPlan, executableVerificationCommands, discovery.scaffold.requirements[0]?.path)
-          const error = sanitized.error || reconcilePreviousWork(sanitized.plan || freshPlan, previousInterventions)
+          const error =
+            sanitized.error ||
+            incompatibleGreenfieldScaffold(sanitized.plan || freshPlan, discovery.scaffold, req.prompt) ||
+            reconcilePreviousWork(sanitized.plan || freshPlan, previousInterventions)
           return error ? { status: 'invalid', error } : { status: 'valid', data: sanitized.plan! }
         },
       )

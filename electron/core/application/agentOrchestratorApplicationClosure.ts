@@ -28,9 +28,9 @@ import {
 } from '../../../shared/domain/agent/agentMainText'
 import { emitLocalizedLog } from './agentOrchestratorTypes'
 import { captureMilestoneFileEvidence, captureWorkspaceVersion, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
-import { unreachableUiDeliverables } from '../infrastructure/filesystem/workspaceUiReachability'
+import { missingAcceptanceDirectories, unreachableUiDeliverables } from '../infrastructure/filesystem/workspaceUiReachability'
 import { resolveMilestoneDeliverableStatus } from '../../../shared/domain/agent/milestoneDeliverableResolver'
-import { requiresBehaviorEvidence, verificationEvidenceKind } from '../domain/agent/milestoneVerificationPromotion'
+import { requiresBehaviorEvidence, requiresVisualEvidence, verificationEvidenceKind } from '../domain/agent/milestoneVerificationPromotion'
 
 export interface ApplicationClosureContext {
   workspacePath: string | null
@@ -166,19 +166,32 @@ function reconcileVerifiedMilestones(ctx: ApplicationClosureContext, run: Verifi
   for (const milestone of ctx.goalPlanner.getMilestones()) {
     if (milestone.status !== 'verified' || isCompletionMilestoneTitle(milestone)) continue
     const proofIsCurrent = Boolean(
-      workspaceVersion && milestone.verificationEvidence?.passed && milestone.verificationEvidence.workspaceVersion === workspaceVersion,
+      workspaceVersion &&
+        milestone.verificationEvidence?.passed &&
+        milestone.verificationEvidence.workspaceVersion === workspaceVersion &&
+        (!requiresVisualEvidence(milestone) || verificationEvidenceKind(milestone.verificationEvidence.command) === 'visual'),
     )
     if (proofIsCurrent) continue
     const command = commands.find(
       (candidate) =>
-        (!milestone.verificationCommand || milestone.verificationCommand.trim().toLowerCase() === candidate.trim().toLowerCase()) &&
-        (!requiresBehaviorEvidence(milestone) || verificationEvidenceKind(candidate) === 'behavior'),
+        (requiresVisualEvidence(milestone) ||
+          !milestone.verificationCommand ||
+          milestone.verificationCommand.trim().toLowerCase() === candidate.trim().toLowerCase()) &&
+        (!requiresBehaviorEvidence(milestone) ||
+          verificationEvidenceKind(candidate) === 'behavior' ||
+          (requiresVisualEvidence(milestone) &&
+            verificationEvidenceKind(candidate) === 'visual' &&
+            commands.some(
+              (passed) => passed.trim().toLowerCase() === (milestone.verificationCommand || milestone.proposedVerificationCommand)?.trim().toLowerCase(),
+            ))) &&
+        (!requiresVisualEvidence(milestone) || verificationEvidenceKind(candidate) === 'visual'),
     )
     if (
       workspaceVersion &&
       command &&
       resolveMilestoneDeliverableStatus(milestone, probe) === 'satisfied' &&
-      unreachableUiDeliverables(ctx.workspacePath, milestone).length === 0
+      unreachableUiDeliverables(ctx.workspacePath, milestone).length === 0 &&
+      missingAcceptanceDirectories(ctx.workspacePath, milestone).length === 0
     ) {
       milestone.verificationEvidence = { command, passed: true, checkedAt: new Date().toISOString(), workspaceVersion }
       const fileEvidence = captureMilestoneFileEvidence(ctx.workspacePath, milestone)
@@ -254,14 +267,22 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
       (milestone) =>
         milestone.status === 'verified' &&
         !isCompletionMilestoneTitle(milestone) &&
-        (!milestone.verificationEvidence?.passed || milestone.verificationEvidence.workspaceVersion !== workspaceVersion),
+        (!milestone.verificationEvidence?.passed ||
+          milestone.verificationEvidence.workspaceVersion !== workspaceVersion ||
+          (requiresVisualEvidence(milestone) && verificationEvidenceKind(milestone.verificationEvidence.command) !== 'visual')),
     )
   const shouldRunVerification =
     ctx.settings.verifyBeforeFinish !== false && (hasStaleMilestone || (ctx.flags.hasFileMutations && evidenceLevel !== 'behavioral'))
 
   if (shouldRunVerification) {
     emitLocalizedLog(ctx.emitLog, 'info', { key: 'finalVerificationStarted' })
-    run = await runProjectVerification(ctx.workspacePath, (chunk) => ctx.emitLog('terminal', chunk), ctx.signal, ctx.settings.fullAccess === true)
+    run = await runProjectVerification(
+      ctx.workspacePath,
+      (chunk) => ctx.emitLog('terminal', chunk),
+      ctx.signal,
+      ctx.settings.fullAccess === true,
+      ctx.goalPlanner.getMilestones(),
+    )
     const verificationEvidence = toVerificationEvidence(run)
     ctx.recordVerificationEvidence?.(verificationEvidence)
     ctx.lastVerification = verificationEvidence
@@ -276,7 +297,7 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
       ctx.flags.hasVerifiedBuild = true
       evidenceLevel = evidenceLevelOf(run)
       for (const verifiedCommand of run.verifiedCommands ?? [run.command || 'verification command']) {
-        promoteMilestonesProvenBy(ctx, verifiedCommand)
+        promoteMilestonesProvenBy(ctx, verifiedCommand, run.verifiedCommands ?? [])
       }
     } else if (request.allowCorrection) {
       const decision = decideVerificationGate({

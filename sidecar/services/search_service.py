@@ -2,7 +2,7 @@ import re
 from typing import Any, Dict, List, Optional
 from sidecar.config import CHUNKS_TABLE_NAME, DOCS_TABLE_NAME, logger
 from sidecar.schemas import SearchRequest, SearchResult
-from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id
+from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, database_operation, delete_document_records
 from sidecar.infrastructure.embeddings import (
     DEFAULT_EMBEDDING_MODEL,
     FALLBACK_EMBEDDING_MODEL,
@@ -194,33 +194,23 @@ def _document_summary(r: Dict[str, Any], status_val: str) -> Dict[str, Any]:
 
 
 def _read_document_summary_rows(tbl: Any) -> List[Dict[str, Any]]:
-    try:
-        return tbl.search().select(DOCUMENT_SUMMARY_COLUMNS).limit(max(1, tbl.count_rows())).to_list()
-    except Exception:
-        pass
-    try:
-        return tbl.to_arrow().to_pylist()
-    except Exception:
-        return tbl.to_pandas().to_dict(orient="records")
+    return tbl.search().select(DOCUMENT_SUMMARY_COLUMNS).limit(None).to_list()
 
 
+@database_operation
 def list_stored_documents() -> List[Dict[str, Any]]:
     """Returns the metadata of every listable document stored in LanceDB, without its Markdown."""
-    try:
-        if DOCS_TABLE_NAME not in get_existing_tables():
-            return []
-        tbl = lance_db.open_table(DOCS_TABLE_NAME)
-        clean_records: List[Dict[str, Any]] = []
-        for r in _read_document_summary_rows(tbl):
-            status_val = str(r.get("status", "indexed")).lower()
-            if status_val in LISTABLE_STATUSES:
-                clean_records.append(_document_summary(r, status_val))
-        return clean_records
-    except Exception as e:
-        logger.error(f"Error listing documents from LanceDB: {e}")
+    if DOCS_TABLE_NAME not in get_existing_tables():
         return []
+    tbl = lance_db.open_table(DOCS_TABLE_NAME)
+    return [
+        _document_summary(row, str(row.get("status", "indexed")).lower())
+        for row in _read_document_summary_rows(tbl)
+        if str(row.get("status", "indexed")).lower() in LISTABLE_STATUSES
+    ]
 
 
+@database_operation
 def get_stored_document(doc_id: str) -> Optional[Dict[str, Any]]:
     """Returns one listable document with its extracted Markdown, or None when it does not exist."""
     safe_id = validate_doc_id(doc_id)
@@ -240,20 +230,5 @@ def get_stored_document(doc_id: str) -> Optional[Dict[str, Any]]:
 def delete_stored_document(doc_id: str) -> Dict[str, str]:
     """Deletes document record and associated vector chunks from LanceDB tables."""
     safe_id = validate_doc_id(doc_id)
-    existing_tables = get_existing_tables()
-    
-    if DOCS_TABLE_NAME in existing_tables:
-        try:
-            dtbl = lance_db.open_table(DOCS_TABLE_NAME)
-            dtbl.delete(f'id = "{safe_id}"')
-        except Exception as e:
-            logger.warning(f"Could not delete from {DOCS_TABLE_NAME}: {e}")
-
-    if CHUNKS_TABLE_NAME in existing_tables:
-        try:
-            ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
-            ctbl.delete(f'doc_id = "{safe_id}"')
-        except Exception as e:
-            logger.warning(f"Could not delete from {CHUNKS_TABLE_NAME}: {e}")
-
+    delete_document_records(safe_id)
     return {"status": "success", "message": f"Deleted document {doc_id} from LanceDB."}

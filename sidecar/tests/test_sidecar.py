@@ -855,14 +855,18 @@ def test_list_stored_documents_includes_fallback_embedded_documents(monkeypatch)
     ]
 
     class FakeTable:
-        def to_arrow(self):
-            raise RuntimeError("arrow unavailable")
+        def search(self):
+            return self
 
-        def to_pandas(self):
-            class FakeFrame:
-                def to_dict(self, orient="records"):
-                    return stored_rows
-            return FakeFrame()
+        def select(self, columns):
+            assert "extracted_markdown" not in columns
+            return self
+
+        def limit(self, count):
+            return self
+
+        def to_list(self):
+            return stored_rows
 
     class FakeDb:
         def open_table(self, name):

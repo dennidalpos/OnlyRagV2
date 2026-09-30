@@ -27,7 +27,7 @@ from sidecar.schemas import (
     IndexPromptHistoryRequest, PromptHistorySearchRequest, PromptHistorySearchResult,
     PromptHistoryRemoveRequest, TranslateInplaceRequest,
 )
-from sidecar.infrastructure.db import lance_db, get_existing_tables, run_db_maintenance, ensure_chunk_embedding_model_column
+from sidecar.infrastructure.db import lance_db, get_existing_tables, run_db_maintenance, ensure_chunk_embedding_model_column, recover_database, DatabaseRecoveryError, database_operation
 from sidecar.infrastructure.ocr import detect_gpu_acceleration, get_ocr_runtime_info
 from sidecar.domain.exporter import export_markdown_to_file
 from sidecar.services.ingest_service import (
@@ -51,6 +51,11 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
     logger.info("FastAPI Sidecar starting up. Loading bundled vocabulary & DB maintenance...")
+    try:
+        await asyncio.to_thread(recover_database)
+    except DatabaseRecoveryError:
+        yield
+        return
     await asyncio.to_thread(
         ensure_chunk_embedding_model_column,
         CHUNKS_TABLE_NAME, DOCS_TABLE_NAME, DEFAULT_EMBEDDING_MODEL, FALLBACK_EMBEDDING_MODEL,
@@ -63,6 +68,7 @@ async def lifespan(app_instance: FastAPI):
     yield
     for task in startup_tasks:
         task.cancel()
+    await asyncio.gather(*startup_tasks, return_exceptions=True)
     logger.info("FastAPI Sidecar shutting down.")
 
 app = FastAPI(title="OnlyRag V2 Python Sidecar Engine", version="2.5.0", lifespan=lifespan)
@@ -100,11 +106,12 @@ async def global_exception_handler(request: Request, exc: Exception):
         "error_type": type(exc).__name__,
     }, sort_keys=True))
     return JSONResponse(
-        status_code=500,
+        status_code=503 if request.url.path == "/health" and isinstance(exc, DatabaseRecoveryError) else 500,
         content={"detail": "Internal Server Error", "error_id": error_id}
     )
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health", response_model=HealthResponse, responses={503: {"description": "Database unavailable or pending recovery"}})
+@database_operation
 def health_check():
     doc_count, chunk_count = 0, 0
     try:
@@ -114,6 +121,7 @@ def health_check():
             chunk_count = lance_db.open_table(CHUNKS_TABLE_NAME).count_rows()
     except Exception as e:
         logger.error(f"Error checking LanceDB status: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable") from e
 
     gpu_info = detect_gpu_acceleration()
     ocr_info = get_ocr_runtime_info()
@@ -153,7 +161,7 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
         media_type="application/x-ndjson"
     )
 
-@app.put("/documents/{doc_id}", response_model=IngestResponse)
+@app.put("/documents/{doc_id}", response_model=IngestResponse, responses={500: {"description": "Database update failed"}})
 async def update_document(doc_id: str, req: UpdateDocumentRequest):
     logger.info(f"Updating and re-indexing document {doc_id} in LanceDB")
     try:
@@ -203,11 +211,11 @@ async def get_page_preview(doc_id: str, page_num: int):
         logger.error(f"Error rendering page preview: {e}")
         raise
 
-@app.get("/documents", response_model=List[DocumentSummary])
+@app.get("/documents", response_model=List[DocumentSummary], responses={500: {"description": "Database read failed"}})
 async def list_documents():
     return await asyncio.to_thread(list_stored_documents)
 
-@app.get("/documents/{doc_id}", response_model=DocumentRecord)
+@app.get("/documents/{doc_id}", response_model=DocumentRecord, responses={500: {"description": "Database read failed"}})
 async def get_document(doc_id: str):
     try:
         document = await asyncio.to_thread(get_stored_document, doc_id)
@@ -217,7 +225,7 @@ async def get_document(doc_id: str):
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
     return document
 
-@app.delete("/documents/{doc_id}", response_model=DeleteResponse)
+@app.delete("/documents/{doc_id}", response_model=DeleteResponse, responses={500: {"description": "Database deletion failed"}})
 async def delete_document(doc_id: str):
     try:
         return await asyncio.to_thread(delete_stored_document, doc_id)
@@ -227,7 +235,7 @@ async def delete_document(doc_id: str):
         logger.error(f"Error deleting document {doc_id}: {e}")
         raise
 
-@app.post("/vector/search", response_model=List[SearchResult])
+@app.post("/vector/search", response_model=List[SearchResult], responses={500: {"description": "Database search failed"}})
 async def search_vector_db(req: SearchRequest):
     logger.info(f"Performing LanceDB vector search for query: '{req.query}'")
     return await asyncio.to_thread(perform_vector_search, req)

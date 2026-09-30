@@ -45,3 +45,9 @@ Target Vitest: `npx vitest run <path>`.
 - `clean_repo.ps1` e `clean_workspace.ps1`: pulizie separate con target espliciti.
 
 I comandi distruttivi (`clean:full`) richiedono attenzione: possono rimuovere dati utente locali.
+
+## Disinstallazione e dati
+
+Il disinstallatore mostra «Delete personal data too / Elimina anche i dati personali», disattivato inizialmente. Senza selezione, impostazioni, cronologia e archivio documenti restano disponibili. Una rimozione silenziosa conserva i dati; l'opzione esistente `--delete-app-data` ne richiede esplicitamente la rimozione. Gli aggiornamenti conservano i dati e rifiutano la combinazione `--updated --delete-app-data` con codice 2.
+
+`powershell -ExecutionPolicy Bypass -File scripts/test_uninstall_policy.ps1` compila pagina e macro NSIS in una fixture temporanea con percorsi rediretti. Verifica conservazione, stato di selezione simulato, consenso silenzioso e aggiornamenti, senza usare AppData reale. Richiede il compilatore NSIS nella cache di electron-builder; non sostituisce la verifica visiva della pagina.

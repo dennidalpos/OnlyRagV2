@@ -25,7 +25,7 @@ I guardrail garantiscono la sicurezza dell'ambiente locale, la coerenza delle mo
 ## Tracciamento eventi e chiusure
 
 - Ogni evento di arresto o forzatura viene registrato come `{ guard, action: advise | force_advance | stop, step }` (`AgentGuardId` in `shared/types`).
-- Una chiusura da guard di stop (`request.guard`) imposta sempre lo stato `blocked`: il task interrotto non viene mai contrassegnato come verificato o proposto per la pubblicazione.
+- Una chiusura da guard di stop (`request.guard`) imposta sempre lo stato `blocked`: il task interrotto non viene contrassegnato come verificato; le modifiche rimangono nel workspace.
 - Le verifiche di progetto tracciano il comando canonico (`canonicalCommand`): `npm test`, `npm t` e `npm run test` sono considerati equivalenti.
 
 ## Consigli e ordini
@@ -43,7 +43,7 @@ Un turno porta al massimo un ordine, quello di [`planDirectiveArbiter.ts`](../el
 
 - Le mutazioni su file esistenti richiedono la versione letta in precedenza (`fileVersionEvidence.ts`, massimo 64 hash per sessione).
 - Se un file subisce modifiche concorrenti esterne sul disco, la scrittura viene respinta finché non viene rieseguita una lettura aggiornata.
-- Gli script runtime temporanei `.onlyrag` vengono esclusi dall'anteprima diff e dalla pubblicazione.
+- I metadati `.onlyrag` sono esclusi dai file ripristinabili dei checkpoint e dalle scansioni dei deliverable; non esiste una fase separata di pubblicazione delle modifiche.
 
 ## Sicurezza comandi e filesystem
 

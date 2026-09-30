@@ -1,5 +1,9 @@
 # Verifica e limiti noti
 
+## Audit di affidabilita del 2026-09-30
+
+Correzioni e prove: [audit di affidabilita](./reliability-audit-2026-09-30.md). Passano 287 file / 2293 test Vitest, 153 test Sidecar, typecheck, qualita statica, dead code, cicli, documentazione e controllo diff. `npm audit --audit-level=low` segnala 0 vulnerabilita dopo l'aggiornamento mirato di brace-expansion. OpenAPI e rigenerato e verificato dalla suite Sidecar. Build, smoke Electron e `npm run package:win` passano; i cinque casi NSIS isolati passano. Firma dell'installer, interazione visiva con la checkbox e ciclo completo in VM non sono verificati. Non e stata eseguita una nuova qualifica Ollama.
+
 ## Ordine rapido
 
 ```powershell
@@ -17,7 +21,7 @@ npx vitest run <path>
 
 Per il Sidecar: `npm run test:sidecar`. Per tipi e confini: `npm run typecheck`, `npm run audit:cycles` e `npm run audit:deadcode`.
 
-Il 2026-09-29 `npm update fast-uri undici --ignore-scripts` (npm 11) ha rigenerato solo le tre voci transitive vulnerabili del lockfile: `fast-uri` 3.1.6 → 3.1.8, `undici` 6.28.0 → 6.29.0 e 7.29.0 → 7.30.0. `npm audit --audit-level=low` ora segnala zero vulnerabilità. `npm run test:fast` ha passato 285 file e 2279 test alla seconda esecuzione; la prima aveva passato gli stessi test ma Vitest era uscito per un `EPERM` non gestito su un file temporaneo in `webClient.test.ts`, non riprodotto nei 15 test mirati. Passano anche `npm run quality:static`, `npm run test:e2e:agent-browser` (2 test) e `npm run package:win`. Il packaging ha prodotto l'installer NSIS; la verifica dello stato della firma è rimasta indisponibile perché il modulo `Microsoft.PowerShell.Security` non si caricava in questo ambiente. GitHub mostrava ancora 13 alert aperti su `fast-uri` e `undici` nel branch remoto: la chiusura degli alert richiede pubblicare e rivalutare il lockfile aggiornato.
+Il 2026-09-29 `npm update fast-uri undici --ignore-scripts` (npm 11) ha rigenerato solo le tre voci transitive vulnerabili del lockfile: `fast-uri` 3.1.6 → 3.1.8, `undici` 6.28.0 → 6.29.0 e 7.29.0 → 7.30.0. `npm audit --audit-level=low` in quella verifica segnalava zero vulnerabilità. `npm run test:fast` ha passato 285 file e 2279 test alla seconda esecuzione; la prima aveva passato gli stessi test ma Vitest era uscito per un `EPERM` non gestito su un file temporaneo in `webClient.test.ts`, non riprodotto nei 15 test mirati. Passano anche `npm run quality:static`, `npm run test:e2e:agent-browser` (2 test) e `npm run package:win`. Il packaging ha prodotto l'installer NSIS; la verifica dello stato della firma è rimasta indisponibile perché il modulo `Microsoft.PowerShell.Security` non si caricava in questo ambiente. GitHub mostrava ancora 13 alert aperti su `fast-uri` e `undici` nel branch remoto: la chiusura degli alert richiede pubblicare e rivalutare il lockfile aggiornato.
 
 L'audit dead code esclude `electron-builder`: non e importato dal codice TypeScript, ma viene eseguito con `npx --no-install` dalla pipeline PowerShell `package:win`.
 

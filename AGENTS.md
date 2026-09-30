@@ -1,56 +1,25 @@
 # AGENTS.md
 
-`v1.26 · 2026-09-28` — Repository facts and verified commands.
+`v1.27 · 2026-09-30` — Verified repository quirks.
 
-## Scope
+- Work directly on `master`; never create branches. Commit and push only when explicitly requested.
+- Local Ollama and Python Sidecar only; cloud forwarding is out of scope. Preserve agent filesystem gates, checkpoints, budgets, timeouts, loop and OOM safeguards.
+- `.gitattributes` requires LF; use UTF-8 without BOM. Do not mass-convert files.
+- Use npm 11 for dependency changes: npm 10 drops lockfile `libc` fields. Electron 43 has no postinstall; after `npm ci`, run `node node_modules/electron/install.js` before launching Electron (`setup:dev` and CI do this).
+- Main and Renderer share code through `shared/`; IPC contracts derive from `shared/ipc/ipcContract.ts`. Add a domain port only for an enforced boundary or a second implementation.
+- Recover `document-recovery.json` before any database migration or maintenance. Failed recovery preserves the journal and disables database access. Sidecar authentication exempts only `/health`.
+- Orphan reclamation requires exact process identity from `sidecar-ownership.json`; never reclaim a port by number alone.
+- DOM tests outside Vitest's `dom` project need `// @vitest-environment happy-dom` on the first line. Knip's production pass rejects test-only exports unless tagged `@internal`.
+- `PROJECT_STATUS.json` is the canonical backlog; retain its `todos` string array. Historical evidence is in `docs/`; model qualification remains separate from deterministic tests.
+- Keep legacy session compatibility until real nonempty released data has migrated with verified backup/readback; absence on this host is insufficient. The registered `Desktop/test_app` is a read-only regression reference.
+- Live artifacts use `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides). Do not treat resumable Ollama blobs as app data.
 
-- Local desktop AI assistant and coding studio with RAG, Ollama, and Python Sidecar. Cloud LLM forwarding and proprietary remote services are out of scope.
-- Keep Renderer and Main isolated; share only through `shared/`. CPU offload is acceptable when needed for correctness; retain OOM, timeout, anomaly, loop, and eviction safeguards.
+Verified in PowerShell on 2026-09-30 (Node 24, npm 11, Python 3.13):
 
-## Verified commands
+- `npm run test:fast`: 287 files, 2293 tests.
+- `.venv\Scripts\python.exe -m pytest -q` (full Sidecar).
+- `npm run typecheck`, `npm run quality:static`, `npm run audit:deadcode`, `npm run audit:cycles`, `npm run docs:check`, `npm run format:check`.
+- `npm run generate:openapi` after schema changes; `npm run build`, `npm run package:win` (signature unverified).
+- `powershell -ExecutionPolicy Bypass -File scripts/test_uninstall_policy.ps1`: five isolated NSIS policy cases; simulated selection, no visual test.
 
-Run from repository root in PowerShell. On 2026-09-26 on Windows (Node 24, Python 3.13.15, Ollama on an RTX 2070), after the move of the Sidecar to Python 3.13 (OCR on `rapidocr` 3) and of the post-edit typecheck to a worker thread, every command in the table passed, including all six E2E commands and the full audit. After the removal of the legacy migrations and the move of tool-result diagnostics to advice (same day), typecheck, `quality:static`, `audit:deadcode`, `audit:cycles`, `docs:check`, `npm run test:fast` (276 files, 2188 tests), the Sidecar tests (133), `test:e2e:electron`, `test:e2e:settings-bootstrap` and `npm run package:win` passed again; the other E2E commands and the full audit were not rerun. After the CI fix (Electron runtime download, actions v7), the removal of the cross-folder settings copy and the tokenizer fix for long repeated runs (same day), typecheck, `quality:static`, `audit:deadcode`, `audit:cycles`, `docs:check`, `npm run test:coverage` (276 files, 2189 tests), `test:e2e:settings-bootstrap` and, in a clean clone, the CI steps `lint_format.ps1 -Fast -SkipTests` and `test_sidecar_health.ps1 -Fast` passed; after the move of the app name and E2E userData into `electron/appIdentity.ts` and the isolated smoke run, `test:smoke`, `test:e2e:electron`, `test:e2e:cold-start`, `test:e2e:bundle-ux` and `test:e2e:settings-bootstrap` passed as well. After the shell-cwd spelling fix, the move of the remaining tool-result orders to advice (with the `orderAuthority.test.ts` invariant) and the removal of the `shell_tool_confusion` loop pattern (same day), typecheck, `quality:static`, `audit:deadcode`, `audit:cycles`, `docs:check`, `npm run test:fast` (277 files, 2190 tests) and `test:e2e:electron` passed. On 2026-09-27, after the per-turn reasoning budget, the chosen thinking level for chat and translation and the streamed structured generation, typecheck, `quality:static`, `audit:deadcode`, `audit:cycles`, `docs:check`, `npm run test:fast` (277 files, 2200 tests), the Sidecar tests (134, with the regenerated OpenAPI contract) and `test:e2e:electron` passed. GitHub CI (`.github/workflows/ci.yml`) is green again since 88c757f (run 36254391613: static gate, lint and bundle smoke, coverage, Sidecar tests); coverage failures surface as check-run annotations, readable through the public GitHub API without job-log access. `qwen3.8:27b` is installed; its 2026-09-26 rerun confirmed prompt-cache reuse but ran on default settings (25 steps, harness bug since fixed) at about 2 tok/s; the thinking-`low` run reached the 180-minute limit after one 159-minute reasoning turn. The 2026-09-27 thinking-off full-task run verified 8/8 milestones and passed build and tests, but its closing model turn exhausted two 10-minute transport timeouts; application-owned closure now avoids that turn. A second thinking-off run stopped at 26/50 with 0/8 after a failed build and two more initial-response timeouts, so qwen3.8 qualification and live reasoning-budget confirmation remain open (`PROJECT_STATUS.json`). The live test timeout matches the 180-minute session limit. Live workspaces and audit snapshots go to `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides). Electron 43 has no postinstall: after `npm ci`, run `node node_modules/electron/install.js` before anything that launches `node_modules/electron/dist/electron.exe` (`setup:dev` and CI do). In a container without `node_modules`, `npm ci --ignore-scripts` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1` suffices for static checks and the fast suite; change dependencies with `npx npm@11`, since npm 10 drops lockfile `libc` fields.
-
-| Purpose | Command |
-| --- | --- |
-| Fast suite | `npm run test:fast` (285 files, 2281 tests on 2026-09-29 after command-mutation guard fix; 27 `itWithPowerShell` cases skip off Windows; `node` project for `electron/`, `shared/`, `src/services/`, `src/constants/`, `scripts/`, `dom` project for the rest of `src/`) |
-| Sidecar tests | `.venv\Scripts\python.exe -m pytest -q` (140 tests on 2026-09-28; after a Sidecar schema change, `npm run generate:openapi` refreshes `sidecar/contracts/openapi-2.5.0.json`) |
-| Legacy chunk prefix migration | Set `ONLYRAG_DATA_DIR` to the actual app userData, then run `.venv\Scripts\python.exe scripts/migrate_chunk_context.py` to preview and add `--apply` to migrate; app userData preview found 0 chunks; an isolated Ollama-backed index previewed and migrated 1 legacy chunk with verified backup rollback. |
-| Electron Agent E2E | `npm run test:e2e:electron` (8 reliability + 9 guard + 2 plan/tracker + active-run mode/context/consent scenarios; passed on 2026-09-29 after the restored-overlap fixture supplied a real syntax check) |
-| Agent browser E2E | `npm run test:e2e:agent-browser` (managed local server, Playwright interactions, screenshot and blocked external traffic; passed 2026-09-29) |
-| Sidecar ownership E2E | `npm run test:e2e:sidecar-ownership` (2 tests; requires free `:8000` and built `sidecar.exe`) |
-| Cold-start network E2E | `npm run test:e2e:cold-start` (Main and Renderer first launch) |
-| Settings bootstrap E2E | `npm run test:e2e:settings-bootstrap` |
-| Bundle and viewport E2E | `npm run test:e2e:bundle-ux` (1024×700 and 1400×900) |
-| Ingestion and translation E2E | `npm run test:e2e:ingest-translate` (dev Sidecar from `.venv`, real Ollama models from `settings.json`, free `:8000`) |
-| Static quality | `npm run quality:static` (Biome lint errors, format-check of every file, IPC and layering guards; `noExplicitAny` is an error in every file, tests included) |
-| Installer | `npm run package:win` (passed 2026-09-29 after dependency update; output in `release/`; Vite owns and empties `dist/`; signature status could not be checked because `Microsoft.PowerShell.Security` failed to load) |
-| Dependency audit | `npm audit --audit-level=low` (0 vulnerabilities on 2026-09-29 after updating transitive `fast-uri` and `undici`) |
-| Full audit | `powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast` |
-| Targeted Vitest | `npx vitest run <path>` |
-| Format / types | `npm run format:check`; `npm run typecheck` (includes `scripts/live` and `scripts/e2e`) |
-| Dead code / cycles | `npm run audit:deadcode` (knip, then `knip --production`: test-only exports fail it unless tagged `@internal`); `npm run audit:cycles` |
-
-## Architecture
-
-- `src/` (Renderer) and `electron/` (Main) import shared code only from `shared/`. Every IPC channel is declared once in `shared/ipc/ipcContract.ts` (one object payload or none); the preload, `secureIpcMain.handle` and `IElectronAPI` derive from it.
-- Main layers: `electron/core/{presentation,application,domain,infrastructure}`. Domain is pure; ports live in `domain/ports/`, adapters in Infrastructure (Electron adapters in `infrastructure/electron/`). Application and Domain never import `electron` or `node:fs`; `scripts/check_layering.mjs` (run by `npm run quality:static`) enforces it. Application may import Infrastructure adapters directly; add a port only for an enforced boundary or a second implementation.
-- The Main logger is `electron/core/infrastructure/logging/logger.ts`; `electron/diagnostics.ts` only holds hardware/Ollama probes; Application reaches them through `HardwareProbePort` (adapter `electron/core/infrastructure/diagnostics/hardwareProbe.ts`), enforced by `scripts/check_layering.mjs`.
-- `electron/core/infrastructure/http/sidecarHttpClient.ts` centralizes HTTP I/O to `:8000` and sends the per-launch `X-OnlyRag-Token` that `sidecarProcessManager` passes to the Sidecar; only `/health` is exempt.
-- Ollama HTTP from Main goes through `electron/core/infrastructure/http/ollamaTransport.ts` (http or https per configured host); defaults live in `shared/domain/ollamaHost.ts` and `shared/domain/settings/appSettingsDefaults.ts`.
-- Sidecar vectors record their `embedding_model` per chunk; search embeds the query once per stored model.
-- Agent Coding initializes `.onlyrag/layout.json` (version 2) before a run in every workspace. Local history is `sessions/history.json`; state and tracker live under `sessions/<sha256(sessionId)>/`. Legacy files are copied to `migration-backup/v1` before cleanup; an ambiguous old tracker stays in `legacy-unassigned/`. Without Full access, file tools cannot access `.onlyrag` and shell commands retain their protections; Full access is an explicit per-run opt-in that lifts those application permission gates in Guided and Auto, while Ask remains read-only. Removing a project only unregisters it; deleting a chat removes its local state and attributable checkpoints.
-- Main Ollama generation uses `ollamaGenerationScheduler` at concurrency 1; model inventory uses `/api/tags`.
-- Coding Agent uses `/api/chat` with native tool calls and an append-only persisted transcript (system prompt frozen per session, the conversation's first task once, turn context appended; a follow-up run keeps the transcript and appends its request). For `qwen2.5-coder:7b` only, an entire schema-valid JSON tool envelope in message content is converted to a call because the installed model emits that shape despite declaring `tools`; prose and fenced examples are ignored. Main applies the same security gates and returns every outcome as the tool message. Runs edit the workspace in place and save a restorable checkpoint in `.onlyrag/checkpoints` (`agent:restore-checkpoint`). Sampling follows the Modelfile unless `modelSamplingOverrides` is set. The 2026-09-26 audit is `docs/coding-agent-audit-2026-09-26.md`; qwen3-coder:30b verified the full task (8/8); qwen3.8:27b verified 8/8 milestones in one 2026-09-27 live run but ended blocked on transport; a second run also stopped on transport before milestone verification (`PROJECT_STATUS.json`).
-- The UI terminal and agent shell tools use `PersistentPowerShellSession`; sessions retain shell state per workspace and are disposed with active tasks.
-- Managed dev servers run only the workspace `package.json` `dev` script. Main assigns `HOST=127.0.0.1` and `PORT`, rejects listeners reachable on other local addresses, and limits HTTP probes to that managed port; Main owns and stops the process.
-- Agent Coding's Playwright tools use a per-run headless context on that managed port. The page blocks external requests, WebSocket connections, popups, downloads, and all HTTP redirects; even `offline-strict` and Full access retain the managed-port boundary. Guided reviews each browser click or fill.
-
-## Repository specifics
-
-- Sidecar lifecycle is owned by `sidecarProcessManager`; on Windows orphan port reclaim requires exact process identity from `sidecar-ownership.json`.
-- Keep UTF-8 without BOM and avoid CRLF/LF-only diffs. `.gitattributes` checks every text file out with LF, as Biome requires, whatever `core.autocrlf` says; after a clone made before it existed, `git add --renormalize .` followed by `git reset` clears the phantom modifications.
-- A test outside the `dom` project that needs a DOM declares `// @vitest-environment happy-dom` on its first line.
-- `PROJECT_STATUS.json` is the canonical backlog; retain its `todos` string-array format and remove completed entries.
-- `scripts/live/fullTaskRun.live.ts` accepts `ONLYRAG_LIVE_PROMPT_FILE` to run the first separated prompt block; both 2026-09-29 exact-prompt 4B runs failed qualification (5/9, then 0/9 milestones). `scripts/live/webUiSmoke.live.ts` detected the first run's blank page and missing CSS; the second stopped before UI verification (`docs/verification.md`).
-- Work directly on `master`; do not create branches. Commit only when explicitly requested; push only when explicitly requested.
+Verification limits: `docs/verification.md`.

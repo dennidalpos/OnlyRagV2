@@ -7,9 +7,9 @@ import datetime
 from typing import Optional, List, Dict, Any, Generator, Tuple
 from concurrent.futures import ThreadPoolExecutor
 import pymupdf
-from sidecar.config import DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
+from sidecar.config import DOCS_TABLE_NAME, logger
 from sidecar.schemas import IngestResponse, PagePreviewResponse
-from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, append_records
+from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, write_document_records, delete_document_records, database_operation
 from sidecar.infrastructure.embeddings import (
     DEFAULT_EMBEDDING_MODEL,
     FALLBACK_EMBEDDING_MODEL,
@@ -27,15 +27,11 @@ from sidecar.domain.ingestion import (
 )
 from sidecar.domain.router import classify_file_type, analyze_pdf_page_structure, DocumentCategory, PageRoutingStrategy
 from sidecar.services.task_cancellation import TaskCancelled, raise_if_cancelled, register_task, unregister_task
+from sidecar.services.search_service import get_stored_document
 
 
 def _cleanup_partial_ingestion(doc_id: str) -> None:
-    for table_name, predicate in ((DOCS_TABLE_NAME, f'id = "{doc_id}"'), (CHUNKS_TABLE_NAME, f'doc_id = "{doc_id}"')):
-        try:
-            if table_name in get_existing_tables():
-                lance_db.open_table(table_name).delete(predicate)
-        except Exception as err:
-            logger.warning(f"Could not clean cancelled ingestion {doc_id} from {table_name}: {err}")
+    delete_document_records(doc_id)
 
 def _build_chunk_records(
     raw_chunks: List[Tuple[int, str, str]],
@@ -267,15 +263,6 @@ def process_and_index_document_generator(
 
         raise_if_cancelled(task_id)
 
-        if chunk_records:
-            append_records(CHUNKS_TABLE_NAME, chunk_records)
-
-            try:
-                raise_if_cancelled(task_id)
-            except TaskCancelled:
-                _cleanup_partial_ingestion(doc_id)
-                raise
-
         doc_record = [{
             "id": doc_id,
             "filename": filename,
@@ -291,12 +278,8 @@ def process_and_index_document_generator(
         }]
 
         raise_if_cancelled(task_id)
-        append_records(DOCS_TABLE_NAME, doc_record)
-        try:
-            raise_if_cancelled(task_id)
-        except TaskCancelled:
-            _cleanup_partial_ingestion(doc_id)
-            raise
+        write_document_records(doc_record[0], chunk_records)
+        raise_if_cancelled(task_id)
 
         logger.info(f"Ingested {filename} (streaming) into LanceDB: {num_pages} pages, {len(chunk_records)} chunks indexed (status={doc_status}).")
 
@@ -345,27 +328,13 @@ def update_and_reindex_document(
     new_markdown: str,
     embedding_model: str = DEFAULT_EMBEDDING_MODEL,
 ) -> IngestResponse:
-    """
-    Updates previously ingested document with user edits:
-    1. Sanitizes markdown
-    2. Deletes old chunks for doc_id from LanceDB
-    3. Re-chunks semantic markdown and re-computes embeddings
-    4. Updates document record in LanceDB
-    """
+    """Prepare the new index before committing either table."""
     validate_doc_id(doc_id)
 
     clean_markdown = sanitize_extracted_text(new_markdown)
-    existing_tables = get_existing_tables()
-
-    if DOCS_TABLE_NAME not in existing_tables:
+    old_doc = get_stored_document(doc_id)
+    if old_doc is None:
         raise ValueError(f"Document {doc_id} not found in database")
-
-    dtbl = lance_db.open_table(DOCS_TABLE_NAME)
-    records = dtbl.search().where(f'id = "{doc_id}"', prefilter=True).limit(1).to_list()
-    if not records:
-        raise ValueError(f"Document {doc_id} not found in database")
-
-    old_doc = records[0]
     filename = old_doc.get("filename", "document.md")
     persisted_path = old_doc.get("file_path", "")
     file_type = old_doc.get("file_type", "text")
@@ -375,15 +344,6 @@ def update_and_reindex_document(
     page_matches = re.findall(r'(?:^|\n)##\s+Page\s+\d+', clean_markdown, re.IGNORECASE)
     num_pages = max(1, len(page_matches)) if page_matches else int(old_doc.get("num_pages", 1))
 
-    # 1. Delete old chunks from LanceDB
-    if CHUNKS_TABLE_NAME in existing_tables:
-        try:
-            ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
-            ctbl.delete(f'doc_id = "{doc_id}"')
-        except Exception as e:
-            logger.warning(f"Error removing old chunks for {doc_id}: {e}")
-
-    # 2. Re-chunk and compute new embeddings
     raw_chunks = create_semantic_chunks(filename, clean_markdown)
     updated_at = datetime.datetime.now().isoformat()
 
@@ -392,11 +352,6 @@ def update_and_reindex_document(
     )
     doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
 
-    if chunk_records:
-        append_records(CHUNKS_TABLE_NAME, chunk_records)
-
-    # 3. Update doc record in LanceDB
-    dtbl.delete(f'id = "{doc_id}"')
     new_doc_record = [{
         "id": doc_id,
         "filename": filename,
@@ -410,7 +365,7 @@ def update_and_reindex_document(
         "file_type": file_type,
         "used_fallback_embeddings": used_fallback_embeddings
     }]
-    dtbl.add(new_doc_record)
+    write_document_records(new_doc_record[0], chunk_records)
 
     logger.info(f"Re-indexed document {doc_id} ({filename}): {len(chunk_records)} chunks updated in LanceDB (status={doc_status}).")
 
@@ -427,6 +382,7 @@ def update_and_reindex_document(
         used_fallback_embeddings=used_fallback_embeddings
     )
 
+@database_operation
 def render_document_page_preview(doc_id: str, page_num: int) -> PagePreviewResponse:
     """
     Renders high-fidelity real page preview image (PNG base64) directly from original source file on disk.

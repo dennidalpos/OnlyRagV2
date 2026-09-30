@@ -208,6 +208,15 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
           </div>
         </div>
 
+        {c.storageError && (
+          <div role="alert" className="flex items-center gap-3 border-b border-amber-500/40 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span className="flex-1">{t(c.storageError === 'save' ? 'chat.storageSaveError' : 'chat.storageLoadError')}</span>
+            <button type="button" onClick={c.retryPersistence} className="shrink-0 rounded border border-amber-500/50 px-3 py-1 focus-ring">
+              {t('chat.storageRetry')}
+            </button>
+          </div>
+        )}
         {/* Main Split Layout */}
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar: Context Documents & History */}

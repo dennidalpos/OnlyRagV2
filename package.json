@@ -152,7 +152,7 @@
       "createStartMenuShortcut": true,
       "shortcutName": "OnlyRag V2",
       "uninstallDisplayName": "OnlyRag V2 Local AI Workspace",
-      "deleteAppDataOnUninstall": true,
+      "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
       "include": "installer/installer.nsh"
     }

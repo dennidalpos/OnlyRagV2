@@ -22,6 +22,33 @@ function createMockServer(routes: Array<{ method: string; path: string; handler:
 }
 
 describe('SidecarHttpClient Unit Tests', () => {
+  it('reports a 503 health response offline and preserves document failure as unavailable', async () => {
+    const broken = await createMockServer([
+      {
+        method: 'GET',
+        path: '/health',
+        handler: (_req, res) => {
+          res.writeHead(503)
+          res.end('{"detail":"Database unavailable"}')
+        },
+      },
+      {
+        method: 'GET',
+        path: '/documents',
+        handler: (_req, res) => {
+          res.writeHead(500)
+          res.end('{"detail":"Internal Server Error"}')
+        },
+      },
+    ])
+    try {
+      const client = new SidecarHttpClient(broken.baseUrl)
+      expect(await client.getStatus()).toEqual({ status: 'offline', error: 'HTTP 503' })
+      expect(await client.listDocuments()).toBeNull()
+    } finally {
+      await new Promise<void>((resolve, reject) => broken.server.close((error) => (error ? reject(error) : resolve())))
+    }
+  })
   let server: http.Server
   let client: SidecarHttpClient
 

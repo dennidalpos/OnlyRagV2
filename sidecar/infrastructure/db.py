@@ -1,9 +1,105 @@
+import os
 import re
+from contextlib import contextmanager
+from functools import wraps
+from pathlib import Path
+from threading import RLock
+from typing import Annotated, Literal
 import lancedb
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional, Any, Dict
-from sidecar.config import LANCEDB_DIR, logger
+from sidecar.config import LANCEDB_DIR, DATA_DIR, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
 
 lance_db = lancedb.connect(LANCEDB_DIR)
+_database_lock = RLock()
+_recovery_error: Optional[str] = None
+_mutation_active = False
+_journal_path = Path(DATA_DIR) / "document-recovery.json"
+
+
+class DatabaseRecoveryError(RuntimeError):
+    """The store is unavailable until its pending recovery succeeds."""
+
+
+class DocumentRecovery(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    version: Literal[1] = 1
+    doc_id: str = Field(pattern=r"^[a-zA-Z0-9_\-]+$")
+    versions: Dict[Literal["documents", "chunks"], Optional[Annotated[int, Field(ge=1)]]] = Field(min_length=2, max_length=2)
+
+
+def database_operation(function):
+    """Keep readers and single-table writers outside coordinated document commits."""
+    @wraps(function)
+    def guarded(*args, **kwargs):
+        with _database_lock:
+            if _recovery_error or (_journal_path.exists() and not _mutation_active):
+                raise DatabaseRecoveryError(_recovery_error or "Pending document recovery must complete first.")
+            return function(*args, **kwargs)
+    return guarded
+
+
+def _restore_document(recovery: DocumentRecovery) -> None:
+    existing = set(lance_db.list_tables().tables)
+    for name, version in recovery.versions.items():
+        if version is not None:
+            table = lance_db.open_table(name)
+            if table.version != version:
+                table.restore(version)
+        elif name in existing:
+            column = "id" if name == DOCS_TABLE_NAME else "doc_id"
+            lance_db.open_table(name).delete(f"{column} = '{recovery.doc_id}'")
+
+
+def recover_database() -> None:
+    """Recover before migrations or maintenance can remove the saved versions."""
+    global _recovery_error
+    with _database_lock:
+        try:
+            if _journal_path.exists():
+                recovery = DocumentRecovery.model_validate_json(_journal_path.read_text(encoding="utf-8"))
+                _restore_document(recovery)
+                _journal_path.unlink()
+            _recovery_error = None
+        except Exception as err:
+            _recovery_error = "Document recovery failed; preserve document-recovery.json and the database."
+            logger.error(f"{_recovery_error} {err}")
+            raise DatabaseRecoveryError(_recovery_error) from err
+
+
+@contextmanager
+def document_mutation(doc_id: str):
+    """Restore both tables on failure; a durable journal also covers process interruption."""
+    global _recovery_error, _mutation_active
+    with _database_lock:
+        if _recovery_error or _journal_path.exists():
+            raise DatabaseRecoveryError(_recovery_error or "Pending document recovery must complete first.")
+        validate_doc_id(doc_id)
+        existing = set(get_existing_tables())
+        recovery = DocumentRecovery(doc_id=doc_id, versions={
+            name: lance_db.open_table(name).version if name in existing else None
+            for name in (DOCS_TABLE_NAME, CHUNKS_TABLE_NAME)
+        })
+        temporary = _journal_path.with_suffix(".tmp")
+        with temporary.open("w", encoding="utf-8", newline="\n") as stream:
+            stream.write(recovery.model_dump_json())
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, _journal_path)
+        _mutation_active = True
+        try:
+            yield
+            _journal_path.unlink()
+        except Exception:
+            try:
+                _restore_document(recovery)
+                _journal_path.unlink()
+            except Exception as err:
+                _recovery_error = "Document rollback failed; preserve document-recovery.json and the database."
+                raise DatabaseRecoveryError(_recovery_error) from err
+            raise
+        finally:
+            _mutation_active = False
 
 _DOC_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_\-]+$')
 
@@ -15,20 +111,10 @@ def validate_doc_id(doc_id: str) -> str:
         raise ValueError(f"Invalid document ID format: {doc_id!r}")
     return doc_id
 
+@database_operation
 def get_existing_tables() -> List[str]:
-    """Returns a clean list of table name strings robustly across LanceDB versions."""
-    try:
-        tables = lance_db.list_tables()
-        if hasattr(tables, "tables"):
-            return list(tables.tables)
-        if isinstance(tables, list):
-            return tables
-        return [str(t) for t in tables]
-    except Exception:
-        try:
-            return lance_db.table_names()
-        except Exception:
-            return []
+    """An unavailable store must never look like an empty one."""
+    return list(lance_db.list_tables().tables)
 
 class SchemaMismatchError(RuntimeError):
     """Raised when a record cannot be appended to an existing table.
@@ -46,32 +132,49 @@ class SchemaMismatchError(RuntimeError):
         )
 
 
+@database_operation
 def append_records(
     table_name: str,
     records: List[Dict[str, Any]],
     delete_where: Optional[str] = None,
+    match_key: str = "id",
 ) -> Any:
-    """Appends records to a table, creating it on first use, and returns the table handle.
-
-    Deliberately non-destructive. Earlier revisions answered a failed `add` by dropping and
-    re-creating the table from the incoming record alone, which silently deleted every row the
-    user had already indexed whenever a schema changed. A mismatch now raises SchemaMismatchError
-    and leaves the stored data intact: losing an ingest is recoverable, losing the corpus is not.
-    """
-    if table_name not in get_existing_tables():
-        return lance_db.create_table(table_name, data=records)
-
-    tbl = lance_db.open_table(table_name)
-    if delete_where:
-        tbl.delete(delete_where)
+    """Append or atomically replace matching rows without deleting rejected records."""
     try:
-        tbl.add(records)
-    except Exception as err:
+        if table_name not in get_existing_tables():
+            return lance_db.create_table(table_name, data=records)
+        tbl = lance_db.open_table(table_name)
+        if delete_where:
+            tbl.merge_insert(match_key).when_matched_update_all().when_not_matched_insert_all().when_not_matched_by_source_delete(delete_where).execute(records)
+        else:
+            tbl.add(records)
+    except ValueError as err:
         logger.error(f"Schema mismatch appending to LanceDB table '{table_name}': {err}")
         raise SchemaMismatchError(table_name, err) from err
     return tbl
 
 
+def write_document_records(document: Dict[str, Any], chunks: List[Dict[str, Any]]) -> None:
+    doc_id = validate_doc_id(document["id"])
+    if any(chunk["doc_id"] != doc_id for chunk in chunks):
+        raise ValueError("Chunk document id does not match the document.")
+    with document_mutation(doc_id):
+        if chunks:
+            append_records(CHUNKS_TABLE_NAME, chunks, delete_where=f"doc_id = '{doc_id}'", match_key="chunk_id")
+        elif CHUNKS_TABLE_NAME in get_existing_tables():
+            lance_db.open_table(CHUNKS_TABLE_NAME).delete(f"doc_id = '{doc_id}'")
+        append_records(DOCS_TABLE_NAME, [document], delete_where=f"id = '{doc_id}'")
+
+
+def delete_document_records(doc_id: str) -> None:
+    with document_mutation(doc_id):
+        existing = set(get_existing_tables())
+        for name, column in ((DOCS_TABLE_NAME, "id"), (CHUNKS_TABLE_NAME, "doc_id")):
+            if name in existing:
+                lance_db.open_table(name).delete(f"{column} = '{doc_id}'")
+
+
+@database_operation
 def ensure_chunk_embedding_model_column(
     chunks_table: str,
     docs_table: str,
@@ -103,15 +206,9 @@ def ensure_chunk_embedding_model_column(
     logger.info(f"Migrated '{chunks_table}' with an embedding_model column ({len(fallback_ids)} fallback documents).")
 
 
+@database_operation
 def run_db_maintenance() -> Dict[str, Any]:
-    """Compacts fragmented Lance datasets, prunes obsolete versions and refreshes indices.
-
-    Uses `Table.optimize()`, the supported entry point since LanceDB 0.21. The previous
-    implementation called `compact_files()` and `cleanup_old_versions()`, both deprecated and
-    both requiring the optional `pylance` package: without it every call raised, yet each table
-    was still reported as "success" with compacted/cleaned silently False, so a maintenance run
-    that did nothing at all was indistinguishable from one that worked.
-    """
+    """Optimize only when recovery has completed."""
     results = []
     all_succeeded = True
 

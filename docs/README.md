@@ -38,3 +38,5 @@ Documentazione tecnica breve, verificata contro il codice. I contratti prevalgon
 - Nuovo contributore: [`operations.md`](./operations.md) → [`architecture.md`](./architecture.md).
 - Coding Agent: [`agent.md`](./agent.md) ([`agent-runtime.md`](./agent-runtime.md), [`agent-guards.md`](./agent-guards.md), [`agent-diagnostics.md`](./agent-diagnostics.md)) → [`api-ipc.md`](./api-ipc.md) → [`verification.md`](./verification.md).
 - Sidecar: [`rag-sidecar.md`](./rag-sidecar.md) → [`api-rest.md`](./api-rest.md).
+
+Audit di affidabilita e archivio del backlog: [`reliability-audit-2026-09-30.md`](./reliability-audit-2026-09-30.md).

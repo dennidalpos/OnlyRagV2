@@ -1124,6 +1124,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "500": {
+            "description": "Database read failed"
           }
         },
         "summary": "List Documents"
@@ -1163,6 +1166,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "500": {
+            "description": "Database deletion failed"
           }
         },
         "summary": "Delete Document"
@@ -1200,6 +1206,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "500": {
+            "description": "Database read failed"
           }
         },
         "summary": "Get Document"
@@ -1247,6 +1256,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "500": {
+            "description": "Database update failed"
           }
         },
         "summary": "Update Document"
@@ -1398,6 +1410,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "503": {
+            "description": "Database unavailable or pending recovery"
           }
         },
         "summary": "Health Check"
@@ -1640,6 +1655,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "500": {
+            "description": "Database search failed"
           }
         },
         "summary": "Search Vector Db"

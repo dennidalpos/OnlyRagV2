@@ -96,6 +96,10 @@ export const it = {
     settingsLoadRetry: 'Riprova',
   },
   chat: {
+    storageSaveError: 'Impossibile salvare la chat. I messaggi restano in questa sessione; riprova prima di chiudere l’app.',
+    storageRetry: 'Riprova salvataggio',
+    storageLoadError:
+      'Impossibile leggere la cronologia. I dati originali sono conservati; i nuovi messaggi restano in questa sessione finché il salvataggio non viene ripristinato.',
     title: 'Multi-Document RAG & Chat',
     subtitle: 'Q&A semantico sui documenti con citazioni e recupero vettoriale.',
     headerTitle: 'Assistente AI & Ricerca Documentale',

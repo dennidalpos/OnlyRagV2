@@ -7,7 +7,7 @@ import docx
 import httpx
 import pymupdf
 from sidecar.config import DOCS_TABLE_NAME, OLLAMA_BASE_URL, logger, httpx_client
-from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id
+from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, database_operation
 from sidecar.services.task_cancellation import TaskCancelled, raise_if_cancelled, register_task, unregister_task
 
 # Preserved/removed during cleanup of legacy batch responses.
@@ -777,6 +777,7 @@ def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str,
                     page.insert_textbox(expanded_rect, text, fontsize=min_legible, fontname=font_alias, fontfile=font_file, color=color_rgb)
 
 
+@database_operation
 def prepare_translation(doc_id: str) -> Dict[str, Any]:
     """Loads and validates the document before any byte is streamed, so the endpoint can still
     answer 404 (unknown id, source file gone) or 400 (unsupported type) with a real status."""

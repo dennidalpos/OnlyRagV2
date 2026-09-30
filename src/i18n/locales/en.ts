@@ -95,6 +95,9 @@ export const en: TranslationSchema = {
     settingsLoadRetry: 'Retry',
   },
   chat: {
+    storageSaveError: 'Chat could not be saved. Messages remain in this session; retry before closing the app.',
+    storageRetry: 'Retry saving',
+    storageLoadError: 'Saved chat history could not be read. Original data is preserved; new messages remain in this session until storage is recovered.',
     title: 'Multi-Document RAG & Chat',
     subtitle: 'Semantic document Q&A with citations and vector retrieval.',
     headerTitle: 'AI Assistant & Document Search',

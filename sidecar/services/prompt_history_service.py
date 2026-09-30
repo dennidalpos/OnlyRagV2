@@ -8,7 +8,7 @@ from sidecar.schemas import (
     PromptHistorySearchResult,
     PromptHistoryRemoveRequest,
 )
-from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, append_records
+from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, append_records, database_operation
 from sidecar.infrastructure.embeddings import generate_embedding
 
 
@@ -31,9 +31,7 @@ def _normalized_embedding(text: str) -> List[float]:
 
 
 def index_prompt_history(req: IndexPromptHistoryRequest) -> None:
-    """Embeds and upserts one completed prompt into the semantic history index. Idempotent by
-    `id` (delete-then-add), since the renderer's completion trigger could in theory fire twice
-    for the same executed prompt."""
+    """Atomically upsert a completed prompt by id."""
     prompt_text = (req.prompt or "").strip()
     if not prompt_text:
         return
@@ -115,6 +113,7 @@ def search_prompt_history(req: PromptHistorySearchRequest) -> List[PromptHistory
         return []
 
 
+@database_operation
 def remove_prompt_history(req: PromptHistoryRemoveRequest) -> Dict[str, Any]:
     """Deletes prompt-history rows by session id(s) and/or project, keeping the index from
     ever pointing at sessions/projects the user has already deleted."""

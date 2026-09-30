@@ -17,9 +17,7 @@ import { useOllamaGenerationState } from './useOllamaGenerationState'
 import { chosenThinkValue, resolveOllamaThinkingPreference } from '../../shared/domain/agent/ollamaThinkingPolicy'
 import { noConfiguredModelMessage, resolveConfiguredModel } from '../../shared/domain/settings/configuredModel'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
-
-const STORAGE_KEY_CONVERSATIONS = 'onlyrag_chat_conversations'
-const STORAGE_KEY_ACTIVE_ID = 'onlyrag_chat_active_id'
+import { useChatHistory } from './useChatHistory'
 
 const createDefaultGreetingMessage = (): ChatMessage => ({
   id: '1',
@@ -31,37 +29,6 @@ const createDefaultGreetingMessage = (): ChatMessage => ({
 /** An untitled conversation stores an empty title; the view shows the localized default for it. */
 export function isUntitledConversationTitle(title: string | undefined): boolean {
   return !(title ?? '').trim()
-}
-
-function loadInitialConversations(): ChatConversation[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_CONVERSATIONS)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed as ChatConversation[]
-      }
-    }
-  } catch (e) {
-    logger.warn('ChatEngine', `Failed loading saved conversations from localStorage: ${e}`)
-  }
-  const defaultConv: ChatConversation = {
-    id: `session-${Date.now()}`,
-    title: '',
-    messages: [createDefaultGreetingMessage()],
-    selectedDocIds: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
-  return [defaultConv]
-}
-
-function safeSetLocalStorage(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value)
-  } catch (err) {
-    logger.warn('ChatEngine', `Failed writing ${key} to localStorage: ${err}`)
-  }
 }
 
 export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsData | null) {
@@ -84,15 +51,8 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   budgetRef.current = contextBudget
 
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
-  const [conversations, setConversations] = useState<ChatConversation[]>(loadInitialConversations)
-  const [activeConversationId, setActiveConversationId] = useState<string>(() => {
-    const initial = loadInitialConversations()
-    const savedActiveId = localStorage.getItem(STORAGE_KEY_ACTIVE_ID)
-    if (savedActiveId && initial.some((c) => c.id === savedActiveId)) {
-      return savedActiveId
-    }
-    return initial[0]?.id || `session-${Date.now()}`
-  })
+  const { conversations, setConversations, activeConversationId, setActiveConversationId, storageError, retryPersistence } =
+    useChatHistory(createDefaultGreetingMessage)
 
   const activeConversation = useMemo(() => {
     return conversations.find((c) => c.id === activeConversationId) || conversations[0]
@@ -141,7 +101,6 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const isScrolledUpRef = useRef<boolean>(false)
 
   const prevActiveIdRef = useRef<string>(activeConversationId)
-  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const persistConversationState = useCallback((msgs: ChatMessage[], docIds: Set<string>, convId: string) => {
     if (!convId) return
@@ -157,13 +116,11 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         }
         return conv
       })
-      safeSetLocalStorage(STORAGE_KEY_CONVERSATIONS, JSON.stringify(next))
-      safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, convId)
       return next
     })
   }, [])
 
-  // Persist conversation changes to localStorage debounced and safely without race conditions or streaming I/O freezes
+  // Keep streamed tokens out of the persistent history until the response settles.
   useEffect(() => {
     // If the conversation ID just changed, do not persist yet — we are loading the target conversation
     if (prevActiveIdRef.current !== activeConversationId) {
@@ -173,24 +130,9 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
     if (!activeConversationId) return
 
-    // CRITICAL: Skip synchronous disk I/O and conversations array rebuild 25 times/sec during active token streaming!
     if (isGeneratingRef.current) return
 
-    if (persistTimerRef.current) {
-      clearTimeout(persistTimerRef.current)
-    }
-
-    persistTimerRef.current = setTimeout(() => {
-      persistConversationState(messages, selectedDocIds, activeConversationId)
-      persistTimerRef.current = null
-    }, 400)
-
-    return () => {
-      if (persistTimerRef.current) {
-        clearTimeout(persistTimerRef.current)
-        persistTimerRef.current = null
-      }
-    }
+    persistConversationState(messages, selectedDocIds, activeConversationId)
   }, [messages, selectedDocIds, activeConversationId, persistConversationState])
 
   const handleScroll = useCallback(() => {
@@ -559,6 +501,8 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
   const loadConversation = useCallback(
     (id: string) => {
+      if (id === activeConversationId) return
+      persistConversationState(messages, selectedDocIds, activeConversationId)
       if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
         window.electronAPI.cancelOllamaStream({ operationId: activeStreamIdRef.current }).catch(() => {})
       }
@@ -583,12 +527,12 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
       setInput('')
       setShowMentions(false)
-      safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, id)
     },
-    [conversations, documents, isGenerating],
+    [conversations, documents, messages, selectedDocIds, activeConversationId, persistConversationState, setActiveConversationId],
   )
 
   const handleNewChat = useCallback(() => {
+    persistConversationState(messages, selectedDocIds, activeConversationId)
     if (streamThrottleTimer.current) {
       clearInterval(streamThrottleTimer.current)
       streamThrottleTimer.current = null
@@ -612,15 +556,10 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     }
 
     prevActiveIdRef.current = newConv.id
-    setConversations((prev) => {
-      const nextList = [newConv, ...prev]
-      safeSetLocalStorage(STORAGE_KEY_CONVERSATIONS, JSON.stringify(nextList))
-      return nextList
-    })
+    setConversations((prev) => [newConv, ...prev])
     setActiveConversationId(newConv.id)
     setMessages(newConv.messages)
-    safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, newConv.id)
-  }, [isGenerating])
+  }, [messages, selectedDocIds, activeConversationId, persistConversationState, setConversations, setActiveConversationId])
 
   const deleteConversation = useCallback(
     (id: string) => {
@@ -655,17 +594,14 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           setMessages(fresh.messages)
           setSelectedDocIds(new Set())
           nextList = [fresh]
-          safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, fresh.id)
         } else if (activeConversationId === id) {
           const nextActive = remaining[0]
           prevActiveIdRef.current = nextActive.id
           setActiveConversationId(nextActive.id)
           setMessages(nextActive.messages && nextActive.messages.length > 0 ? nextActive.messages : [createDefaultGreetingMessage()])
           setSelectedDocIds(new Set(nextActive.selectedDocIds || []))
-          safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, nextActive.id)
         }
 
-        safeSetLocalStorage(STORAGE_KEY_CONVERSATIONS, JSON.stringify(nextList))
         return nextList
       })
     },
@@ -676,12 +612,13 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     if (!newTitle.trim()) return
     setConversations((prev) => {
       const updated = prev.map((c) => (c.id === id ? { ...c, title: newTitle.trim(), updatedAt: new Date().toISOString() } : c))
-      safeSetLocalStorage(STORAGE_KEY_CONVERSATIONS, JSON.stringify(updated))
       return updated
     })
   }, [])
 
   return {
+    storageError,
+    retryPersistence,
     isPromptModalOpen,
     setIsPromptModalOpen,
     documents,

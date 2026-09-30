@@ -30,6 +30,12 @@ Il server FastAPI ascolta su `127.0.0.1:8000`. Route e schemi sono definiti in [
 - La ricerca combina retrieval denso per modello, conteggio lessicale sui candidati e RRF, poi un cross-score lessicale locale. Non esiste un indice FTS/BM25 separato.
 - Il Sidecar gestisce LanceDB, OCR RapidOCR/Vision, traduzione PDF/DOCX, export e storico semantico.
 - Il vocabolario si inizializza all'avvio solo dagli asset inclusi (`bundled`), senza rete; se il manifest non è leggibile resta la cache esistente (`cache`).
-- Ogni errore interno, anche quello intercettato da una route, risponde `500` con `{"detail": "Internal Server Error", "error_id"}`: il dettaglio (che può contenere path locali) resta solo nel log del Sidecar. Solo `400`/`404` di dominio riportano il messaggio. La validazione dei body è Pydantic.
+- Ogni errore interno, anche quello intercettato da una route, risponde `500` (eccetto il database indisponibile su `/health`, che risponde `503`) con `{"detail": "Internal Server Error", "error_id"}`: il dettaglio (che può contenere path locali) resta solo nel log del Sidecar. Solo `400`/`404` di dominio riportano il messaggio. La validazione dei body è Pydantic.
 
 Verifica: `npm run test:sidecar`. Rigenerazione OpenAPI: `npm run generate:openapi`.
+
+## Affidabilita del database
+
+- `GET /health` restituisce 503 se il database non e utilizzabile o il recupero e fallito; 200 mantiene il contratto `status: online`. Il Main interpreta un 503 come offline.
+- I guasti di lettura, aggiornamento, cancellazione e ricerca restituiscono 500, senza essere convertiti in elenchi vuoti o successi. `[]` indica un archivio realmente vuoto. Il Renderer conserva elenco e selezione su una richiesta fallita.
+- Ingestion e reindicizzazione preparano embedding e chunk prima del commit coordinato. Se la seconda tabella fallisce, vengono ripristinate entrambe; il registro delle versioni sopravvive alle interruzioni del processo. Non modificare o cancellare `data/document-recovery.json` quando il recupero fallisce.

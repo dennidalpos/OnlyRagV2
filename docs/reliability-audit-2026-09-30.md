@@ -48,7 +48,7 @@ Artefatto finale: `release/OnlyRag V2 Setup 1.0.0.exe` (1489.58 MB), SHA256 `60E
 
 ## Passaggio di sessione
 
-Le correzioni di affidabilita sono implementate e verificate localmente; `PROJECT_STATUS.json` conserva solo le attivita aperte. Il prossimo controllo e il risultato CI e la rivalutazione Dependabot del commit pubblicato su `master`. Non ripetere le suite complete senza nuovi problemi o modifiche.
+Le correzioni di affidabilita sono implementate e verificate localmente; `PROJECT_STATUS.json` conserva solo le attivita aperte. Il commit sorgente `022d385` e pubblicato su `master`. La prima [CI](https://github.com/dennidalpos/OnlyRagV2/actions/runs/36709984830) e partita; controllare il risultato dell'ultima run su `master` nella prossima sessione. La rivalutazione Dependabot dopo il push ha completato con **0 alert aperti**, verificati tramite API GitHub. Non ripetere le suite complete senza nuovi problemi o modifiche.
 
 Restano aperti la verifica NSIS visiva e in VM, la firma dell'installer, le qualifiche Ollama e le prove su dati legacy reali. L'installer sotto `release/` e un artefatto locale ignorato da Git; codice, test, contratto OpenAPI, documentazione ed evidenze sono inclusi nel commit. Conservare i workspace live falliti e i dati personali reali.
 

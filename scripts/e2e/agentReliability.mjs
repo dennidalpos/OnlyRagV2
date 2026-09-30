@@ -711,6 +711,7 @@ try {
 
   console.log('[milestones] restored overlap advances only the first open milestone')
   const overlapIdentity = identity('overlapping-milestones')
+  fs.writeFileSync(path.join(workspaceRoot, 'overlap-check.js'), 'export const overlapCheck = true\n', 'utf8')
   assert.equal(
     await api(page, 'agentPlanSeed', {
       sessionId: overlapIdentity.conversationId,
@@ -718,7 +719,13 @@ try {
       planRevisionId: overlapIdentity.planRevisionId,
       userTask: 'Verify the ordered plan.',
       planMilestones: [
-        { id: 'm-1', title: 'Review the project', status: 'in_progress' },
+        {
+          id: 'm-1',
+          title: 'Check source syntax',
+          filePaths: ['overlap-check.js'],
+          verificationCommand: 'node --check overlap-check.js',
+          status: 'in_progress',
+        },
         { id: 'm-2', title: 'Check the result', status: 'in_progress' },
         { id: 'm-3', title: 'Summarize the work', status: 'pending' },
       ],
@@ -744,6 +751,13 @@ try {
   assert.deepEqual(
     overlapBefore.planMilestones.map(({ status }) => status),
     ['in_progress', 'in_progress', 'pending'],
+  )
+  assert(
+    await page.evaluate(
+      (runId) =>
+        window.__onlyragE2E.logs.some((event) => event.runId === runId && event.message.includes("update_plan rejected: 'm-2' is not the active milestone")),
+      overlapIdentity.runId,
+    ),
   )
   serverState.pendingResponses.delete(overlapHold)
   sendChatLine(overlapHold, {

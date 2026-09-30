@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
+import { AgentProgressPolicy, PROGRESS_BUDGET } from '../domain/agent/agentProgressPolicy'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -25,6 +25,50 @@ import { verifyWebUi } from '../infrastructure/process/webUiSmokeVerifier'
 vi.mock('../infrastructure/process/webUiSmokeVerifier', () => ({ verifyWebUi: vi.fn() }))
 
 describe('structured tool outcomes', () => {
+  it.each([
+    { outcome: 'success' as const, stopped: false },
+    { outcome: 'failure' as const, stopped: true },
+  ])('counts a $outcome shell command that wrote a project file before the no-mutation guard', async ({ outcome, stopped }) => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-command-progress-'))
+    try {
+      const progress = new AgentProgressPolicy({}, { ...PROGRESS_BUDGET, stepsWithoutMutation: 2 })
+      expect(progress.onStepExecuted(false)).toBeNull()
+      const toolStartedAtMs = Date.now() - 1_000
+      fs.writeFileSync(path.join(workspace, 'package.json'), '{"name":"fixture"}\n')
+      const closeApplicationRun = vi.fn(async () => ({ outcome: 'closed' }))
+
+      await runToolResultProcessing({
+        parsedTool: { tool: 'run_command', parameters: { command: 'npm init -y' } },
+        toolRes: { outcome, outputForHistory: 'command finished', logMessage: 'command finished' },
+        toolStartedAtMs,
+        stepCount: 2,
+        workspacePath: workspace,
+        flags: { hasFileMutations: false, hasVerifiedBuild: false },
+        sessionChangedFiles: new Map(),
+        goalPlanner: new GoalDecompositionPlanner(),
+        episodicCompactor: { recordStep: () => {} },
+        executionGuard: new TransactionalExecutionGuard(workspace),
+        loopDetector: new AgentActionLoopDetector(2),
+        state: { guardEvents: [], progress, versionEvidence: {} },
+        sessionId: 'command-progress',
+        isSessionActive: () => false,
+        rendererEvents: null,
+        persistCurrentState: async () => {},
+        emitLog: () => {},
+        emitDone: () => {},
+        finalizeSession: () => {},
+        closeApplicationRun,
+        settings: { enableCodingAgentDebugLog: false },
+      } as unknown as ToolResultProcessingContext)
+
+      expect(closeApplicationRun).toHaveBeenCalledTimes(stopped ? 1 : 0)
+      if (stopped) expect(closeApplicationRun).toHaveBeenCalledWith(expect.objectContaining({ guard: 'no_mutation' }))
+      else expect(progress.onStepExecuted(false)).toBeNull()
+    } finally {
+      fs.rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
   it('returns browser runtime errors after a green primary build even without a milestone command', async () => {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-visual-feedback-'))
     try {

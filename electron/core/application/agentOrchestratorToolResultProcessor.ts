@@ -323,7 +323,10 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     ctx.state.progress.clearExecutionFailures()
   }
 
-  const breakerOutcome = await runCircuitBreaker(ctx, isMutating)
+  // Shell commands can create project files too. Count those changes before the no-mutation guard
+  // decides whether to stop this step, while failed commands still count as no progress.
+  const commandTouchedPaths = recordCommandTouchedFiles(ctx, isToolFailure)
+  const breakerOutcome = await runCircuitBreaker(ctx, isMutating || (!isToolFailure && commandTouchedPaths.length > 0))
   if (breakerOutcome) return breakerOutcome
 
   ctx.episodicCompactor.recordStep(
@@ -353,7 +356,6 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   }
   // Runs on failure too: a generator that aborts halfway still leaves directories behind,
   // and that leftover is precisely what the agent needs to be told about.
-  const commandTouchedPaths = recordCommandTouchedFiles(ctx, isToolFailure)
   for (const filePath of [...commandTouchedPaths, ...resolvedMutationPaths(ctx, isToolFailure)]) {
     ctx.recordChangedFile?.(filePath)
   }

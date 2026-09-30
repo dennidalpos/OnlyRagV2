@@ -1,10 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect } from 'vitest'
 import { respondToApproval, runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
 import type { RendererEventSink } from '../../electron/core/domain/ports/rendererEventSink'
 import type { AgentApprovalRequest } from '../../shared/types'
 import { LIVE_CODING_MODEL, liveWorkspacePath, loadRealSettings, reportRun, resetWorkspace, seedGeneratedPlan } from './agentLiveHarness'
+import { managedDevServerRepository } from '../../electron/core/infrastructure/process/managedDevServerRepository'
 
 const MODEL = LIVE_CODING_MODEL
 const RUN_LABEL = process.env.ONLYRAG_LIVE_RUN || 'default'
@@ -82,6 +83,8 @@ Build a fully working first version containing:
 Ensure the application is fully runnable, usable and responsive before moving to the next step.`
 
 describe('live: full task run', () => {
+  afterEach(() => managedDevServerRepository.stopAll())
+
   it('plans and executes the original audit task against a real model', async () => {
     const settings = loadRealSettings({ agentSessionTimeoutMinutes: 180, capabilityPolicyMode: 'network-approved', maxToolCallSteps: 50 })
     const requestedContext = process.env.ONLYRAG_LIVE_CONTEXT_TOKENS

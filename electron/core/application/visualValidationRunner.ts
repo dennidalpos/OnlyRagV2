@@ -9,7 +9,7 @@ interface PageLike {
   goto(url: string, options: { waitUntil: 'load'; timeout: number }): Promise<unknown>
   screenshot(options: { path: string; timeout: number }): Promise<unknown>
   content(): Promise<string>
-  on?(event: 'console' | 'response', listener: (payload: unknown) => void): void
+  on?(event: 'console' | 'response' | 'pageerror' | 'requestfailed', listener: (payload: unknown) => void): void
 }
 
 interface BrowserContextLike {
@@ -107,6 +107,19 @@ export class VisualValidationRunner {
         if (status < 400) return
         if (redact(response.url?.() || '').fields.length > 0) redactedFields.add('url')
         httpEntries.push({ url, status, method: response.request?.().method?.() || 'GET' })
+      })
+      const recordError = (text: string) => {
+        if (consoleEntries.length >= MAX_DIAGNOSTIC_ENTRIES) return
+        const message = redact(text)
+        message.fields.forEach((field) => redactedFields.add(field))
+        consoleEntries.push({ level: 'error', message: message.value })
+      }
+      page.on?.('pageerror', (payload) => {
+        recordError(`Uncaught page error: ${payload instanceof Error ? payload.message : String(payload)}`)
+      })
+      page.on?.('requestfailed', (payload) => {
+        const request = payload as { url?: () => string; failure?: () => { errorText: string } | null }
+        recordError(`Request failed: ${request.url?.() || 'unknown URL'}: ${request.failure?.()?.errorText || 'unknown failure'}`)
       })
       stage = 'load'
       await page.goto(pathToFileURL(path.resolve(pathCheck.safePath)).href, { waitUntil: 'load', timeout: parsed.data.timeoutMs })

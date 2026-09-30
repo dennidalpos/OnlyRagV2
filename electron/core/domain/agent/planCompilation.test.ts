@@ -20,18 +20,15 @@ describe('ensureScaffoldMilestones', () => {
     { id: 'm-2', title: 'Navigation between the pages works — `src/App.tsx`', status: 'pending' as const },
   ]
 
-  it('prepends only missing requirements from the accepted stack', () => {
+  it('prepends one coherent scaffold while preserving each feature intervention', () => {
     const plan = ensureScaffoldMilestones(pagePlan, web)
 
-    expect(plan).toHaveLength(5)
-    expect(plan.slice(0, 3).map((m) => m.title)).toEqual([
-      expect.stringContaining('`package.json`'),
-      expect.stringContaining('`index.html`'),
-      expect.stringContaining('`src/main.tsx`'),
-    ])
+    expect(plan).toHaveLength(3)
+    expect(plan[0].filePaths).toEqual(['package.json', 'index.html', 'src/main.tsx'])
+    expect(plan.slice(1).map((m) => m.title)).toEqual(pagePlan.map((m) => m.title))
     expect(plan[0].proposedVerificationCommand).toBe('npm run build')
     expect(plan[0].verificationCommand).toBeUndefined()
-    expect(plan.map((m) => m.id)).toEqual(['m-1', 'm-2', 'm-3', 'm-4', 'm-5'])
+    expect(plan.map((m) => m.id)).toEqual(['m-1', 'm-2', 'm-3'])
   })
 
   it('appends end-placed requirements after the work they verify', () => {
@@ -51,26 +48,30 @@ describe('ensureScaffoldMilestones', () => {
 
     const plan = ensureScaffoldMilestones(pagePlan, withSmokeTest)
 
-    expect(plan).toHaveLength(6)
+    expect(plan).toHaveLength(4)
     expect(plan.at(-1)).toMatchObject({
-      id: 'm-6',
+      id: 'm-4',
       filePaths: ['src/App.test.tsx'],
       proposedVerificationCommand: 'npm test',
       acceptanceCriteria: ['npm test runs src/App.test.tsx and exits with code 0.'],
       falsifiableHypothesis: 'npm test runs src/App.test.tsx and exits with code 0.',
     })
-    expect(plan[3].title).toContain('DashboardPage')
+    expect(plan[1].title).toContain('DashboardPage')
   })
 
-  it('adds only what the plan is missing', () => {
+  it('includes named entrypoints in the coherent prerequisite without dropping authored work', () => {
     const withEntry = [{ id: 'm-1', title: 'The entry script mounts the app — `src/main.tsx`', status: 'pending' as const }, ...pagePlan]
 
     const plan = ensureScaffoldMilestones(withEntry, web)
 
-    expect(plan).toHaveLength(5)
-    expect(plan.filter((m) => m.title.includes('`src/main.tsx`'))).toHaveLength(1)
-    expect(plan[0].title).toContain('`package.json`')
-    expect(plan[1].title).toContain('`index.html`')
+    expect(plan).toHaveLength(4)
+    expect(plan[0].filePaths).toEqual(['package.json', 'index.html', 'src/main.tsx'])
+    expect(plan.slice(1).map((m) => m.title)).toEqual(withEntry.map((m) => m.title))
+  })
+
+  it('does not duplicate an existing complete first scaffold group', () => {
+    const group = { id: 'm-1', title: 'Initialize project', status: 'pending' as const, filePaths: web.requirements.map((entry) => entry.path) }
+    expect(ensureScaffoldMilestones([group, ...pagePlan], web)).toEqual([group, ...pagePlan].map((m, index) => ({ ...m, id: `m-${index + 1}` })))
   })
 
   it('stays out for existing or unresolved workspaces', () => {

@@ -23,6 +23,7 @@ import { resolveOllamaThinkingPreference, resolveStructuredThinkValue } from '..
 import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/agent/codingAgentDebugPolicy'
 import { ollamaAppService } from './ollamaAppService'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { reviewPlanRequestCoverage } from './planRequestCoverage'
 
 const PLAN_SYSTEM_PROMPT = `Create a short, sequential coding plan in the requested JSON shape.
 Use one intervention for a small fix and normally three to five for medium work; never exceed fifteen.
@@ -31,6 +32,8 @@ Each intervention states observable behavior, one file at most, acceptance crite
 Every intervention must have a file path or an allowed verification command.
 For an existing workspace, change only relevant files and do not re-scaffold.
 For an empty workspace, use only the acceptedGreenfieldStack and scaffold requirements supplied in projectFacts.
+Keep every requested page, navigation behavior, reusable component and service boundary in explicit acceptance criteria; infrastructure setup alone does not cover the request.
+The application supplies a coherent scaffold prerequisite. Plan functional work separately, preserving the user's requested integration scope and deferred integrations.
 When those requirements name root index.html and src/main.*, use a compatible web bundler; do not choose Create React App or react-scripts unless the user explicitly requested them.
 Executable verification commands already exist and may be used in verificationCommand. Proposed commands are future checks only and must never be returned as verificationCommand.
 Never add analysis or inspection as interventions. Never invent verification commands or project infrastructure.
@@ -205,34 +208,44 @@ export class PlanGenerationAppService {
     runtimeOpts.num_predict = calculateAvailableOutputTokens(`${PLAN_SYSTEM_PROMPT}\n${userContent}`, runtimeOpts.num_ctx)
 
     let structuredPlan: PlanningPhaseResponse | null = null
+    let compiledMilestones: PlanMilestone[] = []
+    const retained = retainEvidence(req.previousPlan)
+    const confirmedDecisions = mergeDecisions(req.previousPlan?.decisions || [], decisionsFromAnswers(req.previousDecisions || []))
+      .filter((decision) => decision.source !== 'assumption')
+      .map((decision) => decision.statement)
+    const verification =
+      (profile ? resolvePrimaryProfileVerificationTargets(profile)[0]?.command : undefined) || discovery.facts.verification.proposedCommands[0]
     let generationError: string | undefined
     try {
-      const response = await generateStructuredWithRecovery(
-        {
-          operationId: req.operationId,
-          model,
-          systemPrompt: PLAN_SYSTEM_PROMPT,
-          userContent,
-          format: toOllamaJsonSchema(planningPhaseResponseSchema),
-          think: resolveStructuredThinkValue(resolveOllamaThinkingPreference(model, req.settings, modelMetrics)),
-          host: req.settings.ollamaHost,
-          keepAlive: CODING_MODEL_KEEP_ALIVE,
-          options: runtimeOpts,
-        },
-        (content) => {
-          const validated = validateStructuredContent(content, planningPhaseResponseSchema)
-          if (validated.status === 'invalid') {
-            return { status: 'invalid', error: `Invalid plan response: ${validated.error}` }
-          }
-          const freshPlan = normalizeFreshPlanReferences(validated.data, previousInterventions)
-          const sanitized = sanitizeVerificationCommands(freshPlan, executableVerificationCommands, discovery.scaffold.requirements[0]?.path)
-          const error =
-            sanitized.error ||
-            incompatibleGreenfieldScaffold(sanitized.plan || freshPlan, discovery.scaffold, req.prompt) ||
-            reconcilePreviousWork(sanitized.plan || freshPlan, previousInterventions)
-          return error ? { status: 'invalid', error } : { status: 'valid', data: sanitized.plan! }
-        },
-      )
+      const request = {
+        operationId: req.operationId,
+        model,
+        systemPrompt: PLAN_SYSTEM_PROMPT,
+        userContent,
+        format: toOllamaJsonSchema(planningPhaseResponseSchema),
+        think: resolveStructuredThinkValue(resolveOllamaThinkingPreference(model, req.settings, modelMetrics)),
+        host: req.settings.ollamaHost,
+        keepAlive: CODING_MODEL_KEEP_ALIVE,
+        options: runtimeOpts,
+      }
+      const response = await generateStructuredWithRecovery(request, async (content) => {
+        const validated = validateStructuredContent(content, planningPhaseResponseSchema)
+        if (validated.status === 'invalid') {
+          return { status: 'invalid', error: `Invalid plan response: ${validated.error}` }
+        }
+        const freshPlan = normalizeFreshPlanReferences(validated.data, previousInterventions)
+        const sanitized = sanitizeVerificationCommands(freshPlan, executableVerificationCommands, discovery.scaffold.requirements[0]?.path)
+        const error =
+          sanitized.error ||
+          incompatibleGreenfieldScaffold(sanitized.plan || freshPlan, discovery.scaffold, req.prompt) ||
+          reconcilePreviousWork(sanitized.plan || freshPlan, previousInterventions)
+        if (error) return { status: 'invalid', error }
+        const candidate = compilePlanMilestones(toMilestones(sanitized.plan!), verification, discovery.scaffold)
+        const coverageError = await reviewPlanRequestCoverage(request, req.prompt, candidate, retained, confirmedDecisions)
+        if (coverageError) return { status: 'invalid', error: coverageError }
+        compiledMilestones = candidate
+        return { status: 'valid', data: sanitized.plan! }
+      })
       if (response.status === 'success') {
         structuredPlan = response.data
       } else {
@@ -243,9 +256,7 @@ export class PlanGenerationAppService {
     }
 
     if (generationError) logger.log('WARN', 'PlanGenerationAppService', `Plan generation failed: ${generationError}`)
-    const verification =
-      (profile ? resolvePrimaryProfileVerificationTargets(profile)[0]?.command : undefined) || discovery.facts.verification.proposedCommands[0]
-    const milestones = structuredPlan ? compilePlanMilestones(toMilestones(structuredPlan), verification, discovery.scaffold) : []
+    const milestones = structuredPlan ? compiledMilestones : []
     if (!generationError && milestones.length === 0) generationError = 'Plan response contained no executable interventions'
 
     const previousDecisions = req.previousPlan?.decisions || []
@@ -260,7 +271,7 @@ export class PlanGenerationAppService {
     const result = {
       objective: structuredPlan?.objective || '',
       decisions: mergeDecisions(previousDecisions, [...answerDecisions, ...assumptionDecisions]),
-      retainedEvidence: retainEvidence(req.previousPlan),
+      retainedEvidence: retained,
       milestones,
       supersededWork: [...(req.previousPlan?.supersededWork || []), ...(structuredPlan?.supersededWork || [])],
     }

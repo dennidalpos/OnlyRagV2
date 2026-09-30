@@ -235,6 +235,15 @@ export class GoalDecompositionPlanner {
 
     if (promptWindow.omittedAfter > 0) {
       lines.push(`[${promptWindow.omittedAfter} later milestones omitted from this turn; retained in canonical state.]`)
+      const upcoming = this.milestones
+        .slice((promptWindow.entries.at(-1)?.planIndex ?? -1) + 1)
+        .filter((milestone) => milestone.status === 'pending' || milestone.status === 'in_progress')
+      lines.push('[UPCOMING PLAN CONTEXT — preserve these connections; only the active milestone may advance]')
+      upcoming.slice(0, 6).forEach((milestone) => {
+        lines.push(
+          `${milestone.id}: ${milestone.title.slice(0, 200)}${milestone.filePaths?.length ? ` — files: ${milestone.filePaths.slice(0, 6).join(', ')}` : ''}`,
+        )
+      })
     }
 
     const failedMilestones = this.milestones.filter((milestone) => milestone.status === 'failed')
@@ -267,6 +276,7 @@ export class GoalDecompositionPlanner {
           '3. Never repeat identical file writes or commands in a loop. If configuration or boilerplate files are already created, advance immediately to implementing components in src/.',
           '4. Do NOT invoke "finish" until all operational checklist milestones are completed and verified.',
           '5. If a scaffolding command fails or hangs, create only the files named by the active milestone; preserve the accepted stack and existing infrastructure.',
+          '6. Keep the active edit group connected: imports must resolve, and a web HTML entry must load its source entry module. Run the active group check once its files are coherent, even if later feature milestones remain pending.',
         ].join('\n'),
       )
     }

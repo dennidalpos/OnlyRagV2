@@ -45,16 +45,15 @@ export interface WorkspaceScaffoldFacts {
   requirements: ScaffoldRequirement[]
 }
 
-/** Prepends only missing requirements supplied by project discovery. */
+/** Keeps greenfield entrypoints in one verifiable group; feature interventions stay separate. */
 export function ensureScaffoldMilestones(milestones: PlanMilestone[], workspace?: WorkspaceScaffoldFacts | null): PlanMilestone[] {
   if (!workspace?.isGreenfield || workspace.requirements.length === 0) return milestones
 
   const named = milestones.flatMap((m) => (m.filePaths?.length ? m.filePaths : extractDeliverablePaths(m.title)))
   const missing = workspace.requirements.filter((entry) => !named.includes(entry.path))
-  if (missing.length === 0) return milestones
 
   const toMilestone = (entry: ScaffoldRequirement): PlanMilestone => {
-    const criteria = entry.acceptanceCriteria?.length ? entry.acceptanceCriteria : [`${entry.path} provides the accepted stack capability.`]
+    const criteria = entry.acceptanceCriteria?.length ? entry.acceptanceCriteria : [`${entry.path}: ${entry.title}.`]
     return {
       id: '',
       title: `${entry.title} — \`${entry.path}\``,
@@ -65,13 +64,27 @@ export function ensureScaffoldMilestones(milestones: PlanMilestone[], workspace?
       falsifiableHypothesis: criteria[0],
     }
   }
-  const prepended = missing.filter((entry) => entry.placement !== 'end').map(toMilestone)
+  const initial = workspace.requirements.filter((entry) => entry.placement !== 'end')
+  const firstFiles = milestones[0]?.filePaths || extractDeliverablePaths(milestones[0]?.title || '')
+  const needsGroup = initial.length > 1 && !initial.every((entry) => firstFiles.includes(entry.path))
+  const prepended = needsGroup
+    ? [
+        {
+          id: '',
+          title: 'Create a coherent minimal project scaffold',
+          status: 'pending' as const,
+          filePaths: initial.map((entry) => entry.path),
+          acceptanceCriteria: initial.flatMap((entry) => toMilestone(entry).acceptanceCriteria || []),
+          proposedVerificationCommand: initial.find((entry) => entry.proposedVerificationCommand)?.proposedVerificationCommand,
+        },
+      ]
+    : missing.filter((entry) => entry.placement !== 'end').map(toMilestone)
   const appended = missing.filter((entry) => entry.placement === 'end').map(toMilestone)
 
   return [...prepended, ...milestones, ...appended].map((m, idx) => ({ ...m, id: `m-${idx + 1}` }))
 }
 
-/** Applies canonical normalisation without merging distinct interventions. */
+/** Applies canonical normalisation while retaining authored interventions. */
 export function compilePlanMilestones(
   milestones: PlanMilestone[],
   verificationCommand?: string | null,

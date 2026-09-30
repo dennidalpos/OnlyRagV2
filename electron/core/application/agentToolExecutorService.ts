@@ -840,7 +840,7 @@ export class AgentToolExecutorService {
         documentIoRepository.ensureDirectory(outputDirectory)
         const evidence = await this.visualValidationRunner.captureEvidence(parameters, workspacePath, outputDirectory, signal, fullAccess)
         const result =
-          'status' in evidence && evidence.status === 'UNAVAILABLE'
+          'status' in evidence
             ? visualValidationResultSchema.parse({
                 status: 'UNAVAILABLE',
                 screenshot: { status: 'unavailable' },
@@ -850,13 +850,25 @@ export class AgentToolExecutorService {
                 redaction: { applied: false, fields: [] },
                 error: evidence.error,
               })
-            : visualValidationResultSchema.parse({ status: 'verified', ...evidence })
+            : visualValidationResultSchema.parse({
+                status: evidence.console.some((entry) => entry.level === 'error') || evidence.http.some((entry) => entry.status >= 400) ? 'failed' : 'verified',
+                ...evidence,
+              })
+        // Keep diagnostics before the DOM so prompt truncation preserves actionable failures.
+        const output = JSON.stringify({
+          status: result.status,
+          error: result.error,
+          console: result.console,
+          http: result.http,
+          redaction: result.redaction,
+          screenshot: result.screenshot,
+          dom: result.dom,
+        })
         return {
-          outcome: result.status === 'verified' ? 'success' : 'blocked',
-          outputForHistory: JSON.stringify(result),
+          outcome: result.status === 'verified' ? 'success' : result.status === 'failed' ? 'failure' : 'blocked',
+          outputForHistory: output,
           ...toolLog('toolVisualDone', { status: result.status, target: String(parameters.artifactPath || 'artifact') }),
-          logDetail: JSON.stringify(result).slice(0, 4000),
-          isTerminal: true,
+          logDetail: output.slice(0, 4000),
         }
       }
 

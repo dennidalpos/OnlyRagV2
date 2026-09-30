@@ -107,6 +107,9 @@ describe('GoalDecompositionPlanner', () => {
     expect(prompt).toContain('**m-1:')
     expect(prompt).not.toContain('**m-16:')
     expect(prompt).toContain('19 later milestones omitted from this turn; retained in canonical state')
+    expect(prompt).toContain('[UPCOMING PLAN CONTEXT')
+    expect(prompt).toContain('m-7: Implement capability 7')
+    expect(prompt).not.toContain('m-8: Implement capability 8')
   })
 })
 

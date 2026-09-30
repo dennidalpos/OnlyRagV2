@@ -1,6 +1,7 @@
 import type { UntrustedJson } from '../../../../shared/types'
 import type { AgentToolCall, SupportedToolName, AgentToolReplacementChunk } from './agentTypes'
 import { findToolSchema } from './ollamaToolSchemaCatalog'
+import { visualValidationRequestSchema } from './visualValidationContracts'
 
 export interface SchemaValidationResult {
   valid: boolean
@@ -290,10 +291,19 @@ export function normalizeToolParams(raw: Record<string, UntrustedJson>): Record<
  */
 export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationResult {
   const errors: string[] = []
-  const rawParams = normalizeToolParams({ ...(toolCall.parameters || {}) })
   const tool = (normalizeToolName(toolCall.tool) || toolCall.tool) as SupportedToolName
+  // Visual requests keep the runner's strict shape.
+  const rawParams: Record<string, UntrustedJson> =
+    tool === 'validate_visual_artifact' ? { ...(toolCall.parameters || {}) } : normalizeToolParams({ ...(toolCall.parameters || {}) })
 
   switch (tool) {
+    case 'validate_visual_artifact': {
+      const request = visualValidationRequestSchema.safeParse(rawParams)
+      if (request.success) Object.assign(rawParams, request.data)
+      else errors.push(...request.error.issues.map((issue) => `Invalid visual parameter '${issue.path.join('.') || 'request'}': ${issue.message}`))
+      break
+    }
+
     case 'read_file': {
       if (!rawParams.filePath) {
         errors.push("Missing required parameter 'filePath' for read_file")

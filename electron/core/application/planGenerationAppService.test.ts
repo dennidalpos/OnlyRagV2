@@ -9,6 +9,9 @@ import type { AgentPlan, AppSettings } from '../../../shared/types'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import * as planCompilation from '../../../shared/domain/agent/planCompilation'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
+import { reviewPlanRequestCoverage } from './planRequestCoverage'
+
+vi.mock('./planRequestCoverage', () => ({ reviewPlanRequestCoverage: vi.fn() }))
 
 vi.mock('./ollamaAppService', () => ({
   ollamaAppService: {
@@ -79,7 +82,10 @@ function previousPlan(): AgentPlan {
 }
 
 describe('PlanGenerationAppService', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(reviewPlanRequestCoverage).mockResolvedValue(undefined)
+  })
 
   it('returns a canonical structured plan', async () => {
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(
@@ -275,6 +281,52 @@ describe('PlanGenerationAppService', () => {
     expect(correction.schemaCorrection.validationError).toContain('Invalid plan response')
   })
 
+  it('corrects missing request coverage within the existing planning budget', async () => {
+    vi.mocked(ollamaAppService.generateStructured)
+      .mockResolvedValueOnce(complete([intervention('first', 'Create the UI')]))
+      .mockResolvedValueOnce(complete([intervention('second', 'Prepare the service boundary without connecting external storage')]))
+    vi.mocked(reviewPlanRequestCoverage)
+      .mockResolvedValueOnce('Plan request coverage failed: services folder (missing): Add a deferred service boundary.')
+      .mockResolvedValueOnce(undefined)
+
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Create the UI and a services folder for future integrations', settings })
+
+    expect(result.status).toBe('success')
+    expect(result.milestones[0].title).toContain('service boundary')
+    expect(ollamaAppService.generateStructured).toHaveBeenCalledTimes(2)
+    expect(reviewPlanRequestCoverage).toHaveBeenCalledTimes(2)
+    const correction = JSON.parse(vi.mocked(ollamaAppService.generateStructured).mock.calls[1][0].userContent)
+    expect(correction.schemaCorrection.validationError).toContain('services folder (missing)')
+  })
+
+  it('keeps an uncovered plan non-executable after two candidates', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('first', 'Create the UI')]))
+    vi.mocked(reviewPlanRequestCoverage).mockResolvedValue('Plan request coverage failed: retained offline behavior (contradicted)')
+
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Keep offline behavior', settings })
+
+    expect(result).toMatchObject({ status: 'error', milestones: [] })
+    expect(result.error).toContain('retained offline behavior')
+    expect(ollamaAppService.generateStructured).toHaveBeenCalledTimes(2)
+    expect(reviewPlanRequestCoverage).toHaveBeenCalledTimes(2)
+  })
+
+  it('reviews compiled scaffold criteria and retained verified work', async () => {
+    const previous = previousPlan()
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(
+      complete([{ ...intervention('next', 'Finish pending work'), sourceInterventionId: 'm-2' }]),
+    )
+    await planGenerationAppService.generatePlanText({ prompt: 'Continue', settings, previousPlan: previous })
+
+    expect(reviewPlanRequestCoverage).toHaveBeenCalledWith(
+      expect.objectContaining({ model: settings.codingModel }),
+      'Continue',
+      expect.arrayContaining([expect.objectContaining({ sourceInterventionId: 'm-2' })]),
+      [expect.objectContaining({ interventionId: 'm-1', verificationReferences: ['npm test'] })],
+      ['Storage: local'],
+    )
+  })
+
   describe('workspace facts', () => {
     let workspacePath: string
 
@@ -325,6 +377,7 @@ describe('PlanGenerationAppService', () => {
       expect(files).toContain('src/App.test.jsx')
       expect(result.milestones.some((item) => item.verificationCommand === 'npm run build')).toBe(true)
       expect(result.milestones.some((item) => item.proposedVerificationCommand === 'npm test')).toBe(true)
+      expect(vi.mocked(reviewPlanRequestCoverage).mock.calls[0][2]).toEqual(result.milestones)
     })
 
     it('regenerates a React plan that selects CRA against root entrypoints unless the user requested CRA', async () => {

@@ -331,7 +331,12 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
   const behaviorDecision = resolveBehaviorTestDirective(input)
   if (behaviorDecision) return behaviorDecision
 
-  if (!input.hasVerifiedBuild && input.verificationCommand && isEveryDeliverableSatisfied(input)) {
+  const activeGroupReady =
+    input.activeMilestone &&
+    (input.activeMilestone.filePaths?.length || 0) > 1 &&
+    input.activeMilestone.proposedVerificationCommand === input.verificationCommand?.command &&
+    input.deliverableStatusOf(input.activeMilestone) === 'satisfied'
+  if (!input.hasVerifiedBuild && input.verificationCommand && (isEveryDeliverableSatisfied(input) || activeGroupReady)) {
     // The check has run and failed, and nothing has changed since: ordering it again is ordering the model to re-read code it has already been told is wrong — and it was doing exactly that from the one channel that always wins, against a tool result telling it the o
     if (input.verificationFailing) {
       return {

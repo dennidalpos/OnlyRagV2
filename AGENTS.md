@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.27 · 2026-09-30` — Verified repository quirks.
+`v1.30 · 2026-09-30` — Verified repository quirks.
 
 - Work directly on `master`; never create branches. Commit and push only when explicitly requested.
 - Local Ollama and Python Sidecar only; cloud forwarding is out of scope. Preserve agent filesystem gates, checkpoints, budgets, timeouts, loop and OOM safeguards.
@@ -16,10 +16,10 @@
 
 Verified in PowerShell on 2026-09-30 (Node 24, npm 11, Python 3.13):
 
-- `npm run test:fast`: 287 files, 2293 tests.
+- `npm run test:fast`: 288 files, 2321 tests.
 - `.venv\Scripts\python.exe -m pytest -q` (full Sidecar).
 - `npm run typecheck`, `npm run quality:static`, `npm run audit:deadcode`, `npm run audit:cycles`, `npm run docs:check`, `npm run format:check`.
-- `npm run generate:openapi` after schema changes; `npm run build`, `npm run package:win` (signature unverified).
+- `npm run generate:openapi` after schema changes; `npm run build`, `npm run package:win` (installer confirmed unsigned via PowerShell 7).
 - `powershell -ExecutionPolicy Bypass -File scripts/test_uninstall_policy.ps1`: five isolated NSIS policy cases; simulated selection, no visual test.
 
 Verification limits: `docs/verification.md`.

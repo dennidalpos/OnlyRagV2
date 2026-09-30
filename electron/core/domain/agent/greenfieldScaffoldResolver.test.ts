@@ -5,8 +5,15 @@ const paths = (prompt: string) => resolveGreenfieldScaffold(true, prompt).scaffo
 
 describe('resolveGreenfieldScaffold', () => {
   it('derives the minimal accepted web stack without assuming TypeScript', () => {
-    expect(paths('Create a React web app')).toEqual(['package.json', 'index.html', 'src/main.jsx', 'src/App.test.jsx'])
-    expect(paths('Create a React TypeScript web app')).toEqual(['package.json', 'tsconfig.json', 'index.html', 'src/main.tsx', 'src/App.test.tsx'])
+    expect(paths('Create a React web app')).toEqual(['package.json', 'index.html', 'src/main.jsx', 'src/App.jsx', 'src/App.test.jsx'])
+    expect(paths('Create a React TypeScript web app')).toEqual([
+      'package.json',
+      'tsconfig.json',
+      'index.html',
+      'src/main.tsx',
+      'src/App.tsx',
+      'src/App.test.tsx',
+    ])
   })
 
   it('keeps Python, Rust and non-web JavaScript free of web entrypoints', () => {

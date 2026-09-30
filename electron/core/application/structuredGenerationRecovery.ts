@@ -71,7 +71,7 @@ export function describeInvalidStructuredResponse(
 /** Shares one two-call ceiling across transport and schema recovery. */
 export async function generateStructuredWithRecovery<T>(
   request: OllamaStructuredRequest,
-  validate: (content: string) => StructuredContentValidation<T>,
+  validate: (content: string) => StructuredContentValidation<T> | Promise<StructuredContentValidation<T>>,
 ): Promise<RecoveredStructuredResult<T>> {
   let currentRequest = request
   let transportFailure: RecoveryFailureState | undefined
@@ -132,7 +132,7 @@ export async function generateStructuredWithRecovery<T>(
       continue
     }
 
-    const validated = validate(response.content)
+    const validated = await validate(response.content)
     if (validated.status === 'valid') return { status: 'success', data: validated.data, content: response.content, attempts: attempt }
     logger.log('WARN', 'StructuredGeneration', describeInvalidStructuredResponse(request.model, attempt, response, currentRequest, validated.error))
 

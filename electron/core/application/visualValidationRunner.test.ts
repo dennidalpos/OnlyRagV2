@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { VisualValidationRunner } from './visualValidationRunner'
+import { parseNativeToolCall } from '../domain/agent/toolParser'
 
 // Host-native paths: the services resolve with node:path, so a literal C:\ is only absolute on Windows.
 const workspace = path.join(path.parse(process.cwd()).root, 'workspace')
@@ -21,6 +22,38 @@ function runtime() {
 }
 
 describe('VisualValidationRunner', () => {
+  it('renders a visual request parsed from a native tool call without unrelated alias fields', async () => {
+    const mocks = runtime()
+    const runner = new VisualValidationRunner(
+      mocks.runtime,
+      () => true,
+      () => ({ isFile: () => true }),
+    )
+    const call = parseNativeToolCall('validate_visual_artifact', {
+      artifactPath: 'dist/index.html',
+      captureDom: true,
+      captureScreenshot: true,
+      viewport: { width: 375, height: 900 },
+    })
+
+    expect(call).not.toBeNull()
+    const result = await runner.launchArtifact(call!.parameters, workspace)
+
+    expect(result.status).toBe('ready')
+    expect(mocks.browser.newContext).toHaveBeenCalledWith({ viewport: { width: 375, height: 900 } })
+    if (result.status === 'ready') await result.close()
+  })
+
+  it.each([{ timeoutMs: 99 }, { viewport: { width: 0, height: 900 } }, { unexpected: true }])(
+    'rejects invalid native visual requests before browser dispatch: %j',
+    (parameters) => {
+      const onRejection = vi.fn()
+
+      expect(parseNativeToolCall('validate_visual_artifact', { artifactPath: 'dist/index.html', ...parameters }, onRejection)).toBeNull()
+      expect(onRejection).toHaveBeenCalledWith({ toolName: 'validate_visual_artifact', errors: expect.any(Array) })
+    },
+  )
+
   it('rejects an artifact outside the workspace before launching Playwright', async () => {
     const mocks = runtime()
     const runner = new VisualValidationRunner(
@@ -169,6 +202,33 @@ describe('VisualValidationRunner', () => {
 
     expect(result).toMatchObject({ status: 'UNAVAILABLE' })
     expect((result as { error: string }).error).toContain('aborted')
+    expect(mocks.browser.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('captures uncaught page errors and failed requests using redacted error diagnostics', async () => {
+    const mocks = runtime()
+    mocks.page.on.mockImplementation((event, listener) => {
+      if (event === 'pageerror') listener(new Error('App is not defined token=secret-value'))
+      if (event === 'requestfailed') {
+        listener({ url: () => 'https://example.test/main.js?api_key=secret-value', failure: () => ({ errorText: 'net::ERR_FAILED' }) })
+      }
+    })
+    const runner = new VisualValidationRunner(
+      mocks.runtime,
+      () => true,
+      () => ({ isFile: () => true }),
+    )
+
+    const result = await runner.captureEvidence({ artifactPath: 'dist/index.html' }, workspace, path.join(workspace, 'artifacts'))
+
+    expect(result).toMatchObject({
+      console: [
+        { level: 'error', message: 'Uncaught page error: App is not defined token=[REDACTED]' },
+        { level: 'error', message: 'Request failed: https://example.test/main.js?api_key=[REDACTED] net::ERR_FAILED' },
+      ],
+      redaction: { applied: true, fields: ['token', 'api_key'] },
+    })
+    expect(JSON.stringify(result)).not.toContain('secret-value')
     expect(mocks.browser.close).toHaveBeenCalledTimes(1)
   })
 })

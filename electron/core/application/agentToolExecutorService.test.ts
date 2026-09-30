@@ -198,16 +198,21 @@ describe('AgentToolExecutorService Unit Tests', () => {
     expect(fs.existsSync(filePath)).toBe(false)
   })
 
-  it('should route validate_visual_artifact through the runner and return structured evidence', async () => {
+  it.each([
+    { console: [], http: [], status: 'verified', outcome: 'success' },
+    { console: [{ level: 'warning', message: 'Deprecated API' }], http: [], status: 'verified', outcome: 'success' },
+    { console: [], http: [{ url: 'file:///missing.js', status: 404, method: 'GET' }], status: 'failed', outcome: 'failure' },
+    { console: [{ level: 'error', message: 'Uncaught page error: App is not defined' }], http: [], status: 'failed', outcome: 'failure' },
+  ])('returns $status for captured visual diagnostics ($outcome)', async (diagnostics) => {
     const artifactPath = path.join(tempDir, 'dist', 'index.html')
     fs.mkdirSync(path.dirname(artifactPath), { recursive: true })
     fs.writeFileSync(artifactPath, '<!doctype html><title>preview</title>')
     const runner = {
       captureEvidence: vi.fn().mockResolvedValue({
         screenshot: { status: 'available', path: path.join(tempDir, '.onlyrag', 'visual-validation', 'preview.png') },
-        dom: { status: 'available', content: '<html><title>preview</title></html>' },
-        console: [],
-        http: [{ url: 'file:///missing.js', status: 404, method: 'GET' }],
+        dom: { status: 'available', content: `<html>${'preview'.repeat(2000)}</html>` },
+        console: diagnostics.console,
+        http: diagnostics.http,
         redaction: { applied: false, fields: [] },
       }),
     }
@@ -228,9 +233,13 @@ describe('AgentToolExecutorService Unit Tests', () => {
       false,
     )
     expect(JSON.parse(result.outputForHistory)).toMatchObject({
-      status: 'verified',
-      http: [{ status: 404 }],
+      status: diagnostics.status,
+      console: diagnostics.console,
+      http: diagnostics.http,
     })
+    expect(result.outcome).toBe(diagnostics.outcome)
+    expect(result.isTerminal).toBeFalsy()
+    expect(result.outputForHistory.indexOf('"console"')).toBeLessThan(result.outputForHistory.indexOf('"dom"'))
   })
 
   describe('web research directives', () => {

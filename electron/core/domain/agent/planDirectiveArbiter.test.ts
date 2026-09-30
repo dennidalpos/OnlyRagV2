@@ -79,6 +79,28 @@ describe('verification_due — the directive whose absence stalled every run', (
     expect(decision.blockDirective).toBeNull()
   })
 
+  it('checks a complete active scaffold group before later feature files exist', () => {
+    const milestones = [
+      {
+        ...milestone('m-1', 'Create a coherent minimal project scaffold'),
+        filePaths: ['package.json', 'index.html', 'src/main.jsx', 'src/App.jsx'],
+        proposedVerificationCommand: 'npm run build',
+      },
+      { ...milestone('m-2', 'Dashboard navigation', 'pending'), filePaths: ['src/pages/Dashboard.jsx'] },
+    ]
+    const decision = resolvePlanDirective(input({ milestones, deliverableStatusOf: statusMap({ 'm-2': 'unsatisfied' }) }))
+    expect(decision.kind).toBe('verification_due')
+    expect(decision.blockDirective).toContain('npm run build')
+    expect(milestones.map((item) => item.status)).toEqual(['in_progress', 'pending'])
+    expect(resolvePlanDirective(input({ milestones, deliverableStatusOf: statusMap({ 'm-1': 'unsatisfied', 'm-2': 'unsatisfied' }) })).kind).toBe('focus')
+    expect(resolvePlanDirective(input({ milestones, verificationCommand: null })).kind).toBe('focus')
+    expect(
+      resolvePlanDirective(
+        input({ milestones, verificationCommand: { command: 'npm test', source: 'package.json' }, deliverableStatusOf: statusMap({ 'm-2': 'unsatisfied' }) }),
+      ).kind,
+    ).toBe('focus')
+  })
+
   it('does not count a milestone that names no artefact as work still to write', () => {
     const milestones = [milestone('m-1', 'Ensure every button has a 44x44 touch target')]
     const decision = resolvePlanDirective(input({ milestones, deliverableStatusOf: statusMap({ 'm-1': 'not_applicable' }) }))

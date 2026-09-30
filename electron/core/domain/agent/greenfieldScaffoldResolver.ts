@@ -86,8 +86,17 @@ export function resolveGreenfieldScaffold(isGreenfield: boolean, prompt: string,
         proposedVerificationCommand: proposed,
       },
       ...(typescript ? [{ path: 'tsconfig.json', title: 'TypeScript checks source without emitting build artifacts' }] : []),
-      { path: 'index.html', title: 'The web application has a root entry page' },
-      { path: `src/main.${extension}`, title: 'The entry module mounts or starts the web application' },
+      {
+        path: 'index.html',
+        title: 'The web application has a root entry page',
+        acceptanceCriteria: [`index.html loads src/main.${extension} with a module script; the build bundles that entry instead of a CDN React/Babel page.`],
+      },
+      {
+        path: `src/main.${extension}`,
+        title: 'The entry module mounts or starts the web application',
+        acceptanceCriteria: ['The entry module and every local import resolve within the minimal scaffold.'],
+      },
+      ...(react ? [{ path: `src/App.${extension}`, title: 'The React root component is exported for the entry module' }] : []),
       react
         ? behavioralSmokeTest(`src/App.test.${extension}`, 'the rendered App component (react-dom/server renderToString, no browser needed)', 'vitest run')
         : behavioralSmokeTest(`src/app.test.${extension}`, 'the application modules', 'vitest run'),

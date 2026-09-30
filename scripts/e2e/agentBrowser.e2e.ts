@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { AgentBrowserService, readAgentBrowserScreenshot } from '../../electron/core/infrastructure/process/agentBrowserService'
 import { managedDevServerRepository } from '../../electron/core/infrastructure/process/managedDevServerRepository'
+import { VisualValidationRunner } from '../../electron/core/application/visualValidationRunner'
 
 const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-browser-e2e-'))
 const browser = new AgentBrowserService()
@@ -106,5 +107,27 @@ describe('Agent Coding Playwright browser against a managed local app', () => {
     expect((await browser.navigate('run-4', workspacePath, '/')).outcome).toBe('success')
     managedDevServerRepository.stop(workspacePath)
     expect((await browser.snapshot('run-4')).outcome).toBe('failure')
+  })
+
+  it('captures real page errors and missing resources while preserving usable visual evidence', async () => {
+    const outputDirectory = path.join(workspacePath, 'visual-evidence')
+    fs.mkdirSync(outputDirectory)
+    fs.writeFileSync(
+      path.join(workspacePath, 'broken.html'),
+      '<!doctype html><main>Broken fixture</main><script>throw new Error("App is not defined token=fixture-secret")</script><script src="missing.js"></script>',
+    )
+    const runner = new VisualValidationRunner()
+    const result = await runner.captureEvidence({ artifactPath: 'broken.html' }, workspacePath, outputDirectory)
+
+    if ('status' in result) throw new Error(result.error)
+    expect(result.console).toEqual(
+      expect.arrayContaining([
+        { level: 'error', message: 'Uncaught page error: App is not defined token=[REDACTED]' },
+        { level: 'error', message: expect.stringContaining('Request failed:') },
+      ]),
+    )
+    expect(result.dom.content).toContain('Broken fixture')
+    expect(fs.existsSync(result.screenshot.path)).toBe(true)
+    expect(JSON.stringify(result.console)).not.toContain('fixture-secret')
   })
 })

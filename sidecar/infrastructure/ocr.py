@@ -127,7 +127,7 @@ def deskew_image(image_bytes: bytes) -> bytes:
 
 
 
-def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560, allow_deskew: bool = True) -> bytes:
+def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560, allow_deskew: bool = True, enhance: bool = True) -> bytes:
     """Prepares image for OCR, normalizing color channels, applying CLAHE luminance enhancement, deskewing (optional), and downscaling only if exceeding max_dim."""
     try:
         if allow_deskew:
@@ -136,25 +136,26 @@ def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560, allow_deskew
             except Exception as deskew_err:
                 logger.debug(f"Deskewing step failed in _prepare_image_for_ocr: {deskew_err}")
 
-        try:
-            import cv2
-            import numpy as np
-            nparr = np.frombuffer(image_bytes, np.uint8)
-            cv_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            if cv_img is not None:
-                lab = cv2.cvtColor(cv_img, cv2.COLOR_BGR2LAB)
-                l, a, b = cv2.split(lab)
-                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-                cl = clahe.apply(l)
-                gaussian = cv2.GaussianBlur(cl, (0, 0), 2.0)
-                unsharp = cv2.addWeighted(cl, 1.25, gaussian, -0.25, 0)
-                merged = cv2.merge((unsharp, a, b))
-                enhanced_bgr = cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
-                success, enc_buf = cv2.imencode(".png", enhanced_bgr)
-                if success:
-                    image_bytes = enc_buf.tobytes()
-        except Exception as cv_err:
-            logger.debug(f"OpenCV CLAHE enhancement skipped: {cv_err}")
+        if enhance:
+            try:
+                import cv2
+                import numpy as np
+                nparr = np.frombuffer(image_bytes, np.uint8)
+                cv_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if cv_img is not None:
+                    lab = cv2.cvtColor(cv_img, cv2.COLOR_BGR2LAB)
+                    l, a, b = cv2.split(lab)
+                    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                    cl = clahe.apply(l)
+                    gaussian = cv2.GaussianBlur(cl, (0, 0), 2.0)
+                    unsharp = cv2.addWeighted(cl, 1.25, gaussian, -0.25, 0)
+                    merged = cv2.merge((unsharp, a, b))
+                    enhanced_bgr = cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
+                    success, enc_buf = cv2.imencode(".png", enhanced_bgr)
+                    if success:
+                        image_bytes = enc_buf.tobytes()
+            except Exception as cv_err:
+                logger.debug(f"OpenCV CLAHE enhancement skipped: {cv_err}")
 
         from PIL import Image, ImageOps
         import io
@@ -331,92 +332,54 @@ def _get_rapidocr_engine():
         return _RAPIDOCR_ENGINE
 
 def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
-    """Runs RapidOCR with image enhancement and returns spatially clustered line blocks with bounding boxes
-    accurately mapped back to the input image_bytes coordinate space."""
+    """Returns individual OCR regions and confidence, mapped to the original image.
+    Layout translation keeps the original contrast and geometry; uncertain colored marks remain graphics."""
+    import io
+    import numpy as np
+    from PIL import Image
+
     engine = _get_rapidocr_engine()
-    prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560, allow_deskew=False)
-
-    scale_x, scale_y = 1.0, 1.0
-    try:
-        from PIL import Image
-        import io
-        orig_img = Image.open(io.BytesIO(image_bytes))
-        prep_img = Image.open(io.BytesIO(prepared_bytes))
-        if prep_img.width > 0 and prep_img.height > 0:
-            scale_x = orig_img.width / float(prep_img.width)
-            scale_y = orig_img.height / float(prep_img.height)
-    except Exception:
-        scale_x, scale_y = 1.0, 1.0
-
-    result = _ocr_items(engine(prepared_bytes))
+    prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560, allow_deskew=False, enhance=False)
+    with Image.open(io.BytesIO(image_bytes)) as original, Image.open(io.BytesIO(prepared_bytes)) as prepared:
+        scale_x = original.width / prepared.width
+        scale_y = original.height / prepared.height
+        pixels = np.asarray(prepared.convert("RGB"))
+    output = engine(prepared_bytes)
+    result = _ocr_items(output)
     if not result:
         return []
 
     boxes: List[Dict[str, Any]] = []
-    for item in result:
+    for index, item in enumerate(result):
         if not item or len(item) < 2:
             continue
         pts, text = item[0], str(item[1]).strip()
         if not text:
             continue
-        x0 = min(p[0] for p in pts) * scale_x
-        y0 = min(p[1] for p in pts) * scale_y
-        x1 = max(p[0] for p in pts) * scale_x
-        y1 = max(p[1] for p in pts) * scale_y
-        h = max(1.0, y1 - y0)
-        cy = (y0 + y1) / 2.0
+        x0 = float(min(p[0] for p in pts))
+        y0 = float(min(p[1] for p in pts))
+        x1 = float(max(p[0] for p in pts))
+        y1 = float(max(p[1] for p in pts))
+        score = float(output.scores[index])
+        crop = pixels[max(0, int(y0)):min(pixels.shape[0], int(y1) + 1), max(0, int(x0)):min(pixels.shape[1], int(x1) + 1)].astype(np.int16)
+        dark = crop.min(axis=2) < 180
+        colored = (crop.max(axis=2) - crop.min(axis=2) > 45) & dark
+        is_graphic = score < 0.8 and colored.sum() > max(1, dark.sum()) * 0.5
+        protected_bbox = None
+        if is_graphic:
+            ys, xs = np.where(colored)
+            protected_bbox = ((max(0, int(x0)) + int(xs.min())) * scale_x,
+                              (max(0, int(y0)) + int(ys.min())) * scale_y,
+                              (max(0, int(x0)) + int(xs.max()) + 1) * scale_x,
+                              (max(0, int(y0)) + int(ys.max()) + 1) * scale_y)
         boxes.append({
-            "x0": x0, "y0": y0, "x1": x1, "y1": y1,
-            "h": h, "cy": cy, "text": text
+            "bbox": (x0 * scale_x, y0 * scale_y, x1 * scale_x, y1 * scale_y),
+            "text": text if not is_graphic else "",
+            "score": score,
+            "is_graphic": bool(is_graphic),
+            "protected_bbox": protected_bbox,
         })
-
-    if not boxes:
-        return []
-
-    boxes.sort(key=lambda b: (b["y0"], b["x0"]))
-
-    lines: List[Dict[str, Any]] = []
-    for b in boxes:
-        matched_line = None
-        for line in lines:
-            line_cy = line["cy"]
-            line_h = line["h"]
-            vert_match = abs(b["cy"] - line_cy) <= line_h * 0.5 or (min(b["y1"], line["y1"]) - max(b["y0"], line["y0"]) > 0.4 * min(b["h"], line_h))
-            if vert_match:
-                # Keep separate form columns from becoming one OCR line.
-                horiz_gap = b["x0"] - line["x1"] if b["x0"] >= line["x1"] else line["x0"] - b["x1"]
-                if horiz_gap <= max(16.0, line_h * 0.85):
-                    matched_line = line
-                    break
-
-        if matched_line is not None:
-            matched_line["boxes"].append(b)
-            matched_line["x0"] = min(matched_line["x0"], b["x0"])
-            matched_line["y0"] = min(matched_line["y0"], b["y0"])
-            matched_line["x1"] = max(matched_line["x1"], b["x1"])
-            matched_line["y1"] = max(matched_line["y1"], b["y1"])
-            matched_line["cy"] = (matched_line["y0"] + matched_line["y1"]) / 2.0
-            matched_line["h"] = matched_line["y1"] - matched_line["y0"]
-        else:
-            lines.append({
-                "y0": b["y0"], "y1": b["y1"], "x0": b["x0"], "x1": b["x1"],
-                "cy": b["cy"], "h": b["h"],
-                "boxes": [b]
-            })
-
-    lines.sort(key=lambda l: l["y0"])
-
-    line_blocks: List[Dict[str, Any]] = []
-    for line in lines:
-        line["boxes"].sort(key=lambda b: b["x0"])
-        raw_text = " ".join(b["text"] for b in line["boxes"])
-        text = normalize_ocr_token_spacing(raw_text)
-        line_blocks.append({
-            "bbox": (line["x0"], line["y0"], line["x1"], line["y1"]),
-            "text": text
-        })
-
-    return line_blocks
+    return sorted(boxes, key=lambda box: (box["bbox"][1], box["bbox"][0]))
 
 def run_rapid_ocr(image_bytes: bytes) -> str:
     """Fast local text-recognition OCR via RapidOCR (PP-OCR models exported to ONNX).

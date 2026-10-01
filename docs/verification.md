@@ -1,5 +1,9 @@
 # Verifica e limiti noti
 
+## Traduzione fedele di scansioni del 2026-10-01
+
+La [verifica dedicata](./translation-fidelity-2026-10-01.md) corregge OCR, dati protetti, firma e reinserimento dei blocchi del PDF, con 176 test Sidecar e 19 test frontend mirati passati. Il documento reale e stato rigenerato con qwen3.5:9b senza modificare sorgente, precedente output o impostazioni. Il prompt vieta sintesi e omissioni; i controlli deterministici bloccano perdita di entita o testo non renderizzabile. La fedelta semantica generale resta una verifica separata: nell'output “a.r.” resta abbreviato, e il probe con thinking supera i due timeout esistenti.
+
 ## Audit di affidabilita del 2026-10-01
 
 La [CI del commit agent-fix](https://github.com/dennidalpos/OnlyRagV2/actions/runs/36762400865) passa sullo SHA `b93043cdaaea00c395c9d17526362d5c32d18146`, identico a HEAD locale e `master` remoto al controllo GitHub API/CLI. Job `verify`, qualita statica, qualita/lint, coverage e Sidecar/LanceDB sono `success`. `RELIABILITY-CI-01` e rimosso dal tracker; la CI non verifica modifiche locali successive o la qualifica del modello.

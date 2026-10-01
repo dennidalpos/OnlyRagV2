@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import docx
+import numpy as np
 import pymupdf
 import pytest
 from fastapi.testclient import TestClient
@@ -197,6 +198,100 @@ def test_immutable_entity_masking_and_unmasking():
     assert "Send form to assistenza@pec.telepass.com or visit https://www.telepass.com for details." == unmasked
 
 
+@pytest.mark.parametrize("label", ["CODICE FISCALE *", "N° CIVICO *\nLOCALITÀ *"])
+def test_short_form_labels_are_not_mistaken_for_target_language(label):
+    assert translator_module.is_block_in_target_lang(label, "English") is False
+
+
+def test_translation_rejects_missing_contact_instead_of_reusing_source(monkeypatch):
+    source = "Inviare a first@example.com oppure second@example.com entro il 18/06/2024."
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda *a, **kw: "Send to __PROT_ENT_0__.")
+    with pytest.raises(ValueError, match="protected"):
+        translator_module._translate_texts_with_fallback([source], "Italian", "English", "test-model")
+
+
+def test_translation_preserves_dates_codes_numbers_and_contacts(monkeypatch):
+    source = "Contratto 123456, codice ABC12XYZ, data 18/06/2024, inviare a help@example.com."
+    seen = []
+
+    def translate(text, *args, **kwargs):
+        seen.append(text)
+        return text.replace("Contratto", "Contract").replace("codice", "code").replace("data", "date").replace("inviare a", "send to")
+
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", translate)
+    result = translator_module._translate_texts_with_fallback([source], "Italian", "English", "test-model")
+    assert result == ["Contract 123456, code ABC12XYZ, date 18/06/2024, send to help@example.com."]
+    assert all(value not in seen[0] for value in ("123456", "ABC12XYZ", "18/06/2024", "help@example.com"))
+
+
+def test_translation_rejects_empty_response(monkeypatch):
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda *a, **kw: "")
+    with pytest.raises(ValueError, match="empty"):
+        translator_module._translate_texts_with_fallback(["Inviare il modulo compilato."], "Italian", "English", "test-model")
+
+
+def test_required_field_marker_keeps_its_meaning_for_the_model():
+    masked, tokens = translator_module._mask_immutable_entities("CAP*")
+    assert masked == "CAP*"
+    assert not tokens
+    with pytest.raises(ValueError, match="markers"):
+        translator_module._validated_translation("POSTAL CODE", masked, tokens)
+
+
+def test_unchanged_form_label_uses_existing_individual_fallback(monkeypatch):
+    def translate(text, *args, is_batch=False, **kwargs):
+        if is_batch:
+            return '<seg id="1">CAP*</seg><seg id="2">LOCATION*</seg>'
+        return "POSTAL CODE*"
+
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", translate)
+    result = translator_module._translate_texts_with_fallback(["CAP*", "LOCALITÀ*"], "Italian", "English", "test-model")
+    assert result == ["POSTAL CODE*", "LOCATION*"]
+
+
+def test_company_products_and_postal_addresses_are_not_translated():
+    source = "Restituire Acme/Acme Europeo a Acme S.p.A., Via Esempio 49-00142 Roma."
+    masked, tokens = translator_module._mask_immutable_entities(source)
+    assert "Acme" not in masked
+    assert "Via Esempio" not in masked
+    result = translator_module._unmask_immutable_entities(masked.replace("Restituire", "Return"), tokens)
+    assert result == source.replace("Restituire", "Return")
+
+
+def test_address_protection_does_not_hide_delivery_instructions():
+    source = "Via posta inviare a Via Esempio 49 entro domani."
+    masked, tokens = translator_module._mask_immutable_entities(source)
+    assert "Via posta inviare a" in masked
+    assert "entro domani." in masked
+    assert "Via Esempio 49" in tokens.values()
+
+
+def test_protected_url_backslashes_are_restored_literally():
+    source = r"Inviare a https://example.com/docs?ref=\1"
+    masked, tokens = translator_module._mask_immutable_entities(source)
+    assert translator_module._unmask_immutable_entities(masked.replace("Inviare a", "Send to"), tokens) == source.replace("Inviare a", "Send to")
+
+
+def test_document_notes_are_translated_without_being_removed():
+    source = "Nota: Inviare il modulo.\nNota: Conservare una copia."
+    translation = "Note: Send the form.\nNote: Keep a copy."
+    assert translator_module._clean_translated_segment(translation, source) == translation
+
+
+def test_invalid_batch_ids_use_individual_fallback(monkeypatch):
+    calls = []
+
+    def translate(text, *args, is_batch=False, **kwargs):
+        calls.append(is_batch)
+        if is_batch:
+            return '<seg id="1">Wrong first</seg><seg id="1">Wrong duplicate</seg><seg id="2">Wrong second</seg>'
+        return "TR-" + text
+
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", translate)
+    assert translator_module._translate_texts_with_fallback(["Primo titolo", "Secondo titolo"], "Italian", "English", "test-model") == ["TR-Primo titolo", "TR-Secondo titolo"]
+    assert calls == [True, False, False]
+
+
 def test_translate_batch_happy_path_reassigns_run_text(tmp_path, monkeypatch):
     path = str(tmp_path / "sample.docx")
     _make_docx(path)
@@ -362,6 +457,140 @@ def test_extract_pdf_page_blocks_reads_bbox_text_size_color(tmp_path):
         assert len(blocks[0]["bbox"]) == 4
     finally:
         doc.close()
+
+
+def test_ocr_extraction_rejects_uncertain_printed_text(monkeypatch):
+    from sidecar.infrastructure import ocr
+    monkeypatch.setattr(ocr, "run_rapid_ocr_with_boxes", lambda image: [{
+        "bbox": (50, 80, 300, 100), "text": "Unreadable instructions", "score": 0.4,
+    }])
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        with pytest.raises(ValueError, match="OCR confidence"):
+            translator_module._extract_ocr_page_blocks(page)
+
+
+def test_ocr_graphic_marks_are_kept_out_of_translation(monkeypatch):
+    from sidecar.infrastructure import ocr
+    monkeypatch.setattr(ocr, "run_rapid_ocr_with_boxes", lambda image: [
+        {"bbox": (200, 300, 1200, 400), "text": "Firma leggibile", "score": 0.99},
+        {"bbox": (200, 410, 1200, 650), "text": "Handwriting noise", "score": 0.5, "is_graphic": True},
+    ])
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        blocks = translator_module._extract_ocr_page_blocks(page)
+    assert len(blocks) == 1
+    assert blocks[0]["text"] == "Firma leggibile"
+    assert len(blocks[0]["protected_rects"]) == 1
+    assert len(blocks[0]["redaction_rects"]) == 1
+
+
+def test_unrecognized_scan_is_not_silently_skipped(monkeypatch):
+    from sidecar.infrastructure import ocr
+    monkeypatch.setattr(ocr, "run_rapid_ocr_with_boxes", lambda image: [])
+    with pymupdf.open() as source, pymupdf.open() as doc:
+        original = source.new_page()
+        original.insert_text((40, 60), "Source instructions")
+        page = doc.new_page()
+        page.insert_image(page.rect, stream=original.get_pixmap().tobytes("png"))
+        with pytest.raises(ValueError, match="No text was recognized"):
+            translator_module._extract_ocr_page_blocks(page)
+        assert translator_module._extract_ocr_page_blocks(doc.new_page()) == []
+
+
+def test_unrenderable_translation_fails_before_erasing_original():
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        page.insert_text((40, 60), "Original text")
+        before = page.get_text()
+        blocks = [{"bbox": (40, 40, 41, 41), "size": 10.0, "color": 0, "text": "word " * 500}]
+        with pytest.raises(ValueError, match="does not fit"):
+            translator_module._redact_and_reinsert_pdf_blocks(page, blocks, translator_module._PDF_FALLBACK_FONT_FILE)
+        assert page.get_text() == before
+
+
+def test_scanned_graphics_outside_text_lines_survive_translation():
+    from PIL import Image, ImageDraw
+    import io
+    image = Image.new("RGB", (400, 400), "white")
+    draw = ImageDraw.Draw(image)
+    draw.line([(50, 105), (110, 75), (130, 115), (160, 85)], fill=(20, 40, 160), width=3)
+    image_bytes = io.BytesIO()
+    image.save(image_bytes, format="PNG")
+    with pymupdf.open() as doc:
+        page = doc.new_page(width=400, height=400)
+        page.insert_image(page.rect, stream=image_bytes.getvalue())
+        signature = pymupdf.Rect(40, 70, 170, 120)
+        before = page.get_pixmap(clip=signature).samples
+        blocks = [{
+            "bbox": (40, 40, 170, 120), "size": 10.0, "color": 0,
+            "text": "Client signature", "is_ocr": True,
+            "redaction_rects": [(40, 40, 170, 60)], "protected_rects": [tuple(signature)],
+        }]
+        # The insertion bbox must also stay above the protected graphic.
+        blocks[0]["bbox"] = (40, 40, 170, 60)
+        translator_module._redact_and_reinsert_pdf_blocks(page, blocks, translator_module._PDF_FALLBACK_FONT_FILE)
+        assert page.get_pixmap(clip=signature).samples == before
+        assert "Client signature" in page.get_text()
+
+
+def test_scanned_signature_ink_touching_a_label_survives_redaction():
+    import io
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (400, 400), "white")
+    ImageDraw.Draw(image).line([(50, 85), (110, 55), (130, 95), (160, 65)], fill=(20, 40, 160), width=3)
+    image_bytes = io.BytesIO()
+    image.save(image_bytes, format="PNG")
+    with pymupdf.open() as doc:
+        page = doc.new_page(width=400, height=400)
+        page.insert_image(page.rect, stream=image_bytes.getvalue())
+        signature = pymupdf.Rect(40, 50, 170, 100)
+
+        def blue_pixels():
+            pix = page.get_pixmap(dpi=300, clip=signature)
+            pixels = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3).astype(np.int16)
+            return (pixels[:, :, 2] - pixels[:, :, 0] > 45).sum()
+
+        before = blue_pixels()
+        blocks = [{
+            "bbox": (40, 40, 170, 60), "size": 10.0, "color": 0,
+            "text": "Client signature", "is_ocr": True,
+            "redaction_rects": [(40, 40, 170, 60)], "protected_rects": [tuple(signature)],
+        }]
+        translator_module._redact_and_reinsert_pdf_blocks(page, blocks, translator_module._PDF_FALLBACK_FONT_FILE)
+        assert blue_pixels() >= before * 0.98
+        assert "Client signature" in page.get_text()
+
+
+def test_ocr_form_values_are_preserved_verbatim(monkeypatch):
+    from sidecar.infrastructure import ocr
+    monkeypatch.setattr(ocr, "run_rapid_ocr_with_boxes", lambda image: [
+        {"bbox": (100, 200, 500, 250), "text": "LOCALITÀ*", "score": 0.99},
+        {"bbox": (600, 200, 1200, 250), "text": "BORGO ESEMPIO Loc. Villa Verde", "score": 0.99},
+    ])
+    seen = []
+
+    def translate(text, *args, **kwargs):
+        seen.append(text)
+        return "LOCALITY*"
+
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", translate)
+    with pymupdf.open() as doc:
+        blocks = translator_module._extract_ocr_page_blocks(doc.new_page())
+        translator_module._translate_pdf_blocks(blocks, "Italian", "English", "test-model")
+    assert [block["text"] for block in blocks] == ["LOCALITY*", "BORGO ESEMPIO Loc. Villa Verde"]
+    assert seen == ["LOCALITÀ*"]
+
+
+def test_translation_does_not_overwrite_previous_output(tmp_path):
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"original")
+    previous = tmp_path / "source_english.pdf"
+    previous.write_bytes(b"previous translation")
+    path = translator_module._resolve_output_filepath(str(source), source.name, "English")
+    assert path != str(previous)
+    assert previous.read_bytes() == b"previous translation"
 
 
 def test_redact_and_reinsert_pdf_blocks_erases_original_text_from_raw_stream(tmp_path):
@@ -704,7 +933,8 @@ def test_translate_inplace_with_backup_and_target_dir(monkeypatch, tmp_path):
             client.delete(f"/documents/{doc_id}")
 
 
-def test_translate_scanned_pdf_inplace_with_ocr_fallback(monkeypatch, tmp_path):
+@pytest.mark.parametrize("coordinate_type", [int, np.float32, np.float64])
+def test_translate_scanned_pdf_inplace_with_ocr_fallback(monkeypatch, tmp_path, coordinate_type):
     """Scanned PDF with zero native text layer must detect text blocks via OCR fallback and translate in-place."""
     from sidecar.domain import ingestion as ingestion_module
     from sidecar.infrastructure import ocr as ocr_infra
@@ -722,7 +952,11 @@ def test_translate_scanned_pdf_inplace_with_ocr_fallback(monkeypatch, tmp_path):
     monkeypatch.setattr(
         ocr_infra,
         "run_rapid_ocr_with_boxes",
-        lambda img: [{"bbox": [50, 80, 300, 100], "text": "Richiesta Cessazione Contratto", "score": 0.99}],
+        lambda img: [{
+            "bbox": [coordinate_type(value) for value in (200, 300, 1200, 400)],
+            "text": "Richiesta Cessazione Contratto",
+            "score": 0.99,
+        }],
     )
 
     # 1. Create a pure raster image page (no text layer)
@@ -762,7 +996,7 @@ def test_translate_scanned_pdf_inplace_with_ocr_fallback(monkeypatch, tmp_path):
         translated_pdf = pymupdf.open(translated_file_path)
         try:
             page_text = translated_pdf[0].get_text()
-            assert len(page_text.strip()) > 0
+            assert "TR-Richiesta Cessazione Contratto" in " ".join(page_text.split())
         finally:
             translated_pdf.close()
     finally:

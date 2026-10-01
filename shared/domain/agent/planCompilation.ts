@@ -80,8 +80,23 @@ export function ensureScaffoldMilestones(milestones: PlanMilestone[], workspace?
       ]
     : missing.filter((entry) => entry.placement !== 'end').map(toMilestone)
   const appended = missing.filter((entry) => entry.placement === 'end').map(toMilestone)
+  // A model-provided test path does not replace the application's behavioral proof obligation.
+  const authored = milestones.map((milestone) => {
+    const paths = milestone.filePaths?.length ? milestone.filePaths : extractDeliverablePaths(milestone.title)
+    const requirements = workspace.requirements.filter((entry) => entry.placement === 'end' && paths.includes(entry.path))
+    if (requirements.length === 0) return milestone
+    const proposed = requirements.find((entry) => entry.proposedVerificationCommand)?.proposedVerificationCommand
+    const criteria = [...new Set([...(milestone.acceptanceCriteria || []), ...requirements.flatMap((entry) => toMilestone(entry).acceptanceCriteria || [])])]
+    return {
+      ...milestone,
+      acceptanceCriteria: criteria,
+      proposedVerificationCommand: proposed || milestone.proposedVerificationCommand,
+      // Future canonical checks remain proposed, never promoted to executable commands by the compiler.
+      verificationCommand: proposed && milestone.verificationCommand !== proposed ? undefined : milestone.verificationCommand,
+    }
+  })
 
-  return [...prepended, ...milestones, ...appended].map((m, idx) => ({ ...m, id: `m-${idx + 1}` }))
+  return [...prepended, ...authored, ...appended].map((m, idx) => ({ ...m, id: `m-${idx + 1}` }))
 }
 
 /** Applies canonical normalisation while retaining authored interventions. */

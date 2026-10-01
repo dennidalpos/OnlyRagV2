@@ -1,6 +1,7 @@
 import os from 'node:os'
 import { CODING_MODEL_KEEP_ALIVE, HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
+import { resolveModelSamplingOverrides } from '../../../shared/domain/agent/ollamaSamplingOptions'
 import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import { compilePlanMilestones, type WorkspaceScaffoldFacts } from '../../../shared/domain/agent/planCompilation'
 import { resolveDeclaredFilePaths } from '../../../shared/domain/agent/milestoneDeliverableResolver'
@@ -75,8 +76,8 @@ function retainEvidence(previousPlan?: AgentPlan): PlanEvidence[] {
   previousPlan.milestones
     .filter((item) => item.status === 'verified')
     .forEach((item) =>
-      retained.set(item.id, {
-        interventionId: item.id,
+      retained.set(`${previousPlan.id}@${previousPlan.version}:${item.id}`, {
+        interventionId: `${previousPlan.id}@${previousPlan.version}:${item.id}`,
         summary: item.title,
         verificationReferences: item.verificationReferences || [item.verificationCommand, item.notes].filter((value): value is string => Boolean(value)),
       }),
@@ -176,12 +177,15 @@ export class PlanGenerationAppService {
     }
     const cachedGpu = hardwareProbe.getCachedGpuInfo()
     const memInfo = hardwareProbe.getMemoryInfo()
-    const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
-      hasGpu: cachedGpu?.hasNvidiaGpu,
-      vramTotalMB: cachedGpu?.vramTotalMB,
-      systemRamGB: memInfo?.totalRAMGB,
-      cpuCount: os.cpus()?.length,
-    })
+    const runtimeOpts = {
+      ...HardwareProfileResolver.resolveOllamaOptions('Auto', {
+        hasGpu: cachedGpu?.hasNvidiaGpu,
+        vramTotalMB: cachedGpu?.vramTotalMB,
+        systemRamGB: memInfo?.totalRAMGB,
+        cpuCount: os.cpus()?.length,
+      }),
+      ...resolveModelSamplingOverrides(model, req.settings.modelSamplingOverrides),
+    }
     const trainedContext = await ollamaAppService.getModelContextLength(model, req.settings.ollamaHost)
     const modelMetrics = await ollamaAppService.getModelMetrics(req.settings.ollamaHost)
     runtimeOpts.num_ctx = resolveModelContextLength(model, req.settings.modelContextLengths, runtimeOpts.num_ctx, trainedContext)

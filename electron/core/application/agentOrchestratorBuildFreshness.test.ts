@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -10,6 +10,8 @@ import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import type { ToolExecutionResult } from './agentToolExecutorService'
 import type { ToolResultProcessingContext, ToolResultMutableFlags } from './agentOrchestratorRunContext'
+import { executeRunTestsTool } from './runTestsTool'
+import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 
 /** `hasVerifiedBuild` was monotonic: any passing build kept vouching for files written long afterwards, so the Definition of Done gate let a session finish on stale evidence. */
 
@@ -245,5 +247,32 @@ describe('the project "test" script is a verification even when it is not the pr
     trackVerification(makeContext('npm test', flags), false)
 
     expect(flags.hasVerifiedBuild).toBe(false)
+  })
+})
+
+describe('structured run_tests retains the command that establishes milestone proof', () => {
+  it.each([
+    { explicit: undefined, executed: 'npm test', status: 'verified' },
+    { explicit: 'npm test', executed: 'npm test', status: 'verified' },
+    { explicit: 'npm run test:other', executed: 'npm run test:other', status: 'in_progress' },
+    { explicit: 'npm test', executed: 'npm test', status: 'in_progress', script: 'echo "Error: no test specified"' },
+  ])('uses $executed with explicit override $explicit and script $script', async ({ explicit, executed, status, script }) => {
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ scripts: { test: script || 'node --test', 'test:other': 'node --test' } }))
+    fs.mkdirSync(path.join(tempDir, 'src'))
+    fs.writeFileSync(path.join(tempDir, 'src/value.mjs'), 'export const value = 3\n')
+    const execute = vi.fn(async (_command: string) => ({ stdout: 'A declared shell fixture exits successfully.', stderr: '', code: 0 }))
+    const result = await executeRunTestsTool(explicit, tempDir, () => ({ execute }) as never)
+    expect(result.verification).toEqual({ ran: true, passed: true, command: executed })
+    expect(execute.mock.calls[0][0]).toBe(executed)
+
+    const ctx = makeContext(executed, { hasFileMutations: true, hasVerifiedBuild: false })
+    ctx.parsedTool = { tool: 'run_tests', parameters: explicit ? { command: explicit } : {} }
+    ctx.toolRes = result
+    ctx.goalPlanner = new GoalDecompositionPlanner()
+    ctx.goalPlanner.initializePlan([
+      { id: 'm-1', title: 'Verify src/value.mjs', filePaths: ['src/value.mjs'], status: 'in_progress', verificationCommand: 'npm test' },
+    ])
+    trackVerification(ctx, false)
+    expect(ctx.goalPlanner.findMilestone('m-1')?.status).toBe(status)
   })
 })

@@ -26,7 +26,7 @@ export interface OllamaStructuredRequest {
   format: Record<string, unknown>
   host?: string
   keepAlive?: string
-  /** Structured JSON does not benefit from hidden reasoning; level-only models take their lowest level. */
+  /** Per-model thinking preference; level-only structured requests use their lowest supported level. */
   think?: OllamaThinkValue
   options?: OllamaSamplingOverrides & {
     num_ctx?: number

@@ -29,6 +29,7 @@ const milestones: PlanMilestone[] = [
 function respond(requirements: unknown[]) {
   vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({ status: 'complete', content: JSON.stringify({ requirements }) })
 }
+
 const covered = {
   requestLine: 1,
   status: 'covered',
@@ -38,6 +39,23 @@ const covered = {
 
 describe('reviewPlanRequestCoverage', () => {
   beforeEach(() => vi.resetAllMocks())
+
+  it.each([true, 'low'])('preserves explicit sampling for thinking %s', async (think) => {
+    respond([covered])
+    await reviewPlanRequestCoverage(
+      { ...request, think, options: { num_ctx: 8192, temperature: 0.6, top_k: 20 } },
+      'Create Dashboard and Tasks.',
+      milestones,
+      [],
+    )
+    expect(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].options).toMatchObject({ temperature: 0.6, top_k: 20 })
+  })
+
+  it('keeps model sampling defaults when thinking is enabled without overrides', async () => {
+    respond([covered])
+    await reviewPlanRequestCoverage({ ...request, think: true }, 'Create Dashboard and Tasks.', milestones, [])
+    expect(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].options).not.toHaveProperty('temperature')
+  })
 
   it('reports omitted deferred integrations and preserves the original request', async () => {
     respond([
@@ -56,7 +74,8 @@ describe('reviewPlanRequestCoverage', () => {
     const call = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
     expect(JSON.parse(call.userContent)).toEqual({
       requestLines: prompt.split('\n').map((text, index) => ({ line: index + 1, text })),
-      planEvidence: [{ id: 1, source: 'planned', statement: milestones[0].acceptanceCriteria![0] }],
+      planInterventions: [{ id: 'm-1', objective: 'Create pages', filePaths: [] }],
+      planEvidence: [{ id: 1, source: 'planned', interventionId: 'm-1', statement: milestones[0].acceptanceCriteria![0] }],
       confirmedDecisions: [],
     })
     expect(call).toMatchObject({ model: request.model, host: request.host, think: false, keepAlive: '30m' })
@@ -119,6 +138,65 @@ describe('reviewPlanRequestCoverage', () => {
     ).toContain('contradicted')
   })
 
+  it('preserves distinct owners for identical local criteria', async () => {
+    respond([{ requestLine: 1, status: 'covered', evidence: [1, 2], reason: 'Both editor and menu actions retain keyboard access.' }])
+    const error = await reviewPlanRequestCoverage(
+      request,
+      'Editor and menu actions must remain keyboard accessible.',
+      [
+        {
+          id: 'editor',
+          title: 'Update editor actions',
+          status: 'pending',
+          filePaths: ['src/Editor.tsx'],
+          acceptanceCriteria: ['Actions are keyboard accessible.'],
+        },
+        { id: 'menu', title: 'Update menu actions', status: 'pending', filePaths: ['src/Menu.tsx'], acceptanceCriteria: ['Actions are keyboard accessible.'] },
+      ],
+      [],
+    )
+    expect(error).toBeUndefined()
+    const input = JSON.parse(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].userContent)
+    expect(input.planInterventions).toEqual([
+      { id: 'editor', objective: 'Update editor actions', filePaths: ['src/Editor.tsx'] },
+      { id: 'menu', objective: 'Update menu actions', filePaths: ['src/Menu.tsx'] },
+    ])
+    expect(input.planEvidence).toEqual([
+      { id: 1, source: 'planned', interventionId: 'editor', statement: 'Actions are keyboard accessible.' },
+      { id: 2, source: 'planned', interventionId: 'menu', statement: 'Actions are keyboard accessible.' },
+    ])
+  })
+
+  it('keeps conditional children and confirmed choices in their original context', async () => {
+    respond([
+      { requestLine: 1, status: 'context', evidence: [], reason: 'Constraint heading.' },
+      { requestLine: 2, status: 'covered', evidence: [1], reason: 'The condition and both retention constraints are explicit.' },
+    ])
+    const decisions = ['Keep the exporter command-line only.']
+    expect(
+      await reviewPlanRequestCoverage(
+        request,
+        'For optional exports:\n- If CSV is requested, retain column order and UTF-8 encoding.',
+        [
+          {
+            id: 'export',
+            title: 'Preserve optional exports',
+            status: 'pending',
+            acceptanceCriteria: ['If CSV is requested, retain column order and UTF-8 encoding.'],
+          },
+        ],
+        [],
+        decisions,
+      ),
+    ).toBeUndefined()
+    const input = JSON.parse(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].userContent)
+    expect(input.requestLines).toEqual([
+      { line: 1, text: 'For optional exports:' },
+      { line: 2, text: '- If CSV is requested, retain column order and UTF-8 encoding.' },
+    ])
+    expect(input.confirmedDecisions).toEqual(decisions)
+  })
+
   it.each([
     [{ ...covered, requestLine: 99 }, 'unavailable request line'],
     [{ ...covered, evidence: [99] }, 'unavailable plan evidence'],
@@ -145,6 +223,8 @@ describe('reviewPlanRequestCoverage', () => {
         ],
       ),
     ).toBeUndefined()
+    const input = JSON.parse(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].userContent)
+    expect(input.planEvidence).toEqual([{ id: 1, source: 'retained', interventionId: 'prior', statement: 'CSV export works: npm test' }])
   })
 
   it('rejects a review that silently omits another request line', async () => {

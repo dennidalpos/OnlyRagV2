@@ -31,7 +31,7 @@ export const toolExecutionResultSchema = z
       .strict()
       .optional(),
     verification: z
-      .object({ ran: z.literal(true), passed: z.boolean() })
+      .object({ ran: z.literal(true), passed: z.boolean(), command: nonBlank.optional() })
       .strict()
       .optional(),
     noOpMutation: z.boolean().optional(),
@@ -49,7 +49,7 @@ export interface ToolExecutionResult {
   isTerminal?: boolean
   terminalCode?: 'MODEL_UNSUITABLE'
   changeStats?: { filePath: string; additions: number; deletions: number }
-  verification?: { ran: true; passed: boolean }
+  verification?: { ran: true; passed: boolean; command?: string }
   noOpMutation?: boolean
   /** Whether an externally visible effect is known after execution returns. */
   effectOutcome?: 'none' | 'confirmed' | 'uncertain'

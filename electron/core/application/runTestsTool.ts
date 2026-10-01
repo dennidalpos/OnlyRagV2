@@ -104,7 +104,7 @@ export async function executeRunTestsTool(
       localized: { message },
       logDetail: rawOutput.slice(0, 1000),
       isTerminal: true,
-      verification: { ran: true, passed: !res.timedOut && parsed.success },
+      verification: { ran: true, passed: !res.timedOut && parsed.success, command: sanitizedCmd },
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)

@@ -5,6 +5,8 @@ import {
   ensureRunnableMilestone,
   renderAgentPlanMarkdown,
 } from '../../../../shared/domain/agent/planCompilation'
+import { resolveGreenfieldScaffold } from './greenfieldScaffoldResolver'
+import { selectMilestonesProvenByVerification } from './milestoneVerificationPromotion'
 
 describe('ensureScaffoldMilestones', () => {
   const web = {
@@ -67,6 +69,27 @@ describe('ensureScaffoldMilestones', () => {
     expect(plan).toHaveLength(4)
     expect(plan[0].filePaths).toEqual(['package.json', 'index.html', 'src/main.tsx'])
     expect(plan.slice(1).map((m) => m.title)).toEqual(withEntry.map((m) => m.title))
+  })
+
+  it.each([undefined, 'npm run build'])('retains the canonical behavioral gate when the model already names its test file (%s)', (verificationCommand) => {
+    const authored = {
+      id: 'model-test',
+      title: 'Create heading render test',
+      status: 'pending' as const,
+      filePaths: ['src/App.test.jsx'],
+      acceptanceCriteria: ['The rendered heading says TaskLab.'],
+      verificationCommand,
+    }
+    const { scaffold } = resolveGreenfieldScaffold(true, 'Create a JavaScript React/Vite app.')
+    const plan = ensureScaffoldMilestones([authored], scaffold)
+    const test = plan.find((milestone) => milestone.title === authored.title)!
+
+    expect(plan.filter((milestone) => milestone.filePaths?.includes('src/App.test.jsx'))).toHaveLength(1)
+    expect(test.acceptanceCriteria).toContain(authored.acceptanceCriteria[0])
+    expect(test.acceptanceCriteria?.some((criterion) => criterion.includes('npm test runs src/App.test.jsx'))).toBe(true)
+    expect(test.proposedVerificationCommand).toBe('npm test')
+    expect(selectMilestonesProvenByVerification([test], 'npm run build', () => 'satisfied')).toEqual([])
+    expect(selectMilestonesProvenByVerification([test], 'npm test', () => 'satisfied')).toEqual([{ id: test.id, title: test.title }])
   })
 
   it('does not duplicate an existing complete first scaffold group', () => {

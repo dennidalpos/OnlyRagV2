@@ -128,6 +128,17 @@ describe('PlanGenerationAppService', () => {
     expect(result.decisions[0].id).toBe('a-1')
   })
 
+  it('forwards only the selected model sampling preferences to planning and coverage', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('m-1', 'Create endpoint')]))
+    const sampling = { temperature: 1, presence_penalty: 1.5, top_k: 20 }
+    await planGenerationAppService.generatePlanText({
+      prompt: 'Add login',
+      settings: { ...settings, modelSamplingOverrides: { [settings.codingModel!]: sampling, other: { temperature: 0 } } },
+    })
+    expect(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].options).toMatchObject(sampling)
+    expect(vi.mocked(reviewPlanRequestCoverage).mock.calls[0][0].options).toMatchObject(sampling)
+  })
+
   it('clamps the saved setup window to the model trained context', async () => {
     vi.mocked(ollamaAppService.getModelContextLength).mockResolvedValueOnce(4096)
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('m-1', 'Create endpoint')]))
@@ -170,7 +181,7 @@ describe('PlanGenerationAppService', () => {
 
     const result = await planGenerationAppService.generatePlanText({ prompt: 'Continue', settings, previousPlan: previous })
     expect(result.status, JSON.stringify(result)).toBe('success')
-    expect(result.retainedEvidence).toEqual([{ interventionId: 'm-1', summary: 'Completed work', verificationReferences: ['npm test'] }])
+    expect(result.retainedEvidence).toEqual([{ interventionId: 'plan-1@1:m-1', summary: 'Completed work', verificationReferences: ['npm test'] }])
     expect(result.decisions).toEqual(previous.decisions)
 
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('m-1', 'Replacement work')]))
@@ -187,6 +198,17 @@ describe('PlanGenerationAppService', () => {
     const result = await planGenerationAppService.generatePlanText({ prompt: 'Replace scope', settings, previousPlan: previousPlan() })
     expect(result.status).toBe('success')
     expect(result.supersededWork).toEqual([{ interventionId: 'm-2', reason: 'The new request replaces it.' }])
+  })
+
+  it('retains distinct verified work when a later revision reuses canonical intervention IDs', async () => {
+    const previous = previousPlan()
+    previous.milestones = previous.milestones.filter((item) => item.status === 'verified')
+    previous.retainedEvidence = [{ interventionId: 'm-1', summary: 'Earlier verified scaffold', verificationReferences: ['scaffold render test passed'] }]
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('m-1', 'Add next feature')]))
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Continue', settings, previousPlan: previous })
+    expect(result.status).toBe('success')
+    expect(result.retainedEvidence.map((item) => item.summary)).toEqual(['Earlier verified scaffold', 'Completed work'])
+    expect(new Set(result.retainedEvidence.map((item) => item.interventionId)).size).toBe(2)
   })
 
   it('keeps transport, incomplete, schema, and invented-command failures non-executable', async () => {
@@ -322,7 +344,7 @@ describe('PlanGenerationAppService', () => {
       expect.objectContaining({ model: settings.codingModel }),
       'Continue',
       expect.arrayContaining([expect.objectContaining({ sourceInterventionId: 'm-2' })]),
-      [expect.objectContaining({ interventionId: 'm-1', verificationReferences: ['npm test'] })],
+      [expect.objectContaining({ interventionId: 'plan-1@1:m-1', verificationReferences: ['npm test'] })],
       ['Storage: local'],
     )
   })

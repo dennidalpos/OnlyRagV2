@@ -489,8 +489,11 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
   if (ctx.toolRes.verification?.ran) {
     const activeM = ctx.goalPlanner.getActiveMilestone()
     if (ctx.toolRes.verification.passed) {
+      const command = ctx.toolRes.verification.command || 'run_tests'
+      if (isProjectTestCommand(command) && (!ctx.workspacePath || !isUsableTestScript(readWorkspaceManifest(ctx.workspacePath).packageJson?.scripts?.test)))
+        return
       ctx.flags.hasVerifiedBuild = true
-      promoteMilestonesProvenBy(ctx, 'run_tests')
+      promoteMilestonesProvenBy(ctx, command)
     } else if (activeM) {
       ctx.goalPlanner.updateMilestone(activeM.id, 'failed', 'run_tests reported failures.')
     }

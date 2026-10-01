@@ -43,6 +43,16 @@ describe('AgentInterviewAppService', () => {
     expect(result).toMatchObject({ status: 'completed', hasQuestions: false, questions: [] })
   })
 
+  it('forwards only the selected model sampling preferences to the interview', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({ status: 'complete', content: '{"hasQuestions":false,"questions":[]}' })
+    const sampling = { temperature: 1, presence_penalty: 1.5, top_k: 20 }
+    await service.conductInterview('Create a sum function', undefined, {
+      ...settings,
+      modelSamplingOverrides: { [settings.codingModel!]: sampling, other: { temperature: 0 } },
+    })
+    expect(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].options).toMatchObject(sampling)
+  })
+
   it('uses the enabled thinking preference only for the exact installed model', async () => {
     vi.mocked(ollamaAppService.getModelMetrics).mockResolvedValueOnce({
       'qwen3:4b': { capabilities: ['completion', 'thinking'], family: 'qwen3' },

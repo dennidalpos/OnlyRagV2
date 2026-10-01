@@ -1,6 +1,7 @@
 import os from 'node:os'
 import { CODING_MODEL_KEEP_ALIVE, HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
+import { resolveModelSamplingOverrides } from '../../../shared/domain/agent/ollamaSamplingOptions'
 import { logger } from '../infrastructure/logging/logger'
 import { hardwareProbe } from '../infrastructure/diagnostics/hardwareProbe'
 import type { AppSettings, InterviewAnalysisResult, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
@@ -53,12 +54,15 @@ export class AgentInterviewAppService {
     if (!modelToUse) return { status: 'error', hasQuestions: false, questions: [], error: noConfiguredModelMessage('coding') }
     const cachedGpu = hardwareProbe.getCachedGpuInfo()
     const memInfo = hardwareProbe.getMemoryInfo()
-    const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
-      hasGpu: cachedGpu?.hasNvidiaGpu,
-      vramTotalMB: cachedGpu?.vramTotalMB,
-      systemRamGB: memInfo?.totalRAMGB,
-      cpuCount: os.cpus()?.length,
-    })
+    const runtimeOpts = {
+      ...HardwareProfileResolver.resolveOllamaOptions('Auto', {
+        hasGpu: cachedGpu?.hasNvidiaGpu,
+        vramTotalMB: cachedGpu?.vramTotalMB,
+        systemRamGB: memInfo?.totalRAMGB,
+        cpuCount: os.cpus()?.length,
+      }),
+      ...resolveModelSamplingOverrides(modelToUse, settings.modelSamplingOverrides),
+    }
     const trainedContext = await ollamaAppService.getModelContextLength(modelToUse, settings.ollamaHost)
     const modelMetrics = await ollamaAppService.getModelMetrics(settings.ollamaHost)
     runtimeOpts.num_ctx = resolveModelContextLength(modelToUse, settings.modelContextLengths, runtimeOpts.num_ctx, trainedContext)

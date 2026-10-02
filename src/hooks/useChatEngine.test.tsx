@@ -142,6 +142,18 @@ describe('chat document grounding', () => {
     expect(prompt).not.toContain('FULL access')
     expect(chat.messages.at(-1)?.text).toBe('Fixture answer')
   })
+  it('retains zero-overlap candidates without using ranking scores as evidence confidence', async () => {
+    searchVectorDb.mockResolvedValueOnce([
+      { chunk_id: 'candidate', doc_id: 'a', doc_name: 'a.md', text: 'La consegna deve avvenire entro trenta giorni.', score: 0.225 },
+    ])
+    await send()
+    const prompt = generateOllamaStream.mock.calls[0][0].prompt
+    expect(prompt).toContain('La consegna deve avvenire entro trenta giorni.')
+    expect(prompt).toContain('Retrieved passages are candidates, not verified support.')
+    expect(prompt).toContain('If the supplied text does not support the answer, say so.')
+    expect(prompt).not.toContain('0.225')
+    expect(chat.messages.at(-1)?.sources?.[0].score).toBe(0.225)
+  })
   it('labels truncated context in the prompt and the visible saved answer', async () => {
     const text = 'A'.repeat(chat.contextBudget.perDocumentPreviewChars + 100)
     getIngestedDocument.mockResolvedValueOnce({ ...docA, extractedMarkdown: text })

@@ -72,7 +72,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
             </div>
           )}
 
-          {/* Citations and Source Verification Cards */}
+          {/* Retrieved candidate passages */}
           {msg.sources && msg.sources.length > 0 && <ChatMessageSources msg={msg} copiedCitationIndex={copiedCitationIndex} onCopyCitation={onCopyCitation} />}
         </div>
       </div>
@@ -97,6 +97,7 @@ function ChatMessageSources({ msg, copiedCitationIndex, onCopyCitation }: Pick<C
           <span>{t('chat.sourcesTitle', { label: headerLabel })}</span>
         </div>
       </div>
+      <p className="text-[10px] text-slate-400">{t('chat.rankingScoreHint')}</p>
       <div className="grid grid-cols-1 gap-1.5">
         {sources.map((src, idx) => (
           <div key={idx} className="p-2 bg-slate-950/70 border border-slate-800/80 rounded-xl space-y-1">
@@ -110,7 +111,7 @@ function ChatMessageSources({ msg, copiedCitationIndex, onCopyCitation }: Pick<C
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-cyan-400 font-mono text-[9px] px-1.5 py-0.2 bg-cyan-950/80 border border-cyan-800/50 rounded-full">
-                  {t('chat.relevance')}: {(src.score * 100).toFixed(0)}%
+                  {t('chat.rankingScore')}: {src.score.toFixed(3)}
                 </span>
                 <button
                   type="button"

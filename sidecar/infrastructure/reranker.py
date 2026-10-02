@@ -2,7 +2,7 @@ import re
 from typing import List, Dict, Any
 
 def calculate_cross_score(query: str, text: str, header: str = "") -> float:
-    """Fast in-process cross-scoring calculating query phrase coverage, term density and header relevance."""
+    """Lexical heuristic for phrase matches, term density and header overlap."""
     clean_query = query.lower().strip()
     clean_text = text.lower()
     clean_header = (header or "").lower()
@@ -10,7 +10,7 @@ def calculate_cross_score(query: str, text: str, header: str = "") -> float:
     if not clean_query or not clean_text:
         return 0.0
 
-    terms = [t for t in re.findall(r'\w+', clean_query) if len(t) > 2]
+    terms = re.findall(r'\w+', clean_query)
     if not terms:
         return 0.5
 
@@ -41,14 +41,13 @@ def rerank_candidates(
     if not candidates or not query.strip():
         return candidates[:top_k]
 
-    # High-fidelity in-process cross-scorer
     reranked = []
     for c in candidates:
         initial_score = float(c.get("score", 0.5))
         cross_score = calculate_cross_score(
             query=query,
             text=c.get("text", ""),
-            header=c.get("section_header", "")
+            header=f"{c.get('doc_name', '')}\n{c.get('section_header', '')}"
         )
         fused_score = round(0.45 * initial_score + 0.55 * cross_score, 3)
         c_copy = dict(c)

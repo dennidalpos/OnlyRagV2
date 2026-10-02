@@ -1,5 +1,9 @@
 # Renderer React
 
+## Retrieval scores — 2026-10-02
+
+Chat source cards display a decimal ranking score, with an IT/EN explanation that it is a heuristic rather than evidence confidence. Cards are labeled retrieved passages: the selection does not prove they support an answer claim. The prior percentage/relevance label and its unused translations are removed. Sources and scores remain backward compatible in saved messages; no history migration is introduced. The existing document prompt requires explicit abstention when supplied text does not support the answer, without treating zero term overlap as grounds for rejection. DOM checks cover both languages and preserve unrelated and cross-language passages. Model-specific reviewed outcomes and open language/provenance/desktop limits: [RAG policy](./rag-sidecar.md#ranking-scores-and-insufficient-evidence--2026-10-02), [verification](./verification.md#ranking-score-presentation-and-evidence-policy--2026-10-02).
+
 ## Salvataggio delle impostazioni — 2026-10-02
 
 `SETTINGS-PERSISTENCE-FEEDBACK-01` e completato. Il banner globale distingue salvataggio in corso, conferma del Main e modifiche non salvate; un errore mantiene i valori in memoria e offre Riprova. I messaggi IT/EN usano `role=status` o `role=alert`, senza spostare il focus. La conferma vale solo per l'ultimo snapshot: completamenti obsoleti non confermano nuove modifiche. Il debounce resta 100 ms e le scritture restano serializzate; snapshot superati ancora in coda non vengono scritti. Un caricamento fallito continua a bloccare salvataggi e diagnostica.

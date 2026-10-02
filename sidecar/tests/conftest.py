@@ -73,12 +73,13 @@ def isolated_lancedb_tables():
     visible to the next one — and a table written under one schema makes a later ingest with a
     different schema fail outright.
     """
-    yield
-
+    import lancedb
+    from sidecar.config import LANCEDB_DIR
     from sidecar.infrastructure.db import get_existing_tables, lance_db
 
+    # A fresh native session prevents cached indexes surviving drop/recreate at the same URI.
+    lance_db.__init__(LANCEDB_DIR, session=lancedb.Session())
+    yield
+
     for table_name in get_existing_tables():
-        try:
-            lance_db.drop_table(table_name)
-        except Exception:
-            pass
+        lance_db.drop_table(table_name)

@@ -1,4 +1,3 @@
-import re
 from typing import Any, Dict, List, Optional
 from sidecar.config import CHUNKS_TABLE_NAME, DOCS_TABLE_NAME, logger
 from sidecar.schemas import SearchRequest, SearchResult
@@ -9,13 +8,7 @@ from sidecar.infrastructure.embeddings import (
 )
 from sidecar.infrastructure.reranker import rerank_candidates
 
-# Multi-language stop words for hybrid keyword filtering
-_STOP_WORDS = {
-    "the", "and", "a", "an", "is", "in", "of", "to", "for", "with", "on", "at", "by", "from", "as", "about",
-    "il", "lo", "la", "i", "gli", "le", "un", "uno", "una", "di", "a", "da", "in", "con", "su", "per",
-    "tra", "fra", "e", "o", "ma", "che", "non", "del", "della", "dei", "degli", "delle", "al", "alla",
-    "ai", "agli", "alle", "nel", "nella", "nei", "negli", "nelle", "sul", "sulla", "sui", "sugli", "sulle"
-}
+_LEXICAL_COLUMNS = ("text", "doc_name", "section_header")
 
 def reciprocal_rank_fusion(
     dense_ranks: Dict[str, int],
@@ -57,8 +50,29 @@ def _stored_embedding_spaces(ctbl: Any, doc_filter: Optional[str]) -> list:
     return [spaces[key] for key in sorted(spaces)]
 
 
+def _lexical_candidates(ctbl: Any, query: str, doc_filter: Optional[str], limit: int) -> list:
+    """Native BM25 searches the store, including unindexed fragments."""
+    indexes = {index.name: index for index in ctbl.list_indices()}
+    for column in _LEXICAL_COLUMNS:
+        name = f"onlyrag_lexical_{column}_v1"
+        if name in indexes:
+            index = indexes[name]
+            if index.index_type != "FTS" or index.columns != [column]:
+                raise RuntimeError(f"Incompatible lexical index: {name}")
+        else:
+            ctbl.create_fts_index(
+                column, name=name, use_tantivy=False, stem=False,
+                remove_stop_words=False, max_token_length=None, ascii_folding=False,
+            )
+    search = ctbl.search(query, query_type="fts", fts_columns=list(_LEXICAL_COLUMNS))
+    if doc_filter:
+        search = search.where(doc_filter, prefilter=True)
+    return search.limit(limit).to_list()
+
+
+@database_operation
 def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
-    """Retrieve within each verified space, then lexically rerank the dense shortlist."""
+    """Fuse independent dense and native lexical ranks, then apply the lexical heuristic."""
     query_raw = req.query.strip()
     if not query_raw:
         return []
@@ -88,7 +102,7 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
     if raw_doc_ids and not allowed_doc_ids:
         return []
 
-    doc_filter = " OR ".join([f'doc_id = "{d_id}"' for d_id in allowed_doc_ids]) if allowed_doc_ids else None
+    doc_filter = " OR ".join([f"doc_id = '{d_id}'" for d_id in sorted(allowed_doc_ids)]) if allowed_doc_ids else None
 
     # Dense retrieval per embedding model; rankings merged by rank across spaces
     chunk_map: Dict[str, Dict[str, Any]] = {}
@@ -113,26 +127,15 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
             dense_ranks[c_id] = min(rank, dense_ranks.get(c_id, rank))
             rank += 1
 
-    # Lexical re-ranking of dense candidates
-    raw_tokens = re.findall(r'\w+', query_raw.lower())
-    query_terms = [t for t in raw_tokens if len(t) > 2 and t not in _STOP_WORDS]
-
-    sparse_scores: Dict[str, float] = {}
-    for c_id, item in chunk_map.items():
-        text_lower = item.get("text", "").lower()
-        doc_lower = item.get("doc_name", "").lower()
-        header_lower = item.get("section_header", "").lower()
-
-        term_matches = sum(
-            (text_lower.count(term) * 1.0) + (doc_lower.count(term) * 2.0) + (header_lower.count(term) * 2.0)
-            for term in query_terms
-        )
-        sparse_scores[c_id] = term_matches
-
-    # Sort chunks with matches to assign sparse ranks
-    matched_sparse = [c_id for c_id, score in sparse_scores.items() if score > 0]
-    matched_sparse.sort(key=lambda c_id: sparse_scores[c_id], reverse=True)
-    sparse_ranks: Dict[str, int] = {c_id: idx + 1 for idx, c_id in enumerate(matched_sparse)}
+    sparse_ranks: Dict[str, int] = {}
+    lexical_scores: Dict[str, float] = {}
+    for item in _lexical_candidates(ctbl, query_raw, doc_filter, fetch_limit):
+        c_id = str(item.get("chunk_id", ""))
+        if not c_id or (allowed_doc_ids and item.get("doc_id") not in allowed_doc_ids):
+            continue
+        chunk_map.setdefault(c_id, item)
+        sparse_ranks[c_id] = len(sparse_ranks) + 1
+        lexical_scores[c_id] = float(item["_score"])
 
     # RRF fusion (k=60)
     K_RRF = 60
@@ -153,14 +156,26 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
             "doc_name": item.get("doc_name", ""),
             "section_header": item.get("section_header", ""),
             "text": item.get("text", ""),
-            "score": normalized_score
+            "score": normalized_score,
+            "dense_rank": dense_ranks.get(c_id),
+            "lexical_rank": sparse_ranks.get(c_id),
+            "lexical_score": lexical_scores.get(c_id),
+            "rrf_score": rrf_score,
         })
 
-    candidate_dicts.sort(key=lambda x: x["score"], reverse=True)
+    candidate_dicts.sort(key=lambda x: (-x["rrf_score"], x["chunk_id"]))
+    for rank, candidate in enumerate(candidate_dicts, 1):
+        candidate["fused_rank"] = rank
     top_candidates = candidate_dicts[:max(top_k * 3, 15)]
 
     # Lexical cross-scoring
     reranked_dicts = rerank_candidates(query=query_raw, candidates=top_candidates, top_k=top_k)
+    for rank, candidate in enumerate(reranked_dicts, 1):
+        logger.debug(
+            "Retrieval rank chunk=%s dense=%s lexical=%s bm25=%s rrf=%s fused=%s final=%s score=%s",
+            candidate["chunk_id"], candidate["dense_rank"], candidate["lexical_rank"],
+            candidate["lexical_score"], candidate["rrf_score"], candidate["fused_rank"], rank, candidate["score"],
+        )
 
     return [
         SearchResult(

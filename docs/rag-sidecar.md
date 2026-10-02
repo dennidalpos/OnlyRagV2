@@ -82,9 +82,29 @@ Confini interessati: [`llm_normalizer.py`](../sidecar/domain/llm_normalizer.py),
 [`search_service.py`](../sidecar/services/search_service.py) esegue:
 
 1. retrieval denso sui chunk LanceDB, una query per ciascuna identità verificata dello spazio di embedding (i ranking si fondono per posizione, mai per distanza);
-2. matching lessicale sui token, nome documento e sezione dei candidati;
+2. retrieval BM25 nativo indipendente su testo, nome documento e sezione nell'intero store filtrato;
 3. RRF con `k=60`;
 4. cross-score lessicale locale sui candidati finali.
+
+### Independent lexical retrieval — 2026-10-02
+
+`RAG-INDEPENDENT-LEXICAL-RETRIEVAL-01` is complete. Native LanceDB FTS retrieves candidates independently of the dense shortlist, with the same prefiltered document selection. The union enters RRF (`k=60`); ties are deterministic by chunk ID. Each returned candidate retains dense rank (possibly absent), lexical rank, BM25 score, raw RRF score, fused rank and final rank in DEBUG diagnostics. The existing REST/IPC result shape remains unchanged; its `score` is an uncalibrated ranking heuristic, not evidence confidence. Score meaning and evaluated abstention are documented below; source provenance remains open.
+
+The final lexical heuristic also considers filename/header matches and retains short identifiers. Fixtures give the exact evidence an ID that loses alphabetical ties to unrelated dense candidates: successful retrieval must depend on content/metadata, not favorable IDs. The final focused FTS/Sidecar run passes 69 tests in 15.61s.
+
+Three native indexes, `onlyrag_lexical_{text,doc_name,section_header}_v1`, are created once on the first successful search of a versioned store. They add derived index data without changing chunk rows, vectors or document schemas. The built-in simple tokenizer splits punctuation/whitespace and lowercases; stemming, stop-word removal and accent folding are disabled, with no token-length exclusion. No lexical parser, dependency or encoder change was introduced. Native queries include unindexed fragments, so append/replacement does not require eager optimization. Index errors fail explicitly. Index creation/search run under the existing database lock and recovery gate; legacy or malformed provenance is rejected before any index is created. No personal store was searched or migrated in this pass.
+
+Sources checked against installed LanceDB 0.37.1 on 2026-10-02: [native FTS, filtering and unindexed rows](https://docs.lancedb.com/search/full-text-search), [Python API and session caches](https://lancedb.github.io/lancedb/python/python/). Eleven real-store regressions cover an exact code outside 50 dense candidates, filenames, section names, punctuation, two-letter identifiers, clauses, selected-document filters, append/replacement/delete, rank tracing, unchanged rows, recovery refusal and explicit index failure. The 37-test retrieval/provenance/recovery run passes in 7.58s. This proves retrieval mechanics with declared vectors, not multilingual encoder quality. Measure initial index construction, lock occupancy, index size, unindexed-tail scans and p95 search cost in `RAG-INDEX-METADATA-EFFICIENCY-01`; the frozen failed Nomic campaign remains unchanged.
+### Ranking scores and insufficient evidence — 2026-10-02
+
+`RAG-EVIDENCE-SCORING-01` is complete for truthful score meaning and the evaluated abstention policy. The ranking score combines normalized RRF (45%) and lexical phrase/term/header heuristics (55%). It is neither calibrated relevance nor evidence confidence. The chat displays the raw decimal as a ranking score, with an explicit explanation, and labels cards as retrieved passages rather than verified citations. No confidence probability is computed, and scores are not inserted in the generation prompt or used as an evidence cutoff. Zero lexical overlap alone cannot trigger evidence rejection; cross-language/paraphrased candidates remain available to generation when retrieved.
+
+The existing production prompt already requires claims to use supplied document text, calls retrieved passages candidates and directs the model to say when the text does not support an answer. Insufficient or unresolved contradictory text requires an explicit unavailable/ambiguous answer; document conditions and triggers must be preserved. No numeric relevance threshold can substitute for this support check. There is no post-generation semantic validator or general guarantee of abstention: claim/source validation remains a separate task.
+
+Six frozen IT/EN cases were independently reviewed against retained real `qwen3.5:9b` output: absent penalty, unrelated cactus/invoice text, cross-language payment, paraphrased defect notice, conditional refund and conflicting deadlines. All six supported-answer/abstention outcomes pass. Retrieval and document loading are declared fixtures; prompt assembly, queue and HTTP generation are production code. Effective context is 4096, thinking is false, digest `6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7`. Two English-question cases answered in Italian despite English fixture settings/provider; this response-language residue is tracked under `QUALITY-CONTENT-ACCEPTANCE-01`, alongside broader corpus/model evaluation. Evidence, exact prompts, runtime, hashes and semantic review are retained under `%USERPROFILE%/OnlyRag-Live/evidence-scoring-2026-10-02T16-51-07-987Z-7c758057`. The first retained replay and failed harness attempt are separate historical evidence. No personal settings/store or application budgets/timeouts were changed.
+
+Replay: `npx vitest run --config vitest.live.config.mts scripts/live/evidenceScoring.live.ts --reporter=dot`. Its pass proves generation/capture, not semantic acceptance: review the frozen expectations and every answer independently. The six-case review does not qualify restarted Electron, real retrieval quality, another model, thinking mode or a larger context. Transport reference checked 2026-10-02: [Ollama generation API](https://docs.ollama.com/api/generate).
+
 
 ## Traduzione in-place
 

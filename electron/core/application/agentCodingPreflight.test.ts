@@ -28,6 +28,11 @@ describe('Agent Coding preflight', () => {
       expect(result).toMatchObject({ ready: true })
       expect(result.checks.find((check) => check.id === 'qualification')).toMatchObject({ passed: false, blocking: false })
       expect(result.checks.find((check) => check.id === 'probes')?.detail).toContain('does not finish the plan')
+      expect(result.checks.find((check) => check.id === 'memory')).toMatchObject({
+        passed: false,
+        blocking: false,
+        detail: expect.stringContaining('16384 tokens; unknown'),
+      })
     } finally {
       fs.rmSync(workspacePath, { recursive: true, force: true })
     }

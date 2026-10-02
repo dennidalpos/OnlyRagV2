@@ -1,9 +1,10 @@
-import { DiagnosticsData, RunningModelDetails } from '../types'
+import { DiagnosticsData, RunningModelDetails, OllamaModelMetrics, AppSettings } from '../types'
 import { translate } from '../i18n/I18nContext'
 import {
   calculateRealUsableVram,
-  calculateUsableSystemRamGB,
   classifyHardwareProfileTier,
+  resolveMaxContextTokens,
+  resolveAgentContextTokens,
   type HardwareFacts,
   type HardwareProfileTier,
 } from '../../shared/domain/hardware/hardwareProfileTiers'
@@ -11,6 +12,10 @@ import {
 export type { HardwareFacts } from '../../shared/domain/hardware/hardwareProfileTiers'
 export { estimateModelWeightGB }
 import { estimateModelWeightGB } from '../../shared/domain/hardware/modelWeightEstimator'
+import { assessModelRuntimeFit, type ModelFitVerdict } from '../../shared/domain/hardware/modelRuntimeFit'
+import { resolveModelContextLength } from '../../shared/domain/settings/modelContextPreference'
+import { isLocalOllamaHost } from '../../shared/domain/ollamaHost'
+export type { ModelFitVerdict } from '../../shared/domain/hardware/modelRuntimeFit'
 
 export interface HardwareRecommendations {
   profileTier: HardwareProfileTier
@@ -33,117 +38,38 @@ export function getModelApproxSize(modelName: string, details?: RunningModelDeta
   return `${weightGB.toFixed(1)} GB`
 }
 
-/** Estimates KV-Cache VRAM footprint in GB. */
-export function estimateKvCacheMemoryGB(contextTokens: number = 4096, isQuantizedQ8: boolean = true): number {
-  const bytesPerElem = isQuantizedQ8 ? 1 : 2
-  const bytes = 2 * 32 * 8 * 128 * contextTokens * bytesPerElem
-  const gb = bytes / (1024 * 1024 * 1024)
-  return Math.round(gb * 100) / 100
-}
-
-/** Calculates total model footprint in GB (weights + KV cache + CUDA overhead). */
-export function calculateTotalModelFootprintGB(
-  modelName: string,
-  contextTargetTokens: number = 4096,
-  isQuantizedQ8: boolean = true,
-  details?: RunningModelDetails,
-): number {
-  const weightGB = estimateModelWeightGB(modelName, details)
-  const kvCacheGB = estimateKvCacheMemoryGB(contextTargetTokens, isQuantizedQ8)
-  const cudaRuntimeOverheadGB = 0.25
-  const total = weightGB + kvCacheGB + cudaRuntimeOverheadGB
-  return Math.round(total * 100) / 100
-}
-
-/** Assesses model compatibility against detected hardware VRAM/RAM. */
-export function assessModelHardwareCompatibility(
-  modelName: string,
-  vramTotalMB: number,
-  totalRamGB: number,
-  contextTargetTokens: number = 4096,
-  details?: RunningModelDetails,
-): {
-  isCompatible: boolean
-  footprintGB: number
-  safeVramBudgetGB: number
-  compatibilityStatus: 'optimal_vram' | 'tight_vram' | 'exceeds_vram'
-  warning?: string
-} {
-  const footprintGB = calculateTotalModelFootprintGB(modelName, contextTargetTokens, true, details)
-  const safeVramBudgetGB = calculateRealUsableVram(vramTotalMB)
-  const safeRamBudget = calculateUsableSystemRamGB(totalRamGB)
-  const hasGpu = vramTotalMB > 0
-
-  if (hasGpu && safeVramBudgetGB > 0) {
-    if (footprintGB <= safeVramBudgetGB) {
-      return {
-        isCompatible: true,
-        footprintGB,
-        safeVramBudgetGB,
-        compatibilityStatus: 'optimal_vram',
-      }
-    } else if (footprintGB <= safeVramBudgetGB + 1.2) {
-      return {
-        isCompatible: true,
-        footprintGB,
-        safeVramBudgetGB,
-        compatibilityStatus: 'tight_vram',
-        warning: translate('services.vramHigh'),
-      }
-    } else {
-      return {
-        isCompatible: false,
-        footprintGB,
-        safeVramBudgetGB,
-        compatibilityStatus: 'exceeds_vram',
-        warning: translate('services.vramInsufficient'),
-      }
-    }
-  }
-
-  // CPU execution / No GPU
-  if (footprintGB <= safeRamBudget) {
-    return {
-      isCompatible: true,
-      footprintGB,
-      safeVramBudgetGB: 0,
-      compatibilityStatus: 'optimal_vram',
-    }
-  }
-  return {
-    isCompatible: false,
-    footprintGB,
-    safeVramBudgetGB: 0,
-    compatibilityStatus: 'exceeds_vram',
-    warning: translate('services.ramInsufficient'),
-  }
-}
-
-/** Verdict for a single model on the current host, as shown next to a model choice in the UI. */
-export interface ModelFitVerdict {
-  compatibilityStatus: 'optimal_vram' | 'tight_vram' | 'exceeds_vram'
-  footprintGB: number
-}
-
-/** Builds a memoized per-model VRAM verdict lookup for the detected host. */
-export function buildModelFitLookup(diagnostics: DiagnosticsData | null): (modelName: string) => ModelFitVerdict {
+/** Use the same role context resolver as execution; remote memory is unknown. */
+export function buildModelFitLookup(
+  diagnostics: DiagnosticsData | null,
+  settings: AppSettings,
+  metrics: Record<string, OllamaModelMetrics>,
+  setup = false,
+): (modelName: string, coding?: boolean) => ModelFitVerdict {
   const facts = extractHardwareFacts(diagnostics)
-  const vramTotalMB = facts.vramTotalMB || 0
-  const systemRamGB = facts.systemRamGB || 8
-  const cache = new Map<string, ModelFitVerdict>()
-
-  return (modelName: string): ModelFitVerdict => {
-    const cached = cache.get(modelName)
-    if (cached) return cached
-
-    const assessment = assessModelHardwareCompatibility(modelName, vramTotalMB, systemRamGB, 4096, diagnostics?.ollama.modelDetails?.[modelName])
-    const verdict: ModelFitVerdict = {
-      compatibilityStatus: assessment.compatibilityStatus,
-      footprintGB: assessment.footprintGB,
-    }
-    cache.set(modelName, verdict)
-    return verdict
+  const knownFacts = diagnostics && settings.ollamaMode !== 'remote' && isLocalOllamaHost(settings.ollamaHost) ? facts : undefined
+  return (modelName, coding = false) => {
+    const hardwareContext = !setup && coding ? resolveAgentContextTokens('Auto', facts) : resolveMaxContextTokens('Auto', facts)
+    const context = resolveModelContextLength(modelName, settings.modelContextLengths, hardwareContext, metrics[modelName]?.contextLength)
+    return assessModelRuntimeFit(modelName, context, knownFacts, metrics[modelName])
   }
+}
+
+export function formatModelFit(fit: ModelFitVerdict): string {
+  const size =
+    fit.maximumGB === undefined
+      ? `~${fit.minimumGB.toFixed(1)} + ?`
+      : fit.minimumGB === fit.maximumGB
+        ? fit.maximumGB.toFixed(1)
+        : `${fit.minimumGB.toFixed(1)}–${fit.maximumGB.toFixed(1)}`
+  const labels = {
+    gpu_possible: 'hardwareWizard.memoryGpu',
+    cpu_offload_possible: 'hardwareWizard.memoryOffload',
+    cpu_possible: 'hardwareWizard.memoryCpu',
+    insufficient: 'hardwareWizard.memoryInsufficient',
+    unknown: 'hardwareWizard.memoryUnknown',
+  } as const
+  const basis = fit.basis === 'observed' ? translate('hardwareWizard.memoryObserved') : translate('hardwareWizard.memoryEstimated')
+  return `${fit.contextTokens} ctx · ${size} GiB · ${translate(labels[fit.placement])} · ${basis}${fit.uncertain ? ' ?' : ''}`
 }
 
 export { isOllamaModelInstalled } from '../../shared/domain/agent/modelTagMatcher'
@@ -163,7 +89,7 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
   }
 }
 
-/** Detects the host hardware profile tier (legacy/entry/midrange/highend/extreme) from GPU VRAM and system RAM, and derives the safe usable VRAM budget and summary labels used throughout the recommendations (AGT6: extracted from analyzeHardwareAndRecommend to kee */
+/** Summarize detected hardware separately from model/workload fit. */
 function resolveHardwareProfile(diagnostics: DiagnosticsData | null): {
   profileTier: HardwareProfileTier
   profileName: string

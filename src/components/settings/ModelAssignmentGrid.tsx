@@ -6,7 +6,7 @@ import { resolveModelRuntimeStatus } from '../../../shared/domain/agent/codingMo
 import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
 import { extractHardwareFacts } from '../../services/hardwareRecommendationEngine'
 import { findInstalledOllamaOption } from '../../services/ollamaModelOptions'
-import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
+import { resolveMaxContextTokens, resolveAgentContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
 import { ModelBadgeStrip } from './ModelBadgeStrip'
 import { ModelContextControl } from './ModelContextControl'
 import { ModelSelect } from './ModelSelect'
@@ -101,7 +101,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
                 model={codingModel}
                 settings={settings}
                 metrics={metrics[codingModel]}
-                hardwareDefault={hardwareDefault}
+                hardwareDefault={resolveAgentContextTokens('Auto', extractHardwareFacts(diagnostics))}
+                diagnostics={diagnostics}
                 onUpdateSettings={onUpdateSettings}
               />
             )}
@@ -142,6 +143,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
                 settings={settings}
                 metrics={metrics[chatModel]}
                 hardwareDefault={hardwareDefault}
+                diagnostics={diagnostics}
                 onUpdateSettings={onUpdateSettings}
               />
             )}
@@ -178,6 +180,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
                 settings={settings}
                 metrics={metrics[translationModel]}
                 hardwareDefault={hardwareDefault}
+                diagnostics={diagnostics}
                 onUpdateSettings={onUpdateSettings}
               />
             )}
@@ -222,6 +225,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
                 settings={settings}
                 metrics={metrics[visionModel]}
                 hardwareDefault={hardwareDefault}
+                diagnostics={diagnostics}
                 onUpdateSettings={onUpdateSettings}
               />
             )}

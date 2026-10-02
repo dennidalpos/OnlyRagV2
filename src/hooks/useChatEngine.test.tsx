@@ -164,6 +164,23 @@ describe('chat document grounding', () => {
     expect(chat.messages.at(-1)?.text).toContain('Partial document context')
     expect(chat.conversations[0].messages.at(-1)?.text).toContain('Partial document context')
   })
+  it('persists only completed, supplied citations and reports unknown references', async () => {
+    searchVectorDb.mockResolvedValueOnce([
+      { chunk_id: 'a_chunk_0', doc_id: 'a', doc_name: 'a.md', text: 'Delivery in 21 days.', score: 0.2 },
+      { chunk_id: 'a_chunk_1', doc_id: 'a', doc_name: 'a.md', text: 'Another unrelated passage.', score: 0.9 },
+      { chunk_id: 'wrong_chunk_0', doc_id: 'not-selected', doc_name: 'a.md', text: 'Not selected', score: 1 },
+    ])
+    generateOllamaStream.mockImplementationOnce(async (_request, onChunk) => {
+      onChunk('Delivery in 21 days [S1]. Unknown claim [S99].')
+      return { success: true }
+    })
+    await send()
+    const answer = chat.messages.at(-1)
+    expect(answer?.sources?.map((source) => source.citationState)).toEqual(['cited', 'candidate'])
+    expect(answer?.invalidSourceReferences).toEqual(['S99'])
+    expect(generateOllamaStream.mock.calls[0][0].prompt).not.toContain('Not selected')
+    expect(chat.conversations[0].messages.at(-1)).toEqual(answer)
+  })
   it('preserves a missing selection on conversation reload and blocks its next answer', async () => {
     const original = chat.activeConversationId
     await act(async () => chat.toggleDocSelection('deleted-id'))
@@ -379,19 +396,22 @@ describe('chat document grounding', () => {
     expect(generateOllamaStream).toHaveBeenCalledOnce()
   })
   it('preserves unflushed text at Stop and persists only the stopped response', async () => {
+    searchVectorDb.mockResolvedValueOnce([{ chunk_id: 'a_chunk_0', doc_id: 'a', doc_name: 'a.md', text: 'Payment in 21 days.', score: 0.2 }])
     const generation = deferred<{ success: boolean }>()
     let chunk!: (text: string) => void
     generateOllamaStream.mockImplementationOnce((_request, onChunk) => {
       chunk = onChunk
       return generation.promise
     })
-    const { completion } = await start([])
+    const { completion } = await start(['a'])
+    expect(chat.messages.at(-1)?.sources?.[0].citationState).toBe('candidate')
     await act(async () => {
-      chunk('Unflushed answer')
+      chunk('Unflushed answer [S1]')
       await chat.handleStopGeneration()
     })
     expect(chat.messages.at(-1)?.text).toContain('Unflushed answer')
     expect(chat.messages.at(-1)?.text).toContain('Generation stopped')
+    expect(chat.messages.at(-1)?.sources?.[0].citationState).toBe('candidate')
     const stopped = chat.messages
     await act(async () => {
       chunk('Stale tokens')

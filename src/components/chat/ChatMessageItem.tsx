@@ -1,7 +1,11 @@
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Bot, Check, Copy, Loader2, Sparkles, User } from 'lucide-react'
-import type { ChatMessage } from '../../types'
+import type { ChatMessage, CitationSource, SourceLocation } from '../../types'
 import { useTranslation } from '../../i18n'
+import { electronApi } from '../../services/electronApi'
+import { sourceLocationRequest } from '../../services/chatSourceReferences'
+import { Modal } from '../common/Modal'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 interface ChatMessageItemProps {
   msg: ChatMessage
@@ -25,6 +29,35 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
 }: ChatMessageItemProps) {
   const { t } = useTranslation()
   const isUser = msg.sender === 'user'
+  const [location, setLocation] = useState<SourceLocation | null>(null)
+  const [locationError, setLocationError] = useState('')
+  const [isOpening, setIsOpening] = useState(false)
+  const navigation = useRef(0)
+  const [showLocation, setShowLocation] = useState(false)
+  useEffect(
+    () => () => {
+      navigation.current++
+    },
+    [],
+  )
+  const openSource = async (source: CitationSource) => {
+    if (msg.isStreaming || source.citationState !== 'cited') return
+    const request = sourceLocationRequest(source)
+    if (!request) return
+    const attempt = ++navigation.current
+    setShowLocation(true)
+    setLocation(null)
+    setLocationError('')
+    setIsOpening(true)
+    try {
+      const result = await electronApi().getSourceLocation(request)
+      if (navigation.current === attempt) setLocation(result)
+    } catch (error: unknown) {
+      if (navigation.current === attempt) setLocationError(errorMessage(error))
+    } finally {
+      if (navigation.current === attempt) setIsOpening(false)
+    }
+  }
 
   return (
     <div className={`flex gap-3 max-w-4xl ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}>
@@ -64,7 +97,26 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
 
           {/* Message Text / Streaming State */}
           {msg.text ? (
-            <div className="whitespace-pre-wrap font-sans text-slate-200 selection:bg-cyan-500/30 selection:text-cyan-100">{msg.text}</div>
+            <div className="whitespace-pre-wrap font-sans text-slate-200 selection:bg-cyan-500/30 selection:text-cyan-100">
+              {msg.text.split(/(\[S[1-9]\d*\])/g).map((part, index) => {
+                const source = msg.isStreaming
+                  ? undefined
+                  : msg.sources?.find((item) => `[${item.referenceId}]` === part && item.citationState === 'cited' && sourceLocationRequest(item))
+                return source ? (
+                  <button
+                    type="button"
+                    key={index}
+                    onClick={() => void openSource(source)}
+                    className="text-cyan-300 underline focus-ring"
+                    title={t('chat.openOriginal')}
+                  >
+                    {part}
+                  </button>
+                ) : (
+                  part
+                )
+              })}
+            </div>
           ) : (
             <div className="flex items-center gap-2 text-cyan-400 animate-pulse py-1">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -73,14 +125,67 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
           )}
 
           {/* Retrieved candidate passages */}
-          {msg.sources && msg.sources.length > 0 && <ChatMessageSources msg={msg} copiedCitationIndex={copiedCitationIndex} onCopyCitation={onCopyCitation} />}
+          {msg.invalidSourceReferences?.length ? (
+            <p role="status" className="text-amber-300">
+              {t('chat.invalidSourceReferences', { references: msg.invalidSourceReferences.join(', ') })}
+            </p>
+          ) : null}
+          {msg.sources && msg.sources.length > 0 && (
+            <ChatMessageSources msg={msg} copiedCitationIndex={copiedCitationIndex} onCopyCitation={onCopyCitation} onOpenSource={openSource} />
+          )}
         </div>
       </div>
+      <Modal
+        isOpen={showLocation}
+        onClose={() => {
+          navigation.current++
+          setShowLocation(false)
+        }}
+        labelledById={`source-location-${msg.id}`}
+      >
+        <div className="p-4 space-y-3 overflow-auto">
+          <div className="flex items-center justify-between">
+            <h2 id={`source-location-${msg.id}`}>{t('chat.originalLocation')}</h2>
+            <button
+              type="button"
+              onClick={() => {
+                navigation.current++
+                setShowLocation(false)
+              }}
+            >
+              {t('common.close')}
+            </button>
+          </div>
+          {isOpening && <p role="status">{t('chat.openingOriginal')}</p>}
+          {locationError && (
+            <p role="alert">
+              {t('chat.originalUnavailable')} {locationError}
+            </p>
+          )}
+          {location && (
+            <>
+              <p>
+                {t('chat.locationVerified')} {location.page_number ? t('chat.sourcePage', { page: location.page_number }) : location.section_header}
+              </p>
+              <p className="text-sm text-slate-400">{t('chat.locationSupportHint')}</p>
+              <pre className="whitespace-pre-wrap text-sm">{location.exact_quote}</pre>
+              {location.image_base64 && (
+                <img src={`data:image/png;base64,${location.image_base64}`} alt={t('chat.sourcePage', { page: location.page_number || 1 })} />
+              )}
+            </>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 })
 
-function ChatMessageSources({ msg, copiedCitationIndex, onCopyCitation }: Pick<ChatMessageItemProps, 'msg' | 'copiedCitationIndex' | 'onCopyCitation'>) {
+function ChatMessageSources({
+  msg,
+  copiedCitationIndex,
+  onCopyCitation,
+  onOpenSource,
+}: Pick<ChatMessageItemProps, 'msg' | 'copiedCitationIndex' | 'onCopyCitation'> & { onOpenSource: (source: CitationSource) => Promise<void> }) {
   const { t } = useTranslation()
   const sources = msg.sources || []
   const uniqueDocNames = Array.from(new Set(sources.map((s) => s.docName || t('common.document'))))
@@ -124,6 +229,16 @@ function ChatMessageSources({ msg, copiedCitationIndex, onCopyCitation }: Pick<C
                 </button>
               </div>
             </div>
+            <p className="text-xs text-slate-300">
+              {src.citationState === 'cited' ? t('chat.modelCitedPassage') : t('chat.uncitedCandidate')} {src.referenceId ? `[${src.referenceId}]` : ''}
+            </p>
+            {!msg.isStreaming && src.citationState === 'cited' && sourceLocationRequest(src) ? (
+              <button type="button" className="text-xs text-cyan-300 underline focus-ring" onClick={() => void onOpenSource(src)}>
+                {t('chat.openOriginal')}
+              </button>
+            ) : (
+              <p className="text-xs text-slate-400">{t('chat.originalUnavailable')}</p>
+            )}
             <p className="text-[10px] text-slate-400 font-sans italic line-clamp-2 leading-relaxed">"{src.snippet}"</p>
           </div>
         ))}

@@ -103,6 +103,44 @@ export interface VectorSearchResult {
   section_header?: string
   text: string
   score: number
+  provenance?: SourceProvenance | null
+}
+
+export interface SourceProvenance {
+  version: 1
+  source_revision: string
+  extraction_revision: string
+  index_revision: string
+  location_kind: 'original' | 'derived' | 'unavailable'
+  page_number?: number | null
+  section_header?: string | null
+  span_start?: number | null
+  span_end?: number | null
+  exact_quote?: string | null
+}
+
+export interface SourceLocationRequest {
+  docId: string
+  chunkId: string
+  sourceRevision: string
+  extractionRevision: string
+  indexRevision: string
+  spanStart: number
+  spanEnd: number
+}
+
+export interface SourceLocation {
+  doc_id: string
+  chunk_id: string
+  source_revision: string
+  extraction_revision: string
+  index_revision: string
+  page_number?: number | null
+  section_header?: string | null
+  span_start: number
+  span_end: number
+  exact_quote: string
+  image_base64?: string | null
 }
 
 /** One semantic match from the cross-project prompt history index (see sidecar's /history/search). */
@@ -125,6 +163,10 @@ export interface CitationSource {
   score: number
   snippet: string
   sectionHeader?: string
+  docId?: string
+  referenceId?: string
+  citationState?: 'candidate' | 'cited'
+  provenance?: SourceProvenance | null
 }
 
 export interface ChatMessage {
@@ -133,6 +175,7 @@ export interface ChatMessage {
   text: string
   timestamp: string
   sources?: CitationSource[]
+  invalidSourceReferences?: string[]
   isStreaming?: boolean
 }
 
@@ -559,6 +602,27 @@ export interface OllamaModelMetrics {
   digest?: string
   /** `think` values reported by /api/show (e.g. `[false, "low", "medium"]`) and the model's own default. */
   thinking?: OllamaThinkingSupport
+  memoryGeometry?: OllamaMemoryGeometry
+  runtimeAllocation?: OllamaRuntimeAllocation
+}
+
+export interface OllamaMemoryGeometry {
+  architecture: string
+  layout: 'full-attention' | 'unsupported'
+  blockCount?: number
+  embeddingLength?: number
+  headCount?: number
+  kvHeadCount?: number
+  keyLength?: number
+  valueLength?: number
+}
+
+export interface OllamaRuntimeAllocation {
+  observedAt: number
+  digest: string
+  totalBytes: number
+  gpuBytes: number
+  contextLength: number
 }
 
 /** One value Ollama accepts for `think`: a boolean switch or a named reasoning level. */

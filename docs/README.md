@@ -13,6 +13,7 @@ Documentazione tecnica breve, verificata contro il codice. I contratti prevalgon
 | Architettura e confini | [`architecture.md`](./architecture.md) |
 | Electron Main e processi | [`electron-main.md`](./electron-main.md) |
 | Renderer React | [`frontend.md`](./frontend.md) |
+| Model/runtime memory fit | [`model-runtime-fit.md`](./model-runtime-fit.md) |
 | Coding Agent (Panoramica) | [`agent.md`](./agent.md) |
 | Agent Runtime e orchestrazione | [`agent-runtime.md`](./agent-runtime.md) |
 | Agent Guardrail e progresso | [`agent-guards.md`](./agent-guards.md) |

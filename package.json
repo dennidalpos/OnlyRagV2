@@ -65,7 +65,7 @@
     "zod": "^4.4.3"
   },
   "overrides": {
-    "dompurify": "^3.4.13"
+    "dompurify": "^3.4.16"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.12",

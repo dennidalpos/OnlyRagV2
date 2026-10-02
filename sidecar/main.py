@@ -23,7 +23,7 @@ from sidecar.schemas import (
     IngestResponse, IngestPathRequest, SearchRequest, SearchResult, HealthResponse,
     DocumentRecord, DocumentSummary, DeleteResponse, ExportResponse, SuccessResponse,
     TaskCancelResponse,
-    ExportRequest, UpdateDocumentRequest, PagePreviewResponse,
+    ExportRequest, UpdateDocumentRequest, PagePreviewResponse, SourceLocationResponse,
     IndexPromptHistoryRequest, PromptHistorySearchRequest, PromptHistorySearchResult,
     PromptHistoryRemoveRequest, TranslateInplaceRequest,
 )
@@ -44,6 +44,7 @@ from sidecar.domain.translator import (
 from sidecar.services.search_service import perform_vector_search, list_stored_documents, get_stored_document, delete_stored_document
 from sidecar.services.prompt_history_service import index_prompt_history, search_prompt_history, remove_prompt_history
 from sidecar.services.vocab_service import background_vocab_sync_startup
+from sidecar.infrastructure.source_provenance import resolve_source_location
 from sidecar.infrastructure.embeddings import DEFAULT_EMBEDDING_MODEL
 
 from contextlib import asynccontextmanager
@@ -210,6 +211,19 @@ async def get_page_preview(doc_id: str, page_num: int):
     except Exception as e:
         logger.error(f"Error rendering page preview: {e}")
         raise
+
+@app.get("/documents/{doc_id}/source-location", response_model=SourceLocationResponse)
+async def get_source_location(doc_id: str, chunk_id: str = Query(min_length=1, max_length=200),
+                              source_revision: str = Query(pattern=r"^[a-f0-9]{64}$"),
+                              extraction_revision: str = Query(pattern=r"^[a-f0-9]{64}$"),
+                              index_revision: str = Query(pattern=r"^[a-f0-9]{64}$"),
+                              span_start: int = Query(ge=0), span_end: int = Query(ge=1, le=10_000_000)):
+    try:
+        return await asyncio.to_thread(resolve_source_location, doc_id, chunk_id, source_revision,
+                                       extraction_revision, index_revision, span_start, span_end)
+    except (ValueError, FileNotFoundError) as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
 
 @app.get("/documents", response_model=List[DocumentSummary], responses={500: {"description": "Database read failed"}})
 async def list_documents():

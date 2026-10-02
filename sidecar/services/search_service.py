@@ -7,6 +7,7 @@ from sidecar.infrastructure.embeddings import (
     EmbeddingSpaceMismatchError,
 )
 from sidecar.infrastructure.reranker import rerank_candidates
+from sidecar.infrastructure.source_provenance import chunk_source_provenance
 
 _LEXICAL_COLUMNS = ("text", "doc_name", "section_header")
 
@@ -184,7 +185,8 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
             doc_name=d["doc_name"],
             section_header=d.get("section_header"),
             text=d["text"],
-            score=d["score"]
+            score=d["score"],
+            provenance=chunk_source_provenance(d["doc_id"], d["text"], d.get("section_header")) if d.get("doc_id") else None,
         )
         for d in reranked_dicts
     ]

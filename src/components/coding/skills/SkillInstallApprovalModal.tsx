@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import { Modal } from '../../common/Modal'
 import { Check, Package, Store, Target, X } from 'lucide-react'
 import { SkillInstallApprovalRequest } from '../../../types'
@@ -16,15 +16,6 @@ interface SkillInstallApprovalModalProps {
  */
 export const SkillInstallApprovalModal: React.FC<SkillInstallApprovalModalProps> = ({ request, onApprove, onReject }) => {
   const { t } = useTranslation()
-
-  useEffect(() => {
-    if (!request) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onReject(request.requestId)
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [request, onReject])
 
   if (!request) return null
 

@@ -14,6 +14,7 @@ import type { IngestedDocument, IngestedDocumentContent, OllamaThinkValue, Promp
 import type { IpcEventContract } from '../../../shared/ipc/ipcContract'
 import { toIngestionProgressPayload, toTranslateProgressPayload } from '../domain/sidecarContract'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import type { SourceLocationRequest } from '../../../shared/types'
 
 export function normalizeIngestedFileType(fileType?: string, filename?: string): IngestedDocument['fileType'] {
   const rawType = (fileType || filename?.split('.').pop() || '').trim().toLowerCase().replace(/^\./, '')
@@ -55,6 +56,10 @@ export class SidecarAppService {
 
   getStatus() {
     return sidecarHttpClient.getStatus()
+  }
+
+  getSourceLocation(payload: SourceLocationRequest) {
+    return sidecarHttpClient.getSourceLocation(payload)
   }
 
   async restartSidecar() {

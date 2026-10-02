@@ -12,7 +12,7 @@ describe('wizard model choices', () => {
       root.render(
         <WizardStepRecommendedModels
           downloadedModels={['local-model:latest', 'vision-model:latest']}
-          getModelFit={() => ({ compatibilityStatus: 'optimal_vram', footprintGB: 2 })}
+          getModelFit={() => ({ placement: 'gpu_possible', contextTokens: 16384, minimumGB: 2, maximumGB: 3, basis: 'metadata', uncertain: true })}
           selectedCoding="retired:1b"
           onChangeCoding={vi.fn()}
           selectedChat="local-model:latest"
@@ -34,6 +34,8 @@ describe('wizard model choices', () => {
     expect(optionValues).toContain('vision-model:latest')
     expect(optionValues).not.toContain('retired:1b')
     expect(container.querySelector('[role="status"]')?.textContent).toContain('retired:1b')
+    expect(container.textContent).toContain('16384 ctx · 2.0–3.0 GiB')
+    expect(container.textContent).toContain('cache')
 
     await act(async () => root.unmount())
     container.remove()

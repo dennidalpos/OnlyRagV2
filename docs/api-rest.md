@@ -8,13 +8,15 @@ Il server FastAPI ascolta su `127.0.0.1:8000`. Route e schemi sono definiti in [
 | --- | --- |
 | Stato | `GET /health`, `POST /tasks/cancel?task_id=...` |
 | Ingestion | `POST /ingest-path-stream` |
-| Documenti | `GET /documents`, `GET /documents/{doc_id}`, `PUT /documents/{doc_id}`, `DELETE /documents/{doc_id}`, `GET /documents/{doc_id}/page-preview/{page_num}` |
+| Documenti | `GET /documents`, `GET /documents/{doc_id}`, `PUT /documents/{doc_id}`, `DELETE /documents/{doc_id}`, `GET /documents/{doc_id}/page-preview/{page_num}`, `GET /documents/{doc_id}/source-location` |
 | Traduzione | `POST /documents/{doc_id}/translate-inplace-stream` |
 | Ricerca | `POST /vector/search` |
 | Storico prompt | `POST /history/index`, `POST /history/search`, `POST /history/remove` |
 | Export | `POST /export` |
 
 ## Note operative
+
+`GET /documents/{doc_id}/source-location` requires `chunk_id`, `source_revision`, `extraction_revision`, `index_revision`, `span_start` and `span_end`. IDs resolve through stored records and the gated source archive; callers cannot provide paths. Missing/changed originals, stale revisions, deleted/wrong chunks or invalid spans return 404, without Markdown preview fallback. Valid responses contain the bounded original-extraction quote and optional real PDF page PNG. `/vector/search` adds optional version-1 `provenance`; legacy/unresolved locations remain absent/derived. Authentication is required as for every route except `/health`. OpenAPI was regenerated through `npm run generate:openapi`. [Policy and limits](./rag-sidecar.md#claimsource-provenance--2026-10-02).
 
 Il rifiuto della normalizzazione e un evento terminale `error` di `/ingest-path-stream`, con `normalization_review: { original_markdown, issues: [{ page, reason }] }`. L'originale contiene tutte le pagine prima della normalizzazione; `page` parte da 1 e `reason` distingue troncamento, completamento non confermato, risposta vuota, richiesta/modello indisponibile, entita modificate e contenuto modificato. Nessun documento/chunk viene scritto. Il Main valida il campo; i [limiti e il comportamento di revisione](./rag-sidecar.md) non cambiano i record persistiti o gli errori ordinari.
 

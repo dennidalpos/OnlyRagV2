@@ -33,18 +33,6 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({ pend
   const isFileMutation = Boolean(pendingApproval && FILE_MUTATION_TYPES.includes(pendingApproval.type))
   const targetPath = pendingApproval?.parameters?.filePath || pendingApproval?.target || ''
 
-  // ESC Key Listener for Accessibility
-  React.useEffect(() => {
-    if (!pendingApproval) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onReject()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [pendingApproval, onReject])
-
   // Load the file as it exists on disk right now, so the modal shows the real before/after rather than only the replacement text.
   React.useEffect(() => {
     let cancelled = false

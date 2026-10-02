@@ -217,8 +217,8 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
 
     sanitized = sanitize_extracted_text(page_content)
 
+    work_item["original_markdown"] = sanitized
     if work_item.get("normalize_with_llm"):
-        work_item["original_markdown"] = sanitized
         try:
             sanitized = normalize_page_markdown_with_llm(
                 sanitized,
@@ -398,7 +398,8 @@ def extract_document_markdown(
     max_tabular_rows: Optional[int] = None,
     max_excel_rows: Optional[int] = None,
     max_sheets: Optional[int] = None,
-    num_ctx: Optional[int] = None
+    num_ctx: Optional[int] = None,
+    original_pages: Optional[List[Tuple[int, str]]] = None
 ) -> Tuple[str, int]:
     """Fast-routed, sanitized, and pagination-preserving document markdown extractor with progress callback."""
     category = classify_file_type(filename)
@@ -446,6 +447,8 @@ def extract_document_markdown(
             num_ctx=num_ctx
         )
         sanitized_ocr = sanitize_extracted_text(ocr_text)
+        if original_pages is not None:
+            original_pages.append((1, sanitized_ocr))
         if normalize_with_llm and sanitized_ocr:
             try:
                 sanitized_ocr = normalize_page_markdown_with_llm(
@@ -567,6 +570,8 @@ def extract_document_markdown(
             page_blocks.append((1, "[Binary content processed]"))
 
     full_markdown = assemble_document_markdown(filename, page_blocks)
+    if original_pages is not None and not original_pages:
+        original_pages.extend(page_blocks)
     return full_markdown, max(1, num_pages)
 
 def _split_oversized_text(text: str, max_chars: int = 1000, overlap: int = 100) -> List[str]:

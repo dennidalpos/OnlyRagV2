@@ -876,6 +876,16 @@
             "title": "Doc Name",
             "type": "string"
           },
+          "provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceProvenance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "score": {
             "title": "Score",
             "type": "number"
@@ -903,6 +913,188 @@
           "score"
         ],
         "title": "SearchResult",
+        "type": "object"
+      },
+      "SourceLocationResponse": {
+        "properties": {
+          "chunk_id": {
+            "title": "Chunk Id",
+            "type": "string"
+          },
+          "doc_id": {
+            "title": "Doc Id",
+            "type": "string"
+          },
+          "exact_quote": {
+            "title": "Exact Quote",
+            "type": "string"
+          },
+          "extraction_revision": {
+            "title": "Extraction Revision",
+            "type": "string"
+          },
+          "image_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Base64"
+          },
+          "index_revision": {
+            "title": "Index Revision",
+            "type": "string"
+          },
+          "page_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Number"
+          },
+          "section_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Header"
+          },
+          "source_revision": {
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "span_end": {
+            "title": "Span End",
+            "type": "integer"
+          },
+          "span_start": {
+            "title": "Span Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "doc_id",
+          "chunk_id",
+          "source_revision",
+          "extraction_revision",
+          "index_revision",
+          "span_start",
+          "span_end",
+          "exact_quote"
+        ],
+        "title": "SourceLocationResponse",
+        "type": "object"
+      },
+      "SourceProvenance": {
+        "properties": {
+          "exact_quote": {
+            "anyOf": [
+              {
+                "maxLength": 10000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exact Quote"
+          },
+          "extraction_revision": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Extraction Revision",
+            "type": "string"
+          },
+          "index_revision": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Index Revision",
+            "type": "string"
+          },
+          "location_kind": {
+            "enum": [
+              "original",
+              "derived",
+              "unavailable"
+            ],
+            "title": "Location Kind",
+            "type": "string"
+          },
+          "page_number": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Number"
+          },
+          "section_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Header"
+          },
+          "source_revision": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "span_end": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Span End"
+          },
+          "span_start": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Span Start"
+          },
+          "version": {
+            "const": 1,
+            "default": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_revision",
+          "extraction_revision",
+          "index_revision",
+          "location_kind"
+        ],
+        "title": "SourceProvenance",
         "type": "object"
       },
       "SuccessResponse": {
@@ -1310,6 +1502,107 @@
           }
         },
         "summary": "Get Page Preview"
+      }
+    },
+    "/documents/{doc_id}/source-location": {
+      "get": {
+        "operationId": "get_source_location_documents__doc_id__source_location_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "doc_id",
+            "required": true,
+            "schema": {
+              "title": "Doc Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "chunk_id",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Chunk Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_revision",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Source Revision",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "extraction_revision",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Extraction Revision",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "index_revision",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Index Revision",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "span_start",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "title": "Span Start",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "span_end",
+            "required": true,
+            "schema": {
+              "maximum": 10000000,
+              "minimum": 1,
+              "title": "Span End",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceLocationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Source Location"
       }
     },
     "/documents/{doc_id}/translate-inplace-stream": {

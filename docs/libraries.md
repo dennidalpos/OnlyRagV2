@@ -21,6 +21,12 @@
 
 Versioni e vincoli sono nei manifest [`package.json`](../package.json), [`sidecar/requirements.txt`](../sidecar/requirements.txt) e [`sidecar/constraints.txt`](../sidecar/constraints.txt). Non duplicarli nella documentazione.
 
+## DOMPurify dependency remediation — 2026-10-02
+
+The existing npm override now requires DOMPurify 3.4.16 or newer compatible 3.x; npm 11 regenerated the lockfile and changed exactly one installed package (3.4.14 to 3.4.16). `npm install --ignore-scripts --no-fund` reports zero vulnerabilities; `npm explain dompurify` verifies Monaco's resolved dependency. Build passes before and after the update. [Upstream advisory GHSA-p98j-92pf-mc4p](https://github.com/cure53/DOMPurify/security/advisories/GHSA-p98j-92pf-mc4p), checked 2026-10-02, identifies 3.4.16 as the patch for alert 25.
+
+Runtime review found an independent vendored DOMPurify 3.4.8 inside Monaco's ESM `domSanitize.js` path. The npm override does not replace that embedded implementation, and the renderer bundle is unchanged by this dependency-only update. Reviewed Monaco calls sanitize strings or fragments, without `IN_PLACE`; its `afterSanitizeAttributes` hook removes attributes, not nodes. The alert's specific exploit prerequisites were not found in this app path. This is not a general security certification of the old embedded copy: upstream update or scoped bundle resolution and real-editor verification remain tracked separately as `DEPENDENCY-MONACO-VENDORED-SANITIZER-01`. GitHub alert 25 remains open on the remote branch until this local lockfile change is committed/pushed on explicit request; no alert was dismissed.
+
 ## Controlli
 
 `npm run quality:static` (errori di lint Biome, format-check Biome di ogni file incluso da `biome.json`, guard IPC e di layering; `noExplicitAny` è un errore in ogni file, test compresi (il JSON non fidato ai confini usa l'alias documentato `UntrustedJson` di `shared/types`; i doppi di test usano tipi espliciti, `as unknown as T` o `as never`); i `catch` usano `unknown` con [`errorMessage`](../shared/domain/errors/errorMessage.ts)), `npm run audit:deadcode` e `npm run audit:cycles` coprono qualità, export orfani e dipendenze circolari. `audit:deadcode` esegue knip due volte: la modalità normale conta anche i test come entry, `--production` solo le entry marcate `!` in [`knip.json`](../knip.json), così un export usato solo dai test risulta orfano; gli hook di test voluti (reset di cache, `__testing`) portano il tag JSDoc `@internal`. I log passano da [`logRedactor.ts`](../electron/logRedactor.ts).

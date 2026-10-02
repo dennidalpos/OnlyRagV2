@@ -125,6 +125,33 @@ class SearchRequest(StrictRequest):
     doc_id: Optional[str] = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
     doc_ids: Optional[List[str]] = Field(default=None, max_length=100)
 
+class SourceProvenance(BaseModel):
+    version: Literal[1] = 1
+    source_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
+    extraction_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
+    index_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
+    location_kind: Literal["original", "derived", "unavailable"]
+    page_number: Optional[int] = Field(default=None, ge=1)
+    section_header: Optional[str] = None
+    span_start: Optional[int] = Field(default=None, ge=0)
+    span_end: Optional[int] = Field(default=None, ge=1)
+    exact_quote: Optional[str] = Field(default=None, max_length=10_000)
+
+
+class SourceLocationResponse(BaseModel):
+    doc_id: str
+    chunk_id: str
+    source_revision: str
+    extraction_revision: str
+    index_revision: str
+    page_number: Optional[int] = None
+    section_header: Optional[str] = None
+    span_start: int
+    span_end: int
+    exact_quote: str
+    image_base64: Optional[str] = None
+
+
 class SearchResult(BaseModel):
     chunk_id: str
     doc_id: Optional[str] = None
@@ -132,6 +159,7 @@ class SearchResult(BaseModel):
     section_header: Optional[str] = None
     text: str
     score: float
+    provenance: Optional[SourceProvenance] = None
 
 class ExportRequest(StrictRequest):
     markdown_content: str = Field(..., min_length=1, max_length=10_000_000)

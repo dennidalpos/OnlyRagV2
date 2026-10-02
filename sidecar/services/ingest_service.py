@@ -30,6 +30,7 @@ from sidecar.domain.llm_normalizer import NormalizationReviewRequired
 from sidecar.domain.router import classify_file_type, analyze_pdf_page_structure, DocumentCategory, PageRoutingStrategy
 from sidecar.services.task_cancellation import TaskCancelled, raise_if_cancelled, register_task, unregister_task
 from sidecar.services.search_service import get_stored_document
+from sidecar.infrastructure.source_provenance import retain_original, save_extraction
 
 
 def _cleanup_partial_ingestion(doc_id: str) -> None:
@@ -80,7 +81,7 @@ def process_and_index_document_generator(
 ) -> Generator[str, None, None]:
     """
     Streaming NDJSON generator for real-time progress reporting during extraction and LanceDB vectorization
-    of a file already on disk (Main passes a validated local path; the source file is never copied).
+    of a validated local file, retained before extraction for revision-bound citations.
     """
     filename = os.path.basename(file_path)
     doc_id = str(uuid.uuid4())
@@ -91,6 +92,10 @@ def process_and_index_document_generator(
         register_task(task_id)
     try:
         raise_if_cancelled(task_id)
+        caller_path = file_path
+        retained_path, source_revision = retain_original(doc_id, file_path, lambda: raise_if_cancelled(task_id))
+        file_path = str(retained_path)
+        original_pages: List[Tuple[int, str]] = []
         yield json.dumps({
             "type": "progress",
             "percent": 5,
@@ -196,11 +201,11 @@ def process_and_index_document_generator(
 
                 raise_normalization_review_if_needed(filename, work_items)
                 full_markdown = assemble_document_markdown(filename, page_blocks)
+                original_pages = [(item["page_num"], item["original_markdown"]) for item in work_items]
             except (TaskCancelled, NormalizationReviewRequired):
                 raise
             except Exception as pdf_err:
-                logger.warning(f"PyMuPDF streaming parse error: {pdf_err}")
-                full_markdown = f"# {filename}\n\n## Page 1\n\n[Error reading PDF pages]"
+                raise ValueError("PDF extraction failed; no indexing performed.") from pdf_err
 
         else:
             raise_if_cancelled(task_id)
@@ -223,7 +228,8 @@ def process_and_index_document_generator(
                 num_ctx=num_ctx,
                 max_tabular_rows=max_tabular_rows,
                 max_excel_rows=max_excel_rows_per_sheet,
-                max_sheets=max_excel_sheets
+                max_sheets=max_excel_sheets,
+                original_pages=original_pages
             )
 
         raise_if_cancelled(task_id)
@@ -265,7 +271,7 @@ def process_and_index_document_generator(
         doc_record = [{
             "id": doc_id,
             "filename": filename,
-            "file_path": file_path,
+            "file_path": caller_path,
             "file_size": file_size,
             "num_pages": num_pages,
             "num_chunks": len(chunk_records),
@@ -277,6 +283,8 @@ def process_and_index_document_generator(
         }]
 
         raise_if_cancelled(task_id)
+        save_extraction(doc_id, retained_path, source_revision, filename, original_pages,
+                        category in (DocumentCategory.PDF, DocumentCategory.IMAGE))
         write_document_records(doc_record[0], chunk_records)
         raise_if_cancelled(task_id)
 
@@ -285,7 +293,7 @@ def process_and_index_document_generator(
         final_payload = {
             "id": doc_id,
             "filename": filename,
-            "filePath": file_path,
+            "filePath": caller_path,
             "file_size": file_size,
             "num_pages": num_pages,
             "num_chunks": len(chunk_records),

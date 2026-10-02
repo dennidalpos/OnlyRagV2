@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ChatConversation } from '../types'
+import { sourceProvenanceSchema } from '../../shared/domain/sourceProvenance'
 
 const HISTORY_KEY = 'onlyrag_chat_conversations'
 const ACTIVE_KEY = 'onlyrag_chat_active_id'
@@ -11,6 +12,13 @@ const citationSchema = z
     score: z.number().finite(),
     snippet: z.string(),
     sectionHeader: z.string().optional(),
+    docId: z.string().optional(),
+    referenceId: z
+      .string()
+      .regex(/^S[1-9]\d*$/)
+      .optional(),
+    citationState: z.enum(['candidate', 'cited']).optional(),
+    provenance: sourceProvenanceSchema.nullish(),
   })
   .passthrough()
 const historySchema = z.array(
@@ -26,6 +34,7 @@ const historySchema = z.array(
             text: z.string(),
             timestamp: z.string(),
             sources: z.array(citationSchema).optional(),
+            invalidSourceReferences: z.array(z.string().max(32)).optional(),
             isStreaming: z.boolean().optional(),
           })
           .passthrough(),

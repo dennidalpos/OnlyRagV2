@@ -32,6 +32,7 @@ import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAnd
 import type { AgentExecutionMode } from '../../../shared/types'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
+import { isLocalOllamaHost } from '../../../shared/domain/ollamaHost'
 
 export type { AgentSession }
 
@@ -306,11 +307,12 @@ export async function runAgentOrchestratorLoop(
   // Resolve the selected context with the same hardware policy used for model turns.
   if (!hardwareProbe.getCachedGpuInfo()) await hardwareProbe.detectGpu().catch(() => null)
   const cachedGpu = hardwareProbe.getCachedGpuInfo()
-  const hardwareContext = HardwareProfileResolver.resolveOllamaOptions('Auto', {
+  const hardwareFacts = {
     hasGpu: cachedGpu?.hasNvidiaGpu,
     vramTotalMB: cachedGpu?.vramTotalMB,
     systemRamGB: hardwareProbe.getMemoryInfo().totalRAMGB,
-  }).num_ctx
+  }
+  const hardwareContext = HardwareProfileResolver.resolveOllamaOptions('Auto', hardwareFacts).num_ctx
   const preflight = evaluateAgentCodingPreflight({
     codingModel,
     availableModels,
@@ -324,6 +326,7 @@ export async function runAgentOrchestratorLoop(
     sourceWorkspacePath: payload.sourceWorkspacePath,
     isStandaloneMode,
     toolchain: guestOsInfo.tools,
+    hardwareFacts: settings.ollamaMode !== 'remote' && isLocalOllamaHost(settings.ollamaHost) ? hardwareFacts : undefined,
   })
   for (const check of preflight.checks) {
     emitLocalizedLog(emitLog, 'info', {

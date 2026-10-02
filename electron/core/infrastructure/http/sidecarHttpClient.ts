@@ -4,6 +4,9 @@ import type { NormalizationReview, OllamaThinkValue, VectorSearchResult } from '
 import { parseNormalizationReview } from '../../domain/sidecarContract'
 import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
+import { z } from 'zod'
+import { sourceLocationSchema, sourceProvenanceSchema } from '../../../../shared/domain/sourceProvenance'
+import type { SourceLocation, SourceLocationRequest } from '../../../../shared/types'
 
 export interface SidecarIngestStreamPayload {
   file_path: string
@@ -386,6 +389,32 @@ export class SidecarHttpClient {
     }
   }
 
+  /** Verify a revision-bound original location. */
+  async getSourceLocation(payload: SourceLocationRequest): Promise<SourceLocation> {
+    const params = new URLSearchParams({
+      chunk_id: payload.chunkId,
+      source_revision: payload.sourceRevision,
+      extraction_revision: payload.extractionRevision,
+      index_revision: payload.indexRevision,
+      span_start: String(payload.spanStart),
+      span_end: String(payload.spanEnd),
+    })
+    const result = await this.requestJson<unknown>('GET', `/documents/${encodeURIComponent(payload.docId)}/source-location?${params}`, undefined, 15_000)
+    if (!result.success) throw new Error(result.error)
+    const location = sourceLocationSchema.parse(result.data)
+    if (
+      location.doc_id !== payload.docId ||
+      location.chunk_id !== payload.chunkId ||
+      location.source_revision !== payload.sourceRevision ||
+      location.extraction_revision !== payload.extractionRevision ||
+      location.index_revision !== payload.indexRevision ||
+      location.span_start !== payload.spanStart ||
+      location.span_end !== payload.spanEnd
+    )
+      throw new Error('Source response identity mismatch')
+    return location
+  }
+
   /** Hybrid vector search over indexed chunks. */
   async searchVectorDb(query: string, topK: number = 5, docIds?: string[]): Promise<VectorSearchResult[]> {
     if (typeof query !== 'string' || !query.trim()) return []
@@ -393,7 +422,20 @@ export class SidecarHttpClient {
     if (docIds && docIds.length > 0) payload.doc_ids = docIds
     const result = await this.requestJson<VectorSearchResult[]>('POST', '/vector/search', payload, VECTOR_SEARCH_TIMEOUT_MS)
     if (!result.success) throw new Error(`Vector search failed: ${result.error}`)
-    return result.data
+    return z
+      .array(
+        z.object({
+          chunk_id: z.string(),
+          doc_id: z.string().nullish(),
+          doc_name: z.string(),
+          section_header: z.string().nullish(),
+          text: z.string(),
+          score: z.number().finite(),
+          provenance: sourceProvenanceSchema.nullish(),
+        }),
+      )
+      .parse(result.data)
+      .map((row) => ({ ...row, doc_id: row.doc_id ?? undefined, section_header: row.section_header ?? undefined }))
   }
 
   /** POST JSON with fallback on failure. */

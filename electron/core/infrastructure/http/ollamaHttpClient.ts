@@ -15,6 +15,7 @@ import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
 import { resolveOllamaUrl, requestOllama, type OllamaUrl } from './ollamaTransport'
 import { DEFAULT_OLLAMA_HOST, normalizeOllamaHost } from '../../../../shared/domain/ollamaHost'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
+import { parseMemoryGeometry } from '../../../../shared/domain/hardware/modelRuntimeFit'
 
 export type { OllamaModelMetrics }
 
@@ -59,6 +60,8 @@ export interface RawOllamaTagModel {
 export interface OllamaModelShowFacts {
   contextLength?: number
   thinking?: OllamaThinkingSupport
+  memoryGeometry?: OllamaModelMetrics['memoryGeometry']
+  capabilities?: string[]
 }
 
 /** `/api/show` reports `thinking: { values: [false, "low", ...], default: "medium" }` for models with reasoning levels. */
@@ -200,14 +203,44 @@ export class OllamaHttpClient {
       }
     }
 
+    const runningProbe = Object.keys(map).length > 0 ? this.getRunningModels(customHost).then((result) => ({ ...result, observedAt: Date.now() })) : undefined
     // `details.context_length` is not present in every Ollama version; `thinking` levels exist only in /api/show.
     await Promise.all(
       Object.keys(map).map(async (name) => {
         const facts = await this.getModelShowFacts(name, customHost)
         if (facts.contextLength !== undefined) map[name].contextLength = facts.contextLength
         if (facts.thinking) map[name].thinking = facts.thinking
+        if (facts.memoryGeometry) map[name].memoryGeometry = facts.memoryGeometry
+        if (facts.capabilities) map[name].capabilities = facts.capabilities
       }),
     )
+
+    if (runningProbe) {
+      const running = await runningProbe
+      const observedAt = running.observedAt
+      for (const loaded of running.models) {
+        const metric = map[loaded.name]
+        if (
+          !metric?.digest ||
+          metric.digest !== loaded.digest ||
+          !Number.isSafeInteger(loaded.size) ||
+          loaded.size <= 0 ||
+          !Number.isSafeInteger(loaded.size_vram) ||
+          loaded.size_vram! < 0 ||
+          loaded.size_vram! > loaded.size ||
+          !Number.isSafeInteger(loaded.context_length) ||
+          loaded.context_length! <= 0
+        )
+          continue
+        metric.runtimeAllocation = {
+          observedAt,
+          digest: metric.digest,
+          totalBytes: loaded.size,
+          gpuBytes: loaded.size_vram!,
+          contextLength: loaded.context_length!,
+        }
+      }
+    }
 
     return map
   }
@@ -247,7 +280,17 @@ export class OllamaHttpClient {
                   .map(([, value]) => value),
               ]
               const value = candidates.find((candidate) => typeof candidate === 'number' && candidate > 0)
-              resolve({ contextLength: typeof value === 'number' ? value : undefined, thinking: parseThinkingSupport(parsed?.thinking) })
+              const capabilities = Array.isArray(parsed?.capabilities)
+                ? parsed.capabilities.filter((item: unknown): item is string => typeof item === 'string' && item.length <= 64).slice(0, 64)
+                : undefined
+              const memoryGeometry = parseMemoryGeometry(parsed?.model_info)
+              if (memoryGeometry && capabilities && !capabilities.includes('completion')) memoryGeometry.layout = 'unsupported'
+              resolve({
+                contextLength: typeof value === 'number' ? value : undefined,
+                thinking: parseThinkingSupport(parsed?.thinking),
+                memoryGeometry,
+                capabilities,
+              })
             } catch {
               resolve({})
             }

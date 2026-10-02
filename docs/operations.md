@@ -48,6 +48,8 @@ I comandi distruttivi (`clean:full`) richiedono attenzione: possono rimuovere da
 
 ## Disinstallazione e dati
 
+Le nuove ingestion conservano originali e manifest di estrazione in `<userData>/data/source-documents/<doc_id>`; i vecchi documenti non vengono migrati. Limiti: 512 MiB per originale, 10 milioni di code point estratti e 10.000 pagine; il superamento impedisce l'indicizzazione. Copie di ingestion fallite/rifiutate/cancellate e documenti eliminati restano conservate, ma non navigabili senza record e revisioni validi. Backup/export e reclamazione esplicita sono tracciati in `SOURCE-ARCHIVE-LIFECYCLE-01`; non eliminare queste cartelle come semplici file temporanei. Dettagli: [provenienza](./rag-sidecar.md#claimsource-provenance--2026-10-02).
+
 Il disinstallatore mostra «Delete personal data too / Elimina anche i dati personali», disattivato inizialmente. Senza selezione, impostazioni, cronologia e archivio documenti restano disponibili. Una rimozione silenziosa conserva i dati; l'opzione esistente `--delete-app-data` ne richiede esplicitamente la rimozione. Gli aggiornamenti conservano i dati e rifiutano la combinazione `--updated --delete-app-data` con codice 2.
 
 `powershell -ExecutionPolicy Bypass -File scripts/test_uninstall_policy.ps1` compila pagina e macro NSIS in una fixture temporanea con percorsi rediretti. Verifica conservazione, stato di selezione simulato, consenso silenzioso e aggiornamenti, senza usare AppData reale. Richiede il compilatore NSIS nella cache di electron-builder; non sostituisce la verifica visiva della pagina.

@@ -19,7 +19,7 @@ Il controllo statico verifica la presenza degli schemi, non la copertura di ogni
 | `diagnostics` | `clear-logs`, `clear-agent-audit-log`, `get-log-filepath`, `get-logs`, `log-telemetry`, `open-logs-folder`, `run` |
 | `dialog` | `open-directory`, `open-file` |
 | `history` | `index`, `search` |
-| `ingest` | `delete`, `export`, `file`, `get`, `list`, `page-preview`, `search`, `translate-inplace`, `update` |
+| `ingest` | `delete`, `export`, `file`, `get`, `list`, `page-preview`, `source-location`, `search`, `translate-inplace`, `update` |
 | `ollama` | `cancel-pull`, `cancel-stream`, `check-model-updates`, `delete-model`, `generate-stream`, `get-generation-status`, `get-model-metrics`, `get-running-models`, `install-or-launch`, `pull-model`, `test-connection`, `unload-model` |
 | `projects` | `list`, `register`, `remove`, `rename`, `touch` |
 | `sessions` | `clear`, `delete`, `list`, `save` |
@@ -33,6 +33,8 @@ Il controllo statico verifica la presenza degli schemi, non la copertura di ogni
 Registrazione: [`agentIpc.ts`](../electron/core/presentation/agentIpc.ts), [`workspaceIpc.ts`](../electron/core/presentation/workspaceIpc.ts), [`ollamaIpc.ts`](../electron/core/presentation/ollamaIpc.ts), [`sidecarIpc.ts`](../electron/core/presentation/sidecarIpc.ts), [`skillIpc.ts`](../electron/core/presentation/skillIpc.ts), [`settingsIpc.ts`](../electron/core/presentation/settingsIpc.ts), [`diagnosticsIpc.ts`](../electron/core/presentation/diagnosticsIpc.ts), [`systemIpc.ts`](../electron/core/presentation/systemIpc.ts), [`projectRegistryIpc.ts`](../electron/core/presentation/projectRegistryIpc.ts), [`sessionHistoryIpc.ts`](../electron/core/presentation/sessionHistoryIpc.ts), [`artifactIpc.ts`](../electron/core/presentation/artifactIpc.ts).
 
 ## Eventi Renderer
+
+`ingest:search` may return version-1 `provenance`: source/extraction/index SHA-256 revisions, location kind, known page/section, exact raw-extraction quote and zero-based end-exclusive Unicode code-point spans. Missing provenance means no verified original location. `getSourceLocation` invokes `ingest:source-location` with `{ docId, chunkId, sourceRevision, extractionRevision, indexRevision, spanStart, spanEnd }`; strict validation rejects paths and invalid selectors. The authenticated Sidecar verifies stored IDs/revisions and the retained original hash. Main validates response identity, quote/span length and image data. Failures reject the invoke; the result contains snake-case identity/revisions, quote, page/section and optional original PDF PNG. Navigation verifies location, not claim entailment. [Policy](./rag-sidecar.md#claimsource-provenance--2026-10-02).
 
 Eventi `on` esposti: `agent:approval-request`, `agent:change-metrics`, `agent:context-budget`, `agent:done`, `agent:log`, `agent:skill-install-request`, `agent:skills-matched`, `agent:step-update`, `agent:stream-thought`, `agent:stream-token`, `ingest:stream-progress`, `ingest:translate-progress`, `ollama:pull-progress`, `workspace:file-deleted`, `workspace:file-version`; `ollama:chunk` e `ollama:done` li consuma solo `generateOllamaStream`. Gli eventi di progresso `ingest:*` sono l'evento NDJSON del Sidecar validato da Main (`toIngestionProgressPayload`, `toTranslateProgressPayload` in [`sidecarContract.ts`](../electron/core/domain/sidecarContract.ts)): il record del documento dell'evento `done` non viene inoltrato (il documento arriva come risultato dell'invoke) e un evento fuori schema viene registrato come WARN e scartato. L'ingestion emette anche `error` e `cancelled`.
 
@@ -57,3 +59,7 @@ Le operazioni `ollama:pull-model`, `ollama:delete-model` e `ollama:generate-stre
 `ollama:generate-stream` restituisce l'esito `{ success, error? }`: errori HTTP, di trasporto o timeout non diventano chunk testuali. Chat e Traduzione accettano come completata solo una risposta riuscita e non vuota; l'export della traduzione resta disabilitato per risultati parziali o falliti.
 
 L'unico `send` Renderer→Main è `agent:skill-install-response`. I listener restituiscono una funzione di unsubscribe.
+
+## Model/workload memory facts — 2026-10-02
+
+The approved existing `ollama:get-model-metrics` result adds optional `memoryGeometry` (bounded scalar architecture/layout/dimensions) and `runtimeAllocation` (observedAt, digest, totalBytes, gpuBytes, contextLength). Main validates scalar fields, same-digest binding and allocation splits; missing/malformed/offline facts remain unavailable. No new channel/request, REST field, saved setting or database schema. Consumers assess only the requested context, and fresh runtime evidence expires after 60 seconds. Geometry/cache/host uncertainty is explicit. [Policy and verification](./model-runtime-fit.md).

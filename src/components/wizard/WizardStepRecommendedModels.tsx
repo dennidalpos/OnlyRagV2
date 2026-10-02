@@ -2,13 +2,12 @@ import React from 'react'
 import { Code, MessageSquare, Eye, Activity, Sparkles } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { findInstalledOllamaOption } from '../../services/ollamaModelOptions'
-import type { ModelFitVerdict } from '../../services/hardwareRecommendationEngine'
+import { formatModelFit, type ModelFitVerdict } from '../../services/hardwareRecommendationEngine'
 import { ModelSelect } from '../settings/ModelSelect'
 
 export interface WizardStepRecommendedModelsProps {
   downloadedModels: string[]
-  /** Per-model VRAM verdict for the detected host, rendered inline on every option. */
-  getModelFit: (modelName: string) => ModelFitVerdict
+  getModelFit: (modelName: string, coding?: boolean) => ModelFitVerdict
   // Coding
   selectedCoding: string
   onChangeCoding: (model: string) => void
@@ -56,28 +55,10 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
   const buildOptions = () => [...new Set(downloadedModels)]
   const unavailable = (name: string | undefined) => (name && !installedOption(name) ? name : undefined)
 
-  // A native <option> renders text only, so the VRAM verdict is appended to the label rather
-  // than drawn as a styled badge.
-  const FIT_MARKERS: Record<ModelFitVerdict['compatibilityStatus'], string> = {
-    optimal_vram: '●',
-    tight_vram: '⚠',
-    exceeds_vram: '⛔',
-  }
-  const FIT_LABEL_KEYS = {
-    optimal_vram: 'hardwareWizard.vramFitOptimal',
-    tight_vram: 'hardwareWizard.vramFitTight',
-    exceeds_vram: 'hardwareWizard.vramFitExceeds',
-  } as const
-
-  const renderVramBadge = (name: string) => {
-    const { compatibilityStatus, footprintGB } = getModelFit(name)
-    return ` — ${FIT_MARKERS[compatibilityStatus]} ${footprintGB} GB · ${t(FIT_LABEL_KEYS[compatibilityStatus])}`
-  }
-
-  const renderOption = (name: string) => {
+  const renderOption = (name: string, coding = false) => {
     return (
       <option key={name} value={name}>
-        {`✓ ${name} [${t('common.ready')}]${renderVramBadge(name)}`}
+        {`✓ ${name} [${t('common.ready')}] — ${formatModelFit(getModelFit(name, coding))}`}
       </option>
     )
   }
@@ -89,6 +70,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
         <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
         <span>{t('wizardModels.intro')}</span>
       </div>
+      <p className="text-xs text-amber-300">{t('hardwareWizard.memoryHint')}</p>
 
       {/* 1. AI Coding Agent Studio */}
       <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
@@ -112,7 +94,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               onChange={(e) => onChangeCoding(e.target.value)}
             >
               <option value="">{t('uiShell.selectLocalModel')}</option>
-              {buildOptions().map((m) => renderOption(m))}
+              {buildOptions().map((m) => renderOption(m, true))}
             </ModelSelect>
           </div>
         </div>

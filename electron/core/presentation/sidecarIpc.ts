@@ -2,6 +2,7 @@ import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { sidecarAppService } from '../application/sidecarAppService'
 
 export function registerSidecarIpcHandlers() {
+  ipcMain.handle('ingest:source-location', (_, payload) => sidecarAppService.getSourceLocation(payload))
   ipcMain.handle('sidecar:restart', async () => {
     return sidecarAppService.restartSidecar()
   })

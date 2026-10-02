@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   analyzeHardwareAndRecommend,
-  calculateTotalModelFootprintGB,
-  assessModelHardwareCompatibility,
-  estimateKvCacheMemoryGB,
   estimateModelWeightGB,
   getModelApproxSize,
   isOllamaModelInstalled,
@@ -12,6 +9,7 @@ import {
 import { findMatchingInstalledModel } from '../../shared/domain/agent/modelTagMatcher'
 import { calculateRealUsableVram } from '../../shared/domain/hardware/hardwareProfileTiers'
 import { DiagnosticsData, RunningModelDetails } from '../types'
+import { DEFAULT_APP_SETTINGS } from '../../shared/domain/settings/appSettingsDefaults'
 
 describe('hardwareRecommendationEngine Unit Tests', () => {
   const createMockDiagnostics = (hasGpu: boolean, vramMB: number, ramGB: number, gpuName = 'NVIDIA GeForce RTX 4070'): DiagnosticsData => ({
@@ -122,49 +120,6 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     })
   })
 
-  it('should calculate KV cache and total model footprint accurately', () => {
-    // KV Cache Q8 at 4096 tokens
-    const kv4k = estimateKvCacheMemoryGB(4096, true)
-    expect(kv4k).toBeGreaterThanOrEqual(0.2)
-    expect(kv4k).toBeLessThanOrEqual(0.4)
-
-    // Total footprint for 1.5B model
-    const fp1_5b = calculateTotalModelFootprintGB('qwen2.5-coder:1.5b', 4096, true)
-    expect(fp1_5b).toBeGreaterThan(1.0)
-    expect(fp1_5b).toBeLessThan(2.0)
-
-    // Total footprint for 7B model
-    const fp7b = calculateTotalModelFootprintGB('qwen2.5-coder:7b', 4096, true)
-    expect(fp7b).toBeGreaterThan(4.5)
-    expect(fp7b).toBeGreaterThan(estimateModelWeightGB('qwen2.5-coder:7b'))
-
-    // Total footprint for 14B model
-    const fp14b = calculateTotalModelFootprintGB('qwen2.5-coder:14b', 4096, true)
-    expect(fp14b).toBeGreaterThan(8.5)
-  })
-
-  it('should accurately evaluate hardware compatibility and flag OOM risks', () => {
-    // 8GB GPU (safe budget = 4.5GB)
-    const fit1 = assessModelHardwareCompatibility('qwen2.5-coder:1.5b', 8192, 16)
-    expect(fit1.isCompatible).toBe(true)
-    expect(fit1.compatibilityStatus).toBe('optimal_vram')
-
-    const fit2 = assessModelHardwareCompatibility('qwen2.5-coder:3b', 8192, 16)
-    expect(fit2.isCompatible).toBe(true)
-    expect(fit2.compatibilityStatus).toBe('optimal_vram')
-
-    // 14B model on 8GB GPU -> exceeds VRAM
-    const fit3 = assessModelHardwareCompatibility('qwen2.5-coder:14b', 8192, 16)
-    expect(fit3.isCompatible).toBe(false)
-    expect(fit3.compatibilityStatus).toBe('exceeds_vram')
-    expect(fit3.warning).toContain('VRAM insufficiente')
-
-    // 32B model on 8GB GPU -> exceeds VRAM
-    const fit4 = assessModelHardwareCompatibility('deepseek-r1:32b', 8192, 16)
-    expect(fit4.isCompatible).toBe(false)
-    expect(fit4.compatibilityStatus).toBe('exceeds_vram')
-  })
-
   it('keeps hardware profile detection independent of model catalogs', () => {
     expect(analyzeHardwareAndRecommend(createMockDiagnostics(false, 0, 8)).profileTier).toBe('legacy')
     expect(analyzeHardwareAndRecommend(createMockDiagnostics(true, 8192, 16)).profileTier).toBe('midrange')
@@ -218,32 +173,35 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(findMatchingInstalledModel('qwen2.5', installed)).toBe('qwen2.5-coder:7b-instruct-q4_k_m')
   })
 
-  describe('buildModelFitLookup (Setup Wizard per-option VRAM verdict)', () => {
-    it('should assess a model name that is absent from every built-in catalog', () => {
-      const diag = createMockDiagnostics(true, 8192, 16)
-      const getFit = buildModelFitLookup(diag)
-
-      const fit = getFit('some-unlisted-model:70b')
-      expect(fit.footprintGB).toBeGreaterThan(0)
-      expect(fit.compatibilityStatus).toBe('exceeds_vram')
+  describe('buildModelFitLookup', () => {
+    it('uses setup context, overrides and the trained ceiling instead of fixed 4K', () => {
+      const diagnostics = createMockDiagnostics(true, 8192, 32)
+      const metrics = { model: { capabilities: ['completion'], contextLength: 16384, sizeBytes: 2 * 1024 ** 3 } }
+      expect(buildModelFitLookup(diagnostics, DEFAULT_APP_SETTINGS, metrics, true)('model').contextTokens).toBe(16384)
+      const settings = { ...DEFAULT_APP_SETTINGS, modelContextLengths: { model: 8192 } }
+      expect(buildModelFitLookup(diagnostics, settings, metrics, true)('model').contextTokens).toBe(8192)
     })
 
-    it('should agree with assessModelHardwareCompatibility for the same host', () => {
-      const diag = createMockDiagnostics(true, 8192, 16)
-      const getFit = buildModelFitLookup(diag)
-
-      for (const model of ['qwen2.5-coder:1.5b', 'qwen2.5-coder:14b']) {
-        const direct = assessModelHardwareCompatibility(model, 8192, 16, 4096, undefined)
-        expect(getFit(model)).toEqual({
-          compatibilityStatus: direct.compatibilityStatus,
-          footprintGB: direct.footprintGB,
-        })
-      }
+    it('keeps unknown architecture and remote hardware explicitly uncertain', () => {
+      const diagnostics = createMockDiagnostics(true, 8192, 32)
+      const metrics = { model: { capabilities: ['completion'], contextLength: 32768, sizeBytes: 2 * 1024 ** 3 } }
+      expect(buildModelFitLookup(diagnostics, DEFAULT_APP_SETTINGS, metrics)('model').placement).toBe('unknown')
+      expect(buildModelFitLookup(diagnostics, { ...DEFAULT_APP_SETTINGS, ollamaMode: 'remote' }, metrics)('model').placement).toBe('unknown')
+      expect(buildModelFitLookup(null, DEFAULT_APP_SETTINGS, metrics)('model').placement).toBe('unknown')
+      expect(
+        buildModelFitLookup(diagnostics, { ...DEFAULT_APP_SETTINGS, ollamaMode: 'local', ollamaHost: 'http://localhost.remote.test:11434' }, metrics)('model')
+          .placement,
+      ).toBe('unknown')
     })
 
-    it('should return a stable memoized verdict for repeated lookups', () => {
-      const getFit = buildModelFitLookup(createMockDiagnostics(true, 8192, 16))
-      expect(getFit('qwen2.5-coder:7b')).toEqual(getFit('qwen2.5-coder:7b'))
+    it('shares the preserved agent default and uses the same persisted override across roles', () => {
+      const diagnostics = createMockDiagnostics(true, 16384, 32)
+      const metrics = { model: { capabilities: ['completion'], contextLength: 131072 } }
+      const lookup = buildModelFitLookup(diagnostics, DEFAULT_APP_SETTINGS, metrics)
+      expect(lookup('model', true).contextTokens).toBe(65536)
+      expect(lookup('model').contextTokens).toBe(32768)
+      const pinned = buildModelFitLookup(diagnostics, { ...DEFAULT_APP_SETTINGS, modelContextLengths: { model: 8192 } }, metrics)
+      expect(pinned('model', true).contextTokens).toBe(pinned('model').contextTokens)
     })
   })
 })

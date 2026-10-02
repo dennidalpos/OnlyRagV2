@@ -1,5 +1,6 @@
 import { ipcMain, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
+import { sourceLocationRequestSchema } from '../../../shared/domain/sourceProvenance'
 import {
   sidecarExportPayloadSchema,
   sidecarIngestFilePayloadSchema,
@@ -247,6 +248,7 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
   'ingest:update': sidecarUpdateDocumentPayloadSchema,
   'ingest:translate-inplace': sidecarTranslatePayloadSchema,
   'ingest:page-preview': sidecarPagePreviewPayloadSchema,
+  'ingest:source-location': sourceLocationRequestSchema,
   'ingest:list': null,
   'ingest:get': docId,
   'ingest:delete': docId,

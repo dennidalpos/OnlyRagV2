@@ -94,3 +94,10 @@ export function resolveMaxContextTokens(declared: DeclaredHardwareProfile = 'Aut
   }
   return vramBaseCtx
 }
+
+/** Agent default shared with its selector; preserves the existing RAM/profile policy. */
+export function resolveAgentContextTokens(declared: DeclaredHardwareProfile = 'Auto', facts: HardwareFacts = {}): number {
+  const shared = resolveMaxContextTokens(declared, facts)
+  const agent = (facts.systemRamGB ?? 0) >= 30 ? (resolveEffectiveTier(declared, facts) === 'legacy' ? 32768 : 65536) : shared
+  return Math.max(shared, agent)
+}

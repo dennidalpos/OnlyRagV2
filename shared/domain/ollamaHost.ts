@@ -6,3 +6,12 @@ export function normalizeOllamaHost(host?: string): string {
   const value = host?.trim() || DEFAULT_OLLAMA_HOST
   return (value.startsWith('http') ? value : `http://${value}`).replace(/\/$/, '')
 }
+
+/** Local diagnostics apply only to a loopback endpoint. */
+export function isLocalOllamaHost(host?: string): boolean {
+  try {
+    return ['localhost', '127.0.0.1', '[::1]'].includes(new URL(normalizeOllamaHost(host)).hostname)
+  } catch {
+    return false
+  }
+}

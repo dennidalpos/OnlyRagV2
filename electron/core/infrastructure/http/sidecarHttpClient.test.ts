@@ -22,6 +22,53 @@ function createMockServer(routes: Array<{ method: string; path: string; handler:
 }
 
 describe('SidecarHttpClient Unit Tests', () => {
+  it.each(['valid', 'wrong-document', 'malformed-span'] as const)('validates source-location identity and exact spans (%s)', async (scenario) => {
+    const revision = 'a'.repeat(64)
+    const payload = {
+      docId: 'doc',
+      chunkId: 'doc_chunk_0',
+      sourceRevision: revision,
+      extractionRevision: revision,
+      indexRevision: revision,
+      spanStart: 2,
+      spanEnd: 4,
+    }
+    let requestedUrl = ''
+    let authenticated = false
+    const mock = await createMockServer([
+      {
+        method: 'GET',
+        path: '/documents/doc/source-location',
+        handler: (req, res) => {
+          requestedUrl = req.url || ''
+          authenticated = req.headers['x-onlyrag-token'] === 'test-token'
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(
+            JSON.stringify({
+              doc_id: scenario === 'wrong-document' ? 'other' : 'doc',
+              chunk_id: 'doc_chunk_0',
+              source_revision: revision,
+              extraction_revision: revision,
+              index_revision: revision,
+              span_start: 2,
+              span_end: scenario === 'malformed-span' ? 5 : 4,
+              exact_quote: '😀x',
+            }),
+          )
+        },
+      },
+    ])
+    try {
+      const client = new SidecarHttpClient(mock.baseUrl)
+      client.setAuthToken('test-token')
+      if (scenario === 'valid') expect((await client.getSourceLocation(payload)).exact_quote).toBe('😀x')
+      else await expect(client.getSourceLocation(payload)).rejects.toThrow()
+      expect(authenticated).toBe(true)
+      expect(new URL(requestedUrl, mock.baseUrl).searchParams.get('chunk_id')).toBe(payload.chunkId)
+    } finally {
+      await new Promise<void>((resolve, reject) => mock.server.close((error) => (error ? reject(error) : resolve())))
+    }
+  })
   it.each([false, true])('keeps a normalization refusal failed even after a done event (invalid=%s)', async (invalid) => {
     const original = '# Original\n\nReference AB123 must remain unchanged.'
     const mock = await createMockServer([
@@ -164,7 +211,7 @@ describe('SidecarHttpClient Unit Tests', () => {
         path: '/vector/search',
         handler: (_req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify([{ chunk_id: 'c-1', text: 'matched', score: 0.95 }]))
+          res.end(JSON.stringify([{ chunk_id: 'c-1', doc_name: 'report.pdf', text: 'matched', score: 0.95 }]))
         },
       },
       {

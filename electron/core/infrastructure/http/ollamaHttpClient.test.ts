@@ -81,9 +81,35 @@ describe('OllamaHttpClient — /api/tags Consolidation Unit Tests', () => {
               res.end(JSON.stringify({ details: { context_length: 8192 } }))
             } else {
               res.writeHead(200, { 'Content-Type': 'application/json' })
-              res.end(JSON.stringify({}))
+              res.end(
+                JSON.stringify({
+                  capabilities: ['completion', 'tools'],
+                  model_info: {
+                    'general.architecture': 'qwen2',
+                    'qwen2.block_count': 28,
+                    'qwen2.embedding_length': 3584,
+                    'qwen2.attention.head_count': 28,
+                    'qwen2.attention.head_count_kv': 4,
+                  },
+                }),
+              )
             }
           })
+        },
+      },
+      {
+        method: 'GET',
+        path: '/api/ps',
+        handler: (_req, res) => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(
+            JSON.stringify({
+              models: [
+                { name: 'qwen2.5-coder:7b', digest: 'sha256:abcd1234', size: 6_000_000_000, size_vram: 4_000_000_000, context_length: 16384 },
+                { name: 'llama3.2:3b', digest: 'stale', size: 3_000_000_000, size_vram: 3_000_000_000, context_length: 8192 },
+              ],
+            }),
+          )
         },
       },
     ])
@@ -119,6 +145,10 @@ describe('OllamaHttpClient — /api/tags Consolidation Unit Tests', () => {
     expect(metrics['qwen2.5-coder:7b'].contextLength).toBe(32768)
     expect(metrics['qwen2.5-coder:7b'].parameterSize).toBe('7.6B')
     expect(metrics['qwen2.5-coder:7b'].family).toBe('qwen2')
+    expect(metrics['qwen2.5-coder:7b'].memoryGeometry?.kvHeadCount).toBe(4)
+    expect(metrics['qwen2.5-coder:7b'].runtimeAllocation?.contextLength).toBe(16384)
+    expect(metrics['qwen2.5-coder:7b'].runtimeAllocation?.totalBytes).toBe(6_000_000_000)
+    expect(metrics['llama3.2:3b'].runtimeAllocation).toBeUndefined()
 
     // llama3.2 context length should be enriched from /api/show
     expect(metrics['llama3.2:3b'].contextLength).toBe(8192)

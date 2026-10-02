@@ -20,6 +20,7 @@ import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwar
 import { buildSetupModelContextPreferences } from '../../../shared/domain/settings/setupModelContextPreferences'
 import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
 
 interface HardwareSetupWizardModalProps {
   isOpen: boolean
@@ -48,7 +49,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const enableSoundEffects = settings.enableSoundEffects !== false
   const recommendations: HardwareRecommendations = analyzeHardwareAndRecommend(diagnostics)
   const hardwareContext = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics))
-  const getModelFit = buildModelFitLookup(diagnostics)
+  const { metrics } = useOllamaModelMetrics(settings.ollamaHost, isOpen)
+  const getModelFit = buildModelFitLookup(diagnostics, settings, metrics, true)
 
   const downloadedModels = diagnostics?.ollama.models ?? []
   const isRemoteOllama = isRemoteOllamaMode(settings)

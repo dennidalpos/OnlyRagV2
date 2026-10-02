@@ -24,6 +24,8 @@ import type {
   GuestOsInfo,
   HubSkillItem,
   IngestedDocument,
+  SourceLocation,
+  SourceLocationRequest,
   IngestedDocumentContent,
   IngestionStreamProgressPayload,
   NormalizationReview,
@@ -109,6 +111,7 @@ export interface IpcInvokeContract {
     result: DocumentResult
   }
   'ingest:page-preview': { payload: { docId: string; pageNumber: number }; result: PagePreviewData | null }
+  'ingest:source-location': { payload: SourceLocationRequest; result: SourceLocation }
   'ingest:list': { payload: void; result: IngestedDocument[] | null }
   'ingest:get': { payload: { docId: string }; result: IngestedDocumentContent | null }
   'ingest:delete': { payload: { docId: string }; result: Success }
@@ -308,6 +311,7 @@ export const IPC_INVOKE_METHODS = {
   updateIngestedDocument: 'ingest:update',
   translateDocumentInplace: 'ingest:translate-inplace',
   getDocumentPagePreview: 'ingest:page-preview',
+  getSourceLocation: 'ingest:source-location',
   getIngestedDocuments: 'ingest:list',
   getIngestedDocument: 'ingest:get',
   deleteIngestedDocument: 'ingest:delete',

@@ -18,6 +18,7 @@ import { chosenThinkValue, resolveOllamaThinkingPreference } from '../../shared/
 import { noConfiguredModelMessage, resolveConfiguredModel } from '../../shared/domain/settings/configuredModel'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
 import { useChatHistory } from './useChatHistory'
+import { citationForSuppliedPassage, resolveAnswerReferences } from '../services/chatSourceReferences'
 
 interface ChatRun {
   id: string
@@ -118,10 +119,12 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     })
   }, [])
 
-  const updateRunMessage = useCallback((run: ChatRun, text: string, sources?: CitationSource[]) => {
+  const updateRunMessage = useCallback((run: ChatRun, text: string, sources?: CitationSource[], invalidSourceReferences?: string[]) => {
     if (activeRunRef.current !== run) return
     run.text = text
-    const next = messagesRef.current.map((msg) => (msg.id === run.botMsgId ? { ...msg, text, ...(sources ? { sources } : {}) } : msg))
+    const next = messagesRef.current.map((msg) =>
+      msg.id === run.botMsgId ? { ...msg, text, ...(sources ? { sources } : {}), ...(invalidSourceReferences ? { invalidSourceReferences } : {}) } : msg,
+    )
     messagesRef.current = next
     setMessages(next)
   }, [])
@@ -355,28 +358,23 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
           if (!Array.isArray(searchResults)) throw new Error('Invalid retrieval response')
           if (searchResults.length > 0) {
-            const validResults = searchResults.filter((res) => res && res.text)
+            const validResults = searchResults.filter((res) => res && res.text && (!res.doc_id || run.docIds.has(res.doc_id)))
             const includedBlocks: string[] = []
             const includedSources: CitationSource[] = []
             let usedChars = 0
 
             for (let idx = 0; idx < validResults.length; idx++) {
               const res = validResults[idx]
-              const header = `[Source ${idx + 1}: ${res.doc_name || 'Document'} | Section: ${res.section_header || 'General'}]\n`
+              const referenceId = `S${idx + 1}`
+              const header = `[${referenceId}: ${res.doc_name || 'Document'} | Section: ${res.section_header || 'General'}]\n`
               const separatorChars = includedBlocks.length > 0 ? 7 : 0
               const availableChars = budget.vectorContextChars - usedChars - separatorChars - header.length
               if (availableChars <= 0) break
-              const body = res.text.slice(0, availableChars)
+              const body = res.text.slice(0, availableChars).replace(/[\uD800-\uDBFF]$/, '')
               const block = header + body
               includedBlocks.push(block)
               usedChars += block.length + separatorChars
-              includedSources.push({
-                chunkId: res.chunk_id || '',
-                docName: res.doc_name || 'Document',
-                sectionHeader: res.section_header || undefined,
-                snippet: body.slice(0, 150) + (body.length > 150 ? '...' : ''),
-                score: res.score || 0,
-              })
+              includedSources.push(citationForSuppliedPassage(res, body, referenceId))
             }
 
             vectorContextText = includedBlocks.join('\n\n---\n\n')
@@ -467,6 +465,8 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       const docContextBlock = boundedContext
         ? `[INDEXED DOCUMENT CONTEXT (LanceDB)]\n` +
           `Use only the document text supplied below for document claims. Retrieved passages are candidates, not verified support. An excerpt is incomplete: do not claim access to omitted text or complete-document coverage. If the supplied text does not support the answer, say so.\n` +
+          `Cite each supported document claim immediately with its supplied passage reference, such as [S1]. Use only references supplied in this turn. Do not cite a passage that does not support the claim, and do not invent references for document previews.\n` +
+          `If a sentence combines facts from multiple passages, cite every needed reference next to that sentence. Keep citations beside their claims, rather than in a separate final list.\n` +
           (partialDocs.length > 0 ? `Incomplete or omitted document previews: ${partialDocs.join(', ')}.\n` : '') +
           '\n' +
           `${boundedContext}\n` +
@@ -543,6 +543,8 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           if (!isCurrentRun()) return
           if (!result.success) throw new Error(result.error || 'Ollama generation failed.')
           if (!accumulated.trim()) throw new Error('Ollama returned an empty response.')
+          const references = resolveAnswerReferences(accumulated, citationSources)
+          updateRunMessage(run, contextNotice + accumulated, references.sources, references.invalidSourceReferences)
         } finally {
           clearInterval(intervalId)
           if (isCurrentRun()) {

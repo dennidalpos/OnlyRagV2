@@ -19,6 +19,49 @@ function store(history: string | null, active = 'one') {
 }
 
 describe('chat history storage', () => {
+  it('round-trips revision-bound citations and retains legacy candidate cards', () => {
+    const revision = 'a'.repeat(64)
+    const stored: ChatConversation = {
+      ...conversation,
+      messages: [
+        {
+          id: 'answer',
+          sender: 'bot',
+          text: 'Answer [S1]',
+          timestamp: '12:00',
+          invalidSourceReferences: ['S99'],
+          sources: [
+            {
+              docName: 'a.pdf',
+              chunkId: 'doc_chunk_0',
+              docId: 'doc',
+              referenceId: 'S1',
+              citationState: 'cited',
+              snippet: '😀x',
+              score: 0.2,
+              provenance: {
+                version: 1,
+                source_revision: revision,
+                extraction_revision: revision,
+                index_revision: revision,
+                location_kind: 'original',
+                span_start: 2,
+                span_end: 4,
+                exact_quote: '😀x',
+              },
+            },
+            { docName: 'legacy.pdf', chunkId: 'old', snippet: 'old candidate', score: 0.8 },
+          ],
+        },
+      ],
+    }
+    const storage = store(null)
+    saveChatHistory([stored], 'one', storage)
+    const loaded = loadChatHistory(storage)
+    expect(loaded.error).toBeNull()
+    expect(loaded.conversations).toEqual([stored])
+    expect(loaded.conversations[0].messages[0].sources?.[1].citationState).toBeUndefined()
+  })
   it('preserves additional saved fields while validating known data', () => {
     const extended = { ...conversation, extra: 'keep', messages: [{ ...conversation.messages[0], extra: 'keep too' }] }
     const storage = store(JSON.stringify([extended]))

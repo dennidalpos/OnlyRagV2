@@ -4,6 +4,8 @@ import { supportsNativeToolCalling } from '../../../shared/domain/agent/ollamaTo
 import { noConfiguredModelMessage } from '../../../shared/domain/settings/configuredModel'
 import { validateWorkspaceRealpath } from '../infrastructure/filesystem/workspaceRealpathGuard'
 import { findCodingModelEvidence } from '../../../shared/domain/agent/codingModelQualification'
+import { assessModelRuntimeFit } from '../../../shared/domain/hardware/modelRuntimeFit'
+import type { HardwareFacts } from '../../../shared/domain/hardware/hardwareProfileTiers'
 
 const MIN_AGENT_CONTEXT_TOKENS = 4096
 
@@ -18,10 +20,11 @@ export interface AgentCodingPreflightInput {
   sourceWorkspacePath?: string | null
   isStandaloneMode: boolean
   toolchain: GuestOsInfo['tools']
+  hardwareFacts?: HardwareFacts
 }
 
 export interface AgentCodingPreflightCheck {
-  id: 'ollama' | 'model' | 'tools' | 'probes' | 'qualification' | 'context' | 'workspace' | 'trust' | 'toolchain'
+  id: 'ollama' | 'model' | 'tools' | 'probes' | 'qualification' | 'context' | 'memory' | 'workspace' | 'trust' | 'toolchain'
   passed: boolean
   blocking: boolean
   detail: string
@@ -61,6 +64,7 @@ export function evaluateAgentCodingPreflight(input: AgentCodingPreflightInput): 
   const toolsAvailable = Object.entries(input.toolchain)
     .filter(([, available]) => !available)
     .map(([tool]) => tool)
+  const fit = assessModelRuntimeFit(input.codingModel, input.effectiveContextTokens, input.hardwareFacts, metric)
 
   const checks: AgentCodingPreflightCheck[] = [
     {
@@ -104,6 +108,12 @@ export function evaluateAgentCodingPreflight(input: AgentCodingPreflightInput): 
       passed: contextValid,
       blocking: true,
       detail: `Effective run context: ${input.effectiveContextTokens} tokens; model capacity: ${metric?.contextLength ?? 'unknown'}; minimum runtime requirement: ${MIN_AGENT_CONTEXT_TOKENS}. This is not a full-task quality threshold.`,
+    },
+    {
+      id: 'memory',
+      passed: fit.placement !== 'unknown' && fit.placement !== 'insufficient',
+      blocking: false,
+      detail: `${fit.contextTokens} tokens; ${fit.placement}; ${fit.basis}; ${fit.minimumGB.toFixed(1)}–${fit.maximumGB?.toFixed(1) ?? '?'} GiB. Single-request assessment; cache/parallel configuration and speed remain unqualified. Existing admission/OOM safeguards remain enforced.`,
     },
     {
       id: 'workspace',

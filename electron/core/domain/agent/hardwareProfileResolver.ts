@@ -1,5 +1,5 @@
 import { APPROX_CHARS_PER_TOKEN } from '../../../../shared/domain/agent/charsPerToken'
-import { resolveEffectiveTier, resolveMaxContextTokens, type DeclaredHardwareProfile } from '../../../../shared/domain/hardware/hardwareProfileTiers'
+import { resolveAgentContextTokens, type DeclaredHardwareProfile } from '../../../../shared/domain/hardware/hardwareProfileTiers'
 import type { OllamaSamplingOverrides } from '../../../../shared/types'
 
 /**
@@ -37,15 +37,7 @@ export class HardwareProfileResolver {
   }
   /** Resolves optimal Ollama runtime options from user settings and hardware diagnostics. */
   static resolveOllamaOptions(profile: DeclaredHardwareProfile = 'Auto', env?: HardwareEnvironment): OllamaRuntimeOptions {
-    // Sizing and RAM-aware scaling is delegated to resolveMaxContextTokens in hardwareProfileTiers.ts
-    // (single source of truth across Electron domain, Recommendation Engine, and React UI), then
-    // raised for the agent alone: Ollama recommends at least 64k tokens for agents and coding tools
-    // (docs.ollama.com/context-length), and a 32 GB host holds a 4-bit ~30B model plus a 64k KV cache.
-    const sharedCtx = resolveMaxContextTokens(profile, env)
-    const ramGB = env?.systemRamGB ?? 0
-    // Installed memory reads slightly under its nominal size (a 32 GB host reports 31.9 GB).
-    const agentCtx = ramGB >= 30 ? (resolveEffectiveTier(profile, env) === 'legacy' ? 32768 : 65536) : sharedCtx
-    const numCtx = Math.max(sharedCtx, agentCtx)
+    const numCtx = resolveAgentContextTokens(profile, env)
 
     return {
       num_ctx: numCtx,

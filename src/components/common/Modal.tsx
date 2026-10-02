@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useLockBodyScroll } from '../../hooks/useLockBodyScroll'
+import { isTopModal, registerModal } from '../../lib/modalFocus'
 
 export const MODAL_LAYER = {
   base: 'z-[100]',
@@ -36,27 +37,30 @@ export const Modal: React.FC<ModalProps> = ({
   children,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const closeRef = useRef(onClose)
+  const dismissibleRef = useRef(dismissible)
+  closeRef.current = onClose
+  dismissibleRef.current = dismissible
 
   useLockBodyScroll(isOpen)
 
-  useEffect(() => {
-    if (!isOpen || !dismissible) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, dismissible, onClose])
-
-  useEffect(() => {
-    if (!isOpen) return
-    panelRef.current?.focus()
-  }, [isOpen])
+  useLayoutEffect(() => {
+    if (!isOpen || !rootRef.current || !panelRef.current) return
+    return registerModal(
+      rootRef.current,
+      panelRef.current,
+      { base: 0, nested: 1, approval: 2 }[layer],
+      () => dismissibleRef.current,
+      () => closeRef.current(),
+    )
+  }, [isOpen, layer])
 
   if (!isOpen) return null
 
   return createPortal(
     <div
+      ref={rootRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelledById}
@@ -65,7 +69,7 @@ export const Modal: React.FC<ModalProps> = ({
       }`}
       onMouseDown={(event) => {
         // Avoid closing when a selection begins inside the panel and ends on the backdrop.
-        if (dismissible && event.target === event.currentTarget) onClose()
+        if (dismissible && isTopModal(rootRef.current) && event.target === event.currentTarget) onClose()
       }}
     >
       <div ref={panelRef} tabIndex={-1} className={`w-full outline-none ${panelClassName}`}>

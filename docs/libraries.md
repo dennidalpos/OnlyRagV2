@@ -14,6 +14,8 @@
 
 - FastAPI/Uvicorn/Pydantic: HTTP e validazione.
 - LanceDB/NumPy/Pandas: persistenza e dati vettoriali.
+- openpyxl e xlrd: motori Excel espliciti per XLSX e XLS, inclusi nel bundle PyInstaller.
+- Arrow: dipendenza diretta per Parquet; PyInstaller include esplicitamente `pyarrow.parquet`.
 - PyMuPDF, python-docx, Pillow, RapidOCR (`rapidocr` 3, modelli PP-OCRv6 nel wheel), OpenCV (`opencv-python`, la build richiesta da `rapidocr`) e ONNX Runtime GPU: parsing/OCR.
 - `wordfreq`, `symspellpy`, `langdetect`: vocabolario e normalizzazione.
 

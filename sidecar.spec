@@ -11,9 +11,9 @@ datas = [
     (os.path.join(SPECPATH, 'sidecar', 'assets', 'vocab'), os.path.join('sidecar', 'assets', 'vocab')),
 ]
 binaries = []
-hiddenimports = []
+hiddenimports = ['pyarrow.parquet']
 
-for pkg in ['lancedb', 'pymupdf', 'fastapi', 'uvicorn', 'pydantic', 'docx', 'rapidocr', 'wordfreq', 'langdetect', 'ftfy', 'puremagic', 'tabulate', 'chevron']:
+for pkg in ['lancedb', 'pymupdf', 'fastapi', 'uvicorn', 'pydantic', 'docx', 'rapidocr', 'wordfreq', 'langdetect', 'ftfy', 'puremagic', 'tabulate', 'chevron', 'openpyxl', 'xlrd']:
     try:
         tmp_ret = collect_all(pkg)
         datas += tmp_ret[0]

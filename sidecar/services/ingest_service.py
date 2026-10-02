@@ -12,12 +12,13 @@ from sidecar.schemas import IngestResponse, PagePreviewResponse
 from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, write_document_records, delete_document_records, database_operation
 from sidecar.infrastructure.embeddings import (
     DEFAULT_EMBEDDING_MODEL,
-    FALLBACK_EMBEDDING_MODEL,
-    generate_embeddings_with_status,
+    generate_embedding_batch,
 )
 from sidecar.domain.sanitizer import sanitize_extracted_text
 from sidecar.domain.vision_prompt import is_vision_ocr_requested
 from sidecar.domain.ingestion import (
+    assemble_document_markdown,
+    raise_normalization_review_if_needed,
     extract_document_markdown,
     create_semantic_chunks,
     extract_tables_from_page,
@@ -25,6 +26,7 @@ from sidecar.domain.ingestion import (
     render_prepared_pdf_page,
     PDF_PAGE_RENDER_CONCURRENCY
 )
+from sidecar.domain.llm_normalizer import NormalizationReviewRequired
 from sidecar.domain.router import classify_file_type, analyze_pdf_page_structure, DocumentCategory, PageRoutingStrategy
 from sidecar.services.task_cancellation import TaskCancelled, raise_if_cancelled, register_task, unregister_task
 from sidecar.services.search_service import get_stored_document
@@ -41,14 +43,10 @@ def _build_chunk_records(
     ingested_at: str,
     embedding_model: str,
 ) -> Tuple[List[Dict[str, Any]], bool]:
-    """Embeds the chunks and tags every row with the model that produced its vector.
-
-    Search groups rows by that tag and embeds the query with the same model, so documents
-    indexed under different embedding settings (or with the offline hash fallback) stay
-    comparable instead of mixing vectors from unrelated spaces.
-    """
-    vectors, used_fallback = generate_embeddings_with_status([item[1] for item in raw_chunks], model=embedding_model)
-    stored_model = FALLBACK_EMBEDDING_MODEL if used_fallback else embedding_model
+    """Persist the verified space shared by the entire document batch."""
+    if not raw_chunks:
+        return [], False
+    batch = generate_embedding_batch([item[1] for item in raw_chunks], model=embedding_model, role="document")
     records = [
         {
             "vector": vec,
@@ -60,11 +58,11 @@ def _build_chunk_records(
             "section_header": sec_header,
             "file_type": file_type,
             "ingested_at": ingested_at,
-            "embedding_model": stored_model,
+            **batch.space.metadata(),
         }
-        for (idx, text, sec_header), vec in zip(raw_chunks, vectors)
+        for (idx, text, sec_header), vec in zip(raw_chunks, batch.vectors)
     ]
-    return records, used_fallback
+    return records, batch.used_fallback
 
 def process_and_index_document_generator(
     file_path: str,
@@ -155,6 +153,7 @@ def process_and_index_document_generator(
                             vision_prompt=vision_prompt,
                             normalize_with_llm=normalize_with_llm,
                             normalization_model=normalization_model,
+                            normalization_think=normalization_think,
                             filename=filename,
                             num_pages=num_pages
                         ))
@@ -195,9 +194,9 @@ def process_and_index_document_generator(
                 finally:
                     pdf_doc.close()
 
-                paginated_sections = [f"## Page {p_idx}\n\n{p_text}" for p_idx, p_text in page_blocks]
-                full_markdown = f"# {filename}\n\n" + "\n\n".join(paginated_sections)
-            except TaskCancelled:
+                raise_normalization_review_if_needed(filename, work_items)
+                full_markdown = assemble_document_markdown(filename, page_blocks)
+            except (TaskCancelled, NormalizationReviewRequired):
                 raise
             except Exception as pdf_err:
                 logger.warning(f"PyMuPDF streaming parse error: {pdf_err}")
@@ -310,6 +309,14 @@ def process_and_index_document_generator(
     except TaskCancelled:
         _cleanup_partial_ingestion(doc_id)
         yield json.dumps({"type": "cancelled", "task_id": task_id, "fileName": filename}) + "\n"
+    except NormalizationReviewRequired as review:
+        logger.warning("Normalization review required for %s (%s pages flagged); no indexing performed.", filename, len(review.issues))
+        yield json.dumps({
+            "type": "error",
+            "error": str(review),
+            "fileName": filename,
+            "normalization_review": review.wire_payload(),
+        }) + "\n"
     except Exception as exc:
         import traceback
         err_msg = f"Errore durante l'ingestione: {str(exc)}"

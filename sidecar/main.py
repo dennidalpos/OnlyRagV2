@@ -27,7 +27,7 @@ from sidecar.schemas import (
     IndexPromptHistoryRequest, PromptHistorySearchRequest, PromptHistorySearchResult,
     PromptHistoryRemoveRequest, TranslateInplaceRequest,
 )
-from sidecar.infrastructure.db import lance_db, get_existing_tables, run_db_maintenance, ensure_chunk_embedding_model_column, recover_database, DatabaseRecoveryError, database_operation
+from sidecar.infrastructure.db import lance_db, get_existing_tables, run_db_maintenance, recover_database, DatabaseRecoveryError, database_operation
 from sidecar.infrastructure.ocr import detect_gpu_acceleration, get_ocr_runtime_info
 from sidecar.domain.exporter import export_markdown_to_file
 from sidecar.services.ingest_service import (
@@ -44,7 +44,7 @@ from sidecar.domain.translator import (
 from sidecar.services.search_service import perform_vector_search, list_stored_documents, get_stored_document, delete_stored_document
 from sidecar.services.prompt_history_service import index_prompt_history, search_prompt_history, remove_prompt_history
 from sidecar.services.vocab_service import background_vocab_sync_startup
-from sidecar.infrastructure.embeddings import DEFAULT_EMBEDDING_MODEL, FALLBACK_EMBEDDING_MODEL
+from sidecar.infrastructure.embeddings import DEFAULT_EMBEDDING_MODEL
 
 from contextlib import asynccontextmanager
 
@@ -56,10 +56,6 @@ async def lifespan(app_instance: FastAPI):
     except DatabaseRecoveryError:
         yield
         return
-    await asyncio.to_thread(
-        ensure_chunk_embedding_model_column,
-        CHUNKS_TABLE_NAME, DOCS_TABLE_NAME, DEFAULT_EMBEDDING_MODEL, FALLBACK_EMBEDDING_MODEL,
-    )
     # Held so the event loop cannot garbage-collect the tasks mid-flight.
     startup_tasks = {
         asyncio.create_task(background_vocab_sync_startup()),
@@ -138,7 +134,11 @@ def health_check():
         "python_version": sys.version
     }
 
-@app.post("/ingest-path-stream")
+@app.post("/ingest-path-stream", description=(
+    "NDJSON progress/done/error/cancelled stream. Rejected LLM normalization returns an error "
+    "with normalization_review: original_markdown (the complete pre-normalization extraction) "
+    "and issues (page, reason). No document or chunks are indexed for that outcome."
+))
 async def ingest_document_by_path_stream(req: IngestPathRequest):
     logger.info(f"Received path for streaming ingestion: {req.file_path} (normalize_with_llm={req.normalize_with_llm})")
     resolved_path = os.path.abspath(req.file_path)

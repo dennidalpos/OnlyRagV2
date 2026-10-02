@@ -10,6 +10,8 @@ Il controllo statico verifica la presenza degli schemi, non la copertura di ogni
 
 ## Canali request/response
 
+`ingest:file` puo restituire `{ success: false, error, normalizationReview: { originalMarkdown, issues: [{ page, reason }] } }` per una normalizzazione da rivedere. Il campo e opzionale e validato da Main sul wire REST; non viene inoltrato negli eventi di progresso. La UI mantiene il testo come bozza separata, di sola lettura ed esportabile, senza selezionarlo come documento indicizzato o sovrascrivere modifiche locali. Successi ed errori ordinari restano compatibili. Contratto approvato dall'utente il 2026-10-01; implementazione il 2026-10-02. Dettagli: [RAG/Sidecar](./rag-sidecar.md).
+
 | Prefisso | Canali registrati |
 | --- | --- |
 | `agent` | `approval-response`, `cancel-task`, `compact-context`, `export-ai-debug-bundle`, `get-plan-state`, `get-queue-status`, `plan-cancel`, `plan-enrich-prompt`, `plan-generate`, `plan-interview`, `plan-seed`, `restore-checkpoint`, `start-task`, `update-active-run` |

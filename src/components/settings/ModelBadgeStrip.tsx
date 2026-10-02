@@ -1,25 +1,18 @@
 import React from 'react'
-import { BadgeCheck, CircleDashed, HelpCircle, Ban, Wrench, Gauge, Layers, Boxes } from 'lucide-react'
+import { FlaskConical, CircleDashed, HelpCircle, Ban, Wrench, Gauge, Layers, Boxes } from 'lucide-react'
 import type { OllamaModelMetrics } from '../../types'
-import { findVerificationEvidence, type ModelVerificationStatus } from '../../services/codingModelMatrix'
+import { findCodingModelEvidence, type ModelRuntimeStatus } from '../../../shared/domain/agent/codingModelQualification'
 import { useTranslation, type TranslationKey } from '../../i18n'
-
-/** The badges for one model. */
 
 interface ModelBadgeStripProps {
   modelName: string
-  status: ModelVerificationStatus
+  status: ModelRuntimeStatus
   /** Undefined for a model that is not installed: capability badges are then omitted. */
   metrics?: OllamaModelMetrics
   className?: string
 }
 
-const STATUS_STYLE: Record<ModelVerificationStatus, { label: TranslationKey; className: string; Icon: typeof BadgeCheck }> = {
-  verified: {
-    label: 'modelBadges.verified',
-    className: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
-    Icon: BadgeCheck,
-  },
+const STATUS_STYLE: Record<ModelRuntimeStatus, { label: TranslationKey; className: string; Icon: typeof CircleDashed }> = {
   compatible: {
     label: 'modelBadges.compatible',
     className: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
@@ -37,7 +30,7 @@ const STATUS_STYLE: Record<ModelVerificationStatus, { label: TranslationKey; cla
   },
 }
 
-const STATUS_TOOLTIP: Record<Exclude<ModelVerificationStatus, 'verified'>, TranslationKey> = {
+const STATUS_TOOLTIP: Record<ModelRuntimeStatus, TranslationKey> = {
   compatible: 'modelBadges.compatibleTooltip',
   unsupported: 'modelBadges.unsupportedTooltip',
   unknown: 'modelBadges.unknownTooltip',
@@ -56,29 +49,31 @@ const Badge: React.FC<{ title?: string; className: string; children: React.React
 export const ModelBadgeStrip: React.FC<ModelBadgeStripProps> = ({ modelName, status, metrics, className }) => {
   const { t } = useTranslation()
   const style = STATUS_STYLE[status]
-  const evidence = status === 'verified' ? findVerificationEvidence(modelName) : null
-
-  // The verified tooltip IS the evidence. Anything less would make the badge a claim the user
-  // has no way to check, which is the whole thing this badge was built not to be.
-  const statusTooltip = evidence
-    ? `${t('modelBadges.verifiedEvidence', { date: evidence.date, probes: evidence.probes.join(', ') })}\n\n${evidence.outcome}`
-    : status === 'verified'
-      ? ''
-      : t(STATUS_TOOLTIP[status])
-
+  const evidence = findCodingModelEvidence(modelName)
+  const evidenceTooltip = evidence
+    ? `${t('modelBadges.probeEvidence', { date: evidence.date, probes: evidence.probes.join(', ') })}\n\n${evidence.outcome}`
+    : t('modelBadges.noProbeEvidence')
   const supportsTools = metrics?.capabilities?.includes('tools')
 
   return (
     <div className={`flex flex-wrap items-center gap-1.5 ${className || ''}`}>
-      <Badge title={statusTooltip} className={style.className}>
+      <Badge title={t(STATUS_TOOLTIP[status])} className={style.className}>
         <style.Icon className="w-3 h-3" />
         {t(style.label)}
+      </Badge>
+
+      <Badge title={evidenceTooltip} className="bg-slate-800/60 text-slate-300 border-slate-700">
+        {t(evidence ? 'modelBadges.focusedProbes' : 'modelBadges.noProbes')}
+      </Badge>
+      <Badge title={t('modelBadges.experimentalTooltip')} className="bg-amber-500/10 text-amber-300 border-amber-500/30">
+        <FlaskConical className="w-3 h-3" />
+        {t('modelBadges.unqualified')}
       </Badge>
 
       {metrics?.contextLength !== undefined && (
         <Badge title={t('modelBadges.trainedContext', { tokens: metrics.contextLength })} className="bg-slate-800/60 text-slate-300 border-slate-700">
           <Layers className="w-3 h-3" />
-          {formatContext(metrics.contextLength)}
+          {t('modelBadges.contextCapacity', { context: formatContext(metrics.contextLength) })}
         </Badge>
       )}
 
@@ -96,9 +91,7 @@ export const ModelBadgeStrip: React.FC<ModelBadgeStripProps> = ({ modelName, sta
         </Badge>
       )}
 
-      {/* Drawn only when Ollama actually answered about this model: absent capabilities mean
-          "not installed", which is not the same claim as "no tool calling". */}
-      {metrics !== undefined && (
+      {metrics?.capabilities !== undefined && (
         <Badge
           title={supportsTools ? t('modelBadges.nativeTools') : t('modelBadges.noNativeTools')}
           className={supportsTools ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}

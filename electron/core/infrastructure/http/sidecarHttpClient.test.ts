@@ -22,6 +22,43 @@ function createMockServer(routes: Array<{ method: string; path: string; handler:
 }
 
 describe('SidecarHttpClient Unit Tests', () => {
+  it.each([false, true])('keeps a normalization refusal failed even after a done event (invalid=%s)', async (invalid) => {
+    const original = '# Original\n\nReference AB123 must remain unchanged.'
+    const mock = await createMockServer([
+      {
+        method: 'POST',
+        path: '/ingest-path-stream',
+        handler: (_req, res) => {
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+          res.write(
+            `${JSON.stringify({
+              type: 'error',
+              error: 'Review required',
+              normalization_review: { original_markdown: original, issues: [{ page: 1, reason: invalid ? 'verified' : 'entities_changed' }] },
+            })}\n`,
+          )
+          res.end(`${JSON.stringify({ type: 'done', data: { id: 'false-success' } })}\n`)
+        },
+      },
+    ])
+    try {
+      const client = new SidecarHttpClient(mock.baseUrl)
+      const events: { type?: string }[] = []
+      const result = await client.ingestFileStream({ file_path: 'doc.pdf', task_id: 'review-test' }, (event) => events.push(event))
+      expect(result.success).toBe(false)
+      expect(result.data).toBeUndefined()
+      expect(events.map((event) => event.type)).toEqual(['error'])
+      if (invalid) {
+        expect(result.error).toContain('Invalid normalization review')
+        expect(result.normalizationReview).toBeUndefined()
+      } else {
+        expect(result.normalizationReview).toEqual({ originalMarkdown: original, issues: [{ page: 1, reason: 'entities_changed' }] })
+      }
+    } finally {
+      await new Promise<void>((resolve, reject) => mock.server.close((error) => (error ? reject(error) : resolve())))
+    }
+  })
+
   it('reports a 503 health response offline and preserves document failure as unavailable', async () => {
     const broken = await createMockServer([
       {

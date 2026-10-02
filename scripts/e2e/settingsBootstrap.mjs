@@ -35,6 +35,26 @@ try {
   assert.equal(persisted.settings.language, 'en')
   assert.equal(await page.getByRole('dialog').count(), 0, 'Wizard opened despite completed setup in settings.json')
 
+  // A directory at the isolated file path forces the real writer to reject the save.
+  const beforeFailedSave = fs.readFileSync(settingsPath)
+  fs.unlinkSync(settingsPath)
+  fs.mkdirSync(settingsPath)
+  await page.locator('aside button:has(svg.lucide-globe)').click()
+  const saveBanner = page.getByTestId('settings-save-status')
+  await page.getByTestId('settings-save-retry').waitFor({ timeout: 10_000 })
+  assert.equal(await saveBanner.getAttribute('role'), 'alert')
+  assert(fs.statSync(settingsPath).isDirectory(), 'Failed save replaced the incompatible target')
+  fs.rmdirSync(settingsPath)
+  fs.writeFileSync(settingsPath, beforeFailedSave)
+  await page.getByTestId('settings-save-retry').click()
+  await page.waitForFunction(() => document.querySelector('[data-testid="settings-save-status"]')?.textContent?.includes('Impostazioni salvate.'))
+  assert.equal(JSON.parse(fs.readFileSync(settingsPath, 'utf8')).settings.language, 'it', 'Retry lost the unsaved language')
+  await page.reload({ waitUntil: 'load' })
+  await page.locator('#tab-ingestion').getByText('Ingestione Doc').waitFor({ timeout: 10_000 })
+  assert.equal(await page.locator('aside button:has(svg.lucide-globe)').textContent(), 'IT', 'Reload lost the retried setting')
+  await page.locator('aside button:has(svg.lucide-globe)').click()
+  await page.waitForFunction(() => document.querySelector('[data-testid="settings-save-status"]')?.textContent?.includes('Settings saved.'))
+
   // Real settings:get handler with an unreadable or unversioned file: recoverable error, no overwrite, no diagnostics, then retry.
   const validSettingsFile = fs.readFileSync(settingsPath)
   const unversionedSettingsFile = JSON.stringify(explicitSettings)
@@ -150,7 +170,7 @@ try {
   assert.equal(writes.calls, 3, 'Separated changes did not produce the expected saves')
   assert.equal(writes.maxActive, 1, 'Settings saves overlapped')
   assert.equal(writes.last.language, 'it')
-  console.log('[PASS] Settings bootstrap, versioned file load, unreadable and unversioned file recovery, language, wizard and serialized/coalesced writes.')
+  console.log('[PASS] Settings bootstrap, real write failure/retry/reload, versioned file recovery, language, wizard and serialized/coalesced writes.')
 } finally {
   if (application) await application.close()
   fs.rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })

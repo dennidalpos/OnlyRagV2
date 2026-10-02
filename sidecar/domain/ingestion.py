@@ -76,7 +76,21 @@ def extract_tables_from_page(page: pymupdf.Page) -> Tuple[List[str], List[Any]]:
 
     return md_tables, table_rects
 
-from sidecar.domain.llm_normalizer import normalize_page_markdown_with_llm
+from sidecar.domain.llm_normalizer import normalize_page_markdown_with_llm, NormalizationReviewRequired
+
+
+def assemble_document_markdown(filename: str, page_blocks: List[Tuple[int, str]]) -> str:
+    sections = [f"## Page {page}\n\n{text}" for page, text in page_blocks]
+    return f"# {filename}\n\n" + "\n\n".join(sections)
+
+
+def raise_normalization_review_if_needed(filename: str, work_items: List[Dict[str, Any]]) -> None:
+    issues = [issue for item in work_items for issue in item.get("normalization_issues", [])]
+    if issues:
+        original = assemble_document_markdown(filename, [
+            (item["page_num"], item["original_markdown"]) for item in work_items
+        ])
+        raise NormalizationReviewRequired(original, issues)
 
 def run_page_ocr(
     image_bytes: bytes,
@@ -204,12 +218,16 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
     sanitized = sanitize_extracted_text(page_content)
 
     if work_item.get("normalize_with_llm"):
-        sanitized = normalize_page_markdown_with_llm(
-            sanitized,
-            page_num=page_num,
-            model=work_item.get("normalization_model"),
-            think=bool(work_item.get("normalization_think")),
-        )
+        work_item["original_markdown"] = sanitized
+        try:
+            sanitized = normalize_page_markdown_with_llm(
+                sanitized,
+                page_num=page_num,
+                model=work_item.get("normalization_model"),
+                think=bool(work_item.get("normalization_think")),
+            )
+        except NormalizationReviewRequired as review:
+            work_item["normalization_issues"] = review.issues
 
     return page_num, sanitized
 
@@ -269,6 +287,7 @@ def extract_pdf_document(
     with ThreadPoolExecutor(max_workers=min(PDF_PAGE_RENDER_CONCURRENCY, max(1, len(work_items)))) as executor:
         results = list(executor.map(render_prepared_pdf_page, work_items))
 
+    raise_normalization_review_if_needed(filename, work_items)
     return results
 
 def extract_tabular_document(
@@ -287,37 +306,50 @@ def extract_tabular_document(
     limit_excel_rows = max_excel_rows or EXCEL_MAX_ROWS_PER_SHEET
     limit_sheets = max_sheets or EXCEL_MAX_SHEETS
 
-    # Excel formats (.xlsx, .xls)
+    # Keep every source cell, including a header-only or single-cell sheet.
     if ext in [".xlsx", ".xls"]:
-        try:
-            excel_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
-            xls = pd.ExcelFile(excel_source)
+        excel_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
+        engine = "openpyxl" if ext == ".xlsx" else "xlrd"
+        with pd.ExcelFile(excel_source, engine=engine) as xls:
             sheets_output = []
             total_sheets_count = len(xls.sheet_names)
             processed_sheets = xls.sheet_names[:limit_sheets]
 
             for sheet_name in processed_sheets:
-                df_all = pd.read_excel(xls, sheet_name=sheet_name)
+                df_all = pd.read_excel(xls, sheet_name=sheet_name, header=None, dtype=object, keep_default_na=False)
                 total_sheet_rows = len(df_all)
                 if df_all.empty:
                     continue
                 df = df_all.head(limit_excel_rows)
-                # Clean column headers
-                df.columns = [str(c).replace("\n", " ").strip() if str(c).strip() else f"Col {i+1}" for i, c in enumerate(df.columns)]
-                md_table = df.to_markdown(tablefmt="pipe", index=False) or ""
+                if not any(str(cell).strip() for cell in df.to_numpy().flat):
+                    continue
+                df.columns = [f"Col {i+1}" for i in range(len(df.columns))]
+                md_table = df.to_markdown(tablefmt="pipe", index=False, disable_numparse=True) or ""
 
                 sheet_md = f"### Foglio: {sheet_name}\n\n{md_table}"
                 if total_sheet_rows > limit_excel_rows:
                     sheet_md += f"\n\n> [!NOTE]\n> Tabella troncata a {limit_excel_rows} righe (su {total_sheet_rows} totali nel foglio '{sheet_name}').\n"
                 sheets_output.append(sheet_md)
 
+            if not sheets_output:
+                raise ValueError("Excel extraction produced no readable cells in the selected sheets.")
+
             combined_excel_md = "\n\n".join(sheets_output)
             if total_sheets_count > limit_sheets:
                 combined_excel_md += f"\n\n> [!NOTE]\n> Mostrati i primi {len(processed_sheets)} fogli su {total_sheets_count} totali nella cartella Excel.\n"
 
             return [(1, combined_excel_md)]
-        except Exception as e:
-            logger.warning(f"Excel parsing fallback for {filename}: {e}")
+
+    if ext == ".parquet":
+        parquet_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
+        df_all = pd.read_parquet(parquet_source, engine="pyarrow")
+        df = df_all.head(limit_csv_rows)
+        if df.empty or df.replace(r"^\s*$", pd.NA, regex=True).dropna(how="all").empty:
+            raise ValueError("Parquet extraction produced no readable values.")
+        md_table = df.to_markdown(tablefmt="pipe", index=False, disable_numparse=True) or ""
+        if len(df_all) > limit_csv_rows:
+            md_table += f"\n\n> [!NOTE]\n> Tabella troncata a {limit_csv_rows} righe (su {len(df_all)} totali nel file).\n"
+        return [(1, md_table)]
 
     # CSV / TSV
     if ext in [".csv", ".tsv"]:
@@ -415,12 +447,17 @@ def extract_document_markdown(
         )
         sanitized_ocr = sanitize_extracted_text(ocr_text)
         if normalize_with_llm and sanitized_ocr:
-            sanitized_ocr = normalize_page_markdown_with_llm(
-                sanitized_ocr,
-                page_num=1,
-                model=normalization_model,
-                think=normalization_think,
-            )
+            try:
+                sanitized_ocr = normalize_page_markdown_with_llm(
+                    sanitized_ocr,
+                    page_num=1,
+                    model=normalization_model,
+                    think=normalization_think,
+                )
+            except NormalizationReviewRequired as review:
+                raise NormalizationReviewRequired(
+                    assemble_document_markdown(filename, [(1, sanitized_ocr)]), review.issues,
+                ) from None
         if sanitized_ocr:
             page_blocks.append((1, sanitized_ocr))
         else:
@@ -529,12 +566,7 @@ def extract_document_markdown(
         except Exception:
             page_blocks.append((1, "[Binary content processed]"))
 
-    # Assemble strictly paginated Markdown document
-    paginated_sections: List[str] = []
-    for page_idx, p_text in page_blocks:
-        paginated_sections.append(f"## Page {page_idx}\n\n{p_text}")
-
-    full_markdown = f"# {filename}\n\n" + "\n\n".join(paginated_sections)
+    full_markdown = assemble_document_markdown(filename, page_blocks)
     return full_markdown, max(1, num_pages)
 
 def _split_oversized_text(text: str, max_chars: int = 1000, overlap: int = 100) -> List[str]:

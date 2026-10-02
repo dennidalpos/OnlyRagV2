@@ -1538,6 +1538,7 @@
     },
     "/ingest-path-stream": {
       "post": {
+        "description": "NDJSON progress/done/error/cancelled stream. Rejected LLM normalization returns an error with normalization_review: original_markdown (the complete pre-normalization extraction) and issues (page, reason). No document or chunks are indexed for that outcome.",
         "operationId": "ingest_document_by_path_stream_ingest_path_stream_post",
         "requestBody": {
           "content": {

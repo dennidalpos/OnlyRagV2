@@ -70,6 +70,8 @@ export const AppLayout: React.FC = () => {
   const [settingsLoadAttempt, setSettingsLoadAttempt] = useState(0)
   const settingsReady = settingsBootstrap.status === 'ready'
   const saveChain = useRef<Promise<unknown>>(Promise.resolve())
+  const [settingsSave, setSettingsSave] = useState<{ status: 'idle' | 'saving' | 'saved' | 'failed' }>({ status: 'idle' })
+  const [settingsSaveAttempt, setSettingsSaveAttempt] = useState(0)
   const isRemoteOllama = isRemoteOllamaMode(settings)
 
   // Load and synchronize settings with canonical Electron main process filesystem store
@@ -100,21 +102,33 @@ export const AppLayout: React.FC = () => {
   }, [setLanguage, settingsLoadAttempt])
 
   useEffect(() => {
-    if (!settingsReady || !window.electronAPI?.saveAppSettings) return
+    if (!settingsReady) return
+    let cancelled = false
+    setSettingsSave({ status: 'saving' })
     const timer = setTimeout(() => {
       const snapshot = settings
       saveChain.current = saveChain.current
         .then(async () => {
-          if (!(await window.electronAPI!.saveAppSettings!(snapshot))) throw new Error('Settings save failed')
+          if (cancelled) return
+          const save = window.electronAPI?.saveAppSettings
+          if (!save || (await save(snapshot)) !== true) throw new Error('Settings save failed')
+          if (!cancelled) setSettingsSave({ status: 'saved' })
         })
-        .catch((err: unknown) => logger.error('AppLayout', `Failed saving settings: ${String(err)}`))
+        .catch((err: unknown) => {
+          const message = errorMessage(err)
+          logger.error('AppLayout', `Failed saving settings: ${message}`)
+          if (!cancelled) setSettingsSave({ status: 'failed' })
+        })
     }, 100)
-    return () => clearTimeout(timer)
-  }, [settings, settingsReady])
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [settings, settingsReady, settingsSaveAttempt])
 
   const handleUpdateSettings = useCallback(
     (newSettings: Partial<AppSettings>) => {
-      // Applied before setSettings: React runs state updaters during the render phase, so updating another component's state (I18nProvider) from inside one is a render-phase update and React warns about it.
+      // Update the language provider outside the settings state updater.
       if (newSettings.language && newSettings.language !== language) {
         setLanguage(newSettings.language)
       }
@@ -433,6 +447,32 @@ export const AppLayout: React.FC = () => {
 
       {/* Main App Content View */}
       <main className="flex-1 h-full flex flex-col overflow-hidden relative">
+        {settingsReady && settingsSave.status !== 'idle' && (
+          <div
+            role={settingsSave.status === 'failed' ? 'alert' : 'status'}
+            aria-atomic="true"
+            data-testid="settings-save-status"
+            className={`shrink-0 flex items-center gap-3 px-4 py-2 border-b text-xs ${
+              settingsSave.status === 'failed' ? 'border-amber-600/60 bg-amber-950 text-amber-100' : 'border-slate-800 bg-slate-900 text-slate-400'
+            }`}
+          >
+            <span className="flex-1">
+              {settingsSave.status === 'failed'
+                ? t('sidebar.settingsSaveFailed')
+                : t(settingsSave.status === 'saving' ? 'sidebar.settingsSaving' : 'sidebar.settingsSaved')}
+            </span>
+            {settingsSave.status === 'failed' && (
+              <button
+                type="button"
+                data-testid="settings-save-retry"
+                onClick={() => setSettingsSaveAttempt((attempt) => attempt + 1)}
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold focus-ring"
+              >
+                {t('sidebar.settingsLoadRetry')}
+              </button>
+            )}
+          </div>
+        )}
         {settingsBootstrap.status === 'failed' && (
           <div
             role="alert"

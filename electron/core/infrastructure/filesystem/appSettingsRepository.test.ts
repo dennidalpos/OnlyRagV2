@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -75,5 +75,24 @@ describe('AppSettingsRepository Unit Tests', () => {
   it('preserves a finite budget of 200 steps', async () => {
     await repo.saveSettings({ ...getDefaultAppSettings(), maxToolCallSteps: 200 })
     expect((await repo.loadSettings())?.maxToolCallSteps).toBe(200)
+  })
+
+  it('preserves the original file after a failed save and reads retry values from a fresh repository', async () => {
+    const original = { ...getDefaultAppSettings(), chatModel: 'original' }
+    const changed = { ...original, chatModel: 'retry-value' }
+    expect(await repo.saveSettings(original)).toBe(true)
+    const target = path.join(tmpDir, 'settings.json')
+    const before = fs.readFileSync(target, 'utf8')
+    const serialize = vi.spyOn(JSON, 'stringify').mockImplementationOnce(() => {
+      throw new Error('controlled serialization failure')
+    })
+    try {
+      expect(await repo.saveSettings(changed)).toBe(false)
+      expect(fs.readFileSync(target, 'utf8')).toBe(before)
+    } finally {
+      serialize.mockRestore()
+    }
+    expect(await repo.saveSettings(changed)).toBe(true)
+    expect((await new AppSettingsRepository(tmpDir).loadSettingsOrThrow())?.chatModel).toBe('retry-value')
   })
 })

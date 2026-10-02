@@ -2,7 +2,7 @@ import React from 'react'
 import { Code, MessageSquare, Languages, FileText, Database, Eye, Activity, Scale } from 'lucide-react'
 import { DiagnosticsData, AppSettings } from '../../types'
 import { useTranslation } from '../../i18n'
-import { resolveVerificationStatus } from '../../services/codingModelMatrix'
+import { resolveModelRuntimeStatus } from '../../../shared/domain/agent/codingModelQualification'
 import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
 import { extractHardwareFacts } from '../../services/hardwareRecommendationEngine'
 import { findInstalledOllamaOption } from '../../services/ollamaModelOptions'
@@ -32,7 +32,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
 
   const renderBadges = (modelName: string) => {
     if (!modelName) return null
-    const status = resolveVerificationStatus({
+    const status = resolveModelRuntimeStatus({
       modelName,
       capabilities: metrics[modelName]?.capabilities,
     })
@@ -105,7 +105,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
                 onUpdateSettings={onUpdateSettings}
               />
             )}
-            <p className="text-[10px] text-slate-400 leading-tight">Esegue i tool, scrive codice e mantiene la KV-cache fissa in GPU a zero latenza.</p>
+            <p className="text-[11px] text-amber-300 leading-snug">{t('modelBadges.experimentalTooltip')}</p>
           </div>
         </div>
       </div>

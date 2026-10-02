@@ -1,5 +1,91 @@
 # Verifica e limiti noti
 
+## Preparazione embedding e retrieval reale — 2026-10-02
+
+`RAG-EMBEDDING-TASK-PREPARATION-01` e completato e rimosso dal tracker dopo l'approvazione esplicita della politica persistita. Baseline: **32 test in 2.70s**. La verifica mirata successiva passa **60 test in 4.06s**; aggiunta la prova integrata del vero generatore con trasporto dichiarato, la suite completa `.venv\Scripts\python.exe -m pytest -q` passa **269 test in 24.57s**. Nessuna API REST/IPC, colonna Arrow, dipendenza, timeout o retry e cambiato. Appending/reindicizzazione di una preparazione incompatibile preserva record, Markdown, sorgenti e journal; le query sono rifiutate prima di inviare vettori in uno spazio sbagliato. La cronologia prompt conserva il comportamento raw fino al proprio task.
+
+La campagna reale autorizzata esegue `.venv\Scripts\python.exe scripts/live/embeddingPreparation.py` contro il solo Nomic installato: Ollama **0.35.0**, `nomic-embed-text:latest`, **137M/F16**, digest `0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f`, 768 dimensioni, `nomic-search-v1`. Nessun download, generazione di risposte o cambio delle preferenze. Il corpus ha **8 documenti / 12 query**, hash `b2eccb3176eed0576e99caa5545373b7132df2b9c5cf464cb3794621d3b3907d`; aspettative congelate prima dell'esecuzione. Le 32 richieste `/api/embed` catturate (8 documenti, 24 query) hanno i prefissi corretti e `truncate=false`; il readback registra la stessa identita per documenti/query.
+
+| Misura | Esito |
+| --- | --- |
+| Dense recall@1 | 9/12 |
+| Dense recall@3 | 10/12 |
+| Dense MRR | 0.8111 |
+| Pipeline recall@3 | 9/12 |
+| Gate tutte le query nei primi tre | Fallito, exit 1 |
+
+| Caso fallito | Rank denso atteso | Esito pipeline |
+| --- | --- | --- |
+| `payment-it`, domanda IT su testo EN | 5 | Documento atteso escluso dai primi tre |
+| `support-it`, domanda IT su testo EN | 5 | Documento atteso escluso dai primi tre |
+| `storage-en`, domanda EN su testo IT | 1 | Reranking lessicale esclude il candidato corretto dai primi tre |
+
+La preparazione e corretta; il modello e la pipeline restano non qualificati per retrieval multilingue. Il corpus piccolo non dimostra qualita delle risposte, copertura delle clausole, astensione o prestazioni su corpora estesi. Qwen e BGE hanno prove di trasporto dichiarato, senza nuove campagne reali. Il Sidecar frozen/installer non e stato rigenerato dopo la preparazione; i risultati Python/live esercitano i sorgenti di sviluppo. Fallimenti mantenuti in `QUALITY-CONTENT-ACCEPTANCE-01` e `RAG-SEMANTIC-RERANKER-QUALIFICATION-01`; costo delle scansioni append in `RAG-INDEX-METADATA-EFFICIENCY-01`. Rebuild operativo e formato di attivazione restano `RAG-EMBEDDING-REBUILD-01`.
+
+Evidenze conservate: `%USERPROFILE%/OnlyRag-Live/embedding-preparation-20261002T155318Z-220245dc/report.json`, copia del corpus e store isolato. Il runner fallisce esplicitamente sul gate: nessuna aspettativa o soglia e stata modificata per ottenere un esito verde. Le fonti ufficiali e la politica sono in [rag-sidecar](./rag-sidecar.md#preparazione-documentquery).
+
+## Feedback del salvataggio impostazioni — 2026-10-02
+
+`SETTINGS-PERSISTENCE-FEEDBACK-01` e completato e rimosso dal tracker. Baseline Main: **10 test** passano. La regressione DOM aggiunta riproduce prima della correzione l'assenza di un avviso dopo `settings:save=false`. Dopo la correzione passano **18 test su tre file**, con errore restituito e sollevato, retry, bridge assente, bootstrap fallito, snapshot obsoleti e scritture serializzate. Il repository conserva il file originale dopo una serializzazione fallita e una nuova istanza rilegge il valore salvato al retry.
+
+`npm run test:fast`: **292 file / 2385 test in 141.06s**. `npm run typecheck`, `npm run quality:static` e `npm run build` passano. `node scripts/e2e/settingsBootstrap.mjs` passa nel bundle Electron con profilo temporaneo: un target incompatibile provoca un errore reale nel writer/IPC, il banner avvisa, Riprova salva la lingua rimasta in memoria e un reload rilegge il valore. Passano anche bootstrap, file corrotto/non versionato, wizard e serializzazione/coalescenza. Le ulteriori prove di timing usano handler IPC dichiarati; nessuna impostazione personale viene modificata.
+
+Residuo riprodotto e tracciato in `SETTINGS-CLOSE-DURABILITY-01`: il dismount prima dei 100 ms annulla lo snapshot ancora nel debounce; chiusura/crash con valori non confermati non ha ancora un protocollo di flush/recovery. Il banner invita a riprovare prima di chiudere. Non si dichiara durabilita per modifiche ancora pendenti.
+
+## Identità e cancellazione chat del 2026-10-02
+
+`CHAT-OPERATION-CANCELLATION-01` è completato e rimosso dal tracker. La suite completa dopo la correzione passa: `npm run test:fast`, **290 file / 2369 test in 140.34s**. `npm run build`, `npm run typecheck`, `npm run quality:static`, `npm run audit:deadcode`, `npm run audit:cycles`, `npm run docs:check` (27 documenti) e `npm run format:check` passano. Nessuna modifica al Sidecar in questa sessione: i 229 test Python del precedente follow-up non sono stati rieseguiti.
+
+Prima della correzione, tre fixture DOM controllate riproducono F25: retrieval sospeso che avvia Ollama dopo Stop, contenuto sospeso che avvia Ollama dopo nuova chat, cancellazione backend lenta che lascia occupata la UI. Dopo la correzione passano **33 test mirati su cinque file**: **21 regressioni chat**, persistenza, stato operazione, IPC e scheduler Main. Il test della coda usa `OllamaGenerationScheduler` reale con una richiesta indipendente attiva; la run chat non viene eseguita e la richiesta indipendente non viene cancellata.
+
+Sono verificati Stop durante ricerca/elenco/contenuto, nuove chat, cambio ed eliminazione conversazione, dismount, doppio invio prima del render, vecchi token/errori/finally, conferma di cancellazione tardiva mentre una nuova run è attiva, token non ancora pubblicati dal timer e readback localStorage del solo messaggio interrotto. L'identità è assegnata prima del primo await e viene usata anche dagli ID dei messaggi; i nuovi ID conversazione non collidono nello stesso millisecondo. Typecheck e qualità statica passano. La strategia di ignorare completamenti obsoleti segue la [documentazione ufficiale React](https://react.dev/reference/react/useEffect#fetching-data-with-effects), consultata il 2026-10-02.
+
+Fixture Ollama dichiarate, nessuna generazione live né modifica dei timeout/retry o dello scheduler. Il percorso desktop riavviato con Sidecar/Ollama reali, inclusa la deselezione di file assenti, resta non verificato. Il dismount invalida la run; la conservazione del turno ancora attivo alla chiusura/crash resta un requisito di `CHAT-DURABLE-HISTORY-01`. Le letture documentali già inviate non sono abortite dal Renderer e terminano entro i timeout esistenti; non possono avviare o salvare una risposta dopo l'invalidazione.
+
+## Contesto documentale chat del 2026-10-02
+
+`CHAT-GROUNDING-FAILURE-01` è completato. La baseline mirata passa **24 test su quattro file**. Le **nove regressioni** di `src/hooks/useChatEngine.test.tsx` verificano ricerca fallita, contenuto rifiutato/null/vuoto, selezione parzialmente caricata, documento eliminato nonostante cache preesistente, elenco indisponibile, ricerca senza candidati con testo valido, estratti dichiarati e selezione eliminata conservata al cambio conversazione. Non viene richiesta alcuna generazione dopo un errore di grounding. `npm run build` e `npm run quality:static` passano dopo la correzione di un tipo implicito rilevato da TypeScript.
+
+Le risposte Ollama sono fixture dichiarate: queste prove verificano il comportamento della chat, non la qualità del modello o l'adeguatezza semantica dei candidati. I messaggi distinguono l'assenza confermata dall'elenco aggiornato e un contenuto indisponibile che può dipendere anche da un'eliminazione successiva. Copertura completa, provenienza navigabile e accettazione semantica restano nei relativi task. Il percorso desktop riavviato non è verificato da queste prove DOM.
+
+La suite estesa dopo il problema rilevato passa: `npm run test:fast`, **290 file / 2357 test in 143.57s**. `npm run docs:check` passa su 27 documenti e `npm run format:check` passa. La voce completata è rimossa dal tracker; i prerequisiti delle voci dipendenti la indicano come completata.
+
+## Integrita della normalizzazione del 2026-10-02
+
+`DOC-NORMALIZATION-INTEGRITY-01` e completato. La precedente baseline di sette test del normalizzatore passava anche con risposte incomplete o sostitutive; quei casi ora richiedono revisione. PDF e immagini conservano l'estrazione originale e un rifiuto termina prima di embedding/scrittura. Il PDF multipagina mantiene anche pagine accettate in precedenza e pagine finali. Il contratto REST/IPC approvato passa testo originale e motivi alla bozza UI separata; export/dismiss non toccano il documento selezionato o le modifiche dell'editor. Nessuna migrazione o nuovo stato persistito.
+
+- `.venv\Scripts\python.exe -m pytest -q`: **229 passed in 23.81s**. I **60 test mirati** coprono Excel/Parquet, risposte incomplete/troncate/vuote, perdita di riferimenti/segni/importi, omissione di clausole/negazioni, sostituzioni e pulizia valida, originali multipagina e assenza di scrittura.
+- `npm run test:fast`: **289 files / 2348 passed in 142.35s**. Dopo il controllo terminale dello stream, **38 test mirati su cinque file** passano: dati di revisione validati, errore non convertibile in successo ne progresso `done`, inoltro Main/IPC, bozza/export UI e contenuto inerte anche se contiene markup.
+- `.venv\Scripts\pyinstaller.exe --noconfirm --distpath sidecar_dist sidecar.spec`: passata. Il bundle finale passa **17 test HTTP in 6.05s**, selezione `-k stream` su `test_tabular_ingestion.py` e `test_normalization_ingestion.py`. Autenticazione attiva, directory/database isolati, sorgenti invariati e nessuna riga residua. I binari XLSX/XLS/Parquet e l'estrazione PDF sono reali; le generazioni Ollama sono una fixture dichiarata e gli embedding usano fallback. Non e qualifica di un modello reale.
+- `npm run generate:openapi`, `npm run typecheck`, `npm run quality:static`, `npm run audit:deadcode`, `npm run audit:cycles` e `npm run build`: passati. Il formatter Biome ha corretto sei nuovi file; nessuna regola modificata.
+
+Le prove contro il bundle usano `ONLYRAG_TABULAR_TEST_URL` e `ONLYRAG_TABULAR_TEST_TOKEN` solo per il client pytest; `ONLYRAG_TEST_OLLAMA_URL` identifica il server di risposte controllate dei test. Server e client devono condividere un token temporaneo non stampato, un database vuoto isolato e un endpoint Ollama di fixture; i test non avviano o riutilizzano modelli personali. La normale suite usa TestClient e database temporanei propri.
+
+Limiti residui tracciati: lettura tabellare ancora integrale in memoria (`TABULAR-BOUNDED-READ-INTEGRITY-01`); false accettazioni/rifiuti e ambiguita di punteggiatura/segmentazione da misurare su corpus/modelli (`QUALITY-CONTENT-ACCEPTANCE-01`); revisione/export oltre 10 milioni di caratteri o 10.000 motivi di pagina (`DOC-NORMALIZATION-CONTEXT-01`). La bozza e in memoria e non sopravvive al riavvio. La UI e verificata con DOM, non nel desktop riavviato; nessun nuovo installer NSIS o campagna live.
+
+Pulizia parzialmente bloccata: `D:/GITHUB/OnlyRagV2/build/tabular-probes` resta gitignored e contiene solo temporanei creati da questa verifica (database isolati, copie di fixture, probe runner e log). Dopo verifica del percorso assoluto e inventario dei contenuti, la revisione automatica ha rifiutato sia la rimozione PowerShell con guard sia quella con percorso letterale, riportando `blocked by policy` senza dettagli ulteriori. Nessun file e stato rimosso. Il residuo e aggiunto a `LIVE-RUN-RESIDUE-CLEANUP-01`; i risultati sopra restano registrati nella documentazione. Dati personali e artefatti live non sono coinvolti.
+
+## Estrazione Excel del 2026-10-01
+
+`DOC-EXCEL-EXTRACTION-01` e completato e rimosso dal tracker. La baseline riprodotta con XLSX e XLS reali restituiva solo titolo/pagina dopo un errore di motore mancante; i tre controlli tabellari preesistenti passavano. Ora i parser reali conservano celle iniziali/finali, fogli successivi, zeri iniziali e `NA`. Vuoto, corruzione e motore assente falliscono esplicitamente senza evento `done`, embedding o nuovi record; i sorgenti rimangono identici.
+
+- `.venv\Scripts\python.exe -m pytest -q sidecar/tests/test_tabular_ingestion.py`: **16 passed**.
+- `.venv\Scripts\python.exe -m pytest -q`: **192 passed in 24.16s**.
+- `npx vitest run electron/core/infrastructure/process/sidecarProcessManager.test.ts --reporter=dot`: **3 passed**. `npm run typecheck`, `npm run quality:static` e `npm run build`: passati.
+- `.venv\Scripts\pyinstaller.exe --noconfirm --distpath sidecar_dist sidecar.spec`: compilazione completata. Lo stesso file di test, selezione `-k excel_stream`, passa contro il Sidecar compilato: **6 passed in 7.82s**. Eseguibile avviato da una directory isolata, autenticazione attiva, database temporaneo e Ollama volutamente indisponibile; solo embedding di fallback, nessuna qualifica RAG/modello. Dopo la prova non restano righe nel database isolato.
+
+Il workbook XLS e la sua provenienza/licenza sono in [`sidecar/tests/fixtures`](../sidecar/tests/fixtures/README.md); gli XLSX sono generati nei temporanei pytest. Non e stato rigenerato l'installer NSIS ne verificato il percorso desktop. Memoria su input grandi e visibilita delle omissioni oltre i limiti restano in `TABULAR-BOUNDED-READ-INTEGRITY-01`.
+
+## Estrazione Parquet del 2026-10-01
+
+`DOC-PARQUET-EXTRACTION-01` e completato e rimosso dal tracker. La baseline di un vero file Parquet restituiva solo titolo/pagina; ora pandas/Arrow conserva colonne, codici, importi e testo, segnala il limite di righe e propaga gli errori. Motore assente, input corrotto, vuoto o privo di valori leggibili non producono indicizzazione riuscita.
+
+- Test tabellari combinati prima del controllo finale sugli intervalli vuoti: **27 passed**; suite Sidecar: **203 passed in 19.75s**. `.venv\Scripts\python.exe -m pip check`: **No broken requirements found**.
+- Il bundle PyInstaller con `pyarrow.parquet` incluso passa gli stessi test HTTP Excel/Parquet, selezione `-k stream`: **10 passed in 10.71s**, da directory e database isolati con autenticazione attiva. Parser reali, sorgenti invariati, nessun record residuo; Ollama indisponibile e soli embedding di fallback. Non e una verifica semantica di retrieval o del modello.
+- `npm run quality:static` e `npm run build`: passati. I controlli finali includono anche intervalli di output vuoti prima di dati presenti oltre il limite.
+
+Le prove Parquet sono binari generati da pandas/Arrow nei temporanei pytest. La lettura in memoria rimane completa prima della limitazione di output: questo residuo e gia tracciato in `TABULAR-BOUNDED-READ-INTEGRITY-01`, insieme a CSV e fogli Excel. Nessun installer NSIS o percorso desktop verificato.
+
 ## Traduzione fedele di scansioni del 2026-10-01
 
 La [verifica dedicata](./translation-fidelity-2026-10-01.md) corregge OCR, dati protetti, firma e reinserimento dei blocchi del PDF, con 176 test Sidecar e 19 test frontend mirati passati. Il documento reale e stato rigenerato con qwen3.5:9b senza modificare sorgente, precedente output o impostazioni. Il prompt vieta sintesi e omissioni; i controlli deterministici bloccano perdita di entita o testo non renderizzabile. La fedelta semantica generale resta una verifica separata: nell'output “a.r.” resta abbreviato, e il probe con thinking supera i due timeout esistenti.
@@ -115,3 +201,19 @@ npm run test:e2e:electron
 - L'audit della run `sequence1-runtime-fix-20260929` mostra che `npm init` e `npm install` avevano creato file, ma il guard `no_mutation` veniva calcolato prima della scansione dei file toccati dal comando. Il 2026-09-29 `runToolResultProcessing` è stato corretto per registrare i file prodotti da un comando prima del guard; una chiamata fallita non azzera la soglia. Passano 46 test mirati, typecheck, `quality:static`, l'E2E Electron (8 scenari di affidabilità e 9 guard) e la suite rapida (285 file, 2281 test). La ripetizione live isolata del primo prompt con `qwen3.5:4b` a 16K (`sequence1-guardfix-20260929`) ha raggiunto 50/50 passi senza `no_mutation`, ma si è chiusa `blocked/step_budget`: 0/12 milestone e 20 tool call fallite. Il workspace contiene `src/` senza file sorgenti; `npm run build` fallisce con TS5083 perché manca `tsconfig.json`, e `npm test` fallisce perché manca lo script. L'audit non registra tool browser né feedback web-ui; la qualifica del modello resta aperta. Workspace e snapshot restano in `%USERPROFILE%\OnlyRag-Live\fulltask_qwen3-5-4b-sequence1-guardfix-20260929` e `snapshots/2026-09-29T21-17-18-244Z_live-full-task-qwen3-5-4b-sequence1-guardfix-20260929_full-task-run-qwen3-5-4b-sequence1-guardfix-20260929`.
 
 Per i contratti da verificare consultare [`api-ipc.md`](./api-ipc.md), [`api-rest.md`](./api-rest.md) e [`PROJECT_STATUS.json`](../PROJECT_STATUS.json).
+
+## Model qualification signals — 2026-10-02
+
+Baseline: 59 tests passed across the model matrix, preflight and orchestrator. After the fix, the focused five-file run passed 78 tests in 11.92s: historical 7B/9B evidence never overrides missing native capabilities; DOM badges retain complete failure/tooltips; invalid effective context is blocked; a selected 2K window prevents generation despite advertised 8K capacity. The initial typecheck caught two incorrect test fixture fields; both were corrected, with no production check relaxed. `npm run build` passes after that repair. No live model campaign or restarted-desktop qualification was performed; TaskLab and resource-fit qualification remain in their existing tracker entries.
+
+## Native embedding geometry and storage — 2026-10-02
+
+Baseline: `.venv\Scripts\python.exe -m pytest -q sidecar/tests/test_embeddings.py sidecar/tests/test_embedding_model_consistency.py sidecar/tests/test_document_recovery.py` passed 21 tests in 4.47s. After implementation, adding `sidecar/tests/test_embedding_space_storage.py` to that command passed 45 tests in 3.77s. Wire fixtures verify native dimensions 768/1024/2560/4096, exact batch cardinality, non-finite/boolean/string/zero vectors, local metadata and pre/post-request digest checks, unchanged cold-load timeouts, explicit input-truncation rejection and separate transport fallback. Actual isolated LanceDB verifies fixed-size float32 vectors, orthogonal tail coordinates beyond 768 (squared L2 distance 2), same-space document filtering, malformed provenance refusal, legacy preservation and transactional rollback on dimension changes.
+
+General pytest fixtures explicitly attach declared word-hash provenance for mechanics; they cannot prove semantic model quality. Native-dimension tests capture the production embedding entry point and use separate transport/geometry fixtures. That geometry verification did not download or invoke a model or change personal data. The later approved document/query preparation and Nomic IT/EN evaluation are reported above; multilingual quality remains open. Operational rebuild/activation remains `RAG-EMBEDDING-REBUILD-01`. The old chunk-context migration is historical and is not the new rebuild path.
+
+### Final regression after both tasks
+
+The first complete TypeScript run found the inherited-property registry case (`__proto__`). The evidence lookup now accepts only own recorded keys; its focused 22-test run passes. The final stable `npm run test:fast` passes **291 files / 2377 tests in 141.39s**, exit 0. Final `.venv\Scripts\python.exe -m pytest -q` passes **253 tests in 27.44s**, exit 0. `npm run build`, `quality:static` (770 files), both Knip passes, `audit:cycles` (no cycles), `docs:check` (27 documents) and diff checks pass. No checks were disabled. The Sidecar frozen executable/installer and restarted desktop were not rebuilt or qualified in this pass; the Python results exercise development sources.
+
+The tracker has 40 unique open tasks: two completed entries removed and operational embedding rebuild added separately. Saved settings and personal databases remain unchanged. The new digest/show requests and expanded space-provenance scan still need workload measurements, covered by `RAG-INDEX-METADATA-EFFICIENCY-01`; no speculative cache or index was introduced.

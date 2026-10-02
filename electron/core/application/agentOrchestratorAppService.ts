@@ -303,10 +303,21 @@ export async function runAgentOrchestratorLoop(
     ollamaAppService.testConnection(settings.ollamaHost),
     workspaceAppService.inspectGuestOsEnvironment(),
   ])
+  // Resolve the selected context with the same hardware policy used for model turns.
+  if (!hardwareProbe.getCachedGpuInfo()) await hardwareProbe.detectGpu().catch(() => null)
+  const cachedGpu = hardwareProbe.getCachedGpuInfo()
+  const hardwareContext = HardwareProfileResolver.resolveOllamaOptions('Auto', {
+    hasGpu: cachedGpu?.hasNvidiaGpu,
+    vramTotalMB: cachedGpu?.vramTotalMB,
+    systemRamGB: hardwareProbe.getMemoryInfo().totalRAMGB,
+  }).num_ctx
   const preflight = evaluateAgentCodingPreflight({
     codingModel,
     availableModels,
     modelMetrics,
+    effectiveContextTokens:
+      session.ollamaRuntimeProfile?.options.num_ctx ??
+      resolveModelContextLength(codingModel, settings.modelContextLengths, hardwareContext, modelMetrics[codingModel]?.contextLength),
     ollamaReachable: ollamaConnection.success,
     ollamaError: ollamaConnection.error,
     workspacePath,
@@ -333,12 +344,6 @@ export async function runAgentOrchestratorLoop(
     finalizeSession()
     return { success: false, summary: errorMsg, completionStatus: 'blocked' }
   }
-
-  // No warm-up request: a preload without the session's num_ctx made Ollama load the model twice,
-  // once with its default window and again at the first turn's window.
-  // The context window depends on the GPU tier; before the first diagnostics run the cache is empty
-  // and the host was sized as GPU-less (16k instead of 64k in the live run of 2026-09-26).
-  if (!hardwareProbe.getCachedGpuInfo()) await hardwareProbe.detectGpu().catch(() => null)
 
   session.changedFiles ||= []
   session.nonRollbackEffects ||= []

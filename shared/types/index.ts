@@ -88,6 +88,14 @@ export interface IngestedDocumentContent extends IngestedDocument {
   extractedMarkdown: string
 }
 
+export interface NormalizationReview {
+  originalMarkdown: string
+  issues: {
+    page: number
+    reason: 'model_missing' | 'request_failed' | 'incomplete_response' | 'truncated' | 'empty_response' | 'entities_changed' | 'content_changed'
+  }[]
+}
+
 export interface VectorSearchResult {
   chunk_id: string
   doc_id?: string

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { IngestionStreamProgressPayload, TranslateProgressPayload } from '../../../shared/types'
+import type { IngestionStreamProgressPayload, NormalizationReview, TranslateProgressPayload } from '../../../shared/types'
 
 const nonBlank = z.string().trim().min(1)
 const boundedPath = nonBlank.max(4096)
@@ -67,6 +67,28 @@ export const sidecarExportPayloadSchema = z
 const count = z.number().int().nonnegative()
 const percent = z.number().min(0).max(100)
 const text = z.string().max(20_000)
+
+const normalizationReviewSchema = z
+  .object({
+    original_markdown: z.string().min(1).max(10_000_000),
+    issues: z
+      .array(
+        z
+          .object({
+            page: z.number().int().min(1),
+            reason: z.enum(['model_missing', 'request_failed', 'incomplete_response', 'truncated', 'empty_response', 'entities_changed', 'content_changed']),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(10_000),
+  })
+  .strict()
+
+export function parseNormalizationReview(value: unknown): NormalizationReview | null {
+  const parsed = normalizationReviewSchema.safeParse(value)
+  return parsed.success ? { originalMarkdown: parsed.data.original_markdown, issues: parsed.data.issues } : null
+}
 
 /** The Sidecar's ingestion NDJSON event; unknown keys (the `done` document record, `task_id`) are dropped. */
 const sidecarIngestProgressEventSchema = z.object({

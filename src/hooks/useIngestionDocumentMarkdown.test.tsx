@@ -91,4 +91,29 @@ describe('useIngestion loads the selected document on demand', () => {
     expect(ingestion.markdownContent).toBe('# A edited')
     expect(getIngestedDocument).toHaveBeenCalledTimes(1)
   })
+
+  it('retains and exports a review draft without replacing the selected document or indexing it', async () => {
+    await resolveDocument('a', '# A')
+    await act(async () => ingestion.setMarkdownContent('# A edited'))
+    const review = { originalMarkdown: '# Original\n\nAB123 retained.', issues: [{ page: 1, reason: 'truncated' }] }
+    const ingestFile = vi.fn(async () => ({ success: false, error: 'Review required', normalizationReview: review }))
+    const exportDocument = vi.fn(async () => ({ success: true }))
+    const updateIngestedDocument = vi.fn()
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = { getIngestedDocument, ingestFile, exportDocument, updateIngestedDocument }
+
+    await act(async () => ingestion.handleIngestPath('C:/fixtures/review.pdf'))
+
+    expect(ingestion.normalizationReview).toEqual(review)
+    expect(ingestion.selectedDoc?.id).toBe('a')
+    expect(ingestion.markdownContent).toBe('# A edited')
+    expect(ingestion.isUploading).toBe(false)
+    expect(ingestion.ingestionProgress.active).toBe(false)
+    expect(documentsStore.documents).toEqual([docA, docB])
+    expect(updateIngestedDocument).not.toHaveBeenCalled()
+    await act(async () => ingestion.handleExportNormalizationReview())
+    expect(exportDocument).toHaveBeenCalledWith({ markdownContent: review.originalMarkdown, format: 'md' })
+    await act(async () => ingestion.dismissNormalizationReview())
+    expect(ingestion.normalizationReview).toBeNull()
+    expect(ingestion.markdownContent).toBe('# A edited')
+  })
 })

@@ -109,6 +109,21 @@ const itWithPowerShell = it.skipIf(process.platform !== 'win32')
 describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () => {
   let tempDir: string
 
+  it('blocks a selected 2K context before model generation despite an 8K advertised capacity', async () => {
+    const result = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Read the project',
+        workspacePath: tempDir,
+        agentMode: 'ask',
+        settings: { ...TOOL_ENABLED_SETTINGS, modelContextLengths: { 'llama3.2:3b': 2048 } },
+      },
+      null,
+    )
+    expect(result.completionStatus).toBe('blocked')
+    expect(result.summary).toContain('context')
+    expect(AgentStreamTransport.streamCompletion).not.toHaveBeenCalled()
+  })
+
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-orchestrator-test-'))
     vi.clearAllMocks()

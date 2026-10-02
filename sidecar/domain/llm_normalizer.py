@@ -2,9 +2,34 @@ import re
 import json
 import urllib.request
 import urllib.error
-from typing import Optional
+import unicodedata
+from collections import Counter
+from typing import Optional, List, Dict, Any
 from sidecar.config import OLLAMA_BASE_URL, logger
 from sidecar.domain.sanitizer import sanitize_extracted_text
+
+_PROTECTED_TOKEN = re.compile(r"(?<!\w)[+-]?\w*\d[\w./:@+-]*\b")
+
+
+class NormalizationReviewRequired(Exception):
+    def __init__(self, original_markdown: str, issues: List[Dict[str, Any]]):
+        super().__init__("Normalization requires review; the original extraction was preserved and was not indexed.")
+        self.original_markdown = original_markdown
+        self.issues = issues
+
+    def wire_payload(self) -> Dict[str, Any]:
+        return {"original_markdown": self.original_markdown, "issues": self.issues}
+
+
+def _content_sequence(text: str) -> str:
+    # Compare content order while allowing spacing, Markdown and accent cleanup.
+    text = re.sub(r"(?<=\w)-\s*\n\s*(?=\w)", "", text)
+    normalized = unicodedata.normalize("NFKD", text).casefold()
+    return "".join(char for char in normalized if char.isalnum() or char in "@=+%?!")
+
+
+def _review(page_text: str, page_num: int, reason: str) -> NormalizationReviewRequired:
+    return NormalizationReviewRequired(page_text, [{"page": page_num, "reason": reason}])
 
 def should_normalize_page_with_llm(page_text: str) -> bool:
     """Heuristic check to determine if a page's extracted text warrants LLM normalization."""
@@ -26,18 +51,11 @@ def normalize_page_markdown_with_llm(
     ollama_url: Optional[str] = None,
     think: bool = False
 ) -> str:
-    """
-    Optional, per-page LLM Markdown normalizer.
-    Calls local Ollama to clean up OCR line breaks, hyphenation, and fragmented layouts.
-    Strictly preserves all factual content and falls back gracefully to deterministic sanitization
-    on timeout, network error, or empty response.
-    """
+    """Accept conservative layout cleanup or retain the source for explicit review."""
     if not should_normalize_page_with_llm(page_text):
         return sanitize_extracted_text(page_text)
     if not model:
-        # IngestPathRequest rejects normalization without a model; never guess one here.
-        logger.warning("LLM normalization skipped for page %s: no normalization model configured.", page_num)
-        return sanitize_extracted_text(page_text)
+        raise _review(page_text, page_num, "model_missing")
 
     endpoint = f"{ollama_url or OLLAMA_BASE_URL}/api/generate"
     prompt = (
@@ -74,21 +92,29 @@ def normalize_page_markdown_with_llm(
             method="POST"
         )
         with urllib.request.urlopen(req, timeout=timeout_seconds) as response:
-            if response.status == 200:
-                res_body = json.loads(response.read().decode("utf-8"))
-                cleaned_output = res_body.get("response", "").strip()
-                if cleaned_output:
-                    # Strip markdown block fences if the LLM wrapped its entire response in ```markdown ... ```
-                    cleaned_output = re.sub(r'^```(?:markdown)?\s*', '', cleaned_output)
-                    cleaned_output = re.sub(r'\s*```$', '', cleaned_output).strip()
-                    # Strip conversational header banners and trailing notes
-                    cleaned_output = re.sub(r'^\*\*(?:Cleaned|Normalized|Formatted)\s+Markdown\s+(?:Text|Output)\*\*\s*', '', cleaned_output, flags=re.IGNORECASE)
-                    cleaned_output = re.sub(r'\n+\*\*(?:Nota|Note|Disclaimer):\*\*.*$', '', cleaned_output, flags=re.IGNORECASE | re.DOTALL)
-                    cleaned_output = cleaned_output.strip()
-                    logger.info(f"Page {page_num} successfully normalized via LLM ({model})")
-                    return sanitize_extracted_text(cleaned_output)
-    except Exception as err:
-        logger.debug(f"LLM normalization skipped on page {page_num} (falling back to deterministic): {err}")
+            if response.status != 200:
+                raise _review(page_text, page_num, "request_failed")
+            res_body = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, json.JSONDecodeError, UnicodeDecodeError):
+        raise _review(page_text, page_num, "request_failed") from None
 
-    # Fallback guarantee: deterministic sanitization
-    return sanitize_extracted_text(page_text)
+    if not isinstance(res_body, dict):
+        raise _review(page_text, page_num, "incomplete_response")
+    if res_body.get("done_reason") == "length":
+        raise _review(page_text, page_num, "truncated")
+    if res_body.get("done") is not True or res_body.get("done_reason") != "stop":
+        raise _review(page_text, page_num, "incomplete_response")
+    cleaned_output = res_body.get("response")
+    if not isinstance(cleaned_output, str) or not cleaned_output.strip():
+        raise _review(page_text, page_num, "empty_response")
+    cleaned_output = cleaned_output.strip()
+    if cleaned_output.startswith("```") and cleaned_output.endswith("```"):
+        cleaned_output = re.sub(r'^```(?:markdown)?\s*', '', cleaned_output)
+        cleaned_output = re.sub(r'\s*```$', '', cleaned_output).strip()
+    cleaned_output = sanitize_extracted_text(cleaned_output)
+    if Counter(_PROTECTED_TOKEN.findall(page_text)) != Counter(_PROTECTED_TOKEN.findall(cleaned_output)):
+        raise _review(page_text, page_num, "entities_changed")
+    if not cleaned_output or _content_sequence(page_text) != _content_sequence(cleaned_output):
+        raise _review(page_text, page_num, "content_changed")
+    logger.info("Page %s passed conservative LLM layout checks (%s); semantic fidelity is not certified.", page_num, model)
+    return cleaned_output

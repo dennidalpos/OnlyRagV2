@@ -43,6 +43,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
   ({ settings, diagnostics, onUpdateSettings, isActive = true }) => {
     const { t } = useTranslation()
     const c = useChatEngine(settings, diagnostics)
+    const unavailableSelections = Array.from(c.selectedDocIds).filter((id) => !c.documents.some((doc) => doc.id === id))
     const toast = useToast()
     const downloadProgress = useModelDownloadProgress()
     const activeChatModel = resolveConfiguredModel('chat', settings)
@@ -271,6 +272,16 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-1.5 pr-1" role="group" aria-label={t('chat.toolsTitle')}>
+                  {unavailableSelections.map((id) => (
+                    <button
+                      type="button"
+                      key={id}
+                      onClick={() => c.toggleDocSelection(id)}
+                      className="w-full text-left p-2.5 rounded-xl border border-amber-800 text-xs text-amber-200 focus-ring"
+                    >
+                      {t('chat.removeUnavailableSelection', { id })}
+                    </button>
+                  ))}
                   {c.documents.length === 0 ? (
                     <div className="text-center py-8 text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl p-4 leading-relaxed">
                       {t('chat.noDocsIndexed')} {t('chat.noDocsHint')}

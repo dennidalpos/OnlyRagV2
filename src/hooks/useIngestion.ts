@@ -1,6 +1,6 @@
 import type { editor } from 'monaco-editor'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { IngestedDocument, AppSettings, DiagnosticsData, IngestionStreamProgressPayload } from '../types'
+import { IngestedDocument, AppSettings, DiagnosticsData, IngestionStreamProgressPayload, NormalizationReview } from '../types'
 import { electronApi } from '../services/electronApi'
 import { logger } from '../lib/logger'
 import { useIngestedDocuments, notifyDocumentsChanged } from './useIngestedDocuments'
@@ -101,6 +101,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   const [markdownContent, setMarkdownContent] = useState<string>('')
   const [isUploading, setIsUploading] = useState<boolean>(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [normalizationReview, setNormalizationReview] = useState<NormalizationReview | null>(null)
   const [syncScroll, setSyncScroll] = useState<boolean>(true)
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string } | null>(null)
@@ -331,11 +332,10 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     })
   }
 
-  const handleExportMarkdown = async (format: 'pdf' | 'md' = 'pdf') => {
-    if (!selectedDoc || !markdownContent) return
+  const exportMarkdownContent = async (content: string, format: 'pdf' | 'md') => {
     setExportStatus({ active: true, message: t('ingestion.exportPreparing', { format: format.toUpperCase() }) })
     try {
-      const res = await electronApi().exportDocument({ markdownContent, format })
+      const res = await electronApi().exportDocument({ markdownContent: content, format })
       if (res.success) {
         setExportStatus({ active: false, message: res.message || t('ingestion.exportSuccess', { format: format.toUpperCase() }) })
       } else {
@@ -349,6 +349,14 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         setExportStatus(null)
       }, 5000)
     }
+  }
+
+  const handleExportMarkdown = async (format: 'pdf' | 'md' = 'pdf') => {
+    if (selectedDoc && markdownContent) await exportMarkdownContent(markdownContent, format)
+  }
+
+  const handleExportNormalizationReview = async () => {
+    if (normalizationReview) await exportMarkdownContent(normalizationReview.originalMarkdown, 'md')
   }
 
   const handleSelectDoc = (doc: IngestedDocument) => {
@@ -465,7 +473,12 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
       if (activeTaskIdRef.current !== taskId) return
 
       if (!res.success) {
-        setUploadError(res.error || t('ingestion.failedUnknown'))
+        if (res.normalizationReview) {
+          setNormalizationReview(res.normalizationReview)
+          setUploadError(null)
+        } else {
+          setUploadError(res.error || t('ingestion.failedUnknown'))
+        }
         setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 })
         return
       }
@@ -579,6 +592,9 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     isUploading,
     uploadError,
     setUploadError,
+    normalizationReview,
+    dismissNormalizationReview: () => setNormalizationReview(null),
+    handleExportNormalizationReview,
     syncScroll,
     setSyncScroll,
     ingestionProgress,

@@ -1,6 +1,7 @@
 import http from 'node:http'
 import { logger } from '../logging/logger'
-import type { OllamaThinkValue, VectorSearchResult } from '../../../../shared/types'
+import type { NormalizationReview, OllamaThinkValue, VectorSearchResult } from '../../../../shared/types'
+import { parseNormalizationReview } from '../../domain/sidecarContract'
 import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
@@ -77,6 +78,7 @@ export interface SidecarStreamResult<T> {
   success: boolean
   data?: T
   error?: string
+  normalizationReview?: NormalizationReview
 }
 
 type Envelope<T> = { success: true; data: T } | { success: false; error: string }
@@ -196,6 +198,7 @@ export class SidecarHttpClient {
   ): Promise<SidecarStreamResult<T>> {
     let finalResult: T | null = null
     let streamError: string | null = null
+    let normalizationReview: SidecarStreamResult<T>['normalizationReview']
     const handleLine = (line: string) => {
       let event: SidecarStreamEvent
       try {
@@ -205,9 +208,17 @@ export class SidecarHttpClient {
       } catch {
         return
       }
+      if (streamError) return
       onProgress(event)
       if (event.type === 'done' && event.data) finalResult = event.data as T
-      if (event.type === 'error') streamError = String(event.error || event.step || `${label} failed`)
+      if (event.type === 'error') {
+        streamError = String(event.error || event.step || `${label} failed`)
+        if (event.normalization_review !== undefined) {
+          const review = parseNormalizationReview(event.normalization_review)
+          if (review) normalizationReview = review
+          else streamError = 'Invalid normalization review payload; ingestion was not accepted'
+        }
+      }
     }
 
     try {
@@ -226,8 +237,8 @@ export class SidecarHttpClient {
         return { success: false, error: detail }
       }
       if (res.body.trim()) handleLine(res.body.trim())
+      if (streamError) return { success: false, error: streamError, ...(normalizationReview ? { normalizationReview } : {}) }
       if (finalResult) return { success: true, data: finalResult }
-      if (streamError) return { success: false, error: streamError }
       logger.log('WARN', 'SidecarClient', `${label} stream ended without a done event`)
       return { success: false, error: `${label} stream terminated without completion confirmation` }
     } catch (err: unknown) {

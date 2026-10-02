@@ -47,6 +47,9 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         </div>
         <div>
           <h1 className="font-bold text-slate-100 text-sm tracking-wide">{t('coding.headerTitle')}</h1>
+          <p className="text-[11px] text-amber-300" title={t('modelBadges.experimentalTooltip')}>
+            {t('modelBadges.experimental')}
+          </p>
         </div>
       </div>
 

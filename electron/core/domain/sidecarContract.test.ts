@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  parseNormalizationReview,
   sidecarExportPayloadSchema,
   sidecarIngestFilePayloadSchema,
   sidecarSearchPayloadSchema,
@@ -7,6 +8,27 @@ import {
   toIngestionProgressPayload,
   toTranslateProgressPayload,
 } from './sidecarContract'
+
+describe('normalization review contract', () => {
+  it('retains the original Markdown verbatim with typed page issues', () => {
+    expect(parseNormalizationReview({ original_markdown: '  # Original\n\nAB123\n', issues: [{ page: 2, reason: 'truncated' }] })).toEqual({
+      originalMarkdown: '  # Original\n\nAB123\n',
+      issues: [{ page: 2, reason: 'truncated' }],
+    })
+  })
+
+  it.each([
+    { original_markdown: '', issues: [{ page: 1, reason: 'truncated' }] },
+    { original_markdown: '# A', issues: [] },
+    { original_markdown: '# A', issues: [{ page: 0, reason: 'truncated' }] },
+    { original_markdown: '# A', issues: [{ page: 1, reason: 'verified' }] },
+    { original_markdown: '# A', issues: [{ page: 1, reason: 'truncated', extra: true }] },
+    { original_markdown: '# A', issues: [{ page: 1, reason: 'truncated' }], indexed: true },
+    { original_markdown: 'A'.repeat(10_000_001), issues: [{ page: 1, reason: 'truncated' }] },
+  ])('rejects invalid or excessive review data: %#', (value) => {
+    expect(parseNormalizationReview(value)).toBeNull()
+  })
+})
 
 describe('sidecar IPC contract', () => {
   it('accepts bounded ingestion and translation payloads', () => {

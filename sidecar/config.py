@@ -29,7 +29,6 @@ EXPORT_DIR = os.path.join(DATA_DIR, "exports")
 os.makedirs(LANCEDB_DIR, exist_ok=True)
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
-EMBEDDING_DIM: int = 768
 DOCS_TABLE_NAME: str = "documents"
 CHUNKS_TABLE_NAME: str = "chunks"
 PROMPT_HISTORY_TABLE_NAME: str = "prompt_history"

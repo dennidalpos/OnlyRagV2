@@ -11,6 +11,7 @@ function runPreflight(workspacePath: string, overrides: Partial<Parameters<typeo
     codingModel: 'qwen2.5-coder:7b',
     availableModels: ['qwen2.5-coder:7b'],
     modelMetrics: { 'qwen2.5-coder:7b': { capabilities: ['completion', 'tools'], contextLength: 32768 } },
+    effectiveContextTokens: 16384,
     ollamaReachable: true,
     workspacePath,
     isStandaloneMode: false,
@@ -20,10 +21,13 @@ function runPreflight(workspacePath: string, overrides: Partial<Parameters<typeo
 }
 
 describe('Agent Coding preflight', () => {
-  it('accepts a qualified installed model in a writable confined workspace', () => {
+  it('accepts a runtime-compatible model while retaining unqualified full-task status', () => {
     const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-preflight-'))
     try {
-      expect(runPreflight(workspacePath)).toMatchObject({ ready: true })
+      const result = runPreflight(workspacePath)
+      expect(result).toMatchObject({ ready: true })
+      expect(result.checks.find((check) => check.id === 'qualification')).toMatchObject({ passed: false, blocking: false })
+      expect(result.checks.find((check) => check.id === 'probes')?.detail).toContain('does not finish the plan')
     } finally {
       fs.rmSync(workspacePath, { recursive: true, force: true })
     }
@@ -48,7 +52,18 @@ describe('Agent Coding preflight', () => {
         modelMetrics: { 'qwen2.5-coder:7b': { capabilities: ['completion'], contextLength: 2048 } },
       })
       expect(result.ready).toBe(false)
-      expect(result.checks.filter((check) => check.blocking && !check.passed).map((check) => check.id)).toEqual(['ollama', 'model', 'qualification', 'context'])
+      expect(result.checks.filter((check) => check.blocking && !check.passed).map((check) => check.id)).toEqual(['ollama', 'model', 'tools', 'context'])
+    } finally {
+      fs.rmSync(workspacePath, { recursive: true, force: true })
+    }
+  })
+
+  it.each([2048, 65536, Number.NaN, 4096.5])('blocks an invalid effective window %s despite advertised capacity', (effectiveContextTokens) => {
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-preflight-'))
+    try {
+      const result = runPreflight(workspacePath, { effectiveContextTokens })
+      expect(result.ready).toBe(false)
+      expect(result.checks.find((check) => check.id === 'context')).toMatchObject({ passed: false, blocking: true })
     } finally {
       fs.rmSync(workspacePath, { recursive: true, force: true })
     }

@@ -1,5 +1,17 @@
 # Renderer React
 
+## Salvataggio delle impostazioni — 2026-10-02
+
+`SETTINGS-PERSISTENCE-FEEDBACK-01` e completato. Il banner globale distingue salvataggio in corso, conferma del Main e modifiche non salvate; un errore mantiene i valori in memoria e offre Riprova. I messaggi IT/EN usano `role=status` o `role=alert`, senza spostare il focus. La conferma vale solo per l'ultimo snapshot: completamenti obsoleti non confermano nuove modifiche. Il debounce resta 100 ms e le scritture restano serializzate; snapshot superati ancora in coda non vengono scritti. Un caricamento fallito continua a bloccare salvataggi e diagnostica.
+
+DOM e readback del repository passano; Electron prova un errore reale del writer su un profilo temporaneo, retry dei valori correnti e reload del file salvato. La chiusura prima del debounce o con scritture pendenti resta in `SETTINGS-CLOSE-DURABILITY-01`. Fonti rilette il 2026-10-02: [ciclo di vita degli effetti React](https://react.dev/reference/react/useEffect), [messaggi di stato W3C](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html). Evidenze: [verification](./verification.md).
+
+La chat verifica elenco e contenuto aggiornati dei documenti selezionati prima di generare: una selezione eliminata resta riconoscibile, non diventa una chat senza allegati; nel pannello Contesto è deselezionabile anche se non compare più nell'elenco. Ricerca fallita, elenco indisponibile, contenuto indisponibile o testo vuoto interrompono la risposta con motivi e conteggio dei documenti caricati. Un caricamento parziale non avvia Ollama né espone candidati come fonti della risposta. Gli estratti limitati dal budget sono segnalati nel messaggio e nel prompt; solo un testo completo che rientra nel budget usa `Full Document`. La cache Markdown degli altri consumatori resta indipendente.
+
+Ogni invio chat assegna un'identità prima della ricerca e la conserva per caricamento, coda Ollama, stream e salvataggio nella conversazione d'origine. Stop, cambio/nuova chat ed eliminazione invalidano subito la run e salvano il testo ricevuto con un avviso di risposta incompleta; la conferma asincrona della cancellazione non modifica una run successiva. Il cleanup al dismount impedisce nuove generazioni e callback tardivi. Le letture Sidecar già inviate possono terminare entro i timeout esistenti, ma il loro risultato è ignorato. La durata di un turno ancora attivo alla chiusura non è qualificata; resta in `CHAT-DURABLE-HISTORY-01`.
+
+Un risultato fallito di `ingest:file` con `normalizationReview` apre il pannello [`NormalizationReviewPanel.tsx`](../src/components/ingestion/NormalizationReviewPanel.tsx): motivi localizzati, originale completo di sola lettura ed export Markdown. Il testo rimane una bozza in memoria, senza documento/chunk o ripristino dopo riavvio. La selezione corrente e le modifiche dell'editor restano indipendenti; la normalizzazione non viene abilitata automaticamente.
+
 Il Renderer in `src/` usa React 19, Vite, Tailwind CSS e Monaco. Lo stato è gestito localmente dagli hook React; non usa Zustand.
 
 ## Viste
@@ -39,3 +51,9 @@ Il Renderer in `src/` usa React 19, Vite, Tailwind CSS e Monaco. Lo stato è ges
 - La RAM di sistema è mostrata con valori distinti per memoria disponibile, in uso e totale sia nella barra laterale sia nella diagnostica; il report copiabile mantiene le stesse etichette.
 
 La persistenza chat e separata in `useChatHistory` e `chatHistoryStorage`: schema validato, formato e campi aggiuntivi conservati, scritture accorpate e avviso persistente con Riprova. Una cronologia illeggibile blocca le scritture per preservare i dati originali; i messaggi nuovi restano in memoria. La quota esaurita mantiene i messaggi e l'ultima cronologia salvata.
+
+## Segnali di qualificazione dei modelli — 2026-10-02
+
+`MODEL-QUALIFICATION-SIGNALS-01` è completato. La matrice condivisa `shared/domain/agent/codingModelQualification.ts` distingue capacità runtime e prove mirate storiche; non esiste più un badge generico «Verificato». Il 7B conserva nel tooltip anche il fallimento del task completo, il 9B le otto sonde e zero sequenze/stadi TaskLab qualificati. Le capacità locali prevalgono sempre sul tag storico. Setup e header del Coding Agent dichiarano il coding autonomo sperimentale e non qualificato; capacità massima del modello, tool nativi, sonde e accettazione completa sono segnali separati. L'assenza di tool blocca il percorso nativo, senza promettere un ripiego JSON.
+
+Il preflight separa installazione, tool, prove, qualificazione e contesto effettivo: risolve la preferenza per modello con la stessa politica hardware delle richieste Ollama. Una finestra scelta di 2048 token è bloccata anche se il modello dichiara 8192. La soglia runtime esistente di 4096 resta invariata e non è una soglia di qualità del task; nessuna preferenza viene riscritta. Prove storiche e mancata qualificazione sono avvisi, non nuovi permessi o bypass dei guard. Fonti ufficiali consultate il 2026-10-02: [tool calling Ollama](https://docs.ollama.com/capabilities/tool-calling), [contesto Ollama](https://docs.ollama.com/context-length). Memoria, offload e velocità restano nel task `MODEL-RUNTIME-FIT-01`.

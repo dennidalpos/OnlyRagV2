@@ -124,7 +124,11 @@ export class SidecarAppService {
         return { success: true, data: { ...toIngestedDocumentContent({ ...result.data, filename }), filePath: resolvedPath } }
       }
 
-      return { success: false, error: result.error || 'Ingestion failed' }
+      return {
+        success: false,
+        error: result.error || 'Ingestion failed',
+        ...(result.normalizationReview ? { normalizationReview: result.normalizationReview } : {}),
+      }
     } catch (err: unknown) {
       logger.log('ERROR', 'SidecarApp', `Unexpected ingestion exception: ${errorMessage(err)}`)
       return { success: false, error: errorMessage(err) }

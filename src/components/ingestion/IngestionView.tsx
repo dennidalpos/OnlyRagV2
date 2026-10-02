@@ -31,6 +31,7 @@ import { OcrEngineBadge } from './OcrEngineBadge'
 import { DocumentListTable } from './DocumentListTable'
 import { VectorSearchPanel } from './VectorSearchPanel'
 import { SourcePagePreview } from './SourcePagePreview'
+import { NormalizationReviewPanel } from './NormalizationReviewPanel'
 import { useIngestion } from '../../hooks/useIngestion'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
@@ -442,6 +443,15 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
+        )}
+
+        {ing.normalizationReview && (
+          <NormalizationReviewPanel
+            review={ing.normalizationReview}
+            exporting={Boolean(ing.exportStatus?.active)}
+            onExport={ing.handleExportNormalizationReview}
+            onDismiss={ing.dismissNormalizationReview}
+          />
         )}
 
         {/* Main Dual-Pane Content */}

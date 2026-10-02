@@ -6,9 +6,11 @@ from pathlib import Path
 from threading import RLock
 from typing import Annotated, Literal
 import lancedb
+import pyarrow as pa
 from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional, Any, Dict
 from sidecar.config import LANCEDB_DIR, DATA_DIR, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
+from sidecar.infrastructure.embeddings import EmbeddingSpace, EmbeddingSpaceMismatchError, validate_embedding_vectors
 
 lance_db = lancedb.connect(LANCEDB_DIR)
 _database_lock = RLock()
@@ -127,9 +129,45 @@ class SchemaMismatchError(RuntimeError):
         self.cause = cause
         super().__init__(
             f"Cannot append to LanceDB table '{table_name}': the record does not match the "
-            f"stored schema ({cause}). The existing data was left untouched -- migrate or "
-            f"remove the table deliberately before ingesting again."
+            f"stored schema ({cause}). Preserve the existing data and use an explicit "
+            f"rebuild with verified backup, readback and rollback."
         )
+
+
+_SPACE_FIELDS = tuple(EmbeddingSpace.__dataclass_fields__)
+CHUNK_PROVENANCE_FIELDS = (*_SPACE_FIELDS, "embedding_space_id")
+
+
+def chunk_embedding_space(row: Dict[str, Any]) -> EmbeddingSpace:
+    try:
+        space = EmbeddingSpace(**{key: row[key] for key in _SPACE_FIELDS})
+        if (type(space.embedding_dimension) is not int or space.embedding_dimension <= 0
+                or any(not isinstance(row[key], str) or not row[key] for key in _SPACE_FIELDS if key != "embedding_dimension")
+                or space.metadata()["embedding_space_id"] != row["embedding_space_id"]):
+            raise ValueError("Invalid embedding provenance.")
+        return space
+    except (KeyError, TypeError, ValueError) as err:
+        raise EmbeddingSpaceMismatchError("Unversioned or malformed chunk provenance; explicitly rebuild from preserved Markdown with verified backup/readback/rollback.") from err
+
+
+def chunk_schema(dimension: int) -> pa.Schema:
+    strings = ["chunk_id", "doc_id", "doc_name", "text", "section_header", "file_type", "ingested_at",
+               *[key for key in CHUNK_PROVENANCE_FIELDS if key != "embedding_dimension"]]
+    return pa.schema([
+        pa.field("vector", pa.list_(pa.float32(), dimension), nullable=False),
+        pa.field("chunk_index", pa.int64(), nullable=False),
+        pa.field("embedding_dimension", pa.int32(), nullable=False),
+        *[pa.field(key, pa.string(), nullable=False) for key in strings],
+    ])
+
+
+def require_versioned_chunk_table(table: Any) -> int:
+    if not set(CHUNK_PROVENANCE_FIELDS).issubset(table.schema.names):
+        raise EmbeddingSpaceMismatchError("Legacy index has no verified embedding-space provenance; preserve documents and explicitly rebuild with verified backup/readback/rollback.")
+    vector_type = table.schema.field("vector").type
+    if not pa.types.is_fixed_size_list(vector_type) or not pa.types.is_float32(vector_type.value_type):
+        raise EmbeddingSpaceMismatchError("Incompatible vector schema; an explicit backed-up rebuild is required.")
+    return vector_type.list_size
 
 
 @database_operation
@@ -141,6 +179,29 @@ def append_records(
 ) -> Any:
     """Append or atomically replace matching rows without deleting rejected records."""
     try:
+        if table_name == CHUNKS_TABLE_NAME:
+            spaces = [chunk_embedding_space(row) for row in records]
+            dimension = spaces[0].embedding_dimension
+            schema = chunk_schema(dimension)
+            normalized_records = []
+            for row, space in zip(records, spaces):
+                if space.embedding_dimension != dimension or set(row) != set(schema.names):
+                    raise ValueError("Chunk records must have one native dimension and the explicit schema fields.")
+                vector = validate_embedding_vectors([row["vector"]], 1, dimension)[0]
+                normalized_records.append({**row, "vector": vector})
+            if table_name in get_existing_tables():
+                stored_table = lance_db.open_table(table_name)
+                stored_dimension = require_versioned_chunk_table(stored_table)
+                if stored_dimension != dimension:
+                    raise EmbeddingSpaceMismatchError(f"Index dimension is {stored_dimension}, encoder dimension is {dimension}; explicitly rebuild with verified backup/readback/rollback before changing encoder.")
+                stored_rows = stored_table.search().select(list(CHUNK_PROVENANCE_FIELDS)).limit(None).to_list()
+                incoming_policies = {space.embedding_model.partition(":")[0]: space.embedding_preparation for space in spaces}
+                for row in stored_rows:
+                    stored_space = chunk_embedding_space(row)
+                    incoming = incoming_policies.get(stored_space.embedding_model.partition(":")[0])
+                    if incoming is not None and incoming != stored_space.embedding_preparation:
+                        raise EmbeddingSpaceMismatchError("Encoder preparation changed; preserve the store and explicitly rebuild with verified backup/readback/rollback.")
+            records = pa.Table.from_pylist(normalized_records, schema=schema)
         if table_name not in get_existing_tables():
             return lance_db.create_table(table_name, data=records)
         tbl = lance_db.open_table(table_name)
@@ -172,38 +233,6 @@ def delete_document_records(doc_id: str) -> None:
         for name, column in ((DOCS_TABLE_NAME, "id"), (CHUNKS_TABLE_NAME, "doc_id")):
             if name in existing:
                 lance_db.open_table(name).delete(f"{column} = '{doc_id}'")
-
-
-@database_operation
-def ensure_chunk_embedding_model_column(
-    chunks_table: str,
-    docs_table: str,
-    default_model: str,
-    fallback_model: str,
-) -> None:
-    """Adds the per-chunk `embedding_model` column to stores created before it existed.
-
-    Search embeds the query once per stored model, so every row must say which model produced
-    its vector. Legacy rows were always embedded with the default model, except those of
-    documents marked `indexed_fallback`, whose vectors came from the deterministic hash.
-    """
-    if chunks_table not in get_existing_tables():
-        return
-    tbl = lance_db.open_table(chunks_table)
-    if "embedding_model" in tbl.schema.names:
-        return
-    tbl.add_columns({"embedding_model": f"'{default_model}'"})
-    if docs_table not in get_existing_tables():
-        return
-    fallback_ids = [
-        str(row.get("id"))
-        for row in lance_db.open_table(docs_table).to_arrow().to_pylist()
-        if str(row.get("status", "")) == "indexed_fallback" and _DOC_ID_PATTERN.match(str(row.get("id", "")))
-    ]
-    if fallback_ids:
-        id_list = ", ".join(f"'{doc_id}'" for doc_id in fallback_ids)
-        tbl.update(where=f"doc_id IN ({id_list})", values={"embedding_model": fallback_model})
-    logger.info(f"Migrated '{chunks_table}' with an embedding_model column ({len(fallback_ids)} fallback documents).")
 
 
 @database_operation

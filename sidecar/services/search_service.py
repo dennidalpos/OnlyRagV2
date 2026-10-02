@@ -2,12 +2,10 @@ import re
 from typing import Any, Dict, List, Optional
 from sidecar.config import CHUNKS_TABLE_NAME, DOCS_TABLE_NAME, logger
 from sidecar.schemas import SearchRequest, SearchResult
-from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, database_operation, delete_document_records
+from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, database_operation, delete_document_records, CHUNK_PROVENANCE_FIELDS, chunk_embedding_space, require_versioned_chunk_table
 from sidecar.infrastructure.embeddings import (
-    DEFAULT_EMBEDDING_MODEL,
-    FALLBACK_EMBEDDING_MODEL,
-    generate_embedding_with_status,
-    get_fallback_embedding,
+    generate_embedding_batch,
+    EmbeddingSpaceMismatchError,
 )
 from sidecar.infrastructure.reranker import rerank_candidates
 
@@ -43,17 +41,24 @@ def _sql_literal(value: str) -> str:
     return value.replace("'", "''")
 
 
-def _stored_embedding_models(ctbl: Any, doc_filter: Optional[str]) -> List[str]:
-    """Distinct embedding models among the searchable rows."""
-    query = ctbl.search().select(["embedding_model"])
+def _stored_embedding_spaces(ctbl: Any, doc_filter: Optional[str]) -> list:
+    """Do not assign a current digest or policy retroactively to old rows."""
+    dimension = require_versioned_chunk_table(ctbl)
+    query = ctbl.search().select(list(CHUNK_PROVENANCE_FIELDS))
     if doc_filter:
         query = query.where(doc_filter, prefilter=True)
     rows = query.limit(None).to_list()
-    return sorted({str(row.get("embedding_model") or DEFAULT_EMBEDDING_MODEL) for row in rows})
+    spaces = {}
+    for row in rows:
+        space = chunk_embedding_space(row)
+        if space.embedding_dimension != dimension:
+            raise EmbeddingSpaceMismatchError("Chunk dimension conflicts with its stored vector schema; rebuild explicitly.")
+        spaces[row["embedding_space_id"]] = space
+    return [spaces[key] for key in sorted(spaces)]
 
 
 def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
-    """Dense vector search per embedding model, fused with a lexical re-rank via Reciprocal Rank Fusion (RRF k=60)."""
+    """Retrieve within each verified space, then lexically rerank the dense shortlist."""
     query_raw = req.query.strip()
     if not query_raw:
         return []
@@ -80,22 +85,21 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
         except ValueError as invalid_id_err:
             logger.warning(f"Rejected malformed doc_id in search request: {invalid_id_err}")
 
+    if raw_doc_ids and not allowed_doc_ids:
+        return []
+
     doc_filter = " OR ".join([f'doc_id = "{d_id}"' for d_id in allowed_doc_ids]) if allowed_doc_ids else None
 
     # Dense retrieval per embedding model; rankings merged by rank across spaces
     chunk_map: Dict[str, Dict[str, Any]] = {}
     dense_ranks: Dict[str, int] = {}
 
-    for model in _stored_embedding_models(ctbl, doc_filter):
-        if model == FALLBACK_EMBEDDING_MODEL:
-            query_vec = get_fallback_embedding(query_raw)
-        else:
-            query_vec, query_used_fallback = generate_embedding_with_status(query_raw, model=model)
-            if query_used_fallback:
-                logger.warning(f"Skipping dense search over '{model}' chunks: the query could not be embedded.")
-                continue
-
-        model_filter = f"embedding_model = '{_sql_literal(model)}'"
+    for space in _stored_embedding_spaces(ctbl, doc_filter):
+        batch = generate_embedding_batch([query_raw], model=space.embedding_model, expected_space=space, role="query")
+        if batch.space != space:
+            raise EmbeddingSpaceMismatchError("Query and stored embedding spaces differ.")
+        query_vec = batch.vectors[0]
+        model_filter = f"embedding_space_id = '{_sql_literal(space.metadata()['embedding_space_id'])}'"
         where_clause = f"({doc_filter}) AND {model_filter}" if doc_filter else model_filter
         dense_results = ctbl.search(query_vec).where(where_clause, prefilter=True).limit(fetch_limit).to_list()
 

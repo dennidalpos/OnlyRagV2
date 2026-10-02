@@ -5,7 +5,7 @@ import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../constants/promptConfig'
 import { evaluateDomainIntent } from '../services/domainRouter'
 import { useIngestedDocuments } from './useIngestedDocuments'
-import { loadDocumentMarkdown } from '../services/documentMarkdown'
+import { useTranslation } from '../i18n'
 import { resolveChatContextBudget, resolveChatThreadCount, resolvePromptCharBudget } from '../services/chatContextBudget'
 import { compactChatHistory } from '../services/chatContextCompactor'
 import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
@@ -18,6 +18,15 @@ import { chosenThinkValue, resolveOllamaThinkingPreference } from '../../shared/
 import { noConfiguredModelMessage, resolveConfiguredModel } from '../../shared/domain/settings/configuredModel'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
 import { useChatHistory } from './useChatHistory'
+
+interface ChatRun {
+  id: string
+  conversationId: string
+  docIds: Set<string>
+  botMsgId: string
+  text: string
+  dispatched: boolean
+}
 
 const createDefaultGreetingMessage = (): ChatMessage => ({
   id: '1',
@@ -32,8 +41,8 @@ export function isUntitledConversationTitle(title: string | undefined): boolean 
 }
 
 export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsData | null) {
-  // Retrieval context, replayed history and the generation window are all sized from the
-  // detected host instead of a single hardcoded budget — see chatContextBudget.ts.
+  const { t } = useTranslation()
+  // Use the effective model window and detected hardware for context budgets.
   const hardwareFacts = useMemo(() => extractHardwareFacts(diagnostics), [diagnostics])
   const hardwareDefault = useMemo(() => resolveMaxContextTokens('Auto', hardwareFacts), [hardwareFacts])
   const { metrics: modelMetrics } = useOllamaModelMetrics(settings.ollamaHost)
@@ -65,21 +74,10 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     return activeConversation?.messages?.length > 0 ? activeConversation.messages : [createDefaultGreetingMessage()]
   })
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
 
-  const handleDocsUpdated = useCallback((docs: IngestedDocument[]) => {
-    setSelectedDocIds((prev) => {
-      const next = new Set<string>()
-      const validIds = new Set(docs.map((d) => d.id))
-      prev.forEach((id) => {
-        if (validIds.has(id)) next.add(id)
-      })
-      return next
-    })
-  }, [])
-
-  const { documents, refetchDocuments: fetchDocuments } = useIngestedDocuments({
-    onDocsUpdated: handleDocsUpdated,
-  })
+  const { documents, refetchDocuments: fetchDocuments } = useIngestedDocuments()
 
   const [input, setInput] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
@@ -93,7 +91,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const chatBottomRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isGeneratingRef = useRef<boolean>(false)
-  const activeStreamIdRef = useRef<string | null>(null)
+  const activeRunRef = useRef<ChatRun | null>(null)
   const streamThrottleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [autoScroll, setAutoScroll] = useState<boolean>(true)
   const [isScrolledUp, setIsScrolledUp] = useState<boolean>(false)
@@ -120,9 +118,48 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     })
   }, [])
 
+  const updateRunMessage = useCallback((run: ChatRun, text: string, sources?: CitationSource[]) => {
+    if (activeRunRef.current !== run) return
+    run.text = text
+    const next = messagesRef.current.map((msg) => (msg.id === run.botMsgId ? { ...msg, text, ...(sources ? { sources } : {}) } : msg))
+    messagesRef.current = next
+    setMessages(next)
+  }, [])
+
+  const settleRun = useCallback(
+    (run: ChatRun) => {
+      if (activeRunRef.current !== run) return
+      activeRunRef.current = null
+      if (streamThrottleTimer.current) {
+        clearInterval(streamThrottleTimer.current)
+        streamThrottleTimer.current = null
+      }
+      isGeneratingRef.current = false
+      setIsGenerating(false)
+      trackOperation(null)
+      persistConversationState(messagesRef.current, run.docIds, run.conversationId)
+    },
+    [persistConversationState, trackOperation],
+  )
+
+  const cancelActiveRun = useCallback(async () => {
+    const run = activeRunRef.current
+    if (!run) return
+    updateRunMessage(run, run.text ? `${run.text}\n\n${t('chat.generationStopped')}` : t('chat.generationStopped'))
+    // Invalidate locally before awaiting Main; late callbacks cannot own a newer run.
+    settleRun(run)
+    if (run.dispatched && window.electronAPI?.cancelOllamaStream) {
+      try {
+        await window.electronAPI.cancelOllamaStream({ operationId: run.id })
+      } catch (err: unknown) {
+        logger.warn('ChatView', `Failed stopping Ollama stream: ${errorMessage(err)}`)
+      }
+    }
+  }, [settleRun, updateRunMessage, t])
+
   // Keep streamed tokens out of the persistent history until the response settles.
   useEffect(() => {
-    // If the conversation ID just changed, do not persist yet — we are loading the target conversation
+    // Do not persist the previous conversation into the newly selected one.
     if (prevActiveIdRef.current !== activeConversationId) {
       prevActiveIdRef.current = activeConversationId
       return
@@ -222,37 +259,20 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     setTimeout(() => setCopiedMsgId(null), 2000)
   }
 
-  const handleStopGeneration = useCallback(async () => {
-    const operationId = activeStreamIdRef.current
-    if (operationId && window.electronAPI?.cancelOllamaStream) {
-      try {
-        await window.electronAPI.cancelOllamaStream({ operationId })
-      } catch (err: unknown) {
-        logger.warn('ChatView', `Failed stopping Ollama stream: ${errorMessage(err)}`)
-      }
-    }
-    activeStreamIdRef.current = null
-    trackOperation(null)
-    if (streamThrottleTimer.current) {
-      clearInterval(streamThrottleTimer.current)
-      streamThrottleTimer.current = null
-    }
-    setIsGenerating(false)
-    isGeneratingRef.current = false
-    setMessages((curr) => {
-      persistConversationState(curr, selectedDocIds, activeConversationId)
-      return curr
-    })
-  }, [selectedDocIds, activeConversationId, persistConversationState, trackOperation])
+  const handleStopGeneration = cancelActiveRun
 
   useEffect(() => {
     return () => {
+      const run = activeRunRef.current
+      activeRunRef.current = null
       if (streamThrottleTimer.current) {
         clearInterval(streamThrottleTimer.current)
         streamThrottleTimer.current = null
       }
-      if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
-        window.electronAPI.cancelOllamaStream({ operationId: activeStreamIdRef.current }).catch(() => {})
+      if (run?.dispatched && window.electronAPI?.cancelOllamaStream) {
+        window.electronAPI.cancelOllamaStream({ operationId: run.id }).catch((err: unknown) => {
+          logger.warn('ChatView', `Failed cancelling unmounted chat: ${errorMessage(err)}`)
+        })
       }
     }
   }, [])
@@ -261,20 +281,31 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault()
     }
-    if (!input.trim() || isGenerating) return
+    if (!input.trim() || isGeneratingRef.current) return
 
     const userText = input.trim()
+    const operationId = crypto.randomUUID()
+    const run: ChatRun = {
+      id: operationId,
+      conversationId: activeConversationId,
+      docIds: new Set(selectedDocIds),
+      botMsgId: `${operationId}:bot`,
+      text: '',
+      dispatched: false,
+    }
+    activeRunRef.current = run
+    const isCurrentRun = () => activeRunRef.current === run
     setInput('')
     setShowMentions(false)
 
     const userMsg: ChatMessage = {
-      id: Date.now().toString(),
+      id: `${operationId}:user`,
       sender: 'user',
       text: userText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     }
 
-    const botMsgId = (Date.now() + 1).toString()
+    const botMsgId = run.botMsgId
     const botMsg: ChatMessage = {
       id: botMsgId,
       sender: 'bot',
@@ -294,14 +325,17 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     )
 
     const budget = budgetRef.current
-    const hasSelectedDocs = selectedDocIds.size > 0
+    const hasSelectedDocs = run.docIds.size > 0
 
-    setMessages((prev) => [...prev, userMsg, botMsg])
+    messagesRef.current = [...messagesRef.current, userMsg, botMsg]
+    setMessages(messagesRef.current)
     setIsGenerating(true)
     isGeneratingRef.current = true
 
     // Scroll immediately to show the user's message
-    setTimeout(() => scrollToBottom(true), 50)
+    setTimeout(() => {
+      if (isCurrentRun()) scrollToBottom(true)
+    }, 50)
 
     try {
       const routingResult = evaluateDomainIntent(userText, settings)
@@ -309,14 +343,18 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
       let vectorContextText = ''
       let citationSources: CitationSource[] = []
-      const scopedDocIds = hasSelectedDocs ? Array.from(selectedDocIds) : undefined
+      const groundingFailures: string[] = []
+      let contextNotice = ''
+      const scopedDocIds = hasSelectedDocs ? Array.from(run.docIds) : undefined
 
       // Retrieval runs ONLY when documents are explicitly selected and the query is non-chitchat
       if (hasSelectedDocs && routingResult.requiresRetrieval) {
         try {
           const searchResults = await electronApi().searchVectorDb({ query: userText, topK: budget.vectorTopK, docIds: scopedDocIds })
+          if (!isCurrentRun()) return
 
-          if (Array.isArray(searchResults) && searchResults.length > 0) {
+          if (!Array.isArray(searchResults)) throw new Error('Invalid retrieval response')
+          if (searchResults.length > 0) {
             const validResults = searchResults.filter((res) => res && res.text)
             const includedBlocks: string[] = []
             const includedSources: CitationSource[] = []
@@ -324,15 +362,19 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
             for (let idx = 0; idx < validResults.length; idx++) {
               const res = validResults[idx]
-              const block = `[Source ${idx + 1}: ${res.doc_name || 'Document'} | Section: ${res.section_header || 'General'}]\n${res.text}`
-              if (includedBlocks.length > 0 && usedChars + block.length > budget.vectorContextChars) break
+              const header = `[Source ${idx + 1}: ${res.doc_name || 'Document'} | Section: ${res.section_header || 'General'}]\n`
+              const separatorChars = includedBlocks.length > 0 ? 7 : 0
+              const availableChars = budget.vectorContextChars - usedChars - separatorChars - header.length
+              if (availableChars <= 0) break
+              const body = res.text.slice(0, availableChars)
+              const block = header + body
               includedBlocks.push(block)
-              usedChars += block.length
+              usedChars += block.length + separatorChars
               includedSources.push({
                 chunkId: res.chunk_id || '',
                 docName: res.doc_name || 'Document',
                 sectionHeader: res.section_header || undefined,
-                snippet: (res.text || '').slice(0, 150) + (res.text?.length > 150 ? '...' : ''),
+                snippet: body.slice(0, 150) + (body.length > 150 ? '...' : ''),
                 score: res.score || 0,
               })
             }
@@ -341,33 +383,72 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
             citationSources = includedSources
           }
         } catch (err: unknown) {
-          logger.warn('ChatView', `Vector search non-blocking notice: ${errorMessage(err)}`)
+          if (!isCurrentRun()) return
+          logger.warn('ChatView', `Vector search failed: ${errorMessage(err)}`)
+          groundingFailures.push(t('chat.groundingSearchFailed'))
         }
       }
 
-      // Attach citations to the bot message if available
-      if (citationSources.length > 0) {
-        setMessages((prev) => prev.map((msg) => (msg.id === botMsgId ? { ...msg, sources: citationSources } : msg)))
+      const activeDocTexts: { name: string; full: string }[] = []
+      if (hasSelectedDocs) {
+        // Fresh metadata and content detect deletion; cached Markdown is not proof of availability.
+        try {
+          const currentDocs = await electronApi().getIngestedDocuments()
+          if (!isCurrentRun()) return
+          if (!currentDocs) throw new Error('Document list unavailable')
+          const selectedDocs: IngestedDocument[] = []
+          for (const id of run.docIds) {
+            const doc = currentDocs.find((item) => item.id === id)
+            if (doc) selectedDocs.push(doc)
+            else groundingFailures.push(t('chat.groundingDeleted', { name: documents.find((item) => item.id === id)?.filename || id }))
+          }
+          const loaded = await Promise.allSettled(selectedDocs.map((doc) => electronApi().getIngestedDocument({ docId: doc.id })))
+          if (!isCurrentRun()) return
+          loaded.forEach((result, index) => {
+            const name = selectedDocs[index].filename
+            if (result.status === 'rejected' || !result.value) {
+              groundingFailures.push(t('chat.groundingUnavailable', { name }))
+            } else if (!result.value.extractedMarkdown?.trim()) {
+              groundingFailures.push(t('chat.groundingEmpty', { name }))
+            } else {
+              activeDocTexts.push({ name, full: result.value.extractedMarkdown })
+            }
+          })
+        } catch (err: unknown) {
+          if (!isCurrentRun()) return
+          logger.warn('ChatView', `Document context unavailable: ${errorMessage(err)}`)
+          groundingFailures.push(t('chat.groundingListFailed'))
+        }
+        if (groundingFailures.length > 0) {
+          const text = t('chat.groundingBlocked', { loaded: activeDocTexts.length, total: run.docIds.size, details: groundingFailures.join('\n') })
+          updateRunMessage(run, text)
+          return
+        }
       }
 
-      const activeDocs = documents.filter((d) => selectedDocIds.has(d.id))
-      // The document list carries metadata only; the text of each selected document is loaded here.
-      const activeDocTexts = await Promise.all(activeDocs.map(async (d) => ({ d, full: (await loadDocumentMarkdown(d)) ?? '' })))
-      const directDocsText = activeDocTexts
-        .map(({ d, full }) => {
-          const body = full.slice(0, budget.perDocumentPreviewChars)
-          // Say which of the two this actually is.
-          return body.length === full.length
-            ? `[Full Document: ${d.filename}]\n${body}`
-            : `[Document Excerpt (first ${body.length} of ${full.length} chars): ${d.filename}]\n${body}\n[...truncated]`
-        })
-        .join('\n\n---\n\n')
-
-      // Budget the two sources SEPARATELY instead of slicing their concatenation.
-      const boundedVectorContext = vectorContextText.slice(0, budget.vectorContextChars)
-      const directDocsBudget = Math.max(0, budget.totalContextChars - boundedVectorContext.length)
-      const boundedDirectDocs = directDocsText.slice(0, directDocsBudget)
-      const boundedContext = [boundedVectorContext, boundedDirectDocs].filter(Boolean).join('\n\n=== ADDITIONAL CONTEXT ===\n\n')
+      const contextSeparator = '\n\n=== ADDITIONAL CONTEXT ===\n\n'
+      let remainingChars = Math.max(0, budget.totalContextChars - vectorContextText.length - (vectorContextText ? contextSeparator.length : 0))
+      const documentBlocks: string[] = []
+      const partialDocs: string[] = []
+      for (const { name, full } of activeDocTexts) {
+        const separatorChars = documentBlocks.length > 0 ? 7 : 0
+        const fullHeader = `[Full Document: ${name}]\n`
+        const excerptHeader = `[Document Excerpt: ${name} | original ${full.length} chars; incomplete]\n`
+        const complete = full.length <= budget.perDocumentPreviewChars && fullHeader.length + full.length + separatorChars <= remainingChars
+        const header = complete ? fullHeader : excerptHeader
+        const body = full.slice(0, Math.min(budget.perDocumentPreviewChars, Math.max(0, remainingChars - separatorChars - header.length)))
+        if (!complete) partialDocs.push(name)
+        if (!body.trim()) continue
+        const block = header + body
+        documentBlocks.push(block)
+        remainingChars -= block.length + separatorChars
+      }
+      if (partialDocs.length > 0) contextNotice = t('chat.groundingPartial', { names: partialDocs.join(', ') }) + '\n\n'
+      const boundedContext = [vectorContextText, documentBlocks.join('\n\n---\n\n')].filter(Boolean).join(contextSeparator)
+      if (hasSelectedDocs && !boundedContext.trim()) throw new Error(t('chat.groundingNoContext'))
+      if (citationSources.length > 0 || contextNotice) {
+        updateRunMessage(run, contextNotice, citationSources)
+      }
 
       const modelToUse = routingResult.modelName
       if (!modelToUse) throw new Error(noConfiguredModelMessage('chat'))
@@ -385,8 +466,9 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
       const docContextBlock = boundedContext
         ? `[INDEXED DOCUMENT CONTEXT (LanceDB)]\n` +
-          // The last sentence is load-bearing.
-          `MANDATORY DIRECTIVE: The following excerpts constitute the actual parsed text of the user's selected documents and attachments. You have FULL access to this information. Always search, extract, and cite from this text to accurately answer any user question regarding files, documents, or attachments. A document IS selected and its text is right below: never answer that no document is attached, and never ask the user to select one.\n\n` +
+          `Use only the document text supplied below for document claims. Retrieved passages are candidates, not verified support. An excerpt is incomplete: do not claim access to omitted text or complete-document coverage. If the supplied text does not support the answer, say so.\n` +
+          (partialDocs.length > 0 ? `Incomplete or omitted document previews: ${partialDocs.join(', ')}.\n` : '') +
+          '\n' +
           `${boundedContext}\n` +
           `[END DOCUMENT CONTEXT]`
         : `[ATTACHMENT CONTEXT STATUS]\n` +
@@ -396,7 +478,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       const promptSections = [effectiveSystemPrompt, temporalContext, docContextBlock].filter(Boolean)
       const systemPromptWithContext = promptSections.join('\n\n')
 
-      // History is compacted LAST, against whatever the window has left once the system prompt and the selected document context have been placed.
+      // Compact history into the space left by instructions and document context.
       const turnSuffix = `User: ${userText}\nAssistant:`
       const historyBudgetChars = Math.max(0, resolvePromptCharBudget(budget.maxNumCtx) - systemPromptWithContext.length - turnSuffix.length)
       const compactionResult = compactChatHistory(messages, budget, hasSelectedDocs, historyBudgetChars)
@@ -421,9 +503,9 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         let pendingChunk = false
 
         const flushAccumulatedText = () => {
-          if (!pendingChunk) return
+          if (!isCurrentRun() || !pendingChunk) return
           pendingChunk = false
-          setMessages((prev) => prev.map((msg) => (msg.id === botMsgId ? { ...msg, text: accumulated } : msg)))
+          updateRunMessage(run, contextNotice + accumulated)
           if (autoScrollRef.current && !isScrolledUpRef.current) {
             scrollToBottom(false)
           }
@@ -431,13 +513,13 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
         const intervalId = setInterval(flushAccumulatedText, 40)
         streamThrottleTimer.current = intervalId
-        const operationId = crypto.randomUUID()
-        activeStreamIdRef.current = operationId
         trackOperation(operationId)
 
         try {
           logger.info('ChatEngine', `Context budget [${budget.profileTier}${budget.isMinimal ? '/minimal' : ''}]: selected num_ctx ${budget.maxNumCtx}`)
 
+          if (!isCurrentRun()) return
+          run.dispatched = true
           const result = await window.electronAPI.generateOllamaStream(
             {
               model: modelToUse,
@@ -452,102 +534,68 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
               operationId,
             },
             (chunk: string) => {
+              if (!isCurrentRun()) return
               accumulated += chunk
+              run.text = contextNotice + accumulated
               pendingChunk = true
             },
           )
+          if (!isCurrentRun()) return
           if (!result.success) throw new Error(result.error || 'Ollama generation failed.')
           if (!accumulated.trim()) throw new Error('Ollama returned an empty response.')
         } finally {
           clearInterval(intervalId)
-          streamThrottleTimer.current = null
-          if (activeStreamIdRef.current === operationId) activeStreamIdRef.current = null
-          trackOperation(null)
-          // Final flush to guarantee full text is set
-          setMessages((prev) => prev.map((msg) => (msg.id === botMsgId ? { ...msg, text: accumulated } : msg)))
-          scrollToBottom(false)
+          if (isCurrentRun()) {
+            streamThrottleTimer.current = null
+            updateRunMessage(run, contextNotice + accumulated)
+            scrollToBottom(false)
+          }
         }
       } else {
-        setMessages((prev) => prev.map((msg) => (msg.id === botMsgId ? { ...msg, text: 'Local Ollama API offline or window.electronAPI unattached.' } : msg)))
+        updateRunMessage(run, 'Local Ollama API offline or window.electronAPI unattached.')
       }
     } catch (err: unknown) {
+      if (!isCurrentRun()) return
       const normalized = normalizeError(err, 'Chat RAG')
       logger.error('ChatView', `Error during RAG generation: ${normalized.message}`)
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === botMsgId
-            ? {
-                ...msg,
-                text: normalized.remediation ? `${normalized.message}\n\n💡 ${normalized.remediation}` : normalized.message,
-              }
-            : msg,
-        ),
-      )
+      updateRunMessage(run, normalized.remediation ? `${normalized.message}\n\n💡 ${normalized.remediation}` : normalized.message)
     } finally {
-      setIsGenerating(false)
-      isGeneratingRef.current = false
-      trackOperation(null)
-      if (streamThrottleTimer.current) {
-        clearInterval(streamThrottleTimer.current)
-        streamThrottleTimer.current = null
+      if (isCurrentRun()) {
+        settleRun(run)
+        scrollToBottom(false)
       }
-      setMessages((curr) => {
-        persistConversationState(curr, selectedDocIds, activeConversationId)
-        return curr
-      })
-      setTimeout(() => scrollToBottom(false), 50)
     }
   }
 
   const loadConversation = useCallback(
     (id: string) => {
       if (id === activeConversationId) return
-      persistConversationState(messages, selectedDocIds, activeConversationId)
-      if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
-        window.electronAPI.cancelOllamaStream({ operationId: activeStreamIdRef.current }).catch(() => {})
-      }
-      setIsGenerating(false)
-      isGeneratingRef.current = false
       const target = conversations.find((c) => c.id === id)
       if (!target) return
+      void cancelActiveRun()
+      persistConversationState(messagesRef.current, selectedDocIds, activeConversationId)
 
       prevActiveIdRef.current = id
       setActiveConversationId(id)
       setMessages(target.messages && target.messages.length > 0 ? target.messages : [createDefaultGreetingMessage()])
 
-      // Filter selectedDocIds against valid current documents to prevent orphaned doc selections
-      const validDocIds = new Set(documents.map((d) => d.id))
-      const filteredSelection = new Set<string>()
-      if (documents.length > 0 && target.selectedDocIds) {
-        target.selectedDocIds.forEach((docId) => {
-          if (validDocIds.has(docId)) filteredSelection.add(docId)
-        })
-      }
-      setSelectedDocIds(filteredSelection)
+      setSelectedDocIds(new Set(target.selectedDocIds || []))
 
       setInput('')
       setShowMentions(false)
     },
-    [conversations, documents, messages, selectedDocIds, activeConversationId, persistConversationState, setActiveConversationId],
+    [conversations, selectedDocIds, activeConversationId, persistConversationState, setActiveConversationId, cancelActiveRun],
   )
 
   const handleNewChat = useCallback(() => {
-    persistConversationState(messages, selectedDocIds, activeConversationId)
-    if (streamThrottleTimer.current) {
-      clearInterval(streamThrottleTimer.current)
-      streamThrottleTimer.current = null
-    }
-    if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
-      window.electronAPI.cancelOllamaStream({ operationId: activeStreamIdRef.current }).catch(() => {})
-    }
-    setIsGenerating(false)
-    isGeneratingRef.current = false
+    void cancelActiveRun()
+    persistConversationState(messagesRef.current, selectedDocIds, activeConversationId)
     setInput('')
     setShowMentions(false)
     setSelectedDocIds(new Set())
 
     const newConv: ChatConversation = {
-      id: `session-${Date.now()}`,
+      id: `session-${crypto.randomUUID()}`,
       title: '',
       messages: [createDefaultGreetingMessage()],
       selectedDocIds: [],
@@ -559,20 +607,12 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     setConversations((prev) => [newConv, ...prev])
     setActiveConversationId(newConv.id)
     setMessages(newConv.messages)
-  }, [messages, selectedDocIds, activeConversationId, persistConversationState, setConversations, setActiveConversationId])
+  }, [selectedDocIds, activeConversationId, persistConversationState, setConversations, setActiveConversationId, cancelActiveRun])
 
   const deleteConversation = useCallback(
     (id: string) => {
       if (activeConversationId === id) {
-        if (streamThrottleTimer.current) {
-          clearInterval(streamThrottleTimer.current)
-          streamThrottleTimer.current = null
-        }
-        if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
-          window.electronAPI.cancelOllamaStream({ operationId: activeStreamIdRef.current }).catch(() => {})
-        }
-        setIsGenerating(false)
-        isGeneratingRef.current = false
+        void cancelActiveRun()
         setInput('')
         setShowMentions(false)
       }
@@ -582,7 +622,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         let nextList = remaining
         if (remaining.length === 0) {
           const fresh: ChatConversation = {
-            id: `session-${Date.now()}`,
+            id: `session-${crypto.randomUUID()}`,
             title: '',
             messages: [createDefaultGreetingMessage()],
             selectedDocIds: [],
@@ -605,7 +645,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         return nextList
       })
     },
-    [activeConversationId, isGenerating],
+    [activeConversationId, cancelActiveRun, setActiveConversationId, setConversations],
   )
 
   const renameConversation = useCallback((id: string, newTitle: string) => {

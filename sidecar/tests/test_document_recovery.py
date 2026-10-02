@@ -8,6 +8,7 @@ from sidecar.infrastructure import db
 from sidecar.services import ingest_service, search_service, prompt_history_service
 from sidecar.schemas import PromptHistorySearchRequest
 from sidecar.config import PROMPT_HISTORY_TABLE_NAME
+from sidecar.infrastructure.embeddings import FALLBACK_SPACE, get_fallback_embedding
 from sidecar import main
 
 
@@ -27,7 +28,9 @@ def document(doc_id="one", text="old"):
 
 
 def chunks(doc_id="one", text="old"):
-    return [{"chunk_id": f"{doc_id}_chunk_0", "doc_id": doc_id, "text": text, "vector": [0.1, 0.2, 0.3]}]
+    return [{"chunk_id": f"{doc_id}_chunk_0", "doc_id": doc_id, "text": text, "vector": get_fallback_embedding(text),
+             "doc_name": "notes.md", "chunk_index": 0, "section_header": "", "file_type": "text",
+             "ingested_at": "2026-09-30", **FALLBACK_SPACE.metadata()}]
 
 
 def seed():

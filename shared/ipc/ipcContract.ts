@@ -26,6 +26,7 @@ import type {
   IngestedDocument,
   IngestedDocumentContent,
   IngestionStreamProgressPayload,
+  NormalizationReview,
   InterviewAnalysisResult,
   InterviewQuestion,
   LogEntry,
@@ -100,7 +101,7 @@ export interface IpcInvokeContract {
       taskId?: string
       normalizationThink?: boolean
     }
-    result: DocumentResult
+    result: DocumentResult & { normalizationReview?: NormalizationReview }
   }
   'ingest:update': { payload: { docId: string; markdownContent: string }; result: DocumentResult }
   'ingest:translate-inplace': {

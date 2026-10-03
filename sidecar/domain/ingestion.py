@@ -3,6 +3,7 @@ import re
 import io
 import json
 import zipfile
+import warnings
 from typing import List, Tuple, Dict, Optional, Any, Callable
 from concurrent.futures import ThreadPoolExecutor
 import pymupdf
@@ -353,21 +354,21 @@ def extract_tabular_document(
 
     # CSV / TSV
     if ext in [".csv", ".tsv"]:
-        try:
-            csv_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
-            sep = "\t" if ext == ".tsv" else ","
-            df_all = pd.read_csv(csv_source, sep=sep, on_bad_lines="skip")
-            total_csv_rows = len(df_all)
-            df = df_all.head(limit_csv_rows)
-            df.columns = [str(c).replace("\n", " ").strip() if str(c).strip() else f"Col {i+1}" for i, c in enumerate(df.columns)]
-            md_table = df.to_markdown(tablefmt="pipe", index=False) or ""
+        csv_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
+        sep = "\t" if ext == ".tsv" else ","
+        # Preserve literal cells through parsing and Markdown rendering.
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", pd.errors.ParserWarning)
+            df_all = pd.read_csv(csv_source, sep=sep, dtype=str, keep_default_na=False, on_bad_lines="error", index_col=False)
+        total_csv_rows = len(df_all)
+        df = df_all.head(limit_csv_rows)
+        df.columns = [str(c).replace("\n", " ").strip() if str(c).strip() else f"Col {i+1}" for i, c in enumerate(df.columns)]
+        md_table = df.to_markdown(tablefmt="pipe", index=False, disable_numparse=True) or ""
 
-            if total_csv_rows > limit_csv_rows:
-                md_table += f"\n\n> [!NOTE]\n> Tabella troncata a {limit_csv_rows} righe (su {total_csv_rows} totali nel file).\n"
+        if total_csv_rows > limit_csv_rows:
+            md_table += f"\n\n> [!NOTE]\n> Tabella troncata a {limit_csv_rows} righe (su {total_csv_rows} totali nel file).\n"
 
-            return [(1, md_table)]
-        except Exception as e:
-            logger.warning(f"CSV/TSV parsing fallback for {filename}: {e}")
+        return [(1, md_table)]
 
     # JSON formatted
     if ext == ".json":

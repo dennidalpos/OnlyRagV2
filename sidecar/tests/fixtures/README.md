@@ -6,3 +6,7 @@ Its BSD license is retained in `xlrd-LICENSE.txt`.
 
 Sheet1 contains the source rows `a,b,c`, `d,e`, `f`, `g,h,I,j`, and `k,,,l`; Sheet2 and Sheet3 are empty. Tests assert first and last rows as well as trailing cells.
 XLSX fixtures are generated with openpyxl in pytest temporary directories. Expected cells include leading-zero codes, numeric amounts, literal `NA`, a second sheet, and a single-cell workbook. No fixture needs Microsoft Excel or a live model.
+
+`content-acceptance-it-en.json` is the version-1 synthetic content oracle frozen before local inference. It defines eight documents, twelve queries, eleven supporting passages, six labeled normalization pairs and two live normalization inputs. Generated originals and complete raw outputs belong to new isolated OnlyRag-Live campaigns, rather than this fixture directory. [Acceptance policy and honest failed baseline](../../../docs/content-acceptance.md) distinguish fixture mechanics, real retrieval, independent source review and unqualified desktop/model roles. Do not change expected evidence to match generated answers.
+
+`normalization-whitespace-policy.json` records the explicit 2026-10-02 approval separately from the frozen semantic oracle. Faithful lexical repairs remain semantically safe labels but intentionally require review. New campaigns copy this overlay and report both policy decisions and raw semantic false-rejection counts; old campaigns retain their original policy.

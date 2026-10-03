@@ -500,7 +500,7 @@ export const it = {
       truncated: 'risposta troncata dal limite di generazione',
       empty_response: 'risposta vuota',
       entities_changed: 'numeri o riferimenti modificati o rimossi',
-      content_changed: 'testo omesso, riordinato o sostituito oltre la pulizia del layout',
+      content_changed: 'parole, punteggiatura, accenti o layout protetto modificati: si accettano automaticamente solo spazi e a capo del testo semplice',
     },
     cancelOperation: 'Annulla operazione',
     exportPreparing: 'Esportazione {format} in corso...',

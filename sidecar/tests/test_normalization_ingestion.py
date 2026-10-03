@@ -91,9 +91,32 @@ def test_normalization_stream_valid_cleanup_indexes(sidecar_http_client, normali
     payload = done_payload(sidecar_http_client.post("/ingest-path-stream", json={
         "file_path": str(path), "normalize_with_llm": True, "normalization_model": "normalizer-cleanup",
     }))
-    assert f"# {source}" in payload["extracted_markdown"]
+    assert source in payload["extracted_markdown"]
     assert payload["num_chunks"] > 0
     assert sidecar_http_client.delete(f"/documents/{payload['id']}").status_code == 200
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("model,source", [
+    ("normalizer-punctuation", "The inspector said: the contractor is liable. Ada denied it."),
+    ("normalizer-word-boundary", "The therapist contacted Ada Neri about the complete report."),
+    ("normalizer-markdown", "Reference AB123 requires explicit consent before payment."),
+])
+def test_lexical_rewrites_require_review_before_indexing(sidecar_http_client, normalization_ollama, tmp_path, model, source):
+    path = write_pdf(tmp_path, [source])
+    original = path.read_bytes()
+    before = sidecar_http_client.get("/health").json()
+    events = read_events(sidecar_http_client.post("/ingest-path-stream", json={
+        "file_path": str(path), "normalize_with_llm": True, "normalization_model": model,
+    }))
+    assert events[-1]["type"] == "error"
+    assert events[-1]["normalization_review"] == {
+        "original_markdown": f"# {path.name}\n\n## Page 1\n\n{source}",
+        "issues": [{"page": 1, "reason": "content_changed"}],
+    }
+    assert not any(event["type"] == "done" or event.get("step_code") == "embedding" for event in events)
+    after = sidecar_http_client.get("/health").json()
+    assert (after["documents_count"], after["chunks_count"]) == (before["documents_count"], before["chunks_count"])
     assert path.read_bytes() == original
 
 

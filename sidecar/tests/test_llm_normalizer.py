@@ -21,7 +21,7 @@ def test_should_normalize_page_heuristics():
     assert not should_normalize_page_with_llm("[Scanned page - No readable text detected]")
     assert should_normalize_page_with_llm("This is a sufficiently long OCR text block with broken\nword wraps and messy layout that needs normalization.")
 
-def test_normalize_page_markdown_with_llm_success():
+def test_word_repairs_preserve_the_original_for_review():
     raw_ocr = "Il pre sente modu lo dovra es sere in viato via e-mail"
     cleaned_expected = "Il presente modulo dovrà essere inviato via e-mail"
 
@@ -31,8 +31,10 @@ def test_normalize_page_markdown_with_llm_success():
     mock_resp.__enter__.return_value = mock_resp
 
     with patch("urllib.request.urlopen", return_value=mock_resp):
-        res = normalize_page_markdown_with_llm(raw_ocr, page_num=1, model="llama3.2")
-        assert cleaned_expected in res
+        with pytest.raises(NormalizationReviewRequired) as rejected:
+            normalize_page_markdown_with_llm(raw_ocr, page_num=1, model="llama3.2")
+        assert rejected.value.original_markdown == raw_ocr
+        assert rejected.value.issues == [{"page": 1, "reason": "content_changed"}]
 
 def test_normalizer_sends_thinking_separately_from_content():
     raw_ocr = "Long OCR content with broken spacing and layout requiring normalization here."
@@ -104,6 +106,18 @@ def test_normalizer_requires_complete_nonempty_response(body, reason):
     ("Payment requires a signature. Delivery requires consent.", "Payment requires a signature.", "content_changed"),
     ("Payment requires a signature. Delivery requires consent.", "Payment requires consent. Delivery requires a signature.", "content_changed"),
     ("The supplier is Mario Rossi. Delivery requires consent.", "The supplier is Maria Rossi. Delivery requires consent.", "content_changed"),
+    ("The inspector said: the contractor is liable. Ada denied it.", "The inspector, said the contractor, is liable. Ada denied it.", "content_changed"),
+    ("The therapist contacted Ada Neri about the complete report.", "The the rapist contacted Ada Neri about the complete report.", "content_changed"),
+    ("The complete con-\ntract AB123 preserves the original clause.", "The complete contract AB123 preserves the original clause.", "content_changed"),
+    ("Il papa legge il documento completo alla presenza di Ada Neri.", "Il papà legge il documento completo alla presenza di Ada Neri.", "content_changed"),
+    ("Reference AB123 requires the Contractor to give consent.", "Reference AB123 requires the contractor to give consent.", "content_changed"),
+    ("Reference AB123\nAmount 42\nPayment requires consent.", "# Reference AB123\n\n- Amount 42\n- Payment requires consent.", "content_changed"),
+    ("```python\nif ready:\n    deliver()\n```", "```python\nif ready:\ndeliver()\n```", "content_changed"),
+    ("| Order | Status |\n| AB123 | Ready |", "| Order |\nStatus | | AB123 | Ready |", "content_changed"),
+    ("Reference AB123 requires explicit consent before payment.", "```markdown\nReference AB123 requires explicit consent before payment.\n```", "content_changed"),
+    ("The **complete original report** requires consent before payment.", "The **complete\n\noriginal report** requires consent before payment.", "content_changed"),
+    ("The [complete original report](local) requires consent before payment.", "The [complete\n\noriginal report](local) requires consent before payment.", "content_changed"),
+    ("1) Preserve explicit consent.\n2) Preserve the complete original report.", "1) Preserve explicit consent. 2) Preserve the complete original report.", "content_changed"),
 ])
 def test_normalizer_rejects_content_loss_or_replacement(source, candidate, reason):
     with patch("urllib.request.urlopen") as urlopen:
@@ -117,8 +131,9 @@ def test_normalizer_rejects_content_loss_or_replacement(source, candidate, reaso
 
 
 @pytest.mark.parametrize("source,candidate", [
-    ("The complete con-\ntract AB123 preserves the original clause.", "The complete contract AB123 preserves the original clause."),
-    ("Reference AB123\nAmount 42\nPayment requires consent.", "# Reference AB123\n\n- Amount 42\n- Payment requires consent."),
+    ("Reference AB123\nAmount 42\nPayment requires consent.", "Reference AB123 Amount 42\n\nPayment requires consent."),
+    ("Ada Neri  requires   consent before delivery of the complete report.", "Ada Neri requires consent before delivery of the complete report."),
+    ("```python\nif ready:\n    deliver()\n```", "```python\nif ready:\n    deliver()\n```"),
 ])
 def test_normalizer_allows_conservative_layout_cleanup(source, candidate):
     with patch("urllib.request.urlopen") as urlopen:

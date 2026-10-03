@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.38 · 2026-10-02` — Quirks.
+`v1.40 · 2026-10-02` — Quirks.
 
 - `master` only; no branches. Commit/push only on request.
 - Diagnosis: 10 informed attempts override two-failure stop; preserve retries/guards/timeouts.
@@ -23,7 +23,7 @@
 2026-10-02 (PS, Node24/npm11/Python3.13):
 
 - `npm run test:fast`: 297 files/2412 tests; hardware subset: 113, modal: 17.
-- `.venv\Scripts\python.exe -m pytest -q`: 294 tests.
+- `.venv\Scripts\python.exe -m pytest -q`: 318 tests.
 - `npm run typecheck`, `npm run quality:static`, `npm run audit:deadcode`, `npm run audit:cycles`, `npm run docs:check`, `npm run format:check`.
 - `npm run generate:openapi` after schema changes; `npm run build`.
 

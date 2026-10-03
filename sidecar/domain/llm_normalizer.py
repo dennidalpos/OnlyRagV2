@@ -2,11 +2,9 @@ import re
 import json
 import urllib.request
 import urllib.error
-import unicodedata
 from collections import Counter
 from typing import Optional, List, Dict, Any
 from sidecar.config import OLLAMA_BASE_URL, logger
-from sidecar.domain.sanitizer import sanitize_extracted_text
 
 _PROTECTED_TOKEN = re.compile(r"(?<!\w)[+-]?\w*\d[\w./:@+-]*\b")
 
@@ -21,11 +19,22 @@ class NormalizationReviewRequired(Exception):
         return {"original_markdown": self.original_markdown, "issues": self.issues}
 
 
-def _content_sequence(text: str) -> str:
-    # Compare content order while allowing spacing, Markdown and accent cleanup.
-    text = re.sub(r"(?<=\w)-\s*\n\s*(?=\w)", "", text)
-    normalized = unicodedata.normalize("NFKD", text).casefold()
-    return "".join(char for char in normalized if char.isalnum() or char in "@=+%?!")
+def _layout_only(source: str, candidate: str) -> bool:
+    if source == candidate:
+        return True
+    if source.split() != candidate.split():
+        return False
+    # Preserve whitespace-sensitive code, tables, markup and list structure exactly.
+    for text in (source, candidate):
+        if any(char in text for char in "`|<>\t#*_[]~"):
+            return False
+        if any(char.isspace() and char not in " \r\n" for char in text):
+            return False
+        for line in text.splitlines():
+            stripped = line.lstrip()
+            if line.startswith("    ") or stripped.startswith(("- ", "+ ")) or any(stripped.partition(marker)[0].isdigit() for marker in (". ", ") ")):
+                return False
+    return True
 
 
 def _review(page_text: str, page_num: int, reason: str) -> NormalizationReviewRequired:
@@ -53,20 +62,19 @@ def normalize_page_markdown_with_llm(
 ) -> str:
     """Accept conservative layout cleanup or retain the source for explicit review."""
     if not should_normalize_page_with_llm(page_text):
-        return sanitize_extracted_text(page_text)
+        return page_text
     if not model:
         raise _review(page_text, page_num, "model_missing")
 
     endpoint = f"{ollama_url or OLLAMA_BASE_URL}/api/generate"
     prompt = (
-        f"You are an expert OCR Markdown layout normalizer.\n"
-        f"Task: Clean up the following OCR-extracted text from Page {page_num}.\n\n"
+        f"You are a conservative OCR whitespace normalizer.\n"
+        f"Task: Clean up only ordinary prose spaces and line wraps from Page {page_num}.\n\n"
         f"Strict Rules:\n"
-        f"1. Fix fused words, missing spaces, and glued tokens (e.g., separate 'RICHIESTACESSAZIONECONTRATTO' into 'RICHIESTA CESSAZIONE CONTRATTO').\n"
-        f"2. Fix broken line wraps, OCR spacing artifacts, and fragmented sentences.\n"
-        f"3. Reconstruct clean Markdown structure (paragraphs, bullet points, headers, tables).\n"
-        f"4. NEVER hallucinate, never invent information, and never omit existing names, codes, dates, or numbers.\n"
-        f"5. Return ONLY the cleaned document body text. DO NOT add title banners like '**Cleaned Markdown Text**', and DO NOT add conversational notes, disclaimers, or comments at the end.\n\n"
+        f"1. Preserve every word, word boundary, punctuation mark, accent, letter case, name, code, date and number exactly.\n"
+        f"2. NEVER split or fuse words, remove line-wrap hyphens, correct spelling or accents, or insert or remove Markdown markers.\n"
+        f"3. Preserve code, tables, markup and lists exactly, including their whitespace. When unsure, return the original text unchanged.\n"
+        f"4. Return ONLY the document body. Do not add code fences, titles, commentary or missing information.\n\n"
         f"--- RAW OCR TEXT FOR PAGE {page_num} ---\n"
         f"{page_text}\n"
         f"--- END RAW OCR TEXT ---"
@@ -107,14 +115,9 @@ def normalize_page_markdown_with_llm(
     cleaned_output = res_body.get("response")
     if not isinstance(cleaned_output, str) or not cleaned_output.strip():
         raise _review(page_text, page_num, "empty_response")
-    cleaned_output = cleaned_output.strip()
-    if cleaned_output.startswith("```") and cleaned_output.endswith("```"):
-        cleaned_output = re.sub(r'^```(?:markdown)?\s*', '', cleaned_output)
-        cleaned_output = re.sub(r'\s*```$', '', cleaned_output).strip()
-    cleaned_output = sanitize_extracted_text(cleaned_output)
     if Counter(_PROTECTED_TOKEN.findall(page_text)) != Counter(_PROTECTED_TOKEN.findall(cleaned_output)):
         raise _review(page_text, page_num, "entities_changed")
-    if not cleaned_output or _content_sequence(page_text) != _content_sequence(cleaned_output):
+    if not _layout_only(page_text, cleaned_output):
         raise _review(page_text, page_num, "content_changed")
-    logger.info("Page %s passed conservative LLM layout checks (%s); semantic fidelity is not certified.", page_num, model)
+    logger.info("Page %s preserves words/punctuation under whitespace-only normalization (%s); semantic fidelity is not certified.", page_num, model)
     return cleaned_output

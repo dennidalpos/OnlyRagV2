@@ -13,6 +13,50 @@ from _stream import done_payload, read_events
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+@pytest.mark.parametrize("extension,separator", [("csv", ","), ("tsv", "\t")])
+@pytest.mark.parametrize("from_disk", [False, True])
+def test_delimited_cells_preserve_literal_values(tmp_path, extension, separator, from_disk):
+    content = separator.join(["Code", "Status", "Amount", "Note"]) + "\n"
+    content += separator.join(["0007", "NA", "12.50", '"Ada, Neri"']) + "\n"
+    content += separator.join(["0008", "NULL", "0", '"first line\nsecond line"']) + "\n"
+    original = content.encode("utf-8")
+    path = tmp_path / f"literal.{extension}"
+    path.write_bytes(original)
+    markdown, pages = extract_document_markdown(path.name, b"" if from_disk else original, str(path) if from_disk else None)
+    assert pages == 1
+    for value in ("0007", "NA", "12.50", "Ada, Neri", "0008", "NULL", "first line", "second line"):
+        assert value in markdown
+    assert "nan" not in markdown
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("content", [
+    b'Code,Status\n0007,"unterminated\n',
+    b"Code,Status\n0007,Ready\n0008,Ready,unexpected\n",
+    b"Code,Status\n0007,Ready,unexpected\n0008,Ready,unexpected\n",
+])
+def test_malformed_csv_never_indexes_partial_content(sidecar_http_client, tmp_path, content):
+    path = tmp_path / "malformed.csv"
+    path.write_bytes(content)
+    before = sidecar_http_client.get("/health").json()
+    events = read_events(sidecar_http_client.post("/ingest-path-stream", json={"file_path": str(path)}))
+    assert events[-1]["type"] == "error"
+    assert not any(event["type"] == "done" or event.get("step_code") == "embedding" for event in events)
+    after = sidecar_http_client.get("/health").json()
+    assert (after["documents_count"], after["chunks_count"]) == (before["documents_count"], before["chunks_count"])
+    assert path.read_bytes() == content
+
+
+def test_csv_stream_preserves_the_original_literals(sidecar_http_client, tmp_path):
+    content = b"Order,Route,Status\n0007,North,NA\n0008,South,Ready\n"
+    path = tmp_path / "literal.csv"
+    path.write_bytes(content)
+    payload = done_payload(sidecar_http_client.post("/ingest-path-stream", json={"file_path": str(path)}))
+    for value in ("0007", "NA", "0008", "Ready"):
+        assert value in payload["extracted_markdown"]
+    assert path.read_bytes() == content
+
+
 def workbook_bytes(rows, extra_sheets=()):
     book = Workbook()
     for row in rows:

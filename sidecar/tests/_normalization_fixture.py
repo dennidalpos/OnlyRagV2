@@ -22,7 +22,7 @@ def normalization_server():
             requests.append(payload)
             source = re.search(r"--- RAW OCR TEXT FOR PAGE \d+ ---\n(.*?)\n--- END RAW OCR TEXT ---", payload["prompt"], re.DOTALL).group(1)
             model = payload["model"]
-            output = "# " + source.replace("\n", " ")
+            output = source.replace("\n", " ")
             done = True
             reason = "stop"
             if model == "normalizer-truncated":
@@ -35,6 +35,12 @@ def normalization_server():
                 output = ""
             elif model == "normalizer-incomplete":
                 done = False
+            elif model == "normalizer-punctuation":
+                output = source.replace("said: the contractor", ", said the contractor,")
+            elif model == "normalizer-word-boundary":
+                output = source.replace("therapist", "the rapist")
+            elif model == "normalizer-markdown":
+                output = "# " + source
             body = json.dumps({"response": output, "done": done, "done_reason": reason}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

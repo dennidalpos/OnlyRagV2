@@ -1,0 +1,13 @@
+{
+  "version": "whitespace-only-v1",
+  "approved": "User decision on 2026-10-02: automatic spaces/line-wrap cleanup only; preserve words and punctuation.",
+  "expected_auto_acceptance": {
+    "safe-wrap": false,
+    "safe-spacing": false,
+    "lost-negation": false,
+    "changed-entity": false,
+    "punctuation-scope": false,
+    "word-boundary": false
+  },
+  "note": "The unchanged corpus safe labels measure semantic acceptability. Two safe lexical repairs intentionally require review under this stricter automatic policy; report those refusals separately. Never automatically accept an independently unsafe output."
+}

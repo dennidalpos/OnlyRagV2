@@ -493,7 +493,7 @@ export const en: TranslationSchema = {
       truncated: 'response truncated by the generation limit',
       empty_response: 'empty response',
       entities_changed: 'numbers or references changed or removed',
-      content_changed: 'text omitted, reordered or replaced beyond layout cleanup',
+      content_changed: 'words, punctuation, accents or protected layout changed; only prose spaces and line wraps can be accepted automatically',
     },
     cancelOperation: 'Cancel operation',
     exportPreparing: 'Preparing {format} export...',

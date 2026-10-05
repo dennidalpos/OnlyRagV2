@@ -198,6 +198,49 @@ def test_immutable_entity_masking_and_unmasking():
     assert "Send form to assistenza@pec.telepass.com or visit https://www.telepass.com for details." == unmasked
 
 
+@pytest.mark.parametrize("phrase, expected", [
+    ("raccomandata a.r. entro", "registered mail with advice of delivery entro"),
+    ("Raccomandata A/R", "Registered mail with advice of delivery"),
+    ("RACCOMANDATA CON A.R.", "REGISTERED MAIL WITH ADVICE OF DELIVERY."),
+])
+def test_postal_receipt_term_uses_verified_english_meaning(phrase, expected):
+    masked, tokens = translator_module._mask_immutable_entities(phrase, "Italian", "English")
+    assert translator_module._unmask_immutable_entities(masked, tokens) == expected
+    assert "__PROT_ENT_0__" in masked
+
+
+@pytest.mark.parametrize("source, source_lang, target_lang", [
+    ("A.R. autorizza il modulo AR-0042.", "Italian", "English"),
+    ("raccomandata a.r.", "Italian", "French"),
+    ("raccomandata a.r.", "English", "Italian"),
+    ("https://example.com/raccomandata a.r.", "Italian", "English"),
+])
+def test_postal_term_does_not_rewrite_other_languages_initials_or_urls(source, source_lang, target_lang):
+    masked, tokens = translator_module._mask_immutable_entities(source, source_lang, target_lang)
+    assert translator_module._unmask_immutable_entities(masked, tokens) == source
+
+
+@pytest.mark.parametrize("texts", [["Inviare per raccomandata a.r. entro il 18/06/2024."], [
+    "Inviare per raccomandata a.r. entro il 18/06/2024.", "Non inviare a help@example.com."
+]])
+def test_single_and_batch_translation_protect_delivery_term_and_literal_values(monkeypatch, texts):
+    def translate(text, *args, **kwargs):
+        assert "raccomandata" not in text
+        return text.replace("Inviare per", "Send by").replace("entro il", "by").replace("Non inviare a", "Do not send to")
+
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", translate)
+    result = translator_module._translate_texts_with_fallback(texts, "Italian", "English", "test-model")
+    assert result[0] == "Send by registered mail with advice of delivery by 18/06/2024."
+    if len(texts) > 1:
+        assert result[1] == "Do not send to help@example.com."
+
+
+def test_missing_protected_postal_term_fails_instead_of_dropping_receipt(monkeypatch):
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda *args, **kwargs: "Send by registered mail.")
+    with pytest.raises(ValueError, match="protected"):
+        translator_module._translate_texts_with_fallback(["Inviare per raccomandata a.r."], "Italian", "English", "test-model")
+
+
 @pytest.mark.parametrize("label", ["CODICE FISCALE *", "N° CIVICO *\nLOCALITÀ *"])
 def test_short_form_labels_are_not_mistaken_for_target_language(label):
     assert translator_module.is_block_in_target_lang(label, "English") is False

@@ -10,6 +10,12 @@ import {
 } from './sidecarContract'
 
 describe('normalization review contract', () => {
+  it.each(['context_missing', 'context_budget_exceeded'] as const)('retains source-preserving context refusal: %s', (reason) => {
+    expect(parseNormalizationReview({ original_markdown: '# Complete original', issues: [{ page: 1, reason }] })).toEqual({
+      originalMarkdown: '# Complete original',
+      issues: [{ page: 1, reason }],
+    })
+  })
   it('retains the original Markdown verbatim with typed page issues', () => {
     expect(parseNormalizationReview({ original_markdown: '  # Original\n\nAB123\n', issues: [{ page: 2, reason: 'truncated' }] })).toEqual({
       originalMarkdown: '  # Original\n\nAB123\n',

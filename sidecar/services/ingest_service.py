@@ -160,7 +160,8 @@ def process_and_index_document_generator(
                             normalization_model=normalization_model,
                             normalization_think=normalization_think,
                             filename=filename,
-                            num_pages=num_pages
+                            num_pages=num_pages,
+                            num_ctx=num_ctx,
                         ))
                         page_render_meta[page_num] = {
                             "tables": len(md_tables),

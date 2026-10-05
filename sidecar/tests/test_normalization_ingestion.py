@@ -45,7 +45,7 @@ def test_normalization_stream_rejection_retains_the_original(
     original = path.read_bytes()
     before = sidecar_http_client.get("/health").json()
     events = read_events(sidecar_http_client.post("/ingest-path-stream", json={
-        "file_path": str(path), "normalize_with_llm": True, "normalization_model": model,
+        "file_path": str(path), "normalize_with_llm": True, "normalization_model": model, "num_ctx": 4096,
     }))
     assert events[-1]["type"] == "error"
     assert events[-1]["normalization_review"] == {
@@ -70,7 +70,7 @@ def test_normalization_stream_review_includes_all_original_pages(
     path = write_pdf(tmp_path, pages)
     original = path.read_bytes()
     events = read_events(sidecar_http_client.post("/ingest-path-stream", json={
-        "file_path": str(path), "normalize_with_llm": True,
+        "file_path": str(path), "normalize_with_llm": True, "num_ctx": 4096,
         "normalization_model": "normalizer-last-page", "normalization_think": True,
     }))
     assert events[-1]["type"] == "error"
@@ -82,6 +82,7 @@ def test_normalization_stream_review_includes_all_original_pages(
     if normalization_ollama:
         assert len(normalization_ollama) == 3
         assert all(request["think"] is True for request in normalization_ollama)
+        assert all(request["options"]["num_ctx"] == 4096 for request in normalization_ollama)
 
 
 def test_normalization_stream_valid_cleanup_indexes(sidecar_http_client, normalization_ollama, tmp_path):
@@ -89,7 +90,7 @@ def test_normalization_stream_valid_cleanup_indexes(sidecar_http_client, normali
     path = write_pdf(tmp_path, [source])
     original = path.read_bytes()
     payload = done_payload(sidecar_http_client.post("/ingest-path-stream", json={
-        "file_path": str(path), "normalize_with_llm": True, "normalization_model": "normalizer-cleanup",
+        "file_path": str(path), "normalize_with_llm": True, "normalization_model": "normalizer-cleanup", "num_ctx": 4096,
     }))
     assert source in payload["extracted_markdown"]
     assert payload["num_chunks"] > 0
@@ -107,7 +108,7 @@ def test_lexical_rewrites_require_review_before_indexing(sidecar_http_client, no
     original = path.read_bytes()
     before = sidecar_http_client.get("/health").json()
     events = read_events(sidecar_http_client.post("/ingest-path-stream", json={
-        "file_path": str(path), "normalize_with_llm": True, "normalization_model": model,
+        "file_path": str(path), "normalize_with_llm": True, "normalization_model": model, "num_ctx": 4096,
     }))
     assert events[-1]["type"] == "error"
     assert events[-1]["normalization_review"] == {
@@ -127,11 +128,13 @@ def test_pdf_extractor_preserves_every_page_on_review(normalization_ollama, tmp_
     ])
     with pytest.raises(NormalizationReviewRequired) as rejected:
         ingestion.extract_document_markdown(
-            path.name, b"", str(path), normalize_with_llm=True, normalization_model="normalizer-last-page",
+            path.name, b"", str(path), normalize_with_llm=True, normalization_model="normalizer-last-page", num_ctx=4096,
         )
     assert "## Page 1\n\nThe original first clause" in rejected.value.original_markdown
     assert "## Page 2\n\nReference AB123" in rejected.value.original_markdown
     assert rejected.value.issues == [{"page": 2, "reason": "entities_changed"}]
+    if normalization_ollama:
+        assert all(request["options"]["num_ctx"] == 4096 for request in normalization_ollama)
 
 
 def test_image_extractor_retains_original_on_review(monkeypatch):
@@ -143,3 +146,41 @@ def test_image_extractor_retains_original_on_review(monkeypatch):
     with pytest.raises(NormalizationReviewRequired) as rejected:
         ingestion.extract_document_markdown("source.png", b"fixture", normalize_with_llm=True, normalization_model="fixture")
     assert rejected.value.original_markdown == f"# source.png\n\n## Page 1\n\n{source}"
+
+
+@pytest.mark.parametrize("context,reason", [(None, "context_missing"), (512, "context_budget_exceeded")])
+def test_context_refusal_retains_complete_http_source_without_indexing(sidecar_http_client, normalization_ollama, tmp_path, context, reason):
+    source = "The complete original report requires written consent before payment."
+    path = write_pdf(tmp_path, [source, source])
+    original = path.read_bytes()
+    before = sidecar_http_client.get("/health").json()
+    events = read_events(sidecar_http_client.post("/ingest-path-stream", json={
+        "file_path": str(path), "normalize_with_llm": True, "normalization_model": "normalizer-context", "num_ctx": context,
+    }))
+    assert events[-1]["type"] == "error"
+    review = events[-1]["normalization_review"]
+    assert review["original_markdown"] == f"# {path.name}\n\n## Page 1\n\n{source}\n\n## Page 2\n\n{source}"
+    assert review["issues"] == [{"page": 1, "reason": reason}, {"page": 2, "reason": reason}]
+    assert not any(event["type"] == "done" or event.get("step_code") == "embedding" for event in events)
+    after = sidecar_http_client.get("/health").json()
+    assert (after["documents_count"], after["chunks_count"]) == (before["documents_count"], before["chunks_count"])
+    assert not normalization_ollama
+    assert path.read_bytes() == original
+
+
+def test_image_ocr_and_normalizer_receive_the_same_context(monkeypatch, normalization_ollama):
+    source = "The complete original report requires written consent before payment."
+    seen = []
+    def ocr(*args, **kwargs):
+        seen.append(kwargs["num_ctx"])
+        return source
+    monkeypatch.setattr(ingestion, "run_page_ocr", ocr)
+    markdown, pages = ingestion.extract_document_markdown(
+        "source.png", b"fixture", normalize_with_llm=True, normalization_model="normalizer-context", num_ctx=2048,
+    )
+    assert pages == 1 and source in markdown
+    assert seen == [2048]
+    if normalization_ollama:
+        assert len(normalization_ollama) == 1
+        assert normalization_ollama[0]["options"]["num_ctx"] == 2048
+        assert normalization_ollama[0]["options"]["num_predict"] < 2048

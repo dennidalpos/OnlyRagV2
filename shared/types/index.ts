@@ -92,7 +92,16 @@ export interface NormalizationReview {
   originalMarkdown: string
   issues: {
     page: number
-    reason: 'model_missing' | 'request_failed' | 'incomplete_response' | 'truncated' | 'empty_response' | 'entities_changed' | 'content_changed'
+    reason:
+      | 'model_missing'
+      | 'context_missing'
+      | 'context_budget_exceeded'
+      | 'request_failed'
+      | 'incomplete_response'
+      | 'truncated'
+      | 'empty_response'
+      | 'entities_changed'
+      | 'content_changed'
   }[]
 }
 

@@ -138,7 +138,10 @@ def health_check():
 @app.post("/ingest-path-stream", description=(
     "NDJSON progress/done/error/cancelled stream. Rejected LLM normalization returns an error "
     "with normalization_review: original_markdown (the complete pre-normalization extraction) "
-    "and issues (page, reason). No document or chunks are indexed for that outcome."
+    "and issues (page, reason). No document or chunks are indexed for that outcome. "
+    "num_ctx is shared by Vision OCR and optional normalization. Normalization-eligible pages "
+    "without a selected context return context_missing; insufficient input/output budget returns "
+    "context_budget_exceeded, preserving the complete original without generation or indexing."
 ))
 async def ingest_document_by_path_stream(req: IngestPathRequest):
     logger.info(f"Received path for streaming ingestion: {req.file_path} (normalize_with_llm={req.normalize_with_llm})")

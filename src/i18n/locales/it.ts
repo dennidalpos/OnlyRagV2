@@ -495,6 +495,8 @@ export const it = {
     normalizationReviewIssue: 'Pagina {page}: {reason}',
     normalizationReasons: {
       model_missing: 'modello non configurato',
+      context_missing: 'contesto di ingestion mancante o non valido',
+      context_budget_exceeded: 'il testo completo supera il budget di input o output; originale conservato',
       request_failed: 'richiesta al modello non riuscita',
       incomplete_response: 'completamento della risposta non confermato',
       truncated: 'risposta troncata dal limite di generazione',

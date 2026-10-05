@@ -76,7 +76,17 @@ const normalizationReviewSchema = z
         z
           .object({
             page: z.number().int().min(1),
-            reason: z.enum(['model_missing', 'request_failed', 'incomplete_response', 'truncated', 'empty_response', 'entities_changed', 'content_changed']),
+            reason: z.enum([
+              'model_missing',
+              'context_missing',
+              'context_budget_exceeded',
+              'request_failed',
+              'incomplete_response',
+              'truncated',
+              'empty_response',
+              'entities_changed',
+              'content_changed',
+            ]),
           })
           .strict(),
       )

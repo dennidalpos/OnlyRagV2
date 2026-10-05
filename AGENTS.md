@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`v1.40 · 2026-10-02` — Quirks.
+`v1.41 · 2026-10-05` — Quirks.
 
 - `master` only; no branches. Commit/push only on request.
 - Diagnosis: 10 informed attempts override two-failure stop; preserve retries/guards/timeouts.
@@ -8,7 +8,7 @@
 - npm 11 preserves `libc`. Electron 43 needs `node node_modules/electron/install.js` after `npm ci` (`setup:dev`/CI).
 - Main/Renderer share `shared/`; IPC derives from `shared/ipc/ipcContract.ts`. Ports need enforced boundaries or second implementations.
 - Chunks: native dimensions, versioned Nomic/Qwen preparation. Incompatible spaces need backed-up rebuild; prompt history stays raw pending its task.
-- Normalization refusal: non-indexed draft; no persisted status or migration.
+- Ingestion `numCtx` is shared by Vision/normalization. Missing/insufficient normalization context preserves the non-indexed original; no persisted status or migration.
 - Recover `document-recovery.json` before maintenance; failure preserves it and blocks DB access. Only `/health` exempts Sidecar authentication.
 - Orphans need exact identity from `sidecar-ownership.json`; never reclaim by port alone.
 - DOM tests outside `dom` need `// @vitest-environment happy-dom` first. Knip production test-only exports need `@internal`.
@@ -20,10 +20,10 @@
 - Unknown memory geometry stays uncertain; fit cannot bypass admission.
 - Live artifacts use `%USERPROFILE%\OnlyRag-Live` (`ONLYRAG_LIVE_ROOT` overrides). Resumable Ollama blobs are not app data.
 
-2026-10-02 (PS, Node24/npm11/Python3.13):
+2026-10-05 (PS, Node24/npm11/Python3.13):
 
-- `npm run test:fast`: 297 files/2412 tests; hardware subset: 113, modal: 17.
-- `.venv\Scripts\python.exe -m pytest -q`: 318 tests.
+- `npm run test:fast`: 297 files/2418 tests.
+- `.venv\Scripts\python.exe -m pytest -q`: 336 tests.
 - `npm run typecheck`, `npm run quality:static`, `npm run audit:deadcode`, `npm run audit:cycles`, `npm run docs:check`, `npm run format:check`.
 - `npm run generate:openapi` after schema changes; `npm run build`.
 

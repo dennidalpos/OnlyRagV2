@@ -32,7 +32,7 @@ def test_word_repairs_preserve_the_original_for_review():
 
     with patch("urllib.request.urlopen", return_value=mock_resp):
         with pytest.raises(NormalizationReviewRequired) as rejected:
-            normalize_page_markdown_with_llm(raw_ocr, page_num=1, model="llama3.2")
+            normalize_page_markdown_with_llm(raw_ocr, page_num=1, model="llama3.2", num_ctx=4096)
         assert rejected.value.original_markdown == raw_ocr
         assert rejected.value.issues == [{"page": 1, "reason": "content_changed"}]
 
@@ -44,7 +44,7 @@ def test_normalizer_sends_thinking_separately_from_content():
     mock_resp.__enter__.return_value = mock_resp
 
     with patch("urllib.request.urlopen", return_value=mock_resp) as urlopen:
-        assert normalize_page_markdown_with_llm(raw_ocr, model="llama3.2", think=True) == raw_ocr
+        assert normalize_page_markdown_with_llm(raw_ocr, model="llama3.2", think=True, num_ctx=4096) == raw_ocr
         request = urlopen.call_args.args[0]
         assert json.loads(request.data)["think"] is True
 
@@ -52,7 +52,7 @@ def test_normalize_page_markdown_with_llm_failure_requires_review():
     raw_ocr = "Contratto Telepass numero 123456 con testo lungo sufficiente per la normalizzazione"
     with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("Connection refused")):
         with pytest.raises(NormalizationReviewRequired) as rejected:
-            normalize_page_markdown_with_llm(raw_ocr, page_num=1, model="llama3.2")
+            normalize_page_markdown_with_llm(raw_ocr, page_num=1, model="llama3.2", num_ctx=4096)
         assert rejected.value.original_markdown == raw_ocr
         assert rejected.value.issues == [{"page": 1, "reason": "request_failed"}]
 
@@ -92,7 +92,7 @@ def test_normalizer_requires_complete_nonempty_response(body, reason):
         response.status = 200
         response.read.return_value = json.dumps(body).encode()
         with pytest.raises(NormalizationReviewRequired) as rejected:
-            normalize_page_markdown_with_llm(source, model="fixture", page_num=3)
+            normalize_page_markdown_with_llm(source, model="fixture", page_num=3, num_ctx=4096)
     assert rejected.value.original_markdown == source
     assert rejected.value.issues == [{"page": 3, "reason": reason}]
 
@@ -125,7 +125,7 @@ def test_normalizer_rejects_content_loss_or_replacement(source, candidate, reaso
         response.status = 200
         response.read.return_value = json.dumps({"response": candidate, "done": True, "done_reason": "stop"}).encode()
         with pytest.raises(NormalizationReviewRequired) as rejected:
-            normalize_page_markdown_with_llm(source, model="fixture")
+            normalize_page_markdown_with_llm(source, model="fixture", num_ctx=4096)
     assert rejected.value.original_markdown == source
     assert rejected.value.issues[0]["reason"] == reason
 
@@ -140,4 +140,39 @@ def test_normalizer_allows_conservative_layout_cleanup(source, candidate):
         response = urlopen.return_value.__enter__.return_value
         response.status = 200
         response.read.return_value = json.dumps({"response": candidate, "done": True, "done_reason": "stop"}).encode()
-        assert normalize_page_markdown_with_llm(source, model="fixture") == candidate
+        assert normalize_page_markdown_with_llm(source, model="fixture", num_ctx=4096) == candidate
+
+
+@pytest.mark.parametrize("context", [None, 256, 512])
+def test_missing_or_insufficient_context_refuses_before_model_call(context):
+    source = "Reference AB123 requires explicit consent before payment of the complete invoice."
+    with patch("urllib.request.urlopen") as urlopen:
+        with pytest.raises(NormalizationReviewRequired) as rejected:
+            normalize_page_markdown_with_llm(source, model="fixture", num_ctx=context)
+        urlopen.assert_not_called()
+    assert rejected.value.original_markdown == source
+    assert rejected.value.issues[0]["reason"] == ("context_missing" if context is None else "context_budget_exceeded")
+
+
+def test_context_and_output_reservation_are_explicit_without_changing_timeout():
+    source = "A" * 1400
+    with patch("urllib.request.urlopen") as urlopen:
+        response = urlopen.return_value.__enter__.return_value
+        response.status = 200
+        response.read.return_value = json.dumps({"response": source, "done": True, "done_reason": "stop"}).encode()
+        assert normalize_page_markdown_with_llm(source, model="fixture", num_ctx=4096) == source
+        payload = json.loads(urlopen.call_args.args[0].data)
+        assert payload["options"]["num_ctx"] == 4096
+        assert len(source.encode("utf-8")) + 64 <= payload["options"]["num_predict"] < 2048
+        assert len(payload["prompt"].encode("utf-8")) + payload["options"]["num_predict"] + 128 <= 4096
+        assert urlopen.call_args.kwargs["timeout"] == 25.0
+
+
+def test_unicode_input_cannot_exceed_existing_output_limit_even_with_large_context():
+    source = "界" * 800
+    with patch("urllib.request.urlopen") as urlopen:
+        with pytest.raises(NormalizationReviewRequired) as rejected:
+            normalize_page_markdown_with_llm(source, model="fixture", num_ctx=32768)
+        urlopen.assert_not_called()
+    assert rejected.value.original_markdown == source
+    assert rejected.value.issues[0]["reason"] == "context_budget_exceeded"

@@ -226,6 +226,7 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
                 page_num=page_num,
                 model=work_item.get("normalization_model"),
                 think=bool(work_item.get("normalization_think")),
+                num_ctx=work_item.get("num_ctx"),
             )
         except NormalizationReviewRequired as review:
             work_item["normalization_issues"] = review.issues
@@ -457,6 +458,7 @@ def extract_document_markdown(
                     page_num=1,
                     model=normalization_model,
                     think=normalization_think,
+                    num_ctx=num_ctx,
                 )
             except NormalizationReviewRequired as review:
                 raise NormalizationReviewRequired(

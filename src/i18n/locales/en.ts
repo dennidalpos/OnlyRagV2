@@ -488,6 +488,8 @@ export const en: TranslationSchema = {
     normalizationReviewIssue: 'Page {page}: {reason}',
     normalizationReasons: {
       model_missing: 'no model configured',
+      context_missing: 'ingestion context missing or invalid',
+      context_budget_exceeded: 'the complete text exceeds the input or output budget; original preserved',
       request_failed: 'model request failed',
       incomplete_response: 'response completion was not confirmed',
       truncated: 'response truncated by the generation limit',

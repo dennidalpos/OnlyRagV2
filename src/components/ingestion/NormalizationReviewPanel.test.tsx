@@ -6,6 +6,36 @@ import { I18nProvider } from '../../i18n'
 import { NormalizationReviewPanel } from './NormalizationReviewPanel'
 
 describe('normalization review panel', () => {
+  it.each(['it', 'en'] as const)('explains context refusals without losing the complete original (%s)', async (language) => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const original = 'Complete original content, without truncation.'
+    try {
+      await act(async () =>
+        root.render(
+          <I18nProvider initialLanguage={language}>
+            <NormalizationReviewPanel
+              review={{
+                originalMarkdown: original,
+                issues: [
+                  { page: 1, reason: 'context_missing' },
+                  { page: 2, reason: 'context_budget_exceeded' },
+                ],
+              }}
+              exporting={false}
+              onExport={vi.fn()}
+              onDismiss={vi.fn()}
+            />
+          </I18nProvider>,
+        ),
+      )
+      expect(container.textContent).toContain(language === 'it' ? 'contesto di ingestion mancante' : 'ingestion context missing')
+      expect(container.textContent).toContain(language === 'it' ? 'originale conservato' : 'original preserved')
+      expect(container.querySelector('textarea')?.value).toBe(original)
+    } finally {
+      await act(async () => root.unmount())
+    }
+  })
   it('shows readable reasons and the original as inert text, and exposes export and dismissal', async () => {
     const container = document.createElement('div')
     const root = createRoot(container)

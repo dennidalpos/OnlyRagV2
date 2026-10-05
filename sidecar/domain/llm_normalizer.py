@@ -58,13 +58,16 @@ def normalize_page_markdown_with_llm(
     model: Optional[str] = None,
     timeout_seconds: float = 25.0,
     ollama_url: Optional[str] = None,
-    think: bool = False
+    think: bool = False,
+    num_ctx: Optional[int] = None,
 ) -> str:
     """Accept conservative layout cleanup or retain the source for explicit review."""
     if not should_normalize_page_with_llm(page_text):
         return page_text
     if not model:
         raise _review(page_text, page_num, "model_missing")
+    if isinstance(num_ctx, bool) or not isinstance(num_ctx, int) or not 256 <= num_ctx <= 131072:
+        raise _review(page_text, page_num, "context_missing")
 
     endpoint = f"{ollama_url or OLLAMA_BASE_URL}/api/generate"
     prompt = (
@@ -80,6 +83,12 @@ def normalize_page_markdown_with_llm(
         f"--- END RAW OCR TEXT ---"
     )
 
+    # Conservative UTF-8 byte admission, plus template/EOS space; never slice the source.
+    input_budget = len(prompt.encode("utf-8")) + 128
+    output_budget = min(2048, num_ctx - input_budget)
+    if output_budget < len(page_text.encode("utf-8")) + 64:
+        raise _review(page_text, page_num, "context_budget_exceeded")
+
     payload = {
         "model": model,
         "prompt": prompt,
@@ -87,7 +96,8 @@ def normalize_page_markdown_with_llm(
         "think": bool(think),
         "options": {
             "temperature": 0.1,
-            "num_predict": 2048,
+            "num_ctx": num_ctx,
+            "num_predict": output_budget,
         }
     }
 

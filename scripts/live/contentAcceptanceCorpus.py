@@ -175,7 +175,7 @@ def main():
 
             with patch("urllib.request.urlopen", fixture_response):
                 try:
-                    normalize_page_markdown_with_llm(pair["source"], model="declared-pair-fixture")
+                    normalize_page_markdown_with_llm(pair["source"], model="declared-pair-fixture", num_ctx=4096)
                     accepted, reasons = True, []
                 except NormalizationReviewRequired as refusal:
                     accepted, reasons = False, refusal.issues
@@ -198,7 +198,7 @@ def main():
 
             with patch("urllib.request.urlopen", live_response):
                 try:
-                    output = normalize_page_markdown_with_llm(case["source"], model=MODEL, think=False)
+                    output = normalize_page_markdown_with_llm(case["source"], model=MODEL, think=False, num_ctx=4096)
                     accepted, reasons = True, []
                 except NormalizationReviewRequired as refusal:
                     output, accepted, reasons = None, False, refusal.issues

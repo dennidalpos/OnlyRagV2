@@ -99,6 +99,7 @@ export interface IpcInvokeContract {
       visionPrompt?: string
       normalizeWithLlm?: boolean
       normalizationModel?: string
+      /** Common context for Vision OCR and optional normalization; required for normalization calls. */
       numCtx?: number
       taskId?: string
       normalizationThink?: boolean

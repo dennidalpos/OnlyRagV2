@@ -191,21 +191,22 @@ _ADDRESS_LINE_PATTERN = re.compile(
 )
 _COMPANY_SUFFIX = r'(?:S\.p\.A\.?|S\.r\.l\.?|Ltd\.?|Inc\.?|LLC|GmbH)'
 _COMPANY_PATTERN = re.compile(r'\b([A-Z][\w-]*)\s+' + _COMPANY_SUFFIX + r'(?=\s|[.,;]|$)')
+_REGISTERED_AR_PATTERN = re.compile(r'\braccomandata\s+(?:con\s+)?(?:a\.\s*r\.?|a/r)(?!\w)', re.IGNORECASE)
 
 
-def _mask_immutable_entities(text: str) -> Tuple[str, Dict[str, str]]:
-    """Masks contacts, dates, numbers and identifiers with deterministic placeholders."""
+def _mask_immutable_entities(text: str, source_lang: str = "", target_lang: str = "") -> Tuple[str, Dict[str, str]]:
+    """Protect literal entities and the verified Italian-to-English postal term."""
     if not text:
         return "", {}
     token_map: Dict[str, str] = {}
     counter = 0
 
-    def repl(m: re.Match, trim_end: bool = False) -> str:
+    def repl(m: re.Match, trim_end: bool = False, translation: Optional[str] = None) -> str:
         nonlocal counter
         tok = f"__PROT_ENT_{counter}__"
         value = m.group(0)
         literal = value.rstrip(".,; \t") if trim_end else value
-        token_map[tok] = literal
+        token_map[tok] = translation if translation is not None else literal
         counter += 1
         prefix = " " if m.start() and m.string[m.start() - 1].isalnum() else ""
         suffix = " " if m.end() < len(m.string) and m.string[m.end()].isalnum() else ""
@@ -219,6 +220,19 @@ def _mask_immutable_entities(text: str) -> Tuple[str, Dict[str, str]]:
     masked = _EMAIL_PATTERN.sub(repl, masked)
     masked = _URL_PATTERN.sub(repl, masked)
     masked = _NUMBER_CODE_PATTERN.sub(repl, masked)
+    if source_lang.strip().casefold() == "italian" and target_lang.strip().casefold() == "english":
+        # Poste Italiane: A.R. / Advice of Delivery; unrelated initials stay literal.
+        def postal_term(match: re.Match) -> str:
+            term = "registered mail with advice of delivery"
+            if match.group(0).isupper():
+                term = term.upper()
+            elif match.group(0)[0].isupper():
+                term = term.capitalize()
+            if match.group(0).endswith(".") and not match.string[match.end():].strip():
+                term += "."
+            return repl(match, translation=term)
+
+        masked = _REGISTERED_AR_PATTERN.sub(postal_term, masked)
     return masked, token_map
 
 
@@ -459,7 +473,7 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
     if len(clean_texts) == 1:
         if _should_skip_translation(clean_texts[0]) or is_block_in_target_lang(clean_texts[0], target_lang):
             return clean_texts
-        masked_text, token_map = _mask_immutable_entities(clean_texts[0])
+        masked_text, token_map = _mask_immutable_entities(clean_texts[0], source_lang, target_lang)
         single = _call_ollama_translate(masked_text, source_lang, target_lang, model, is_batch=False, **ollama_options)
         return [_validated_translation(single, masked_text, token_map)]
 
@@ -469,7 +483,7 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
 
     for i, t in enumerate(clean_texts):
         if not _should_skip_translation(t) and not is_block_in_target_lang(t, target_lang):
-            masked, tmap = _mask_immutable_entities(t)
+            masked, tmap = _mask_immutable_entities(t, source_lang, target_lang)
             active_indices.append(i)
             active_texts.append(masked)
             token_maps.append(tmap)

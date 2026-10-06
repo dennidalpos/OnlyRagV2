@@ -13,6 +13,8 @@ export function useWorkspaceProjects(settings?: AppSettings) {
   const [registryFailed, setRegistryFailed] = useState(false)
   const mounted = useRef(false)
   const registryRevision = useRef(0)
+  const selectionRevision = useRef(0)
+  const chooserRevision = useRef(0)
   const [workspacePath, setWorkspacePath] = useState<string | null>(() =>
     startsStandalone ? null : settings?.customWorkspacePath || localStorage.getItem(LAST_WORKSPACE_STORAGE_KEY) || null,
   )
@@ -46,38 +48,39 @@ export function useWorkspaceProjects(settings?: AppSettings) {
     return () => {
       mounted.current = false
       registryRevision.current++
+      selectionRevision.current++
     }
   }, [reloadRegistry])
 
-  const ensureStandaloneWorkspace = useCallback(async (): Promise<string | null> => {
-    if (standaloneWorkspacePath) return standaloneWorkspacePath
-    if (!window.electronAPI?.getStandaloneScratchWorkspace) return null
-    try {
-      const result = await window.electronAPI.getStandaloneScratchWorkspace()
-      setStandaloneWorkspacePath(result.path)
-      return result.path
-    } catch (err: unknown) {
-      logger.warn('useWorkspaceProjects', `Could not initialize standalone scratch workspace: ${errorMessage(err)}`)
-      return null
-    }
-  }, [standaloneWorkspacePath])
+  const ensureStandaloneWorkspace = useCallback(
+    async (revision: number): Promise<void> => {
+      try {
+        const scratchPath = standaloneWorkspacePath || (await window.electronAPI?.getStandaloneScratchWorkspace?.())?.path
+        if (!scratchPath || !mounted.current || revision !== selectionRevision.current) return
+        setStandaloneWorkspacePath(scratchPath)
+        currentWorkspace.current = scratchPath
+        setWorkspacePath(scratchPath)
+      } catch (err: unknown) {
+        logger.warn('useWorkspaceProjects', `Could not initialize standalone scratch workspace: ${errorMessage(err)}`)
+      }
+    },
+    [standaloneWorkspacePath],
+  )
 
   useEffect(() => {
     if (!isStandaloneMode) return
-    void ensureStandaloneWorkspace().then((scratchPath) => {
-      if (scratchPath) setWorkspacePath(scratchPath)
-    })
+    void ensureStandaloneWorkspace(selectionRevision.current)
   }, [ensureStandaloneWorkspace, isStandaloneMode])
 
   const handleSelectProject = useCallback(
     (pathStr: string | null) => {
+      if (!mounted.current) return
+      const revision = ++selectionRevision.current
       if (!pathStr || !pathStr.trim()) {
         currentWorkspace.current = standaloneWorkspacePath
         setIsStandaloneMode(true)
         setWorkspacePath(standaloneWorkspacePath)
-        void ensureStandaloneWorkspace().then((scratchPath) => {
-          if (scratchPath) setWorkspacePath(scratchPath)
-        })
+        void ensureStandaloneWorkspace(revision)
         try {
           localStorage.removeItem(LAST_WORKSPACE_STORAGE_KEY)
         } catch (err: unknown) {
@@ -117,11 +120,15 @@ export function useWorkspaceProjects(settings?: AppSettings) {
   )
 
   const handleAddProject = useCallback(async () => {
-    if (!window.electronAPI?.openDirectoryDialog) return
-    const chosen = await window.electronAPI.openDirectoryDialog({
-      title: translate('services.addProjectFolder'),
-    })
-    if (chosen) handleSelectProject(chosen)
+    if (!mounted.current || !window.electronAPI?.openDirectoryDialog) return
+    const selection = selectionRevision.current
+    const chooser = ++chooserRevision.current
+    try {
+      const chosen = await window.electronAPI.openDirectoryDialog({ title: translate('services.addProjectFolder') })
+      if (chosen && mounted.current && selection === selectionRevision.current && chooser === chooserRevision.current) handleSelectProject(chosen)
+    } catch (err: unknown) {
+      logger.warn('useWorkspaceProjects', `Could not choose project directory: ${errorMessage(err)}`)
+    }
   }, [handleSelectProject])
 
   const handleRenameProject = useCallback(

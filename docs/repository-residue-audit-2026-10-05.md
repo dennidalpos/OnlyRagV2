@@ -122,3 +122,22 @@ Remediation **2026-10-06**, A08: `TRANSLATION-OPERATION-OWNERSHIP-01` is complet
 Remediation **2026-10-06**, A15: `DOCS-DECISION-DRIFT-01` is completed. Operations, frontend, Main lifecycle and dependency snapshots now distinguish actual commands/ownership from previous evidence. Legacy compatibility remains protected. A15 above records the historical drift; [verification](./verification.md#documentation-reconciliation--2026-10-06) describes the current source comparison and actively exercised command.
 
 Checked on **2026-10-05**: Electron [File.path removal](https://www.electronjs.org/docs/latest/breaking-changes#removed-filepath), [webUtils API](https://www.electronjs.org/docs/latest/api/web-utils) and [renderer-loss event](https://www.electronjs.org/docs/latest/api/web-contents#event-render-process-gone); Python 3.13 [logging filters](https://docs.python.org/3.13/library/logging.html#filter-objects); npm 11 [audit semantics](https://docs.npmjs.com/cli/v11/commands/npm-audit/); GitHub reviewed [braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) and [build-cache advisory](https://github.com/advisories/GHSA-ch52-4w7c-c8xp), both updated **2026-10-02**, plus the upstream [braces report](https://github.com/micromatch/braces/issues/70). Source facts come from the checked-out code; exploitability beyond the traced dependency paths remains unverified.
+
+
+## Prompt-history follow-up — 2026-10-06
+
+A12 follow-up: the build-cache exposure review is complete with disabled Got HTTP caching and a loopback/CI guard for download/cache/checksum behavior. The package finding remains unresolved upstream under `DEPENDENCY-BUILD-CACHE-UPSTREAM-01`; this is not a claimed package patch. [Current paths and disposition](./libraries.md#build-download-cache-disposition--2026-10-06).
+
+A11 `HISTORY-OPERATION-FAILURES-01` is complete and removed from the current tracker. Its original reproductions above describe the audited baseline. Search failures now propagate to the visible UI error; failed/partial prompt removal is refused and explicitly retriable through the existing envelopes. Authenticated HTTP, DOM, service and native isolated LanceDB evidence: [verification](./verification.md#prompt-history-operation-failures--2026-10-06).
+
+A10 `SESSION-DELETION-ACKNOWLEDGEMENT-01` retains the restart/concurrent-write/recovery work. Its Main journal/outcome proposal is approved; the newly reproduced late Sidecar index append and additional persisted/REST fence decision are tracked under that same task. A11's completion does not establish durable deletion or certify prompt-history score geometry.
+
+## Cleanup delegation residue — 2026-10-06
+
+Further source review consolidates these paths under existing P1 `LIVE-RUN-RESIDUE-CLEANUP-01`. `Full` invokes `clean_repo.ps1` before test-residue handling. That script recursively removes `build`, `.cache` and other output directories without checking retained diagnosis or tracked descendants. Its subsequent untracked-file pass selects `.bak`, `.orig` and log files by extension under nonexcluded trees; naming does not establish disposable ownership. The retained `build/tabular-probes` evidence is therefore reachable through delegated cleanup as well as the previously audited selectors. `StopAppProcesses` selects only the executable name, without validating installation/run identity.
+
+No deletion, kill or destructive reproduction was performed. These are source-confirmed reachability gaps, not proof that user data has already been lost. The safety repair must cover both scripts, original backups, retained campaigns, reparse paths and owned processes before enabling removal of real candidates. No new cleanup metadata or CLI policy is approved by this review.
+
+## Dependency evidence continuation — 2026-10-06
+
+A07 remains open for scanner isolation/upstream remediation. Source review additionally reproduced incomplete parser evidence being reported complete, unavailable/root-only scans allowing project success and unacknowledged cancellation allowing a verified outcome. These integrity defects are corrected through existing result contracts, with native parser and declared response fixtures. Discovered projects without a native command resolver now block certification and are retained under `PROJECT-VERIFICATION-COMMAND-COVERAGE-01`. The narrower repair does not remove or patch braces. [Verification and remaining scope](./verification.md#dependency-verification-completeness--2026-10-06).

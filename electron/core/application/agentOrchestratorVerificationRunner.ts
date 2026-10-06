@@ -44,19 +44,39 @@ export async function runProjectVerification(
   const verifications = resolveRequiredProfileVerificationTargets(profile)
   const verificationLabel = verifications.map((target) => `${target.projectRelativePath}: ${target.command}`).join(' && ')
   const evidenceLevel = verifications.length > 0 && verifications.every((target) => target.kind === 'test') ? ('behavioral' as const) : ('structural' as const)
+  const interrupted: VerificationRunResult = { hasVerificationCommand: verifications.length > 0, status: 'unverifiable' }
+  const uncheckedProject = profile.projects.find((project) => !verifications.some((target) => target.projectId === project.id))
+  if (uncheckedProject) {
+    return {
+      ...interrupted,
+      command: verificationLabel || undefined,
+      failureDetail: `No terminating verification command is available for project ${uncheckedProject.relativePath}. This project cannot be certified by another project's checks.`,
+      evidenceLevel,
+    }
+  }
 
-  // Checked first: an undeclared import is a build failure whose cause is already known, and
-  // saying which package and which file beats making the model infer it from a compiler error.
-  const scan = await scanWorkspaceDependencies(workspacePath)
-  if (scan.scanned) {
-    const integrity = evaluateDependencyIntegrity(scan.missing, workspacePath, scan.peerProviders)
+  // Every discovered package needs complete dependency evidence before commands run.
+  for (const project of profile.projects.filter((project) => project.manifestFiles.includes('package.json'))) {
+    if (signal?.aborted) return interrupted
+    const scan = await scanWorkspaceDependencies(project.rootPath)
+    if (signal?.aborted) return interrupted
+    if (!scan.scanned) {
+      return {
+        hasVerificationCommand: verifications.length > 0,
+        status: 'unverifiable',
+        command: verificationLabel || 'dependency integrity scan',
+        failureDetail: `The dependency integrity scan is unavailable for project ${project.relativePath}. Retry after resolving the scan failure; incomplete evidence cannot verify this project.`,
+        evidenceLevel,
+      }
+    }
+    const integrity = evaluateDependencyIntegrity(scan.missing, project.rootPath, scan.peerProviders)
     if (!integrity.ok) {
       const result: VerificationRunResult = {
         hasVerificationCommand: true,
         passed: false,
         status: 'failed',
         command: verificationLabel || 'dependency integrity scan',
-        failureDetail: integrity.directive,
+        failureDetail: `Project: ${project.relativePath}\n${integrity.directive}`,
         evidenceLevel,
       }
       return { ...result, status: classifyProjectVerification(result) }
@@ -66,6 +86,7 @@ export async function runProjectVerification(
   if (verifications.length === 0) return { hasVerificationCommand: false, status: 'unverifiable' }
 
   for (const verification of verifications) {
+    if (signal?.aborted) return interrupted
     const security = fullAccess
       ? { isAllowed: true, requiresApproval: false, sanitizedCommand: verification.command }
       : checkCommandSecurity(verification.command, verification.projectRootPath)
@@ -83,6 +104,7 @@ export async function runProjectVerification(
 
     const shell = agentToolExecutorService.getOrCreateShellSession(verification.projectRootPath)
     const res = await shell.execute(security.sanitizedCommand, (chunk) => onOutput?.(chunk.trim()), undefined, VERIFICATION_TIMEOUT_MS, signal)
+    if (signal?.aborted) return interrupted
     if (res.code !== 0 || res.timedOut) {
       const result: VerificationRunResult = {
         hasVerificationCommand: true,
@@ -104,6 +126,7 @@ export async function runProjectVerification(
   }
 
   const webUi = await verifyWebUi(workspacePath, milestones, signal)
+  if (signal?.aborted) return interrupted
   if (webUi.status === 'failed' || webUi.status === 'unavailable') {
     return {
       hasVerificationCommand: true,

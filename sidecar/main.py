@@ -274,7 +274,10 @@ async def search_history(req: PromptHistorySearchRequest):
 
 @app.post("/history/remove", response_model=SuccessResponse)
 async def remove_history(req: PromptHistoryRemoveRequest):
-    return await asyncio.to_thread(remove_prompt_history, req)
+    try:
+        return await asyncio.to_thread(remove_prompt_history, req)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 @app.post("/export", response_model=ExportResponse)
 async def export_document(req: ExportRequest):

@@ -57,6 +57,15 @@ export function useCodingAgentSession({
   const prevSessionIdRef = useRef('')
   const workspaceRef = useRef(workspacePath)
   workspaceRef.current = workspacePath
+  const selectedSessionRef = useRef(activeSessionId)
+  selectedSessionRef.current = activeSessionId
+  const viewRevision = useRef(0)
+  useEffect(
+    () => () => {
+      viewRevision.current++
+    },
+    [],
+  )
   const [contentSessionId, setContentSessionId] = useState('')
   useEffect(() => {
     if (activeSessionId !== prevSessionIdRef.current) {
@@ -98,9 +107,15 @@ export function useCodingAgentSession({
     setTimeout(() => history.switchSession(sessionId), 150)
   }
 
-  const handleDeleteSession = (sessionId: string) => {
-    if (sessionId === activeSessionId) resetConversation()
-    history.deleteSession(sessionId)
+  const handleDeleteSession = async (sessionId: string) => {
+    const revision = viewRevision.current
+    const wasActive = sessionId === activeSessionId
+    if (wasActive) resetRunView()
+    const replacement = await history.deleteSession(sessionId)
+    if (!replacement || !wasActive || revision !== viewRevision.current || workspacePath !== workspaceRef.current) return
+    if (selectedSessionRef.current !== sessionId && selectedSessionRef.current !== replacement.id) return
+    clearRunContext()
+    hydrateFromSession(replacement)
   }
 
   const handleRenameSession = (sessionId: string, newTitle: string) => history.renameSession(sessionId, newTitle)

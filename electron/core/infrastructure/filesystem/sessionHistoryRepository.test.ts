@@ -4,6 +4,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { SessionHistoryRepository, sessionHistoryRepository } from './sessionHistoryRepository'
 import type { CodingSession } from '../../../../shared/types'
+import * as atomicWriter from './safeAtomicFileWriter'
 
 function buildSession(id: string, workspacePath: string | null, overrides: Partial<CodingSession> = {}): CodingSession {
   const nowIso = new Date().toISOString()
@@ -154,6 +155,26 @@ describe('SessionHistoryRepository Unit Tests', () => {
     await sessionHistoryRepository.saveSession(buildSession('session-5', tempDir))
     expect(await sessionHistoryRepository.clearSessions(tempDir)).toBe(true)
     expect(await sessionHistoryRepository.listSessions(tempDir)).toHaveLength(0)
+  })
+
+  it.each(['delete', 'clear'] as const)('refuses %s success when a candidate-store write fails, then retries remaining stores', async (operation) => {
+    const fallback = path.join(tempDir, 'fallback')
+    const repo = new SessionHistoryRepository(fallback)
+    const kept = buildSession('retained', tempDir)
+    await repo.saveSession(kept)
+    fs.mkdirSync(fallback)
+    const fallbackFile = path.join(fallback, 'session_history.json')
+    fs.writeFileSync(fallbackFile, JSON.stringify({ version: 1, sessions: [kept, buildSession('unrelated', null)] }))
+    const original = atomicWriter.safeAtomicWrite
+    const write = vi.spyOn(atomicWriter, 'safeAtomicWrite')
+    write.mockImplementation(async (file, content) => (file === fallbackFile ? false : original(file, content)))
+    const result = operation === 'delete' ? repo.deleteSession('retained', tempDir) : repo.clearSessions(tempDir)
+    if (operation === 'delete') await expect(result).rejects.toThrow('Session deletion was not acknowledged')
+    else expect(await result).toBe(false)
+    expect(JSON.parse(fs.readFileSync(fallbackFile, 'utf8')).sessions.map((item: CodingSession) => item.id)).toEqual(['retained', 'unrelated'])
+    write.mockRestore()
+    expect(await (operation === 'delete' ? repo.deleteSession('retained', tempDir) : repo.clearSessions(tempDir))).toBe(true)
+    expect(JSON.parse(fs.readFileSync(fallbackFile, 'utf8')).sessions.map((item: CodingSession) => item.id)).toEqual(['unrelated'])
   })
 
   it('should return false, not a false "success", when deleting a session that does not exist anywhere', async () => {

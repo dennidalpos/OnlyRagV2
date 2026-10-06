@@ -52,9 +52,18 @@ export function useSessionHistory(workspacePath: string | null) {
   const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(true)
   const [loadFailed, setLoadFailed] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
+  const [deleteFailed, setDeleteFailed] = useState(false)
   const [loadRevision, setLoadRevision] = useState(0)
   const failedWritesRef = useRef<Map<string, CodingSession>>(new Map())
   const loadedWorkspaceRef = useRef(workspacePath)
+  const selectionRevision = useRef(0)
+  const deletionRevision = useRef(0)
+  useEffect(() => {
+    selectionRevision.current += 1
+    return () => {
+      selectionRevision.current += 1
+    }
+  }, [workspacePath])
 
   const persistenceChainsRef = useRef<Map<string, Promise<void>>>(new Map())
   const pendingWritesRef = useRef<Map<string, { session: CodingSession; timer: ReturnType<typeof setTimeout> }>>(new Map())
@@ -202,6 +211,7 @@ export function useSessionHistory(workspacePath: string | null) {
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0] || null
 
   const createSession = useCallback((): CodingSession => {
+    selectionRevision.current += 1
     const fresh = createEmptySession(workspacePath)
     bootstrapSessionsRef.current.set(workspacePath || '', fresh)
     sessionsRef.current = [fresh, ...sessionsRef.current]
@@ -215,6 +225,7 @@ export function useSessionHistory(workspacePath: string | null) {
     (sessionId: string): CodingSession | null => {
       const target = sessionsRef.current.find((s) => s.id === sessionId)
       if (!target) return null
+      selectionRevision.current += 1
       void flushPendingWrites()
       setActiveSessionId(target.id)
       return target
@@ -225,17 +236,21 @@ export function useSessionHistory(workspacePath: string | null) {
   /** Deletes a session and returns the session that became active, when it changed. */
   const deleteSession = useCallback(
     async (sessionId: string): Promise<CodingSession | null> => {
+      const selection = selectionRevision.current
+      const operation = ++deletionRevision.current
+      const ownsView = () => selection === selectionRevision.current && operation === deletionRevision.current
       await flushPendingWrites()
-      if (window.electronAPI?.deleteCodingSession) {
-        try {
-          if (await window.electronAPI.deleteCodingSession({ sessionId, workspacePath })) {
-            failedWritesRef.current.delete(sessionId)
-            setSaveFailed(failedWritesRef.current.size > 0)
-          }
-        } catch (err: unknown) {
-          logger.warn('useSessionHistory', `Could not delete session ${sessionId}: ${errorMessage(err)}`)
-        }
+      try {
+        if (!(await window.electronAPI?.deleteCodingSession?.({ sessionId, workspacePath }))) throw new Error('Session deletion was not acknowledged')
+      } catch (err: unknown) {
+        logger.warn('useSessionHistory', `Could not delete session ${sessionId}: ${errorMessage(err)}`)
+        if (ownsView()) setDeleteFailed(true)
+        return null
       }
+      failedWritesRef.current.delete(sessionId)
+      if (!ownsView()) return null
+      setDeleteFailed(false)
+      setSaveFailed(failedWritesRef.current.size > 0)
 
       const remaining = sessionsRef.current.filter((s) => s.id !== sessionId)
       if (remaining.length === 0) {
@@ -260,18 +275,23 @@ export function useSessionHistory(workspacePath: string | null) {
   )
 
   /** Deletes the whole history of the active workspace and starts from a clean session. */
-  const clearSessions = useCallback(async (): Promise<CodingSession> => {
+  const clearSessions = useCallback(async (): Promise<CodingSession | null> => {
+    const selection = selectionRevision.current
+    const operation = ++deletionRevision.current
+    const ownsView = () => selection === selectionRevision.current && operation === deletionRevision.current
+    const removedIds = new Set(sessionsRef.current.map((session) => session.id))
     await flushPendingWrites()
-    if (window.electronAPI?.clearCodingSessions) {
-      try {
-        if (await window.electronAPI.clearCodingSessions({ workspacePath })) {
-          for (const [id, session] of failedWritesRef.current) if (session.workspacePath === workspacePath) failedWritesRef.current.delete(id)
-          setSaveFailed(failedWritesRef.current.size > 0)
-        }
-      } catch (err: unknown) {
-        logger.warn('useSessionHistory', `Could not clear session history: ${errorMessage(err)}`)
-      }
+    try {
+      if (!(await window.electronAPI?.clearCodingSessions?.({ workspacePath }))) throw new Error('Session clearing was not acknowledged')
+    } catch (err: unknown) {
+      logger.warn('useSessionHistory', `Could not clear session history: ${errorMessage(err)}`)
+      if (ownsView()) setDeleteFailed(true)
+      return null
     }
+    for (const id of removedIds) failedWritesRef.current.delete(id)
+    if (!ownsView()) return null
+    setDeleteFailed(false)
+    setSaveFailed(failedWritesRef.current.size > 0)
     const fresh = createEmptySession(workspacePath)
     bootstrapSessionsRef.current.set(workspacePath || '', fresh)
     sessionsRef.current = [fresh]
@@ -288,6 +308,7 @@ export function useSessionHistory(workspacePath: string | null) {
       setSaveFailed(failedWritesRef.current.size > 0)
 
       if (workspacePath === targetWorkspacePath) {
+        selectionRevision.current += 1
         sessionsRef.current = []
         setSessions([])
         setActiveSessionId('')
@@ -432,7 +453,7 @@ export function useSessionHistory(workspacePath: string | null) {
     activeSession,
     activeSessionId,
     isLoadingSessions,
-    storageFailed: loadFailed || saveFailed,
+    storageFailed: loadFailed || saveFailed || deleteFailed,
     retryStorage,
     createSession,
     switchSession,

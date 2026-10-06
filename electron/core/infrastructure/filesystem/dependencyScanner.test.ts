@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -19,6 +19,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   fs.rmSync(tempDir, { recursive: true, force: true })
 })
 
@@ -63,5 +64,28 @@ describe('scanWorkspaceDependencies', () => {
     const result = await scanWorkspaceDependencies(tempDir)
 
     expect(evaluateDependencyIntegrity(result.missing, tempDir).ok).toBe(true)
+  })
+
+  it('refuses a partial scan when a source file cannot be parsed', async () => {
+    write('package.json', '{"name":"app"}')
+    write('src/broken.js', 'const = ;')
+    expect((await scanWorkspaceDependencies(tempDir)).scanned).toBe(false)
+  })
+
+  it('refuses unknown peer declarations instead of silently returning a complete scan', async () => {
+    write('package.json', '{"name":"app","dependencies":{"provider":"1.0.0"}}')
+    write('src/app.js', "require('missing-peer')")
+    write('node_modules/provider/package.json', '{invalid')
+    expect((await scanWorkspaceDependencies(tempDir)).scanned).toBe(false)
+  })
+
+  it('clears the timeout after a successful scan', async () => {
+    write('package.json', '{"name":"app"}')
+    const setTimer = vi.spyOn(globalThis, 'setTimeout')
+    const clearTimer = vi.spyOn(globalThis, 'clearTimeout')
+    expect((await scanWorkspaceDependencies(tempDir, 1234)).scanned).toBe(true)
+    const timerIndex = setTimer.mock.calls.findIndex((call) => call[1] === 1234)
+    expect(timerIndex).toBeGreaterThanOrEqual(0)
+    expect(clearTimer).toHaveBeenCalledWith(setTimer.mock.results[timerIndex].value)
   })
 })

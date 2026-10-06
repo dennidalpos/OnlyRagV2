@@ -42,10 +42,11 @@ Target Vitest: `npx vitest run <path>`. Con output silenzioso e un percorso usar
 - `audit_codebase.ps1`: cicli con dpdm, dead code con Knip, sintassi Python con `compileall` se la `.venv` esiste e grafo con skott. `-Mode Cycles`, `DeadCode` o `Graph` seleziona il controllo; `-WebUI` apre il grafo interattivo. Non esegue typecheck o test e non equivale al doppio passaggio Knip di `audit:deadcode`.
 - `lint_format.ps1`: diff/documentazione/JSON, typecheck, sintassi Python, Vitest e smoke del bundle; la CI usa `-Fast -SkipTests` perché esegue Vitest con coverage nello step successivo.
 - `build_package.ps1`: Sidecar PyInstaller, bundle e installer NSIS.
+- `node scripts/e2e/buildDownloadCachePolicy.mjs`: installed build downloader/artifact cache checks against a synthetic loopback server; Windows CI runs the same guard after Node setup. It does not build an installer or download public artifacts.
 - `test_bundle_smoke.ps1`: avvio del bundle con una `userData` temporanea (rimossa a fine esecuzione) e marker smoke cercato nel suo `logs/app.log`.
 - `clean_repo.ps1` e `clean_workspace.ps1`: pulizie separate con target espliciti.
 
-I comandi distruttivi (`clean:full`) richiedono attenzione: possono rimuovere dati utente locali.
+`clean:tests` and `clean:full` still lack verified residue ownership/retention checks. `clean:full` also delegates to `clean_repo.ps1`, which can remove retained evidence under generated-output directories and untracked backup files by extension. `StopAppProcesses` has only name-based identity. Do not use these paths to classify retained work as disposable; the P1 repair is tracked in `LIVE-RUN-RESIDUE-CLEANUP-01`. [Source review](./repository-residue-audit-2026-10-05.md#cleanup-delegation-residue--2026-10-06).
 
 ## Disinstallazione e dati
 

@@ -13,5 +13,5 @@
   "project": ["src/**/*.{ts,tsx,css}!", "electron/**/*.{ts,tsx}!", "shared/**/*.{ts,tsx}!", "!src/test/**!"],
   "ignoreExportsUsedInFile": true,
   "ignoreBinaries": ["nvidia-smi"],
-  "ignoreDependencies": ["@types/diff", "@biomejs/biome", "electron-builder"]
+  "ignoreDependencies": ["@types/diff", "@biomejs/biome"]
 }

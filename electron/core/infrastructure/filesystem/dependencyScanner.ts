@@ -24,10 +24,18 @@ export async function scanWorkspaceDependencies(workspacePath: string | null | u
   // No manifest means nothing declares dependencies, so nothing can be undeclared.
   if (!fs.existsSync(path.join(root, 'package.json'))) return NOT_SCANNED
 
+  let timeout: NodeJS.Timeout | undefined
   try {
     const scan = depcheck(root, { ignorePatterns: IGNORED, skipMissing: false })
-    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`depcheck timed out after ${timeoutMs} ms`)), timeoutMs))
-    const result = await Promise.race([scan, timeout])
+    const deadline = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => reject(new Error(`depcheck timed out after ${timeoutMs} ms`)), timeoutMs)
+    })
+    const result = await Promise.race([scan, deadline])
+    const invalidFiles = Object.keys(result.invalidFiles || {}).length
+    const invalidDirectories = Object.keys(result.invalidDirs || {}).length
+    if (invalidFiles || invalidDirectories) {
+      throw new Error(`Dependency scan incomplete: ${invalidFiles} invalid file(s), ${invalidDirectories} inaccessible directory/directories`)
+    }
     const missing = (result.missing || {}) as MissingDependencyMap
     const project = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf-8')) as {
       dependencies?: Record<string, string>
@@ -36,14 +44,14 @@ export async function scanWorkspaceDependencies(workspacePath: string | null | u
     const peerProviders: Record<string, string> = {}
     for (const provider of Object.keys({ ...project.dependencies, ...project.devDependencies })) {
       const manifestPath = path.join(root, 'node_modules', ...provider.split('/'), 'package.json')
-      if (!fs.existsSync(manifestPath)) continue
       try {
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as { peerDependencies?: Record<string, string> }
         for (const packageName of Object.keys(missing)) {
           if (manifest.peerDependencies?.[packageName]) peerProviders[packageName] = provider
         }
-      } catch {
-        continue
+      } catch (err: unknown) {
+        if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') continue
+        throw err
       }
     }
     return { missing, scanned: true, peerProviders }
@@ -51,5 +59,7 @@ export async function scanWorkspaceDependencies(workspacePath: string | null | u
     // A scan that could not run must never be reported as a clean bill of health.
     logger.log('WARN', 'DependencyScanner', `Dependency scan failed for ${root}: ${errorMessage(err)}`)
     return NOT_SCANNED
+  } finally {
+    if (timeout) clearTimeout(timeout)
   }
 }

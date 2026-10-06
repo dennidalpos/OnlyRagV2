@@ -1,8 +1,138 @@
 // @vitest-environment happy-dom
-import { act } from 'react'
+import { act, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import { useWorkspaceProjects } from './useWorkspaceProjects'
+
+describe('standalone selection ownership', () => {
+  it.each(['current', 'new-selection', 'second-dialog', 'unmount'] as const)('applies only the owned directory chooser: %s', async (scenario) => {
+    const releases: ((path: string) => void)[] = []
+    const touch = vi.fn().mockResolvedValue({ path: '/chosen' })
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      listProjects: vi.fn().mockResolvedValue([]),
+      touchProject: touch,
+      openDirectoryDialog: vi.fn().mockImplementation(() => new Promise((resolve) => releases.push(resolve))),
+    }
+    localStorage.clear()
+    let projects!: ReturnType<typeof useWorkspaceProjects>
+    function Harness() {
+      projects = useWorkspaceProjects()
+      return null
+    }
+    const root = createRoot(document.createElement('div'))
+    let unmounted = false
+    try {
+      await act(async () => root.render(<Harness />))
+      let first!: Promise<void>
+      act(() => {
+        first = projects.handleAddProject()
+      })
+      if (scenario === 'new-selection') await act(async () => projects.handleSelectProject('/newer'))
+      if (scenario === 'second-dialog')
+        act(() => {
+          void projects.handleAddProject()
+        })
+      if (scenario === 'unmount') {
+        await act(async () => root.unmount())
+        unmounted = true
+      }
+      await act(async () => {
+        releases[0]('/chosen')
+        await first
+      })
+      if (scenario === 'current') expect(projects.workspacePath).toBe('/chosen')
+      else if (scenario === 'new-selection') expect(projects.workspacePath).toBe('/newer')
+      else expect(touch).not.toHaveBeenCalled()
+      if (scenario === 'second-dialog') {
+        await act(async () => releases[1]('/second'))
+        expect(projects.workspacePath).toBe('/second')
+      }
+    } finally {
+      if (!unmounted) await act(async () => root.unmount())
+      localStorage.clear()
+    }
+  })
+
+  it.each(['startup', 'selection', 'toggle', 'removal', 'reselection', 'unmount', 'strict'] as const)(
+    'keeps the current workspace after delayed scratch initialization: %s',
+    async (scenario) => {
+      const project = { path: '/project', name: 'Project', addedAt: '2026-10-06T00:00:00Z', lastOpenedAt: '2026-10-06T00:00:00Z' }
+      const releases: ((value: { path: string }) => void)[] = []
+      const scratch = vi.fn().mockImplementation(() => new Promise((resolve) => releases.push(resolve)))
+      ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+        listProjects: vi.fn().mockResolvedValue([]),
+        touchProject: vi.fn().mockResolvedValue(project),
+        removeProjectFromRegistry: vi.fn().mockResolvedValue(true),
+        getStandaloneScratchWorkspace: scratch,
+      }
+      localStorage.clear()
+      let projects!: ReturnType<typeof useWorkspaceProjects>
+      function Harness() {
+        projects = useWorkspaceProjects({ noWorkspaceMode: ['startup', 'strict', 'unmount'].includes(scenario) } as Parameters<typeof useWorkspaceProjects>[0])
+        return <span>{projects.workspacePath}</span>
+      }
+      const container = document.createElement('div')
+      const root = createRoot(container)
+      let unmounted = false
+      try {
+        await act(async () =>
+          root.render(
+            scenario === 'strict' ? (
+              <StrictMode>
+                <Harness />
+              </StrictMode>
+            ) : (
+              <Harness />
+            ),
+          ),
+        )
+        if (scenario === 'selection' || scenario === 'reselection') await act(async () => projects.handleSelectProject(null))
+        if (scenario === 'toggle') {
+          await act(async () => projects.handleSelectProject('/project'))
+          await act(async () => projects.handleToggleStandalone())
+        }
+        if (scenario === 'removal') {
+          await act(async () => projects.handleSelectProject('/project'))
+          await act(async () => projects.handleRemoveProject('/project'))
+        }
+        expect(releases.length).toBeGreaterThan(0)
+        const originalRequests = [...releases]
+        if (scenario === 'unmount') {
+          await act(async () => root.unmount())
+          unmounted = true
+          await act(async () => originalRequests.forEach((release) => release({ path: '/scratch' })))
+          expect(projects.standaloneWorkspacePath).toBeNull()
+          expect(container.textContent).toBe('')
+        } else if (scenario === 'strict') {
+          expect(releases.length).toBe(2)
+          await act(async () => releases[0]({ path: '/stale-scratch' }))
+          expect(projects.workspacePath).toBeNull()
+          await act(async () => releases[1]({ path: '/scratch' }))
+          expect(projects.workspacePath).toBe('/scratch')
+          expect(projects.standaloneWorkspacePath).toBe('/scratch')
+        } else {
+          await act(async () => projects.handleSelectProject('/project'))
+          if (scenario === 'reselection') {
+            await act(async () => projects.handleSelectProject(null))
+            await act(async () => originalRequests.forEach((release) => release({ path: '/stale-scratch' })))
+            expect(projects.workspacePath).toBeNull()
+            await act(async () => releases.slice(originalRequests.length).forEach((release) => release({ path: '/scratch' })))
+            expect(projects.workspacePath).toBe('/scratch')
+            expect(projects.isStandaloneMode).toBe(true)
+          } else {
+            await act(async () => originalRequests.forEach((release) => release({ path: '/scratch' })))
+            expect(projects.workspacePath).toBe('/project')
+            expect(projects.isStandaloneMode).toBe(false)
+            expect(localStorage.getItem('onlyrag_last_workspace')).toBe('/project')
+          }
+        }
+      } finally {
+        if (!unmounted) await act(async () => root.unmount())
+        localStorage.clear()
+      }
+    },
+  )
+})
 
 describe('project registry recovery', () => {
   it('keeps a refused-mutation warning when an older successful operation settles, until retry', async () => {

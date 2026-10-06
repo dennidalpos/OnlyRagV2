@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import type { DesktopShellPort } from '../domain/ports/desktopShellPort'
@@ -264,20 +265,45 @@ export class SidecarAppService {
     )
   }
 
-  searchPromptHistory(query: string, topK: number = 10, projectPaths?: string[]): Promise<PromptHistorySearchResult[]> {
-    if (typeof query !== 'string' || !query.trim()) return Promise.resolve([])
+  async searchPromptHistory(query: string, topK: number = 10, projectPaths?: string[]): Promise<PromptHistorySearchResult[]> {
+    if (typeof query !== 'string' || !query.trim()) return []
     const payload: { query: string; top_k: number; project_paths?: string[] } = { query, top_k: topK }
     if (projectPaths && projectPaths.length > 0) payload.project_paths = projectPaths
-    return sidecarHttpClient.postJson<PromptHistorySearchResult[]>('/history/search', payload, 4000, [])
+    const result = await sidecarHttpClient.postJsonEnvelope<unknown>('/history/search', payload, 4000)
+    if (!result.success) throw new Error(`Prompt history search failed: ${result.error}`)
+    return z
+      .array(
+        z.object({
+          id: z.string(),
+          session_id: z.string(),
+          project_id: z.string(),
+          project_path: z.string(),
+          prompt: z.string(),
+          summary: z.string().nullish(),
+          outcome: z.enum(['running', 'success', 'failed', 'cancelled', 'unknown']),
+          started_at: z.string(),
+          completed_at: z.string().nullish(),
+          score: z.number().finite(),
+        }),
+      )
+      .parse(result.data)
+      .map((row) => ({ ...row, summary: row.summary ?? undefined, completed_at: row.completed_at ?? undefined }))
   }
 
-  removePromptHistoryForSessions(sessionIds: string[]): Promise<{ success: boolean }> {
-    if (!sessionIds || sessionIds.length === 0) return Promise.resolve({ success: true })
-    return sidecarHttpClient.postJson<{ success: boolean }>('/history/remove', { session_ids: sessionIds }, 4000, { success: false })
+  async removePromptHistoryForSessions(sessionIds: string[]): Promise<{ success: boolean }> {
+    if (!sessionIds || sessionIds.length === 0) return { success: true }
+    return this.removePromptHistory({ session_ids: sessionIds })
   }
 
   removePromptHistoryForProject(projectPath: string): Promise<{ success: boolean }> {
-    return sidecarHttpClient.postJson<{ success: boolean }>('/history/remove', { project_path: projectPath }, 4000, { success: false })
+    return this.removePromptHistory({ project_path: projectPath })
+  }
+
+  private async removePromptHistory(payload: { session_ids?: string[]; project_path?: string }): Promise<{ success: boolean }> {
+    const result = await sidecarHttpClient.postJsonEnvelope<unknown>('/history/remove', payload, 4000)
+    if (!result.success) return { success: false }
+    const response = z.object({ success: z.boolean() }).safeParse(result.data)
+    return response.success ? response.data : { success: false }
   }
 
   async exportDocument(

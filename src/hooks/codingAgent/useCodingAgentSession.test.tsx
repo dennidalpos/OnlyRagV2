@@ -49,7 +49,7 @@ describe('useCodingAgentSession', () => {
         updateSessionContent: vi.fn(),
         createSession: vi.fn(),
         switchSession: vi.fn(),
-        deleteSession: vi.fn(),
+        deleteSession: vi.fn().mockResolvedValue(session('replacement')),
         renameSession: vi.fn(),
         purgeWorkspace: vi.fn(),
       } as unknown as UseCodingAgentSessionOptions['history'],
@@ -103,11 +103,42 @@ describe('useCodingAgentSession', () => {
     expect(options.clearRunContext).toHaveBeenCalledTimes(1)
     expect(options.history.createSession).toHaveBeenCalledTimes(1)
 
-    act(() => api.handleDeleteSession('other'))
+    await act(async () => api.handleDeleteSession('other'))
     expect(options.clearRunContext).toHaveBeenCalledTimes(1)
-    act(() => api.handleDeleteSession('s1'))
+    await act(async () => api.handleDeleteSession('s1'))
     expect(options.clearRunContext).toHaveBeenCalledTimes(2)
+    expect(options.execution.clearConversation).toHaveBeenCalledTimes(1)
+    expect(options.execution.hydrateFromSession).toHaveBeenLastCalledWith(session('replacement'))
     expect(options.history.deleteSession).toHaveBeenLastCalledWith('s1')
+  })
+
+  it('preserves the active timeline and attachments after a refused deletion', async () => {
+    options = buildOptions('s1', session('s1', ['kept']))
+    vi.mocked(options.history.deleteSession).mockResolvedValue(null)
+    await act(async () => root.render(<Harness {...options} />))
+    await act(async () => api.handleDeleteSession('s1'))
+    expect(options.execution.clearConversation).not.toHaveBeenCalled()
+    expect(options.clearRunContext).not.toHaveBeenCalled()
+  })
+
+  it('does not clear a newer conversation when an older deletion completes', async () => {
+    options = buildOptions('s1', session('s1'))
+    let release!: (next: CodingSession) => void
+    vi.mocked(options.history.deleteSession).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve
+        }),
+    )
+    await act(async () => root.render(<Harness {...options} />))
+    act(() => {
+      void api.handleDeleteSession('s1')
+    })
+    const next = { ...options, history: { ...options.history, activeSessionId: 's2', activeSession: session('s2') } }
+    await act(async () => root.render(<Harness {...next} />))
+    await act(async () => release(session('replacement')))
+    expect(options.execution.clearConversation).not.toHaveBeenCalled()
+    expect(options.clearRunContext).not.toHaveBeenCalled()
   })
 
   it('switching keeps attachments but detaches the running agent', async () => {

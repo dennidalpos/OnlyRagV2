@@ -13,8 +13,8 @@ describe('useSessionHistory persistence', () => {
   let history: History
   const saveCodingSession = vi.fn<(session: CodingSession) => Promise<CodingSession | null>>(async (session) => session)
 
-  function Harness() {
-    history = useSessionHistory('C:/workspace')
+  function Harness({ workspacePath = 'C:/workspace' }: { workspacePath?: string } = {}) {
+    history = useSessionHistory(workspacePath)
     return null
   }
 
@@ -140,5 +140,102 @@ describe('useSessionHistory persistence', () => {
     await act(async () => history.retryStorage())
     expect(saveCodingSession).toHaveBeenCalledTimes(1)
     expect(history.storageFailed).toBe(false)
+  })
+
+  it.each(['delete', 'clear'] as const)('preserves the active session after refused %s and allows explicit retry', async (operation) => {
+    const id = history.activeSessionId
+    await act(async () => history.updateSessionContent(id, { actionLogs: [{ id: 'kept' } as never] }))
+    saveCodingSession.mockResolvedValueOnce(null)
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    const remove = vi.fn().mockResolvedValueOnce(false).mockRejectedValueOnce(new Error('Storage blocked')).mockResolvedValue(true)
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      saveCodingSession,
+      listCodingSessions: vi.fn(async () => []),
+      deleteCodingSession: remove,
+      clearCodingSessions: remove,
+    }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await act(async () => (operation === 'delete' ? history.deleteSession(id) : history.clearSessions()))
+      expect(history.activeSessionId).toBe(id)
+      expect(history.activeSession?.actionLogs).toEqual([{ id: 'kept' }])
+      expect(history.storageFailed).toBe(true)
+    }
+    await act(async () => (operation === 'delete' ? history.deleteSession(id) : history.clearSessions()))
+    expect(history.activeSessionId).not.toBe(id)
+    await act(async () => history.retryStorage())
+    expect(saveCodingSession).toHaveBeenCalledTimes(1)
+    expect(history.storageFailed).toBe(false)
+  })
+
+  it.each(['delete', 'clear'] as const)('does not replace a newer selected session after delayed %s acknowledgement', async (operation) => {
+    const removedId = history.activeSessionId
+    let release!: (value: boolean) => void
+    const remove = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          release = resolve
+        }),
+    )
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      saveCodingSession,
+      listCodingSessions: vi.fn(async () => []),
+      deleteCodingSession: remove,
+      clearCodingSessions: remove,
+    }
+    let pending!: Promise<CodingSession | null>
+    await act(async () => {
+      pending = operation === 'delete' ? history.deleteSession(removedId) : history.clearSessions()
+      await Promise.resolve()
+    })
+    let selected!: CodingSession
+    act(() => {
+      selected = history.createSession()
+    })
+    let result: CodingSession | null = null
+    await act(async () => {
+      release(true)
+      result = await pending
+    })
+    expect(history.activeSessionId).toBe(selected.id)
+    expect(result).toBeNull()
+  })
+
+  it.each(['delete', 'clear'] as const)('does not treat a missing %s port as acknowledged deletion', async (operation) => {
+    const id = history.activeSessionId
+    await act(async () => (operation === 'delete' ? history.deleteSession(id) : history.clearSessions()))
+    expect(history.activeSessionId).toBe(id)
+    expect(history.storageFailed).toBe(true)
+  })
+
+  it.each(['delete', 'clear'] as const)('ignores late %s success/refusal after changing workspace', async (operation) => {
+    const originalId = history.activeSessionId
+    for (const acknowledgement of [true, false]) {
+      let release!: (value: boolean) => void
+      const remove = vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            release = resolve
+          }),
+      )
+      ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+        saveCodingSession,
+        listCodingSessions: vi.fn(async () => []),
+        deleteCodingSession: remove,
+        clearCodingSessions: remove,
+      }
+      let pending!: Promise<CodingSession | null>
+      await act(async () => {
+        pending = operation === 'delete' ? history.deleteSession(originalId) : history.clearSessions()
+        await Promise.resolve()
+      })
+      await act(async () => root.render(<Harness workspacePath={`C:/workspace-${acknowledgement}`} />))
+      const selected = history.activeSessionId
+      await act(async () => {
+        release(acknowledgement)
+        await pending
+      })
+      expect(history.activeSessionId).toBe(selected)
+      expect(history.storageFailed).toBe(false)
+    }
   })
 })

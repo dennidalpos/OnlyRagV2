@@ -166,7 +166,7 @@ export class SessionHistoryRepository {
     })
   }
 
-  /** Returns true only if a matching session was actually found and removed from disk in at least one candidate store -- unlike the single-store lookup this used to be, a "not found here" no longer reads as success, so a genuine failure is never masked as one. */
+  /** Every matching store must acknowledge removal; false means no record was found. */
   public async deleteSession(sessionId: string, workspacePath?: string | null): Promise<boolean> {
     return this.runExclusive(async () => {
       let removedAny = false
@@ -177,7 +177,8 @@ export class SessionHistoryRepository {
         const remaining = sessions.filter((session) => session.id !== sessionId)
         if (remaining.length === sessions.length) continue
         const wrote = await this.writeStoreAtDir(dir, remaining)
-        removedAny = removedAny || wrote
+        if (!wrote) throw new Error('Session deletion was not acknowledged; remaining stores and recovery assets are preserved')
+        removedAny = true
       }
       return removedAny
     })
@@ -194,7 +195,7 @@ export class SessionHistoryRepository {
 
       if (workspaceDir) {
         if (fs.existsSync(workspaceDir)) {
-          await this.writeStoreAtDir(workspaceDir, [])
+          if (!(await this.writeStoreAtDir(workspaceDir, []))) return false
         }
       }
 
@@ -205,7 +206,7 @@ export class SessionHistoryRepository {
             : fallbackSessions.filter((session) => !!session.workspacePath && session.workspacePath.trim().length > 0)
 
           if (remaining.length !== fallbackSessions.length) {
-            await this.writeStoreAtDir(fallbackDir, remaining)
+            if (!(await this.writeStoreAtDir(fallbackDir, remaining))) return false
           }
         }
       }

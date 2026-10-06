@@ -403,13 +403,15 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
     modelName: ctx.runtimeProfile?.model,
     localized: { message: diagnosticMessage, detail: diagnostics },
   })
+  await ctx.persistCurrentState(terminationReasonFor(request.trigger, status), status)
+  if (ctx.workspacePath) {
+    const saved = await agentSessionStateRepository.saveSessionTrackerMarkdown(ctx.workspacePath, ctx.buildSessionTracker(summary))
+    if (!saved) throw new Error('Failed to persist final agent session tracker; recovery data is preserved.')
+  }
+  if (!ctx.isSessionActive()) return { outcome: 'closed', result: { success: false, summary: 'Agent run cancelled.', completionStatus: 'cancelled' } }
   ctx.emitDone(success, summary, status, completionEvidence)
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, success, summary)
-  }
-  await ctx.persistCurrentState(terminationReasonFor(request.trigger, status), status)
-  if (ctx.workspacePath) {
-    await agentSessionStateRepository.saveSessionTrackerMarkdown(ctx.workspacePath, ctx.buildSessionTracker(summary))
   }
   ctx.finalizeSession()
   return { outcome: 'closed', result: { success, summary, completionStatus: status, evidence: completionEvidence } }

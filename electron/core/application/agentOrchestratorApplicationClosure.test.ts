@@ -10,6 +10,7 @@ import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
 import { closeAgentRunFromEvidence, type ApplicationClosureContext } from './agentOrchestratorApplicationClosure'
 import { renderAgentLines } from '../../../shared/domain/agent/agentMainText'
+import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 
 vi.mock('./agentOrchestratorVerificationRunner', () => ({
   runProjectVerification: vi.fn(),
@@ -24,7 +25,23 @@ describe('application-owned agent closure', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     fs.rmSync(workspacePath, { recursive: true, force: true })
+  })
+
+  it.each(['snapshot', 'tracker'] as const)('never reports success before the final %s acknowledgement', async (failure) => {
+    vi.mocked(runProjectVerification).mockResolvedValue({
+      hasVerificationCommand: true,
+      passed: true,
+      status: 'verified',
+      command: 'npm test',
+      evidenceLevel: 'behavioral',
+    })
+    const { ctx, persistCurrentState, emitDone } = makeContext()
+    if (failure === 'snapshot') persistCurrentState.mockRejectedValue(new Error('Failed to persist snapshot'))
+    else vi.spyOn(agentSessionStateRepository, 'saveSessionTrackerMarkdown').mockResolvedValue(false)
+    await expect(closeAgentRunFromEvidence(ctx, { trigger: 'finish', reason: { key: 'reasonFinish' } })).rejects.toThrow('persist')
+    expect(emitDone).not.toHaveBeenCalled()
   })
 
   function makeContext(options?: { active?: boolean; milestoneStatus?: 'pending' | 'in_progress' | 'verified' | 'failed'; hasFileMutations?: boolean }) {
@@ -71,6 +88,7 @@ describe('application-owned agent closure', () => {
       persistCurrentState,
       buildSessionTracker: (summaryText?: string) =>
         new SessionDebtTracker({
+          sessionId: 'closure-session',
           completedTasks: goalPlanner
             .getMilestones()
             .filter((m) => m.status === 'verified')

@@ -5,7 +5,7 @@ import type { RendererEventSink } from '../../domain/ports/rendererEventSink'
 export function createWindowEventSink(getWindow: () => BrowserWindow | null): RendererEventSink {
   const liveWindow = () => {
     const win = getWindow()
-    return win && !win.isDestroyed() ? win : null
+    return win && !win.isDestroyed() && !win.webContents.isDestroyed() ? win : null
   }
   return {
     isAvailable: () => liveWindow() !== null,

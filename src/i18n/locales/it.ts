@@ -385,6 +385,7 @@ export const it = {
     },
   },
   translation: {
+    incomplete: 'Traduzione incompleta. Esportazione non disponibile.',
     title: 'Document Translation Studio',
     subtitle: 'Estrazione testo e traduzione multilingua rapida su qualsiasi formato.',
     tabTextMarkdown: 'Traduzione Testo & Markdown',

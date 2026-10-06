@@ -130,6 +130,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     autoInstallHubSkills: settings.autoInstallHubSkills,
     autoInstallMinScore: settings.autoInstallMinScore,
     onConfirmInstall: (candidate: SkillInstallCandidate) => {
+      if (session.isCancelled || session.abortController?.signal.aborted) return Promise.resolve(false)
       if (settings.fullAccess && agentMode !== 'ask') return Promise.resolve(true)
       emitLocalizedLog(emitLog, 'info', {
         key: 'skillInstallConfirm',

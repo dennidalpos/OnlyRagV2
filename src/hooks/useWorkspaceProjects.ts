@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppSettings, WorkspaceProject } from '../types'
 import { logger } from '../lib/logger'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
@@ -6,43 +6,48 @@ import { translate } from '../i18n/I18nContext'
 
 const LAST_WORKSPACE_STORAGE_KEY = 'onlyrag_last_workspace'
 
-function deriveNameFromPath(pathStr: string): string {
-  return pathStr.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace'
-}
-
 /** Saved project folders and the workspace root the Coding Agent Studio is attached to, including standalone (no-workspace) mode. */
 export function useWorkspaceProjects(settings?: AppSettings) {
   const startsStandalone = settings?.noWorkspaceMode || false
   const [projects, setProjects] = useState<WorkspaceProject[]>([])
   const [registryFailed, setRegistryFailed] = useState(false)
-  const [loadRevision, setLoadRevision] = useState(0)
-  const retryRegistry = useCallback(() => setLoadRevision((revision) => revision + 1), [])
+  const mounted = useRef(false)
+  const registryRevision = useRef(0)
   const [workspacePath, setWorkspacePath] = useState<string | null>(() =>
     startsStandalone ? null : settings?.customWorkspacePath || localStorage.getItem(LAST_WORKSPACE_STORAGE_KEY) || null,
   )
   const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(startsStandalone)
   const [standaloneWorkspacePath, setStandaloneWorkspacePath] = useState<string | null>(null)
+  const currentWorkspace = useRef(workspacePath)
+  currentWorkspace.current = workspacePath
+
+  const reloadRegistry = useCallback(async (clearFailure: boolean): Promise<WorkspaceProject[] | null> => {
+    if (!mounted.current) return null
+    const revision = ++registryRevision.current
+    if (!window.electronAPI?.listProjects) return null
+    try {
+      const list = await window.electronAPI.listProjects()
+      if (mounted.current && revision === registryRevision.current) {
+        setProjects(list)
+        if (clearFailure) setRegistryFailed(false)
+        return list
+      }
+    } catch (err: unknown) {
+      logger.warn('useWorkspaceProjects', `Could not load project registry: ${errorMessage(err)}`)
+      if (mounted.current && revision === registryRevision.current) setRegistryFailed(true)
+    }
+    return null
+  }, [])
+  const retryRegistry = useCallback(() => void reloadRegistry(true), [reloadRegistry])
 
   useEffect(() => {
-    let cancelled = false
-    const loadProjects = async () => {
-      if (!window.electronAPI?.listProjects) return
-      try {
-        const list = await window.electronAPI.listProjects()
-        if (!cancelled) {
-          setProjects(list)
-          setRegistryFailed(false)
-        }
-      } catch (err: unknown) {
-        logger.warn('useWorkspaceProjects', `Could not load project registry: ${errorMessage(err)}`)
-        if (!cancelled) setRegistryFailed(true)
-      }
-    }
-    void loadProjects()
+    mounted.current = true
+    void reloadRegistry(true)
     return () => {
-      cancelled = true
+      mounted.current = false
+      registryRevision.current++
     }
-  }, [loadRevision])
+  }, [reloadRegistry])
 
   const ensureStandaloneWorkspace = useCallback(async (): Promise<string | null> => {
     if (standaloneWorkspacePath) return standaloneWorkspacePath
@@ -67,6 +72,7 @@ export function useWorkspaceProjects(settings?: AppSettings) {
   const handleSelectProject = useCallback(
     (pathStr: string | null) => {
       if (!pathStr || !pathStr.trim()) {
+        currentWorkspace.current = standaloneWorkspacePath
         setIsStandaloneMode(true)
         setWorkspacePath(standaloneWorkspacePath)
         void ensureStandaloneWorkspace().then((scratchPath) => {
@@ -81,6 +87,7 @@ export function useWorkspaceProjects(settings?: AppSettings) {
       }
 
       const cleanPath = pathStr.trim()
+      currentWorkspace.current = cleanPath
       setWorkspacePath(cleanPath)
       try {
         localStorage.setItem(LAST_WORKSPACE_STORAGE_KEY, cleanPath)
@@ -89,35 +96,24 @@ export function useWorkspaceProjects(settings?: AppSettings) {
       }
       setIsStandaloneMode(false)
 
-      // Optimistic reorder so the sidebar reflects the new active project instantly;
-      // reconciled below with the authoritative registry entry once the IPC round-trip resolves.
-      const nowIso = new Date().toISOString()
-      setProjects((prev) => {
-        const existing = prev.find((p) => p.path === cleanPath)
-        const optimistic: WorkspaceProject = existing
-          ? { ...existing, lastOpenedAt: nowIso }
-          : { path: cleanPath, name: deriveNameFromPath(cleanPath), addedAt: nowIso, lastOpenedAt: nowIso }
-        return [optimistic, ...prev.filter((p) => p.path !== cleanPath)]
-      })
+      registryRevision.current++
 
       void (async () => {
-        if (!window.electronAPI?.touchProject) return
         try {
+          if (!window.electronAPI?.touchProject) throw new Error('Project registry is unavailable')
           let entry = await window.electronAPI.touchProject({ projectPath: cleanPath })
           if (!entry && window.electronAPI.registerProject) {
             entry = await window.electronAPI.registerProject({ projectPath: cleanPath })
           }
-          if (entry) {
-            const confirmed = entry
-            setProjects((prev) => [confirmed, ...prev.filter((p) => p.path !== cleanPath)])
-          }
+          if (!entry) throw new Error('Project registration was not acknowledged')
         } catch (err: unknown) {
           logger.warn('useWorkspaceProjects', `Could not update project registry: ${errorMessage(err)}`)
-          setRegistryFailed(true)
+          if (mounted.current) setRegistryFailed(true)
         }
+        await reloadRegistry(false)
       })()
     },
-    [ensureStandaloneWorkspace, standaloneWorkspacePath],
+    [ensureStandaloneWorkspace, standaloneWorkspacePath, reloadRegistry],
   )
 
   const handleAddProject = useCallback(async () => {
@@ -128,19 +124,22 @@ export function useWorkspaceProjects(settings?: AppSettings) {
     if (chosen) handleSelectProject(chosen)
   }, [handleSelectProject])
 
-  const handleRenameProject = useCallback(async (projectPath: string, newName: string) => {
-    const cleanName = newName.trim()
-    if (!cleanName || !projectPath) return
-    setProjects((prev) => prev.map((p) => (p.path === projectPath ? { ...p, name: cleanName } : p)))
-    if (window.electronAPI?.renameProject) {
+  const handleRenameProject = useCallback(
+    async (projectPath: string, newName: string) => {
+      const cleanName = newName.trim()
+      if (!cleanName || !projectPath) return
+      registryRevision.current++
       try {
-        await window.electronAPI.renameProject({ projectPath, name: cleanName })
+        if (!window.electronAPI?.renameProject) throw new Error('Project registry is unavailable')
+        if (!(await window.electronAPI.renameProject({ projectPath, name: cleanName }))) throw new Error('Project rename was not acknowledged')
       } catch (err: unknown) {
         logger.warn('useWorkspaceProjects', `Could not rename project in registry: ${errorMessage(err)}`)
-        setRegistryFailed(true)
+        if (mounted.current) setRegistryFailed(true)
       }
-    }
-  }, [])
+      await reloadRegistry(false)
+    },
+    [reloadRegistry],
+  )
 
   const handleOpenProjectPath = useCallback(async (projectPath: string) => {
     if (!projectPath || !projectPath.trim()) return
@@ -154,29 +153,24 @@ export function useWorkspaceProjects(settings?: AppSettings) {
   }, [])
 
   const handleRemoveProject = useCallback(
-    (pathStr: string) => {
-      if (window.electronAPI?.removeProjectFromRegistry) {
-        window.electronAPI.removeProjectFromRegistry({ projectPath: pathStr }).catch((err: unknown) => {
-          logger.warn('useWorkspaceProjects', `Could not remove project from registry: ${errorMessage(err)}`)
-          setRegistryFailed(true)
-        })
+    async (pathStr: string): Promise<boolean> => {
+      registryRevision.current++
+      try {
+        if (!window.electronAPI?.removeProjectFromRegistry) throw new Error('Project registry is unavailable')
+        if (!(await window.electronAPI.removeProjectFromRegistry({ projectPath: pathStr }))) throw new Error('Project removal was not acknowledged')
+      } catch (err: unknown) {
+        logger.warn('useWorkspaceProjects', `Could not remove project from registry: ${errorMessage(err)}`)
+        if (mounted.current) setRegistryFailed(true)
+        await reloadRegistry(false)
+        return false
       }
-
-      setProjects((prev) => {
-        const updated = prev.filter((p) => p.path !== pathStr)
-
-        if (pathStr === workspacePath) {
-          if (updated.length > 0) {
-            handleSelectProject(updated[0].path)
-          } else {
-            handleSelectProject(null)
-          }
-        }
-
-        return updated
-      })
+      if (!mounted.current) return true
+      setProjects((prev) => prev.filter((p) => p.path !== pathStr))
+      const updated = await reloadRegistry(false)
+      if (mounted.current && currentWorkspace.current === pathStr) handleSelectProject((updated || projects.filter((p) => p.path !== pathStr))[0]?.path || null)
+      return true
     },
-    [workspacePath, handleSelectProject],
+    [projects, handleSelectProject, reloadRegistry],
   )
 
   const handleToggleStandalone = useCallback(() => {

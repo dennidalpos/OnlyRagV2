@@ -69,11 +69,16 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
   }
 
   const persistCurrentState = async (terminationReason?: AgentSessionTerminationReason, completionStatus?: AgentCompletionStatus) => {
+    // A late write cannot turn a cancelled run back into an active or successful one.
+    if (session.isCancelled && session.completionStatus === 'cancelled') {
+      terminationReason = 'cancelled'
+      completionStatus = 'cancelled'
+    }
     // Only the plan's completion flag is persisted: every other field of the compact
     // state is a projection of planMilestones, which is already stored below.
     const isPlanCompleted = goalPlanner.hasPlan() ? goalPlanner.getCompactState(userTask).isCompleted : false
 
-    await agentSessionStateRepository.saveSessionState({
+    const saved = await agentSessionStateRepository.saveSessionState({
       sessionId,
       runIdentity: session.identity,
       workspacePath,
@@ -104,9 +109,11 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
       lastVerification: session.lastVerification,
       chatMessages: session.chatMessages,
     })
+    if (!saved) throw new Error('Failed to persist agent session snapshot; existing recovery data is preserved.')
 
     if (workspacePath) {
-      await agentSessionStateRepository.saveSessionTrackerMarkdown(workspacePath, buildSessionTracker())
+      const trackerSaved = await agentSessionStateRepository.saveSessionTrackerMarkdown(workspacePath, buildSessionTracker())
+      if (!trackerSaved) throw new Error('Failed to persist agent session tracker; the snapshot and recovery data are preserved.')
     }
   }
 

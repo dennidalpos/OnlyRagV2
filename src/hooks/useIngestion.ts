@@ -98,13 +98,27 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   const { t } = useI18n()
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
-  const [markdownContent, setMarkdownContent] = useState<string>('')
+  const [markdownContent, updateMarkdownContent] = useState<string>('')
   const [isUploading, setIsUploading] = useState<boolean>(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [normalizationReview, setNormalizationReview] = useState<NormalizationReview | null>(null)
   const [syncScroll, setSyncScroll] = useState<boolean>(true)
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string } | null>(null)
+  const draftsRef = useRef(new Map<string, string>())
+  const markdownRef = useRef('')
+  const selectedDocRef = useRef<IngestedDocument | null>(null)
+  const savingRef = useRef<{ docId: string; content: string } | null>(null)
+  const selectionEpochRef = useRef(0)
+  const mountedRef = useRef(true)
+  const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current)
+    }
+  }, [])
 
   // Mirrors this module's busy state (upload/ingest pipeline) into the cross-module task lock
   // so the coding agent/translation module can block starting their own task while ingestion is mid-flight.
@@ -120,8 +134,20 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   const { markdown: loadedMarkdown } = useDocumentMarkdown(selectedDoc)
   const isDirty = selectedDoc !== null && loadedMarkdown !== null && markdownContent !== loadedMarkdown
 
-  /** Which document version the editor content was loaded from; unsaved edits survive a refresh of the same document. */
+  // Keep drafts for this mounted view; saving never replaces a newer edit.
   const editorSourceRef = useRef<{ id: string; ingestedAt: string; markdown: string } | null>(null)
+  const setMarkdownContent = useCallback((content: string) => {
+    markdownRef.current = content
+    const doc = selectedDocRef.current
+    const source = editorSourceRef.current
+    const pending = savingRef.current
+    if (doc) {
+      const pendingChangesText = pending?.docId === doc.id && pending.content !== content
+      if (source?.id === doc.id && content === source.markdown && !pendingChangesText) draftsRef.current.delete(doc.id)
+      else draftsRef.current.set(doc.id, content)
+    }
+    updateMarkdownContent(content)
+  }, [])
   const selectedDocId = selectedDoc?.id
   const selectedDocVersion = selectedDoc?.ingestedAt
   useEffect(() => {
@@ -129,15 +155,25 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     const source = editorSourceRef.current
     if (source?.id === selectedDocId && source.ingestedAt === selectedDocVersion) return
     editorSourceRef.current = { id: selectedDocId, ingestedAt: selectedDocVersion, markdown: loadedMarkdown }
-    setMarkdownContent((current) => (source?.id === selectedDocId && current !== source.markdown ? current : loadedMarkdown))
+    const content = draftsRef.current.get(selectedDocId) ?? loadedMarkdown
+    markdownRef.current = content
+    updateMarkdownContent(content)
   }, [selectedDocId, selectedDocVersion, loadedMarkdown])
 
-  /** Selects a document; the editor stays empty (and unsaveable) until its Markdown is loaded. */
+  // Restore local drafts; unloaded documents cannot be saved.
   const showDocument = useCallback((doc: IngestedDocument | null) => {
+    if (selectedDocRef.current?.id !== doc?.id) {
+      selectionEpochRef.current++
+      setSaveStatus(null)
+      if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current)
+    }
+    selectedDocRef.current = doc
     setSelectedDoc(doc)
     if (doc && editorSourceRef.current?.id === doc.id) return
     editorSourceRef.current = null
-    setMarkdownContent(doc ? (peekDocumentMarkdown(doc) ?? '') : '')
+    const content = doc ? (draftsRef.current.get(doc.id) ?? peekDocumentMarkdown(doc) ?? '') : ''
+    markdownRef.current = content
+    updateMarkdownContent(content)
   }, [])
 
   const [ingestionProgress, setIngestionProgress] = useState<IngestionProgressState>({
@@ -148,9 +184,6 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   })
 
   const activeTaskIdRef = useRef<string | null>(null)
-
-  const selectedDocRef = useRef<IngestedDocument | null>(null)
-  selectedDocRef.current = selectedDoc
 
   const handleDocUpdateCallback = useCallback(
     (docs: IngestedDocument[]) => {
@@ -373,8 +406,9 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         () => setUploadError(null),
       )
       if (!deleted) return
+      draftsRef.current.delete(id)
       notifyDocumentsChanged()
-      if (selectedDoc?.id === id) {
+      if (selectedDocRef.current?.id === id) {
         const remaining = documents.filter((d) => d.id !== id)
         if (remaining.length > 0) {
           handleSelectDoc(remaining[0])
@@ -561,31 +595,46 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   }
 
   const handleSaveDocument = async () => {
-    if (!selectedDoc || !markdownContent || loadedMarkdown === null || isSaving) return
+    const doc = selectedDocRef.current
+    const source = editorSourceRef.current
+    if (!doc || !source || source.id !== doc.id || source.ingestedAt !== doc.ingestedAt || savingRef.current) return
+    const content = markdownRef.current
+    const epoch = selectionEpochRef.current
+    savingRef.current = { docId: doc.id, content }
+    let confirmedMarkdown = source.markdown
     setIsSaving(true)
     setSaveStatus(null)
+    if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current)
+    const ownsStatus = () => mountedRef.current && selectionEpochRef.current === epoch
 
     try {
-      const res = await electronApi().updateIngestedDocument({ docId: selectedDoc.id, markdownContent })
+      const res = await electronApi().updateIngestedDocument({ docId: doc.id, markdownContent: content })
       if (res.success && res.data) {
+        confirmedMarkdown = res.data.extractedMarkdown
         primeDocumentMarkdown(res.data)
-        editorSourceRef.current = { id: res.data.id, ingestedAt: res.data.ingestedAt, markdown: res.data.extractedMarkdown }
-        setSelectedDoc({ ...selectedDoc, ...res.data })
-        setMarkdownContent(res.data.extractedMarkdown)
-        setSaveStatus({ success: true, message: t('ingestion.saveSuccess') })
+        if (draftsRef.current.get(doc.id) === content) draftsRef.current.delete(doc.id)
+        const current = selectedDocRef.current
+        if (mountedRef.current && current?.id === doc.id && current.ingestedAt === doc.ingestedAt) {
+          editorSourceRef.current = { id: res.data.id, ingestedAt: res.data.ingestedAt, markdown: res.data.extractedMarkdown }
+          selectedDocRef.current = { ...current, ...res.data }
+          setSelectedDoc(selectedDocRef.current)
+          setMarkdownContent(markdownRef.current === content ? res.data.extractedMarkdown : markdownRef.current)
+        }
+        if (ownsStatus()) setSaveStatus({ success: true, message: t('ingestion.saveSuccess') })
         notifyDocumentsChanged()
-        await fetchDocuments()
+        if (mountedRef.current) await fetchDocuments()
       } else {
-        setSaveStatus({ success: false, message: res.error || t('ingestion.saveFailed') })
+        if (ownsStatus()) setSaveStatus({ success: false, message: res.error || t('ingestion.saveFailed') })
       }
     } catch (err: unknown) {
       const normalized = normalizeError(err, 'Ingestion Save')
-      setSaveStatus({ success: false, message: normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message })
+      if (ownsStatus())
+        setSaveStatus({ success: false, message: normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message })
     } finally {
-      setIsSaving(false)
-      setTimeout(() => {
-        setSaveStatus(null)
-      }, 4000)
+      savingRef.current = null
+      if (draftsRef.current.get(doc.id) === confirmedMarkdown) draftsRef.current.delete(doc.id)
+      if (mountedRef.current) setIsSaving(false)
+      if (ownsStatus()) saveStatusTimerRef.current = setTimeout(() => setSaveStatus(null), 4000)
     }
   }
 

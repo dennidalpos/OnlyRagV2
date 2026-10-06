@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { ProjectRegistryRepository } from './projectRegistryRepository'
+import * as writer from './safeAtomicFileWriter'
 
 describe('ProjectRegistryRepository Unit Tests', () => {
   let tempDir: string
@@ -26,9 +27,36 @@ describe('ProjectRegistryRepository Unit Tests', () => {
   )
 
   afterEach(() => {
+    vi.restoreAllMocks()
     try {
       fs.rmSync(tempDir, { recursive: true, force: true })
     } catch {}
+  })
+
+  it('retains concurrent registrations across repositories sharing the same store', async () => {
+    const other = new ProjectRegistryRepository(tempDir)
+    await Promise.all(Array.from({ length: 12 }, (_, index) => (index % 2 ? repo : other).upsert(`/repo/${index}`)))
+    expect((await repo.list()).map((project) => project.path).sort()).toEqual(Array.from({ length: 12 }, (_, index) => `/repo/${index}`).sort())
+  })
+
+  it('serializes mixed rename, touch, remove and registration without losing unrelated entries', async () => {
+    for (const name of ['a', 'b', 'c']) await repo.upsert(`/repo/${name}`)
+    await Promise.all([repo.rename('/repo/a', 'Renamed'), repo.touch('/repo/b'), repo.remove('/repo/c'), repo.upsert('/repo/d')])
+    const projects = await repo.list()
+    expect(projects.map((project) => project.path).sort()).toEqual(['/repo/a', '/repo/b', '/repo/d'])
+    expect(projects.find((project) => project.path === '/repo/a')?.name).toBe('Renamed')
+  })
+
+  it.each(['upsert', 'touch', 'rename', 'remove'] as const)('rejects an unacknowledged %s and allows an explicit retry', async (operation) => {
+    await repo.upsert('/repo/a', 'Alpha')
+    const file = path.join(tempDir, 'project_registry.json')
+    const original = fs.readFileSync(file, 'utf8')
+    const blocked = vi.spyOn(writer, 'safeAtomicWrite').mockResolvedValue(false)
+    const mutate = () => (operation === 'rename' ? repo.rename('/repo/a', 'New name') : repo[operation]('/repo/a'))
+    await expect(mutate()).rejects.toThrow('saved')
+    expect(fs.readFileSync(file, 'utf8')).toBe(original)
+    blocked.mockRestore()
+    await expect(mutate()).resolves.toBeTruthy()
   })
 
   it('should round-trip a registered project through an atomic write', async () => {

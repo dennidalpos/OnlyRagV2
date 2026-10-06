@@ -430,8 +430,10 @@ export class AgentToolExecutorService {
     this.shellSessions.clear()
   }
 
-  public closeBrowserRun(runId: string): void {
-    void agentBrowserService.closeRun(runId).catch((error: unknown) => logger.log('WARN', 'AgentBrowser', `Failed to close run ${runId}: ${String(error)}`))
+  public closeBrowserRun(runId: string): Promise<void> {
+    return agentBrowserService.closeRun(runId).catch((error: unknown) => {
+      logger.log('WARN', 'AgentBrowser', `Failed to close run ${runId}: ${String(error)}`)
+    })
   }
 
   public async closeAllBrowserRuns(): Promise<void> {

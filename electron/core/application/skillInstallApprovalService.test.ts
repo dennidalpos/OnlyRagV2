@@ -28,4 +28,17 @@ describe('SkillInstallApprovalService', () => {
   it('denies without asking when there is no window to ask in', async () => {
     await expect(new SkillInstallApprovalService().requestApproval(null, candidate, identity)).resolves.toBe(false)
   })
+
+  it('denies only approvals belonging to the cancelled run', async () => {
+    const service = new SkillInstallApprovalService()
+    const sent: Array<{ requestId: string }> = []
+    const otherIdentity = { ...identity, runId: 'other-run' }
+    const owned = service.requestApproval(fakeWindow(sent), candidate, identity)
+    const other = service.requestApproval(fakeWindow(sent), candidate, otherIdentity)
+    service.cancelRun(identity)
+    await expect(owned).resolves.toBe(false)
+    service.handleResponse({ ...identity, requestId: sent[0].requestId, approved: true })
+    service.handleResponse({ ...otherIdentity, requestId: sent[1].requestId, approved: true })
+    await expect(other).resolves.toBe(true)
+  })
 })

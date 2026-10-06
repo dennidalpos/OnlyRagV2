@@ -56,6 +56,8 @@ export interface AgentSession {
   updateActiveRun?: (update: { mode?: AgentExecutionMode; numCtx?: number }) => { approvalResolved: boolean; numCtx?: number }
   /** Registered after bootstrap so user cancellation can persist its terminal cause. */
   persistCancellation?: () => Promise<void>
+  /** One cancellation settlement shared by Stop, renderer loss and shutdown. */
+  cancellationSettlement?: Promise<void>
   /** Terminal state set by cancellation/timeout before an in-flight operation unwinds. */
   completionStatus?: AgentCompletionStatus
   terminalSummary?: string

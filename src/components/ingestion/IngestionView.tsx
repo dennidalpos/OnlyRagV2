@@ -111,6 +111,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
 
     // Listen for Ctrl+S / Cmd+S shortcut to save
     useEffect(() => {
+      if (!isActive) return
       const handleKeyDown = (e: KeyboardEvent) => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
           e.preventDefault()
@@ -121,7 +122,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
       }
       window.addEventListener('keydown', handleKeyDown)
       return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [ing.isDirty, ing.isSaving, ing.handleSaveDocument])
+    }, [isActive, ing.isDirty, ing.isSaving, ing.handleSaveDocument])
 
     // Parse markdown into distinct paginated sections robustly
     const parsedPages = useMemo(() => {

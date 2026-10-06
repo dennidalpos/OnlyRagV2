@@ -33,6 +33,14 @@ export class SkillInstallApprovalService {
     pending.resolve(payload.approved === true)
   }
 
+  public cancelRun(identity: Readonly<AgentRunIdentity>): void {
+    for (const [requestId, pending] of this.pendingRequests) {
+      if (!matchesAgentRunIdentity(pending.identity, identity)) continue
+      this.pendingRequests.delete(requestId)
+      pending.resolve(false)
+    }
+  }
+
   public async requestApproval(
     rendererEvents: RendererEventSink | null,
     candidate: SkillInstallCandidate,

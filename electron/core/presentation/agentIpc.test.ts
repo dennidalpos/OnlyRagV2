@@ -59,7 +59,7 @@ describe('agent IPC session-state facade', () => {
     handlers.clear()
     vi.clearAllMocks()
     setTrustedIpcWindowProvider(() => ({ webContents: trustedContents }) as never)
-    registerAgentIpcHandlers({ isAvailable: () => false, send: () => {} })
+    registerAgentIpcHandlers(() => ({ isAvailable: () => false, send: () => {} }))
   })
 
   it('projects persisted session state for the renderer', async () => {

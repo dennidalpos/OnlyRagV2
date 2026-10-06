@@ -72,8 +72,13 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
       session.pendingApprovalReasons = undefined
     }
     codingAgentLogger.logSessionEnd(sessionId, stepCountBox.value, false, timeoutSummary)
-    await persistCurrentState('timeout', 'blocked')
-    finalizeSession()
+    try {
+      await persistCurrentState('timeout', 'blocked')
+    } catch (error: unknown) {
+      logger.log('ERROR', 'AgentOrchestratorApp', `Failed to persist timed-out run ${session.id}: ${String(error)}`)
+    } finally {
+      finalizeSession()
+    }
   }, SESSION_TIMEOUT_MS)
 
   /** Sends `agent:approval-request` and pauses the calling step in place until the renderer answers via the `agent:approval-response` IPC channel (see `respondToApproval` in agentOrchestratorAppService.ts), or until cancellation/timeout resolves it to `false`. */

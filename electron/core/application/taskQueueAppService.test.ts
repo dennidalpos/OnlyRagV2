@@ -12,7 +12,7 @@ vi.mock('./agentOrchestratorAppService', () => ({
 import { cancelActiveAgentTask, runAgentOrchestratorLoop } from './agentOrchestratorAppService'
 import { TaskQueueAppService, taskQueueAppService } from './taskQueueAppService'
 
-const noRenderer = { isAvailable: () => false, send: () => {} }
+const noRenderer = { isAvailable: () => true, send: () => {} }
 
 describe('TaskQueueAppService serial execution invariant', () => {
   const workspaces: string[] = []
@@ -35,6 +35,78 @@ describe('TaskQueueAppService serial execution invariant', () => {
     const status = taskQueueAppService.getQueueStatus()
     expect(status.maxConcurrency).toBe(1)
     expect(status.runningCount).toBeLessThanOrEqual(1)
+  })
+
+  it('cancels the lost renderer active/queued runs and preserves another owner', async () => {
+    const service = new TaskQueueAppService()
+    let release!: () => void
+    vi.mocked(runAgentOrchestratorLoop).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ success: false, summary: 'cancelled', completionStatus: 'cancelled' })
+        }),
+    )
+    const owned = { isAvailable: () => true, send: vi.fn() }
+    const other = { isAvailable: () => true, send: vi.fn() }
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-owned-queue-'))
+    workspaces.push(workspacePath)
+    const schedule = (id: string, events: typeof owned) =>
+      service.scheduleAgentTask(
+        {
+          sessionId: id,
+          identity: { runId: id, conversationId: id, planRevisionId: 'plan', workspaceId: 'workspace' },
+          userTask: 'Inspect',
+          agentMode: 'ask',
+          workspacePath,
+        },
+        events,
+      )
+    await schedule('active', owned)
+    await schedule('lost-queued', owned)
+    await schedule('other-queued', other)
+    const lost = service.cancelRendererTasks(owned)
+    expect(cancelActiveAgentTask).toHaveBeenCalledWith('active')
+    expect(cancelActiveAgentTask).toHaveBeenCalledWith('lost-queued')
+    expect(cancelActiveAgentTask).not.toHaveBeenCalledWith('other-queued')
+    release()
+    await lost
+    await vi.waitFor(() => expect(runAgentOrchestratorLoop).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(runAgentOrchestratorLoop).mock.calls[1][2]).toBe('other-queued')
+  })
+
+  it('bounds shutdown, prevents queued starts and refuses new runs', async () => {
+    const service = new TaskQueueAppService()
+    let release!: () => void
+    vi.mocked(runAgentOrchestratorLoop).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ success: false, summary: 'cancelled' })
+        }),
+    )
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-shutdown-queue-'))
+    workspaces.push(workspacePath)
+    const payload = { sessionId: 'active', userTask: 'Inspect', agentMode: 'ask' as const, workspacePath }
+    await service.scheduleAgentTask(payload, noRenderer)
+    await service.scheduleAgentTask({ ...payload, sessionId: 'queued' }, noRenderer)
+    await expect(service.shutdown(25)).rejects.toThrow('did not settle within 25ms')
+    await expect(service.scheduleAgentTask({ ...payload, sessionId: 'new' }, noRenderer)).resolves.toMatchObject({
+      success: false,
+      completionStatus: 'cancelled',
+    })
+    release()
+    await service.shutdown()
+    expect(runAgentOrchestratorLoop).toHaveBeenCalledOnce()
+    expect(service.getQueueStatus()).toMatchObject({ runningCount: 0, queuedCount: 0 })
+  })
+
+  it('refuses an unavailable renderer before creating workspace metadata', async () => {
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-missing-renderer-'))
+    workspaces.push(workspacePath)
+    await expect(
+      new TaskQueueAppService().scheduleAgentTask({ userTask: 'Inspect', agentMode: 'ask', workspacePath }, { isAvailable: () => false, send: () => {} }),
+    ).resolves.toMatchObject({ success: false, completionStatus: 'cancelled' })
+    expect(fs.existsSync(path.join(workspacePath, '.onlyrag'))).toBe(false)
+    expect(runAgentOrchestratorLoop).not.toHaveBeenCalled()
   })
 
   it('uses the immutable run identity as the queue and orchestrator key', async () => {

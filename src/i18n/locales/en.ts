@@ -390,6 +390,7 @@ export const en: TranslationSchema = {
     stopTranslation: 'Stop',
     startTranslation: 'Start Translation',
     translating: 'Translating document...',
+    incomplete: 'Translation incomplete. Export is unavailable.',
     sourceDocTitle: 'Source Document',
     sourceText: 'Original Text',
     translatedText: 'Translated Output',

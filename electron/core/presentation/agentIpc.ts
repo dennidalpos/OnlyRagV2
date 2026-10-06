@@ -25,8 +25,10 @@ export function parseAgentTaskPayload(input: unknown): AgentTaskPayload {
   return { ...rest, activeFile: activeFile ?? null, ...(settings ? { settings: sanitizeAppSettings(settings) } : {}) }
 }
 
-export function registerAgentIpcHandlers(rendererEvents: RendererEventSink) {
+export function registerAgentIpcHandlers(getRendererEvents: () => RendererEventSink | null) {
   ipcMain.handle('agent:start-task', async (_, payload) => {
+    const rendererEvents = getRendererEvents()
+    if (!rendererEvents) return { success: false, summary: 'Agent renderer is unavailable.', completionStatus: 'cancelled' }
     return taskQueueAppService.scheduleAgentTask(parseAgentTaskPayload(payload), rendererEvents)
   })
 

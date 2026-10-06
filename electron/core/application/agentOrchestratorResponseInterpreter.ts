@@ -93,11 +93,11 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
   if (ctx.agentMode === 'ask') {
     agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.sessionId)
     ctx.emitLog('info', `Task Finished: ${summary.slice(0, 300)}`)
+    await ctx.persistCurrentState()
     ctx.emitDone(true, summary)
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, true, summary)
     }
-    await ctx.persistCurrentState()
     ctx.finalizeSession()
     return { outcome: 'return', result: { success: true, summary } }
   }

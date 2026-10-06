@@ -17,8 +17,6 @@ export interface QueuedAgentTask {
   id: string
   payload: AgentTaskPayload
   rendererEvents: RendererEventSink
-  resolve: (result: AgentTaskResult) => void
-  reject: (err: unknown) => void
 }
 
 /** Agent tasks run strictly one at a time. */
@@ -27,6 +25,8 @@ const AGENT_TASK_CONCURRENCY = 1
 export class TaskQueueAppService {
   private queue = new TaskQueueDomain<QueuedAgentTask>(AGENT_TASK_CONCURRENCY)
   private pQueue = new PQueue({ concurrency: AGENT_TASK_CONCURRENCY })
+  private shuttingDown = false
+  private executions = new Map<string, Promise<void>>()
 
   constructor(private readonly resolveStandaloneWorkspacePath: () => string = () => standaloneScratchWorkspace.getPath()) {}
 
@@ -45,6 +45,9 @@ export class TaskQueueAppService {
   }
 
   public async scheduleAgentTask(payload: AgentTaskPayload, rendererEvents: RendererEventSink): Promise<AgentTaskResult> {
+    if (this.shuttingDown || !rendererEvents.isAvailable()) {
+      return { success: false, summary: 'Agent renderer is unavailable or the application is shutting down.', completionStatus: 'cancelled' }
+    }
     if (payload.identity?.conversationId && payload.sessionId && payload.identity.conversationId !== payload.sessionId) {
       return { success: false, summary: 'Agent run identity mismatch', error: 'conversationId does not match sessionId' }
     }
@@ -94,8 +97,6 @@ export class TaskQueueAppService {
       id: taskId,
       payload: taskPayload,
       rendererEvents,
-      resolve: () => {},
-      reject: () => {},
     }
 
     this.queue.enqueue(taskId, 'agent_task', taskData)
@@ -125,7 +126,17 @@ export class TaskQueueAppService {
       .add(async () => {
         const nextItem = this.queue.popNext()
         if (nextItem) {
-          await this.executeTaskItem(nextItem)
+          if (!nextItem.payload.rendererEvents.isAvailable()) {
+            this.queue.cancel(nextItem.id)
+            return
+          }
+          const execution = this.executeTaskItem(nextItem)
+          this.executions.set(nextItem.id, execution)
+          try {
+            await execution
+          } finally {
+            this.executions.delete(nextItem.id)
+          }
         }
       })
       .catch((err) => {
@@ -154,9 +165,43 @@ export class TaskQueueAppService {
     }
   }
 
+  public async cancelRendererTasks(rendererEvents: RendererEventSink): Promise<void> {
+    const items = [...this.queue.getQueuedTasks(), ...this.queue.getRunningTasks()].filter((item) => item.payload.rendererEvents === rendererEvents)
+    const settlements: Promise<void>[] = []
+    for (const item of items) {
+      this.queue.cancel(item.id)
+      settlements.push(cancelActiveAgentTask(item.id))
+      const execution = this.executions.get(item.id)
+      if (execution) settlements.push(execution)
+    }
+    await Promise.all(settlements)
+  }
+
+  public async shutdown(timeoutMs = 5000): Promise<void> {
+    this.shuttingDown = true
+    const cancellations = cancelActiveAgentTask()
+    const executions = [...this.executions.values()]
+    this.queue.cancelAll()
+    this.pQueue.clear()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        Promise.allSettled([cancellations, ...executions, this.pQueue.onIdle()]).then((results) => {
+          const failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason as unknown)
+          if (failures.length) throw new AggregateError(failures, 'Agent shutdown persistence failed.')
+        }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`Agent shutdown did not settle within ${timeoutMs}ms; recovery data is retained.`)), timeoutMs)
+        }),
+      ])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  }
+
   private async executeTaskItem(item: TaskQueueItem<QueuedAgentTask>): Promise<void> {
     const { id, payload } = item
-    const { payload: taskPayload, rendererEvents, resolve } = payload
+    const { payload: taskPayload, rendererEvents } = payload
 
     logger.log(
       'INFO',
@@ -169,13 +214,12 @@ export class TaskQueueAppService {
       // are there, and every changed file is recorded in a checkpoint the user can restore. The
       // former per-run copy left out node_modules and .onlyrag, so each run reinstalled dependencies
       // and could not see the approved plan.
-      const result = await runAgentOrchestratorLoop(taskPayload, rendererEvents, id)
+      await runAgentOrchestratorLoop(taskPayload, rendererEvents, id)
       this.queue.markCompleted(id)
-      resolve(result)
     } catch (err: unknown) {
       this.queue.markFailed(id, errorMessage(err))
       logger.log('ERROR', 'TaskQueueAppService', `Task execution [${id}] failed: ${errorMessage(err)}`)
-      resolve({ success: false, summary: `Execution error: ${errorMessage(err)}`, error: errorMessage(err) })
+      throw err
     }
   }
 }

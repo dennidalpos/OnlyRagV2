@@ -99,4 +99,31 @@ describe('TranslationView in-place job lifecycle', () => {
     expect(selects).toEqual(expect.arrayContaining(['English', 'Italian']))
     expect(selects.indexOf('English')).toBeLessThan(selects.indexOf('Italian'))
   })
+
+  it('labels stopped Markdown output as incomplete and removes export controls', async () => {
+    let chunk!: (text: string) => void
+    let finish!: (result: { success: boolean }) => void
+    const cancelOllamaStream = vi.fn(async () => ({ success: true }))
+    window.electronAPI = {
+      ...window.electronAPI!,
+      cancelOllamaStream,
+      generateOllamaStream: vi.fn((_request, onChunk) => {
+        chunk = onChunk
+        return new Promise<{ success: boolean }>((resolve) => {
+          finish = resolve
+        })
+      }),
+    }
+    await click(button(/^Start Translation$/))
+    await act(async () => chunk('Partial translation'))
+    await click(button(/^Stop$/))
+    expect(container.textContent).toContain('Translation incomplete. Export is unavailable.')
+    expect(cancelOllamaStream).toHaveBeenCalledTimes(1)
+    expect([...container.querySelectorAll('button')].some((candidate) => /Export (PDF|DOCX|Markdown)/.test(candidate.textContent || ''))).toBe(false)
+    await act(async () => {
+      chunk('OLD')
+      finish({ success: true })
+    })
+    expect(container.textContent).toContain('Translation incomplete. Export is unavailable.')
+  })
 })

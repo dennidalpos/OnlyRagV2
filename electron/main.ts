@@ -40,11 +40,14 @@ import { registerArtifactIpcHandlers } from './core/presentation/artifactIpc'
 import { setTrustedIpcWindowProvider } from './core/presentation/secureIpcMain'
 import { systemAppService } from './core/application/systemAppService'
 import { agentToolExecutorService } from './core/application/agentToolExecutorService'
+import { taskQueueAppService } from './core/application/taskQueueAppService'
+import type { RendererEventSink } from './core/domain/ports/rendererEventSink'
 
 process.env.DIST = path.join(__dirname, '../dist')
 process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(__dirname, '../public')
 
 let win: BrowserWindow | null = null
+let agentRendererEvents: RendererEventSink | null = null
 
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 
@@ -55,9 +58,7 @@ function fatalMainError(reason: unknown) {
   fatalShutdownStarted = true
   logger.log('ERROR', 'MainProcess', `Fatal Main error: ${reason instanceof Error ? reason.stack || reason.message : String(reason)}`)
   taskRunner.cancelAllTasks()
-  managedDevServerRepository.stopAll()
-  sidecarProcessManager.stopPythonSidecar()
-  void agentToolExecutorService.closeAllBrowserRuns().finally(() => app.exit(1))
+  void shutdownOwnedResources().finally(() => app.exit(1))
 }
 process.on('uncaughtException', fatalMainError)
 process.on('unhandledRejection', fatalMainError)
@@ -80,6 +81,28 @@ function createWindow() {
     },
     autoHideMenuBar: true,
   })
+  const ownedWindow = win
+  let invalidateRenderer: () => void
+  const bindRenderer = () => {
+    let available = true
+    const events = createWindowEventSink(() => (available ? ownedWindow : null))
+    agentRendererEvents = events
+    invalidateRenderer = () => {
+      if (!available) return
+      available = false
+      if (agentRendererEvents === events) agentRendererEvents = null
+      void taskQueueAppService.cancelRendererTasks(events).catch((error: unknown) => {
+        logger.log('ERROR', 'MainProcess', `Lost-renderer agent settlement failed: ${String(error)}`)
+      })
+    }
+  }
+  bindRenderer()
+  ownedWindow.webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+    if (!isMainFrame || isInPlace) return
+    invalidateRenderer()
+    bindRenderer()
+  })
+  ownedWindow.on('closed', () => invalidateRenderer())
 
   // The UI needs no camera, microphone, geolocation or notification permissions.
   win.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
@@ -102,6 +125,7 @@ function createWindow() {
   win.webContents.on('render-process-gone', (_, details) => {
     logger.log('WARN', 'MainProcess', `Renderer process gone/crashed: ${details.reason} (exitCode: ${details.exitCode})`)
     taskRunner.cancelAllTasks()
+    invalidateRenderer()
   })
 
   if (VITE_DEV_SERVER_URL) {
@@ -113,17 +137,44 @@ function createWindow() {
   logger.log('INFO', 'MainProcess', 'Window created successfully.')
 }
 
-let quitCleanupStarted = false
-app.on('before-quit', (event) => {
-  if (quitCleanupStarted) return
-  quitCleanupStarted = true
-  event.preventDefault()
-  logger.log('INFO', 'MainProcess', 'Application before-quit event triggered. Cleaning up active tasks & temp files...')
+let ownedShutdown: Promise<void> | undefined
+function shutdownOwnedResources(): Promise<void> {
+  if (ownedShutdown) return ownedShutdown
   taskRunner.cancelAllTasks()
   managedDevServerRepository.stopAll()
   sidecarProcessManager.stopPythonSidecar()
-  taskRunner.cleanTempResiduals().catch(() => {})
-  void agentToolExecutorService.closeAllBrowserRuns().finally(() => app.quit())
+  const cleanup = Promise.allSettled([taskQueueAppService.shutdown(), agentToolExecutorService.closeAllBrowserRuns(), taskRunner.cleanTempResiduals()]).then(
+    (results) => {
+      const failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason as unknown)
+      if (failures.length) throw new AggregateError(failures, 'Owned shutdown resources failed to settle.')
+    },
+  )
+  let timer: ReturnType<typeof setTimeout>
+  ownedShutdown = Promise.race([
+    cleanup,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Owned shutdown exceeded 5000ms; retained state/checkpoints may require recovery.')), 5000)
+    }),
+  ])
+    .catch((error: unknown) => {
+      logger.log('ERROR', 'MainProcess', `Shutdown settlement failed: ${String(error)}`)
+    })
+    .finally(() => clearTimeout(timer))
+  return ownedShutdown
+}
+
+let quitCleanupStarted = false
+let quitCleanupFinished = false
+app.on('before-quit', (event) => {
+  if (quitCleanupFinished) return
+  event.preventDefault()
+  if (quitCleanupStarted) return
+  quitCleanupStarted = true
+  logger.log('INFO', 'MainProcess', 'Application before-quit event triggered. Cleaning up active tasks & temp files...')
+  void shutdownOwnedResources().finally(() => {
+    quitCleanupFinished = true
+    app.quit()
+  })
 })
 
 app.on('window-all-closed', () => {
@@ -158,7 +209,7 @@ app.whenReady().then(() => {
   registerOllamaIpcHandlers()
   registerWorkspaceIpcHandlers()
   registerSidecarIpcHandlers()
-  registerAgentIpcHandlers(createWindowEventSink(() => win))
+  registerAgentIpcHandlers(() => agentRendererEvents)
   registerSkillIpcHandlers()
   registerSessionHistoryIpcHandlers()
   registerProjectRegistryIpcHandlers()

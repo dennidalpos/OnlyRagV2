@@ -491,6 +491,11 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                 </div>
               )}
 
+              {tr.translatedMarkdown && !tr.isTranslating && !tr.isTranslationComplete && (
+                <div role="status" className="px-4 py-2 text-xs text-amber-300 bg-amber-950/60 border-b border-amber-800">
+                  {t('translation.incomplete')}
+                </div>
+              )}
               <div className="flex-1 overflow-hidden bg-slate-950 min-h-[300px]">
                 {!tr.selectedDoc ? (
                   <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3 text-slate-400">

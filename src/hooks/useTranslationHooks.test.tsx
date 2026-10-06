@@ -112,6 +112,74 @@ describe('translation hooks', () => {
     expect(documentTranslation.translatedMarkdown).toBe('Hello')
   })
 
+  it('ignores old chunks, completion and cancellation settlement after Stop and restart', async () => {
+    const runs: { chunk: (text: string) => void; finish: (result: { success: boolean; error?: string }) => void }[] = []
+    generateOllamaStream.mockImplementation((_request: unknown, chunk: (text: string) => void) => new Promise((finish) => runs.push({ chunk, finish })))
+    let finishCancel!: () => void
+    window.electronAPI = {
+      ...window.electronAPI!,
+      cancelOllamaStream: vi.fn(
+        () =>
+          new Promise<{ success: boolean }>((resolve) => {
+            finishCancel = () => resolve({ success: true })
+          }),
+      ),
+    }
+    await render({ translationModel: 'translator:latest' })
+    let first!: Promise<void>
+    await act(async () => {
+      first = documentTranslation.handleStartTranslation()
+    })
+    await act(async () => runs[0].chunk('Partial'))
+    let stopping!: Promise<void>
+    await act(async () => {
+      stopping = documentTranslation.handleStopTranslation()
+    })
+    expect(documentTranslation.isTranslationComplete).toBe(false)
+    expect(documentTranslation.translatedMarkdown).toBe('Partial')
+    let second!: Promise<void>
+    await act(async () => {
+      second = documentTranslation.handleStartTranslation()
+    })
+    await act(async () => {
+      runs[1].chunk('NEW')
+      runs[0].chunk('OLD')
+      runs[0].finish({ success: true })
+      await first
+      finishCancel()
+      await stopping
+    })
+    expect(documentTranslation.translatedMarkdown).toBe('NEW')
+    expect(documentTranslation.isTranslating).toBe(true)
+    expect(documentTranslation.isTranslationComplete).toBe(false)
+    expect(documentTranslation.generationState).toBe('queued')
+    await act(async () => {
+      runs[1].finish({ success: true })
+      await second
+    })
+    expect(documentTranslation.translatedMarkdown).toBe('NEW')
+    expect(documentTranslation.isTranslationComplete).toBe(true)
+  })
+
+  it('invalidates completed output when its language pair or source changes', async () => {
+    const exportDocument = vi.fn(async () => ({ success: true }))
+    window.electronAPI = { ...window.electronAPI!, exportDocument }
+    generateOllamaStream.mockImplementation(async (_request: unknown, chunk: (text: string) => void) => {
+      chunk('Hello')
+      return { success: true }
+    })
+    await render({ translationModel: 'translator:latest' })
+    await act(async () => documentTranslation.handleStartTranslation())
+    await act(async () => documentTranslation.setTargetLang('French'))
+    expect(documentTranslation.isTranslationComplete).toBe(false)
+    await act(async () => documentTranslation.handleExportTranslation('md'))
+    expect(exportDocument).not.toHaveBeenCalled()
+    await act(async () => documentTranslation.handleStartTranslation())
+    await act(async () => documentTranslation.setSelectedDoc(pdfDoc))
+    expect(documentTranslation.isTranslationComplete).toBe(false)
+    expect(documentTranslation.translatedMarkdown).toBe('')
+  })
+
   it('reports a document whose Markdown cannot be loaded instead of translating an empty text', async () => {
     getIngestedDocument.mockResolvedValueOnce(null).mockResolvedValueOnce(null)
     await render({ translationModel: 'translator:latest' })

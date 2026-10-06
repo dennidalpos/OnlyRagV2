@@ -64,7 +64,7 @@ describe('useCodingAgentSession', () => {
       actionLogs: [],
       clearRunContext: vi.fn(),
       selectProject: vi.fn(),
-      removeProject: vi.fn(),
+      removeProject: vi.fn().mockResolvedValue(true),
     }
   }
 
@@ -126,12 +126,22 @@ describe('useCodingAgentSession', () => {
     options = buildOptions('s1', session('s1'), 'C:/w')
     await act(async () => root.render(<Harness {...options} />))
 
-    act(() => api.handleRemoveProject('C:/other'))
+    await act(async () => api.handleRemoveProject('C:/other'))
     expect(options.execution.resetRunView).not.toHaveBeenCalled()
-    act(() => api.handleRemoveProject('C:/w'))
+    await act(async () => api.handleRemoveProject('C:/w'))
     expect(options.history.purgeWorkspace).toHaveBeenCalledWith('C:/w')
     expect(options.execution.resetRunView).toHaveBeenCalledTimes(1)
     expect(options.removeProject).toHaveBeenLastCalledWith('C:/w')
+  })
+
+  it('keeps cached conversations and the active view when project removal is refused', async () => {
+    options = buildOptions('s1', session('s1'), 'C:/w')
+    vi.mocked(options.removeProject).mockResolvedValue(false)
+    await act(async () => root.render(<Harness {...options} />))
+    await act(async () => api.handleRemoveProject('C:/w'))
+    expect(options.history.purgeWorkspace).not.toHaveBeenCalled()
+    expect(options.execution.resetRunView).not.toHaveBeenCalled()
+    expect(options.clearRunContext).not.toHaveBeenCalled()
   })
 })
 

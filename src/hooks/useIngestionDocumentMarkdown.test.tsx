@@ -16,7 +16,7 @@ vi.mock('./useIngestedDocuments', () => ({
 vi.mock('./useOllamaModelMetrics', () => ({ useOllamaModelMetrics: () => ({ metrics: {} }) }))
 
 import { useIngestion } from './useIngestion'
-import { clearDocumentMarkdownCache } from '../services/documentMarkdown'
+import { clearDocumentMarkdownCache, peekDocumentMarkdown, primeDocumentMarkdown } from '../services/documentMarkdown'
 
 const docA = { id: 'a', filename: 'a.md', fileType: 'text', numPages: 1, ingestedAt: 't1' } as IngestedDocument
 const docB = { id: 'b', filename: 'b.md', fileType: 'text', numPages: 1, ingestedAt: 't1' } as IngestedDocument
@@ -80,6 +80,35 @@ describe('useIngestion loads the selected document on demand', () => {
     expect(ingestion.markdownContent).toBe('# B')
   })
 
+  it('preserves typing during loading without allowing an unbound save', async () => {
+    const updateIngestedDocument = vi.fn()
+    window.electronAPI = { ...window.electronAPI!, updateIngestedDocument }
+    await act(async () => ingestion.setMarkdownContent('# A typed while loading'))
+    await act(async () => ingestion.handleSaveDocument())
+    expect(updateIngestedDocument).not.toHaveBeenCalled()
+    await act(async () => ingestion.handleSelectDoc(docB))
+    await act(async () => ingestion.handleSelectDoc(docA))
+    await resolveDocument('a', '# A loaded')
+    expect(ingestion.markdownContent).toBe('# A typed while loading')
+    expect(ingestion.isDirty).toBe(true)
+  })
+
+  it('discards a clean saved draft so external revisions can load', async () => {
+    await resolveDocument('a', '# A')
+    await act(async () => ingestion.setMarkdownContent('# A saved'))
+    window.electronAPI = {
+      ...window.electronAPI!,
+      updateIngestedDocument: vi.fn(async () => ({ success: true, data: { ...docA, ingestedAt: 't2', extractedMarkdown: '# A saved' } })),
+    }
+    await act(async () => ingestion.handleSaveDocument())
+    expect(ingestion.isDirty).toBe(false)
+    const external = { ...docA, ingestedAt: 't3', extractedMarkdown: '# A external' }
+    primeDocumentMarkdown(external)
+    await act(async () => documentsStore.notify?.([external, docB]))
+    expect(ingestion.markdownContent).toBe('# A external')
+    expect(ingestion.isDirty).toBe(false)
+  })
+
   it('keeps unsaved edits when the list refreshes the same document', async () => {
     await resolveDocument('a', '# A')
     await act(async () => ingestion.setMarkdownContent('# A edited'))
@@ -90,6 +119,154 @@ describe('useIngestion loads the selected document on demand', () => {
     expect(ingestion.selectedDoc?.id).toBe('a')
     expect(ingestion.markdownContent).toBe('# A edited')
     expect(getIngestedDocument).toHaveBeenCalledTimes(1)
+  })
+
+  it('restores unsaved drafts when navigating back to a document', async () => {
+    await resolveDocument('a', '# A')
+    await act(async () => ingestion.setMarkdownContent('# A draft'))
+    await act(async () => ingestion.handleSelectDoc(docB))
+    await resolveDocument('b', '# B')
+    await act(async () => ingestion.setMarkdownContent('# B draft'))
+    await act(async () => ingestion.handleSelectDoc(docA))
+    expect(ingestion.markdownContent).toBe('# A draft')
+    expect(ingestion.isDirty).toBe(true)
+    await act(async () => ingestion.handleSelectDoc(docB))
+    expect(ingestion.markdownContent).toBe('# B draft')
+  })
+
+  it('updates a saved document cache without replacing a newer selection', async () => {
+    await resolveDocument('a', '# A')
+    await act(async () => ingestion.setMarkdownContent('# A saved'))
+    let finish!: (result: unknown) => void
+    window.electronAPI = {
+      ...window.electronAPI!,
+      updateIngestedDocument: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      ) as NonNullable<typeof window.electronAPI>['updateIngestedDocument'],
+    }
+    let saving!: Promise<void>
+    await act(async () => {
+      saving = ingestion.handleSaveDocument()
+    })
+    await act(async () => ingestion.handleSelectDoc(docB))
+    await resolveDocument('b', '# B')
+    await act(async () => ingestion.setMarkdownContent('# B draft'))
+    const saved = { ...docA, ingestedAt: 't2', extractedMarkdown: '# A saved' }
+    await act(async () => {
+      finish({ success: true, data: saved })
+      await saving
+    })
+    expect(ingestion.selectedDoc?.id).toBe('b')
+    expect(ingestion.markdownContent).toBe('# B draft')
+    expect(ingestion.saveStatus).toBeNull()
+    expect(peekDocumentMarkdown(saved)).toBe('# A saved')
+    await act(async () => ingestion.handleSelectDoc(saved))
+    expect(ingestion.markdownContent).toBe('# A saved')
+    expect(ingestion.isDirty).toBe(false)
+  })
+
+  it('preserves edits made after Save and serializes duplicate save calls', async () => {
+    await resolveDocument('a', '# A')
+    await act(async () => ingestion.setMarkdownContent('# A saved'))
+    let finish!: (result: unknown) => void
+    const update = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    window.electronAPI = { ...window.electronAPI!, updateIngestedDocument: update as NonNullable<typeof window.electronAPI>['updateIngestedDocument'] }
+    let saving!: Promise<void>
+    await act(async () => {
+      saving = ingestion.handleSaveDocument()
+      void ingestion.handleSaveDocument()
+    })
+    expect(update).toHaveBeenCalledTimes(1)
+    await act(async () => ingestion.setMarkdownContent('# A newer draft'))
+    await act(async () => {
+      finish({ success: true, data: { ...docA, ingestedAt: 't2', extractedMarkdown: '# A saved' } })
+      await saving
+    })
+    expect(update).toHaveBeenCalledTimes(1)
+    expect(ingestion.markdownContent).toBe('# A newer draft')
+    expect(ingestion.isDirty).toBe(true)
+    await act(async () => ingestion.handleSelectDoc(docB))
+    await act(async () => ingestion.handleSelectDoc({ ...docA, ingestedAt: 't2' }))
+    expect(ingestion.markdownContent).toBe('# A newer draft')
+  })
+
+  it('keeps the draft after a failed save', async () => {
+    await resolveDocument('a', '# A')
+    await act(async () => ingestion.setMarkdownContent('# A draft'))
+    window.electronAPI = { ...window.electronAPI!, updateIngestedDocument: vi.fn(async () => ({ success: false, error: 'Save refused' })) }
+    await act(async () => ingestion.handleSaveDocument())
+    expect(ingestion.saveStatus).toEqual({ success: false, message: 'Save refused' })
+    expect(ingestion.isSaving).toBe(false)
+    expect(ingestion.isDirty).toBe(true)
+    await act(async () => ingestion.handleSelectDoc(docB))
+    await act(async () => ingestion.handleSelectDoc(docA))
+    expect(ingestion.markdownContent).toBe('# A draft')
+  })
+
+  it('keeps an independently refreshed revision when an older save settles', async () => {
+    await resolveDocument('a', '# A')
+    await act(async () => ingestion.setMarkdownContent('# A saved'))
+    let finish!: (result: unknown) => void
+    window.electronAPI = {
+      ...window.electronAPI!,
+      updateIngestedDocument: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      ) as NonNullable<typeof window.electronAPI>['updateIngestedDocument'],
+    }
+    let saving!: Promise<void>
+    await act(async () => {
+      saving = ingestion.handleSaveDocument()
+    })
+    const refreshed = { ...docA, ingestedAt: 't3', extractedMarkdown: '# A external' }
+    primeDocumentMarkdown(refreshed)
+    await act(async () => documentsStore.notify?.([refreshed, docB]))
+    await act(async () => ingestion.setMarkdownContent('# A new draft'))
+    await act(async () => {
+      finish({ success: true, data: { ...docA, ingestedAt: 't2', extractedMarkdown: '# A saved' } })
+      await saving
+    })
+    expect(ingestion.selectedDoc?.ingestedAt).toBe('t3')
+    expect(ingestion.markdownContent).toBe('# A new draft')
+    expect(ingestion.isDirty).toBe(true)
+  })
+
+  it('preserves a return to the original text while a different snapshot saves', async () => {
+    await resolveDocument('a', '# A')
+    await act(async () => ingestion.setMarkdownContent('# A saved'))
+    let finish!: (result: unknown) => void
+    window.electronAPI = {
+      ...window.electronAPI!,
+      updateIngestedDocument: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      ) as NonNullable<typeof window.electronAPI>['updateIngestedDocument'],
+    }
+    let saving!: Promise<void>
+    await act(async () => {
+      saving = ingestion.handleSaveDocument()
+    })
+    await act(async () => ingestion.setMarkdownContent('# A'))
+    await act(async () => ingestion.handleSelectDoc(docB))
+    await act(async () => {
+      finish({ success: true, data: { ...docA, ingestedAt: 't2', extractedMarkdown: '# A saved' } })
+      await saving
+    })
+    await act(async () => ingestion.handleSelectDoc({ ...docA, ingestedAt: 't2' }))
+    expect(ingestion.markdownContent).toBe('# A')
+    expect(ingestion.isDirty).toBe(true)
   })
 
   it('retains and exports a review draft without replacing the selected document or indexing it', async () => {

@@ -9,6 +9,7 @@ import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 const REGISTRY_FILE_NAME = 'project_registry.json'
 const STORE_VERSION = 1
+const mutationQueues = new Map<string, Promise<void>>()
 
 interface ProjectRegistryStore {
   version: number
@@ -31,6 +32,22 @@ export class ProjectRegistryRepository {
     return path.join(baseDir, REGISTRY_FILE_NAME)
   }
 
+  private async runExclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const filePath = path.resolve(this.getStateFilePath())
+    const result = (mutationQueues.get(filePath) || Promise.resolve()).then(operation)
+    // A failed mutation must reject its caller without blocking the next explicit attempt.
+    const settled = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    mutationQueues.set(filePath, settled)
+    try {
+      return await result
+    } finally {
+      if (mutationQueues.get(filePath) === settled) mutationQueues.delete(filePath)
+    }
+  }
+
   private async readStore(): Promise<WorkspaceProject[]> {
     const filePath = this.getStateFilePath()
     try {
@@ -51,50 +68,61 @@ export class ProjectRegistryRepository {
     }
   }
 
-  private async writeStore(projects: WorkspaceProject[]): Promise<boolean> {
+  private async writeStore(projects: WorkspaceProject[]): Promise<void> {
     const filePath = this.getStateFilePath()
     try {
       const payload: ProjectRegistryStore = { version: STORE_VERSION, projects }
-      return await safeAtomicWrite(filePath, JSON.stringify(payload, null, 2))
+      if (!(await safeAtomicWrite(filePath, JSON.stringify(payload, null, 2)))) throw new Error('Project registry could not be saved')
     } catch (err: unknown) {
       logger.log('WARN', 'ProjectRegistryRepo', `Failed writing project registry at ${filePath}: ${errorMessage(err)}`)
-      return false
+      throw new Error('Project registry could not be saved')
     }
   }
 
   public async list(): Promise<WorkspaceProject[]> {
-    return sortProjectsByRecency(await this.readStore())
+    return this.runExclusive(async () => sortProjectsByRecency(await this.readStore()))
   }
 
   /** Creates the project if unseen, or preserves `addedAt` and bumps `lastOpenedAt` if known. */
   public async upsert(projectPath: string, name?: string): Promise<WorkspaceProject> {
-    const projects = await this.readStore()
-    const next = upsertProject(projects, projectPath, name)
-    await this.writeStore(next)
-    return next.find((p) => p.path === projectPath)!
+    return this.runExclusive(async () => {
+      const projects = await this.readStore()
+      const normalizedPath = projectPath.trim()
+      if (!normalizedPath) throw new Error('Project path is required')
+      const next = upsertProject(projects, normalizedPath, name)
+      await this.writeStore(next)
+      return next.find((p) => p.path === normalizedPath)!
+    })
   }
 
   /** Bumps `lastOpenedAt` for a known project; returns null without writing if it isn't registered. */
   public async touch(projectPath: string): Promise<WorkspaceProject | null> {
-    const projects = await this.readStore()
-    const next = touchProject(projects, projectPath)
-    if (!next) return null
-    await this.writeStore(next)
-    return next.find((p) => p.path === projectPath) || null
+    return this.runExclusive(async () => {
+      const projects = await this.readStore()
+      const next = touchProject(projects, projectPath)
+      if (!next) return null
+      await this.writeStore(next)
+      return next.find((p) => p.path === projectPath) || null
+    })
   }
 
   public async rename(projectPath: string, name: string): Promise<WorkspaceProject | null> {
-    const projects = await this.readStore()
-    const next = renameProjectInList(projects, projectPath, name)
-    await this.writeStore(next)
-    return next.find((p) => p.path === projectPath) || null
+    return this.runExclusive(async () => {
+      const projects = await this.readStore()
+      const next = renameProjectInList(projects, projectPath, name)
+      if (next !== projects) await this.writeStore(next)
+      return next.find((p) => p.path === projectPath) || null
+    })
   }
 
   public async remove(projectPath: string): Promise<boolean> {
-    const projects = await this.readStore()
-    const remaining = projects.filter((p) => p.path !== projectPath)
-    if (remaining.length === projects.length) return false
-    return this.writeStore(remaining)
+    return this.runExclusive(async () => {
+      const projects = await this.readStore()
+      const remaining = projects.filter((p) => p.path !== projectPath)
+      if (remaining.length === projects.length) return false
+      await this.writeStore(remaining)
+      return true
+    })
   }
 }
 

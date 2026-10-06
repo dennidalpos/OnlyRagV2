@@ -1,10 +1,11 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { AgentStreamTransport, initialResponseTimeoutMs, type AgentChatMessage } from './agentStreamTransport'
 import { REASONING_BUDGET_ERROR } from '../../domain/agent/ollamaSessionRuntime'
 import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../../domain/agent/ollamaToolSchemaCatalog'
 import type { OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
+import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
 
 /** The request body the mock Ollama server received. */
 interface CapturedOllamaBody {
@@ -77,6 +78,39 @@ describe('AgentStreamTransport', () => {
         signal: controller.signal,
       }),
     ).rejects.toThrow('Agent run cancelled')
+  })
+
+  it('cancels an owned generation waiting behind another operation without cancelling the other owner', async () => {
+    let release!: () => void
+    const otherCancel = vi.fn()
+    const blocker = ollamaGenerationScheduler.schedule('unrelated-fixture', (setCancel) => {
+      setCancel(otherCancel)
+      return new Promise<void>((resolve) => {
+        release = resolve
+      })
+    })
+    let cancel!: () => void
+    const completion = AgentStreamTransport.streamCompletion({
+      targetModel: 'qwen2.5-coder:7b',
+      messages: userMessage('Do not dispatch this queued request'),
+      toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
+      runtimeOpts,
+      isCancelled: () => false,
+      onCancelHandle: (handle) => {
+        cancel = handle
+      },
+    })
+    expect(ollamaGenerationScheduler.getStatus().queued.some((job) => job.label === 'agent')).toBe(true)
+    try {
+      cancel()
+      await expect(completion).rejects.toThrow('cancelled')
+      expect(ollamaGenerationScheduler.getStatus().queued).toHaveLength(0)
+      expect(otherCancel).not.toHaveBeenCalled()
+      expect(ollamaGenerationScheduler.getStatus().active?.id).toBe(blocker.id)
+    } finally {
+      release()
+      await blocker.promise
+    }
   })
 
   it('streams POST /api/chat with the transcript and the tools array, and returns the structured call', async () => {

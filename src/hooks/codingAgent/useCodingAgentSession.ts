@@ -38,7 +38,7 @@ export interface UseCodingAgentSessionOptions {
   /** Clears attachments and pinned files, which belong to a single conversation. */
   clearRunContext: () => void
   selectProject: (workspacePath: string) => void
-  removeProject: (workspacePath: string) => void
+  removeProject: (workspacePath: string) => Promise<boolean>
 }
 
 /** Conversation switching and persistence: each conversation keeps its own timeline, queue and context settings. */
@@ -55,6 +55,8 @@ export function useCodingAgentSession({
   const { hydrateFromSession, resetRunView, clearConversation, promptQueue, contextBudget, forceContextCompaction } = execution
 
   const prevSessionIdRef = useRef('')
+  const workspaceRef = useRef(workspacePath)
+  workspaceRef.current = workspacePath
   const [contentSessionId, setContentSessionId] = useState('')
   useEffect(() => {
     if (activeSessionId !== prevSessionIdRef.current) {
@@ -103,11 +105,11 @@ export function useCodingAgentSession({
 
   const handleRenameSession = (sessionId: string, newTitle: string) => history.renameSession(sessionId, newTitle)
 
-  /** Purges cached sessions of the removed workspace, clears the view if it was active, then unregisters it. */
-  const handleRemoveProject = (pathStr: string) => {
+  /** Registry acknowledgement precedes cache removal and active-view cleanup. */
+  const handleRemoveProject = async (pathStr: string) => {
+    if (!(await removeProject(pathStr))) return
     history.purgeWorkspace(pathStr)
-    if (pathStr === workspacePath) resetConversation()
-    removeProject(pathStr)
+    if (pathStr === workspaceRef.current) resetConversation()
   }
 
   return {

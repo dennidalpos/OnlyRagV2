@@ -62,12 +62,12 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
   if (ctx.agentMode === 'ask') {
     agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.sessionId)
     ctx.emitLog('info', `Task Finished: ${summary}`, summary, { category: 'final_report' })
+    await ctx.persistCurrentState('finish')
     ctx.emitDone(true, summary)
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, 'finish', parsedTool.parameters, parsedTool.explanation)
       codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, true, summary)
     }
-    await ctx.persistCurrentState('finish')
     ctx.finalizeSession()
     return { outcome: 'return', result: { success: true, summary } }
   }

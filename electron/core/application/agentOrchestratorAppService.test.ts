@@ -7,6 +7,7 @@ import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import {
   runAgentOrchestratorLoop as runOrchestratorLoop,
   cancelActiveAgentTask,
+  restoreRunCheckpoint,
   requestActiveAgentContextCompaction,
   respondToApproval,
   updateActiveAgentRun,
@@ -22,6 +23,7 @@ import { agentSessionStateRepository } from '../infrastructure/filesystem/agentS
 import { workspaceMetadataStatePath, workspaceMetadataTrackerPath } from '../infrastructure/filesystem/workspaceMetadataDirectory'
 import type { AppSettings } from '../../../shared/types'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
+import { ollamaAppService } from './ollamaAppService'
 
 const fallbackProfile = vi.hoisted(() => ({ sessions: '' }))
 vi.mock('../infrastructure/filesystem/userDataRoot', async (importOriginal) => ({
@@ -117,6 +119,55 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   let pendingWrites: Promise<boolean>[]
   const saveState = agentSessionStateRepository.saveSessionState.bind(agentSessionStateRepository)
   const saveTracker = agentSessionStateRepository.saveSessionTrackerMarkdown.bind(agentSessionStateRepository)
+
+  it('persists interruption after cancellation during preparation, without dispatching a model turn', async () => {
+    let release!: () => void
+    vi.mocked(ollamaAppService.getInstalledModels).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve(['llama3.2:3b'])
+        }),
+    )
+    const sessionId = 'cancel-preparation'
+    const result = runAgentOrchestratorLoop({ sessionId, userTask: 'Inspect', workspacePath: tempDir, agentMode: 'auto' }, null)
+    await vi.waitFor(() => expect(release).toBeDefined())
+    await cancelActiveAgentTask(sessionId)
+    const restoreWhileSettling = restoreRunCheckpoint(tempDir, 'pending-checkpoint')
+    release()
+    await expect(result).resolves.toMatchObject({ success: false, completionStatus: 'cancelled' })
+    expect(restoreWhileSettling).toMatchObject({ success: false, errors: [expect.stringContaining('still working')] })
+    expect(AgentStreamTransport.streamCompletion).not.toHaveBeenCalled()
+    expect(await agentSessionStateRepository.loadSessionState(sessionId, tempDir)).toMatchObject({
+      status: 'FAILED',
+      completionStatus: 'cancelled',
+      terminationReason: 'cancelled',
+    })
+  })
+
+  it.each(['snapshot', 'tracker'] as const)('blocks execution when the %s write is not acknowledged', async (failedWrite) => {
+    const writer = failedWrite === 'snapshot' ? 'saveSessionState' : 'saveSessionTrackerMarkdown'
+    vi.mocked(agentSessionStateRepository[writer]).mockResolvedValue(false)
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValue(toolTurn('write_file', { filePath: 'unexpected.txt', content: 'unsafe' }))
+    const { window, send } = createMockWindow()
+    const result = await runAgentOrchestratorLoop({ userTask: 'Write a file', workspacePath: tempDir, agentMode: 'auto' }, window)
+    expect(result).toMatchObject({ success: false, completionStatus: 'blocked' })
+    expect(result.summary).toContain('persist')
+    expect(AgentStreamTransport.streamCompletion).not.toHaveBeenCalled()
+    expect(fs.existsSync(path.join(tempDir, 'unexpected.txt'))).toBe(false)
+    expect(send).toHaveBeenCalledWith('agent:done', expect.objectContaining({ success: false, completionStatus: 'blocked' }))
+  })
+
+  it('does not execute a delayed proposal after its renderer becomes unavailable', async () => {
+    let available = true
+    const events: RendererEventSink = { isAvailable: () => available, send: vi.fn() }
+    vi.mocked(AgentStreamTransport.streamCompletion).mockImplementationOnce(async () => {
+      available = false
+      return toolTurn('write_file', { filePath: 'unexpected.txt', content: 'unsafe' })
+    })
+    const result = await runAgentOrchestratorLoop({ userTask: 'Write a file', workspacePath: tempDir, agentMode: 'auto' }, events)
+    expect(result).toMatchObject({ success: false, completionStatus: 'cancelled' })
+    expect(fs.existsSync(path.join(tempDir, 'unexpected.txt'))).toBe(false)
+  })
 
   it('blocks a selected 2K context before model generation despite an 8K advertised capacity', async () => {
     const result = await runAgentOrchestratorLoop(

@@ -4,6 +4,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { spawn, ChildProcess } from 'node:child_process'
+import { createInterface } from 'node:readline'
 import { logger } from '../logging/logger'
 import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
 import { normalizeOllamaHost } from '../../../../shared/domain/ollamaHost'
@@ -11,6 +12,7 @@ import { appSettingsRepository } from '../filesystem/appSettingsRepository'
 import { sidecarHttpClient } from '../http/sidecarHttpClient'
 import { isProcessOrDescendant, matchesSidecarOwnership, parseListeningPidFromNetstat, type SidecarOwnershipMarker } from './orphanPortReclaim'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
+import { sanitizeLogMessage } from '../../../logRedactor'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
@@ -380,7 +382,7 @@ export class SidecarProcessManager {
       return false
     }
 
-    this.attachSidecarProcessLogs()
+    this.attachSidecarProcessLogs(sidecarProcess)
     if (!(await this.waitForSidecarHealth())) return false
     const childPid = sidecarProcess?.pid
     const listenerPid =
@@ -416,39 +418,50 @@ export class SidecarProcessManager {
         }
       }
       const timestamp = new Date().toISOString()
-      fs.appendFileSync(logPath, `[${timestamp}] [${level}] ${msg}\n`, 'utf-8')
-    } catch {}
+      fs.appendFileSync(logPath, `[${timestamp}] [${level}] ${sanitizeLogMessage(msg)}\n`, 'utf-8')
+    } catch (err: unknown) {
+      logger.log('WARN', 'Sidecar', `Could not persist Sidecar log: ${errorMessage(err)}`)
+    }
   }
 
-  private attachSidecarProcessLogs() {
-    if (!sidecarProcess) return
+  private attachSidecarProcessLogs(ownedProcess: ChildProcess) {
+    // Redact complete lines so chunk boundaries cannot expose half a credential.
+    if (ownedProcess.stdout)
+      createInterface({ input: ownedProcess.stdout, crlfDelay: Infinity })
+        .on('error', (err) => {
+          logger.log('WARN', 'Sidecar', `Sidecar stdout log stream failed: ${errorMessage(err)}`)
+        })
+        .on('line', (line) => {
+          const msg = sanitizeLogMessage(line.trim())
+          this.writeSidecarLog('INFO', msg)
+          if (msg.includes('GET /health HTTP/1.1" 200') || msg.includes('GET /documents HTTP/1.1" 200') || msg.includes('GET /docs HTTP/1.1" 200')) {
+            return // Suppress redundant periodic polling stdout access logs in main diagnostics logger
+          }
+          logger.log('INFO', 'SidecarProcess', msg)
+        })
 
-    sidecarProcess.stdout?.on('data', (data) => {
-      const msg = data.toString().trim()
-      this.writeSidecarLog('INFO', msg)
-      if (msg.includes('GET /health HTTP/1.1" 200') || msg.includes('GET /documents HTTP/1.1" 200') || msg.includes('GET /docs HTTP/1.1" 200')) {
-        return // Suppress redundant periodic polling stdout access logs in main diagnostics logger
-      }
-      logger.log('INFO', 'SidecarProcess', msg)
-    })
+    if (ownedProcess.stderr)
+      createInterface({ input: ownedProcess.stderr, crlfDelay: Infinity })
+        .on('error', (err) => {
+          logger.log('WARN', 'Sidecar', `Sidecar stderr log stream failed: ${errorMessage(err)}`)
+        })
+        .on('line', (line) => {
+          const level = classifySidecarStderr(line)
+          const msg = sanitizeLogMessage(line.trim())
+          this.writeSidecarLog(level, msg)
+          if (msg.includes('GET /health HTTP/1.1" 200') || msg.includes('GET /documents HTTP/1.1" 200')) {
+            return
+          }
+          logger.log(level, 'SidecarProcess', msg)
+        })
 
-    sidecarProcess.stderr?.on('data', (data) => {
-      const msg = data.toString().trim()
-      const level = classifySidecarStderr(msg)
-      this.writeSidecarLog(level, msg)
-      if (msg.includes('GET /health HTTP/1.1" 200') || msg.includes('GET /documents HTTP/1.1" 200')) {
-        return
-      }
-      logger.log(level, 'SidecarProcess', msg)
-    })
-
-    sidecarProcess.on('close', (code) => {
+    ownedProcess.on('close', (code) => {
       this.writeSidecarLog('WARN', `Python sidecar process exited with code ${code}`)
       logger.log('WARN', 'Sidecar', `Python sidecar process exited with code ${code}`)
       this.markProcessExited(code)
     })
 
-    sidecarProcess.on('error', (err) => {
+    ownedProcess.on('error', (err) => {
       this.writeSidecarLog('ERROR', `Python sidecar process failed to start: ${err.message}`)
       logger.log('ERROR', 'Sidecar', `Python sidecar process failed to start: ${err.message}`)
       sidecarProcess = null

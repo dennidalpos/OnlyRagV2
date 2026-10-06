@@ -33,15 +33,21 @@ export class ProjectRegistryRepository {
 
   private async readStore(): Promise<WorkspaceProject[]> {
     const filePath = this.getStateFilePath()
-    if (!fs.existsSync(filePath)) return []
     try {
       const raw = await fs.promises.readFile(filePath, 'utf-8')
       const parsed = JSON.parse(raw) as ProjectRegistryStore
-      if (!parsed || !Array.isArray(parsed.projects)) return []
-      return parsed.projects.filter((p) => p && typeof p.path === 'string' && p.path && typeof p.name === 'string')
+      if (!parsed || (parsed.version !== undefined && parsed.version !== STORE_VERSION) || !Array.isArray(parsed.projects)) {
+        throw new Error('Unsupported project registry envelope')
+      }
+      if (parsed.projects.some((p) => !p || typeof p.path !== 'string' || !p.path || typeof p.name !== 'string')) {
+        throw new Error('Invalid retained project')
+      }
+      if (new Set(parsed.projects.map((p) => p.path)).size !== parsed.projects.length) throw new Error('Duplicate retained project identities')
+      return parsed.projects
     } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') return []
       logger.log('WARN', 'ProjectRegistryRepo', `Failed reading project registry at ${filePath}: ${errorMessage(err)}`)
-      return []
+      throw new Error('Project registry is unreadable; original data is preserved')
     }
   }
 

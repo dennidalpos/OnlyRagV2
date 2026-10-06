@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
-import { agentSessionStateRepository, SavedAgentSessionState } from './agentSessionStateRepository'
-import { workspaceMetadataTrackerPath } from './workspaceMetadataDirectory'
+import { AgentSessionStateRepository, agentSessionStateRepository, SavedAgentSessionState } from './agentSessionStateRepository'
+import { workspaceMetadataStatePath, workspaceMetadataTrackerPath } from './workspaceMetadataDirectory'
 
 describe('AgentSessionStateRepository Unit Tests', () => {
   let tempDir: string
@@ -14,9 +14,104 @@ describe('AgentSessionStateRepository Unit Tests', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     if (fs.existsSync(tempDir)) {
       fs.rmSync(tempDir, { recursive: true, force: true })
     }
+  })
+
+  it.each(['{broken', '{}', 'null', '[]', '{"version":99}'])('preserves invalid state %s during load, seed and save', async (original) => {
+    const sessionId = 'invalid-state'
+    const filePath = workspaceMetadataStatePath(tempDir, sessionId)
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    fs.writeFileSync(filePath, original)
+    await expect(agentSessionStateRepository.loadSessionState(sessionId, tempDir)).rejects.toThrow('original data is preserved')
+    await expect(agentSessionStateRepository.seedPlanMilestones(sessionId, tempDir, [])).rejects.toThrow('original data is preserved')
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe(original)
+    const replacement = {
+      sessionId,
+      workspacePath: tempDir,
+      agentMode: 'guided' as const,
+      stepCount: 0,
+      maxSteps: 0,
+      episodes: [],
+      recentFullLogs: [],
+      planMilestones: [],
+      userTask: 'New task',
+      updatedAt: new Date().toISOString(),
+    }
+    await expect(agentSessionStateRepository.saveSessionState(replacement)).resolves.toBe(false)
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe(original)
+    fs.writeFileSync(filePath, JSON.stringify(replacement))
+    await expect(agentSessionStateRepository.seedPlanMilestones(sessionId, tempDir, [{ id: 'retry', title: 'Retry', status: 'pending' }])).resolves.toBe(true)
+  })
+
+  it('does not turn a blocked state read into absence and permits retry', async () => {
+    await agentSessionStateRepository.seedPlanMilestones('blocked-read', tempDir, [])
+    const filePath = workspaceMetadataStatePath(tempDir, 'blocked-read')
+    const original = fs.readFileSync(filePath)
+    const readFile = fs.promises.readFile.bind(fs.promises)
+    const blocked = vi.spyOn(fs.promises, 'readFile').mockImplementation((...args: Parameters<typeof fs.promises.readFile>) => {
+      if (args[0] === filePath) return Promise.reject(Object.assign(new Error('Access denied'), { code: 'EACCES' }))
+      return readFile(...args)
+    })
+    await expect(agentSessionStateRepository.loadSessionState('blocked-read', tempDir)).rejects.toThrow('original data is preserved')
+    await expect(agentSessionStateRepository.seedPlanMilestones('blocked-read', tempDir, [])).rejects.toThrow('original data is preserved')
+    expect(fs.readFileSync(filePath)).toEqual(original)
+    blocked.mockRestore()
+    await expect(agentSessionStateRepository.seedPlanMilestones('blocked-read', tempDir, [])).resolves.toBe(true)
+  })
+
+  it('rejects mismatched identities and invalid nested execution records without rewriting them', async () => {
+    await agentSessionStateRepository.seedPlanMilestones('retained', tempDir, [])
+    const filePath = workspaceMetadataStatePath(tempDir, 'retained')
+    const state = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+    for (const patch of [
+      { sessionId: 'other' },
+      { workspacePath: 'other' },
+      { stepCount: -1 },
+      { episodes: [null] },
+      { recentFullLogs: [{}] },
+      { planMilestones: [{}] },
+      { pendingPlanMilestones: [null] },
+      { runIdentity: { runId: 'other' } },
+      { recoveryFailures: { schema: {} } },
+      { chatMessages: [{ role: 'tool' }] },
+    ]) {
+      const original = JSON.stringify({ ...state, ...patch })
+      fs.writeFileSync(filePath, original)
+      await expect(agentSessionStateRepository.seedPlanMilestones('retained', tempDir, [])).rejects.toThrow('original data is preserved')
+      expect(fs.readFileSync(filePath, 'utf-8')).toBe(original)
+    }
+  })
+
+  it('distinguishes missing fallback state from invalid retained fallback state', async () => {
+    const fallbackDir = path.join(tempDir, 'fallback')
+    const repository = new AgentSessionStateRepository(fallbackDir)
+    await expect(repository.loadSessionState('fallback', null)).resolves.toBeNull()
+    await repository.seedPlanMilestones('fallback', null, [])
+    const filePath = path.join(fallbackDir, '.agent_state_fallback.json')
+    const valid = fs.readFileSync(filePath, 'utf-8')
+    fs.writeFileSync(filePath, '{broken')
+    await expect(repository.loadSessionState('fallback', null)).rejects.toThrow('original data is preserved')
+    await expect(repository.seedPlanMilestones('fallback', null, [])).rejects.toThrow('original data is preserved')
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('{broken')
+    fs.writeFileSync(filePath, valid)
+    await expect(repository.loadSessionState('fallback', null)).resolves.toMatchObject({ sessionId: 'fallback' })
+  })
+
+  it('blocks tracker projection when its retained state is invalid', async () => {
+    const sessionId = 'tracker-invalid-state'
+    await agentSessionStateRepository.seedPlanMilestones(sessionId, tempDir, [])
+    const tracker = new SessionDebtTracker({ sessionId, completedTasks: ['retained'] })
+    await agentSessionStateRepository.saveSessionTrackerMarkdown(tempDir, tracker)
+    const trackerPath = workspaceMetadataTrackerPath(tempDir, sessionId)
+    const originalTracker = fs.readFileSync(trackerPath)
+    fs.writeFileSync(workspaceMetadataStatePath(tempDir, sessionId), '{}')
+    await expect(
+      agentSessionStateRepository.saveSessionTrackerMarkdown(tempDir, new SessionDebtTracker({ sessionId, completedTasks: ['replacement'] })),
+    ).resolves.toBe(false)
+    expect(fs.readFileSync(trackerPath)).toEqual(originalTracker)
   })
 
   it('should save, load, and clear session state correctly', async () => {

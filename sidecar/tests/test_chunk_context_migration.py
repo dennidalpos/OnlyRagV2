@@ -1,59 +1,84 @@
-from pathlib import Path
+"""The retired command must refuse before any storage, recovery or encoder access."""
 
+import hashlib
+import importlib.util
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+import lancedb
 import pytest
 
-from sidecar.config import CHUNKS_TABLE_NAME, LANCEDB_DIR
-from sidecar.infrastructure.db import lance_db
-from sidecar.infrastructure.embeddings import FALLBACK_EMBEDDING_MODEL, get_fallback_embedding
-from sidecar.services import chunk_context_migration
+from sidecar.config import CHUNKS_TABLE_NAME
+from sidecar.infrastructure.embeddings import EmbeddingSpace, get_fallback_embedding
 
 
-def _row(chunk_id: str, text: str, model: str = FALLBACK_EMBEDDING_MODEL) -> dict:
+_COMMAND = Path(__file__).resolve().parents[2] / "scripts" / "migrate_chunk_context.py"
+
+
+def _invoke(root: Path | None, args: list[str]):
+    environment = os.environ.copy()
+    environment.pop("ONLYRAG_DATA_DIR", None)
+    if root is not None:
+        environment["ONLYRAG_DATA_DIR"] = str(root)
+    return subprocess.run(
+        [sys.executable, str(_COMMAND), *args],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize("args", [[], ["--apply"], ["--help"]])
+@pytest.mark.parametrize("configured", [False, True])
+def test_retired_cli_refuses_without_creating_storage(tmp_path, args, configured):
+    root = tmp_path / "must-not-be-created"
+    result = _invoke(root if configured else None, args)
+    assert result.returncode == 2
+    assert "Retired:" in result.stderr
+    assert "No storage was opened or changed" in result.stderr
+    assert "RAG-EMBEDDING-REBUILD-01 remains deferred" in result.stderr
+    assert not result.stdout
+    assert not root.exists()
+
+
+def _hashes(root: Path) -> dict[str, str]:
     return {
-        "chunk_id": chunk_id,
-        "doc_id": "doc",
-        "doc_name": "doc.md",
-        "text": text,
-        "vector": get_fallback_embedding(text),
-        "chunk_index": 0,
-        "section_header": "doc.md",
-        "file_type": "md",
-        "ingested_at": "2026-09-27",
-        "embedding_model": model,
+        str(file.relative_to(root)): hashlib.sha256(file.read_bytes()).hexdigest()
+        for file in root.rglob("*")
+        if file.is_file()
     }
 
 
-def test_migrates_legacy_prefix_and_vector_with_backup():
-    old = "[Documento: doc.md | Sezione: doc.md]\nLegacy content"
-    current = "[Document: doc.md | Section: doc.md]\nCurrent content"
-    table = lance_db.create_table(CHUNKS_TABLE_NAME, data=[_row("old_chunk_0", old), _row("new_chunk_0", current)])
+@pytest.mark.parametrize("preparation", ["legacy-context-v0", "nomic-search-v1"])
+def test_retired_cli_preserves_legacy_and_versioned_stores_and_recovery(tmp_path, preparation):
+    root = tmp_path / "isolated-profile"
+    store = lancedb.connect(root / "data" / "lancedb_store", session=lancedb.Session())
+    text = "[Documento: doc.md | Sezione: doc.md]\nRetained original"
+    space = EmbeddingSpace("nomic-embed-text", "a" * 64, 768, embedding_preparation=preparation)
+    table = store.create_table(CHUNKS_TABLE_NAME, data=[{
+        "chunk_id": "retained_chunk_0", "doc_id": "retained", "text": text,
+        "vector": get_fallback_embedding(text, 768), **space.metadata(),
+    }])
+    history = store.create_table("prompt_history", data=[{"id": "retained", "prompt": "Original prompt"}])
+    original = root / "data" / "source-documents" / "retained" / "original.md"
+    original.parent.mkdir(parents=True, exist_ok=True)
+    original.write_text(text, encoding="utf-8")
+    journal = root / "data" / "document-recovery.json"
+    journal.write_bytes(b"{invalid-recovery-journal")
+    rows_before = table.to_arrow().to_pylist(), history.to_arrow().to_pylist()
+    hashes_before = _hashes(root)
 
-    count, backup = chunk_context_migration.migrate_chunk_context(table, Path(LANCEDB_DIR))
+    result = _invoke(root, ["--apply"])
 
-    assert count == 1
-    assert backup is not None and backup.is_dir()
-    rows = {row["chunk_id"]: row for row in table.to_arrow().to_pylist()}
-    migrated = "[Document: doc.md | Section: doc.md]\nLegacy content"
-    assert rows["old_chunk_0"]["text"] == migrated
-    assert rows["old_chunk_0"]["vector"] == pytest.approx(get_fallback_embedding(migrated))
-    assert rows["new_chunk_0"]["text"] == current
-    assert chunk_context_migration.migrate_chunk_context(table, Path(LANCEDB_DIR)) == (0, None)
-
-
-def test_unavailable_embedding_model_aborts_before_backup_or_write(monkeypatch):
-    old = "[Documento: doc.md | Sezione: doc.md]\nLegacy content"
-    table = lance_db.create_table(CHUNKS_TABLE_NAME, data=[_row("old_chunk_0", old, "missing-model")])
-    monkeypatch.setattr(chunk_context_migration, "generate_embeddings_with_status", lambda texts, model: ([get_fallback_embedding(t) for t in texts], True))
-    backups_before = set(Path(LANCEDB_DIR).parent.glob("lancedb_store.before-context-en-*"))
-
-    with pytest.raises(RuntimeError, match="unavailable"):
-        chunk_context_migration.migrate_chunk_context(table, Path(LANCEDB_DIR))
-
-    assert table.to_arrow().to_pylist()[0]["text"] == old
-    assert set(Path(LANCEDB_DIR).parent.glob("lancedb_store.before-context-en-*")) == backups_before
+    assert result.returncode == 2
+    assert "Retired:" in result.stderr
+    assert (table.to_arrow().to_pylist(), history.to_arrow().to_pylist()) == rows_before
+    assert _hashes(root) == hashes_before
 
 
-def test_context_conversion_preserves_document_and_section_content():
-    old = "[Documento: report.md | Sezione: report.md > Parte A]\nDocumento: body"
-    assert chunk_context_migration.updated_context_text(old) == "[Document: report.md | Section: report.md > Parte A]\nDocumento: body"
-    assert chunk_context_migration.updated_context_text("Ordinary text") is None
+def test_in_place_migration_service_is_removed():
+    assert importlib.util.find_spec("sidecar.services.chunk_context_migration") is None

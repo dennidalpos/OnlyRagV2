@@ -23,6 +23,12 @@ import { workspaceMetadataStatePath, workspaceMetadataTrackerPath } from '../inf
 import type { AppSettings } from '../../../shared/types'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 
+const fallbackProfile = vi.hoisted(() => ({ sessions: '' }))
+vi.mock('../infrastructure/filesystem/userDataRoot', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../infrastructure/filesystem/userDataRoot')>()),
+  userDataSessionsDir: () => fallbackProfile.sessions,
+}))
+
 // The production fallback is fail-closed; these loop tests exercise tool execution, so they opt in.
 const TOOL_ENABLED_SETTINGS: AppSettings = {
   ...buildDefaultAgentSettings(),
@@ -108,6 +114,9 @@ const itWithPowerShell = it.skipIf(process.platform !== 'win32')
 
 describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () => {
   let tempDir: string
+  let pendingWrites: Promise<boolean>[]
+  const saveState = agentSessionStateRepository.saveSessionState.bind(agentSessionStateRepository)
+  const saveTracker = agentSessionStateRepository.saveSessionTrackerMarkdown.bind(agentSessionStateRepository)
 
   it('blocks a selected 2K context before model generation despite an 8K advertised capacity', async () => {
     const result = await runAgentOrchestratorLoop(
@@ -126,6 +135,18 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-orchestrator-test-'))
+    fallbackProfile.sessions = path.join(tempDir, 'fallback', 'sessions')
+    pendingWrites = []
+    vi.spyOn(agentSessionStateRepository, 'saveSessionState').mockImplementation((state) => {
+      const write = saveState(state)
+      pendingWrites.push(write)
+      return write
+    })
+    vi.spyOn(agentSessionStateRepository, 'saveSessionTrackerMarkdown').mockImplementation((workspace, tracker) => {
+      const write = saveTracker(workspace, tracker)
+      pendingWrites.push(write)
+      return write
+    })
     vi.clearAllMocks()
     // clearAllMocks resets call history but NOT the mockResolvedValueOnce queue, and every test here scripts a turn-by-turn sequence of LLM replies.
     vi.mocked(AgentStreamTransport.streamCompletion).mockReset()
@@ -133,8 +154,10 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     cancelActiveAgentTask()
+    await Promise.all(pendingWrites)
+    vi.restoreAllMocks()
     try {
       fs.rmSync(tempDir, { recursive: true, force: true })
     } catch {}
@@ -153,6 +176,45 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.success).toBe(false)
     expect(res.error).toBe('Task prompt is required')
     expect(res.completionStatus).toBe('blocked')
+  })
+
+  it('blocks corrupt state before generation, preserves recovery assets and releases the run for retry', async () => {
+    const sessionId = 'corrupt-bootstrap'
+    const identity = createAgentRunIdentity({ runId: 'blocked-run', conversationId: sessionId, workspacePath: tempDir })
+    const statePath = workspaceMetadataStatePath(tempDir, sessionId)
+    fs.mkdirSync(path.dirname(statePath), { recursive: true })
+    fs.writeFileSync(statePath, '{broken')
+    const trackerPath = workspaceMetadataTrackerPath(tempDir, sessionId)
+    fs.writeFileSync(trackerPath, 'Retained tracker')
+    const { window, send } = createMockWindow()
+    const payload = { identity, userTask: 'Review', workspacePath: tempDir, agentMode: 'ask' as const }
+
+    const result = await runAgentOrchestratorLoop(payload, window)
+    expect(result).toMatchObject({ success: false, completionStatus: 'blocked' })
+    expect(result.summary).toContain('original data is preserved')
+    expect(send).toHaveBeenCalledWith('agent:done', expect.objectContaining({ ...identity, completionStatus: 'blocked' }))
+    expect(AgentStreamTransport.streamCompletion).not.toHaveBeenCalled()
+    expect(fs.readFileSync(statePath, 'utf-8')).toBe('{broken')
+    expect(fs.readFileSync(trackerPath, 'utf-8')).toBe('Retained tracker')
+    expect(requestActiveAgentContextCompaction(identity)).toBe(false)
+    fs.writeFileSync(
+      statePath,
+      JSON.stringify({
+        sessionId,
+        workspacePath: tempDir,
+        agentMode: 'guided',
+        stepCount: 0,
+        maxSteps: 0,
+        episodes: [],
+        recentFullLogs: [],
+        planMilestones: [],
+        userTask: 'Review',
+        updatedAt: new Date().toISOString(),
+      }),
+    )
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValue({ content: 'Reviewed.', thinking: '', toolCalls: [] })
+    await expect(runAgentOrchestratorLoop(payload, window)).resolves.toMatchObject({ success: true })
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledOnce()
   })
 
   it('rejects a saved verified plan without check evidence before requesting another model turn', async () => {

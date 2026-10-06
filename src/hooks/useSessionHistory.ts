@@ -50,6 +50,11 @@ export function useSessionHistory(workspacePath: string | null) {
   const sessionsRef = useRef<CodingSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string>('')
   const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(true)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [saveFailed, setSaveFailed] = useState(false)
+  const [loadRevision, setLoadRevision] = useState(0)
+  const failedWritesRef = useRef<Map<string, CodingSession>>(new Map())
+  const loadedWorkspaceRef = useRef(workspacePath)
 
   const persistenceChainsRef = useRef<Map<string, Promise<void>>>(new Map())
   const pendingWritesRef = useRef<Map<string, { session: CodingSession; timer: ReturnType<typeof setTimeout> }>>(new Map())
@@ -67,10 +72,14 @@ export function useSessionHistory(workspacePath: string | null) {
     const previous = persistenceChainsRef.current.get(session.id) || Promise.resolve()
     const save = previous.then(async () => {
       try {
+        failedWritesRef.current.set(session.id, session)
         // IPC validates log entries as JSON; optional undefined fields are removed by the
         // same serialization used by the session history store on disk.
         const payload = JSON.parse(JSON.stringify(session)) as CodingSession
         const saved = await saveCodingSession(payload)
+        if (!saved) throw new Error('Session write was not acknowledged')
+        if (failedWritesRef.current.get(session.id) === session) failedWritesRef.current.delete(session.id)
+        setSaveFailed(failedWritesRef.current.size > 0)
         if (saved && saved.title !== session.title) {
           const current = sessionsRef.current
           sessionsRef.current = current.map((item) => (item.id === saved.id ? { ...item, title: saved.title } : item))
@@ -79,6 +88,7 @@ export function useSessionHistory(workspacePath: string | null) {
         return saved
       } catch (err: unknown) {
         logger.warn('useSessionHistory', `Could not persist session ${session.id}: ${errorMessage(err)}`)
+        setSaveFailed(true)
         return null
       }
     })
@@ -112,6 +122,14 @@ export function useSessionHistory(workspacePath: string | null) {
     [schedulePersist],
   )
 
+  const retryStorage = useCallback(async () => {
+    await flushPendingWrites()
+    for (const session of Array.from(failedWritesRef.current.values())) {
+      if (!(await schedulePersist(session))) return
+    }
+    setLoadRevision((revision) => revision + 1)
+  }, [flushPendingWrites, schedulePersist])
+
   // Unmount (workspace view closed, window reload) must not drop the last debounced write.
   useEffect(() => () => void flushPendingWrites(), [flushPendingWrites])
 
@@ -135,6 +153,12 @@ export function useSessionHistory(workspacePath: string | null) {
 
     const loadSessions = async () => {
       setIsLoadingSessions(true)
+      if (loadedWorkspaceRef.current !== workspacePath) {
+        loadedWorkspaceRef.current = workspacePath
+        sessionsRef.current = []
+        setSessions([])
+        setActiveSessionId('')
+      }
       await flushPendingWrites()
 
       let stored: CodingSession[] = []
@@ -143,9 +167,15 @@ export function useSessionHistory(workspacePath: string | null) {
           stored = (await window.electronAPI.listCodingSessions({ workspacePath })) || []
         } catch (err: unknown) {
           logger.warn('useSessionHistory', `Could not load session history: ${errorMessage(err)}`)
+          if (!cancelled) {
+            setLoadFailed(true)
+            setIsLoadingSessions(false)
+          }
+          return
         }
       }
       if (cancelled) return
+      setLoadFailed(false)
 
       if (stored.length === 0) {
         const workspaceKey = workspacePath || ''
@@ -167,7 +197,7 @@ export function useSessionHistory(workspacePath: string | null) {
     return () => {
       cancelled = true
     }
-  }, [workspacePath, flushPendingWrites, schedulePersist])
+  }, [workspacePath, flushPendingWrites, schedulePersist, loadRevision])
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0] || null
 
@@ -198,7 +228,10 @@ export function useSessionHistory(workspacePath: string | null) {
       await flushPendingWrites()
       if (window.electronAPI?.deleteCodingSession) {
         try {
-          await window.electronAPI.deleteCodingSession({ sessionId, workspacePath })
+          if (await window.electronAPI.deleteCodingSession({ sessionId, workspacePath })) {
+            failedWritesRef.current.delete(sessionId)
+            setSaveFailed(failedWritesRef.current.size > 0)
+          }
         } catch (err: unknown) {
           logger.warn('useSessionHistory', `Could not delete session ${sessionId}: ${errorMessage(err)}`)
         }
@@ -231,7 +264,10 @@ export function useSessionHistory(workspacePath: string | null) {
     await flushPendingWrites()
     if (window.electronAPI?.clearCodingSessions) {
       try {
-        await window.electronAPI.clearCodingSessions({ workspacePath })
+        if (await window.electronAPI.clearCodingSessions({ workspacePath })) {
+          for (const [id, session] of failedWritesRef.current) if (session.workspacePath === workspacePath) failedWritesRef.current.delete(id)
+          setSaveFailed(failedWritesRef.current.size > 0)
+        }
       } catch (err: unknown) {
         logger.warn('useSessionHistory', `Could not clear session history: ${errorMessage(err)}`)
       }
@@ -248,6 +284,8 @@ export function useSessionHistory(workspacePath: string | null) {
     (targetWorkspacePath: string | null) => {
       const targetKey = targetWorkspacePath || ''
       bootstrapSessionsRef.current.delete(targetKey)
+      for (const [id, session] of failedWritesRef.current) if (session.workspacePath === targetWorkspacePath) failedWritesRef.current.delete(id)
+      setSaveFailed(failedWritesRef.current.size > 0)
 
       if (workspacePath === targetWorkspacePath) {
         sessionsRef.current = []
@@ -394,6 +432,8 @@ export function useSessionHistory(workspacePath: string | null) {
     activeSession,
     activeSessionId,
     isLoadingSessions,
+    storageFailed: loadFailed || saveFailed,
+    retryStorage,
     createSession,
     switchSession,
     deleteSession,

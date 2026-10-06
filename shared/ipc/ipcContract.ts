@@ -418,6 +418,8 @@ export type OllamaStreamRequest = Omit<IpcPayload<'ollama:generate-stream'>, 'op
 
 export type IElectronAPI = InvokeMethods &
   EventMethods & {
+    /** Resolves disk-backed DOM Files locally in Preload. */
+    resolveNativeFilePath: (payload: { file: File }) => string
     /** Streams one generation; chunks and completion are matched to this call by its operation id. */
     generateOllamaStream: (request: OllamaStreamRequest, onChunk: (chunk: string) => void, onDone?: () => void) => Promise<IpcResult<'ollama:generate-stream'>>
     respondAgentSkillInstall: (response: IpcSendContract['agent:skill-install-response']) => void

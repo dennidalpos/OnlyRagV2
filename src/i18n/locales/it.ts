@@ -246,6 +246,9 @@ export const it = {
     autoHubOnTitle: 'Auto-Discovery Skill: ATTIVA (clicca per disattivare)',
     autoHubOffTitle: 'Auto-Discovery Skill: DISATTIVA (clicca per attivare)',
     historyTitle: 'Storico Prompt Progetto',
+    storageFailed:
+      'Impossibile leggere o salvare sessioni o progetti. Un archivio illeggibile non viene sostituito. Le modifiche alle sessioni restano in memoria: tieni aperta questa vista e riprova.',
+    storageRetry: 'Riprova archiviazione',
     historyEmpty: 'Nessuna sessione registrata per questo progetto.',
     historyClear: 'Svuota storico progetto',
     historyClearConfirm: 'Eliminare lo storico del progetto? Sessioni e piani andranno persi.',
@@ -532,6 +535,7 @@ export const it = {
     categoryTabular: 'Dati Tabellari / Strutturati',
     categorySource: 'File Testo / Codice Sorgente',
     selectFileTitle: 'Seleziona Documento per Ingestion & OCR',
+    fileWithoutDiskPath: 'Questo file non ha un percorso locale su disco. Seleziona un file salvato sul dispositivo.',
     supportedDocuments: 'Documenti Supportati',
     allFiles: 'Tutti i file',
     saveSuccess: 'Modifiche salvate e vettori LanceDB ri-indicizzati con successo!',

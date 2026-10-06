@@ -380,6 +380,29 @@ describe('usePlanApproval interview and error flow', () => {
     expect(onPersistPlan).toHaveBeenNthCalledWith(2, expect.objectContaining({ status: 'ready' }))
   })
 
+  it('keeps approval retryable and surfaces an unreadable retained state', async () => {
+    const message = 'Agent session state is unreadable; original data is preserved. Retry after recovery.'
+    const agentPlanSeed = vi.fn().mockRejectedValueOnce(new Error(message)).mockResolvedValue(true)
+    installElectronApi({
+      agentPlanInterview: vi.fn().mockResolvedValue({ status: 'ready', hasQuestions: false, questions: [] }),
+      agentPlanGenerate: vi.fn().mockResolvedValue(planResult([{ id: 'm-1', title: 'Task', filePaths: ['src/task.ts'], status: 'pending' }])),
+      agentPlanSeed,
+    })
+    await act(async () => {
+      await currentHook.startPlanFlow('Task')
+    })
+    await act(async () => {
+      await currentHook.handleApprovePlan()
+    })
+    expect(onPlanApproved).not.toHaveBeenCalled()
+    expect(currentHook.currentPlan).toMatchObject({ status: 'ready', approvalError: message })
+    expect(currentHook.isApprovingPlan).toBe(false)
+    await act(async () => {
+      await currentHook.handleApprovePlan()
+    })
+    expect(onPlanApproved).toHaveBeenCalledOnce()
+  })
+
   it('deduplicates approval callbacks while persistence is in flight', async () => {
     let releaseSave!: (value: boolean) => void
     onPersistPlan = vi.fn(

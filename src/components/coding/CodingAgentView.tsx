@@ -168,6 +168,14 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
           onOpenPermissionsModal={() => setIsPermissionsOpen(true)}
         />
 
+        {c.storageFailed && (
+          <div role="alert" className="flex items-center justify-between gap-3 border-b border-amber-600/50 bg-amber-950/40 px-3 py-2 text-xs text-amber-100">
+            <span>{t('coding.storageFailed')}</span>
+            <button type="button" onClick={c.retryStorage} className="shrink-0 rounded border border-amber-600 px-2 py-1 hover:bg-amber-950">
+              {t('coding.storageRetry')}
+            </button>
+          </div>
+        )}
         {/* Main Workspace Split Layout */}
         <div className="flex-1 flex overflow-hidden">
           {/* Full Workspace Explorer Sidebar */}

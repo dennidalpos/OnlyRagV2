@@ -60,6 +60,8 @@ Pianifica -> [interview -> plan -> approval] -> run in selected mode
 
 ## Sessione, identità e audit
 
+- Il caricamento dello stato agente restituisce assenza solo per file mancanti (`ENOENT`). JSON invalido, record incompleti, identità incoerenti o letture indisponibili bloccano seed, ripresa e scritture dipendenti conservando i dati originali. L'avvio segnala `blocked` prima di chiamare il modello e libera la run; l'approvazione resta riprovabile dopo il recupero dello storage. I seed legacy validi senza identità di run e la normalizzazione dei vecchi modi a Guided restano compatibili. Il debug bundle propaga l'errore invece di presentare una traiettoria vuota. Nessun ripristino automatico di checkpoint o nuovo formato persistito; [prove e limiti](./verification.md#agent-state-preservation--2026-10-06).
+
 - Le milestone operative avanzano nell'ordine del piano: una voce resta attiva fino alla verifica o all'abbandono, poi la run prosegue automaticamente con la successiva. Una scrittura o una verifica non attiva più voci insieme; la checklist mostra una sola voce "IN CORSO". L'E2E Electron del 2026-09-28 ripristina due voci `in_progress`, rifiuta la verifica anticipata della seconda e conferma che la seconda resta attiva dopo la verifica della prima; il server Ollama della fixture è simulato.
 - Ogni comando ed evento trasporta l'identità immutabile `{ runId, conversationId, planRevisionId, workspaceId }`. Il Renderer accetta solo eventi della run attiva.
 - Timeout e annullamento condividono un `AbortSignal`; la cancellazione blocca l'elaborazione di eventi successivi. Nessuno dei due annulla le modifiche: entrambi salvano il checkpoint e il timeout notifica la fine della run al Renderer.

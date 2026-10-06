@@ -27,6 +27,8 @@ export function useCodingAgent(settings?: AppSettings) {
 
   const {
     projects,
+    registryFailed,
+    retryRegistry,
     workspacePath,
     isStandaloneMode,
     handleSelectProject,
@@ -127,6 +129,11 @@ export function useCodingAgent(settings?: AppSettings) {
   })
 
   return {
+    storageFailed: registryFailed || history.storageFailed,
+    retryStorage: () => {
+      retryRegistry()
+      void history.retryStorage()
+    },
     // Execution
     agentMode: execution.agentMode,
     setAgentMode: execution.setAgentMode,

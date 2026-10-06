@@ -13,6 +13,18 @@ describe('ProjectRegistryRepository Unit Tests', () => {
     repo = new ProjectRegistryRepository(tempDir)
   })
 
+  it.each(['{broken', '{"version":99,"projects":[]}', '{"version":1}', '{"version":1,"projects":[{"path":"/kept","name":"Kept"},null]}'])(
+    'preserves unreadable or unsupported registry: %s',
+    async (raw) => {
+      const file = path.join(tempDir, 'project_registry.json')
+      fs.writeFileSync(file, raw)
+      await expect(repo.list()).rejects.toThrow()
+      await expect(repo.upsert('/new')).rejects.toThrow()
+      await expect(repo.remove('/kept')).rejects.toThrow()
+      expect(fs.readFileSync(file, 'utf8')).toBe(raw)
+    },
+  )
+
   afterEach(() => {
     try {
       fs.rmSync(tempDir, { recursive: true, force: true })
@@ -29,6 +41,15 @@ describe('ProjectRegistryRepository Unit Tests', () => {
     const listed = await repo.list()
     expect(listed).toHaveLength(1)
     expect(listed[0].path).toBe('/repo/a')
+  })
+
+  it('rejects duplicate retained paths before a mutation collapses them', async () => {
+    const retained = await repo.upsert('/duplicate')
+    const file = path.join(tempDir, 'project_registry.json')
+    const raw = JSON.stringify({ version: 1, projects: [retained, retained] })
+    fs.writeFileSync(file, raw)
+    await expect(repo.upsert('/new')).rejects.toThrow()
+    expect(fs.readFileSync(file, 'utf8')).toBe(raw)
   })
 
   it('should preserve addedAt across repeated upserts of the same project', async () => {

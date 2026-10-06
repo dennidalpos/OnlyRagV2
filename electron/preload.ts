@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import {
   IPC_EVENT_METHODS,
   IPC_INVOKE_METHODS,
@@ -28,6 +28,7 @@ const eventMethods = Object.fromEntries(
 const api = {
   ...invokeMethods,
   ...eventMethods,
+  resolveNativeFilePath: ({ file }) => webUtils.getPathForFile(file),
   generateOllamaStream: async (request, onChunk, onDone) => {
     const operationId = request.operationId || crypto.randomUUID()
     const unsubscribeChunk = subscribe('ollama:chunk', (event) => {

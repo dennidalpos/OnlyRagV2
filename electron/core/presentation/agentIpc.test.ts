@@ -226,6 +226,16 @@ describe('agent IPC session-state facade', () => {
     ).toThrow('Invalid IPC payload')
   })
 
+  it('propagates unreadable state through plan reads and seeding', async () => {
+    const error = new Error('Agent session state is unreadable; original data is preserved')
+    vi.mocked(agentSessionStateAppService.loadSessionState).mockRejectedValueOnce(error)
+    vi.mocked(agentSessionStateAppService.seedPlanMilestones).mockRejectedValueOnce(error)
+    await expect(handlers.get('agent:get-plan-state')?.(trustedEvent, { sessionId: 'retained', workspacePath: null })).rejects.toThrow(error.message)
+    await expect(handlers.get('agent:plan-seed')?.(trustedEvent, { sessionId: 'retained', workspacePath: null, planMilestones: [] })).rejects.toThrow(
+      error.message,
+    )
+  })
+
   it('returns null when no persisted session state exists and forwards plan seeding', async () => {
     vi.mocked(agentSessionStateAppService.loadSessionState).mockResolvedValue(null)
     vi.mocked(agentSessionStateAppService.seedPlanMilestones).mockResolvedValue(true)

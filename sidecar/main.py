@@ -254,7 +254,7 @@ async def delete_document(doc_id: str):
 
 @app.post("/vector/search", response_model=List[SearchResult], responses={500: {"description": "Database search failed"}})
 async def search_vector_db(req: SearchRequest):
-    logger.info(f"Performing LanceDB vector search for query: '{req.query}'")
+    logger.info("Performing LanceDB vector search (query_length=%s, top_k=%s)", len(req.query), req.top_k)
     return await asyncio.to_thread(perform_vector_search, req)
 
 @app.post("/history/index", response_model=SuccessResponse)

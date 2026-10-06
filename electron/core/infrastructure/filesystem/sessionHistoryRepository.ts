@@ -84,15 +84,29 @@ export class SessionHistoryRepository {
 
   private async readStoreAtDir(dir: string): Promise<CodingSession[]> {
     const filePath = this.historyFilePath(dir)
-    if (!fs.existsSync(filePath)) return []
     try {
       const raw = await fs.promises.readFile(filePath, 'utf-8')
       const parsed = JSON.parse(raw) as SessionHistoryStore
-      if (!parsed || !Array.isArray(parsed.sessions)) return []
-      return parsed.sessions.map((session) => normalizeSession(session)).filter((session): session is CodingSession => session !== null)
+      if (!parsed || (parsed.version !== undefined && parsed.version !== STORE_VERSION) || !Array.isArray(parsed.sessions)) {
+        throw new Error('Unsupported session history envelope')
+      }
+      const sessions = parsed.sessions.map((session) => {
+        const normalized = normalizeSession(session)
+        if (!normalized) throw new Error('Invalid retained session')
+        for (const key of ['actionLogs', 'executedPrompts', 'plans', 'promptQueue', 'pinnedFilePaths'] as const) {
+          const original = session[key]
+          if (original !== undefined && (!Array.isArray(original) || (original.length > 0 && original.length !== normalized[key]?.length))) {
+            throw new Error(`Unsupported retained session field: ${key}`)
+          }
+        }
+        return normalized
+      })
+      if (new Set(sessions.map((session) => session.id)).size !== sessions.length) throw new Error('Duplicate retained session identities')
+      return sessions
     } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') return []
       logger.log('WARN', 'SessionHistoryRepo', `Failed reading session history at ${filePath}: ${errorMessage(err)}`)
-      return []
+      throw new Error('Session history is unreadable; original data is preserved')
     }
   }
 
@@ -156,8 +170,9 @@ export class SessionHistoryRepository {
   public async deleteSession(sessionId: string, workspacePath?: string | null): Promise<boolean> {
     return this.runExclusive(async () => {
       let removedAny = false
-      for (const dir of this.getCandidateStorageDirs(workspacePath)) {
-        const sessions = await this.readStoreAtDir(dir)
+      const stores = []
+      for (const dir of this.getCandidateStorageDirs(workspacePath)) stores.push({ dir, sessions: await this.readStoreAtDir(dir) })
+      for (const { dir, sessions } of stores) {
         if (sessions.length === 0) continue
         const remaining = sessions.filter((session) => session.id !== sessionId)
         if (remaining.length === sessions.length) continue
@@ -171,17 +186,19 @@ export class SessionHistoryRepository {
   public async clearSessions(workspacePath?: string | null): Promise<boolean> {
     return this.runExclusive(async () => {
       const normalizedTarget = workspacePath ? path.normalize(workspacePath).toLowerCase() : null
+      const fallbackDir = this.getFallbackDir()
+      const fallbackSessions = await this.readStoreAtDir(fallbackDir)
+      const workspaceDir = workspacePath && fs.existsSync(workspacePath) ? path.dirname(workspaceMetadataHistoryPath(workspacePath)) : null
+      // Read every affected store before deleting from any of them.
+      if (workspaceDir) await this.readStoreAtDir(workspaceDir)
 
-      if (workspacePath && fs.existsSync(workspacePath)) {
-        const workspaceDir = path.dirname(workspaceMetadataHistoryPath(workspacePath))
+      if (workspaceDir) {
         if (fs.existsSync(workspaceDir)) {
           await this.writeStoreAtDir(workspaceDir, [])
         }
       }
 
-      const fallbackDir = this.getFallbackDir()
       if (fs.existsSync(fallbackDir)) {
-        const fallbackSessions = await this.readStoreAtDir(fallbackDir)
         if (fallbackSessions.length > 0) {
           const remaining = normalizedTarget
             ? fallbackSessions.filter((session) => (session.workspacePath ? path.normalize(session.workspacePath).toLowerCase() : null) !== normalizedTarget)

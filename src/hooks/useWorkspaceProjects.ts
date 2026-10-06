@@ -14,6 +14,9 @@ function deriveNameFromPath(pathStr: string): string {
 export function useWorkspaceProjects(settings?: AppSettings) {
   const startsStandalone = settings?.noWorkspaceMode || false
   const [projects, setProjects] = useState<WorkspaceProject[]>([])
+  const [registryFailed, setRegistryFailed] = useState(false)
+  const [loadRevision, setLoadRevision] = useState(0)
+  const retryRegistry = useCallback(() => setLoadRevision((revision) => revision + 1), [])
   const [workspacePath, setWorkspacePath] = useState<string | null>(() =>
     startsStandalone ? null : settings?.customWorkspacePath || localStorage.getItem(LAST_WORKSPACE_STORAGE_KEY) || null,
   )
@@ -26,16 +29,20 @@ export function useWorkspaceProjects(settings?: AppSettings) {
       if (!window.electronAPI?.listProjects) return
       try {
         const list = await window.electronAPI.listProjects()
-        if (!cancelled) setProjects(list)
+        if (!cancelled) {
+          setProjects(list)
+          setRegistryFailed(false)
+        }
       } catch (err: unknown) {
         logger.warn('useWorkspaceProjects', `Could not load project registry: ${errorMessage(err)}`)
+        if (!cancelled) setRegistryFailed(true)
       }
     }
     void loadProjects()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [loadRevision])
 
   const ensureStandaloneWorkspace = useCallback(async (): Promise<string | null> => {
     if (standaloneWorkspacePath) return standaloneWorkspacePath
@@ -106,6 +113,7 @@ export function useWorkspaceProjects(settings?: AppSettings) {
           }
         } catch (err: unknown) {
           logger.warn('useWorkspaceProjects', `Could not update project registry: ${errorMessage(err)}`)
+          setRegistryFailed(true)
         }
       })()
     },
@@ -129,6 +137,7 @@ export function useWorkspaceProjects(settings?: AppSettings) {
         await window.electronAPI.renameProject({ projectPath, name: cleanName })
       } catch (err: unknown) {
         logger.warn('useWorkspaceProjects', `Could not rename project in registry: ${errorMessage(err)}`)
+        setRegistryFailed(true)
       }
     }
   }, [])
@@ -149,6 +158,7 @@ export function useWorkspaceProjects(settings?: AppSettings) {
       if (window.electronAPI?.removeProjectFromRegistry) {
         window.electronAPI.removeProjectFromRegistry({ projectPath: pathStr }).catch((err: unknown) => {
           logger.warn('useWorkspaceProjects', `Could not remove project from registry: ${errorMessage(err)}`)
+          setRegistryFailed(true)
         })
       }
 
@@ -179,6 +189,8 @@ export function useWorkspaceProjects(settings?: AppSettings) {
   }, [handleSelectProject, isStandaloneMode])
 
   return {
+    registryFailed,
+    retryRegistry,
     projects,
     workspacePath,
     standaloneWorkspacePath,

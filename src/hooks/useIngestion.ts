@@ -545,7 +545,18 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   }
 
   const handleFileUpload = async (file: File) => {
-    const filePath = (file as File & { path?: string }).path || file.name
+    let filePath: string
+    try {
+      filePath = electronApi().resolveNativeFilePath({ file })
+    } catch (err) {
+      logger.error('IngestionView', normalizeError(err, 'Native File Path').message)
+      setUploadError(t('ingestion.fileWithoutDiskPath'))
+      return
+    }
+    if (!filePath) {
+      setUploadError(t('ingestion.fileWithoutDiskPath'))
+      return
+    }
     await handleIngestPath(filePath, file.name)
   }
 

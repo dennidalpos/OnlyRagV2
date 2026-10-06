@@ -4,10 +4,12 @@ import { IPC_EVENT_METHODS, IPC_INVOKE_METHODS, type IElectronAPI, type Unmapped
 const electronMock = vi.hoisted(() => ({
   api: null as IElectronAPI | null,
   invoke: vi.fn(),
+  getPathForFile: vi.fn(),
   listeners: new Map<string, Set<(...args: unknown[]) => void>>(),
 }))
 
 vi.mock('electron', () => ({
+  webUtils: { getPathForFile: electronMock.getPathForFile },
   contextBridge: {
     exposeInMainWorld: vi.fn((_name: string, api: IElectronAPI) => {
       electronMock.api = api
@@ -35,6 +37,7 @@ function emit(channel: string, payload: unknown) {
 describe('preload Ollama stream isolation', () => {
   beforeEach(() => {
     electronMock.invoke.mockReset()
+    electronMock.getPathForFile.mockReset()
     electronMock.listeners.clear()
   })
 
@@ -126,8 +129,33 @@ describe('preload Ollama stream isolation', () => {
     // Checked by the compiler: a channel declared in the contract without a method fails the typecheck.
     expectTypeOf<UnmappedIpcChannels['invoke']>().toEqualTypeOf<never>()
     expectTypeOf<UnmappedIpcChannels['event']>().toEqualTypeOf<never>()
-    for (const method of [...Object.keys(IPC_INVOKE_METHODS), ...Object.keys(IPC_EVENT_METHODS), 'generateOllamaStream', 'respondAgentSkillInstall']) {
+    for (const method of [
+      ...Object.keys(IPC_INVOKE_METHODS),
+      ...Object.keys(IPC_EVENT_METHODS),
+      'generateOllamaStream',
+      'respondAgentSkillInstall',
+      'resolveNativeFilePath',
+    ]) {
       expect(typeof electronMock.api![method as keyof IElectronAPI], method).toBe('function')
     }
+  })
+
+  it('resolves the exact File locally without sending it through IPC', () => {
+    const file = new File(['content'], 'report.md')
+    electronMock.getPathForFile.mockReturnValue('C:/selected/report.md')
+    expect(electronMock.api!.resolveNativeFilePath({ file })).toBe('C:/selected/report.md')
+    expect(electronMock.getPathForFile).toHaveBeenCalledWith(file)
+    expect(electronMock.invoke).not.toHaveBeenCalled()
+  })
+
+  it('preserves native empty-path results and invalid-File errors', () => {
+    const file = new File(['synthetic'], 'report.md')
+    electronMock.getPathForFile.mockReturnValue('')
+    expect(electronMock.api!.resolveNativeFilePath({ file })).toBe('')
+    electronMock.getPathForFile.mockImplementation(() => {
+      throw new TypeError('Expected a File')
+    })
+    expect(() => electronMock.api!.resolveNativeFilePath({ file: {} as File })).toThrow('Expected a File')
+    expect(electronMock.invoke).not.toHaveBeenCalled()
   })
 })

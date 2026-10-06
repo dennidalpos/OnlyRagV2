@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { z } from 'zod'
 import { workspaceMetadataSessionDirectory, workspaceMetadataStatePath, workspaceMetadataTrackerPath } from './workspaceMetadataDirectory'
 import path from 'node:path'
 import { logger } from '../logging/logger'
@@ -14,6 +15,7 @@ import type { RecoveryFailureState } from '../../domain/agent/recoveryBudget'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../../domain/agent/ollamaSessionRuntime'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 import type { AgentChatMessage } from '../http/agentStreamTransport'
+import { agentRunIdentitySchema, planMilestoneSchema } from '../../domain/agent/agentTaskContract'
 
 export type AgentSessionTerminationReason =
   | 'finish'
@@ -72,23 +74,152 @@ export interface SavedAgentSessionState {
   chatMessages?: AgentChatMessage[]
 }
 
-function normalizePersistedMode(raw: unknown): SavedAgentSessionState {
-  const record = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+const counter = z.number().int().nonnegative()
+const recoveryFailure = z.object({ signature: z.string(), equivalentFailures: counter, totalFailures: counter }).loose()
+const persistedMilestone = planMilestoneSchema
+  .extend({
+    verificationEvidence: z
+      .object({ command: z.string(), passed: z.literal(true), checkedAt: z.string(), workspaceVersion: z.string() })
+      .loose()
+      .optional(),
+  })
+  .loose()
+const savedStateSchema = z
+  .object({
+    version: z.never().optional(),
+    sessionId: z.string().min(1),
+    workspacePath: z.string().nullable(),
+    agentMode: z.string().optional(),
+    stepCount: counter,
+    maxSteps: counter,
+    episodes: z.array(
+      z
+        .object({ step: counter, tool: z.string(), status: z.enum(['SUCCESS', 'FAILURE', 'BLOCKED']), summary: z.string(), target: z.string().optional() })
+        .loose(),
+    ),
+    recentFullLogs: z.array(
+      z.object({ step: counter, tool: z.string(), output: z.string(), isFailure: z.boolean().optional(), target: z.string().optional() }).loose(),
+    ),
+    planMilestones: z.array(persistedMilestone),
+    pendingPlanMilestones: z.array(persistedMilestone).optional(),
+    pendingPlanUserTask: z.string().optional(),
+    pendingPlanRevisionId: z.string().optional(),
+    userTask: z.string(),
+    initialUserTask: z.string().optional(),
+    updatedAt: z.string().min(1),
+    runIdentity: agentRunIdentitySchema.optional(),
+    status: z.enum(['IN_PROGRESS', 'COMPLETED', 'FAILED']).optional(),
+    terminationReason: z
+      .enum([
+        'finish',
+        'step_budget',
+        'cancelled',
+        'timeout',
+        'circuit_breaker',
+        'verification_failed',
+        'model_silence',
+        'transport_error',
+        'runtime_validation',
+        'protocol_error',
+        'plan_proposal',
+      ])
+      .optional(),
+    completionStatus: z.enum(['verified', 'unverifiable', 'blocked', 'cancelled']).optional(),
+    executionPhase: z.enum(['collect_context', 'propose_action', 'apply_action', 'verify', 'outcome']).optional(),
+    recoveryFailures: z
+      .object({
+        schema: recoveryFailure.optional(),
+        execution: recoveryFailure.optional(),
+        versionConflictReadPath: z.string().optional(),
+        verificationFixCycles: counter.optional(),
+      })
+      .loose()
+      .optional(),
+    versionEvidence: z.record(z.string(), z.string()).optional(),
+    guardEvents: z.array(z.object({ guard: z.string(), action: z.enum(['advise', 'force_advance', 'stop']), step: counter }).loose()).optional(),
+    terminationGuard: z.string().optional(),
+    ollamaRuntimeProfile: z
+      .object({
+        model: z.string().min(1),
+        host: z.string(),
+        digest: z.string().optional(),
+        options: z.object({ num_ctx: counter.positive(), num_predict: counter.positive(), maxContextChars: counter.positive() }).loose(),
+      })
+      .loose()
+      .optional(),
+    ollamaGenerationTelemetry: z
+      .array(z.object({ step: counter, model: z.string(), numCtx: counter, startedAt: z.string(), wallDurationMs: z.number().nonnegative() }).loose())
+      .optional(),
+    lastVerification: z
+      .object({
+        status: z.enum(['verified', 'failed', 'unavailable']),
+        checkedAt: z.string(),
+        command: z.string().optional(),
+        evidenceLevel: z.enum(['structural', 'behavioral']).optional(),
+        detail: z.string().optional(),
+      })
+      .loose()
+      .optional(),
+    chatMessages: z
+      .array(
+        z
+          .object({
+            role: z.enum(['system', 'user', 'assistant', 'tool']),
+            content: z.string(),
+            thinking: z.string().optional(),
+            tool_name: z.string().optional(),
+            tool_calls: z
+              .array(
+                z
+                  .object({
+                    type: z.literal('function'),
+                    function: z.object({ index: counter, name: z.string(), arguments: z.record(z.string(), z.unknown()) }).loose(),
+                  })
+                  .loose(),
+              )
+              .optional(),
+          })
+          .loose(),
+      )
+      .optional(),
+  })
+  .loose()
+
+function decodeSessionState(raw: unknown, sessionId: string, workspacePath?: string | null): SavedAgentSessionState {
+  const result = savedStateSchema.safeParse(raw)
+  if (
+    !result.success ||
+    result.data.sessionId !== sessionId ||
+    (workspacePath && result.data.workspacePath !== workspacePath) ||
+    (result.data.runIdentity && result.data.runIdentity.conversationId !== sessionId)
+  ) {
+    throw new Error('Invalid retained agent session state')
+  }
+  // Validation must not strip retained fields or rewrite compatible legacy modes on read.
+  const record = raw as Record<string, unknown>
   const mode = record.agentMode
   const agentMode: AgentMode = mode === 'ask' || mode === 'guided' || mode === 'auto' ? mode : 'guided'
   return { ...record, agentMode } as SavedAgentSessionState
 }
 
 export class AgentSessionStateRepository {
-  private getStateFilePath(sessionId: string, workspacePath?: string | null): string {
-    if (workspacePath && fs.existsSync(workspacePath)) return workspaceMetadataStatePath(workspacePath, sessionId)
+  constructor(private readonly fallbackDir?: string) {}
+
+  private getFallbackStatePath(sessionId: string): string {
     const safeSessionId = sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')
-    return path.join(userDataSessionsDir(), `.agent_state_${safeSessionId}.json`)
+    return path.join(this.fallbackDir || userDataSessionsDir(), `.agent_state_${safeSessionId}.json`)
+  }
+
+  private getStateFilePath(sessionId: string, workspacePath?: string | null): string {
+    if (workspacePath && fs.statSync(workspacePath, { throwIfNoEntry: false })) return workspaceMetadataStatePath(workspacePath, sessionId)
+    return this.getFallbackStatePath(sessionId)
   }
 
   public async saveSessionState(state: SavedAgentSessionState): Promise<boolean> {
-    const filePath = this.getStateFilePath(state.sessionId, state.workspacePath)
     try {
+      decodeSessionState(state, state.sessionId, state.workspacePath)
+      await this.loadSessionState(state.sessionId, state.workspacePath)
+      const filePath = this.getStateFilePath(state.sessionId, state.workspacePath)
       const payload = JSON.stringify(state, null, 2)
       return await safeAtomicWrite(filePath, payload)
     } catch (err: unknown) {
@@ -103,6 +234,7 @@ export class AgentSessionStateRepository {
     try {
       const sessionId = tracker.getData().sessionId
       if (!sessionId) throw new Error('Session tracker has no owner')
+      await this.loadSessionState(sessionId, workspacePath)
       const trackerPath = workspaceMetadataTrackerPath(workspacePath, sessionId)
       await fs.promises.mkdir(path.dirname(trackerPath), { recursive: true })
       const markdown = tracker.compileTrackerMarkdown()
@@ -128,21 +260,27 @@ export class AgentSessionStateRepository {
   public async loadSessionState(sessionId: string, workspacePath?: string | null): Promise<SavedAgentSessionState | null> {
     try {
       const filePath = this.getStateFilePath(sessionId, workspacePath)
-      if (!fs.existsSync(filePath)) {
-        const fallbackPath = path.join(userDataSessionsDir(), `.agent_state_${sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`)
-        if (!fs.existsSync(fallbackPath)) return null
-        const rawFallback = await fs.promises.readFile(fallbackPath, 'utf-8')
-        return normalizePersistedMode(JSON.parse(rawFallback))
+      const fallbackPath = this.getFallbackStatePath(sessionId)
+      for (const candidate of new Set([filePath, fallbackPath])) {
+        let raw: string
+        try {
+          raw = await fs.promises.readFile(candidate, 'utf-8')
+        } catch (err: unknown) {
+          if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') continue
+          throw err
+        }
+        return decodeSessionState(JSON.parse(raw), sessionId, workspacePath)
       }
-      const raw = await fs.promises.readFile(filePath, 'utf-8')
-      return normalizePersistedMode(JSON.parse(raw))
-    } catch (err: unknown) {
-      logger.log('WARN', 'AgentSessionStateRepo', `Failed loading session state for ${sessionId}: ${errorMessage(err)}`)
       return null
+    } catch {
+      logger.log('WARN', 'AgentSessionStateRepo', 'Agent session state is unreadable; original data is preserved')
+      throw new Error(
+        'Agent session state is unreadable; original data is preserved. Make storage readable or recover the original from a verified backup, then retry.',
+      )
     }
   }
 
-  /** Seeds (or merges into existing) persisted session state with the user-approved plan milestones, so that runAgentOrchestratorLoop's restore-from-savedState path (see agentOrchestratorAppService.ts, `goalPlanner.loadMilestones(savedState.planMilestones)`) picks */
+  /** Keeps approved milestones separate from retained run state; unreadable state blocks seeding. */
   public async seedPlanMilestones(
     sessionId: string,
     workspacePath: string | null,
@@ -183,7 +321,7 @@ export class AgentSessionStateRepository {
       if (workspacePath && fs.existsSync(workspacePath)) {
         await fs.promises.rm(workspaceMetadataSessionDirectory(workspacePath, sessionId), { recursive: true, force: true })
       }
-      const fallbackPath = path.join(userDataSessionsDir(), `.agent_state_${sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`)
+      const fallbackPath = this.getFallbackStatePath(sessionId)
       if (fs.existsSync(fallbackPath) && (!workspacePath || JSON.parse(await fs.promises.readFile(fallbackPath, 'utf-8')).workspacePath === workspacePath)) {
         await fs.promises.unlink(fallbackPath)
       }
@@ -207,7 +345,7 @@ export class AgentSessionStateRepository {
           }
         }
       }
-      const fallbackDir = userDataSessionsDir()
+      const fallbackDir = this.fallbackDir || userDataSessionsDir()
       if (fs.existsSync(fallbackDir)) {
         for (const file of await fs.promises.readdir(fallbackDir)) {
           if (!file.startsWith('.agent_state_') || !file.endsWith('.json')) continue

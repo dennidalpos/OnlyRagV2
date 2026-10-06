@@ -212,16 +212,27 @@ export async function runAgentOrchestratorLoop(
   const isSessionActive = () => activeAgentSessions.get(runId) === session && !session.isCancelled
 
   // One-shot session setup: task/workspace/settings resolution, model warm-up, skill matching, state restore, and the persist/watchdog closures the turn loop shares below.
-  const boot = await bootstrapAgentSession({
-    payload,
-    session,
-    sessionId,
-    isSessionActive,
-    deregisterSession: () => {
-      agentToolExecutorService.closeBrowserRun(runId)
-      activeAgentSessions.delete(runId)
-    },
-  })
+  let boot: Awaited<ReturnType<typeof bootstrapAgentSession>>
+  try {
+    boot = await bootstrapAgentSession({
+      payload,
+      session,
+      sessionId,
+      isSessionActive,
+      deregisterSession: () => {
+        agentToolExecutorService.closeBrowserRun(runId)
+        if (activeAgentSessions.get(runId) === session) activeAgentSessions.delete(runId)
+      },
+    })
+  } catch (err: unknown) {
+    const summary = errorMessage(err)
+    if (isSessionActive() && rendererEvents?.isAvailable()) {
+      rendererEvents.send('agent:done', { ...identity, success: false, summary, completionStatus: 'blocked' })
+    }
+    session.abortController?.abort()
+    if (activeAgentSessions.get(runId) === session) activeAgentSessions.delete(runId)
+    return { success: false, summary, error: summary, completionStatus: 'blocked' }
+  }
   const {
     userTask,
     initialUserTask,

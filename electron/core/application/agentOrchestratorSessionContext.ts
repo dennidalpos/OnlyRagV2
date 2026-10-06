@@ -83,11 +83,11 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
 
   const attachedContext = buildAttachedContextBlock(payload)
   const pinnedFilesContextStr = buildPinnedFilesContextBlock(payload)
+  const savedState = await agentSessionStateRepository.loadSessionState(sessionId, workspacePath)
 
   const projectContextMapStr = workspacePath && !isStandaloneMode && documentIoRepository.exists(workspacePath) ? await scanProjectMap(workspacePath) : ''
 
   const availableModels = await ollamaAppService.getInstalledModels(settings.ollamaHost)
-  const savedState = await agentSessionStateRepository.loadSessionState(sessionId, workspacePath)
   const resumesRun = savedState?.status === 'IN_PROGRESS' && matchesAgentRunIdentity(savedState.runIdentity, session.identity)
   // Only the interrupted run itself keeps its pinned model and context window; a follow-up run in the
   // same conversation is a new run and takes the current settings (and measures its own speed).

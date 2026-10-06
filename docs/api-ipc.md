@@ -63,3 +63,18 @@ L'unico `send` Renderer→Main è `agent:skill-install-response`. I listener res
 ## Model/workload memory facts — 2026-10-02
 
 The approved existing `ollama:get-model-metrics` result adds optional `memoryGeometry` (bounded scalar architecture/layout/dimensions) and `runtimeAllocation` (observedAt, digest, totalBytes, gpuBytes, contextLength). Main validates scalar fields, same-digest binding and allocation splits; missing/malformed/offline facts remain unavailable. No new channel/request, REST field, saved setting or database schema. Consumers assess only the requested context, and fresh runtime evidence expires after 60 seconds. Geometry/cache/host uncertainty is explicit. [Policy and verification](./model-runtime-fit.md).
+
+## Native upload bridge — 2026-10-06
+
+The user approved and the implementation adds this local method to `IElectronAPI` in the shared contract:
+
+```ts
+resolveNativeFilePath: (payload: { file: File }) => string
+```
+
+- The method runs locally in Preload and calls `webUtils.getPathForFile(payload.file)`. It adds no IPC channel and sends no DOM `File` to Main. Non-`File` values throw; JavaScript files without disk backing return an empty string, as documented by Electron.
+- Drag/drop and HTML input pass the exact selected `File` to this method. `handleFileUpload` refuses an empty path with a visible error, removing both `File.path` and the basename fallback. Its existing `handleIngestPath` sends the resolved path through `ingest:file` with the current progress/cancellation ownership.
+- Native dialog uploads keep their existing absolute paths. Main still validates the current payload and filesystem access; a resolved disk path grants no additional permission. The local Renderer already receives native dialog paths; only the path needed by the existing ingestion flow is returned.
+- Verification: Preload delegation and DOM refusal/duplicate-basename regressions; [isolated real Electron](../scripts/e2e/ingestionNativePath.mjs) checks six HTML input/drop/native-dialog routes using two same-named sources, their actual content, synthetic/non-File refusal and existing Main schema/filesystem refusals. The OS chooser result is controlled and a loopback HTTP fixture reads the real source, then refuses indexing. Production Main handlers remain installed. This qualifies path identity, without model/Sidecar indexing or manual OS-picker interaction. [Evidence and command](./verification.md#native-ingestion-file-identity--2026-10-06).
+
+Official sources checked 2026-10-06: [Electron File.path removal](https://www.electronjs.org/docs/latest/breaking-changes#removed-filepath), [webUtils and Preload example](https://www.electronjs.org/docs/latest/api/web-utils).

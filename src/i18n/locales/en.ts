@@ -243,6 +243,9 @@ export const en: TranslationSchema = {
     autoHubOnTitle: 'Auto-Discovery Skill: ON (click to disable)',
     autoHubOffTitle: 'Auto-Discovery Skill: OFF (click to enable)',
     historyTitle: 'Project Prompt History',
+    storageFailed:
+      'Session or project data could not be read or saved. An unreadable archive is never replaced. Pending session changes remain in memory: keep this view open and retry.',
+    storageRetry: 'Retry storage',
     historyEmpty: 'No chat sessions recorded for this project.',
     historyClear: 'Clear project history',
     historyClearConfirm: 'Delete project session history? Sessions and plans will be lost.',
@@ -531,6 +534,7 @@ export const en: TranslationSchema = {
     saveFailed: 'Error while saving the document',
     cancelledByUser: 'Ingestion cancelled. Temporary files and partial task data were removed.',
     failedUnknown: 'Ingestion failed: unknown error from the Sidecar.',
+    fileWithoutDiskPath: 'This file has no local disk path. Select a file saved on this device.',
   },
   diagnostics: {
     title: 'System Diagnostics & Telemetry',

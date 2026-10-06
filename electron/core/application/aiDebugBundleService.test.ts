@@ -32,6 +32,11 @@ describe('AiDebugBundleService Unit Tests', () => {
     vi.clearAllMocks()
   })
 
+  it('refuses an unreadable state instead of reporting an empty successful trajectory', async () => {
+    vi.mocked(agentSessionStateRepository.loadSessionState).mockRejectedValueOnce(new Error('Agent session state is unreadable; original data is preserved'))
+    await expect(aiDebugBundleService.generateDebugBundle({ sessionId: 'retained' })).rejects.toThrow('original data is preserved')
+  })
+
   it('should generate a comprehensive AI-optimized markdown debug bundle', async () => {
     vi.mocked(agentSessionStateRepository.loadSessionState).mockResolvedValue({
       sessionId: 'session-123',

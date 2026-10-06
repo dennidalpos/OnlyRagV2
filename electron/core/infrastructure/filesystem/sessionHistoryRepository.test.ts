@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -28,9 +28,74 @@ describe('SessionHistoryRepository Unit Tests', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     try {
       fs.rmSync(tempDir, { recursive: true, force: true })
     } catch {}
+  })
+
+  it.each(['{broken', '{"version":99,"sessions":[]}', '{"version":1}', '{"version":1,"sessions":[{"id":"kept"},null]}'])(
+    'preserves unreadable or unsupported history: %s',
+    async (raw) => {
+      const repo = new SessionHistoryRepository(tempDir)
+      const file = path.join(tempDir, 'session_history.json')
+      fs.writeFileSync(file, raw)
+      await expect(repo.listSessions(null)).rejects.toThrow()
+      await expect(repo.saveSession(buildSession('new', null))).rejects.toThrow()
+      await expect(repo.clearSessions(null)).rejects.toThrow()
+      expect(fs.readFileSync(file, 'utf8')).toBe(raw)
+    },
+  )
+
+  it('refuses to silently discard malformed nested records during normalization', async () => {
+    const repo = new SessionHistoryRepository(tempDir)
+    const raw = JSON.stringify({ version: 1, sessions: [buildSession('kept', null, { plans: [{ id: 'unknown-plan' } as never] })] })
+    const file = path.join(tempDir, 'session_history.json')
+    fs.writeFileSync(file, raw)
+    await expect(repo.saveSession(buildSession('new', null))).rejects.toThrow()
+    expect(fs.readFileSync(file, 'utf8')).toBe(raw)
+  })
+
+  it('preserves inaccessible history and allows retry after the read failure resolves', async () => {
+    const repo = new SessionHistoryRepository(tempDir)
+    await repo.saveSession(buildSession('retained', null))
+    const file = path.join(tempDir, 'session_history.json')
+    const raw = fs.readFileSync(file, 'utf8')
+    vi.spyOn(fs.promises, 'readFile').mockRejectedValueOnce(Object.assign(new Error('Access denied'), { code: 'EACCES' }))
+    await expect(repo.saveSession(buildSession('new', null))).rejects.toThrow()
+    expect(fs.readFileSync(file, 'utf8')).toBe(raw)
+    await repo.saveSession(buildSession('new', null))
+    expect((await repo.listSessions(null)).map((item) => item.id)).toEqual(expect.arrayContaining(['retained', 'new']))
+  })
+
+  it('still reads versionless legacy sessions without rewriting on load', async () => {
+    const repo = new SessionHistoryRepository(tempDir)
+    const raw = JSON.stringify({ sessions: [{ id: 'legacy', actionLogs: [], title: 'Kept' }] })
+    const file = path.join(tempDir, 'session_history.json')
+    fs.writeFileSync(file, raw)
+    expect(await repo.listSessions(null)).toEqual([expect.objectContaining({ id: 'legacy', title: 'Kept' })])
+    expect(fs.readFileSync(file, 'utf8')).toBe(raw)
+  })
+
+  it.each(['delete', 'clear'])('validates all candidate stores before %s mutates any of them', async (operation) => {
+    const fallback = path.join(tempDir, 'fallback')
+    const repo = new SessionHistoryRepository(fallback)
+    await repo.saveSession(buildSession('retained', tempDir))
+    const workspaceFile = path.join(tempDir, '.onlyrag', 'sessions', 'history.json')
+    const raw = fs.readFileSync(workspaceFile, 'utf8')
+    fs.mkdirSync(fallback)
+    fs.writeFileSync(path.join(fallback, 'session_history.json'), '{broken')
+    await expect(operation === 'delete' ? repo.deleteSession('retained', tempDir) : repo.clearSessions(tempDir)).rejects.toThrow()
+    expect(fs.readFileSync(workspaceFile, 'utf8')).toBe(raw)
+  })
+
+  it('rejects duplicate retained identities before upsert collapses them', async () => {
+    const repo = new SessionHistoryRepository(tempDir)
+    const file = path.join(tempDir, 'session_history.json')
+    const raw = JSON.stringify({ version: 1, sessions: [buildSession('duplicate', null), buildSession('duplicate', null)] })
+    fs.writeFileSync(file, raw)
+    await expect(repo.saveSession(buildSession('duplicate', null))).rejects.toThrow()
+    expect(fs.readFileSync(file, 'utf8')).toBe(raw)
   })
 
   it('should save, list and delete sessions in the workspace store', async () => {

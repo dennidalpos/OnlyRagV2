@@ -1,4 +1,5 @@
 import os from 'node:os'
+import { z } from 'zod'
 import { CODING_MODEL_KEEP_ALIVE, HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import { resolveModelSamplingOverrides } from '../../../shared/domain/agent/ollamaSamplingOptions'
@@ -28,6 +29,7 @@ import { reviewPlanRequestCoverage } from './planRequestCoverage'
 import { draftRequestLedger } from './requestCoverageLedgerDraft'
 import {
   requestCoverageLedgerSchema,
+  planCoverageClaimSchema,
   validateRequestLedger,
   type RequestCoverageLedger,
   type CoverageEvidence,
@@ -47,6 +49,9 @@ Executable verification commands already exist and may be used in verificationCo
 Never add analysis or inspection as interventions. Never invent verification commands or project infrastructure.
 Carry each pending prior intervention through sourceInterventionId or list it in supersededWork with a reason.
 The human-confirmed coverage ledger is immutable. Return coverageClaims for every actionable obligation. Evidence IDs are 1-based across intervention acceptance criteria in response order, followed by retainedEvidence in input order. Each claim names its evidenceId, obligationId, exact confirmed subject, global/local scope, targets and exact conditions. Local examples cannot satisfy open global obligations. Statements must explicitly undertake the claimed behavior and scope; a declaration alone cannot supply omitted wording.
+Assign evidence IDs by counting every individual acceptance criterion across interventions in response order, then retainedEvidence in input order; intervention positions are not evidence IDs. Each claim must reference a statement that explicitly supports its own complete obligation, rather than another requirement in the same file.
+closedInventory means the named target list is complete, not that its work is completed. Every actionable obligation needs a planned acceptance criterion or supplied verified retained evidence; assumptions and user choices do not prove existing implementation.
+Preserve preparation-only and deferred-integration scope: do not turn preparation into implementation, replace existing integrations, or invent existing project state.
 Use the request language.`
 
 export interface PlanGenerationRequest {
@@ -58,6 +63,27 @@ export interface PlanGenerationRequest {
   previousPlan?: AgentPlan
   workspacePath?: string | null
   previousDecisions?: UserInterviewAnswer[]
+}
+
+function candidateResponseSchema(ledger?: RequestCoverageLedger) {
+  const obligations = ledger?.obligations.filter((item) => item.scope !== 'context') || []
+  if (!obligations.length) return planningPhaseResponseSchema
+  // Bind confirmed metadata on the wire; native guards still assess references and meaning.
+  const variants = obligations.map((item) =>
+    planCoverageClaimSchema.extend({
+      obligationId: z.literal(item.id),
+      subject: z.literal(item.subject),
+      conditions: item.conditions.length
+        ? z.array(z.literal(item.conditions as [string, ...string[]])).length(item.conditions.length)
+        : planCoverageClaimSchema.shape.conditions.length(0),
+    }),
+  )
+  return planningPhaseResponseSchema.extend({
+    coverageClaims: z
+      .array(z.discriminatedUnion('obligationId', [variants[0], ...variants.slice(1)]))
+      .min(1)
+      .max(300),
+  })
 }
 
 function decisionsFromAnswers(answers: readonly UserInterviewAnswer[]): PlanDecision[] {
@@ -288,7 +314,7 @@ export class PlanGenerationAppService {
         model,
         systemPrompt: PLAN_SYSTEM_PROMPT,
         userContent,
-        format: toOllamaJsonSchema(planningPhaseResponseSchema),
+        format: toOllamaJsonSchema(candidateResponseSchema(confirmedCoverage)),
         think: resolveStructuredThinkValue(resolveOllamaThinkingPreference(model, req.settings, modelMetrics)),
         host: req.settings.ollamaHost,
         keepAlive: CODING_MODEL_KEEP_ALIVE,

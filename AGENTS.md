@@ -1,13 +1,13 @@
 # AGENTS.md
 
-`v1.55 · 2026-10-10` — Quirks.
+`v1.56 · 2026-10-10` — Quirks.
 
 - `master` only; no branches. Commit/push only on request.
 - Diagnosis: 10 informed attempts override two-failure stop; keep guards/timeouts/retries.
 - Local Ollama/Sidecar only; keep filesystem gates/checkpoints/budgets/loop/OOM guards.
 - npm 11 keeps `libc`; Electron needs `node node_modules/electron/install.js` after `npm ci`.
 - IPC: `shared/ipc/ipcContract.ts`; ports need boundaries or two implementations.
-- Planning needs explicit request-ledger confirmation before candidates; no legacy-state rewrite.
+- Planning: confirm ledger before candidates; bind review references. Live budgets are explicit; pin runtime/digest, retain spent markers. No legacy rewrite.
 - Files: Preload resolves paths; refuse empty paths/basename fallbacks.
 - Chunks: native/versioned spaces; raw prompt history. Rebuild CLI needs explicit root/model; no personal migration.
 - Vision/normalization share `numCtx`; insufficient context keeps originals unindexed.

@@ -24,6 +24,8 @@ Earlier failed/imperfect runs are retained in the sibling evidence directories e
 
 ## Verification and remaining limits
 
+Current follow-up, 2026-10-10: the user approved one unchanged four-document synthetic desktop evaluation on installed qwen3.5:9b digest `c97eb11d`, Ollama 0.40.2, context 8192, thinking false. All four exports complete; independent source/output review still accepts **2/4**, reproducing the unsupported written-objection qualifier and the DOCX noun label in place of a return instruction. Postal receipt expansion and storage conditions pass their frozen scope. The campaign, exact hashes, complete clause review and failed acceptance gate are retained; [current runtime result](./verification.md#translation-runtime-resume-decision--2026-10-10). This does not overwrite the historical findings below or qualify broader OCR/languages, DOCX visual layout or arbitrary legal semantics. No further campaign or prompt variant is approved by this result.
+
 Before the fidelity edits, the full Sidecar baseline passed 155 tests. After the changes:
 
 - `.venv\Scripts\python.exe -X utf8 -m pytest -q`: **176 passed in 18.33s**.

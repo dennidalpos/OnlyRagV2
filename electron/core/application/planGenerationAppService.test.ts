@@ -10,6 +10,10 @@ import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import * as planCompilation from '../../../shared/domain/agent/planCompilation'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 import { reviewPlanRequestCoverage } from './planRequestCoverage'
+import { z } from 'zod'
+import { draftRequestLedger } from './requestCoverageLedgerDraft'
+import { requestCoverageLedgerSchema, validateCoverageClaims } from '../../../shared/domain/agent/requestCoverageLedger'
+import { planningPhaseResponseSchema } from '../domain/agent/ollamaStructuredResponse'
 
 vi.mock('./planRequestCoverage', () => ({
   reviewPlanRequestCoverage: vi.fn(),
@@ -209,6 +213,164 @@ describe('PlanGenerationAppService', () => {
     expect(result.error).toContain('Operation cancelled')
     expect(ollamaAppService.generateStructured).toHaveBeenCalledOnce()
     expect(reviewPlanRequestCoverage).not.toHaveBeenCalled()
+  })
+
+  it('constrains extraction targets on the actual wire while retaining every original reference', async () => {
+    const references = JSON.parse(fs.readFileSync('scripts/live/fixtures/requestCoverageCases.json', 'utf8')).cases
+    const ledger = references[0].ledger
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({ status: 'complete', content: JSON.stringify(ledger) })
+    await draftRequestLedger({ model: 'local', systemPrompt: '', userContent: '', format: {} }, ledger.request, [])
+    const wire = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].format
+    const decoder = z.fromJSONSchema(wire as z.core.JSONSchema.JSONSchema)
+    for (const reference of references) expect(decoder.safeParse(reference.ledger).success).toBe(true)
+    const obligation = ledger.obligations[0]
+    for (const scope of ['local', 'global', 'context']) {
+      for (const closedInventory of [false, true]) {
+        const empty = { ...ledger, obligations: [{ ...obligation, scope, closedInventory, targets: [] }] }
+        expect(requestCoverageLedgerSchema.safeParse(empty).success).toBe(true)
+        expect(decoder.safeParse(empty).success).toBe(scope === 'context' || (scope === 'global' && !closedInventory))
+        expect(decoder.safeParse({ ...empty, obligations: [{ ...empty.obligations[0], targets: ['named member'] }] }).success).toBe(true)
+      }
+    }
+    expect(ollamaAppService.generateStructured).toHaveBeenCalledOnce()
+    expect(reviewPlanRequestCoverage).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { scope: 'local', closedInventory: false, error: 'Local obligation needs explicit targets: r1' },
+    { scope: 'global', closedInventory: true, error: 'Closed inventory needs explicit targets: r1' },
+  ])('retains native diagnostics when extraction violates $scope target constraints', async ({ scope, closedInventory, error }) => {
+    const ledger = {
+      request: 'Task',
+      obligations: [{ id: 'r1', sourceLines: [1], requirement: 'Task', subject: 'members', scope, targets: [], closedInventory, conditions: [] }],
+    }
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({ status: 'complete', content: JSON.stringify(ledger) })
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })
+    expect(result).toMatchObject({ status: 'error', error, milestones: [] })
+    expect(ollamaAppService.generateStructured).toHaveBeenCalledOnce()
+    expect(reviewPlanRequestCoverage).not.toHaveBeenCalled()
+  })
+
+  it('preserves all eight frozen claim sets on the actual candidate wire without certifying their semantics', async () => {
+    const references = JSON.parse(fs.readFileSync('scripts/live/fixtures/requestCoverageCases.json', 'utf8')).cases
+    for (const reference of references) {
+      vi.mocked(ollamaAppService.generateStructured).mockClear()
+      const response = complete([intervention('m1', 'Fixture behavior')], { coverageClaims: reference.claims })
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(response)
+      await planGenerationAppService.generatePlanText({ prompt: reference.ledger.request, confirmedCoverage: reference.ledger, settings })
+      const wire = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].format
+      expect(z.fromJSONSchema(wire as z.core.JSONSchema.JSONSchema).safeParse(JSON.parse(response.content)).success).toBe(true)
+      expect(ollamaAppService.generateStructured).toHaveBeenCalledOnce()
+    }
+  })
+
+  it('binds actionable claim metadata while preserving condition ordering, scope flexibility and native checks', async () => {
+    const ledger = {
+      request: 'Task',
+      obligations: [
+        {
+          id: 'a',
+          sourceLines: [1],
+          requirement: 'Task',
+          subject: 'exports',
+          scope: 'global' as const,
+          targets: ['CSV', 'JSON'],
+          closedInventory: true,
+          conditions: [],
+        },
+        {
+          id: 'b',
+          sourceLines: [1],
+          requirement: 'Task',
+          subject: 'CSV export',
+          scope: 'local' as const,
+          targets: ['CSV'],
+          closedInventory: true,
+          conditions: ['CSV requested', 'permission granted'],
+        },
+        {
+          id: 'context',
+          sourceLines: [1],
+          requirement: 'Background',
+          subject: 'background',
+          scope: 'context' as const,
+          targets: [],
+          closedInventory: false,
+          conditions: [],
+        },
+      ],
+    }
+    const claims = [
+      { evidenceId: 1, obligationId: 'a', subject: 'exports', scope: 'local', targets: ['CSV', 'JSON'], conditions: [] },
+      {
+        evidenceId: 1,
+        obligationId: 'b',
+        subject: 'CSV export',
+        scope: 'global',
+        targets: ['CSV', 'additional planned member'],
+        conditions: ['permission granted', 'CSV requested'],
+      },
+    ]
+    const response = complete([intervention('m1', 'Fixture behavior')], { coverageClaims: claims })
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(response)
+    await planGenerationAppService.generatePlanText({ prompt: ledger.request, confirmedCoverage: ledger, settings })
+    const decoder = z.fromJSONSchema(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].format as z.core.JSONSchema.JSONSchema)
+    const plan = JSON.parse(response.content)
+    expect(decoder.safeParse(plan).success).toBe(true)
+    for (const change of [{ obligationId: 'unknown' }, { obligationId: 'context' }, { subject: 'export properties' }, { conditions: ['invented trigger'] }]) {
+      const changed = { ...plan, coverageClaims: [{ ...claims[0], ...change }, claims[1]] }
+      expect(planningPhaseResponseSchema.safeParse(changed).success).toBe(true)
+      expect(decoder.safeParse(changed).success).toBe(false)
+    }
+    const omittedCondition = { ...plan, coverageClaims: [claims[0], { ...claims[1], conditions: ['CSV requested'] }] }
+    expect(decoder.safeParse(omittedCondition).success).toBe(false)
+    const duplicateConditions = [claims[0], { ...claims[1], conditions: ['CSV requested', 'CSV requested'] }]
+    expect(validateCoverageClaims(ledger, [{ id: 1, source: 'planned', interventionId: 'm1', statement: 'Fixture behavior' }], duplicateConditions)).toContain(
+      'Invalid plan coverage claims',
+    )
+    const unavailableEvidence = [claims[0], { ...claims[1], evidenceId: 999 }]
+    expect(decoder.safeParse({ ...plan, coverageClaims: unavailableEvidence }).success).toBe(true)
+    expect(validateCoverageClaims(ledger, [{ id: 1, source: 'planned', interventionId: 'm1', statement: 'Fixture behavior' }], unavailableEvidence)).toBe(
+      'Unavailable coverage reference: b/999',
+    )
+  })
+
+  it('keeps the native two-candidate diagnostic when transport violates the private claim bindings', async () => {
+    const claim = { evidenceId: 1, obligationId: 'r-1', subject: 'requested behavior', scope: 'global', targets: [], conditions: ['invented trigger'] }
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('m1', 'Task')], { coverageClaims: [claim] }))
+    vi.mocked(reviewPlanRequestCoverage).mockImplementation(async (_request, ledger, evidence, claims) => validateCoverageClaims(ledger, evidence, claims))
+    const result = await generateConfirmed({ prompt: 'Task', settings })
+    expect(result).toMatchObject({ status: 'error', milestones: [] })
+    expect(result.error).toContain('Coverage conditions differ: r-1')
+    expect(ollamaAppService.generateStructured).toHaveBeenCalledTimes(2)
+    expect(reviewPlanRequestCoverage).toHaveBeenCalledTimes(2)
+  })
+
+  it('preserves the native no-actionable-obligation path instead of constructing an empty schema union', async () => {
+    const ledger = {
+      request: 'Background',
+      obligations: [
+        {
+          id: 'context',
+          sourceLines: [1],
+          requirement: 'Background',
+          subject: 'context',
+          scope: 'context' as const,
+          targets: [],
+          closedInventory: false,
+          conditions: [],
+        },
+      ],
+    }
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('m1', 'Background')]))
+    vi.mocked(reviewPlanRequestCoverage).mockResolvedValue('Request ledger contains no actionable obligations')
+    const result = await planGenerationAppService.generatePlanText({ prompt: ledger.request, confirmedCoverage: ledger, settings })
+    expect(result.error).toContain('Request ledger contains no actionable obligations')
+    expect(ollamaAppService.generateStructured).toHaveBeenCalledTimes(2)
+    const wire = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].format
+    expect(z.fromJSONSchema(wire as z.core.JSONSchema.JSONSchema).safeParse(JSON.parse(complete([intervention('m1', 'Background')]).content)).success).toBe(
+      true,
+    )
   })
 
   it('returns a canonical structured plan', async () => {

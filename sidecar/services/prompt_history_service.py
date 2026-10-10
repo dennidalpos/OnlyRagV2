@@ -90,8 +90,8 @@ def _search_prompt_index(req: PromptHistorySearchRequest, query_vec: List[float]
     scored = []
     for item in raw_results:
         distance = max(float(item.get("_distance", 0.0)), 0.0)
-        # Legacy ranking; geometry correction belongs to HISTORY-EMBEDDING-CORRECTNESS-01.
-        score = max(0.0, 1.0 - (distance ** 2) / 2.0)
+        # LanceDB L2 is already squared; unit vectors give cosine = 1 - distance / 2.
+        score = max(0.0, 1.0 - distance / 2.0)
         scored.append((score, item))
     scored.sort(key=lambda pair: pair[0], reverse=True)
 

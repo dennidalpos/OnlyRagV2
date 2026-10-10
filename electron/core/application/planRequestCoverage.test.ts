@@ -101,6 +101,36 @@ describe('confirmed request and deterministic claim gates', () => {
   })
 })
 describe('semantic review preserves confirmed scope and budget', () => {
+  it('binds the wire schema to each obligation and its assigned evidence', async () => {
+    const item = cases[7]
+    respond(
+      item.ledger.obligations.map((obligation) => ({
+        ...covered,
+        obligationId: obligation.id,
+        evidence: item.claims.filter((claim) => claim.obligationId === obligation.id).map((claim) => claim.evidenceId),
+      })),
+    )
+    expect(await reviewPlanRequestCoverage(request, item.ledger, item.evidence, item.claims, item.decisions)).toBeUndefined()
+    const format = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].format as {
+      properties: { requirements: { minItems: number; maxItems: number; items: { oneOf: Array<{ properties: Record<string, unknown> }> } } }
+    }
+    const requirements = format.properties.requirements
+    expect(requirements.minItems).toBe(item.ledger.obligations.length)
+    expect(requirements.maxItems).toBe(item.ledger.obligations.length)
+    expect(requirements.items.oneOf.map((variant) => variant.properties)).toEqual(
+      item.ledger.obligations.map((obligation) => ({
+        obligationId: { type: 'string', const: obligation.id },
+        reason: { type: 'string', minLength: 1, maxLength: 240 },
+        evidence: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 1,
+          items: { type: 'number', const: item.claims.find((claim) => claim.obligationId === obligation.id)?.evidenceId },
+        },
+        status: { type: 'string', enum: ['covered', 'missing', 'contradicted'] },
+      })),
+    )
+  })
   it('passes original statements and exact confirmed ledger while preserving thinking sampling', async () => {
     respond([covered])
     expect(await review()).toBeUndefined()
@@ -123,6 +153,7 @@ describe('semantic review preserves confirmed scope and budget', () => {
     [[{ ...covered, obligationId: 'unknown' }], 'reference'],
     [[covered, covered], 'reference'],
     [[{ ...covered, evidence: [19] }], 'unassigned'],
+    [[{ ...covered, evidence: [1, 1] }], 'duplicate coverage evidence'],
     [[{ ...covered, status: 'context' }], 'Invalid'],
     [[{ ...covered, evidence: [] }], 'Invalid'],
     [[{ ...covered, status: 'missing' }], 'coverage failed'],
@@ -136,6 +167,32 @@ describe('semantic review preserves confirmed scope and budget', () => {
     respond([covered])
     const item = cases[7]
     expect(await reviewPlanRequestCoverage(request, item.ledger, item.evidence, item.claims, item.decisions)).toContain('omitted obligations')
+  })
+  it("refuses another obligation's existing evidence and duplicate identities at the exact result count", async () => {
+    const item = cases[7]
+    const requirements = item.ledger.obligations.map((obligation) => ({
+      ...covered,
+      obligationId: obligation.id,
+      evidence: item.claims.filter((claim) => claim.obligationId === obligation.id).map((claim) => claim.evidenceId),
+    }))
+    respond(requirements.map((result, index) => (index === 0 ? { ...result, evidence: requirements[1].evidence } : result)))
+    expect(await reviewPlanRequestCoverage(request, item.ledger, item.evidence, item.claims)).toContain('unassigned evidence')
+    respond(requirements.map((result, index) => (index === 1 ? requirements[0] : result)))
+    expect(await reviewPlanRequestCoverage(request, item.ledger, item.evidence, item.claims)).toContain('Invalid coverage obligation reference')
+  })
+  it('bounds multiple assigned evidence values without permitting an unrelated ID', async () => {
+    const item = cases[3]
+    respond([{ ...covered, evidence: item.claims.map((claim) => claim.evidenceId) }])
+    expect(await reviewPlanRequestCoverage(request, item.ledger, item.evidence, item.claims)).toBeUndefined()
+    const format = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].format as {
+      properties: { requirements: { items: { oneOf: Array<{ properties: { evidence: unknown } }> } } }
+    }
+    expect(format.properties.requirements.items.oneOf[0].properties.evidence).toEqual({
+      type: 'array',
+      minItems: 1,
+      maxItems: 2,
+      items: { type: 'number', enum: [1, 2] },
+    })
   })
   it.each(['transport_error', 'incomplete'] as const)('returns truthful %s without retry', async (status) => {
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({

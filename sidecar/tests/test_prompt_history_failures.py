@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
+import math
 
 import pytest
 from fastapi.testclient import TestClient
@@ -86,3 +87,23 @@ def test_recovery_started_during_embedding_blocks_search_readback(monkeypatch):
         with TestClient(main.app, raise_server_exceptions=False) as client:
             response = client.post("/history/search", json={"query": "retained"})
         assert response.status_code == 500
+
+
+@pytest.mark.parametrize("cosine, expected_score", [(1.0, 1.0), (0.75, 0.75), (0.0, 0.0), (-1.0, 0.0)])
+def test_history_score_uses_native_squared_l2(monkeypatch, cosine, expected_score):
+    project = "C:/synthetic/selected"
+    db.append_records(PROMPT_HISTORY_TABLE_NAME, [
+        {"id": "selected", "project_id": service.compute_project_id(project),
+         "vector": [cosine, math.sqrt(1.0 - cosine * cosine)]},
+        {"id": "unrelated", "project_id": service.compute_project_id("C:/synthetic/other"),
+         "vector": [1.0, 0.0]},
+    ])
+    table = db.lance_db.open_table(PROMPT_HISTORY_TABLE_NAME)
+    rows = table.search([1.0, 0.0]).where('id = "selected"', prefilter=True).to_list()
+    assert rows[0]["_distance"] == pytest.approx(2.0 * (1.0 - cosine))
+    monkeypatch.setattr(service, "_normalized_embedding", lambda _: [1.0, 0.0])
+    with TestClient(main.app) as client:
+        response = client.post("/history/search", json={"query": "selected", "project_paths": [project], "top_k": 1})
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()] == ["selected"]
+    assert response.json()[0]["score"] == pytest.approx(expected_score)

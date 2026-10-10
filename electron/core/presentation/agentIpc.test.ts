@@ -28,6 +28,7 @@ vi.mock('../application/sidecarAppService', () => ({ sidecarAppService: {} }))
 vi.mock('../application/planGenerationAppService', () => ({
   planGenerationAppService: {
     generatePlanText: vi.fn(),
+    cancelPlanOperation: vi.fn(),
   },
 }))
 vi.mock('../application/aiDebugBundleService', () => ({ aiDebugBundleService: {} }))

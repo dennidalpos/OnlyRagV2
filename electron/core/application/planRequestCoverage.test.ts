@@ -1,264 +1,153 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs'
 import { reviewPlanRequestCoverage } from './planRequestCoverage'
 import { ollamaAppService } from './ollamaAppService'
-import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
-import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
+import {
+  validateCoverageClaims,
+  validateRequestLedger,
+  type RequestCoverageLedger,
+  type CoverageEvidence,
+  type PlanCoverageClaim,
+} from '../../../shared/domain/agent/requestCoverageLedger'
 
-vi.mock('./ollamaAppService', () => ({ ollamaAppService: { generateStructured: vi.fn() } }))
-
+vi.mock('./ollamaAppService', () => ({
+  ollamaAppService: { generateStructured: vi.fn() },
+}))
+const cases = JSON.parse(fs.readFileSync('scripts/live/fixtures/requestCoverageCases.json', 'utf8')).cases as Array<{
+  name: string
+  ledger: RequestCoverageLedger
+  evidence: CoverageEvidence[]
+  claims: PlanCoverageClaim[]
+  expectedAccepted: boolean
+  decisions: string[]
+}>
+const sample = cases[1]
 const request = {
-  model: 'local-model',
-  systemPrompt: 'Plan',
-  userContent: '{}',
+  model: 'declared-fixture',
+  systemPrompt: '',
+  userContent: '',
   format: {},
-  think: false,
-  host: 'http://localhost:11434',
-  keepAlive: '30m',
-  options: { num_ctx: 8192 },
+  think: true,
+  options: { num_ctx: 16384, temperature: 1, top_k: 20 },
 }
-const prompt = 'Create Dashboard and Tasks.\nPrepare MongoDB and Redis boundaries without implementing them yet.'
-const milestones: PlanMilestone[] = [
-  {
-    id: 'm-1',
-    title: 'Create pages',
-    status: 'pending',
-    acceptanceCriteria: ['Dashboard and Tasks are reachable from navigation.'],
-  },
-]
-
-function respond(requirements: unknown[]) {
-  vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({ status: 'complete', content: JSON.stringify({ requirements }) })
-}
-
 const covered = {
-  requestLine: 1,
-  status: 'covered',
+  obligationId: 'r1',
+  reason: 'All required buttons are explicitly covered.',
   evidence: [1],
-  reason: 'Both pages are planned.',
+  status: 'covered',
 }
+function respond(requirements: unknown[]) {
+  vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
+    status: 'complete',
+    content: JSON.stringify({ requirements }),
+  })
+}
+const review = () => reviewPlanRequestCoverage(request, sample.ledger, sample.evidence, sample.claims)
 
-describe('reviewPlanRequestCoverage', () => {
-  beforeEach(() => vi.resetAllMocks())
-
-  it.each([true, 'low'])('preserves explicit sampling for thinking %s', async (think) => {
-    respond([covered])
-    await reviewPlanRequestCoverage(
-      { ...request, think, options: { num_ctx: 8192, temperature: 0.6, top_k: 20 } },
-      'Create Dashboard and Tasks.',
-      milestones,
-      [],
+beforeEach(() => vi.resetAllMocks())
+describe('confirmed request and deterministic claim gates', () => {
+  it.each(cases)('accepts the structural contract of frozen case $name without inferring semantics', (item) => {
+    expect(validateRequestLedger(item.ledger, item.ledger.request)).toBeUndefined()
+    expect(validateCoverageClaims(item.ledger, item.evidence, item.claims)).toBeUndefined()
+  })
+  it('refuses stale confirmation, omitted source lines and duplicate identities', () => {
+    expect(validateRequestLedger(sample.ledger, 'Different request')).toContain('different request')
+    expect(validateRequestLedger({ ...sample.ledger, request: sample.ledger.request + '\nKeep JSON' }, sample.ledger.request + '\nKeep JSON')).toContain(
+      'omitted',
     )
-    expect(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].options).toMatchObject({ temperature: 0.6, top_k: 20 })
+    expect(
+      validateRequestLedger(
+        {
+          ...sample.ledger,
+          obligations: [sample.ledger.obligations[0], sample.ledger.obligations[0]],
+        },
+        sample.ledger.request,
+      ),
+    ).toContain('Duplicate')
   })
-
-  it('keeps model sampling defaults when thinking is enabled without overrides', async () => {
+  it.each([
+    ['unknown obligation', { obligationId: 'unknown' }, 'Unavailable'],
+    ['unknown evidence', { evidenceId: 50 }, 'Unavailable'],
+    ['different subject', { subject: 'card buttons' }, 'subject differs'],
+    ['extra condition', { conditions: ['only on cards'] }, 'conditions differ'],
+    ['local claim for an open global inventory', { scope: 'local', targets: ['cards'] }, 'open global'],
+  ])('refuses %s without a model call', async (_label, changes, error) => {
+    const claims = [{ ...sample.claims[0], ...(changes as object) }] as PlanCoverageClaim[]
+    expect(await reviewPlanRequestCoverage(request, sample.ledger, sample.evidence, claims)).toContain(error as string)
+    expect(ollamaAppService.generateStructured).not.toHaveBeenCalled()
+  })
+  it('refuses missing obligations and duplicate coverage claims', () => {
+    expect(validateCoverageClaims(sample.ledger, sample.evidence, [])).toContain('missing obligation')
+    expect(validateCoverageClaims(sample.ledger, sample.evidence, [sample.claims[0], sample.claims[0]])).toContain('Duplicate')
+  })
+  it('refuses dropped conditions and incomplete closed inventories', () => {
+    const conditional = cases[5]
+    expect(validateCoverageClaims(conditional.ledger, conditional.evidence, [{ ...conditional.claims[0], conditions: [] }])).toContain('conditions differ')
+    const closed = cases[3]
+    expect(validateCoverageClaims(closed.ledger, closed.evidence, [closed.claims[0]])).toContain('incomplete target')
+  })
+  it('includes additional declared planned targets in a global closed obligation', () => {
+    const closed = cases[3]
+    const ledger = structuredClone(closed.ledger)
+    ledger.obligations.push({
+      ...ledger.obligations[0],
+      id: 'r2',
+      scope: 'local',
+      targets: ['XML'],
+    })
+    expect(validateCoverageClaims(ledger, closed.evidence, [...closed.claims, { ...closed.claims[0], obligationId: 'r2', targets: ['XML'] }])).toContain(
+      'incomplete target',
+    )
+  })
+})
+describe('semantic review preserves confirmed scope and budget', () => {
+  it('passes original statements and exact confirmed ledger while preserving thinking sampling', async () => {
     respond([covered])
-    await reviewPlanRequestCoverage({ ...request, think: true }, 'Create Dashboard and Tasks.', milestones, [])
-    expect(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].options).not.toHaveProperty('temperature')
-  })
-
-  it('reports omitted deferred integrations and preserves the original request', async () => {
-    respond([
-      covered,
-      {
-        requestLine: 2,
-        status: 'missing',
-        evidence: [],
-        reason: 'No service-boundary criteria exist.',
-      },
-    ])
-    const error = await reviewPlanRequestCoverage(request, prompt, milestones, [])
-
-    expect(error).toContain('MongoDB and Redis boundaries')
-    expect(error).toContain('missing')
+    expect(await review()).toBeUndefined()
     const call = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
     expect(JSON.parse(call.userContent)).toEqual({
-      requestLines: prompt.split('\n').map((text, index) => ({ line: index + 1, text })),
-      planInterventions: [{ id: 'm-1', objective: 'Create pages', filePaths: [] }],
-      planEvidence: [{ id: 1, source: 'planned', interventionId: 'm-1', statement: milestones[0].acceptanceCriteria![0] }],
+      confirmedLedger: sample.ledger,
+      planEvidence: sample.evidence,
+      coverageClaims: sample.claims,
       confirmedDecisions: [],
+      compiledInterventions: [],
     })
-    expect(call).toMatchObject({ model: request.model, host: request.host, think: false, keepAlive: '30m' })
-    expect(call.options?.num_predict).toBe(calculateAvailableOutputTokens(`${call.systemPrompt}\n${call.userContent}`, 8192))
+    expect(call.options).toMatchObject({
+      num_ctx: 16384,
+      temperature: 1,
+      top_k: 20,
+    })
     expect(ollamaAppService.generateStructured).toHaveBeenCalledOnce()
   })
-
-  it('accepts explicit preparation criteria without requiring deferred implementation', async () => {
-    const criterion = 'Service boundaries for MongoDB and Redis exist; no clients or connections are implemented.'
-    respond([
-      covered,
-      {
-        requestLine: 2,
-        status: 'covered',
-        evidence: [2],
-        reason: 'Preparation stays deferred.',
-      },
-    ])
-    expect(
-      await reviewPlanRequestCoverage(
-        request,
-        prompt,
-        [
-          ...milestones,
-          {
-            id: 'm-2',
-            title: 'Prepare services',
-            status: 'pending',
-            acceptanceCriteria: [criterion],
-          },
-        ],
-        [],
-      ),
-    ).toBeUndefined()
-  })
-
-  it('rejects contradicted constraints on an unrelated non-web request', async () => {
-    respond([
-      {
-        requestLine: 1,
-        status: 'contradicted',
-        evidence: [1],
-        reason: 'The public output format changes.',
-      },
-    ])
-    expect(
-      await reviewPlanRequestCoverage(
-        request,
-        'Aggiungi un filtro. Non modificare il formato CSV.',
-        [
-          {
-            id: 'm-1',
-            title: 'Change exporter',
-            status: 'pending',
-            acceptanceCriteria: ['The exporter writes JSON instead of CSV.'],
-          },
-        ],
-        [],
-      ),
-    ).toContain('contradicted')
-  })
-
-  it('preserves distinct owners for identical local criteria', async () => {
-    respond([{ requestLine: 1, status: 'covered', evidence: [1, 2], reason: 'Both editor and menu actions retain keyboard access.' }])
-    const error = await reviewPlanRequestCoverage(
-      request,
-      'Editor and menu actions must remain keyboard accessible.',
-      [
-        {
-          id: 'editor',
-          title: 'Update editor actions',
-          status: 'pending',
-          filePaths: ['src/Editor.tsx'],
-          acceptanceCriteria: ['Actions are keyboard accessible.'],
-        },
-        { id: 'menu', title: 'Update menu actions', status: 'pending', filePaths: ['src/Menu.tsx'], acceptanceCriteria: ['Actions are keyboard accessible.'] },
-      ],
-      [],
-    )
-    expect(error).toBeUndefined()
-    const input = JSON.parse(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].userContent)
-    expect(input.planInterventions).toEqual([
-      { id: 'editor', objective: 'Update editor actions', filePaths: ['src/Editor.tsx'] },
-      { id: 'menu', objective: 'Update menu actions', filePaths: ['src/Menu.tsx'] },
-    ])
-    expect(input.planEvidence).toEqual([
-      { id: 1, source: 'planned', interventionId: 'editor', statement: 'Actions are keyboard accessible.' },
-      { id: 2, source: 'planned', interventionId: 'menu', statement: 'Actions are keyboard accessible.' },
-    ])
-  })
-
-  it('keeps conditional children and confirmed choices in their original context', async () => {
-    respond([
-      { requestLine: 1, status: 'context', evidence: [], reason: 'Constraint heading.' },
-      { requestLine: 2, status: 'covered', evidence: [1], reason: 'The condition and both retention constraints are explicit.' },
-    ])
-    const decisions = ['Keep the exporter command-line only.']
-    expect(
-      await reviewPlanRequestCoverage(
-        request,
-        'For optional exports:\n- If CSV is requested, retain column order and UTF-8 encoding.',
-        [
-          {
-            id: 'export',
-            title: 'Preserve optional exports',
-            status: 'pending',
-            acceptanceCriteria: ['If CSV is requested, retain column order and UTF-8 encoding.'],
-          },
-        ],
-        [],
-        decisions,
-      ),
-    ).toBeUndefined()
-    const input = JSON.parse(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].userContent)
-    expect(input.requestLines).toEqual([
-      { line: 1, text: 'For optional exports:' },
-      { line: 2, text: '- If CSV is requested, retain column order and UTF-8 encoding.' },
-    ])
-    expect(input.confirmedDecisions).toEqual(decisions)
-  })
-
   it.each([
-    [{ ...covered, requestLine: 99 }, 'unavailable request line'],
-    [{ ...covered, evidence: [99] }, 'unavailable plan evidence'],
-    [{ ...covered, evidence: [] }, 'no plan evidence'],
-    [{ ...covered, status: 'context' }, 'context cannot cite plan evidence'],
-  ])('rejects ungrounded review citations %#', async (requirement, message) => {
-    respond([requirement])
-    expect(await reviewPlanRequestCoverage(request, prompt, milestones, [])).toContain(message)
+    [[{ ...covered, obligationId: 'unknown' }], 'reference'],
+    [[covered, covered], 'reference'],
+    [[{ ...covered, evidence: [19] }], 'unassigned'],
+    [[{ ...covered, status: 'context' }], 'Invalid'],
+    [[{ ...covered, evidence: [] }], 'Invalid'],
+    [[{ ...covered, status: 'missing' }], 'coverage failed'],
+    [[{ ...covered, status: 'contradicted' }], 'coverage failed'],
+  ])('refuses invalid or negative review %j', async (requirements, error) => {
+    respond(requirements)
+    expect(await review()).toContain(error)
+    expect(ollamaAppService.generateStructured).toHaveBeenCalledOnce()
   })
-
-  it('accepts retained verified evidence', async () => {
-    respond([{ requestLine: 1, status: 'covered', evidence: [1], reason: 'Already verified.' }])
-    expect(
-      await reviewPlanRequestCoverage(
-        request,
-        'Keep CSV export.',
-        [],
-        [
-          {
-            interventionId: 'prior',
-            summary: 'CSV export works',
-            verificationReferences: ['npm test'],
-          },
-        ],
-      ),
-    ).toBeUndefined()
-    const input = JSON.parse(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].userContent)
-    expect(input.planEvidence).toEqual([{ id: 1, source: 'retained', interventionId: 'prior', statement: 'CSV export works: npm test' }])
-  })
-
-  it('rejects a review that silently omits another request line', async () => {
+  it('refuses omission instead of reclassifying another obligation', async () => {
     respond([covered])
-    expect(await reviewPlanRequestCoverage(request, prompt, milestones, [])).toContain('omitted request lines: 2: Prepare MongoDB')
+    const item = cases[7]
+    expect(await reviewPlanRequestCoverage(request, item.ledger, item.evidence, item.claims, item.decisions)).toContain('omitted obligations')
   })
-
-  it('keeps original line indices across blanks and checks headings explicitly', async () => {
-    respond([
-      { requestLine: 1, status: 'context', evidence: [], reason: 'Section heading.' },
-      { ...covered, requestLine: 3 },
-    ])
-    expect(await reviewPlanRequestCoverage(request, '# Pages\r\n\r\nCreate Dashboard and Tasks.', milestones, [])).toBeUndefined()
-    const input = JSON.parse(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].userContent)
-    expect(input.requestLines).toEqual([
-      { line: 1, text: '# Pages' },
-      { line: 3, text: 'Create Dashboard and Tasks.' },
-    ])
-  })
-
-  it.each([
-    { status: 'complete' as const, content: '{}' },
-    { status: 'complete' as const, content: '{"requirements":[]}' },
-    { status: 'incomplete' as const, content: '{', error: 'length limit' },
-    { status: 'transport_error' as const, content: '', error: 'connection refused' },
-  ])('fails closed on invalid or unavailable review %#', async (response) => {
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(response)
-    expect(await reviewPlanRequestCoverage(request, prompt, milestones, [])).toBeTruthy()
+  it.each(['transport_error', 'incomplete'] as const)('returns truthful %s without retry', async (status) => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
+      status,
+      content: '',
+      error: 'transport stopped',
+    })
+    expect(await review()).toContain('transport stopped')
     expect(ollamaAppService.generateStructured).toHaveBeenCalledOnce()
   })
-
-  it('returns a thrown transport failure to the planner recovery', async () => {
+  it('reports transport exceptions', async () => {
     vi.mocked(ollamaAppService.generateStructured).mockRejectedValue(new Error('socket closed'))
-    expect(await reviewPlanRequestCoverage(request, prompt, milestones, [])).toContain('socket closed')
-    expect(ollamaAppService.generateStructured).toHaveBeenCalledOnce()
+    expect(await review()).toContain('socket closed')
   })
 })

@@ -1,6 +1,22 @@
 import { TranslationSchema } from '../types'
 
 export const en: TranslationSchema = {
+  requestScope: {
+    title: 'Confirm the request scope',
+    description:
+      'Review each obligation before generating a plan. Global properties apply to every current and additional target. Mark only headings and background as context. Edit ambiguous interpretations, or split a source line into distinct obligations.',
+    requirement: 'Required behavior',
+    subject: 'Subject class',
+    scope: 'Scope',
+    global: 'Global',
+    local: 'Named targets only',
+    context: 'Background / heading',
+    targets: 'Named targets (one per line)',
+    closed: 'This list includes every possible target',
+    conditions: 'Conditions (one per line; empty means unconditional)',
+    split: 'Split obligation',
+    confirm: 'Confirm scope and generate plan',
+  },
   common: {
     appName: 'OnlyRag V2',
     tagline: 'Local AI Studio & Vector RAG',

@@ -138,6 +138,8 @@ Further source review consolidates these paths under existing P1 `LIVE-RUN-RESID
 
 No deletion, kill or destructive reproduction was performed. These are source-confirmed reachability gaps, not proof that user data has already been lost. The safety repair must cover both scripts, original backups, retained campaigns, reparse paths and owned processes before enabling removal of real candidates. No new cleanup metadata or CLI policy is approved by this review.
 
+2026-10-10 follow-up: the user approved the explicit-path conservative CLI/policy. Both scripts share preflight, preserve declared state/evidence, refuse reparse/tracked targets, stop prefix/extension deletion and reject name-only process stopping. Full no longer includes profiles. The script safety repair is complete; old retained evidence has not been disposed of and remains separately tracked. [Executed qualification and limits](./verification.md#cleanup-safety-policy--2026-10-10).
+
 ## Dependency evidence continuation — 2026-10-06
 
 A07 remains open for scanner isolation/upstream remediation. Source review additionally reproduced incomplete parser evidence being reported complete, unavailable/root-only scans allowing project success and unacknowledged cancellation allowing a verified outcome. These integrity defects are corrected through existing result contracts, with native parser and declared response fixtures. Discovered projects without a native command resolver now block certification and are retained under `PROJECT-VERIFICATION-COMMAND-COVERAGE-01`. The narrower repair does not remove or patch braces. [Verification and remaining scope](./verification.md#dependency-verification-completeness--2026-10-06).

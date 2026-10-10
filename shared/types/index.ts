@@ -800,7 +800,8 @@ export interface PlanEvidence {
 }
 
 export interface PlanGenerationResult {
-  status: 'success' | 'error'
+  status: 'success' | 'error' | 'scope_confirmation_required'
+  scopeDraft?: import('../domain/agent/requestCoverageLedger').RequestCoverageLedger
   objective: string
   decisions: PlanDecision[]
   retainedEvidence: PlanEvidence[]

@@ -4,6 +4,7 @@
     "electron/main.ts!",
     "electron/preload.ts!",
     "electron/typecheckWorker.ts!",
+    "electron/dependencyScanWorker.ts!",
     "src/components/chat/ChatView.tsx!",
     "src/components/coding/CodingAgentView.tsx!",
     "src/components/translation/TranslationView.tsx!",

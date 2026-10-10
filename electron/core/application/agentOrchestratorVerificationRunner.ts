@@ -58,7 +58,7 @@ export async function runProjectVerification(
   // Every discovered package needs complete dependency evidence before commands run.
   for (const project of profile.projects.filter((project) => project.manifestFiles.includes('package.json'))) {
     if (signal?.aborted) return interrupted
-    const scan = await scanWorkspaceDependencies(project.rootPath)
+    const scan = await scanWorkspaceDependencies(project.rootPath, undefined, signal)
     if (signal?.aborted) return interrupted
     if (!scan.scanned) {
       return {

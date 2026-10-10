@@ -105,6 +105,7 @@ export async function seedGeneratedPlan(args: {
   settings: AppSettings
   /** Defaults to 'recommended': the flow a user actually walks through. */
   interviewPolicy?: InterviewPolicy
+  confirmedCoverage?: import('../../shared/domain/agent/requestCoverageLedger').RequestCoverageLedger
 }): Promise<SeededPlan> {
   const policy = args.interviewPolicy || 'recommended'
   const model = args.settings.codingModel
@@ -130,11 +131,13 @@ export async function seedGeneratedPlan(args: {
 
   const plan = await planGenerationAppService.generatePlanText({
     prompt: effectivePrompt,
+    confirmedCoverage: args.confirmedCoverage,
     model,
     settings: args.settings,
     workspacePath: args.workspacePath,
   })
-  if (plan.status === 'error') {
+  if (plan.status !== 'success') {
+    if (plan.status === 'scope_confirmation_required') throw new Error('Request scope requires explicit reviewed confirmation before live plan seeding')
     throw new Error(`Plan generation failed: ${plan.error || 'unknown error'}`)
   }
 

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { planCoverageClaimSchema } from '../../../../shared/domain/agent/requestCoverageLedger'
 
 const nonEmptyText = z.string().trim().min(1)
 
@@ -48,6 +49,7 @@ export const interviewPhaseResponseSchema = z
 
 export const planningPhaseResponseSchema = z
   .object({
+    coverageClaims: z.array(planCoverageClaimSchema).max(300),
     objective: nonEmptyText,
     assumptions: z
       .array(

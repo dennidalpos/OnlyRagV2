@@ -304,8 +304,7 @@ export function useSessionHistory(workspacePath: string | null) {
     (targetWorkspacePath: string | null) => {
       const targetKey = targetWorkspacePath || ''
       bootstrapSessionsRef.current.delete(targetKey)
-      for (const [id, session] of failedWritesRef.current) if (session.workspacePath === targetWorkspacePath) failedWritesRef.current.delete(id)
-      setSaveFailed(failedWritesRef.current.size > 0)
+      // Registry removal does not acknowledge deletion of unsaved history.
 
       if (workspacePath === targetWorkspacePath) {
         selectionRevision.current += 1

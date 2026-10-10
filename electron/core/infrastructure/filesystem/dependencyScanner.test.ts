@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { scanWorkspaceDependencies } from './dependencyScanner'
+import { scanDependencyFiles } from './dependencyScanFiles'
 import { evaluateDependencyIntegrity } from '../../domain/agent/dependencyIntegrityGate'
 
 let tempDir: string
@@ -23,22 +23,17 @@ afterEach(() => {
   fs.rmSync(tempDir, { recursive: true, force: true })
 })
 
-describe('scanWorkspaceDependencies', () => {
-  it('reports "not scanned" rather than "clean" when there is no workspace', async () => {
-    await expect(scanWorkspaceDependencies(null)).resolves.toEqual({ missing: {}, scanned: false })
-  })
-
+describe('worker dependency file scanning', () => {
   it('reports "not scanned" for a workspace with no package.json', async () => {
     write('src/App.tsx', "import x from 'react-router-dom'\nexport default x")
-    const result = await scanWorkspaceDependencies(tempDir)
-    expect(result.scanned).toBe(false)
+    await expect(scanDependencyFiles(tempDir)).rejects.toThrow()
   })
 
   it('finds nothing to report when every import is declared', async () => {
     write('package.json', JSON.stringify({ name: 'app', dependencies: { react: '^18.2.0' } }))
     write('src/App.tsx', "import React from 'react'\nexport default React")
 
-    const result = await scanWorkspaceDependencies(tempDir)
+    const result = await scanDependencyFiles(tempDir)
 
     expect(result.scanned).toBe(true)
     expect(evaluateDependencyIntegrity(result.missing, tempDir).ok).toBe(true)
@@ -48,7 +43,7 @@ describe('scanWorkspaceDependencies', () => {
     write('package.json', JSON.stringify({ name: 'app', dependencies: { react: '^18.2.0' } }))
     write('src/App.tsx', "import { BrowserRouter } from 'react-router-dom'\nexport default BrowserRouter")
 
-    const result = await scanWorkspaceDependencies(tempDir)
+    const result = await scanDependencyFiles(tempDir)
     const verdict = evaluateDependencyIntegrity(result.missing, tempDir)
 
     expect(result.scanned).toBe(true)
@@ -61,7 +56,7 @@ describe('scanWorkspaceDependencies', () => {
     write('package.json', JSON.stringify({ name: 'app', dependencies: {} }))
     write('dist/bundle.js', "require('some-vendor-package')")
 
-    const result = await scanWorkspaceDependencies(tempDir)
+    const result = await scanDependencyFiles(tempDir)
 
     expect(evaluateDependencyIntegrity(result.missing, tempDir).ok).toBe(true)
   })
@@ -69,23 +64,20 @@ describe('scanWorkspaceDependencies', () => {
   it('refuses a partial scan when a source file cannot be parsed', async () => {
     write('package.json', '{"name":"app"}')
     write('src/broken.js', 'const = ;')
-    expect((await scanWorkspaceDependencies(tempDir)).scanned).toBe(false)
+    await expect(scanDependencyFiles(tempDir)).rejects.toThrow('incomplete')
   })
 
   it('refuses unknown peer declarations instead of silently returning a complete scan', async () => {
     write('package.json', '{"name":"app","dependencies":{"provider":"1.0.0"}}')
     write('src/app.js', "require('missing-peer')")
     write('node_modules/provider/package.json', '{invalid')
-    expect((await scanWorkspaceDependencies(tempDir)).scanned).toBe(false)
+    await expect(scanDependencyFiles(tempDir)).rejects.toThrow()
   })
 
-  it('clears the timeout after a successful scan', async () => {
-    write('package.json', '{"name":"app"}')
-    const setTimer = vi.spyOn(globalThis, 'setTimeout')
-    const clearTimer = vi.spyOn(globalThis, 'clearTimeout')
-    expect((await scanWorkspaceDependencies(tempDir, 1234)).scanned).toBe(true)
-    const timerIndex = setTimer.mock.calls.findIndex((call) => call[1] === 1234)
-    expect(timerIndex).toBeGreaterThanOrEqual(0)
-    expect(clearTimer).toHaveBeenCalledWith(setTimer.mock.results[timerIndex].value)
+  it('retains declared peer provider evidence', async () => {
+    write('package.json', '{"name":"app","dependencies":{"provider":"1.0.0"}}')
+    write('src/app.js', "require('missing-peer')")
+    write('node_modules/provider/package.json', '{"peerDependencies":{"missing-peer":"*"}}')
+    expect((await scanDependencyFiles(tempDir)).peerProviders).toEqual({ 'missing-peer': 'provider' })
   })
 })

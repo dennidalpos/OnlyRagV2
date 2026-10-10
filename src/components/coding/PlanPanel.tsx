@@ -11,8 +11,12 @@ import { PlanInterviewCard } from './PlanInterviewCard'
 import { PlanReviewCard } from './PlanReviewCard'
 import type { OllamaOperationState } from '../../hooks/useOllamaGenerationState'
 import { useTranslation } from '../../i18n'
+import { RequestScopeReview } from './RequestScopeReview'
+import type { RequestCoverageLedger } from '../../../shared/domain/agent/requestCoverageLedger'
 
 interface PlanPanelProps {
+  scopeDraft?: RequestCoverageLedger | null
+  onConfirmScope?: (ledger: RequestCoverageLedger) => void
   plan: AgentPlan | null
   planHistory?: AgentPlan[]
   activePlanIndex?: number
@@ -37,6 +41,8 @@ interface PlanPanelProps {
 }
 
 export const PlanPanel: React.FC<PlanPanelProps> = ({
+  scopeDraft,
+  onConfirmScope,
   plan,
   planHistory = [],
   activePlanIndex = 0,
@@ -131,6 +137,8 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
               {t('common.cancel')}
             </button>
           </div>
+        ) : scopeDraft ? (
+          <RequestScopeReview draft={scopeDraft} onConfirm={onConfirmScope || (() => {})} onCancel={onCancelFlow} />
         ) : isInterviewActive && interviewQuestions.length > 0 ? (
           <PlanInterviewCard
             questions={interviewQuestions}
@@ -141,7 +149,11 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
         ) : isGenerating ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-            <div className="font-bold text-slate-200 text-xs">{t('planPanel.generatingTitle', { version: planHistory.length + 1 })}</div>
+            <div className="font-bold text-slate-200 text-xs">
+              {t('planPanel.generatingTitle', {
+                version: planHistory.length + 1,
+              })}
+            </div>
             <p className="text-[11px] text-slate-400 max-w-xs">{t('planPanel.generatingDescription')}</p>
             {schedulerState && (
               <span className="text-[10px] text-amber-300" role="status">

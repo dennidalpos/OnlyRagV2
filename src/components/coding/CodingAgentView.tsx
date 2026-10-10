@@ -114,6 +114,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
     }
 
     const handleGeneratePlanFromPrompt = async (prompt: string, mode: Exclude<AgentMode, 'ask'>) => {
+      if (planApproval.isGeneratingPlan || planApproval.scopeDraft || planApproval.isInterviewActive || planApproval.isAnalyzingInterview) return
       plannedExecutionModeRef.current = mode
       setActiveRightTab('plan')
       c.setAgentPrompt('')
@@ -123,10 +124,10 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
     }
 
     useEffect(() => {
-      if (planApproval.isGeneratingPlan || planApproval.isInterviewActive || planApproval.currentPlan?.status === 'ready') {
+      if (planApproval.isGeneratingPlan || planApproval.scopeDraft || planApproval.isInterviewActive || planApproval.currentPlan?.status === 'ready') {
         setActiveRightTab('plan')
       }
-    }, [planApproval.isGeneratingPlan, planApproval.isInterviewActive, planApproval.currentPlan?.status])
+    }, [planApproval.isGeneratingPlan, planApproval.scopeDraft, planApproval.isInterviewActive, planApproval.currentPlan?.status])
 
     const handleInitiateTaskExecution = () => {
       const prompt = c.agentPrompt.trim()
@@ -288,7 +289,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
               onSelectTab={handleSelectTab}
               changedFilesCount={c.changeMetrics?.filesTouched || 0}
               planIsReady={planApproval.currentPlan?.status === 'ready'}
-              planIsInProgress={planApproval.isGeneratingPlan}
+              planIsInProgress={planApproval.isGeneratingPlan || Boolean(planApproval.scopeDraft)}
             />
 
             {c.saveConflict && (
@@ -348,6 +349,8 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
 
               {activeRightTab === 'plan' && (
                 <PlanPanel
+                  scopeDraft={planApproval.scopeDraft}
+                  onConfirmScope={planApproval.confirmRequestScope}
                   plan={planApproval.currentPlan}
                   planHistory={planApproval.planHistory}
                   activePlanIndex={planApproval.activePlanIndex}

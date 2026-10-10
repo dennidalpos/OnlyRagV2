@@ -3,6 +3,7 @@ import { recordRecoveryFailure, recoveryStopDiagnostic, type RecoveryFailureStat
 import { ollamaAppService } from './ollamaAppService'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 import { logger } from '../infrastructure/logging/logger'
+import { OllamaGenerationCancelledError } from '../infrastructure/http/ollamaGenerationScheduler'
 
 export type StructuredContentValidation<T> = { status: 'valid'; data: T } | { status: 'invalid'; error: string }
 
@@ -82,6 +83,7 @@ export async function generateStructuredWithRecovery<T>(
     try {
       response = await ollamaAppService.generateStructured(currentRequest)
     } catch (error: unknown) {
+      if (error instanceof OllamaGenerationCancelledError) return { status: 'error', error: error.message, attempts: attempt }
       const message = error instanceof Error ? error.message : String(error)
       const decision = recordRecoveryFailure(transportFailure, normalizedSignature('transport', message))
       transportFailure = decision.state

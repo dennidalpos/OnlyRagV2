@@ -242,6 +242,13 @@ ${promptDetail}`
     return i
   }
 
+  public logRequestCoverage(sessionId: string, ledger: string): void {
+    this.writeEntry(
+      `[CONFIRMED REQUEST COVERAGE] Session: ${sessionId}`,
+      this.includesPayload(sessionId) ? ledger : CodingAgentLogger.payloadSummary('Request Coverage Ledger', ledger),
+    )
+  }
+
   public logTurnPrompt(sessionId: string, step: number, model: string, numCtx: number, prompt: string): void {
     const header = `Session ID: ${sessionId} | Step: ${step} | Target Model: ${model} | Context Limit: ${numCtx}`
     if (!this.includesPayload(sessionId)) {

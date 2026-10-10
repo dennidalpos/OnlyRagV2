@@ -93,6 +93,35 @@ describe('useSessionHistory persistence', () => {
     root = createRoot(container)
   })
 
+  it.each(['reject', 'null'] as const)('keeps a failed snapshot after unregistering its workspace: %s', async (failure) => {
+    if (failure === 'reject') saveCodingSession.mockRejectedValueOnce(new Error('Store unavailable'))
+    else saveCodingSession.mockResolvedValueOnce(null)
+    const sessionId = history.activeSessionId
+    const logs = [{ id: 'unsaved-before-unregister' } as never]
+    await act(async () => history.updateSessionContent(sessionId, { actionLogs: logs }))
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    expect(history.storageFailed).toBe(true)
+
+    act(() => history.purgeWorkspace('C:/workspace'))
+    expect(history.sessions).toEqual([])
+    expect(history.storageFailed).toBe(true)
+    await act(async () => root.render(<Harness workspacePath="C:/other" />))
+    await act(async () => history.retryStorage())
+    expect(saveCodingSession).toHaveBeenCalledTimes(2)
+    expect(saveCodingSession.mock.calls[1][0]).toMatchObject({ id: sessionId, workspacePath: 'C:/workspace', actionLogs: logs })
+    expect(history.storageFailed).toBe(false)
+  })
+
+  it('keeps an owned debounced write when its workspace is unregistered', async () => {
+    const sessionId = history.activeSessionId
+    await act(async () => history.updateSessionContent(sessionId, { actionLogs: [{ id: 'pending-unregister' } as never] }))
+    act(() => history.purgeWorkspace('C:/workspace'))
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    expect(saveCodingSession).toHaveBeenCalledTimes(1)
+    expect(saveCodingSession.mock.calls[0][0]).toMatchObject({ id: sessionId, workspacePath: 'C:/workspace' })
+    expect(history.sessions).toEqual([])
+  })
+
   it('persists a plan revision with JSON-safe action logs', async () => {
     const sessionId = history.activeSessionId
     const plan: AgentPlan = {

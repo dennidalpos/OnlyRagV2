@@ -11,6 +11,7 @@ import { resolveAgentCapabilityProfile } from '../../shared/domain/agent/agentCa
 import { resolveConfiguredModel } from '../../shared/domain/settings/configuredModel'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
 import { useTranslation } from '../i18n'
+import { validateRequestLedger, type RequestCoverageLedger } from '../../shared/domain/agent/requestCoverageLedger'
 
 export type { AgentPlan } from '../types'
 
@@ -25,7 +26,11 @@ export async function resolveInterviewPrompt(
   if (!enrichPrompt || answers.length === 0) return losslessPrompt
 
   try {
-    const enriched = await enrichPrompt({ prompt: originalPrompt, answers, questions })
+    const enriched = await enrichPrompt({
+      prompt: originalPrompt,
+      answers,
+      questions,
+    })
     const preservesInputs =
       typeof enriched === 'string' && enriched.includes(originalPrompt) && answers.every((answer) => enriched.includes(answer.selectedOption))
     if (preservesInputs) return enriched
@@ -71,6 +76,17 @@ export function usePlanApproval({
   const [isApprovingPlan, setIsApprovingPlan] = useState<boolean>(false)
   const [isSavingPlanReview, setIsSavingPlanReview] = useState<boolean>(false)
   const [isCancellingPlanFlow, setIsCancellingPlanFlow] = useState<boolean>(false)
+  const [scopeDraft, setScopeDraft] = useState<RequestCoverageLedger | null>(null)
+  const pendingCoverageRef = useRef<{
+    prompt: string
+    targetModel?: string
+    currentStep: number
+    interviewContext?: {
+      originalPrompt: string
+      answers: UserInterviewAnswer[]
+    }
+    scope: PlanFlowScope
+  } | null>(null)
   const { generationState, trackOperation } = useOllamaGenerationState()
 
   // Pre-flight Clarification Interview state
@@ -133,8 +149,15 @@ export function usePlanApproval({
   }, [])
 
   useEffect(() => {
+    const previousScope = activeOperationRef.current
+    if (previousScope)
+      void window.electronAPI
+        ?.agentPlanCancel?.(previousScope.identity)
+        .catch((error: unknown) => logger.warn('usePlanApproval', `Could not cancel prior planning operation: ${errorMessage(error)}`))
     flowTokenRef.current += 1
     pendingFlowRef.current = null
+    pendingCoverageRef.current = null
+    setScopeDraft(null)
     activeOperationRef.current = null
     approvalInFlightRef.current.clear()
     setIsGeneratingPlan(false)
@@ -152,6 +175,11 @@ export function usePlanApproval({
     return () => {
       mountedRef.current = false
       flowTokenRef.current += 1
+      const scope = activeOperationRef.current
+      if (scope)
+        void window.electronAPI
+          ?.agentPlanCancel?.(scope.identity)
+          .catch((error: unknown) => logger.warn('usePlanApproval', `Could not cancel unmounted planning operation: ${errorMessage(error)}`))
     }
   }, [])
 
@@ -160,8 +188,12 @@ export function usePlanApproval({
       prompt: string,
       targetModel?: string,
       currentStep: number = 0,
-      interviewContext?: { originalPrompt: string; answers: UserInterviewAnswer[] },
+      interviewContext?: {
+        originalPrompt: string
+        answers: UserInterviewAnswer[]
+      },
       inheritedScope?: PlanFlowScope,
+      confirmedCoverage?: RequestCoverageLedger,
     ): Promise<AgentPlan | null> => {
       const scope = inheritedScope || beginFlowScope()
       if (!isFlowCurrent(scope)) {
@@ -198,9 +230,14 @@ export function usePlanApproval({
         capabilityProfile: resolveAgentCapabilityProfile(settings),
       }
 
-      updateCurrentSessionPlans((prev) => [...prev, initialPlan])
       const newIdx = existingHistory.length
-      setActivePlanIndex(newIdx)
+      let historyStarted = false
+      const startHistory = () => {
+        if (historyStarted) return
+        historyStarted = true
+        updateCurrentSessionPlans((prev) => [...prev, initialPlan])
+        setActivePlanIndex(newIdx)
+      }
 
       try {
         // '' when none is configured: plan generation reports it instead of guessing a model.
@@ -214,6 +251,7 @@ export function usePlanApproval({
             trackOperation(scope.identity.runId)
             const genRes = await window.electronAPI.agentPlanGenerate({
               prompt,
+              confirmedCoverage,
               model: modelToUse,
               settings,
               previousPlan: lastApprovedPlan,
@@ -222,6 +260,20 @@ export function usePlanApproval({
               identity: scope.identity,
             })
             if (!isFlowCurrent(scope)) return null
+            if (genRes?.status === 'scope_confirmation_required') {
+              if (!genRes.scopeDraft || validateRequestLedger(genRes.scopeDraft, prompt)) throw new Error('Invalid request scope draft')
+              pendingCoverageRef.current = {
+                prompt,
+                targetModel,
+                currentStep,
+                interviewContext,
+                scope,
+              }
+              setScopeDraft(genRes.scopeDraft)
+              setIsGeneratingPlan(false)
+              trackOperation(null)
+              return null
+            }
             generatedPlan = genRes
             if (genRes?.status === 'error') generationError = genRes.error || t('agentRun.planningIncomplete')
           } catch (ipcErr: unknown) {
@@ -234,6 +286,7 @@ export function usePlanApproval({
           generationError = t('agentRun.planningServiceUnavailable')
         }
 
+        startHistory()
         if (!generationError && !generatedPlan?.milestones.length) {
           generationError = t('agentRun.planningNoExecutablePlan')
         }
@@ -290,6 +343,7 @@ export function usePlanApproval({
         return finalPlan
       } catch (err: unknown) {
         if (!isFlowCurrent(scope)) return null
+        startHistory()
         logger.error('usePlanApproval', `Error generating plan: ${errorMessage(err)}`)
         const failedPlan: AgentPlan = {
           formatVersion: 2,
@@ -337,6 +391,7 @@ export function usePlanApproval({
   )
 
   const handleApprovePlan = useCallback(async () => {
+    if (activeOperationRef.current || pendingCoverageRef.current) return
     const target = currentPlan
     if (!target || (target.status !== 'ready' && target.status !== 'approved')) return
     if (!activeSessionId || !target.milestones?.length || !window.electronAPI?.agentPlanSeed) return
@@ -347,9 +402,17 @@ export function usePlanApproval({
     const scope = beginFlowScope()
     setIsApprovingPlan(true)
 
-    const approved: AgentPlan = { ...target, status: 'approved', approvalError: undefined }
+    const approved: AgentPlan = {
+      ...target,
+      status: 'approved',
+      approvalError: undefined,
+    }
     const recover = async (message: string) => {
-      const recoverable: AgentPlan = { ...target, status: 'ready', approvalError: message }
+      const recoverable: AgentPlan = {
+        ...target,
+        status: 'ready',
+        approvalError: message,
+      }
       replacePlanRevision(recoverable)
       try {
         await onPersistPlan(recoverable)
@@ -366,7 +429,11 @@ export function usePlanApproval({
         logger.warn('usePlanApproval', `Could not persist approved revision ${target.id}: ${errorMessage(err)}`)
       }
       if (!persisted) {
-        replacePlanRevision({ ...target, status: 'ready', approvalError: t('agentRun.revisionSaveFailed') })
+        replacePlanRevision({
+          ...target,
+          status: 'ready',
+          approvalError: t('agentRun.revisionSaveFailed'),
+        })
         return
       }
       if (!isFlowCurrent(scope)) return
@@ -449,6 +516,8 @@ export function usePlanApproval({
 
   const resetPlanHistory = useCallback(() => {
     flowTokenRef.current += 1
+    pendingCoverageRef.current = null
+    setScopeDraft(null)
     updateCurrentSessionPlans(() => [])
     setActivePlanIndex(0)
   }, [updateCurrentSessionPlans])
@@ -464,7 +533,15 @@ export function usePlanApproval({
       setIsAnalyzingInterview(false)
       setIsInterviewActive(false)
       setInterviewQuestions([])
-      pendingFlowRef.current = { prompt, targetModel, currentStep, questions: [], scope }
+      pendingCoverageRef.current = null
+      setScopeDraft(null)
+      pendingFlowRef.current = {
+        prompt,
+        targetModel,
+        currentStep,
+        questions: [],
+        scope,
+      }
 
       const previousDecisions = [...planHistoryRef.current].reverse().find((plan) => plan.interviewAnswers?.length)?.interviewAnswers || []
       const needsInterview = shouldRunPlanInterview(prompt, previousDecisions)
@@ -535,7 +612,13 @@ export function usePlanApproval({
           }
 
           if (interviewRes?.hasQuestions && interviewRes.questions && interviewRes.questions.length > 0) {
-            pendingFlowRef.current = { prompt, targetModel, currentStep, questions: interviewRes.questions, scope }
+            pendingFlowRef.current = {
+              prompt,
+              targetModel,
+              currentStep,
+              questions: interviewRes.questions,
+              scope,
+            }
             setInterviewQuestions(interviewRes.questions)
             setIsInterviewActive(true)
             soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
@@ -637,6 +720,9 @@ export function usePlanApproval({
     if (!scope) return false
     setIsCancellingPlanFlow(true)
     pendingFlowRef.current = null
+    const awaitingConfirmation = Boolean(pendingCoverageRef.current)
+    pendingCoverageRef.current = null
+    setScopeDraft(null)
     flowTokenRef.current += 1
     setIsInterviewActive(false)
     setInterviewQuestions([])
@@ -647,14 +733,27 @@ export function usePlanApproval({
     setIsGeneratingPlan(false)
     setIsAnalyzingInterview(false)
     trackOperation(null)
-    return cancelled
+    return awaitingConfirmation || cancelled
   }, [trackOperation, updateCurrentSessionPlans])
+
+  const confirmRequestScope = useCallback(
+    async (ledger: RequestCoverageLedger) => {
+      const pending = pendingCoverageRef.current
+      if (!pending || !isFlowCurrent(pending.scope) || validateRequestLedger(ledger, pending.prompt)) return null
+      pendingCoverageRef.current = null
+      setScopeDraft(null)
+      return generatePlan(pending.prompt, pending.targetModel, pending.currentStep, pending.interviewContext, pending.scope, ledger)
+    },
+    [generatePlan, isFlowCurrent],
+  )
 
   return {
     currentPlan,
     planHistory,
     activePlanIndex,
     isGeneratingPlan,
+    scopeDraft,
+    confirmRequestScope,
     isApprovingPlan,
     isSavingPlanReview,
     planGenerationState: generationState,

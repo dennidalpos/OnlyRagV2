@@ -81,11 +81,12 @@ export function registerAgentIpcHandlers(getRendererEvents: () => RendererEventS
     return agentInterviewAppService.enrichPromptWithAnswers(prompt, answers, questions)
   })
 
-  /** Plan Approval flow: draft a plan for the given prompt, routed through the hardware-profile Ollama runtime options and parsed via the canonical GoalDecompositionPlanner parser (replaces the renderer's raw fetch()). */
-  ipcMain.handle('agent:plan-generate', async (_, { prompt, model, settings, previousPlan, workspacePath, previousDecisions, identity }) => {
+  /** Request scope is confirmed before bounded candidate generation. */
+  ipcMain.handle('agent:plan-generate', async (_, { prompt, confirmedCoverage, model, settings, previousPlan, workspacePath, previousDecisions, identity }) => {
     logger.log('INFO', 'AgentPlanIpc', `Generation requested (prompt length: ${prompt.length}, model: ${model || 'default'}).`)
     return planGenerationAppService.generatePlanText({
       prompt,
+      confirmedCoverage,
       model,
       settings: sanitizeAppSettings(settings),
       previousPlan,
@@ -96,7 +97,9 @@ export function registerAgentIpcHandlers(getRendererEvents: () => RendererEventS
   })
 
   ipcMain.handle('agent:plan-cancel', async (_, identity) => {
-    return { success: ollamaAppService.cancelStructuredGeneration(identity.runId) }
+    const owned = planGenerationAppService.cancelPlanOperation(identity.runId)
+    const transport = ollamaAppService.cancelStructuredGeneration(identity.runId)
+    return { success: owned || transport }
   })
 
   /** Exposes the backend's persisted plan milestone state (GoalDecompositionPlanner's completion truth, written by agentOrchestratorAppService.persistCurrentState) so the frontend can reflect verified/in-progress/failed status instead of guessing progress from step */

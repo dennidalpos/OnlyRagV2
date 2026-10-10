@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 import { ollamaAppService } from './ollamaAppService'
 import { describeInvalidStructuredResponse, generateStructuredWithRecovery } from './structuredGenerationRecovery'
+import { OllamaGenerationCancelledError } from '../infrastructure/http/ollamaGenerationScheduler'
 
 vi.mock('./ollamaAppService', () => ({
   ollamaAppService: { generateStructured: vi.fn() },
@@ -18,6 +19,15 @@ const baseRequest = {
 
 describe('generateStructuredWithRecovery', () => {
   beforeEach(() => vi.clearAllMocks())
+
+  it('does not restart a cancelled structured operation', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockRejectedValue(new OllamaGenerationCancelledError())
+    const validate = vi.fn()
+    const result = await generateStructuredWithRecovery(baseRequest, validate)
+    expect(result).toMatchObject({ status: 'error', attempts: 1 })
+    expect(ollamaAppService.generateStructured).toHaveBeenCalledOnce()
+    expect(validate).not.toHaveBeenCalled()
+  })
 
   it('retries length truncation only after expanding the output budget', async () => {
     vi.mocked(ollamaAppService.generateStructured)

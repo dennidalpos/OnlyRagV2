@@ -1,0 +1,420 @@
+{
+  "version": 1,
+  "provenance": "Frozen before inference; four negative/positive pairs. Retained line 23 and evidence 19 copied verbatim from the 2026-10-01 minimal artifact. Other entries are declared contrastive fixtures, not production observations.",
+  "cases": [
+    {
+      "name": "retained-card-only-global-claim",
+      "ledger": {
+        "request": "- Buttons must have a minimum touch target of 44×44 px.",
+        "obligations": [
+          {
+            "id": "r1",
+            "sourceLines": [1],
+            "requirement": "- Buttons must have a minimum touch target of 44×44 px.",
+            "subject": "buttons",
+            "scope": "global",
+            "targets": [],
+            "closedInventory": false,
+            "conditions": []
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": 19,
+          "source": "planned",
+          "interventionId": "m-6",
+          "statement": "Buttons on cards meet 44x44px minimum touch target."
+        }
+      ],
+      "claims": [
+        {
+          "evidenceId": 19,
+          "obligationId": "r1",
+          "subject": "buttons",
+          "scope": "global",
+          "targets": [],
+          "conditions": []
+        }
+      ],
+      "expectedAccepted": false,
+      "decisions": []
+    },
+    {
+      "name": "universal-button-counterpart",
+      "ledger": {
+        "request": "- Buttons must have a minimum touch target of 44×44 px.",
+        "obligations": [
+          {
+            "id": "r1",
+            "sourceLines": [1],
+            "requirement": "- Buttons must have a minimum touch target of 44×44 px.",
+            "subject": "buttons",
+            "scope": "global",
+            "targets": [],
+            "closedInventory": false,
+            "conditions": []
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": 1,
+          "source": "planned",
+          "interventionId": "m1",
+          "statement": "Every button in the application has a minimum touch target of 44x44 px."
+        }
+      ],
+      "claims": [
+        {
+          "evidenceId": 1,
+          "obligationId": "r1",
+          "subject": "buttons",
+          "scope": "global",
+          "targets": [],
+          "conditions": []
+        }
+      ],
+      "expectedAccepted": true,
+      "decisions": []
+    },
+    {
+      "name": "csv-only-global-claim",
+      "ledger": {
+        "request": "CSV and JSON exports preserve the source record order.",
+        "obligations": [
+          {
+            "id": "r1",
+            "sourceLines": [1],
+            "requirement": "CSV and JSON exports preserve the source record order.",
+            "subject": "exports",
+            "scope": "global",
+            "targets": ["CSV", "JSON"],
+            "closedInventory": true,
+            "conditions": []
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": 1,
+          "source": "planned",
+          "interventionId": "m1",
+          "statement": "CSV exports preserve the source record order."
+        }
+      ],
+      "claims": [
+        {
+          "evidenceId": 1,
+          "obligationId": "r1",
+          "subject": "exports",
+          "scope": "global",
+          "targets": ["CSV"],
+          "conditions": []
+        }
+      ],
+      "expectedAccepted": false,
+      "decisions": []
+    },
+    {
+      "name": "closed-inventory-complete-counterpart",
+      "ledger": {
+        "request": "CSV and JSON exports preserve the source record order.",
+        "obligations": [
+          {
+            "id": "r1",
+            "sourceLines": [1],
+            "requirement": "CSV and JSON exports preserve the source record order.",
+            "subject": "exports",
+            "scope": "global",
+            "targets": ["CSV", "JSON"],
+            "closedInventory": true,
+            "conditions": []
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": 1,
+          "source": "planned",
+          "interventionId": "m1",
+          "statement": "CSV exports preserve the source record order."
+        },
+        {
+          "id": 2,
+          "source": "planned",
+          "interventionId": "m1",
+          "statement": "JSON exports preserve the source record order."
+        }
+      ],
+      "claims": [
+        {
+          "evidenceId": 1,
+          "obligationId": "r1",
+          "subject": "exports",
+          "scope": "local",
+          "targets": ["CSV"],
+          "conditions": []
+        },
+        {
+          "evidenceId": 2,
+          "obligationId": "r1",
+          "subject": "exports",
+          "scope": "local",
+          "targets": ["JSON"],
+          "conditions": []
+        }
+      ],
+      "expectedAccepted": true,
+      "decisions": []
+    },
+    {
+      "name": "conditional-property-omitted",
+      "ledger": {
+        "request": "If CSV is requested, retain UTF-8 encoding and quote fields containing delimiters.",
+        "obligations": [
+          {
+            "id": "r1",
+            "sourceLines": [1],
+            "requirement": "If CSV is requested, retain UTF-8 encoding and quote fields containing delimiters.",
+            "subject": "CSV export",
+            "scope": "local",
+            "targets": ["CSV"],
+            "closedInventory": true,
+            "conditions": ["CSV is requested"]
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": 1,
+          "source": "planned",
+          "interventionId": "m1",
+          "statement": "If CSV is requested, retain UTF-8 encoding."
+        }
+      ],
+      "claims": [
+        {
+          "evidenceId": 1,
+          "obligationId": "r1",
+          "subject": "CSV export",
+          "scope": "local",
+          "targets": ["CSV"],
+          "conditions": ["CSV is requested"]
+        }
+      ],
+      "expectedAccepted": false,
+      "decisions": []
+    },
+    {
+      "name": "conditional-complete-counterpart",
+      "ledger": {
+        "request": "If CSV is requested, retain UTF-8 encoding and quote fields containing delimiters.",
+        "obligations": [
+          {
+            "id": "r1",
+            "sourceLines": [1],
+            "requirement": "If CSV is requested, retain UTF-8 encoding and quote fields containing delimiters.",
+            "subject": "CSV export",
+            "scope": "local",
+            "targets": ["CSV"],
+            "closedInventory": true,
+            "conditions": ["CSV is requested"]
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": 1,
+          "source": "planned",
+          "interventionId": "m1",
+          "statement": "If CSV is requested, retain UTF-8 encoding and quote fields containing delimiters."
+        }
+      ],
+      "claims": [
+        {
+          "evidenceId": 1,
+          "obligationId": "r1",
+          "subject": "CSV export",
+          "scope": "local",
+          "targets": ["CSV"],
+          "conditions": ["CSV is requested"]
+        }
+      ],
+      "expectedAccepted": true,
+      "decisions": []
+    },
+    {
+      "name": "deferred-boundary-contradicted",
+      "ledger": {
+        "request": "Keep JSON export.\nPrepare storage adapters without connecting to external services.\nUse a browser editor or a command-line editor; ask which.",
+        "obligations": [
+          {
+            "id": "r1",
+            "sourceLines": [1],
+            "requirement": "Keep JSON export.",
+            "subject": "JSON export",
+            "scope": "local",
+            "targets": ["JSON"],
+            "closedInventory": true,
+            "conditions": []
+          },
+          {
+            "id": "r2",
+            "sourceLines": [2],
+            "requirement": "Prepare storage adapters without connecting to external services.",
+            "subject": "storage adapters",
+            "scope": "global",
+            "targets": [],
+            "closedInventory": false,
+            "conditions": []
+          },
+          {
+            "id": "r3",
+            "sourceLines": [3],
+            "requirement": "Keep the editor command-line only as explicitly confirmed.",
+            "subject": "editor",
+            "scope": "local",
+            "targets": ["command-line"],
+            "closedInventory": true,
+            "conditions": []
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": 1,
+          "source": "retained",
+          "interventionId": "previous-json",
+          "statement": "JSON export remains available: npm test: JSON export regression passed"
+        },
+        {
+          "id": 2,
+          "source": "planned",
+          "interventionId": "m1",
+          "statement": "Storage adapters exist and connect to external services."
+        },
+        {
+          "id": 3,
+          "source": "planned",
+          "interventionId": "m1",
+          "statement": "The editor stays command-line only as confirmed by the user."
+        }
+      ],
+      "claims": [
+        {
+          "evidenceId": 1,
+          "obligationId": "r1",
+          "subject": "JSON export",
+          "scope": "local",
+          "targets": ["JSON"],
+          "conditions": []
+        },
+        {
+          "evidenceId": 2,
+          "obligationId": "r2",
+          "subject": "storage adapters",
+          "scope": "global",
+          "targets": [],
+          "conditions": []
+        },
+        {
+          "evidenceId": 3,
+          "obligationId": "r3",
+          "subject": "editor",
+          "scope": "local",
+          "targets": ["command-line"],
+          "conditions": []
+        }
+      ],
+      "expectedAccepted": false,
+      "decisions": ["Keep the editor command-line only; do not add a browser editor."]
+    },
+    {
+      "name": "retained-choice-complete-counterpart",
+      "ledger": {
+        "request": "Keep JSON export.\nPrepare storage adapters without connecting to external services.\nUse a browser editor or a command-line editor; ask which.",
+        "obligations": [
+          {
+            "id": "r1",
+            "sourceLines": [1],
+            "requirement": "Keep JSON export.",
+            "subject": "JSON export",
+            "scope": "local",
+            "targets": ["JSON"],
+            "closedInventory": true,
+            "conditions": []
+          },
+          {
+            "id": "r2",
+            "sourceLines": [2],
+            "requirement": "Prepare storage adapters without connecting to external services.",
+            "subject": "storage adapters",
+            "scope": "global",
+            "targets": [],
+            "closedInventory": false,
+            "conditions": []
+          },
+          {
+            "id": "r3",
+            "sourceLines": [3],
+            "requirement": "Keep the editor command-line only as explicitly confirmed.",
+            "subject": "editor",
+            "scope": "local",
+            "targets": ["command-line"],
+            "closedInventory": true,
+            "conditions": []
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": 1,
+          "source": "retained",
+          "interventionId": "previous-json",
+          "statement": "JSON export remains available: npm test: JSON export regression passed"
+        },
+        {
+          "id": 2,
+          "source": "planned",
+          "interventionId": "m1",
+          "statement": "Storage adapters exist without external connections; integrations stay deferred."
+        },
+        {
+          "id": 3,
+          "source": "planned",
+          "interventionId": "m1",
+          "statement": "The editor stays command-line only as confirmed by the user."
+        }
+      ],
+      "claims": [
+        {
+          "evidenceId": 1,
+          "obligationId": "r1",
+          "subject": "JSON export",
+          "scope": "local",
+          "targets": ["JSON"],
+          "conditions": []
+        },
+        {
+          "evidenceId": 2,
+          "obligationId": "r2",
+          "subject": "storage adapters",
+          "scope": "global",
+          "targets": [],
+          "conditions": []
+        },
+        {
+          "evidenceId": 3,
+          "obligationId": "r3",
+          "subject": "editor",
+          "scope": "local",
+          "targets": ["command-line"],
+          "conditions": []
+        }
+      ],
+      "expectedAccepted": true,
+      "decisions": ["Keep the editor command-line only; do not add a browser editor."]
+    }
+  ]
+}

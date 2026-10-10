@@ -1,5 +1,6 @@
 import { ipcMain, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
+import { requestCoverageLedgerSchema } from '../../../shared/domain/agent/requestCoverageLedger'
 import { sourceLocationRequestSchema } from '../../../shared/domain/sourceProvenance'
 import {
   sidecarExportPayloadSchema,
@@ -206,6 +207,7 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
   'agent:plan-enrich-prompt': obj({ prompt: string, answers: z.array(interviewAnswer).max(50), questions: z.array(interviewQuestion).max(50) }),
   'agent:plan-generate': obj({
     prompt: string,
+    confirmedCoverage: requestCoverageLedgerSchema.optional(),
     model: optionalString,
     settings,
     previousPlan: agentPlanSchema.optional(),

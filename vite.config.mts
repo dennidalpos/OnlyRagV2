@@ -58,9 +58,8 @@ export default defineConfig({
     tailwindcss(),
     electron({
       main: {
-        // The typecheck worker is a second entry so it lands next to main.js as typecheckWorker.js
-        // (WorkspaceTypecheckWorkerClient loads it from __dirname); shared modules become chunks.
-        entry: { main: 'electron/main.ts', typecheckWorker: 'electron/typecheckWorker.ts' },
+        // Worker entries load beside main.js; shared modules become chunks.
+        entry: { main: 'electron/main.ts', typecheckWorker: 'electron/typecheckWorker.ts', dependencyScanWorker: 'electron/dependencyScanWorker.ts' },
         vite: {
           build: {
             // Keep compression while preserving names: Oxc's default mangling
@@ -75,14 +74,8 @@ export default defineConfig({
               output: {
                 minify: { compress: true, mangle: false, codegen: true },
               },
-              // depcheck resolves its language parsers at runtime with require('./parser/<name>'),
-              // built from a name list evaluated the moment the module is imported. Inlined into
-              // dist-electron/main.js that require becomes dist-electron/parser/coffee, which does
-              // not exist: the main process threw "App threw an error during load" before writing
-              // its second log line, so the installed app died at startup with nothing to go on.
-              // Left external it is required from node_modules, which electron-builder does package
-              // (node_modules/depcheck/dist/parser/*.js are inside app.asar), and its own relative
-              // requires resolve next to it.
+              // depcheck loads ./parser/<name> dynamically. Keep it external so those
+              // paths resolve inside its installed package, including app.asar.
               // Playwright resolves browser protocol helpers dynamically. Keeping it in the
               // Electron main bundle makes Rolldown resolve an optional chromium-bidi import
               // that is only needed by one runtime path; the package must remain external so

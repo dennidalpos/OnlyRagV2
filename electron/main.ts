@@ -41,6 +41,7 @@ import { setTrustedIpcWindowProvider } from './core/presentation/secureIpcMain'
 import { systemAppService } from './core/application/systemAppService'
 import { agentToolExecutorService } from './core/application/agentToolExecutorService'
 import { taskQueueAppService } from './core/application/taskQueueAppService'
+import { dependencyScanWorker } from './core/infrastructure/process/dependencyScanWorkerClient'
 import type { RendererEventSink } from './core/domain/ports/rendererEventSink'
 
 process.env.DIST = path.join(__dirname, '../dist')
@@ -143,12 +144,15 @@ function shutdownOwnedResources(): Promise<void> {
   taskRunner.cancelAllTasks()
   managedDevServerRepository.stopAll()
   sidecarProcessManager.stopPythonSidecar()
-  const cleanup = Promise.allSettled([taskQueueAppService.shutdown(), agentToolExecutorService.closeAllBrowserRuns(), taskRunner.cleanTempResiduals()]).then(
-    (results) => {
-      const failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason as unknown)
-      if (failures.length) throw new AggregateError(failures, 'Owned shutdown resources failed to settle.')
-    },
-  )
+  const cleanup = Promise.allSettled([
+    dependencyScanWorker.shutdown(),
+    taskQueueAppService.shutdown(),
+    agentToolExecutorService.closeAllBrowserRuns(),
+    taskRunner.cleanTempResiduals(),
+  ]).then((results) => {
+    const failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason as unknown)
+    if (failures.length) throw new AggregateError(failures, 'Owned shutdown resources failed to settle.')
+  })
   let timer: ReturnType<typeof setTimeout>
   ownedShutdown = Promise.race([
     cleanup,

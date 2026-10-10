@@ -25,6 +25,7 @@ Documentazione tecnica breve, verificata contro il codice. I contratti prevalgon
 | RAG, OCR e traduzione | [`rag-sidecar.md`](./rag-sidecar.md) |
 | Setup, test e release | [`operations.md`](./operations.md) |
 | Dipendenze | [`libraries.md`](./libraries.md) |
+| Distribution licenses and policy | [`distribution-licenses.md`](./distribution-licenses.md) |
 | Decisioni non ovvie | [`decisions.md`](./decisions.md) |
 | Verifica e limiti noti | [`verification.md`](./verification.md) |
 | Audit del Coding Agent (2026-09-26) | [`coding-agent-audit-2026-09-26.md`](./coding-agent-audit-2026-09-26.md) |

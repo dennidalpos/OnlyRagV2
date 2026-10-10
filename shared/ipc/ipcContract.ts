@@ -181,6 +181,7 @@ export interface IpcInvokeContract {
   'agent:plan-generate': {
     payload: {
       prompt: string
+      confirmedCoverage?: import('../domain/agent/requestCoverageLedger').RequestCoverageLedger
       model?: string
       settings: AppSettings
       previousPlan?: AgentPlan

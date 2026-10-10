@@ -1,6 +1,22 @@
 import { AGENT_MAIN_TEXT_IT } from '../../../shared/domain/agent/agentMainText'
 
 export const it = {
+  requestScope: {
+    title: 'Conferma l’ambito della richiesta',
+    description:
+      'Rivedi ogni obbligo prima di generare il piano. Le proprietà globali valgono per tutti i destinatari attuali e aggiuntivi. Segna come contesto solo titoli e informazioni di sfondo. Correggi le interpretazioni ambigue o separa gli obblighi presenti nella stessa riga.',
+    requirement: 'Comportamento richiesto',
+    subject: 'Categoria dei destinatari',
+    scope: 'Ambito',
+    global: 'Globale',
+    local: 'Solo destinatari nominati',
+    context: 'Contesto / titolo',
+    targets: 'Destinatari nominati (uno per riga)',
+    closed: 'Questo elenco comprende ogni destinatario possibile',
+    conditions: 'Condizioni (una per riga; vuoto significa incondizionato)',
+    split: 'Separa obbligo',
+    confirm: 'Conferma ambito e genera piano',
+  },
   common: {
     appName: 'OnlyRag V2',
     tagline: 'AI Studio Locale & Vector RAG',

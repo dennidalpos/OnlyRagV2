@@ -52,7 +52,7 @@ describe('project verification dependency evidence', () => {
     nodeProject('client')
     vi.mocked(scanWorkspaceDependencies).mockResolvedValue({ scanned: true, missing: { 'missing-library': [path.join(root, 'client/src/app.js')] } })
     const result = await runProjectVerification(root, undefined, undefined, true)
-    expect(scanWorkspaceDependencies).toHaveBeenCalledWith(path.join(root, 'client'))
+    expect(scanWorkspaceDependencies).toHaveBeenCalledWith(path.join(root, 'client'), undefined, undefined)
     expect(result.status).toBe('failed')
     expect(result.failureDetail).toContain('missing-library')
     expect(result.failureDetail).toContain('src/app.js')
@@ -90,6 +90,7 @@ describe('project verification dependency evidence', () => {
     expect(result.status).toBe('unverifiable')
     expect(execute).not.toHaveBeenCalled()
     expect(verifyWebUi).not.toHaveBeenCalled()
+    expect(scanWorkspaceDependencies).toHaveBeenCalledWith(root, undefined, cancellation.signal)
   })
 
   it('preserves a successful declared command after complete dependency evidence', async () => {

@@ -25,6 +25,13 @@ import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/
 import { ollamaAppService } from './ollamaAppService'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 import { reviewPlanRequestCoverage } from './planRequestCoverage'
+import { draftRequestLedger } from './requestCoverageLedgerDraft'
+import {
+  requestCoverageLedgerSchema,
+  validateRequestLedger,
+  type RequestCoverageLedger,
+  type CoverageEvidence,
+} from '../../../shared/domain/agent/requestCoverageLedger'
 
 const PLAN_SYSTEM_PROMPT = `Create a short, sequential coding plan in the requested JSON shape.
 Use one intervention for a small fix and normally three to five for medium work; never exceed fifteen.
@@ -39,11 +46,13 @@ When those requirements name root index.html and src/main.*, use a compatible we
 Executable verification commands already exist and may be used in verificationCommand. Proposed commands are future checks only and must never be returned as verificationCommand.
 Never add analysis or inspection as interventions. Never invent verification commands or project infrastructure.
 Carry each pending prior intervention through sourceInterventionId or list it in supersededWork with a reason.
+The human-confirmed coverage ledger is immutable. Return coverageClaims for every actionable obligation. Evidence IDs are 1-based across intervention acceptance criteria in response order, followed by retainedEvidence in input order. Each claim names its evidenceId, obligationId, exact confirmed subject, global/local scope, targets and exact conditions. Local examples cannot satisfy open global obligations. Statements must explicitly undertake the claimed behavior and scope; a declaration alone cannot supply omitted wording.
 Use the request language.`
 
 export interface PlanGenerationRequest {
   operationId?: string
   prompt: string
+  confirmedCoverage?: RequestCoverageLedger
   model?: string
   settings: AppSettings
   previousPlan?: AgentPlan
@@ -123,7 +132,10 @@ function toMilestones(plan: PlanningPhaseResponse): PlanMilestone[] {
     id: `m-${index + 1}`,
     title: intervention.objective,
     status: 'pending',
-    filePaths: resolveDeclaredFilePaths({ title: intervention.objective, filePaths: intervention.filePaths }),
+    filePaths: resolveDeclaredFilePaths({
+      title: intervention.objective,
+      filePaths: intervention.filePaths,
+    }),
     acceptanceCriteria: intervention.acceptanceCriteria,
     verificationCommand: intervention.verificationCommand,
     verificationReferences: intervention.verificationCommand ? [intervention.verificationCommand] : [],
@@ -141,7 +153,9 @@ function sanitizeVerificationCommands(
     (item) => item.verificationCommand && !executableCommands.includes(item.verificationCommand) && item.filePaths.length === 0,
   )
   if (unavailableCommandOnly?.verificationCommand && !scaffoldFilePath) {
-    return { error: `Plan response used an unavailable verification command: ${unavailableCommandOnly.verificationCommand}` }
+    return {
+      error: `Plan response used an unavailable verification command: ${unavailableCommandOnly.verificationCommand}`,
+    }
   }
 
   return {
@@ -161,7 +175,39 @@ function sanitizeVerificationCommands(
 }
 
 export class PlanGenerationAppService {
+  private operations = new Map<string, AbortController>()
+
+  cancelPlanOperation(id: string): boolean {
+    const controller = this.operations.get(id)
+    if (!controller) return false
+    controller.abort(new Error('Plan generation cancelled'))
+    return true
+  }
+
   async generatePlanText(req: PlanGenerationRequest): Promise<PlanGenerationResult> {
+    if (req.operationId && (this.operations.has(req.operationId) || this.operations.size >= 32)) {
+      return {
+        status: 'error',
+        objective: '',
+        decisions: [],
+        retainedEvidence: [],
+        milestones: [],
+        supersededWork: [],
+        error: 'Planning operation already active or capacity exhausted',
+      }
+    }
+    const controller = new AbortController()
+    if (req.operationId) this.operations.set(req.operationId, controller)
+    try {
+      return await this.generateOwnedPlan(req, controller.signal)
+    } catch (error: unknown) {
+      return { status: 'error', objective: '', decisions: [], retainedEvidence: [], milestones: [], supersededWork: [], error: errorMessage(error) }
+    } finally {
+      if (req.operationId) this.operations.delete(req.operationId)
+    }
+  }
+
+  private async generateOwnedPlan(req: PlanGenerationRequest, signal: AbortSignal): Promise<PlanGenerationResult> {
     const model = resolveConfiguredModel('coding', req.settings, req.model)
     if (!model) {
       const previous = req.previousPlan
@@ -175,6 +221,18 @@ export class PlanGenerationAppService {
         error: noConfiguredModelMessage('coding'),
       }
     }
+    const confirmationError = req.confirmedCoverage && validateRequestLedger(req.confirmedCoverage, req.prompt)
+    if (confirmationError)
+      return {
+        status: 'error',
+        objective: '',
+        decisions: [],
+        retainedEvidence: [],
+        milestones: [],
+        supersededWork: [],
+        error: confirmationError,
+      }
+    const confirmedCoverage = req.confirmedCoverage ? requestCoverageLedgerSchema.parse(req.confirmedCoverage) : undefined
     const cachedGpu = hardwareProbe.getCachedGpuInfo()
     const memInfo = hardwareProbe.getMemoryInfo()
     const runtimeOpts = {
@@ -187,7 +245,9 @@ export class PlanGenerationAppService {
       ...resolveModelSamplingOverrides(model, req.settings.modelSamplingOverrides),
     }
     const trainedContext = await ollamaAppService.getModelContextLength(model, req.settings.ollamaHost)
+    signal.throwIfAborted()
     const modelMetrics = await ollamaAppService.getModelMetrics(req.settings.ollamaHost)
+    signal.throwIfAborted()
     runtimeOpts.num_ctx = resolveModelContextLength(model, req.settings.modelContextLengths, runtimeOpts.num_ctx, trainedContext)
     runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx)
     runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx)
@@ -199,6 +259,8 @@ export class PlanGenerationAppService {
     const previousInterventions = req.previousPlan?.milestones || []
     const userContent = JSON.stringify({
       request: req.prompt,
+      confirmedCoverage,
+      retainedEvidence: retainEvidence(req.previousPlan),
       workspace: req.workspacePath ? (hasExistingProject ? 'existing' : 'empty') : 'unknown',
       projectFacts: discovery.facts,
       executableVerificationCommands,
@@ -232,10 +294,27 @@ export class PlanGenerationAppService {
         keepAlive: CODING_MODEL_KEEP_ALIVE,
         options: runtimeOpts,
       }
+      if (!confirmedCoverage) {
+        const scopeDraft = await draftRequestLedger(request, req.prompt, confirmedDecisions)
+        signal.throwIfAborted()
+        return {
+          status: 'scope_confirmation_required',
+          scopeDraft,
+          objective: '',
+          decisions: [],
+          retainedEvidence: retained,
+          milestones: [],
+          supersededWork: [],
+        }
+      }
       const response = await generateStructuredWithRecovery(request, async (content) => {
+        signal.throwIfAborted()
         const validated = validateStructuredContent(content, planningPhaseResponseSchema)
         if (validated.status === 'invalid') {
-          return { status: 'invalid', error: `Invalid plan response: ${validated.error}` }
+          return {
+            status: 'invalid',
+            error: `Invalid plan response: ${validated.error}`,
+          }
         }
         const freshPlan = normalizeFreshPlanReferences(validated.data, previousInterventions)
         const sanitized = sanitizeVerificationCommands(freshPlan, executableVerificationCommands, discovery.scaffold.requirements[0]?.path)
@@ -245,11 +324,34 @@ export class PlanGenerationAppService {
           reconcilePreviousWork(sanitized.plan || freshPlan, previousInterventions)
         if (error) return { status: 'invalid', error }
         const candidate = compilePlanMilestones(toMilestones(sanitized.plan!), verification, discovery.scaffold)
-        const coverageError = await reviewPlanRequestCoverage(request, req.prompt, candidate, retained, confirmedDecisions)
+        const evidence: CoverageEvidence[] = [
+          ...sanitized.plan!.interventions.flatMap((item) =>
+            item.acceptanceCriteria.map((statement) => ({
+              source: 'planned' as const,
+              interventionId: item.id,
+              statement,
+            })),
+          ),
+          ...retained.map((item) => ({
+            source: 'retained' as const,
+            interventionId: item.interventionId,
+            statement: `${item.summary}: ${item.verificationReferences.join('; ')}`,
+          })),
+        ].map((item, index) => ({ ...item, id: index + 1 }))
+        const coverageError = await reviewPlanRequestCoverage(
+          request,
+          confirmedCoverage,
+          evidence,
+          sanitized.plan!.coverageClaims,
+          confirmedDecisions,
+          candidate,
+        )
+        signal.throwIfAborted()
         if (coverageError) return { status: 'invalid', error: coverageError }
         compiledMilestones = candidate
         return { status: 'valid', data: sanitized.plan! }
       })
+      signal.throwIfAborted()
       if (response.status === 'success') {
         structuredPlan = response.data
       } else {
@@ -291,6 +393,7 @@ export class PlanGenerationAppService {
         isCodingAgentDebugPayloadCaptureEnabled(req.settings),
       )
       codingAgentLogger.logPlanGeneration(auditSessionId, req.prompt, milestones.length, 'guided')
+      if (confirmedCoverage) codingAgentLogger.logRequestCoverage(auditSessionId, JSON.stringify(confirmedCoverage))
       const auditSucceeded = !generationError && milestones.length > 0
       codingAgentLogger.logSessionEnd(
         auditSessionId,

@@ -147,6 +147,7 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
   'dialog:open-directory': obj({ title: string.optional() }).optional(),
   'system:open-external': obj({ url: z.url() }),
   'system:open-path': obj({ targetPath: path }),
+  'system:open-distribution-licenses': null,
   'system:check-disk-space': obj({ models: z.array(short).max(100) }),
   'task:cancel': obj({ taskId: optionalString }).optional(),
   'workspace:get-standalone-scratch': null,

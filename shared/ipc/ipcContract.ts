@@ -151,6 +151,7 @@ export interface IpcInvokeContract {
   }
   'system:open-external': { payload: { url: string }; result: boolean }
   'system:open-path': { payload: { targetPath: string }; result: boolean }
+  'system:open-distribution-licenses': { payload: undefined; result: boolean }
   'agent:start-task': { payload: AgentTaskRequest; result: AgentDoneResult & { error?: string; runId?: string; queuePosition?: number } }
   'agent:cancel-task': { payload: AgentRunIdentity; result: { success: boolean; message?: string } }
   'agent:read-browser-screenshot': {
@@ -337,6 +338,7 @@ export const IPC_INVOKE_METHODS = {
   checkDiskSpace: 'system:check-disk-space',
   openExternalUrl: 'system:open-external',
   openPath: 'system:open-path',
+  openDistributionLicenses: 'system:open-distribution-licenses',
   startAgentTask: 'agent:start-task',
   cancelAgentTask: 'agent:cancel-task',
   readAgentBrowserScreenshot: 'agent:read-browser-screenshot',

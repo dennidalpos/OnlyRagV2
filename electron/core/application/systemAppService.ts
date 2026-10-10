@@ -9,6 +9,7 @@ import { estimateModelWeightGB } from '../../../shared/domain/hardware/modelWeig
 import type { AppSettings } from '../../../shared/types'
 import { isAllowedExternalUrl } from '../../navigationPolicy'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { distributionLicenseRepository } from '../infrastructure/filesystem/distributionLicenseRepository'
 
 export interface DiskSpaceCheckResult {
   allowed: boolean
@@ -127,8 +128,11 @@ export class SystemAppService {
   async openPath(targetPath: string): Promise<boolean> {
     const trimmed = typeof targetPath === 'string' ? targetPath.trim() : ''
     if (!trimmed || !this.isDirectory(trimmed)) return false
-    await this.desktop.openPath(trimmed)
-    return true
+    return (await this.desktop.openPath(trimmed)) === ''
+  }
+
+  async openDistributionLicenses(): Promise<boolean> {
+    return this.openPath(distributionLicenseRepository.getDirectory())
   }
 }
 

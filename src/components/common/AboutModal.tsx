@@ -29,7 +29,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   // Core & Desktop Runtime
   {
     name: 'Electron',
-    version: 'v43.4.0',
+    version: 'v43.7.4',
     description: 'Cross-platform native desktop application shell and context-isolated IPC runtime.',
     license: 'MIT',
     category: 'core',
@@ -185,7 +185,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
     name: 'WordFreq & SymSpell',
     version: '>= v3.1 / v6.7',
     description: 'Multilingual token frequency scoring, spell checking, and OCR error correction.',
-    license: 'Apache-2.0 / MIT',
+    license: 'Apache-2.0 / CC BY-SA-4.0 (data) / MIT',
     category: 'aiAndVector',
     url: 'https://github.com/rspeer/wordfreq',
   },
@@ -335,6 +335,7 @@ export const CATEGORY_TABS: { id: string; labelKey: TranslationKey }[] = [
 export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
   const { t } = useTranslation()
   const [copiedUrl, setCopiedUrl] = useState(false)
+  const [licenseError, setLicenseError] = useState(false)
 
   const repoUrl = APP_REPOSITORY_URL
 
@@ -353,6 +354,15 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
       window.electronAPI.openExternalUrl({ url })
     } else {
       window.open(url, '_blank', 'noopener,noreferrer')
+    }
+  }
+
+  const handleOpenLicenses = async () => {
+    try {
+      setLicenseError(!(await window.electronAPI?.openDistributionLicenses()))
+    } catch (err: unknown) {
+      setLicenseError(true)
+      logger.warn('AboutModal', `Failed opening distribution licenses: ${errorMessage(err)}`)
     }
   }
 
@@ -462,6 +472,14 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
               </div>
             </div>
             <div className="text-[11px] text-slate-400 leading-tight">{t('about.licenseNotice')}</div>
+            <button type="button" onClick={handleOpenLicenses} className="text-xs text-emerald-400 hover:text-emerald-300 focus-ring rounded cursor-pointer">
+              {t('about.openLicenses')}
+            </button>
+            {licenseError && (
+              <p role="alert" className="text-xs text-red-400">
+                {t('about.licenseOpenError')}
+              </p>
+            )}
           </div>
         </div>
 

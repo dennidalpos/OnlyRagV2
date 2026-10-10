@@ -722,8 +722,11 @@ export const it = {
     openRepo: 'Apri Repository GitHub',
     copyUrl: 'Copia URL',
     licenseTitle: 'Licenza Software',
-    licenseType: 'MIT License',
-    licenseNotice: 'Libero da usare, modificare e distribuire per scopi commerciali e personali.',
+    licenseType: 'Distribuzione GNU AGPL v3',
+    licenseNotice:
+      'Copyright 2026 Danny Perondi. Nessuna garanzia. Puoi modificare e ridistribuire secondo AGPL v3. Il codice del progetto conserva i permessi MIT. Testi completi, notice dei componenti e indicazioni per i sorgenti sono disponibili qui sotto.',
+    openLicenses: 'Apri licenze e indicazioni per i sorgenti',
+    licenseOpenError: 'Impossibile aprire la cartella delle licenze.',
     creditsTitle: 'Componenti & Dipendenze Core',
     creditsSubtitle: 'Tecnologie fondamentali dell’architettura di OnlyRag V2:',
     categories: {

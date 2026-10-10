@@ -115,20 +115,15 @@
     ],
     "extraResources": [
       {
-        "from": "sidecar",
+        "from": "build/release-cpu/sidecar",
         "to": "sidecar",
         "filter": [
-          "**/*",
-          "!**/__pycache__/**",
-          "!**/*.pyc",
-          "!tests/**",
-          "!assets/fonts/**",
-          "!contracts/**"
+          "**/*"
         ]
       },
       {
-        "from": "sidecar_dist/sidecar",
-        "to": "sidecar",
+        "from": "build/release-cpu/licenses",
+        "to": "licenses",
         "filter": [
           "**/*"
         ]

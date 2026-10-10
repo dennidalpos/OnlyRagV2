@@ -26,6 +26,8 @@ Documentazione tecnica breve, verificata contro il codice. I contratti prevalgon
 | Setup, test e release | [`operations.md`](./operations.md) |
 | Dipendenze | [`libraries.md`](./libraries.md) |
 | Distribution licenses and policy | [`distribution-licenses.md`](./distribution-licenses.md) |
+| Approved AGPL distribution proposal | [`distribution-agpl-proposal.md`](./distribution-agpl-proposal.md) |
+| CPU packaging and release evidence | [`distribution-cpu-release.md`](./distribution-cpu-release.md) |
 | Decisioni non ovvie | [`decisions.md`](./decisions.md) |
 | Verifica e limiti noti | [`verification.md`](./verification.md) |
 | Audit del Coding Agent (2026-09-26) | [`coding-agent-audit-2026-09-26.md`](./coding-agent-audit-2026-09-26.md) |

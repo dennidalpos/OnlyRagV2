@@ -3,6 +3,11 @@ import os
 import sys
 from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_dynamic_libs
 
+sys.path.insert(0, SPECPATH)
+from scripts.release_artifacts import check_environment, is_gpu_library
+
+check_environment()
+
 datas = [
     # translator.py locates these via a __file__-relative path (sidecar/assets/fonts); PyInstaller
     # preserves that relative layout under _internal/ for bundled data files, but only if listed
@@ -22,24 +27,9 @@ for pkg in ['lancedb', 'pymupdf', 'fastapi', 'uvicorn', 'pydantic', 'docx', 'rap
     except Exception as exc:
         raise RuntimeError(f"Failed to collect PyInstaller assets for {pkg}") from exc
 
-# onnxruntime-gpu exposes its Python package as `onnxruntime`. Collect its provider DLLs without
-# traversing optional quantization helpers that require the separate `onnx` package.
+# Collect CPU runtime assets without importing optional quantization tools.
 datas += collect_data_files('onnxruntime')
 binaries += collect_dynamic_libs('onnxruntime')
-
-# CUDA provider dependencies are data-only namespace packages, so collect their runtime DLLs
-# explicitly instead of relying on PyInstaller import discovery.
-site_packages = os.path.join(sys.prefix, 'Lib', 'site-packages')
-for relative_dir in [
-    os.path.join('nvidia', 'cu13', 'bin', 'x86_64'),
-    os.path.join('nvidia', 'cudnn', 'bin'),
-]:
-    source_dir = os.path.join(site_packages, relative_dir)
-    if not os.path.isdir(source_dir):
-        raise RuntimeError(f"Missing bundled CUDA runtime directory: {source_dir}")
-    for name in os.listdir(source_dir):
-        if name.lower().endswith('.dll'):
-            binaries.append((os.path.join(source_dir, name), relative_dir))
 
 sidecar_script = os.path.abspath(os.path.join(SPECPATH, 'sidecar', 'main.py'))
 
@@ -61,15 +51,9 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
-# PyInstaller's dependency scan also copies the CUDA DLLs that onnxruntime links against into the
-# _internal root, duplicating the ones bundled under nvidia/ above (~520 MB of cuBLAS). The runtime
-# puts the nvidia/ directories on PATH before loading the CUDA provider (see
-# sidecar/infrastructure/ocr.py::_configure_cuda_dll_path), so the root copies are never needed.
-bundled_cuda_dlls = {os.path.basename(src).lower() for src, dest in binaries if dest.startswith('nvidia')}
-a.binaries = [
-    entry for entry in a.binaries
-    if not (os.path.dirname(entry[0]) == '' and os.path.basename(entry[0]).lower() in bundled_cuda_dlls)
-]
+for name, source, _kind in a.binaries:
+    if is_gpu_library(name) or is_gpu_library(source):
+        raise RuntimeError(f"GPU library cannot enter the CPU release: {name}")
 
 pyz = PYZ(a.pure)
 

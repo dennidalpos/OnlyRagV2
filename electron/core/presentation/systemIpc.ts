@@ -23,6 +23,10 @@ export function registerSystemIpcHandlers() {
     return systemAppService.openPath(targetPath)
   })
 
+  ipcMain.handle('system:open-distribution-licenses', async () => {
+    return systemAppService.openDistributionLicenses()
+  })
+
   ipcMain.handle('task:cancel', async (_, payload) => {
     return payload?.taskId ? taskAppService.cancelTask(payload.taskId) : taskAppService.cancelAllTasks()
   })

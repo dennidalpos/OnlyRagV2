@@ -1,32 +1,4 @@
--c constraints.txt
+-r requirements-common.txt
 
-fastapi>=0.110.0
-uvicorn>=0.28.0
-lancedb>=0.6.0
-pymupdf>=1.24.0
-pydantic>=2.6.0
-python-multipart>=0.0.9
-httpx>=0.27.0
-numpy>=1.26.0
-pandas>=2.0.0
-pyarrow>=25.0.1
-openpyxl>=3.1.5
-xlrd>=2.0.2
-python-docx>=1.1.0
-pillow>=10.0.0
-puremagic>=1.30
-# rapidocr 3 does not pull the CPU onnxruntime wheel; setup_dev_environment.ps1 swaps it out if anything else does.
-# onnxruntime-gpu includes CPU fallback; the two distributions cannot coexist.
+# Development keeps CUDA; release uses a separate CPU environment.
 onnxruntime-gpu[cuda,cudnn]==1.29.0
-rapidocr>=3.9.0
-wordfreq>=3.1.0
-symspellpy>=6.7.7
-langdetect>=1.0.9
-tabulate>=0.9.0
-# rapidocr requires opencv-python; a headless pin would install a second build into the same cv2 package.
-opencv-python>=4.8.0
-ftfy>=6.2.0
-# Mustache renderer for the `images:analysis` vision prompt: its per-page variables
-# (currentPage/numPages/activePageContent) are only known inside the sidecar page loop, so the
-# Electron side ships the raw template and sidecar/domain/vision_prompt.py renders it here.
-chevron>=0.14.0

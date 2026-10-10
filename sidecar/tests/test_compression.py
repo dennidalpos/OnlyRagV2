@@ -7,6 +7,20 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from sidecar.domain.exporter import _render_pdf_from_markdown
 
+@pytest.mark.parametrize("content,expected", [
+    ("# 日本語\n\nПривет мир\n\n한국어", ["日本語", "Привет мир", "한국어"]),
+    (("Long paragraph preserves every word. " * 120) + "ENDMARKER", ["ENDMARKER"]),
+    ("```python\n" + "\n".join(f"line_{i} = {i}" for i in range(100)), ["line_99 = 99"]),
+    ("<img src=\"file:///private.png\"> & text", ["private.png", "& text"]),
+])
+def test_pdf_export_preserves_content(tmp_path, content, expected):
+    output = tmp_path / "content.pdf"
+    _render_pdf_from_markdown(content, str(output))
+    with pymupdf.open(output) as document:
+        text = "\n".join(page.get_text() for page in document)
+    for fragment in expected:
+        assert fragment in text
+
 def test_pdf_export_compression(tmp_path):
     markdown_sample = """# Relazione Tecnica Progetto OnlyRag V2
 

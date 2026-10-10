@@ -140,5 +140,19 @@ describe('SystemAppService Unit Tests', () => {
       expect(await customService.openPath('/my/workspace/folder')).toBe(true)
       expect(openedPaths).toEqual(['/my/workspace/folder'])
     })
+
+    it('reports shell errors instead of claiming the folder was opened', async () => {
+      const customService = new SystemAppService(
+        { loadSettings: async () => null },
+        {
+          openExternal: async () => {},
+          openPath: async () => 'Access denied',
+          showOpenDialog: async () => [],
+        },
+        () => true,
+      )
+
+      expect(await customService.openPath('/installed/licenses')).toBe(false)
+    })
   })
 })

@@ -42,4 +42,4 @@ skills/     Local agent skills
 
 ## License
 
-MIT. See [`LICENSE`](./LICENSE).
+Project source uses MIT; see [`LICENSE`](./LICENSE). Bundled dependencies have additional terms. The approved CPU installer uses AGPL distribution terms, bundled notices and an adjacent matching source candidate; see the [CPU release record](./docs/distribution-cpu-release.md) and [license review](./docs/distribution-licenses.md). Complete corresponding-source, component-rights and public delivery qualification remain pending. Nothing has been published.

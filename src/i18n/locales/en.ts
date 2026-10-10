@@ -715,8 +715,11 @@ export const en: TranslationSchema = {
     openRepo: 'Open GitHub Repository',
     copyUrl: 'Copy Repo URL',
     licenseTitle: 'Software License',
-    licenseType: 'MIT License',
-    licenseNotice: 'Free to use, modify, and distribute for commercial and personal projects.',
+    licenseType: 'GNU AGPL v3 distribution',
+    licenseNotice:
+      'Copyright 2026 Danny Perondi. No warranty. You may modify and redistribute under AGPL v3. Project source retains MIT permissions. Full terms, component notices and source delivery details are available below.',
+    openLicenses: 'Open licenses and source delivery details',
+    licenseOpenError: 'The license folder could not be opened.',
     creditsTitle: 'Core Dependencies & Components',
     creditsSubtitle: 'Foundational technologies powering OnlyRag V2:',
     categories: {

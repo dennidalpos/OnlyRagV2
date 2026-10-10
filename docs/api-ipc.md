@@ -78,3 +78,7 @@ resolveNativeFilePath: (payload: { file: File }) => string
 - Verification: Preload delegation and DOM refusal/duplicate-basename regressions; [isolated real Electron](../scripts/e2e/ingestionNativePath.mjs) checks six HTML input/drop/native-dialog routes using two same-named sources, their actual content, synthetic/non-File refusal and existing Main schema/filesystem refusals. The OS chooser result is controlled and a loopback HTTP fixture reads the real source, then refuses indexing. Production Main handlers remain installed. This qualifies path identity, without model/Sidecar indexing or manual OS-picker interaction. [Evidence and command](./verification.md#native-ingestion-file-identity--2026-10-06).
 
 Official sources checked 2026-10-06: [Electron File.path removal](https://www.electronjs.org/docs/latest/breaking-changes#removed-filepath), [webUtils and Preload example](https://www.electronjs.org/docs/latest/api/web-utils).
+
+## Distribution licenses — 2026-10-11
+
+`system:open-distribution-licenses` / `openDistributionLicenses` has no payload and returns a boolean. Main selects the installed resources/licenses directory; development selects the retained notice packet. Renderer cannot provide a path. About exposes the action with grant, redistribution and no-warranty notices; failure is displayed. `SystemAppService.openPath` now respects Electron shell.openPath's nonempty error result instead of reporting success.

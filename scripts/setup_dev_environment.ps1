@@ -90,6 +90,14 @@ try {
         & $venvPython -m pip install --no-deps --force-reinstall --constraint (Join-Path $rootDir 'sidecar/constraints.txt') opencv-python
         if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Reinstallazione di opencv-python fallita.' }
     }
+    Write-Host ""
+    Write-Host "=== Riepilogo Setup Ambiente di Sviluppo ===" -ForegroundColor Cyan
+    Write-Host "Root repository:   $rootDir"
+    Write-Host "Node modules:      $(Join-Path $rootDir 'node_modules')"
+    Write-Host "Runtime Electron:  $(Join-Path $rootDir 'node_modules/electron/dist/electron.exe')"
+    Write-Host "Virtualenv Python: $venvDir"
+    Write-Host "Interprete Python: $venvPython"
+    Write-Host "==========================================="
     Write-Host "[PASS] Ambiente pronto in $rootDir" -ForegroundColor Green
     exit 0
 } catch {

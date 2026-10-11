@@ -10,7 +10,6 @@ vi.mock('../infrastructure/filesystem/sessionHistoryRepository', () => ({
 vi.mock('../infrastructure/filesystem/agentSessionStateRepository', () => ({
   agentSessionStateRepository: {
     clearSessionState: vi.fn(),
-    clearAllSessionStates: vi.fn(),
   },
 }))
 vi.mock('../infrastructure/logging/codingAgentLogger', () => ({
@@ -41,7 +40,6 @@ describe('SessionHistoryAppService prompt-history index fan-out', () => {
     vi.mocked(sessionHistoryRepository.deleteSession).mockResolvedValue(true)
     vi.mocked(sessionHistoryRepository.clearSessions).mockResolvedValue(true)
     vi.mocked(agentSessionStateRepository.clearSessionState).mockResolvedValue(true)
-    vi.mocked(agentSessionStateRepository.clearAllSessionStates).mockResolvedValue(true)
     vi.mocked(sidecarAppService.removePromptHistoryForSessions).mockResolvedValue({ success: true })
   })
 
@@ -86,7 +84,6 @@ describe('SessionHistoryAppService prompt-history index fan-out', () => {
     expect(sidecarAppService.removePromptHistoryForSessions).toHaveBeenCalledWith(['standalone'])
     expect(agentSessionStateRepository.clearSessionState).toHaveBeenCalledTimes(1)
     expect(agentSessionStateRepository.clearSessionState).toHaveBeenCalledWith('standalone', null)
-    expect(agentSessionStateRepository.clearAllSessionStates).not.toHaveBeenCalled()
   })
 
   it('keeps prompt-index batches within the existing 100-session request limit', async () => {
@@ -124,7 +121,6 @@ describe('SessionHistoryAppService prompt-history index fan-out', () => {
     expect(await (operation === 'delete' ? service.deleteSession('retained', '/repo/a') : service.clearSessions('/repo/a'))).toBe(false)
     expect(deleteConversationCheckpoints).not.toHaveBeenCalled()
     expect(agentSessionStateRepository.clearSessionState).not.toHaveBeenCalled()
-    expect(agentSessionStateRepository.clearAllSessionStates).not.toHaveBeenCalled()
     expect(sidecarAppService.removePromptHistoryForSessions).not.toHaveBeenCalled()
   })
 

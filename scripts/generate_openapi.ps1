@@ -12,3 +12,10 @@ if (-not (Test-Path -LiteralPath $pythonBin)) {
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
+
+$contractFile = Join-Path $rootDir "sidecar\contracts\openapi-2.5.0.json"
+Write-Host ""
+Write-Host "=== Riepilogo Contratto OpenAPI ===" -ForegroundColor Cyan
+Write-Host "Contratto generato: $contractFile"
+Write-Host "==================================="
+exit 0

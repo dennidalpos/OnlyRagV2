@@ -57,6 +57,9 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
   }, [isLoaded])
 
   const isFetchingRef = useRef(false)
+  const refreshPendingRef = useRef(false)
+  const isMountedRef = useRef(true)
+  const fetchDocumentsRef = useRef<() => Promise<void>>(async () => {})
 
   const retryPolicy = useMemo(() => ({ ...DEFAULT_RETRY_POLICY, baseDelayMs: retryBaseDelayMs }), [retryBaseDelayMs])
 
@@ -80,11 +83,17 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
   )
 
   const fetchDocuments = useCallback(async () => {
-    if (isFetchingRef.current) return
+    if (isFetchingRef.current) {
+      // A mutation can arrive while every consumer shares this request. Coalesce exactly one
+      // follow-up read so the completed request never hides the newer collection state.
+      refreshPendingRef.current = true
+      return
+    }
     isFetchingRef.current = true
     setIsLoading(true)
     try {
       const docs = await fetchDocumentsShared()
+      if (!isMountedRef.current) return
       if (docs === null) {
         // Could not ask the sidecar. Keep the documents (and the caller's selection built on
         // them) exactly as they were, and leave isLoaded false so the retry timer keeps going.
@@ -102,14 +111,21 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
         onDocsUpdatedRef.current(docs)
       }
     } catch (err: unknown) {
-      reportFailure(errorMessage(err) || 'unknown error')
+      if (isMountedRef.current) reportFailure(errorMessage(err) || 'unknown error')
     } finally {
-      setIsLoading(false)
       isFetchingRef.current = false
+      if (!isMountedRef.current) return
+      setIsLoading(false)
+      if (refreshPendingRef.current) {
+        refreshPendingRef.current = false
+        void fetchDocumentsRef.current()
+      }
     }
   }, [reportFailure])
+  fetchDocumentsRef.current = fetchDocuments
 
   useEffect(() => {
+    isMountedRef.current = true
     fetchDocuments()
 
     const handleSyncEvent = () => {
@@ -143,6 +159,8 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
 
     return () => {
       cancelled = true
+      isMountedRef.current = false
+      refreshPendingRef.current = false
       window.removeEventListener(DOCUMENTS_CHANGED_EVENT, handleSyncEvent)
       window.removeEventListener(TAB_CHANGED_EVENT, handleSyncEvent)
       window.removeEventListener('focus', handleSyncEvent)

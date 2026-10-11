@@ -73,6 +73,20 @@ try {
     $hash = (Get-FileHash -LiteralPath $installer[0].FullName -Algorithm SHA256).Hash
     Write-Host "[PASS] CPU candidate built: $($installer[0].Name), $($installer[0].Length) bytes, signature $signatureStatus, SHA256 $hash"
     Write-Host 'License/source completeness and public delivery remain qualification gates; nothing was published.'
+
+    Write-Host ""
+    Write-Host "=== Riepilogo Artefatti di Build e Rilascio ===" -ForegroundColor Cyan
+    Write-Host "Cartella rilascio: $releaseRoot"
+    Write-Host "Installer Setup:   $($installer[0].FullName)"
+    $sourceRecordFile = Join-Path $releaseRoot 'source-delivery.json'
+    if (Test-Path -LiteralPath $sourceRecordFile) {
+        $sourceRecord = Get-Content -LiteralPath $sourceRecordFile -Raw | ConvertFrom-Json
+        Write-Host "Archivio sorgenti: $(Join-Path $releaseRoot $sourceRecord.path)"
+    }
+    Write-Host "Manifest rilascio: $(Join-Path $releaseRoot 'release-manifest.json')"
+    Write-Host "Licenze e notice:  $(Join-Path $releaseRoot 'licenses')"
+    Write-Host "Sidecar dist:      $(Join-Path $releaseRoot 'sidecar-dist')"
+    Write-Host "==============================================="
     exit 0
 } catch {
     Write-Host "[FAIL] $($_.Exception.Message)" -ForegroundColor Red

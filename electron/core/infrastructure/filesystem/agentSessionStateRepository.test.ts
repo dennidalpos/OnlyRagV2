@@ -224,45 +224,6 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     })
   })
 
-  it('should clear all session states in workspace and fallback directories', async () => {
-    const s1: SavedAgentSessionState = {
-      sessionId: 'session-1',
-      workspacePath: tempDir,
-      agentMode: 'auto',
-      stepCount: 1,
-      maxSteps: 50,
-      episodes: [],
-      recentFullLogs: [],
-      planMilestones: [],
-      userTask: 'Task 1',
-      updatedAt: new Date().toISOString(),
-    }
-    const s2: SavedAgentSessionState = {
-      sessionId: 'session-2',
-      workspacePath: tempDir,
-      agentMode: 'ask',
-      stepCount: 2,
-      maxSteps: 50,
-      episodes: [],
-      recentFullLogs: [],
-      planMilestones: [],
-      userTask: 'Task 2',
-      updatedAt: new Date().toISOString(),
-    }
-
-    await agentSessionStateRepository.saveSessionState(s1)
-    await agentSessionStateRepository.saveSessionState(s2)
-
-    expect(await agentSessionStateRepository.loadSessionState('session-1', tempDir)).not.toBeNull()
-    expect(await agentSessionStateRepository.loadSessionState('session-2', tempDir)).not.toBeNull()
-
-    const clearedAll = await agentSessionStateRepository.clearAllSessionStates(tempDir)
-    expect(clearedAll).toBe(true)
-
-    expect(await agentSessionStateRepository.loadSessionState('session-1', tempDir)).toBeNull()
-    expect(await agentSessionStateRepository.loadSessionState('session-2', tempDir)).toBeNull()
-  })
-
   it('should save SESSION_TRACKER.md in the format its own parser reads back (regression: a second, plan-shaped format was written on every checkpoint and could not be parsed, leaving the injected debt block empty)', async () => {
     const tracker = new SessionDebtTracker({
       sessionId: 'tracker-session',

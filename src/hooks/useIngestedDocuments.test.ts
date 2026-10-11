@@ -1,5 +1,15 @@
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest'
-import { notifyDocumentsChanged, notifyTabChanged, DOCUMENTS_CHANGED_EVENT, TAB_CHANGED_EVENT } from './useIngestedDocuments'
+import { notifyDocumentsChanged, notifyTabChanged, DOCUMENTS_CHANGED_EVENT, TAB_CHANGED_EVENT, useIngestedDocuments } from './useIngestedDocuments'
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
 
 describe('useIngestedDocuments event synchronization', () => {
   let dispatchEventSpy: MockInstance<Window['dispatchEvent']>
@@ -42,5 +52,39 @@ describe('useIngestedDocuments event synchronization', () => {
 
     window.removeEventListener(DOCUMENTS_CHANGED_EVENT, docChangeHandler)
     window.removeEventListener(TAB_CHANGED_EVENT, tabChangeHandler)
+  })
+})
+
+describe('useIngestedDocuments refresh ownership', () => {
+  let root: Root
+  let documents: ReturnType<typeof useIngestedDocuments>
+  let getIngestedDocuments: ReturnType<typeof vi.fn>
+
+  function Harness() {
+    documents = useIngestedDocuments()
+    return null
+  }
+
+  beforeEach(async () => {
+    getIngestedDocuments = vi.fn().mockResolvedValue([])
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = { getIngestedDocuments }
+    root = createRoot(document.createElement('div'))
+    await act(async () => root.render(createElement(Harness)))
+  })
+
+  afterEach(async () => {
+    await act(async () => root.unmount())
+  })
+
+  it('coalesces one refresh when a document mutation arrives during a list request', async () => {
+    const first = deferred<[]>()
+    getIngestedDocuments.mockReturnValueOnce(first.promise)
+
+    await act(async () => void documents.refetchDocuments())
+    await act(async () => notifyDocumentsChanged())
+    await act(async () => first.resolve([]))
+    await act(async () => {})
+
+    expect(getIngestedDocuments).toHaveBeenCalledTimes(3)
   })
 })

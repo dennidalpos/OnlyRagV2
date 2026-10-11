@@ -9,7 +9,6 @@ vi.mock('../infrastructure/filesystem/agentSessionStateRepository', () => ({
     loadSessionState: vi.fn(),
     saveSessionState: vi.fn(),
     clearSessionState: vi.fn(),
-    clearAllSessionStates: vi.fn(),
   },
 }))
 vi.mock('../infrastructure/process/gitCliRepository', () => ({

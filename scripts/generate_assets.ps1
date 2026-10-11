@@ -194,6 +194,12 @@ try {
 
     & $PSCommandPath -Check
     if ($LASTEXITCODE -ne 0) { throw "Validazione degli asset generati fallita." }
+    Write-Host ""
+    Write-Host "=== Riepilogo Asset Generati ===" -ForegroundColor Cyan
+    Write-Host "Icona NSIS/App: $iconIco"
+    Write-Host "Icona PNG:      $publicPng"
+    Write-Host "Icona SVG:      $publicSvg"
+    Write-Host "================================"
     exit 0
 } catch {
     Write-Host "[FATAL ERROR] $($_.Exception.Message)" -ForegroundColor Red

@@ -332,34 +332,6 @@ export class AgentSessionStateRepository {
     }
   }
 
-  public async clearAllSessionStates(workspacePath?: string | null): Promise<boolean> {
-    try {
-      if (workspacePath && fs.existsSync(workspacePath)) {
-        const sessionsDir = path.dirname(workspaceMetadataStatePath(workspacePath, 'probe'))
-        const root = path.dirname(sessionsDir)
-        if (fs.existsSync(root)) {
-          for (const entry of await fs.promises.readdir(root, { withFileTypes: true })) {
-            if (entry.isDirectory() && /^[a-f0-9]{64}$/.test(entry.name)) {
-              await fs.promises.rm(path.join(root, entry.name), { recursive: true, force: true })
-            }
-          }
-        }
-      }
-      const fallbackDir = this.fallbackDir || userDataSessionsDir()
-      if (fs.existsSync(fallbackDir)) {
-        for (const file of await fs.promises.readdir(fallbackDir)) {
-          if (!file.startsWith('.agent_state_') || !file.endsWith('.json')) continue
-          const filePath = path.join(fallbackDir, file)
-          const state = JSON.parse(await fs.promises.readFile(filePath, 'utf-8')) as { workspacePath?: string | null }
-          if (!workspacePath || state.workspacePath === workspacePath) await fs.promises.unlink(filePath)
-        }
-      }
-      return true
-    } catch (err: unknown) {
-      logger.log('WARN', 'AgentSessionStateRepo', `Failed clearing all session states: ${errorMessage(err)}`)
-      return false
-    }
-  }
 }
 
 export const agentSessionStateRepository = new AgentSessionStateRepository()

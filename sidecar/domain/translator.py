@@ -195,7 +195,7 @@ _REGISTERED_AR_PATTERN = re.compile(r'\braccomandata\s+(?:con\s+)?(?:a\.\s*r\.?|
 
 
 def _mask_immutable_entities(text: str, source_lang: str = "", target_lang: str = "") -> Tuple[str, Dict[str, str]]:
-    """Protect literal entities and the verified Italian-to-English postal term."""
+    """Protect literal entities, asterisk markers and the verified Italian-to-English postal term."""
     if not text:
         return "", {}
     token_map: Dict[str, str] = {}
@@ -233,19 +233,29 @@ def _mask_immutable_entities(text: str, source_lang: str = "", target_lang: str 
             return repl(match, translation=term)
 
         masked = _REGISTERED_AR_PATTERN.sub(postal_term, masked)
+
+    def asterisk_marker(match: re.Match) -> str:
+        nonlocal counter
+        tok = f"__PROT_ASTERISK_{counter}__"
+        token_map[tok] = match.group(0)
+        counter += 1
+        # Keep adjacency: CAP* must become POSTAL CODE*, without adding a space.
+        return tok
+
+    masked = re.sub(r'\*', asterisk_marker, masked)
     return masked, token_map
 
 
 def _unmask_immutable_entities(text: str, token_map: Dict[str, str]) -> str:
     """Restores masked entity placeholders with original verbatim strings."""
-    if not token_map:
-        return text
     restored = text
     for tok, orig in token_map.items():
         if len(re.findall(re.escape(tok), restored, flags=re.IGNORECASE)) != 1:
+            if tok.startswith("__PROT_ASTERISK_"):
+                raise ValueError("Translation lost or duplicated a required-field or footnote marker.")
             raise ValueError("Translation lost or duplicated a protected contact, date, number or identifier.")
         restored = re.sub(re.escape(tok), lambda match: orig, restored, flags=re.IGNORECASE)
-    if re.search(r'__PROT_ENT_\d+__', restored, flags=re.IGNORECASE):
+    if re.search(r'__PROT_(?:ENT|ASTERISK)_\d+__', restored, flags=re.IGNORECASE):
         raise ValueError("Translation introduced an unknown protected placeholder.")
     return restored
 
@@ -300,6 +310,8 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
         "postal addresses and place names verbatim. Do not translate street names or reorder address components. "
         "Do not interpret unreadable text, handwriting or signatures. Preserve every protected placeholder exactly once. "
         "Placeholders are literal document formatting markers: copy them as written, without interpreting their values. "
+        "__PROT_ASTERISK_N__ represents a literal source asterisk for a required field or footnote: "
+        "copy it exactly once next to the translated label or referenced text. Do not add Markdown emphasis. "
         "Preserve uppercase capitalization of source names and uppercase form labels. "
         "Expand source-language form and delivery abbreviations into their full translated terms when needed. "
         "For example, postal 'a.r.' denotes acknowledgment of receipt: translate that meaning explicitly, never as air mail. "
@@ -448,10 +460,10 @@ def _validated_translation(text: str, source_text: str, token_map: Dict[str, str
     cleaned = _clean_translated_segment(text, source_text)
     if cleaned == source_text and text.strip() != source_text:
         raise ValueError("The model refused the translation or returned no translated content.")
-    if cleaned.count("*") != source_text.count("*"):
-        raise ValueError("Translation changed required-field or footnote markers.")
     result = _unmask_immutable_entities(cleaned, token_map)
     original = _unmask_immutable_entities(source_text, token_map)
+    if result.count("*") != original.count("*"):
+        raise ValueError("Translation changed required-field or footnote markers.")
     if "*" in original and "".join(result.split()).casefold() == "".join(original.split()).casefold():
         raise ValueError("The model left a source form label or instruction untranslated.")
     return result

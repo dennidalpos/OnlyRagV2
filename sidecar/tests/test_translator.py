@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import sys
@@ -273,23 +274,111 @@ def test_translation_rejects_empty_response(monkeypatch):
         translator_module._translate_texts_with_fallback(["Inviare il modulo compilato."], "Italian", "English", "test-model")
 
 
-def test_required_field_marker_keeps_its_meaning_for_the_model():
+def test_required_field_marker_is_protected_with_explicit_meaning():
     masked, tokens = translator_module._mask_immutable_entities("CAP*")
-    assert masked == "CAP*"
-    assert not tokens
-    with pytest.raises(ValueError, match="markers"):
+    assert masked == "CAP__PROT_ASTERISK_0__"
+    assert tokens == {"__PROT_ASTERISK_0__": "*"}
+    assert translator_module._validated_translation("POSTAL CODE__PROT_ASTERISK_0__", masked, tokens) == "POSTAL CODE*"
+    with pytest.raises(ValueError, match="marker"):
         translator_module._validated_translation("POSTAL CODE", masked, tokens)
 
 
+@pytest.mark.parametrize("texts", [["CAP*"], ["CAP*", "LOCALITÀ**"]])
+def test_translation_preserves_required_and_footnote_markers(monkeypatch, texts):
+    def translate(text, *args, **kwargs):
+        # A model treating raw asterisks as Markdown would omit them.
+        assert "__PROT_ASTERISK_0__" in text
+        return text.replace("*", "").replace("CAP", "POSTAL CODE").replace("LOCALITÀ", "LOCATION")
+
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", translate)
+    result = translator_module._translate_texts_with_fallback(texts, "Italian", "English", "test-model")
+    assert result == ["POSTAL CODE*"] + (["LOCATION**"] if len(texts) > 1 else [])
+
+
+@pytest.mark.parametrize("output", [
+    "POSTAL CODE", "POSTAL CODE*", "POSTAL CODE__PROT_ASTERISK_0____PROT_ASTERISK_0__",
+    "POSTAL CODE__PROT_ASTERISK_0____PROT_ASTERISK_1__", "**POSTAL CODE**__PROT_ASTERISK_0__",
+])
+def test_translation_rejects_lost_duplicate_unknown_or_added_markers(monkeypatch, output):
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda *a, **kw: output)
+    with pytest.raises(ValueError, match="marker|placeholder"):
+        translator_module._translate_texts_with_fallback(["CAP*"], "Italian", "English", "test-model")
+
+
+def test_translation_rejects_unknown_marker_when_source_has_no_markers(monkeypatch):
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda *a, **kw: "POSTAL CODE__PROT_ASTERISK_0__")
+    with pytest.raises(ValueError, match="unknown protected placeholder"):
+        translator_module._translate_texts_with_fallback(["CAP"], "Italian", "English", "test-model")
+
+
+@pytest.mark.parametrize("file_type", ["pdf", "docx"])
+@pytest.mark.parametrize("lose_marker", [False, True])
+def test_layout_translation_restores_markers_or_refuses_export(tmp_path, monkeypatch, file_type, lose_marker):
+    source = tmp_path / f"form.{file_type}"
+    if file_type == "pdf":
+        with pymupdf.open() as document:
+            page = document.new_page()
+            assert page.insert_textbox(pymupdf.Rect(40, 40, 350, 120), "Nome*\n*Campo richiesto.", fontsize=14) >= 0
+            document.save(source)
+    else:
+        document = docx.Document()
+        document.add_paragraph().add_run("Nome*").bold = True
+        document.add_paragraph("*Campo richiesto.")
+        document.save(source)
+    original_bytes = source.read_bytes()
+    sent = []
+
+    class FakeHttpxClient:
+        def post(self, url, json=None, timeout=None):
+            sent.append(json)
+            system, user = json["messages"]
+            assert "__PROT_ASTERISK_N__ represents a literal source asterisk" in system["content"]
+            text = user["content"].split("\n\n", 1)[1]
+            text = text.replace("*", "").replace("Nome", "Name").replace("Campo richiesto", "Required field")
+            if lose_marker:
+                text = re.sub(r'__PROT_ASTERISK_\d+__', '', text)
+            return _FakeResponse(200, {"message": {"content": text}})
+
+    monkeypatch.setattr(translator_module, "httpx_client", FakeHttpxClient())
+    record = {"id": "marker-fixture", "file_path": str(source), "filename": source.name, "file_type": file_type}
+    events = [json.loads(line) for line in translator_module.translate_document_stream(
+        record, "Italian", "English", "test-model", num_ctx=8192,
+    )]
+    assert source.read_bytes() == original_bytes
+    assert sent and all(request["options"]["num_ctx"] == 8192 and request["think"] is False for request in sent)
+    if lose_marker:
+        assert events[-1]["type"] == "error"
+        assert "marker" in events[-1]["error"]
+        assert not any(event["type"] == "done" for event in events)
+        assert list(tmp_path.iterdir()) == [source]
+    else:
+        assert events[-1]["type"] == "done"
+        output = events[-1]["data"]["filePath"]
+        if file_type == "pdf":
+            with pymupdf.open(output) as document:
+                text = document[0].get_text()
+        else:
+            document = docx.Document(output)
+            text = "\n".join(paragraph.text for paragraph in document.paragraphs)
+            assert document.paragraphs[0].runs[0].bold is True
+        assert text.count("*") == 2
+        assert "Name*" in text and "*Required field." in text
+        assert "__PROT_" not in text
+
+
 def test_unchanged_form_label_uses_existing_individual_fallback(monkeypatch):
+    calls = []
+
     def translate(text, *args, is_batch=False, **kwargs):
+        calls.append(is_batch)
         if is_batch:
-            return '<seg id="1">CAP*</seg><seg id="2">LOCATION*</seg>'
-        return "POSTAL CODE*"
+            return text.replace("LOCALITÀ", "LOCATION")
+        return text.replace("CAP", "POSTAL CODE")
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", translate)
     result = translator_module._translate_texts_with_fallback(["CAP*", "LOCALITÀ*"], "Italian", "English", "test-model")
     assert result == ["POSTAL CODE*", "LOCATION*"]
+    assert calls == [True, False]
 
 
 def test_company_products_and_postal_addresses_are_not_translated():
@@ -616,14 +705,14 @@ def test_ocr_form_values_are_preserved_verbatim(monkeypatch):
 
     def translate(text, *args, **kwargs):
         seen.append(text)
-        return "LOCALITY*"
+        return text.replace("LOCALITÀ", "LOCALITY")
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", translate)
     with pymupdf.open() as doc:
         blocks = translator_module._extract_ocr_page_blocks(doc.new_page())
         translator_module._translate_pdf_blocks(blocks, "Italian", "English", "test-model")
     assert [block["text"] for block in blocks] == ["LOCALITY*", "BORGO ESEMPIO Loc. Villa Verde"]
-    assert seen == ["LOCALITÀ*"]
+    assert seen == ["LOCALITÀ__PROT_ASTERISK_0__"]
 
 
 def test_translation_does_not_overwrite_previous_output(tmp_path):

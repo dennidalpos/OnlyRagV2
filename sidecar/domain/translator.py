@@ -821,18 +821,55 @@ def _resolve_output_filepath(file_path: str, filename: str, target_lang: str, ta
     return out_path
 
 
+def _pdf_textbox_glyphs(rect: "pymupdf.Rect", text: str, fontsize: float, font_file: str, font: "pymupdf.Font") -> List[Tuple[Tuple[float, float], str, bool]]:
+    """Use native textbox glyph positions and restore the intended Unicode aliases.
+    Mark only individual aliases: multi-character ActualText can duplicate text during
+    MuPDF extraction, even for a single physical line."""
+    with pymupdf.open() as layout_doc:
+        layout_page = layout_doc.new_page(width=rect.x1 + 50, height=rect.y1 + 50)
+        overflow = layout_page.insert_textbox(
+            rect, text, fontsize=fontsize, fontname=_font_alias(font_file), fontfile=font_file
+        )
+        if overflow < 0:
+            raise ValueError("PDF textbox layout overflowed.")
+        source_chars = iter(char for char in text if not char.isspace())
+        glyphs = []
+        layout = layout_page.get_text("rawdict", flags=pymupdf.TEXTFLAGS_RAWDICT | pymupdf.TEXT_INHIBIT_SPACES)
+        for block in layout["blocks"]:
+            if block["type"] != 0:
+                continue
+            for line in block["lines"]:
+                for span in line["spans"]:
+                    for item in span["chars"]:
+                        if item["c"].isspace():
+                            glyphs.append((item["origin"], " ", False))
+                            continue
+                        original = next(source_chars, None)
+                        if original is None or font.has_glyph(ord(original)) != font.has_glyph(ord(item["c"])):
+                            raise ValueError("PDF textbox layout lost a translated glyph.")
+                        glyphs.append((item["origin"], original, original != item["c"]))
+        if next(source_chars, None) is not None:
+            raise ValueError("PDF textbox layout lost a translated glyph.")
+        return glyphs
+
+
 def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str, Any]], font_file: str) -> None:
     """Preflight all translated text, erase only source text regions, then verify reinsertion.
     Uncertain graphic regions and vector artwork are preserved; an overflow fails the whole export."""
     is_scanned_page = any(b.get("is_ocr", False) for b in blocks)
     fill_color = (1, 1, 1) if is_scanned_page else None
     redact_images = pymupdf.PDF_REDACT_IMAGE_PIXELS if is_scanned_page else pymupdf.PDF_REDACT_IMAGE_NONE
+    font = pymupdf.Font(fontfile=font_file)
+    font_identity = font.name.replace(" ", "").replace("-", "").casefold()
     placements = []
     redactions = []
     for block in blocks:
         text = block.get("text", "").strip()
         if not text:
             raise ValueError(f"Empty translated block on page {page.number + 1}.")
+        expected_glyphs = [font.has_glyph(ord(char)) for char in text if not char.isspace()]
+        if not all(expected_glyphs):
+            raise ValueError(f"Translation contains an unsupported glyph on page {page.number + 1}; no PDF was exported.")
         orig_size = float(block["size"])
         rect = _padded_block_rect(block) & page.rect
         source_rects = [pymupdf.Rect(value) for value in block.get("redaction_rects", [tuple(rect)])]
@@ -872,7 +909,7 @@ def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str,
         for source_rect in source_rects:
             if not block.get("preserve_literal"):
                 redactions.append(source_rect)
-        placements.append((rect, text, fit_size, _int_color_to_rgb(block["color"]), 3 if block.get("preserve_literal") else 0))
+        placements.append((rect, text, fit_size, _int_color_to_rgb(block["color"]), 3 if block.get("preserve_literal") else 0, expected_glyphs))
 
     ink_overlays = []
     graphic_regions = dict.fromkeys(tuple(value) for block in blocks for value in block.get("protected_rects", []))
@@ -899,9 +936,41 @@ def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str,
     for rect in redactions:
         page.add_redact_annot(rect, fill=fill_color)
     page.apply_redactions(images=redact_images, graphics=pymupdf.PDF_REDACT_LINE_ART_NONE)
-    for rect, text, fit_size, color_rgb, render_mode in placements:
-        overflow = page.insert_textbox(rect, text, fontsize=fit_size, fontname=_font_alias(font_file), fontfile=font_file, color=color_rgb, render_mode=render_mode)
-        if overflow < 0 or "".join(text.split()) not in "".join(page.get_text(clip=rect).split()):
+    for rect, text, fit_size, color_rgb, render_mode, expected_glyphs in placements:
+        trace_count = len(page.get_texttrace())
+        shape = page.new_shape()
+        try:
+            glyphs = _pdf_textbox_glyphs(rect, text, fit_size, font_file, font)
+        except ValueError as err:
+            raise ValueError(f"PDF reinsertion lost translated text on page {page.number + 1}; no PDF was exported.") from err
+        if any(is_alias for _, _, is_alias in glyphs):
+            for origin, char, is_alias in glyphs:
+                glyph_shape = page.new_shape()
+                glyph_shape.insert_text(origin, char, fontsize=fit_size, fontname=_font_alias(font_file), fontfile=font_file, color=color_rgb, render_mode=render_mode)
+                # Noto CJK shares glyphs between Unicode aliases (e.g. '-' and U+2011).
+                # Preserve each alias independently of the raw glyph check below.
+                shape.text_cont += (
+                    f"/Span << /ActualText {pymupdf.get_pdf_str(char)} >> BDC\n{glyph_shape.text_cont}EMC\n"
+                    if is_alias else glyph_shape.text_cont
+                )
+        else:
+            overflow = shape.insert_textbox(rect, text, fontsize=fit_size, fontname=_font_alias(font_file), fontfile=font_file, color=color_rgb, render_mode=render_mode)
+            if overflow < 0:
+                raise ValueError(f"PDF reinsertion lost translated text on page {page.number + 1}; no PDF was exported.")
+        shape.commit()
+        inserted_spans = page.get_texttrace()[trace_count:]
+        rendered_glyphs = []
+        bounds = (rect + (-0.01, -0.01, 0.01, 0.01)) & page.rect
+        for span in inserted_spans:
+            if span["font"].replace(" ", "").replace("-", "").casefold() != font_identity or span["type"] != render_mode:
+                raise ValueError(f"PDF reinsertion lost translated text on page {page.number + 1}; no PDF was exported.")
+            for codepoint, glyph, _, bbox in span["chars"]:
+                if chr(codepoint).isspace():
+                    continue
+                if not bounds.contains(pymupdf.Rect(bbox)):
+                    raise ValueError(f"PDF reinsertion lost translated text on page {page.number + 1}; no PDF was exported.")
+                rendered_glyphs.append(glyph)
+        if rendered_glyphs != expected_glyphs or "".join(text.split()) not in "".join(page.get_text(clip=rect).split()):
             raise ValueError(f"PDF reinsertion lost translated text on page {page.number + 1}; no PDF was exported.")
     for rect, image_bytes in ink_overlays:
         page.insert_image(rect, stream=image_bytes)

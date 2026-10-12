@@ -973,6 +973,115 @@ def test_redact_and_reinsert_pdf_blocks_renders_cyrillic_fallback(tmp_path):
         reopened.close()
 
 
+@pytest.mark.parametrize("language", ["Chinese", "Traditional Chinese", "Japanese", "Korean"])
+def test_pdf_reinsertion_preserves_cjk_punctuation_unicode(tmp_path, language):
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "translated.pdf"
+    _make_pdf(str(source), text="Source form instructions")
+    source_bytes = source.read_bytes()
+    text = "ABC-123 • 姓名… (A\\B)"
+    with pymupdf.open(source) as doc:
+        page = doc[0]
+        blocks = translator_module._extract_pdf_page_blocks(page)
+        for block in blocks:
+            block["text"] = text
+        translator_module._redact_and_reinsert_pdf_blocks(
+            page, blocks, translator_module._resolve_pdf_font_file(language)
+        )
+        pixels = page.get_pixmap().samples
+        with pymupdf.open() as reference:
+            reference_page = reference.new_page(width=page.rect.width, height=page.rect.height)
+            assert reference_page.insert_textbox(
+                translator_module._padded_block_rect(blocks[0]), text,
+                fontsize=page.get_texttrace()[0]["size"],
+                fontname=translator_module._font_alias(translator_module._resolve_pdf_font_file(language)),
+                fontfile=translator_module._resolve_pdf_font_file(language),
+            ) >= 0
+            expected = np.frombuffer(reference_page.get_pixmap().samples, dtype=np.uint8).astype(np.int16)
+            actual = np.frombuffer(pixels, dtype=np.uint8).astype(np.int16)
+            # Independent native rendering: subpixel roundoff may differ by one gray level.
+            assert np.max(np.abs(actual - expected)) <= 1
+        doc.save(output, deflate=True, garbage=4, clean=True)
+    with pymupdf.open(output) as doc:
+        assert "".join(text.split()) == "".join(doc[0].get_text().split())
+        assert doc[0].get_pixmap().samples == pixels
+    assert source.read_bytes() == source_bytes
+
+
+def test_pdf_reinsertion_preserves_literal_code_in_cjk_form(tmp_path):
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        blocks = [
+            {"bbox": (40, 40, 160, 70), "size": 10., "color": 0,
+             "text": "姓名 *", "is_ocr": True},
+            {"bbox": (180, 40, 360, 70), "size": 10., "color": 0,
+             "text": "CODE-123", "is_ocr": True, "preserve_literal": True},
+        ]
+        translator_module._redact_and_reinsert_pdf_blocks(
+            page, blocks, translator_module._resolve_pdf_font_file("Chinese")
+        )
+        output = tmp_path / "form.pdf"
+        doc.save(output, deflate=True, garbage=4, clean=True)
+    with pymupdf.open(output) as doc:
+        assert "CODE-123" in "".join(doc[0].get_text().split())
+        assert "姓名*" in "".join(doc[0].get_text().split())
+        assert {span["type"] for span in doc[0].get_texttrace()} == {0, 3}
+
+
+def test_pdf_translation_stream_exports_cjk_punctuation(tmp_path, monkeypatch):
+    source = tmp_path / "source.pdf"
+    _make_pdf(str(source), text="Source form instructions")
+    source_bytes = source.read_bytes()
+    text = "姓名 - ABC123 • 地址…"
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda *args, **kwargs: text)
+    events = [json.loads(event) for event in translator_module.translate_document_stream(
+        {"id": "cjk-export-fixture", "file_path": str(source), "filename": source.name, "file_type": "pdf"},
+        "Italian", "Chinese", "fixture-model", target_dir=str(tmp_path),
+    )]
+    assert events[-1]["type"] == "done"
+    with pymupdf.open(events[-1]["data"]["filePath"]) as doc:
+        assert "".join(text.split()) == "".join(doc[0].get_text().split())
+        assert "Source form instructions" not in doc[0].get_text()
+    assert source.read_bytes() == source_bytes
+
+
+def test_pdf_reinsertion_refuses_missing_rendered_glyph_even_with_text_metadata(tmp_path, monkeypatch):
+    source = tmp_path / "source.pdf"
+    _make_pdf(str(source), text="Source form instructions")
+    source_bytes = source.read_bytes()
+    text = "姓名-ABC"
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda *args, **kwargs: text)
+    insert_text = pymupdf.Shape.insert_text
+
+    def drop_glyph(shape, origin, buffer, **kwargs):
+        if buffer == "-":
+            return 0
+        return insert_text(shape, origin, buffer, **kwargs)
+
+    monkeypatch.setattr(pymupdf.Shape, "insert_text", drop_glyph)
+    events = [json.loads(event) for event in translator_module.translate_document_stream(
+        {"id": "glyph-loss-fixture", "file_path": str(source), "filename": source.name, "file_type": "pdf"},
+        "Italian", "Chinese", "fixture-model", target_dir=str(tmp_path),
+    )]
+    assert events[-1]["type"] == "error"
+    assert "reinsertion lost translated text" in events[-1]["error"]
+    assert source.read_bytes() == source_bytes
+    assert list(tmp_path.glob("*.pdf")) == [source]
+
+
+def test_pdf_reinsertion_refuses_unsupported_glyph_before_redaction():
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        page.insert_text((40, 60), "Original text")
+        before = page.get_text()
+        blocks = [{"bbox": (40, 40, 360, 100), "size": 10., "color": 0, "text": "Unsupported \U0001fae0"}]
+        with pytest.raises(ValueError, match="unsupported glyph"):
+            translator_module._redact_and_reinsert_pdf_blocks(
+                page, blocks, translator_module._PDF_FALLBACK_FONT_FILE
+            )
+        assert page.get_text() == before
+
+
 def test_translate_pdf_end_to_end_japanese(tmp_path, monkeypatch):
     """Full pipeline end-to-end with a CJK target language: verifies the font-selection wiring
     from the streaming endpoint all the way through to the saved file and reindexed markdown."""

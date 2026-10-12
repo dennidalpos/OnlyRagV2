@@ -63,6 +63,26 @@ type Success = { success: boolean; error?: string }
 type SkillResult = { success: boolean; skill?: SkillDefinition; error?: string }
 type DocumentResult = { success: boolean; data?: IngestedDocumentContent; error?: string }
 
+export interface SessionDeletionOutcome {
+  status: 'refused' | 'pending' | 'complete'
+  operationId?: string
+  error?: string
+  exportPath?: string
+}
+
+export interface SessionDeletionRecoverySummary {
+  operationId: string
+  workspacePath: string | null
+  sessionIds: string[]
+  status: 'pending' | 'restoring' | 'complete'
+  error?: string
+}
+
+export interface SessionDeletionRecoveryPage {
+  operations: SessionDeletionRecoverySummary[]
+  total: number
+}
+
 /** Renderer → Main request/response channels: `payload` is `void` for channels without input. */
 export interface IpcInvokeContract {
   'diagnostics:run': { payload: { host?: string }; result: DiagnosticsData }
@@ -213,8 +233,13 @@ export interface IpcInvokeContract {
   }
   'sessions:list': { payload: { workspacePath?: string | null }; result: CodingSession[] }
   'sessions:save': { payload: CodingSession; result: CodingSession | null }
-  'sessions:delete': { payload: { sessionId: string; workspacePath?: string | null }; result: boolean }
-  'sessions:clear': { payload: { workspacePath?: string | null }; result: boolean }
+  'sessions:delete': { payload: { sessionId: string; workspacePath?: string | null }; result: SessionDeletionOutcome }
+  'sessions:clear': { payload: { workspacePath?: string | null }; result: SessionDeletionOutcome }
+  'sessions:recovery-list': { payload: { offset?: number }; result: SessionDeletionRecoveryPage }
+  'sessions:recovery-action': {
+    payload: { operationId: string; action: 'retry' | 'restore' | 'export'; destinationDirectory?: string }
+    result: SessionDeletionOutcome
+  }
   /** One-shot import of the sessions an older version kept in localStorage. */
   'projects:list': { payload: void; result: WorkspaceProject[] }
   /** Explicit "add project": creates the entry, or refreshes its name, if unseen. */
@@ -359,6 +384,8 @@ export const IPC_INVOKE_METHODS = {
   saveCodingSession: 'sessions:save',
   deleteCodingSession: 'sessions:delete',
   clearCodingSessions: 'sessions:clear',
+  listSessionDeletionRecovery: 'sessions:recovery-list',
+  actOnSessionDeletionRecovery: 'sessions:recovery-action',
   listProjects: 'projects:list',
   registerProject: 'projects:register',
   touchProject: 'projects:touch',

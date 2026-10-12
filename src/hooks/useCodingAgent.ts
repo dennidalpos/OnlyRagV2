@@ -134,6 +134,7 @@ export function useCodingAgent(settings?: AppSettings) {
       retryRegistry()
       void history.retryStorage()
     },
+    refreshAfterDeletionRecovery: history.refreshAfterDeletionRecovery,
     // Execution
     agentMode: execution.agentMode,
     setAgentMode: execution.setAgentMode,

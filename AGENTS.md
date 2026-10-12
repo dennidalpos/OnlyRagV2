@@ -18,7 +18,7 @@
 - LanceDB drop/recreate URI reuse needs a fresh test session (FTS cache).
 - Backlog: `PROJECT_STATUS.json` todos; evidence: `docs/`. Tests do not qualify models.
 - State: only `ENOENT` means absent; bad reads block writes. Explicit restore; cancel keeps checkpoints, no auto-resume. Windows may omit `before-quit`.
-- Prompt history: Sidecar generation fence; REST restore needs matching operation. Main journal/IPC open.
+- Prompt history: Sidecar generation fence; REST restore needs matching operation. Main journal retains incomplete staging; active runs block deletion.
 - Legacy migration needs backup/readback; host absence proves nothing. `Desktop/test_app` read-only.
 - Archives: `data/source-documents/<doc_id>`; validate chunks/revisions; no auto cleanup/migration.
 - Modal owns Escape/focus/inert; approvals use explicit buttons.

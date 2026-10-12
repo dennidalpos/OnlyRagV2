@@ -149,6 +149,11 @@ export function workspaceMetadataSessionDirectory(workspacePath: string, session
   return metadataDirectory(root, 'sessions', sessionKey(sessionId))
 }
 
+/** Computes the existing session location without creating or migrating workspace metadata. */
+export function workspaceSessionRecoveryPath(workspacePath: string, sessionId: string): string {
+  return path.join(path.resolve(workspacePath), '.onlyrag', 'sessions', sessionKey(sessionId))
+}
+
 export function workspaceMetadataStatePath(workspacePath: string, sessionId: string): string {
   return path.join(workspaceMetadataSessionDirectory(workspacePath, sessionId), 'state.json')
 }

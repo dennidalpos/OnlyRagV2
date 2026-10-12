@@ -24,6 +24,8 @@ import { workspaceMetadataStatePath, workspaceMetadataTrackerPath } from '../inf
 import type { AppSettings } from '../../../shared/types'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import { ollamaAppService } from './ollamaAppService'
+import { sessionDeletionRunGate } from './sessionDeletionRunGate'
+import { sessionDeletionJournal } from '../infrastructure/filesystem/sessionDeletionJournal'
 
 const fallbackProfile = vi.hoisted(() => ({ sessions: '' }))
 vi.mock('../infrastructure/filesystem/userDataRoot', async (importOriginal) => ({
@@ -119,6 +121,31 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   let pendingWrites: Promise<boolean>[]
   const saveState = agentSessionStateRepository.saveSessionState.bind(agentSessionStateRepository)
   const saveTracker = agentSessionStateRepository.saveSessionTrackerMarkdown.bind(agentSessionStateRepository)
+
+  it('refuses a new run while its conversation deletion is reserved', async () => {
+    const sessionId = 'reserved-conversation'
+    expect(sessionDeletionRunGate.reserveDeletion([sessionId])).toBe(true)
+    try {
+      const result = await runAgentOrchestratorLoop({ sessionId, userTask: 'Inspect', workspacePath: tempDir, agentMode: 'auto' }, null)
+      expect(result.completionStatus).toBe('blocked')
+      expect(result.summary).toContain('Session deletion needs recovery')
+      expect(AgentStreamTransport.streamCompletion).not.toHaveBeenCalled()
+    } finally {
+      sessionDeletionRunGate.releaseDeletion([sessionId])
+    }
+  })
+
+  it('refuses a run for a retained deletion after Main restart', async () => {
+    const sessionId = 'retained-conversation'
+    vi.spyOn(sessionDeletionJournal, 'list').mockResolvedValueOnce([{ sessionIds: [sessionId], status: 'pending' }] as never)
+    const result = await runAgentOrchestratorLoop({ sessionId, userTask: 'Inspect', workspacePath: tempDir, agentMode: 'auto' }, null)
+    expect(result.completionStatus).toBe('blocked')
+    expect(result.summary).toContain('Session deletion needs recovery')
+    expect(AgentStreamTransport.streamCompletion).not.toHaveBeenCalled()
+    const releaseRun = sessionDeletionRunGate.beginRun(sessionId, tempDir)
+    expect(releaseRun).not.toBeNull()
+    releaseRun?.()
+  })
 
   it('persists interruption after cancellation during preparation, without dispatching a model turn', async () => {
     let release!: () => void

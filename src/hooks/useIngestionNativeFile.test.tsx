@@ -93,7 +93,13 @@ describe('native ingestion file identity', () => {
 
   it('passes the enabled Excel format setting with native ingestion', async () => {
     allowFullExcelFormat = true
-    await act(async () => root.render(<I18nProvider initialLanguage="en"><Harness /></I18nProvider>))
+    await act(async () =>
+      root.render(
+        <I18nProvider initialLanguage="en">
+          <Harness />
+        </I18nProvider>,
+      ),
+    )
     openFileDialog.mockResolvedValue(['C:/docs/large.xlsx'])
     await act(async () => ingestion.handleSelectFileNative())
     expect(ingestFile).toHaveBeenCalledWith(expect.objectContaining({ allowFullExcelFormat: true }))

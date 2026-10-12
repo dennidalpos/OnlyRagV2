@@ -24,6 +24,15 @@ describe('prompt history search failures', () => {
     expect(await sidecarAppService.removePromptHistoryForSessions(['session'])).toEqual({ success: success === true })
     expect(await sidecarAppService.removePromptHistoryForProject('C:/synthetic')).toEqual({ success: success === true })
   })
+  it('binds deletion and restore to the same Sidecar operation', async () => {
+    const request = vi.spyOn(sidecarHttpClient, 'postJsonEnvelope').mockResolvedValue({ success: true, data: { success: true } })
+    expect(await sidecarAppService.removePromptHistoryForSessions(['session'], 'operation-1')).toEqual({ success: true })
+    expect(await sidecarAppService.restorePromptHistoryForSessions(['session'], 'operation-1')).toEqual({ success: true })
+    expect(request.mock.calls.map(([url, payload]) => [url, payload])).toEqual([
+      ['/history/remove', { session_ids: ['session'], operation_id: 'operation-1' }],
+      ['/history/remove', { session_ids: ['session'], operation_id: 'operation-1', restore: true }],
+    ])
+  })
   it.each(['http', 'parse', 'empty', 'row'] as const)('propagates actual authenticated HTTP results: %s', async (scenario) => {
     let authenticated = false
     const server = http.createServer((req, res) => {

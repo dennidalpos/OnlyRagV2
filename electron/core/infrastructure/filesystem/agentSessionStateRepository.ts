@@ -1,6 +1,11 @@
 import fs from 'node:fs'
 import { z } from 'zod'
-import { workspaceMetadataSessionDirectory, workspaceMetadataStatePath, workspaceMetadataTrackerPath } from './workspaceMetadataDirectory'
+import {
+  workspaceMetadataSessionDirectory,
+  workspaceMetadataStatePath,
+  workspaceMetadataTrackerPath,
+  workspaceSessionRecoveryPath,
+} from './workspaceMetadataDirectory'
 import path from 'node:path'
 import { logger } from '../logging/logger'
 import type { AgentMode } from '../../domain/agent/agentTypes'
@@ -215,6 +220,13 @@ export class AgentSessionStateRepository {
     return this.getFallbackStatePath(sessionId)
   }
 
+  /** Exact state locations that may belong to this session during deletion recovery. */
+  public sessionRecoveryPaths(sessionId: string, workspacePath?: string | null): string[] {
+    const paths = [this.getFallbackStatePath(sessionId)]
+    if (workspacePath) paths.unshift(workspaceSessionRecoveryPath(workspacePath, sessionId))
+    return paths
+  }
+
   public async saveSessionState(state: SavedAgentSessionState): Promise<boolean> {
     try {
       decodeSessionState(state, state.sessionId, state.workspacePath)
@@ -331,7 +343,6 @@ export class AgentSessionStateRepository {
       return false
     }
   }
-
 }
 
 export const agentSessionStateRepository = new AgentSessionStateRepository()

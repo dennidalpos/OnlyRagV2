@@ -1,7 +1,9 @@
 import os
 import re
 import io
+import csv
 import json
+import threading
 import zipfile
 import warnings
 from typing import List, Tuple, Dict, Optional, Any, Callable
@@ -31,6 +33,50 @@ XLS_MAX_SOURCE_BYTES = 8 * 1024 * 1024
 XLSX_MAX_SHARED_STRINGS_BYTES = 16 * 1024 * 1024
 EXCEL_RAG_MAX_COLUMNS = 128
 EXCEL_RAG_MAX_CELL_CHARS = 256
+TABULAR_MAX_COLUMNS = 256
+TABULAR_MAX_CELL_CHARS = 64 * 1024
+TABULAR_MAX_ROW_CHARS = 128 * 1024
+TABULAR_MAX_RENDER_CHARS = 4 * 1024 * 1024
+XLSX_MAX_XML_BYTES = 32 * 1024 * 1024
+XLSX_MAX_TOTAL_XML_BYTES = 128 * 1024 * 1024
+PARQUET_MAX_ROW_GROUP_BYTES = 32 * 1024 * 1024
+PARQUET_MAX_BATCH_BYTES = 8 * 1024 * 1024
+_CSV_FIELD_LIMIT_LOCK = threading.Lock()
+
+
+def _check_tabular_row(row, source, max_columns=TABULAR_MAX_COLUMNS):
+    if max_columns is not None and len(row) > max_columns:
+        raise ValueError(f"{source} row exceeds the {max_columns}-column parser limit.")
+    size = 0
+    for value in row:
+        if value is None:
+            continue
+        length = len(str(value))
+        if length > TABULAR_MAX_CELL_CHARS:
+            raise ValueError(f"{source} cell exceeds the {TABULAR_MAX_CELL_CHARS}-character parser limit.")
+        size += length
+        if size > TABULAR_MAX_ROW_CHARS:
+            raise ValueError(f"{source} row exceeds the {TABULAR_MAX_ROW_CHARS}-character parser limit.")
+    return size
+
+
+def _frame_text_size(frame, source):
+    return sum(_check_tabular_row(row, source) for row in frame.itertuples(index=False, name=None))
+
+
+def _preflight_delimited(content, file_path, separator):
+    with _CSV_FIELD_LIMIT_LOCK:
+        previous = csv.field_size_limit()
+        csv.field_size_limit(TABULAR_MAX_CELL_CHARS)
+        try:
+            stream = open(file_path, "r", encoding="utf-8-sig", newline="") if file_path and os.path.exists(file_path) else io.TextIOWrapper(io.BytesIO(content), encoding="utf-8-sig", newline="")
+            with stream:
+                for row in csv.reader(stream, delimiter=separator):
+                    _check_tabular_row(row, "CSV/TSV")
+        except csv.Error as error:
+            raise ValueError(f"CSV/TSV cell exceeds the {TABULAR_MAX_CELL_CHARS}-character parser limit or has invalid quoting.") from error
+        finally:
+            csv.field_size_limit(previous)
 
 _FIGURE_VISION_PROMPT = (
     "Describe this figure, chart, table, or diagram concisely in Markdown: "
@@ -304,6 +350,7 @@ def _extract_full_format_excel_sheet(sheet_name, rows, max_row, max_column, limi
     nonempty_rows = 0
     shortened_cells = 0
     for row_number, row in rows:
+        _check_tabular_row(row, "Excel", max_columns=None)
         if row_number > max_row:
             raise ValueError(f"Excel row {row_number} exceeds the format limit of {max_row}.")
         selected = {"Row": row_number}
@@ -377,10 +424,17 @@ def extract_tabular_document(
 
         excel_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
         with zipfile.ZipFile(excel_source) as archive:
+            entries = archive.infolist()
+            if len(entries) > 4096:
+                raise ValueError("XLSX archive exceeds the 4,096-entry parser limit.")
             shared_strings_size = sum(
-                entry.file_size for entry in archive.infolist()
+                entry.file_size for entry in entries
                 if entry.filename.rsplit("/", 1)[-1].lower() == "sharedstrings.xml"
             )
+            xml_size = sum(entry.file_size for entry in entries if entry.filename.lower().startswith("xl/") and entry.filename.lower().endswith(".xml"))
+            worksheet_sizes = [entry.file_size for entry in entries if entry.filename.lower().startswith("xl/worksheets/") and entry.filename.lower().endswith(".xml")]
+        if shared_strings_size > XLSX_MAX_XML_BYTES or any(size > XLSX_MAX_XML_BYTES for size in worksheet_sizes) or xml_size > XLSX_MAX_TOTAL_XML_BYTES:
+            raise ValueError("XLSX XML payload exceeds the parser limit; export as CSV.")
         if not allow_full_excel_format and shared_strings_size > XLSX_MAX_SHARED_STRINGS_BYTES:
             raise ValueError("XLSX shared strings exceed the 16 MiB parser limit; export as CSV.")
         workbook = load_workbook(excel_source, read_only=True, data_only=True)
@@ -405,10 +459,15 @@ def extract_tabular_document(
                     continue
                 retained_rows = []
                 last_data_row = 0
+                retained_chars = 0
                 for row_number, row in enumerate(sheet.iter_rows(values_only=True), start=1):
+                    row_chars = _check_tabular_row(row, "Excel")
                     if any(cell is not None and cell != "" for cell in row):
                         last_data_row = row_number
                     if row_number <= limit_excel_rows:
+                        retained_chars += row_chars
+                        if retained_chars > TABULAR_MAX_RENDER_CHARS:
+                            raise ValueError("Excel selected cells exceed the parser render limit.")
                         retained_rows.append(row)
                 retained_rows = retained_rows[:min(last_data_row, limit_excel_rows)]
                 if not retained_rows:
@@ -464,15 +523,29 @@ def extract_tabular_document(
                     finally:
                         xls.book.unload_sheet(sheet_name)
                     continue
+                sheet = xls.book.sheet_by_name(sheet_name)
                 try:
-                    df_all = pd.read_excel(xls, sheet_name=sheet_name, header=None, dtype=object, keep_default_na=False)
+                    if sheet.ncols > TABULAR_MAX_COLUMNS:
+                        raise ValueError(f"Excel exceeds the {TABULAR_MAX_COLUMNS}-column parser limit.")
+                    retained_rows = []
+                    total_sheet_rows = 0
+                    retained_chars = 0
+                    for row_number, row in _xls_rows(sheet, xls.book.datemode):
+                        row_chars = _check_tabular_row(row, "Excel")
+                        if any(cell is not None and cell != "" for cell in row):
+                            total_sheet_rows = row_number
+                        if row_number <= limit_excel_rows:
+                            retained_chars += row_chars
+                            if retained_chars > TABULAR_MAX_RENDER_CHARS:
+                                raise ValueError("Excel selected cells exceed the parser render limit.")
+                            retained_rows.append(row)
                 finally:
                     xls.book.unload_sheet(sheet_name)
-                total_sheet_rows = len(df_all)
-                if df_all.empty:
+                retained_rows = retained_rows[:min(total_sheet_rows, limit_excel_rows)]
+                if not retained_rows:
                     skipped_sheets += 1
                     continue
-                df = df_all.head(limit_excel_rows)
+                df = pd.DataFrame(retained_rows).fillna("")
                 if not any(str(cell).strip() for cell in df.to_numpy().flat):
                     skipped_sheets += 1
                     continue
@@ -502,11 +575,24 @@ def extract_tabular_document(
         parquet_file = parquet.ParquetFile(parquet_source, pre_buffer=False)
         try:
             total_rows = parquet_file.metadata.num_rows
+            if parquet_file.metadata.num_columns > TABULAR_MAX_COLUMNS:
+                raise ValueError(f"Parquet exceeds the {TABULAR_MAX_COLUMNS}-column parser limit.")
+            _check_tabular_row(parquet_file.schema_arrow.names, "Parquet")
+            for group_index in range(parquet_file.metadata.num_row_groups):
+                if parquet_file.metadata.row_group(group_index).total_byte_size > PARQUET_MAX_ROW_GROUP_BYTES:
+                    raise ValueError("Parquet row group exceeds the parser memory limit.")
             retained = []
             observed_rows = 0
-            for batch in parquet_file.iter_batches(batch_size=1024, use_threads=False):
+            retained_chars = 0
+            for batch in parquet_file.iter_batches(batch_size=64, use_threads=False):
+                if batch.nbytes > PARQUET_MAX_BATCH_BYTES:
+                    raise ValueError("Parquet batch exceeds the parser memory limit.")
                 if observed_rows < limit_csv_rows:
-                    retained.append(batch.slice(0, limit_csv_rows - observed_rows).to_pandas())
+                    selected = batch.slice(0, limit_csv_rows - observed_rows).to_pandas()
+                    retained_chars += _frame_text_size(selected, "Parquet")
+                    if retained_chars > TABULAR_MAX_RENDER_CHARS:
+                        raise ValueError("Parquet selected cells exceed the parser render limit.")
+                    retained.append(selected)
                 observed_rows += batch.num_rows
             if observed_rows != total_rows:
                 raise ValueError("Parquet row count differs from file metadata.")
@@ -524,16 +610,22 @@ def extract_tabular_document(
     if ext in [".csv", ".tsv"]:
         csv_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
         sep = "\t" if ext == ".tsv" else ","
+        _preflight_delimited(content, file_path, sep)
         # Preserve literal cells through parsing and Markdown rendering.
         with warnings.catch_warnings():
             warnings.simplefilter("error", pd.errors.ParserWarning)
-            with pd.read_csv(csv_source, sep=sep, dtype=str, keep_default_na=False, on_bad_lines="error", index_col=False, skip_blank_lines=False, chunksize=1024) as reader:
+            with pd.read_csv(csv_source, sep=sep, dtype=str, keep_default_na=False, on_bad_lines="error", index_col=False, skip_blank_lines=False, chunksize=256) as reader:
                 df = reader.read(0)
                 retained = []
                 total_csv_rows = 0
+                retained_chars = sum(len(str(column)) for column in df.columns)
                 for chunk in reader:
                     if total_csv_rows < limit_csv_rows:
-                        retained.append(chunk.head(limit_csv_rows - total_csv_rows))
+                        selected = chunk.head(limit_csv_rows - total_csv_rows)
+                        retained_chars += _frame_text_size(selected, "CSV/TSV")
+                        if retained_chars > TABULAR_MAX_RENDER_CHARS:
+                            raise ValueError("CSV/TSV selected cells exceed the parser render limit.")
+                        retained.append(selected)
                     total_csv_rows += len(chunk)
                 if retained:
                     df = pd.concat(retained, ignore_index=True)

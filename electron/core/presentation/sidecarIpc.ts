@@ -1,5 +1,6 @@
 import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { sidecarAppService } from '../application/sidecarAppService'
+import { sessionHistoryAppService } from '../application/sessionHistoryAppService'
 
 export function registerSidecarIpcHandlers() {
   ipcMain.handle('ingest:source-location', (_, payload) => sidecarAppService.getSourceLocation(payload))
@@ -54,7 +55,7 @@ export function registerSidecarIpcHandlers() {
   })
 
   ipcMain.handle('history:index', async (_, payload) => {
-    return sidecarAppService.indexPromptHistory(payload)
+    return sessionHistoryAppService.indexPromptHistory(payload)
   })
 
   ipcMain.handle('history:search', async (_, { query, topK, projectPaths }) => {

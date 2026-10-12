@@ -292,16 +292,26 @@ export class SidecarAppService {
       .map((row) => ({ ...row, summary: row.summary ?? undefined, completed_at: row.completed_at ?? undefined }))
   }
 
-  async removePromptHistoryForSessions(sessionIds: string[]): Promise<{ success: boolean }> {
+  async removePromptHistoryForSessions(sessionIds: string[], operationId?: string): Promise<{ success: boolean }> {
     if (!sessionIds || sessionIds.length === 0) return { success: true }
-    return this.removePromptHistory({ session_ids: sessionIds })
+    return this.removePromptHistory({ session_ids: sessionIds, ...(operationId ? { operation_id: operationId } : {}) })
+  }
+
+  async restorePromptHistoryForSessions(sessionIds: string[], operationId: string): Promise<{ success: boolean }> {
+    if (sessionIds.length === 0) return { success: true }
+    return this.removePromptHistory({ session_ids: sessionIds, operation_id: operationId, restore: true })
   }
 
   removePromptHistoryForProject(projectPath: string): Promise<{ success: boolean }> {
     return this.removePromptHistory({ project_path: projectPath })
   }
 
-  private async removePromptHistory(payload: { session_ids?: string[]; project_path?: string }): Promise<{ success: boolean }> {
+  private async removePromptHistory(payload: {
+    session_ids?: string[]
+    project_path?: string
+    operation_id?: string
+    restore?: boolean
+  }): Promise<{ success: boolean }> {
     const result = await sidecarHttpClient.postJsonEnvelope<unknown>('/history/remove', payload, 4000)
     if (!result.success) return { success: false }
     const response = z.object({ success: z.boolean() }).safeParse(result.data)

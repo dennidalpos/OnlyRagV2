@@ -152,9 +152,7 @@ export class SessionHistoryRepository {
       this.assertUnambiguousOwners(copies.map((copy) => copy.session))
       if (!ids) return copies.filter((copy) => this.matchesOwner(copy.session, workspacePath))
       const ownedIds = new Set(copies.filter((copy) => this.matchesOwner(copy.session, workspacePath)).map((copy) => copy.session.id))
-      return copies.filter((copy) =>
-        this.matchesOwner(copy.session, workspacePath) || (!ownedIds.has(copy.session.id) && !copy.session.workspacePath),
-      )
+      return copies.filter((copy) => this.matchesOwner(copy.session, workspacePath) || (!ownedIds.has(copy.session.id) && !copy.session.workspacePath))
     })
   }
 
@@ -260,6 +258,51 @@ export class SessionHistoryRepository {
       }
 
       return true
+    })
+  }
+
+  private async planCandidateRestore(
+    copies: readonly SessionHistoryCopy[],
+    workspacePath?: string | null,
+  ): Promise<Array<{ dir: string; sessions: CodingSession[] }>> {
+    if (copies.length === 0) throw new Error('Recovery has no retained history')
+    this.assertUnambiguousOwners(copies.map((copy) => copy.session))
+    const dirs = this.getCandidateStorageDirs(workspacePath)
+    const fallbackDir = this.getFallbackDir()
+    const workspaceDir = dirs.find((dir) => dir !== fallbackDir)
+    const pendingWrites: Array<{ dir: string; sessions: CodingSession[] }> = []
+    for (const store of ['workspace', 'fallback'] as const) {
+      const retained = copies.filter((copy) => copy.store === store)
+      if (retained.length === 0) continue
+      const dir = store === 'fallback' ? fallbackDir : workspaceDir
+      if (!dir) throw new Error('Recovery workspace is unavailable')
+      const current = await this.readStoreAtDir(dir)
+      const additions: CodingSession[] = []
+      for (const copy of retained) {
+        const existing = current.find((session) => session.id === copy.session.id)
+        if (existing && JSON.stringify(existing) !== JSON.stringify(copy.session)) {
+          throw new Error('Newer session history conflicts with restore')
+        }
+        if (!existing) additions.push(copy.session)
+      }
+      if (additions.length > 0) pendingWrites.push({ dir, sessions: sortSessionsByRecency([...current, ...additions]) })
+    }
+    return pendingWrites
+  }
+
+  public async verifyCandidateRestore(copies: readonly SessionHistoryCopy[], workspacePath?: string | null): Promise<void> {
+    await this.runExclusive(async () => {
+      await this.planCandidateRestore(copies, workspacePath)
+    })
+  }
+
+  /** Restores only exact retained copies; a newer session with the same identity blocks restoration. */
+  public async restoreCandidateCopies(copies: readonly SessionHistoryCopy[], workspacePath?: string | null): Promise<void> {
+    await this.runExclusive(async () => {
+      const pendingWrites = await this.planCandidateRestore(copies, workspacePath)
+      for (const write of pendingWrites) {
+        if (!(await this.writeStoreAtDir(write.dir, write.sessions))) throw new Error('Recovery history write was not acknowledged')
+      }
     })
   }
 }

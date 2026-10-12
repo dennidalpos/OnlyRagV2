@@ -24,7 +24,7 @@ Il controllo statico verifica la presenza degli schemi, non la copertura di ogni
 | `ingest` | `delete`, `export`, `file`, `get`, `list`, `page-preview`, `source-location`, `search`, `translate-inplace`, `update` |
 | `ollama` | `cancel-pull`, `cancel-stream`, `check-model-updates`, `delete-model`, `generate-stream`, `get-generation-status`, `get-model-metrics`, `get-running-models`, `install-or-launch`, `pull-model`, `test-connection`, `unload-model` |
 | `projects` | `list`, `register`, `remove`, `rename`, `touch` |
-| `sessions` | `clear`, `delete`, `list`, `save` |
+| `sessions` | `clear`, `delete`, `list`, `recovery-action`, `recovery-list`, `save` |
 | `settings` | `get`, `save` |
 | `sidecar` | `restart` |
 | `skills` | `add-custom-source`, `get-hub-skill-content`, `install-from-hub`, `install-from-url`, `list-hub-all`, `list-hub-by-source`, `list-installed`, `list-sources`, `remove-custom-source`, `reset-original`, `save-custom`, `toggle-active`, `uninstall` |
@@ -33,6 +33,8 @@ Il controllo statico verifica la presenza degli schemi, non la copertura di ogni
 | `workspace` | `clear-standalone-scratch`, `execute-powershell`, `export-standalone-scratch`, `get-git-status-and-diff`, `get-standalone-scratch`, `init-git`, `inspect-guest-os`, `list-files`, `read-file`, `write-file` |
 
 Registrazione: [`agentIpc.ts`](../electron/core/presentation/agentIpc.ts), [`workspaceIpc.ts`](../electron/core/presentation/workspaceIpc.ts), [`ollamaIpc.ts`](../electron/core/presentation/ollamaIpc.ts), [`sidecarIpc.ts`](../electron/core/presentation/sidecarIpc.ts), [`skillIpc.ts`](../electron/core/presentation/skillIpc.ts), [`settingsIpc.ts`](../electron/core/presentation/settingsIpc.ts), [`diagnosticsIpc.ts`](../electron/core/presentation/diagnosticsIpc.ts), [`systemIpc.ts`](../electron/core/presentation/systemIpc.ts), [`projectRegistryIpc.ts`](../electron/core/presentation/projectRegistryIpc.ts), [`sessionHistoryIpc.ts`](../electron/core/presentation/sessionHistoryIpc.ts), [`artifactIpc.ts`](../electron/core/presentation/artifactIpc.ts).
+
+`sessions:delete` e `sessions:clear` restituiscono `{ status: 'refused' | 'pending' | 'complete', operationId?, error? }`. `pending` conserva l'operazione nel journal Main; `complete` conferma tutte le fasi. `sessions:recovery-list` accetta `{ offset? }` e restituisce al massimo 50 operazioni con `total`; record completati rimangono disponibili per ripristino o esportazione. `sessions:recovery-action` accetta l'ID e `retry`, `restore` oppure `export` con `destinationDirectory` assoluta. L'esportazione restituisce anche `exportPath`; l'azione non elimina la copia conservata. Tutti i payload passano dalla validazione IPC esistente. [Comportamento e limiti](./electron-main.md#session-deletion-recovery--2026-10-12).
 
 ## Eventi Renderer
 

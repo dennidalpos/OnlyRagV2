@@ -135,6 +135,25 @@ describe('SessionHistoryRepository Unit Tests', () => {
     expect(await repo.listCandidateCopies(['shared-owner'], tempDir)).toEqual([])
   })
 
+  it('restores both retained candidate copies without overwriting a newer session', async () => {
+    const fallback = path.join(tempDir, 'fallback')
+    const repo = new SessionHistoryRepository(fallback)
+    const workspaceCopy = buildSession('recover', tempDir)
+    const fallbackCopy = buildSession('recover', tempDir, { title: 'older fallback' })
+    await repo.saveSession(workspaceCopy)
+    fs.mkdirSync(fallback)
+    fs.writeFileSync(path.join(fallback, 'session_history.json'), JSON.stringify({ version: 1, sessions: [fallbackCopy] }))
+    const copies = await repo.listCandidateCopies(['recover'], tempDir)
+    expect(await repo.deleteSession('recover', tempDir)).toBe(true)
+    await repo.restoreCandidateCopies(copies, tempDir)
+    expect((await repo.listCandidateCopies(['recover'], tempDir)).map((copy) => copy.session.title)).toEqual(['', 'older fallback'])
+    await repo.restoreCandidateCopies(copies, tempDir)
+    const conflicting = buildSession('recover', tempDir, { title: 'newer work' })
+    fs.writeFileSync(path.join(fallback, 'session_history.json'), JSON.stringify({ version: 1, sessions: [conflicting] }))
+    await expect(repo.restoreCandidateCopies(copies, tempDir)).rejects.toThrow('conflicts')
+    expect(JSON.parse(fs.readFileSync(path.join(fallback, 'session_history.json'), 'utf8')).sessions[0].title).toBe('newer work')
+  })
+
   it('rejects duplicate retained identities before upsert collapses them', async () => {
     const repo = new SessionHistoryRepository(tempDir)
     const file = path.join(tempDir, 'session_history.json')

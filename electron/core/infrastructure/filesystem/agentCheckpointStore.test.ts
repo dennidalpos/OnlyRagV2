@@ -51,7 +51,10 @@ describe('agent checkpoints', () => {
 
   it('lists exactly the checkpoint directories a deletion would remove', () => {
     const root = path.join(workspace, '.onlyrag', 'checkpoints')
-    for (const [id, owner] of [['owned', 'session-a'], ['other', 'session-b']]) {
+    for (const [id, owner] of [
+      ['owned', 'session-a'],
+      ['other', 'session-b'],
+    ]) {
       const directory = path.join(root, id)
       fs.mkdirSync(directory, { recursive: true })
       fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify({ version: 2, checkpointId: id, conversationId: owner, files: [] }))

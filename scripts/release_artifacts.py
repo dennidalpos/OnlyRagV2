@@ -37,6 +37,47 @@ def is_notice_file(path):
     return any(path.name.lower().startswith(token) for token in ('license', 'licence', 'copying', 'notice', 'copyright'))
 
 
+UPSTREAM_PYTHON_NOTICES = {
+    'flatbuffers': ('25.12.19', 'https://raw.githubusercontent.com/google/flatbuffers/v25.12.19/LICENSE',
+                    'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30'),
+    'lance-namespace': ('0.13.0', 'https://raw.githubusercontent.com/lance-format/lance-namespace/v0.13.0/LICENSE',
+                        '03c4e02af8cbe96dd3a9bfaac9ee27ec6a8e9a3ee38ed7b290d50495c11eea48'),
+    'lance-namespace-urllib3-client': ('0.13.0', 'https://raw.githubusercontent.com/lance-format/lance-namespace/v0.13.0/LICENSE',
+                                       '03c4e02af8cbe96dd3a9bfaac9ee27ec6a8e9a3ee38ed7b290d50495c11eea48'),
+    'rapidocr': ('3.9.2', 'https://raw.githubusercontent.com/RapidAI/RapidOCR/v3.9.2/LICENSE',
+                 '3e0af25fdd06aa9586ae97adb00ea927ebe5a3805ac77d2d3a81ce5f55693333'),
+}
+
+PROVISIONAL_NODE_NOTICES = {
+    ('boolbase', '1.0.0'): ('ISC', 'boolbase-1.0.0.txt', 'Felix Boehm'),
+    ('callsite', '1.0.0'): (None, 'callsite-1.0.0.txt', 'TJ Holowaychuk'),
+    ('deps-regex', '0.2.0'): ('MIT', 'deps-regex-0.2.0.txt', 'Mathieu Dutour'),
+}
+
+UPSTREAM_FONTS = {
+    'NotoSans-Regular.otf': ('bfb44de2c2031c391ff856943fe8f105ebb5d725cb9a04d493d211d5bbd5c21b',
+                             'https://github.com/notofonts/latin-greek-cyrillic/releases/download/NotoSans-v2.015/NotoSans-v2.015.zip',
+                             'NotoSans/unhinted/otf/NotoSans-Regular.otf'),
+    'NotoSansCJKjp-Regular.otf': ('68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5',
+                                  'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf', None),
+    'NotoSansCJKkr-Regular.otf': ('6bcb2a0703aa137e874fc2dffa85f6c21ba9a67fa329e81b8c801663af7e992a',
+                                  'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/Korean/NotoSansCJKkr-Regular.otf', None),
+    'NotoSansCJKsc-Regular.otf': ('2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b',
+                                  'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf', None),
+    'NotoSansCJKtc-Regular.otf': ('dce08bd4fd91aa8aa76ed8fea4b694c2dfb8550f67871e326843212ddbeb88b4',
+                                  'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf', None),
+}
+
+ONNX_SUBMODULES = (
+    ('cmake/external/onnx', 'onnx', 'onnx', '2bb50465112feca9003e1ed654d77f01ff1415ca',
+     'fc8cd173cd3a942eb30cb04a95b10d91d9d7d86f6d34222cb931021129075d03'),
+    ('cmake/external/libprotobuf-mutator', 'google', 'libprotobuf-mutator', '7a2ed51a6b682a83e345ff49fc4cfd7ca47550db',
+     'd51365191580c4bf5e9ff104eebcfe34f7ff5f471006d7a460c15dcb3657501c'),
+    ('cmake/external/emsdk', 'emscripten-core', 'emsdk', 'c0bb220cb6e6f4e0fabb6f6db9efd53390ef5e56',
+     '96765e55337d957e9182215ca72f666d8c7fabdc0d1d9fa98234343882084101'),
+)
+
+
 def check_environment():
     names = {(d.metadata['Name'] or '').lower().replace('_', '-'): d.version for d in metadata.distributions()}
     forbidden = [name for name in names if name == 'onnxruntime-gpu' or name.startswith('nvidia-')]
@@ -93,6 +134,42 @@ def github_source(owner, repository, tag, directory):
     return record
 
 
+def official_mupdf_source(version, directory):
+    if version != '1.28.2':
+        raise RuntimeError(f'Unreviewed MuPDF source version: {version}')
+    url = f'https://mupdf.com/downloads/archive/mupdf-{version}-source.tar.gz'
+    digest = '44075a84e329db55b9bef5f342a70fd26d69e48ad1d33cb89d9664581c641156'
+    target = ROOT / 'build/release-cpu/source-cache' / f'mupdf-{version}-official-source.tar.gz'
+    download(url, target, digest)
+    with tarfile.open(target) as archive:
+        core = archive.extractfile(f'mupdf-{version}-source/source/fitz/archive.c')
+        if core is None or hashlib.sha256(core.read()).hexdigest() != '96a0c4b9111ead2f3d55f86a20ef0dda1520ac97fe4df38ffb36922d4b417e2f':
+            raise RuntimeError('Official MuPDF source differs from the pinned core revision')
+        names = archive.getnames()
+        if not all(any(name.startswith(f'mupdf-{version}-source/thirdparty/{part}/') for name in names)
+                   for part in ('mujs', 'freetype', 'cmark-gfm')):
+            raise RuntimeError('Official MuPDF source lacks expected third-party content')
+    shutil.copyfile(target, directory / target.name)
+    return {'path': target.name, 'url': url, 'sha256': digest, 'version': version,
+            'scope': 'Official source tarball includes third-party content; exact PyMuPDF wheel build settings remain to verify.'}
+
+
+def onnx_submodule_sources(parent, directory):
+    if parent['revision'] != '2e2543fbe9fae542f921d47a72d21d5a4ef0b710':
+        raise RuntimeError('ONNX Runtime source revision differs from pinned submodule tree')
+    records = []
+    cache = ROOT / 'build/release-cpu/source-cache'
+    for module_path, owner, repository, revision, digest in ONNX_SUBMODULES:
+        url = f'https://codeload.github.com/{owner}/{repository}/tar.gz/{revision}'
+        target = cache / f'{repository}-{revision}.tar.gz'
+        download(url, target, digest)
+        shutil.copyfile(target, directory / target.name)
+        records.append({'path': target.name, 'url': url, 'sha256': digest, 'revision': revision,
+                        'parentPath': module_path, 'parentRevision': parent['revision'],
+                        'scope': 'Gitlink source at the pinned ONNX Runtime revision; wheel build correspondence remains to verify.'})
+    return records
+
+
 def font_notices(licenses):
     script = r'''
     $ErrorActionPreference = 'Stop'
@@ -112,6 +189,10 @@ def font_notices(licenses):
     lines = ['Noto font copyright and version notices', 'Metadata read from the exact shipped font bytes with Windows GlyphTypeface.', 'Full terms: OFL-NotoSans.txt and OFL-NotoSansCJK.txt.', '']
     for record in records:
         record['sha256'] = sha256(ROOT / 'sidecar/assets/fonts' / record['file'])
+        expected, url, archive_member = UPSTREAM_FONTS[record['file']]
+        if record['sha256'] != expected:
+            raise RuntimeError(f'Font differs from the verified upstream release: {record["file"]}')
+        record['upstream'] = {'url': url, 'sha256': expected, 'archiveMember': archive_member}
         if not record['copyright'] or not all('SIL Open Font License' in text for text in record['license']):
             raise RuntimeError(f'Incomplete font license metadata: {record["file"]}')
         lines.extend([record['file'], *record['version'], *record['copyright'], *record['license'], ''])
@@ -202,6 +283,19 @@ def prepare(release):
             shutil.copyfile(source, target)
             files.append({'path': target.relative_to(licenses).as_posix(), 'sha256': sha256(target)})
         record = {'name': name, 'version': dist.version, 'declaredLicense': dist.metadata.get('License-Expression') or dist.metadata.get('License'), 'notices': files}
+        upstream = UPSTREAM_PYTHON_NOTICES.get(normalized)
+        if not files and upstream:
+            version, url, digest = upstream
+            if dist.version != version:
+                raise RuntimeError(f'Pinned upstream notice version mismatch: {name} {dist.version}')
+            upstream_file = cache / f'{normalized}-{version}-LICENSE'
+            download(url, upstream_file, digest)
+            target = licenses / 'python' / name / 'UPSTREAM-LICENSE.txt'
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(upstream_file, target)
+            shutil.copyfile(upstream_file, source_dir / f'{normalized}-{version}-LICENSE.txt')
+            files.append({'path': target.relative_to(licenses).as_posix(), 'sha256': digest})
+            record['noticeProvenance'] = {'url': url, 'sha256': digest, 'kind': 'versioned-upstream-license'}
         if normalized not in BUILD_TOOLS:
             url = f'https://pypi.org/pypi/{name}/{dist.version}/json'
             data = fetch_json(url)
@@ -239,7 +333,22 @@ def prepare(release):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source, target)
                 files.append({'path': target.relative_to(licenses).as_posix(), 'sha256': sha256(target)})
-        node_records.append({'name': package['name'], 'version': package['version'], 'declaredLicense': package.get('license'), 'notices': files})
+        record = {'name': package['name'], 'version': package['version'], 'declaredLicense': package.get('license'), 'notices': files}
+        provisional = PROVISIONAL_NODE_NOTICES.get((package['name'], package['version']))
+        if not files and provisional:
+            declared, filename, author = provisional
+            if package.get('license') != declared or author not in package.get('author', ''):
+                raise RuntimeError(f'Changed Node license metadata: {package_path}')
+            if package['name'] == 'callsite' and 'MIT' not in (package_path.parent / 'README.md').read_text(encoding='utf-8').split('## License')[-1]:
+                raise RuntimeError('Changed callsite README license declaration')
+            source = ROOT / 'docs/licenses/provisional-node' / filename
+            target = licenses / 'node' / package['name'] / filename
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+            files.append({'path': target.relative_to(licenses).as_posix(), 'sha256': sha256(target)})
+            record['noticeProvenance'] = {'kind': 'provisional-standard-text', 'source': source.relative_to(ROOT).as_posix()}
+            residuals.append(f'{package["name"]} {package["version"]}: provisional standard license text and package-author attribution; confirm original copyright holder/year upstream before public distribution.')
+        node_records.append(record)
     for filename in ('LICENSE', 'LICENSES.chromium.html'):
         source = ROOT / 'node_modules/electron/dist' / filename
         if not source.is_file():
@@ -247,12 +356,13 @@ def prepare(release):
         shutil.copyfile(source, licenses / f'Electron-{filename}')
 
     import pymupdf
-    native_sources = [github_source('microsoft', 'onnxruntime', 'v1.29.0', source_dir),
-                      github_source('ArtifexSoftware', 'mupdf', pymupdf.VersionFitz, source_dir),
+    onnx_source = github_source('microsoft', 'onnxruntime', 'v1.29.0', source_dir)
+    native_sources = [onnx_source, *onnx_submodule_sources(onnx_source, source_dir),
+                      official_mupdf_source(pymupdf.VersionFitz, source_dir),
                       github_source('lancedb', 'lancedb', 'v0.37.1', source_dir)]
     native_notice_records = native_notices(source_dir, native_sources, licenses)
     residuals.extend([
-        f'Bind complete native MuPDF {pymupdf.VersionFitz} sources/build settings used by PyMuPDF {pymupdf.VersionBind}.',
+        f'Bind MuPDF {pymupdf.VersionFitz} build settings used by PyMuPDF {pymupdf.VersionBind} to the official full source tarball.',
         'Verify native/transitive source completeness (including vendored code and native wheel build settings); sdists alone are not certification.',
         'Review upstream font provenance and complete RapidOCR/model/sample-network attribution; exact binary font copyright/version notices are included.',
         'Review actual bundled Renderer/Main/native inventory against the installed-build-environment notice superset.',

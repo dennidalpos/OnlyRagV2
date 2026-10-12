@@ -139,6 +139,18 @@ export function useSessionHistory(workspacePath: string | null) {
     setLoadRevision((revision) => revision + 1)
   }, [flushPendingWrites, schedulePersist])
 
+  const refreshAfterDeletionRecovery = useCallback((sessionIds: readonly string[]) => {
+    for (const sessionId of sessionIds) {
+      const pending = pendingWritesRef.current.get(sessionId)
+      if (pending) clearTimeout(pending.timer)
+      pendingWritesRef.current.delete(sessionId)
+      failedWritesRef.current.delete(sessionId)
+    }
+    setSaveFailed(failedWritesRef.current.size > 0)
+    setDeleteFailed(false)
+    setLoadRevision((revision) => revision + 1)
+  }, [])
+
   // Unmount (workspace view closed, window reload) must not drop the last debounced write.
   useEffect(() => () => void flushPendingWrites(), [flushPendingWrites])
 
@@ -241,7 +253,8 @@ export function useSessionHistory(workspacePath: string | null) {
       const ownsView = () => selection === selectionRevision.current && operation === deletionRevision.current
       await flushPendingWrites()
       try {
-        if (!(await window.electronAPI?.deleteCodingSession?.({ sessionId, workspacePath }))) throw new Error('Session deletion was not acknowledged')
+        const outcome = await window.electronAPI?.deleteCodingSession?.({ sessionId, workspacePath })
+        if (outcome?.status !== 'complete') throw new Error(outcome?.error || 'Session deletion needs recovery')
       } catch (err: unknown) {
         logger.warn('useSessionHistory', `Could not delete session ${sessionId}: ${errorMessage(err)}`)
         if (ownsView()) setDeleteFailed(true)
@@ -282,7 +295,8 @@ export function useSessionHistory(workspacePath: string | null) {
     const removedIds = new Set(sessionsRef.current.map((session) => session.id))
     await flushPendingWrites()
     try {
-      if (!(await window.electronAPI?.clearCodingSessions?.({ workspacePath }))) throw new Error('Session clearing was not acknowledged')
+      const outcome = await window.electronAPI?.clearCodingSessions?.({ workspacePath })
+      if (outcome?.status !== 'complete') throw new Error(outcome?.error || 'Session clearing needs recovery')
     } catch (err: unknown) {
       logger.warn('useSessionHistory', `Could not clear session history: ${errorMessage(err)}`)
       if (ownsView()) setDeleteFailed(true)
@@ -454,6 +468,7 @@ export function useSessionHistory(workspacePath: string | null) {
     isLoadingSessions,
     storageFailed: loadFailed || saveFailed || deleteFailed,
     retryStorage,
+    refreshAfterDeletionRecovery,
     createSession,
     switchSession,
     deleteSession,

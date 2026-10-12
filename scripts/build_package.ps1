@@ -23,6 +23,17 @@ function Invoke-Checked {
     if ($LASTEXITCODE -ne 0) { throw "$Command failed with exit code $LASTEXITCODE" }
 }
 
+function Get-Sha256 {
+    param([string]$Path)
+    $stream = [IO.File]::OpenRead($Path)
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try { return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '') }
+    finally {
+        $algorithm.Dispose()
+        $stream.Dispose()
+    }
+}
+
 try {
     if ($SkipSidecar) { throw 'CPU release requires a fresh Sidecar build; -SkipSidecar is no longer supported.' }
     $rootDir = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
@@ -70,7 +81,7 @@ try {
     catch { if ($RequireSignature) { throw }; Write-Host 'Authenticode status could not be determined.' }
     if ($RequireSignature -and ($null -eq $signature -or $signature.Status -ne 'Valid')) { throw 'A valid installer signature was required.' }
     $signatureStatus = if ($null -eq $signature) { 'Unverifiable' } else { $signature.Status }
-    $hash = (Get-FileHash -LiteralPath $installer[0].FullName -Algorithm SHA256).Hash
+    $hash = Get-Sha256 -Path $installer[0].FullName
     Write-Host "[PASS] CPU candidate built: $($installer[0].Name), $($installer[0].Length) bytes, signature $signatureStatus, SHA256 $hash"
     Write-Host 'License/source completeness and public delivery remain qualification gates; nothing was published.'
 

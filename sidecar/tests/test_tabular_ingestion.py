@@ -77,6 +77,47 @@ def test_csv_blank_data_row_is_counted_instead_of_skipped():
     assert "last" not in markdown
 
 
+def test_csv_refuses_oversize_field_and_wide_record_without_changing_source(tmp_path):
+    cases = [
+        (b"Key,Value\n1," + b"x" * (64 * 1024 + 1) + b"\n", "cell exceeds"),
+        (b",".join(f"C{i}".encode() for i in range(257)) + b"\n", "column parser limit"),
+    ]
+    for index, (content, message) in enumerate(cases):
+        source = tmp_path / f"adversarial-{index}.csv"
+        source.write_bytes(content)
+        with pytest.raises(ValueError, match=message):
+            extract_document_markdown(source.name, b"", str(source))
+        assert source.read_bytes() == content
+
+
+def test_csv_selected_output_budget_refuses_without_truncation():
+    content = b"Value\n" + (b"x" * (64 * 1024) + b"\n") * 65
+    with pytest.raises(ValueError, match="render limit"):
+        extract_document_markdown("large.csv", content)
+
+
+@pytest.mark.parametrize("extension", ["csv", "xlsx", "parquet"])
+def test_adversarial_table_stream_never_indexes_partial_content(sidecar_http_client, tmp_path, extension):
+    if extension == "csv":
+        content = b"Code,Value\n0007,ok\n0008," + b"x" * (64 * 1024 + 1) + b"\n"
+    elif extension == "xlsx":
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("xl/worksheets/sheet1.xml", b"x" * (32 * 1024 * 1024 + 1))
+        content = output.getvalue()
+    else:
+        content = parquet_bytes({"Value": ["x" * (9 * 1024 * 1024)]})
+    source = tmp_path / f"oversize.{extension}"
+    source.write_bytes(content)
+    before = sidecar_http_client.get("/health").json()
+    events = read_events(sidecar_http_client.post("/ingest-path-stream", json={"file_path": str(source)}))
+    assert events[-1]["type"] == "error"
+    assert not any(event["type"] == "done" or event.get("step_code") == "embedding" for event in events)
+    after = sidecar_http_client.get("/health").json()
+    assert (after["documents_count"], after["chunks_count"]) == (before["documents_count"], before["chunks_count"])
+    assert source.read_bytes() == content
+
+
 def workbook_bytes(rows, extra_sheets=()):
     book = Workbook()
     for row in rows:
@@ -179,6 +220,28 @@ def test_xlsx_oversize_shared_strings_are_refused_before_loading():
         archive.writestr("xl/sharedStrings.xml", b"x" * (16 * 1024 * 1024 + 1))
     with pytest.raises(ValueError, match="16 MiB parser limit"):
         extract_document_markdown("oversize.xlsx", output.getvalue())
+
+
+def test_xlsx_refuses_compressed_worksheet_before_loading_and_large_inline_cell():
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("xl/worksheets/sheet1.xml", b"x" * (32 * 1024 * 1024 + 1))
+    assert len(output.getvalue()) < 100_000
+    with pytest.raises(ValueError, match="XML payload exceeds"):
+        extract_document_markdown("compressed.xlsx", output.getvalue(), allow_full_excel_format=True)
+
+    original = workbook_bytes([["seed"]])
+    inline = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(original)) as source, zipfile.ZipFile(inline, "w") as target:
+        for entry in source.infolist():
+            payload = source.read(entry)
+            if entry.filename == "xl/worksheets/sheet1.xml":
+                assert b"<t>seed</t>" in payload
+                payload = payload.replace(b"<t>seed</t>", b"<t>" + b"x" * (64 * 1024 + 1) + b"</t>")
+            target.writestr(entry, payload)
+    content = inline.getvalue()
+    with pytest.raises(ValueError, match="cell exceeds"):
+        extract_document_markdown("inline.xlsx", content)
 
 
 def test_full_format_xlsx_keeps_last_coordinate_in_bounded_rag_extract():
@@ -300,6 +363,19 @@ def test_parquet_counts_omitted_rows_across_batches():
     markdown, _ = extract_document_markdown("many.parquet", content, max_tabular_rows=2)
     assert "su 1100 totali" in markdown
     assert "row-1099" not in markdown
+
+
+def test_parquet_refuses_wide_schema_and_oversize_decompressed_batch():
+    wide = parquet_bytes({f"C{index}": ["x"] for index in range(257)})
+    with pytest.raises(ValueError, match="column parser limit"):
+        extract_document_markdown("wide.parquet", wide)
+    long_header = parquet_bytes({"H" * (64 * 1024 + 1): ["x"]})
+    with pytest.raises(ValueError, match="cell exceeds"):
+        extract_document_markdown("long-header.parquet", long_header)
+    compressed = parquet_bytes({"Value": ["x" * (9 * 1024 * 1024)]})
+    assert len(compressed) < 1024 * 1024
+    with pytest.raises(ValueError, match="batch exceeds"):
+        extract_document_markdown("compressed.parquet", compressed)
 
 
 def test_parquet_rejects_an_empty_selected_row_range():

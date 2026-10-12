@@ -34,6 +34,8 @@ import { resolveModelContextLength } from '../../../shared/domain/settings/model
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { isLocalOllamaHost } from '../../../shared/domain/ollamaHost'
 import { skillInstallApprovalService } from './skillInstallApprovalService'
+import { sessionDeletionRunGate } from './sessionDeletionRunGate'
+import { sessionDeletionJournal } from '../infrastructure/filesystem/sessionDeletionJournal'
 
 const activeAgentSessions = new Map<string, AgentSession>()
 
@@ -205,6 +207,8 @@ export async function runAgentOrchestratorLoop(
   })
   const sessionId = identity.conversationId
   const runId = identity.runId
+  const releaseRun = sessionDeletionRunGate.beginRun(sessionId, payload.workspacePath)
+  if (!releaseRun) return { success: false, summary: 'Session deletion needs recovery before starting another run.', completionStatus: 'blocked' }
   const session: AgentSession = {
     id: runId,
     identity,
@@ -217,6 +221,23 @@ export async function runAgentOrchestratorLoop(
     forceContextCompaction: Boolean(payload.forceContextCompaction),
   }
   activeAgentSessions.set(runId, session)
+  const rejectBeforeBootstrap = async (summary: string): Promise<AgentTaskResult> => {
+    try {
+      await session.cancellationSettlement
+    } finally {
+      if (activeAgentSessions.get(runId) === session) activeAgentSessions.delete(runId)
+      releaseRun()
+    }
+    return { success: false, summary, completionStatus: 'blocked' }
+  }
+  try {
+    const records = await sessionDeletionJournal.list()
+    if (records.some((record) => record.status !== 'restored' && record.sessionIds.includes(sessionId))) {
+      return rejectBeforeBootstrap('Session deletion needs recovery before starting another run.')
+    }
+  } catch (error: unknown) {
+    return rejectBeforeBootstrap(`Session deletion recovery is unavailable: ${errorMessage(error)}`)
+  }
 
   // Compares by identity, not just by key presence: if a later run registers under the same
   // reused sessionId, this run must recognise that it is no longer the owner and stand down.
@@ -749,8 +770,12 @@ export async function runAgentOrchestratorLoop(
     result = { success: false, summary: errorMessage(error), completionStatus: 'blocked' }
   } finally {
     if (session.timeoutHandle) clearTimeout(session.timeoutHandle)
-    await agentToolExecutorService.closeBrowserRun(runId)
-    if (activeAgentSessions.get(runId) === session) activeAgentSessions.delete(runId)
+    try {
+      await agentToolExecutorService.closeBrowserRun(runId)
+    } finally {
+      if (activeAgentSessions.get(runId) === session) activeAgentSessions.delete(runId)
+      releaseRun()
+    }
   }
   if (settlementError) throw settlementError
   if (session.isCancelled) {

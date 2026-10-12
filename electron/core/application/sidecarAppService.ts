@@ -81,6 +81,7 @@ export class SidecarAppService {
     numCtx?: number,
     taskId?: string,
     normalizationThink?: boolean,
+    allowFullExcelFormat?: boolean,
   ) {
     if (typeof filePath !== 'string' || !filePath.trim()) {
       return { success: false, error: 'Invalid file path' }
@@ -109,6 +110,7 @@ export class SidecarAppService {
           normalization_model: normalizationModel || undefined,
           num_ctx: numCtx || undefined,
           normalization_think: normalizationThink === true,
+          allow_full_excel_format: allowFullExcelFormat === true,
           embedding_model: await this.configuredEmbeddingModel(),
         },
         (event) => this.relayProgress('ingest:stream-progress', toIngestionProgressPayload(event, effectiveTaskId), event.type),

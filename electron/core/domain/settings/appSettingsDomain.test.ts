@@ -14,6 +14,7 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(defaults.allowTerminalExecution).toBe(true)
     expect(defaults.capabilityPolicyMode).toBe('network-approved')
     expect(defaults.fullAccess).toBe(false)
+    expect(defaults.allowFullExcelFormat).toBe(false)
     expect(defaults.modelThinkingPreferences).toEqual({})
   })
 
@@ -32,6 +33,12 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(sanitizeAppSettings({ fullAccess: true }).fullAccess).toBe(true)
     expect(sanitizeAppSettings({ fullAccess: 'true' }).fullAccess).toBe(false)
     expect(sanitizeAppSettings({}).fullAccess).toBe(false)
+  })
+
+  it('requires an explicit boolean to enable full Excel format ingestion', () => {
+    expect(sanitizeAppSettings({ allowFullExcelFormat: true }).allowFullExcelFormat).toBe(true)
+    expect(sanitizeAppSettings({ allowFullExcelFormat: 'true' }).allowFullExcelFormat).toBe(false)
+    expect(sanitizeAppSettings({}).allowFullExcelFormat).toBe(false)
   })
 
   it('sanitizes independent per-model thinking preferences', () => {

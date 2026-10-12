@@ -690,6 +690,8 @@ export const it = {
     queueLiveStatusQueued: 'In coda',
     wordWrap: 'A capo automatico',
     wordWrapDesc: 'Ritorno a capo automatico negli editor Monaco e anteprime.',
+    fullExcelFormat: 'Excel: dimensioni del formato',
+    fullExcelFormatDesc: 'Accetta .xls fino a 65.536 × 256 e .xlsx fino a 1.048.576 × 16.384. Il RAG usa un estratto dichiarato di righe, colonne e celle; file complessi possono richiedere molta memoria.',
     soundEffects: 'Effetti Sonori',
     soundEffectsDesc: 'Segnali acustici per errori, conferme e completamento task.',
     generalPreferencesSection: 'Preferenze & Interfaccia Utente',

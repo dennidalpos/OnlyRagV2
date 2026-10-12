@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AtomicWorkspaceJournal } from './atomicWorkspaceJournal'
-import { deleteConversationCheckpoints, restoreAgentCheckpoint, saveAgentCheckpoint } from './agentCheckpointStore'
+import { deleteConversationCheckpoints, listConversationCheckpointPaths, restoreAgentCheckpoint, saveAgentCheckpoint } from './agentCheckpointStore'
 import { ensureWorkspaceMetadataDirectory } from './workspaceMetadataDirectory'
 
 describe('agent checkpoints', () => {
@@ -47,6 +47,27 @@ describe('agent checkpoints', () => {
   it('saves nothing for a run that changed no file', () => {
     expect(saveAgentCheckpoint(workspace, 'run-empty', new AtomicWorkspaceJournal().sessionBaseline)).toBeNull()
     expect(fs.existsSync(path.join(workspace, '.onlyrag', 'checkpoints', 'run-empty'))).toBe(false)
+  })
+
+  it('lists exactly the checkpoint directories a deletion would remove', () => {
+    const root = path.join(workspace, '.onlyrag', 'checkpoints')
+    for (const [id, owner] of [['owned', 'session-a'], ['other', 'session-b']]) {
+      const directory = path.join(root, id)
+      fs.mkdirSync(directory, { recursive: true })
+      fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify({ version: 2, checkpointId: id, conversationId: owner, files: [] }))
+    }
+    expect(listConversationCheckpointPaths(workspace, 'session-a', [])).toEqual([path.join(root, 'owned')])
+    deleteConversationCheckpoints(workspace, 'session-a', [])
+    expect(fs.existsSync(path.join(root, 'owned'))).toBe(false)
+    expect(fs.existsSync(path.join(root, 'other'))).toBe(true)
+  })
+
+  it('refuses a referenced checkpoint owned by another conversation', () => {
+    const directory = path.join(workspace, '.onlyrag', 'checkpoints', 'shared')
+    fs.mkdirSync(directory, { recursive: true })
+    fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify({ version: 2, checkpointId: 'shared', conversationId: 'other', files: [] }))
+    expect(() => deleteConversationCheckpoints(workspace, 'session-a', ['shared'])).toThrow('different or unsupported owner')
+    expect(fs.existsSync(directory)).toBe(true)
   })
 
   it('refuses a manifest entry that points outside the workspace', () => {

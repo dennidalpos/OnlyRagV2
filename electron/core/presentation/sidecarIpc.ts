@@ -17,6 +17,7 @@ export function registerSidecarIpcHandlers() {
       payload.numCtx,
       payload.taskId,
       payload.normalizationThink,
+      payload.allowFullExcelFormat,
     )
   })
 

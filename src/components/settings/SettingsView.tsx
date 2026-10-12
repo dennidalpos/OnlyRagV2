@@ -219,6 +219,24 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
               </div>
             </div>
 
+            {/* Card: Excel format limits */}
+            <div className="glass-panel rounded-xl p-5 border border-slate-800 flex flex-col justify-between space-y-3">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-slate-100 font-bold text-sm">
+                    <Layers className="w-4.5 h-4.5 text-cyan-400" />
+                    <span>{t('settings.fullExcelFormat')}</span>
+                  </div>
+                  <ToggleSwitch
+                    checked={settings.allowFullExcelFormat === true}
+                    onChange={(checked) => onUpdateSettings({ allowFullExcelFormat: checked })}
+                    ariaLabel={t('settings.fullExcelFormat')}
+                  />
+                </div>
+                <p className="text-xs text-slate-400">{t('settings.fullExcelFormatDesc')}</p>
+              </div>
+            </div>
+
             {/* Card: Effetti Sonori UI */}
             <div className="glass-panel rounded-xl p-5 border border-slate-800 flex flex-col justify-between space-y-3">
               <div className="space-y-1">

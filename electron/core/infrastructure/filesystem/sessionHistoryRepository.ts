@@ -17,6 +17,11 @@ interface SessionHistoryStore {
   sessions: CodingSession[]
 }
 
+export interface SessionHistoryCopy {
+  store: 'workspace' | 'fallback'
+  session: CodingSession
+}
+
 /** Single filesystem store for the coding session history (sessions and their ExecutedPrompt records). */
 export class SessionHistoryRepository {
   private mutationTail: Promise<void> = Promise.resolve()
@@ -133,6 +138,43 @@ export class SessionHistoryRepository {
     return sortSessionsByRecency(await this.readStore(workspacePath))
   }
 
+  /** Read every owned copy before deleting from either store. */
+  public async listCandidateCopies(sessionIds: readonly string[] | null, workspacePath?: string | null): Promise<SessionHistoryCopy[]> {
+    return this.runExclusive(async () => {
+      const ids = sessionIds ? new Set(sessionIds) : null
+      const copies: SessionHistoryCopy[] = []
+      for (const dir of this.getCandidateStorageDirs(workspacePath)) {
+        const store = dir === this.getFallbackDir() ? 'fallback' : 'workspace'
+        for (const session of await this.readStoreAtDir(dir)) {
+          if (!ids || ids.has(session.id)) copies.push({ store, session })
+        }
+      }
+      this.assertUnambiguousOwners(copies.map((copy) => copy.session))
+      if (!ids) return copies.filter((copy) => this.matchesOwner(copy.session, workspacePath))
+      const ownedIds = new Set(copies.filter((copy) => this.matchesOwner(copy.session, workspacePath)).map((copy) => copy.session.id))
+      return copies.filter((copy) =>
+        this.matchesOwner(copy.session, workspacePath) || (!ownedIds.has(copy.session.id) && !copy.session.workspacePath),
+      )
+    })
+  }
+
+  private matchesOwner(session: CodingSession, workspacePath?: string | null): boolean {
+    const actual = session.workspacePath ? path.normalize(session.workspacePath).toLowerCase() : null
+    const expected = workspacePath ? path.normalize(workspacePath).toLowerCase() : null
+    return actual === expected
+  }
+
+  private assertUnambiguousOwners(sessions: readonly CodingSession[]): void {
+    const owners = new Map<string, string | null>()
+    for (const session of sessions) {
+      const owner = session.workspacePath ? path.normalize(session.workspacePath).toLowerCase() : null
+      if (owners.has(session.id) && owners.get(session.id) !== owner) {
+        throw new Error('Session identity has conflicting owners; original history is preserved')
+      }
+      owners.set(session.id, owner)
+    }
+  }
+
   public async migrateStandaloneSessions(workspacePath: string): Promise<number> {
     return this.runExclusive(async () => {
       const fallbackDir = this.getFallbackDir()
@@ -172,9 +214,13 @@ export class SessionHistoryRepository {
       let removedAny = false
       const stores = []
       for (const dir of this.getCandidateStorageDirs(workspacePath)) stores.push({ dir, sessions: await this.readStoreAtDir(dir) })
+      this.assertUnambiguousOwners(stores.flatMap(({ sessions }) => sessions.filter((session) => session.id === sessionId)))
+      const ownedCopyExists = stores.some(({ sessions }) => sessions.some((session) => session.id === sessionId && this.matchesOwner(session, workspacePath)))
       for (const { dir, sessions } of stores) {
         if (sessions.length === 0) continue
-        const remaining = sessions.filter((session) => session.id !== sessionId)
+        const remaining = sessions.filter(
+          (session) => session.id !== sessionId || !(this.matchesOwner(session, workspacePath) || (!ownedCopyExists && !session.workspacePath)),
+        )
         if (remaining.length === sessions.length) continue
         const wrote = await this.writeStoreAtDir(dir, remaining)
         if (!wrote) throw new Error('Session deletion was not acknowledged; remaining stores and recovery assets are preserved')
@@ -191,11 +237,13 @@ export class SessionHistoryRepository {
       const fallbackSessions = await this.readStoreAtDir(fallbackDir)
       const workspaceDir = workspacePath && fs.existsSync(workspacePath) ? path.dirname(workspaceMetadataHistoryPath(workspacePath)) : null
       // Read every affected store before deleting from any of them.
-      if (workspaceDir) await this.readStoreAtDir(workspaceDir)
+      const workspaceSessions = workspaceDir ? await this.readStoreAtDir(workspaceDir) : []
+      this.assertUnambiguousOwners([...workspaceSessions, ...fallbackSessions])
 
       if (workspaceDir) {
-        if (fs.existsSync(workspaceDir)) {
-          if (!(await this.writeStoreAtDir(workspaceDir, []))) return false
+        const remaining = workspaceSessions.filter((session) => !this.matchesOwner(session, workspacePath))
+        if (remaining.length !== workspaceSessions.length) {
+          if (!(await this.writeStoreAtDir(workspaceDir, remaining))) return false
         }
       }
 

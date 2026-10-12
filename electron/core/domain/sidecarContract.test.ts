@@ -45,6 +45,7 @@ describe('sidecar IPC contract', () => {
     expect(sidecarTranslatePayloadSchema.parse({ docId: 'doc-1', sourceLang: 'it', targetLang: 'en' })).toMatchObject({ docId: 'doc-1' })
     // A vision model trained on 2k tokens (moondream) gets num_ctx 2048 from resolveModelContextLength.
     expect(sidecarIngestFilePayloadSchema.parse({ filePath: 'a.pdf', numCtx: 2048, taskId: 'ingest-1' })).toMatchObject({ numCtx: 2048 })
+    expect(sidecarIngestFilePayloadSchema.parse({ filePath: 'a.xlsx', taskId: 'ingest-2', allowFullExcelFormat: true })).toMatchObject({ allowFullExcelFormat: true })
     // A reasoning level chosen in Settings travels as itself, not as `true`.
     expect(sidecarTranslatePayloadSchema.parse({ docId: 'doc-1', sourceLang: 'it', targetLang: 'en', think: 'low' })).toMatchObject({ think: 'low' })
   })

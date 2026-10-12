@@ -6,6 +6,114 @@ import type { ChatMessage } from '../../types'
 import { ChatMessageItem } from './ChatMessageItem'
 
 describe('retrieved candidate scores', () => {
+  it('renders structured answers, keeps citations navigable, and refuses unsafe links and HTML', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const revision = 'b'.repeat(64)
+    const getSourceLocation = vi.fn(async () => ({
+      doc_id: 'doc',
+      chunk_id: 'chunk',
+      source_revision: revision,
+      extraction_revision: revision,
+      index_revision: revision,
+      span_start: 0,
+      span_end: 12,
+      exact_quote: 'Due in 21 days.',
+      page_number: 1,
+    }))
+    Object.assign(window, { electronAPI: { getSourceLocation } })
+    const message: ChatMessage = {
+      id: 'formatted',
+      sender: 'bot',
+      timestamp: '12:00',
+      text: '## Summary\n\n- **Due** in 21 days [S1]\n- Keep `literal [S1]`\n\n| Item | Value |\n| --- | --- |\n| Due | [S1] |\n\n```text\n[S1]\n```\n\n[Official](https://example.org/guide) [Unsafe](javascript:alert(1)) ![remote](https://example.org/image.png) <img src=x onerror=alert(1)>',
+      sources: [
+        {
+          docId: 'doc',
+          chunkId: 'chunk',
+          docName: 'contract.pdf',
+          score: 0.8,
+          snippet: 'Due in 21 days.',
+          referenceId: 'S1',
+          citationState: 'cited',
+          provenance: {
+            version: 1,
+            source_revision: revision,
+            extraction_revision: revision,
+            index_revision: revision,
+            location_kind: 'original',
+            span_start: 0,
+            span_end: 12,
+            exact_quote: 'Due in 21 days.',
+          },
+        },
+      ],
+    }
+    try {
+      await act(async () =>
+        root.render(
+          <I18nProvider initialLanguage="en">
+            <ChatMessageItem msg={message} isCopied={false} copiedCitationIndex={null} onCopyMessage={vi.fn()} onCopyCitation={vi.fn()} />
+          </I18nProvider>,
+        ),
+      )
+      expect(container.querySelector('h2')?.textContent).toBe('Summary')
+      expect(container.querySelectorAll('li')).toHaveLength(2)
+      expect(container.querySelector('strong')?.textContent).toBe('Due')
+      expect(container.querySelector('table th')?.textContent).toBe('Item')
+      expect(container.querySelector('table td:last-child')?.textContent).toBe('[S1]')
+      expect(container.querySelectorAll('button[title="Open original location"]')).toHaveLength(2)
+      expect(container.querySelector('code')?.textContent).toContain('literal [S1]')
+      expect(container.querySelector('pre code')?.textContent).toContain('[S1]')
+      const link = container.querySelector('a')!
+      expect(link.href).toBe('https://example.org/guide')
+      expect(link.target).toBe('_blank')
+      expect(link.rel).toBe('noopener noreferrer')
+      expect(container.querySelectorAll('a')).toHaveLength(1)
+      expect(container.querySelector('img')).toBeNull()
+      await act(async () => container.querySelector<HTMLButtonElement>('button[title="Open original location"]')?.click())
+      expect(getSourceLocation).toHaveBeenCalledOnce()
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('preserves user text and does not parse incomplete streaming markdown', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const message: ChatMessage = { id: 'plain', sender: 'user', timestamp: '12:00', text: '**literal**' }
+    try {
+      await act(async () =>
+        root.render(
+          <I18nProvider initialLanguage="en">
+            <ChatMessageItem msg={message} isCopied={false} copiedCitationIndex={null} onCopyMessage={vi.fn()} onCopyCitation={vi.fn()} />
+          </I18nProvider>,
+        ),
+      )
+      expect(container.querySelector('strong')).toBeNull()
+      expect(container.textContent).toContain('**literal**')
+      await act(async () =>
+        root.render(
+          <I18nProvider initialLanguage="en">
+            <ChatMessageItem
+              msg={{ ...message, sender: 'bot', isStreaming: true }}
+              isCopied={false}
+              copiedCitationIndex={null}
+              onCopyMessage={vi.fn()}
+              onCopyCitation={vi.fn()}
+            />
+          </I18nProvider>,
+        ),
+      )
+      expect(container.querySelector('strong')).toBeNull()
+      expect(container.textContent).toContain('**literal**')
+    } finally {
+      await act(async () => root.unmount())
+    }
+  })
+
   it.each([false, true])('opens cited original locations or exposes their stale failure (%s)', async (stale) => {
     const container = document.createElement('div')
     document.body.appendChild(container)

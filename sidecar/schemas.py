@@ -85,8 +85,9 @@ class IngestPathRequest(StrictRequest):
     normalization_think: Optional[bool] = False
     num_ctx: Optional[int] = CONTEXT_TOKENS
     max_tabular_rows: Optional[int] = Field(default=None, ge=1, le=1_000_000)
-    max_excel_rows_per_sheet: Optional[int] = Field(default=None, ge=1, le=1_000_000)
+    max_excel_rows_per_sheet: Optional[int] = Field(default=None, ge=1, le=1_048_576)
     max_excel_sheets: Optional[int] = Field(default=None, ge=1, le=1_000)
+    allow_full_excel_format: bool = False
     embedding_model: Optional[str] = MODEL_NAME
 
     @model_validator(mode="after")
@@ -205,3 +206,5 @@ class PromptHistoryRemoveRequest(StrictRequest):
     session_ids: Optional[List[str]] = Field(default=None, max_length=100)
     # Raw workspace path; hashed internally to the same project_id used at index time.
     project_path: Optional[str] = PATH_VALUE
+    operation_id: Optional[str] = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
+    restore: bool = False

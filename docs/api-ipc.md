@@ -1,5 +1,7 @@
 # Contratto IPC
 
+`ingest:file` accepts optional `allowFullExcelFormat` (default false). Main forwards it as `allow_full_excel_format` in the Sidecar REST request; the generated OpenAPI contract includes the same default. It applies to the current ingestion only and is sourced from the saved Settings switch. [Excel policy](./rag-sidecar.md#opt-in-excel-format-dimensions--2026-10-11).
+
 Il contratto è un solo file, [`shared/ipc/ipcContract.ts`](../shared/ipc/ipcContract.ts): `IpcInvokeContract` dichiara per ogni canale request/response il `payload` (un oggetto, o `void` se il canale non ha input) e il `result`; `IpcSendContract` il messaggio Renderer→Main; `IpcEventContract` gli eventi Main→Renderer. `IPC_INVOKE_METHODS` e `IPC_EVENT_METHODS` associano ogni metodo di `window.electronAPI` al suo canale, e `IElectronAPI` ne è derivato. Nessun metodo accetta argomenti posizionali: un payload con soli campi facoltativi si può omettere.
 
 [`electron/preload.ts`](../electron/preload.ts) costruisce i metodi dalle due mappe; restano scritti a mano solo `generateOllamaStream` (sottoscrive `ollama:chunk`/`ollama:done` per il suo `operationId`) e `respondAgentSkillInstall` (unico `send`). In Main `secureIpcMain.handle(channel, listener)` tipizza payload e risultato dell'handler dal contratto, e `RendererEventSink.send` tipizza gli eventi: un handler che restituisce una forma diversa da quella dichiarata non compila.

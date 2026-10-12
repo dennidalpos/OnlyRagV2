@@ -114,11 +114,12 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
       if (isMountedRef.current) reportFailure(errorMessage(err) || 'unknown error')
     } finally {
       isFetchingRef.current = false
-      if (!isMountedRef.current) return
-      setIsLoading(false)
-      if (refreshPendingRef.current) {
-        refreshPendingRef.current = false
-        void fetchDocumentsRef.current()
+      if (isMountedRef.current) {
+        setIsLoading(false)
+        if (refreshPendingRef.current) {
+          refreshPendingRef.current = false
+          void fetchDocumentsRef.current()
+        }
       }
     }
   }, [reportFailure])

@@ -33,6 +33,10 @@ def is_gpu_library(path):
     return 'nvidia' in parts or any(parts[-1].startswith(name) for name in GPU_NAMES)
 
 
+def is_notice_file(path):
+    return any(path.name.lower().startswith(token) for token in ('license', 'licence', 'copying', 'notice', 'copyright'))
+
+
 def check_environment():
     names = {(d.metadata['Name'] or '').lower().replace('_', '-'): d.version for d in metadata.distributions()}
     forbidden = [name for name in names if name == 'onnxruntime-gpu' or name.startswith('nvidia-')]
@@ -187,7 +191,7 @@ def prepare(release):
         files = []
         for entry in dist.files or []:
             source = Path(dist.locate_file(entry))
-            if not source.is_file() or not any(token in source.name.lower() for token in ('license', 'copying', 'notice', 'copyright')):
+            if not source.is_file() or not is_notice_file(source):
                 continue
             if source.suffix.lower() in ('.py', '.pyc', '.pyd', '.dll'):
                 continue
@@ -230,7 +234,7 @@ def prepare(release):
             continue
         files = []
         for source in package_path.parent.iterdir():
-            if source.is_file() and any(source.name.lower().startswith(token) for token in ('license', 'licence', 'copying', 'notice', 'copyright')):
+            if source.is_file() and is_notice_file(source):
                 target = licenses / 'node' / source.relative_to(ROOT / 'node_modules')
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source, target)

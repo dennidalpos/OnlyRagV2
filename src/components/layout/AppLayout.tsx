@@ -190,16 +190,16 @@ export const AppLayout: React.FC = () => {
   return (
     <div className="flex h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden select-text">
       {/* Navigation Sidebar */}
-      <aside className="w-64 glass-panel border-r border-slate-800 flex flex-col justify-between p-4 z-10 shrink-0">
+      <aside className="w-64 max-[900px]:w-16 glass-panel border-r border-slate-800 flex flex-col justify-between p-4 max-[900px]:p-2 z-10 shrink-0">
         <div>
           {/* App Branding */}
-          <div className="flex items-center justify-between px-2 py-3 mb-6 border-b border-slate-800/80">
+          <div className="flex items-center justify-between max-[900px]:flex-col max-[900px]:gap-2 px-2 max-[900px]:px-0 py-3 mb-6 border-b border-slate-800/80">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-slate-900/90 border border-cyan-500/30 flex items-center justify-center p-1.5 shadow-lg shadow-cyan-950/40 relative overflow-hidden group">
                 <div className="absolute inset-0 bg-cyan-500/10 opacity-50 group-hover:opacity-100 transition-opacity" />
                 <OnlyRagLogo className="w-full h-full object-contain relative z-10 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
               </div>
-              <div>
+              <div className="max-[900px]:hidden">
                 <div className="font-bold text-base tracking-wide text-slate-100">{t('common.appName')}</div>
                 <div className="text-[11px] text-cyan-400 font-medium">{t('common.tagline')}</div>
               </div>
@@ -247,13 +247,14 @@ export const AppLayout: React.FC = () => {
               aria-controls="panel-ingestion"
               id="tab-ingestion"
               onClick={() => handleSelectTab('ingestion')}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
+              aria-label={t('navigation.ingestion')}
+              className={`w-full flex items-center gap-3 max-[900px]:justify-center px-3.5 max-[900px]:px-2 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
                 activeTab === 'ingestion'
                   ? 'bg-slate-900 text-cyan-300 border-l-2 border-cyan-400 font-semibold shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <FileText className="w-4 h-4" /> {t('navigation.ingestion')}
+              <FileText className="w-4 h-4 shrink-0" /> <span className="max-[900px]:hidden">{t('navigation.ingestion')}</span>
             </button>
 
             <button
@@ -264,13 +265,14 @@ export const AppLayout: React.FC = () => {
               aria-controls="panel-chat"
               id="tab-chat"
               onClick={() => handleSelectTab('chat')}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
+              aria-label={t('navigation.chat')}
+              className={`w-full flex items-center gap-3 max-[900px]:justify-center px-3.5 max-[900px]:px-2 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
                 activeTab === 'chat'
                   ? 'bg-slate-900 text-cyan-300 border-l-2 border-cyan-400 font-semibold shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <MessageSquare className="w-4 h-4" /> {t('navigation.chat')}
+              <MessageSquare className="w-4 h-4 shrink-0" /> <span className="max-[900px]:hidden">{t('navigation.chat')}</span>
             </button>
 
             <button
@@ -281,13 +283,14 @@ export const AppLayout: React.FC = () => {
               aria-controls="panel-translation"
               id="tab-translation"
               onClick={() => handleSelectTab('translation')}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
+              aria-label={t('navigation.translation')}
+              className={`w-full flex items-center gap-3 max-[900px]:justify-center px-3.5 max-[900px]:px-2 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
                 activeTab === 'translation'
                   ? 'bg-slate-900 text-cyan-300 border-l-2 border-cyan-400 font-semibold shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <Languages className="w-4 h-4" /> {t('navigation.translation')}
+              <Languages className="w-4 h-4 shrink-0" /> <span className="max-[900px]:hidden">{t('navigation.translation')}</span>
             </button>
 
             <button
@@ -298,13 +301,14 @@ export const AppLayout: React.FC = () => {
               aria-controls="panel-coding"
               id="tab-coding"
               onClick={() => handleSelectTab('coding')}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
+              aria-label={t('navigation.coding')}
+              className={`w-full flex items-center gap-3 max-[900px]:justify-center px-3.5 max-[900px]:px-2 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
                 activeTab === 'coding'
                   ? 'bg-slate-900 text-cyan-300 border-l-2 border-cyan-400 font-semibold shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <Code className="w-4 h-4" /> {t('navigation.coding')}
+              <Code className="w-4 h-4 shrink-0" /> <span className="max-[900px]:hidden">{t('navigation.coding')}</span>
             </button>
 
             <button
@@ -315,20 +319,21 @@ export const AppLayout: React.FC = () => {
               aria-controls="panel-settings"
               id="tab-settings"
               onClick={() => handleSelectTab('settings')}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
+              aria-label={t('navigation.settings')}
+              className={`w-full flex items-center gap-3 max-[900px]:justify-center px-3.5 max-[900px]:px-2 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
                 activeTab === 'settings'
                   ? 'bg-slate-900 text-cyan-300 border-l-2 border-cyan-400 font-semibold shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <Settings className="w-4 h-4" /> {t('navigation.settings')}
+              <Settings className="w-4 h-4 shrink-0" /> <span className="max-[900px]:hidden">{t('navigation.settings')}</span>
             </button>
           </nav>
         </div>
 
         {/* Hardware Status Widget & Diagnostics Button */}
         <div className="space-y-3 pt-4 border-t border-slate-800/80">
-          <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+          <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2 max-[900px]:hidden">
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-slate-400 flex items-center gap-1.5">
                 <Layers className={`w-3 h-3 ${diagnostics?.sidecar?.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`} />
@@ -384,14 +389,14 @@ export const AppLayout: React.FC = () => {
                 }
               }}
               aria-label={t('sidebar.installLaunchOllama')}
-              className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-cyan-950/40"
+              className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-cyan-950/40 max-[900px]:hidden"
             >
               <Zap className="w-3.5 h-3.5 fill-current" /> {t('sidebar.installLaunchOllama')}
             </button>
           )}
 
           {diagnostics?.ollama.status !== 'online' && isRemoteOllama && (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 max-[900px]:hidden">
               <button
                 type="button"
                 onClick={runDiagnosticsScan}
@@ -411,7 +416,7 @@ export const AppLayout: React.FC = () => {
             </div>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-[900px]:flex-col">
             <button
               type="button"
               onClick={handleOpenWizard}
@@ -426,10 +431,10 @@ export const AppLayout: React.FC = () => {
               type="button"
               onClick={handleOpenDiagnostics}
               aria-label={t('sidebar.logsConsole')}
-              className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-medium rounded-xl transition-all focus-ring active:scale-95 flex items-center justify-center gap-1.5"
+              className="flex-1 max-[900px]:flex-none max-[900px]:w-full py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-medium rounded-xl transition-all focus-ring active:scale-95 flex items-center justify-center gap-1.5"
             >
               <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="truncate">{t('sidebar.logsConsole')}</span>
+              <span className="truncate max-[900px]:hidden">{t('sidebar.logsConsole')}</span>
             </button>
 
             <button
@@ -446,7 +451,7 @@ export const AppLayout: React.FC = () => {
       </aside>
 
       {/* Main App Content View */}
-      <main className="flex-1 h-full flex flex-col overflow-hidden relative">
+      <main className="flex-1 min-w-0 h-full flex flex-col overflow-hidden relative">
         {settingsReady && settingsSave.status !== 'idle' && (
           <div
             role={settingsSave.status === 'failed' ? 'alert' : 'status'}

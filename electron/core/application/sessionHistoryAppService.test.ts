@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('../infrastructure/filesystem/sessionHistoryRepository', () => ({
   sessionHistoryRepository: {
     listSessions: vi.fn(),
+    listCandidateCopies: vi.fn(),
     deleteSession: vi.fn(),
     clearSessions: vi.fn(),
   },
@@ -37,6 +38,11 @@ describe('SessionHistoryAppService prompt-history index fan-out', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(sessionHistoryRepository.listSessions).mockResolvedValue([])
+    vi.mocked(sessionHistoryRepository.listCandidateCopies).mockImplementation(async (ids, workspacePath) =>
+      ((await sessionHistoryRepository.listSessions(workspacePath)) || [])
+        .filter((session) => (!ids || ids.includes(session.id)) && (workspacePath || !session.workspacePath))
+        .map((session) => ({ store: 'workspace', session })),
+    )
     vi.mocked(sessionHistoryRepository.deleteSession).mockResolvedValue(true)
     vi.mocked(sessionHistoryRepository.clearSessions).mockResolvedValue(true)
     vi.mocked(agentSessionStateRepository.clearSessionState).mockResolvedValue(true)
@@ -54,6 +60,26 @@ describe('SessionHistoryAppService prompt-history index fan-out', () => {
     expect(agentSessionStateRepository.clearSessionState).toHaveBeenCalledWith('session-1', '/repo/a')
     expect(deleteConversationCheckpoints).toHaveBeenCalledWith('/repo/a', 'session-1', ['run-1'])
     expect(sidecarAppService.removePromptHistoryForSessions).toHaveBeenCalledWith(['session-1'])
+  })
+
+  it('retains checkpoint references from every owned history copy', async () => {
+    const service = new SessionHistoryAppService()
+    vi.mocked(sessionHistoryRepository.listCandidateCopies).mockResolvedValue([
+      { store: 'workspace', session: { id: 'shared', workspacePath: '/repo/a', executedPrompts: [{ evidence: { checkpointId: 'first' } }] } },
+      { store: 'fallback', session: { id: 'shared', workspacePath: '/repo/a', executedPrompts: [{ evidence: { checkpointId: 'second' } }] } },
+    ] as never)
+    expect(await service.deleteSession('shared', '/repo/a')).toBe(true)
+    expect(deleteConversationCheckpoints).toHaveBeenCalledWith('/repo/a', 'shared', ['first', 'second'])
+  })
+
+  it('includes a fallback-only workspace copy when clearing sessions', async () => {
+    const service = new SessionHistoryAppService()
+    vi.mocked(sessionHistoryRepository.listCandidateCopies).mockResolvedValue([
+      { store: 'fallback', session: { id: 'fallback-only', workspacePath: '/repo/a', executedPrompts: [{ evidence: { checkpointId: 'retained' } }] } },
+    ] as never)
+    expect(await service.clearSessions('/repo/a')).toBe(true)
+    expect(sidecarAppService.removePromptHistoryForSessions).toHaveBeenCalledWith(['fallback-only'])
+    expect(deleteConversationCheckpoints).toHaveBeenCalledWith('/repo/a', 'fallback-only', ['retained'])
   })
 
   it('clearSessions should remove every session id that belonged to the workspace from the prompt-history index', async () => {

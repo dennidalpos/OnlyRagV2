@@ -50,6 +50,7 @@ describe('sidecar IPC facade', () => {
       normalizationModel: 'normalizer',
       numCtx: 8192,
       taskId: 'ingest-test-1',
+      allowFullExcelFormat: true,
     })
 
     expect(sidecarAppService.ingestFile).toHaveBeenCalledWith(
@@ -61,6 +62,7 @@ describe('sidecar IPC facade', () => {
       8192,
       'ingest-test-1',
       undefined,
+      true,
     )
     expect(() => handler?.(trustedEvent, { filePath: ' ' })).toThrow('Invalid IPC payload for ingest:file')
     expect(sidecarAppService.ingestFile).toHaveBeenCalledTimes(1)

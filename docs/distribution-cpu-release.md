@@ -1,5 +1,9 @@
 # Approved CPU release implementation — 2026-10-11
 
+## Later notice candidate — 2026-10-12
+
+The new retained `cpu-20261011-193335-bfb712de` candidate fixes the collection of four `LICENCE` files for `et_xmlfile`, `openpyxl` and `tqdm`. Manifest/source/installed hash readback passes; it is a source and notice candidate, with no frozen OCR or restarted-desktop qualification. The previously qualified `cpu-20261010-221255-760103bf` remains preserved with its own exact snapshot and test scope. Current residuals and artifact identities are in [the license audit](./distribution-licenses.md#installed-notice-audit--2026-10-12).
+
 The owner explicitly approved the [CPU AGPL proposal](./distribution-agpl-proposal.md). Its build/capability implementation is complete. Licensing and full current-source runtime qualification remain open in [PROJECT_STATUS.json](../PROJECT_STATUS.json). Nothing is published, installed over a personal profile, committed or pushed.
 
 ## Build contract

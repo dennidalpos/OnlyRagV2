@@ -293,6 +293,7 @@ export interface AppSettings {
   capabilityPolicyMode: 'offline-strict' | 'local-only' | 'network-approved'
   ocrEngine: 'native_cuda' | 'vision_model'
   normalizeWithLlm?: boolean
+  allowFullExcelFormat?: boolean
   ollamaHost: string
   /** Ollama mode: 'local' (127.0.0.1:11434) or 'remote'. Default: 'local'. */
   ollamaMode?: 'local' | 'remote'

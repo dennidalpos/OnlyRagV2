@@ -76,8 +76,22 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
       setTimeout(() => setCopiedCitation(null), 2000)
     }, [])
     const [sidebarTab, setSidebarTab] = useState<'context' | 'history'>('context')
+    const [showCompactSidebar, setShowCompactSidebar] = useState(false)
+    const contextToggleRef = useRef<HTMLButtonElement>(null)
     const [editingConvId, setEditingConvId] = useState<string | null>(null)
     const [editingTitle, setEditingTitle] = useState('')
+
+    useEffect(() => {
+      if (!showCompactSidebar) return
+      const closeOnEscape = (event: KeyboardEvent) => {
+        if (event.key === 'Escape' && (document.activeElement?.closest('#chat-context-sidebar') || document.activeElement === contextToggleRef.current)) {
+          setShowCompactSidebar(false)
+          contextToggleRef.current?.focus()
+        }
+      }
+      document.addEventListener('keydown', closeOnEscape)
+      return () => document.removeEventListener('keydown', closeOnEscape)
+    }, [showCompactSidebar])
 
     // Automatically maintain and restore focus on the prompt input field
     useEffect(() => {
@@ -133,10 +147,21 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
     }
 
     return (
-      <div className="flex-1 h-full flex flex-col bg-slate-950 overflow-hidden select-text">
+      <div className="flex-1 min-w-0 h-full flex flex-col bg-slate-950 overflow-hidden select-text">
         {/* Header */}
-        <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between z-10 shrink-0">
+        <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex flex-wrap items-center justify-between gap-2 z-10 shrink-0">
           <div className="flex items-center gap-3">
+            <button
+              ref={contextToggleRef}
+              type="button"
+              aria-controls="chat-context-sidebar"
+              aria-expanded={showCompactSidebar}
+              aria-label={t('chat.contextTitle', { selected: c.selectedDocIds.size, total: c.documents.length })}
+              onClick={() => setShowCompactSidebar((visible) => !visible)}
+              className="hidden max-[900px]:inline-flex rounded-lg border border-slate-700 p-2 text-cyan-300 focus-ring"
+            >
+              <FileText className="h-4 w-4" />
+            </button>
             <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shadow-sm">
               <MessageSquare className="w-5 h-5 text-purple-400" />
             </div>
@@ -145,7 +170,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
             {/* Quick Chat Model Selector */}
             <QuickModelSelector
               currentModel={settings.chatModel || settings.defaultModel || ''}
@@ -219,12 +244,21 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
           </div>
         )}
         {/* Main Split Layout */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="relative flex-1 flex min-w-0 overflow-hidden">
           {/* Left Sidebar: Context Documents & History */}
           <div
+            id="chat-context-sidebar"
             style={{ width: `${sidebarWidth}px` }}
-            className="border-r border-slate-800 bg-slate-900/40 p-3 space-y-3 flex flex-col shrink-0 overflow-hidden select-text"
+            className={`border-r border-slate-800 bg-slate-900/40 p-3 space-y-3 flex flex-col shrink-0 overflow-hidden select-text max-[900px]:absolute max-[900px]:inset-y-0 max-[900px]:left-0 max-[900px]:z-20 max-[900px]:max-w-[calc(100%-3rem)] ${showCompactSidebar ? '' : 'max-[900px]:hidden'}`}
           >
+            <button
+              type="button"
+              onClick={() => setShowCompactSidebar(false)}
+              aria-label={t('common.close')}
+              className="hidden max-[900px]:inline-flex self-end rounded-lg border border-slate-700 p-1.5 text-slate-300 focus-ring"
+            >
+              <X className="h-4 w-4" />
+            </button>
             {/* Sidebar Tab Switcher */}
             <div className="flex items-center p-1 bg-slate-950/80 rounded-xl border border-slate-800" role="tablist" aria-label="Schede pannello laterale chat">
               <button
@@ -464,7 +498,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
             aria-label={t('coding.resizePanels')}
             onMouseDown={handleSidebarMouseDown}
             onKeyDown={handleSidebarKeyDown}
-            className={`w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring ${
+            className={`w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring max-[900px]:hidden ${
               isSidebarResizing ? 'bg-cyan-500 ring-2 ring-cyan-500/50' : ''
             }`}
             title={t('coding.resizePanels')}

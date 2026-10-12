@@ -94,26 +94,39 @@ export function saveAgentCheckpoint(
   }
 }
 
-/** Removes checkpoints owned by a deleted conversation, including referenced v1 checkpoints. */
-export function deleteConversationCheckpoints(workspacePath: string, conversationId: string, referencedIds: readonly string[]): void {
+/** Finds checkpoints owned by a conversation, including referenced v1 checkpoints. */
+export function listConversationCheckpointPaths(workspacePath: string, conversationId: string, referencedIds: readonly string[]): string[] {
   const root = checkpointsRoot(workspacePath)
-  if (!fs.existsSync(root)) return
+  if (!fs.existsSync(root)) return []
   const referenced = new Set(referencedIds)
+  const owned: string[] = []
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || !safeCheckpointId(entry.name)) continue
     const directory = path.join(root, entry.name)
-    if (referenced.has(entry.name)) {
-      fs.rmSync(directory, { recursive: true, force: true })
-      continue
-    }
     let manifest: CheckpointManifest
     try {
       manifest = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf-8')) as CheckpointManifest
     } catch (error: unknown) {
+      if (referenced.has(entry.name)) throw new Error(`Referenced checkpoint ownership unavailable for ${entry.name}: ${errorMessage(error)}`)
       logger.log('WARN', 'AgentCheckpointStore', `Checkpoint ownership unavailable for ${entry.name}: ${errorMessage(error)}`)
       continue
     }
-    if (manifest.version === 2 && manifest.conversationId === conversationId) fs.rmSync(directory, { recursive: true, force: true })
+    if (referenced.has(entry.name)) {
+      if (manifest.version !== 1 && (manifest.version !== 2 || manifest.conversationId !== conversationId)) {
+        throw new Error(`Referenced checkpoint has a different or unsupported owner: ${entry.name}`)
+      }
+      owned.push(directory)
+      continue
+    }
+    if (manifest.version === 2 && manifest.conversationId === conversationId) owned.push(directory)
+  }
+  return owned
+}
+
+/** Removes checkpoints owned by a deleted conversation, including referenced v1 checkpoints. */
+export function deleteConversationCheckpoints(workspacePath: string, conversationId: string, referencedIds: readonly string[]): void {
+  for (const directory of listConversationCheckpointPaths(workspacePath, conversationId, referencedIds)) {
+    fs.rmSync(directory, { recursive: true, force: true })
   }
 }
 

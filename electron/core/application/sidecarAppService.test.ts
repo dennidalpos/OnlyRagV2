@@ -57,6 +57,14 @@ it('carries a failed normalization review through the application result and clo
   expect(unregister).toHaveBeenCalledWith('review-task')
 })
 
+it('passes the Excel format opt-in to Sidecar only when enabled', async () => {
+  vi.spyOn(documentIoRepository, 'exists').mockReturnValue(true)
+  vi.spyOn(appSettingsRepository, 'loadSettings').mockResolvedValue(null)
+  const stream = vi.spyOn(sidecarHttpClient, 'ingestFileStream').mockResolvedValue({ success: false, error: 'Isolated refusal' })
+  await sidecarAppService.ingestFile('C:/fixtures/large.xlsx', undefined, undefined, false, undefined, undefined, 'excel-task', false, true)
+  expect(stream).toHaveBeenCalledWith(expect.objectContaining({ allow_full_excel_format: true }), expect.any(Function), expect.any(Function))
+})
+
 describe('ingested file type normalization', () => {
   it('preserves DOCX eligibility from authoritative sidecar metadata', () => {
     expect(normalizeIngestedFileType('docx', 'renamed-without-extension')).toBe('docx')

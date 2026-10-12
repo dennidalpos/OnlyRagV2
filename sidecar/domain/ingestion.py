@@ -27,6 +27,10 @@ from sidecar.domain.router import (
 
 # Bounded concurrency for the OCR/Vision rendering phase of PDF page extraction.
 PDF_PAGE_RENDER_CONCURRENCY = 3
+XLS_MAX_SOURCE_BYTES = 8 * 1024 * 1024
+XLSX_MAX_SHARED_STRINGS_BYTES = 16 * 1024 * 1024
+EXCEL_RAG_MAX_COLUMNS = 128
+EXCEL_RAG_MAX_CELL_CHARS = 256
 
 _FIGURE_VISION_PROMPT = (
     "Describe this figure, chart, table, or diagram concisely in Markdown: "
@@ -292,6 +296,64 @@ def extract_pdf_document(
     raise_normalization_review_if_needed(filename, work_items)
     return results
 
+def _extract_full_format_excel_sheet(sheet_name, rows, max_row, max_column, limit_rows):
+    retained = []
+    columns = []
+    seen_columns = set()
+    omitted_columns = set()
+    nonempty_rows = 0
+    shortened_cells = 0
+    for row_number, row in rows:
+        if row_number > max_row:
+            raise ValueError(f"Excel row {row_number} exceeds the format limit of {max_row}.")
+        selected = {"Row": row_number}
+        has_value = False
+        for column_number, value in enumerate(row, start=1):
+            if column_number > max_column:
+                raise ValueError(f"Excel column {column_number} exceeds the format limit of {max_column}.")
+            if value is None or value == "":
+                continue
+            has_value = True
+            if column_number not in seen_columns:
+                seen_columns.add(column_number)
+                if nonempty_rows < limit_rows and len(columns) < EXCEL_RAG_MAX_COLUMNS:
+                    columns.append(column_number)
+                else:
+                    omitted_columns.add(column_number)
+            if nonempty_rows < limit_rows and column_number in columns:
+                cell = str(value)
+                if len(cell) > EXCEL_RAG_MAX_CELL_CHARS:
+                    cell = cell[:EXCEL_RAG_MAX_CELL_CHARS]
+                    shortened_cells += 1
+                selected[f"Col {column_number}"] = cell
+        if has_value:
+            nonempty_rows += 1
+            if len(retained) < limit_rows:
+                retained.append(selected)
+    if not retained:
+        return None
+    frame = pd.DataFrame(retained, columns=["Row", *(f"Col {column}" for column in columns)]).fillna("")
+    result = f"### Foglio: {sheet_name}\n\n{frame.to_markdown(tablefmt='pipe', index=False, disable_numparse=True)}"
+    result += (f"\n\n> [!NOTE]\n> Estratto RAG: prime {len(retained)} righe non vuote su {nonempty_rows}; "
+               f"prime {len(columns)} colonne non vuote su {len(seen_columns)}. "
+               "Row e Col indicano le coordinate originali. Il file originale è conservato.")
+    if omitted_columns:
+        result += f"\n> Colonne omesse dall'estratto: {len(omitted_columns)}."
+    if shortened_cells:
+        result += f"\n> Celle abbreviate a {EXCEL_RAG_MAX_CELL_CHARS} caratteri: {shortened_cells}."
+    return result
+
+
+def _xls_rows(sheet, datemode):
+    from xlrd import XL_CELL_DATE, xldate_as_datetime
+
+    for row_number in range(sheet.nrows):
+        yield row_number + 1, [
+            xldate_as_datetime(cell.value, datemode) if cell.ctype == XL_CELL_DATE else cell.value
+            for cell in sheet.row(row_number)
+        ]
+
+
 def extract_tabular_document(
     filename: str,
     content: bytes,
@@ -299,7 +361,8 @@ def extract_tabular_document(
     max_rows: Optional[int] = None,
     max_excel_rows: Optional[int] = None,
     max_sheets: Optional[int] = None,
-    num_ctx: Optional[int] = None
+    num_ctx: Optional[int] = None,
+    allow_full_excel_format: bool = False,
 ) -> List[Tuple[int, str]]:
     """Extracts CSV, TSV, XLSX, XLS, Parquet, and JSON data formatted cleanly into Markdown tables with truncation tracking."""
     ext = os.path.splitext(filename)[1].lower()
@@ -309,21 +372,109 @@ def extract_tabular_document(
     limit_sheets = max_sheets or EXCEL_MAX_SHEETS
 
     # Keep every source cell, including a header-only or single-cell sheet.
-    if ext in [".xlsx", ".xls"]:
+    if ext == ".xlsx":
+        from openpyxl import load_workbook
+
         excel_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
-        engine = "openpyxl" if ext == ".xlsx" else "xlrd"
-        with pd.ExcelFile(excel_source, engine=engine) as xls:
+        with zipfile.ZipFile(excel_source) as archive:
+            shared_strings_size = sum(
+                entry.file_size for entry in archive.infolist()
+                if entry.filename.rsplit("/", 1)[-1].lower() == "sharedstrings.xml"
+            )
+        if not allow_full_excel_format and shared_strings_size > XLSX_MAX_SHARED_STRINGS_BYTES:
+            raise ValueError("XLSX shared strings exceed the 16 MiB parser limit; export as CSV.")
+        workbook = load_workbook(excel_source, read_only=True, data_only=True)
+        try:
             sheets_output = []
+            skipped_sheets = 0
+            sheet_names = workbook.sheetnames
+            processed_sheets = sheet_names[:limit_sheets]
+            for sheet_name in processed_sheets:
+                sheet = workbook[sheet_name]
+                sheet.reset_dimensions()
+                if allow_full_excel_format:
+                    sheet_md = _extract_full_format_excel_sheet(
+                        sheet_name,
+                        enumerate(sheet.iter_rows(values_only=True), start=1),
+                        1_048_576, 16_384, min(limit_excel_rows, EXCEL_MAX_ROWS_PER_SHEET),
+                    )
+                    if sheet_md:
+                        sheets_output.append(sheet_md)
+                    else:
+                        skipped_sheets += 1
+                    continue
+                retained_rows = []
+                last_data_row = 0
+                for row_number, row in enumerate(sheet.iter_rows(values_only=True), start=1):
+                    if any(cell is not None and cell != "" for cell in row):
+                        last_data_row = row_number
+                    if row_number <= limit_excel_rows:
+                        retained_rows.append(row)
+                retained_rows = retained_rows[:min(last_data_row, limit_excel_rows)]
+                if not retained_rows:
+                    skipped_sheets += 1
+                    continue
+                df = pd.DataFrame(retained_rows).fillna("")
+                if not any(str(cell).strip() for cell in df.to_numpy().flat):
+                    skipped_sheets += 1
+                    continue
+                df.columns = [f"Col {i+1}" for i in range(len(df.columns))]
+                md_table = df.to_markdown(tablefmt="pipe", index=False, disable_numparse=True) or ""
+                sheet_md = f"### Foglio: {sheet_name}\n\n{md_table}"
+                if last_data_row > limit_excel_rows:
+                    sheet_md += f"\n\n> [!NOTE]\n> Tabella troncata a {limit_excel_rows} righe (su {last_data_row} totali nel foglio '{sheet_name}').\n"
+                sheets_output.append(sheet_md)
+            if not sheets_output:
+                raise ValueError("Excel extraction produced no readable cells in the selected sheets.")
+            combined_excel_md = "\n\n".join(sheets_output)
+            if skipped_sheets:
+                combined_excel_md += f"\n\n> [!NOTE]\n> Fogli selezionati senza celle leggibili nel limite di righe: {skipped_sheets}.\n"
+            if len(sheet_names) > limit_sheets:
+                combined_excel_md += f"\n\n> [!NOTE]\n> Mostrati i primi {len(processed_sheets)} fogli su {len(sheet_names)} totali nella cartella Excel.\n"
+            return [(1, combined_excel_md)]
+        finally:
+            workbook.close()
+
+    if ext == ".xls":
+        xls_size = os.path.getsize(file_path) if file_path and os.path.exists(file_path) else len(content)
+        if not allow_full_excel_format and xls_size > XLS_MAX_SOURCE_BYTES:
+            raise ValueError("XLS source exceeds the 8 MiB parser limit; export as XLSX or CSV.")
+        excel_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
+        with pd.ExcelFile(excel_source, engine="xlrd", engine_kwargs={"on_demand": True}) as xls:
+            sheets_output = []
+            skipped_sheets = 0
             total_sheets_count = len(xls.sheet_names)
             processed_sheets = xls.sheet_names[:limit_sheets]
 
             for sheet_name in processed_sheets:
-                df_all = pd.read_excel(xls, sheet_name=sheet_name, header=None, dtype=object, keep_default_na=False)
+                if allow_full_excel_format:
+                    sheet = xls.book.sheet_by_name(sheet_name)
+                    try:
+                        if sheet.nrows > 65_536 or sheet.ncols > 256:
+                            raise ValueError("XLS worksheet exceeds the 65,536-row or 256-column format limit.")
+                        sheet_md = _extract_full_format_excel_sheet(
+                            sheet_name,
+                            _xls_rows(sheet, xls.book.datemode),
+                            65_536, 256, min(limit_excel_rows, EXCEL_MAX_ROWS_PER_SHEET),
+                        )
+                        if sheet_md:
+                            sheets_output.append(sheet_md)
+                        else:
+                            skipped_sheets += 1
+                    finally:
+                        xls.book.unload_sheet(sheet_name)
+                    continue
+                try:
+                    df_all = pd.read_excel(xls, sheet_name=sheet_name, header=None, dtype=object, keep_default_na=False)
+                finally:
+                    xls.book.unload_sheet(sheet_name)
                 total_sheet_rows = len(df_all)
                 if df_all.empty:
+                    skipped_sheets += 1
                     continue
                 df = df_all.head(limit_excel_rows)
                 if not any(str(cell).strip() for cell in df.to_numpy().flat):
+                    skipped_sheets += 1
                     continue
                 df.columns = [f"Col {i+1}" for i in range(len(df.columns))]
                 md_table = df.to_markdown(tablefmt="pipe", index=False, disable_numparse=True) or ""
@@ -337,20 +488,36 @@ def extract_tabular_document(
                 raise ValueError("Excel extraction produced no readable cells in the selected sheets.")
 
             combined_excel_md = "\n\n".join(sheets_output)
+            if skipped_sheets:
+                combined_excel_md += f"\n\n> [!NOTE]\n> Fogli selezionati senza celle leggibili nel limite di righe: {skipped_sheets}.\n"
             if total_sheets_count > limit_sheets:
                 combined_excel_md += f"\n\n> [!NOTE]\n> Mostrati i primi {len(processed_sheets)} fogli su {total_sheets_count} totali nella cartella Excel.\n"
 
             return [(1, combined_excel_md)]
 
     if ext == ".parquet":
+        import pyarrow.parquet as parquet
+
         parquet_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
-        df_all = pd.read_parquet(parquet_source, engine="pyarrow")
-        df = df_all.head(limit_csv_rows)
+        parquet_file = parquet.ParquetFile(parquet_source, pre_buffer=False)
+        try:
+            total_rows = parquet_file.metadata.num_rows
+            retained = []
+            observed_rows = 0
+            for batch in parquet_file.iter_batches(batch_size=1024, use_threads=False):
+                if observed_rows < limit_csv_rows:
+                    retained.append(batch.slice(0, limit_csv_rows - observed_rows).to_pandas())
+                observed_rows += batch.num_rows
+            if observed_rows != total_rows:
+                raise ValueError("Parquet row count differs from file metadata.")
+            df = pd.concat(retained, ignore_index=True) if retained else pd.DataFrame(columns=parquet_file.schema_arrow.names)
+        finally:
+            parquet_file.close()
         if df.empty or df.replace(r"^\s*$", pd.NA, regex=True).dropna(how="all").empty:
             raise ValueError("Parquet extraction produced no readable values.")
         md_table = df.to_markdown(tablefmt="pipe", index=False, disable_numparse=True) or ""
-        if len(df_all) > limit_csv_rows:
-            md_table += f"\n\n> [!NOTE]\n> Tabella troncata a {limit_csv_rows} righe (su {len(df_all)} totali nel file).\n"
+        if total_rows > limit_csv_rows:
+            md_table += f"\n\n> [!NOTE]\n> Tabella troncata a {limit_csv_rows} righe (su {total_rows} totali nel file).\n"
         return [(1, md_table)]
 
     # CSV / TSV
@@ -360,9 +527,16 @@ def extract_tabular_document(
         # Preserve literal cells through parsing and Markdown rendering.
         with warnings.catch_warnings():
             warnings.simplefilter("error", pd.errors.ParserWarning)
-            df_all = pd.read_csv(csv_source, sep=sep, dtype=str, keep_default_na=False, on_bad_lines="error", index_col=False)
-        total_csv_rows = len(df_all)
-        df = df_all.head(limit_csv_rows)
+            with pd.read_csv(csv_source, sep=sep, dtype=str, keep_default_na=False, on_bad_lines="error", index_col=False, skip_blank_lines=False, chunksize=1024) as reader:
+                df = reader.read(0)
+                retained = []
+                total_csv_rows = 0
+                for chunk in reader:
+                    if total_csv_rows < limit_csv_rows:
+                        retained.append(chunk.head(limit_csv_rows - total_csv_rows))
+                    total_csv_rows += len(chunk)
+                if retained:
+                    df = pd.concat(retained, ignore_index=True)
         df.columns = [str(c).replace("\n", " ").strip() if str(c).strip() else f"Col {i+1}" for i, c in enumerate(df.columns)]
         md_table = df.to_markdown(tablefmt="pipe", index=False, disable_numparse=True) or ""
 
@@ -401,7 +575,8 @@ def extract_document_markdown(
     max_excel_rows: Optional[int] = None,
     max_sheets: Optional[int] = None,
     num_ctx: Optional[int] = None,
-    original_pages: Optional[List[Tuple[int, str]]] = None
+    original_pages: Optional[List[Tuple[int, str]]] = None,
+    allow_full_excel_format: bool = False,
 ) -> Tuple[str, int]:
     """Fast-routed, sanitized, and pagination-preserving document markdown extractor with progress callback."""
     category = classify_file_type(filename)
@@ -555,7 +730,8 @@ def extract_document_markdown(
             file_path,
             max_rows=max_tabular_rows,
             max_excel_rows=max_excel_rows,
-            max_sheets=max_sheets
+            max_sheets=max_sheets,
+            allow_full_excel_format=allow_full_excel_format,
         )
 
     # Fallback to UTF-8 text read

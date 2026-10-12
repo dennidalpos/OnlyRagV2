@@ -103,6 +103,7 @@ export interface IpcInvokeContract {
       numCtx?: number
       taskId?: string
       normalizationThink?: boolean
+      allowFullExcelFormat?: boolean
     }
     result: DocumentResult & { normalizationReview?: NormalizationReview }
   }

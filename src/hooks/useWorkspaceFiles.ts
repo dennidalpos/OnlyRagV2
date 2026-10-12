@@ -481,11 +481,11 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
         replaceDraft(file, {
           ...current,
           conflict: {
-          filePath: event.filePath,
-          fileName: file.name,
-          localContent: current.content,
-          diskContent: result.content,
-          diskContentHash: result.contentHash,
+            filePath: event.filePath,
+            fileName: file.name,
+            localContent: current.content,
+            diskContent: result.content,
+            diskContentHash: result.contentHash,
           },
         })
       }

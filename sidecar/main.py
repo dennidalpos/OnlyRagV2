@@ -160,6 +160,7 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
             max_tabular_rows=req.max_tabular_rows,
             max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
             max_excel_sheets=req.max_excel_sheets,
+            allow_full_excel_format=req.allow_full_excel_format,
             embedding_model=req.embedding_model or DEFAULT_EMBEDDING_MODEL,
         ),
         media_type="application/x-ndjson"

@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 import math
 
 import pytest
@@ -8,7 +10,7 @@ from fastapi.testclient import TestClient
 from sidecar import main
 from sidecar.config import PROMPT_HISTORY_TABLE_NAME
 from sidecar.infrastructure import db
-from sidecar.schemas import PromptHistoryRemoveRequest
+from sidecar.schemas import IndexPromptHistoryRequest, PromptHistoryRemoveRequest, PromptHistorySearchRequest
 from sidecar.services import prompt_history_service as service
 
 
@@ -75,6 +77,103 @@ def test_missing_history_is_a_successful_empty_search_and_idempotent_delete():
     with TestClient(main.app) as client:
         assert client.post("/history/search", json={"query": "missing"}).json() == []
         assert client.post("/history/remove", json={"session_ids": ["missing"]}).json() == {"success": True}
+
+
+def test_deleted_session_refuses_late_index_and_explicit_restore_changes_generation(monkeypatch):
+    started = Event()
+    release = Event()
+
+    def paused_embedding(_text):
+        started.set()
+        assert release.wait(5)
+        return [1.0, 0.0]
+
+    monkeypatch.setattr(service, "_normalized_embedding", paused_embedding)
+    request = IndexPromptHistoryRequest(
+        id="prompt", session_id="session", project_path="C:/synthetic/project",
+        prompt="retained", outcome="success", started_at="2026-10-11T00:00:00Z",
+    )
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        late_index = pool.submit(service.index_prompt_history, request)
+        assert started.wait(5)
+        with TestClient(main.app) as client:
+            assert client.post("/history/remove", json={"session_ids": ["session"], "operation_id": "delete1"}).json() == {"success": True}
+            assert client.post("/history/remove", json={"session_ids": ["session"], "operation_id": "delete1"}).json() == {"success": True}
+            assert client.post("/history/remove", json={"session_ids": ["session"], "operation_id": "delete1", "restore": True}).json() == {"success": True}
+        release.set()
+        with pytest.raises(ValueError, match="deleted or changed"):
+            late_index.result(timeout=5)
+    assert PROMPT_HISTORY_TABLE_NAME not in db.get_existing_tables()
+    monkeypatch.setattr(service, "_normalized_embedding", lambda _text: [1.0, 0.0])
+    service.index_prompt_history(request)
+    with TestClient(main.app) as client:
+        assert client.post("/history/remove", json={"session_ids": ["session"], "operation_id": "delete1", "restore": True}).json() == {"success": True}
+        assert client.post("/history/remove", json={"session_ids": ["session"], "operation_id": "delete1"}).status_code == 400
+        assert client.post("/history/remove", json={"session_ids": ["session"], "operation_id": "delete2"}).json() == {"success": True}
+    assert db.lance_db.open_table(PROMPT_HISTORY_TABLE_NAME).count_rows() == 0
+
+
+def test_corrupt_lifecycle_blocks_index_and_delete(monkeypatch):
+    db.append_records(service.SESSION_LIFECYCLE_TABLE, [{
+        "session_id": "session", "version": 2, "operation_id": "delete1", "generation": 1, "state": "deleted",
+    }])
+    monkeypatch.setattr(service, "_normalized_embedding", lambda _text: [1.0, 0.0])
+    request = IndexPromptHistoryRequest(
+        id="prompt", session_id="session", project_path="C:/synthetic/project",
+        prompt="retained", outcome="success", started_at="2026-10-11T00:00:00Z",
+    )
+    with pytest.raises(ValueError, match="Unsupported"):
+        service.index_prompt_history(request)
+    with TestClient(main.app) as client:
+        assert client.post("/history/remove", json={"session_ids": ["session"], "operation_id": "delete1"}).status_code == 400
+
+
+def test_fenced_delete_is_scoped_and_rejects_wrong_restore_operation(monkeypatch):
+    monkeypatch.setattr(service, "_normalized_embedding", lambda _text: [1.0, 0.0])
+    for session_id in ("owned", "other"):
+        service.index_prompt_history(IndexPromptHistoryRequest(
+            id=f"prompt_{session_id}", session_id=session_id, project_path="C:/synthetic/project",
+            prompt=session_id, outcome="success", started_at="2026-10-11T00:00:00Z",
+        ))
+    with TestClient(main.app) as client:
+        assert client.post("/history/remove", json={"session_ids": ["owned"], "operation_id": "delete1"}).json() == {"success": True}
+        assert client.post("/history/remove", json={"session_ids": ["owned"], "operation_id": "wrong", "restore": True}).status_code == 400
+        assert client.post("/history/remove", json={"session_ids": ["owned"], "operation_id": "invalid\"id"}).status_code == 400
+    assert [row["id"] for row in db.lance_db.open_table(PROMPT_HISTORY_TABLE_NAME).to_arrow().to_pylist()] == ["prompt_other"]
+    service.index_prompt_history(IndexPromptHistoryRequest(
+        id="another_other", session_id="other", project_path="C:/synthetic/project",
+        prompt="available", outcome="success", started_at="2026-10-11T00:00:00Z",
+    ))
+    assert db.lance_db.open_table(PROMPT_HISTORY_TABLE_NAME).count_rows() == 2
+
+
+def test_failed_row_removal_keeps_persisted_fence_for_explicit_retry(monkeypatch):
+    import lancedb
+
+    db.append_records(PROMPT_HISTORY_TABLE_NAME, [{"id": "prompt", "session_id": "session", "vector": [1.0, 0.0]}])
+    open_table = service.lance_db.open_table
+
+    def failing_open(name):
+        table = open_table(name)
+        if name == PROMPT_HISTORY_TABLE_NAME:
+            return SimpleNamespace(delete=Mock(side_effect=RuntimeError("locked")))
+        return table
+
+    with monkeypatch.context() as patch:
+        patch.setattr(service.lance_db, "open_table", failing_open)
+        assert service.remove_prompt_history(PromptHistoryRemoveRequest(session_ids=["session"], operation_id="delete1")) == {"success": False}
+    db.lance_db.__init__(db.LANCEDB_DIR, session=lancedb.Session())
+    assert service._session_lifecycle("session")["state"] == "deleted"
+    monkeypatch.setattr(service, "_normalized_embedding", lambda _text: [1.0, 0.0])
+    assert service.search_prompt_history(PromptHistorySearchRequest(query="retained")) == []
+    request = IndexPromptHistoryRequest(
+        id="late", session_id="session", project_path="C:/synthetic/project",
+        prompt="late", outcome="success", started_at="2026-10-11T00:00:00Z",
+    )
+    with pytest.raises(ValueError, match="pending deletion"):
+        service.index_prompt_history(request)
+    assert service.remove_prompt_history(PromptHistoryRemoveRequest(session_ids=["session"], operation_id="delete1")) == {"success": True}
+    assert db.lance_db.open_table(PROMPT_HISTORY_TABLE_NAME).count_rows() == 0
 
 
 def test_recovery_started_during_embedding_blocks_search_readback(monkeypatch):

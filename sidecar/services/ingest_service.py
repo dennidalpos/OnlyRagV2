@@ -76,6 +76,7 @@ def process_and_index_document_generator(
     max_tabular_rows: Optional[int] = None,
     max_excel_rows_per_sheet: Optional[int] = None,
     max_excel_sheets: Optional[int] = None,
+    allow_full_excel_format: bool = False,
     task_id: Optional[str] = None,
     embedding_model: str = DEFAULT_EMBEDDING_MODEL,
 ) -> Generator[str, None, None]:
@@ -230,6 +231,7 @@ def process_and_index_document_generator(
                 max_tabular_rows=max_tabular_rows,
                 max_excel_rows=max_excel_rows_per_sheet,
                 max_sheets=max_excel_sheets,
+                allow_full_excel_format=allow_full_excel_format,
                 original_pages=original_pages
             )
 

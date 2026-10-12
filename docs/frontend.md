@@ -1,5 +1,9 @@
 # Renderer React
 
+## Excel format option — 2026-10-11
+
+Settings offers an off-by-default Excel format switch. The renderer sends its saved boolean through `ingest:file` for each upload. The enabled path accepts valid `.xls`/`.xlsx` format coordinates and produces a declared, limited RAG excerpt; the setting does not request a complete workbook index. [Parser policy](./rag-sidecar.md#opt-in-excel-format-dimensions--2026-10-11) and [focused verification](./verification.md#excel-format-option--2026-10-11).
+
 ## Claim/source navigation — 2026-10-02
 
 Chat assigns `[S1]`-style references only to passages actually supplied after context truncation. On completed generation, unknown references are reported and sources separate model-cited passages from uncited candidates. Streaming, stopped and failed responses do not promote citations. Clicking an eligible reference/card opens a fresh revision/identity-checked original location; stale/deleted/missing originals show an explicit error. Known PDF pages display the retained original PNG plus the exact extraction excerpt. Legacy or ambiguously rewritten/repeated passages have no verified original-span link. Location verification is labeled separately from semantic support. Optional citation fields round-trip through existing chat storage; no personal conversation migration. [Policy](./rag-sidecar.md#claimsource-provenance--2026-10-02), [verification](./verification.md#claimsource-provenance--2026-10-02).
@@ -97,3 +101,9 @@ Sources checked 2026-10-02: [WAI-ARIA modal dialog pattern](https://www.w3.org/W
 
 
 Prompt-history search (2026-10-06) distinguishes unavailable/invalid responses from acknowledged no matches. Errors stay visible and the existing Search action retries explicitly. Closing/resetting the modal, starting a newer search or unmounting invalidates earlier responses/finalizers. Delayed session Delete/Clear outcomes also ignore newer selections and workspace views; durable deletion remains open. [Evidence and remaining recovery boundary](./verification.md#prompt-history-operation-failures--2026-10-06).
+
+## Chat readable output — 2026-10-11
+
+Completed assistant messages render Markdown with GFM tables, lists and code; streaming messages and user text remain literal until complete. Source references such as `[S1]` remain actionable in prose and tables, but stay literal inside code and links. External links accept only absolute HTTP(S) destinations, open separately with `noopener noreferrer`, and raw HTML is not rendered. Image syntax shows its alt text without fetching remote media. Source cards use readable labels and wrapping at narrow widths.
+
+At desktop widths up to 900 CSS pixels the main navigation compresses and the chat context panel opens from the header as a keyboard-dismissible disclosure. The chat remains visible at 375 CSS pixels and 150% zoom. The current representative 1,001-message fixture rendered in 887 ms on the measured host; this is a fixture result, not a production latency guarantee. [Verification](./verification.md#chat-readable-output--2026-10-11).

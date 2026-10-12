@@ -387,6 +387,11 @@
       "IngestPathRequest": {
         "additionalProperties": false,
         "properties": {
+          "allow_full_excel_format": {
+            "default": false,
+            "title": "Allow Full Excel Format",
+            "type": "boolean"
+          },
           "embedding_model": {
             "anyOf": [
               {
@@ -411,7 +416,7 @@
           "max_excel_rows_per_sheet": {
             "anyOf": [
               {
-                "maximum": 1000000.0,
+                "maximum": 1048576.0,
                 "minimum": 1.0,
                 "type": "integer"
               },
@@ -648,6 +653,20 @@
       "PromptHistoryRemoveRequest": {
         "additionalProperties": false,
         "properties": {
+          "operation_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "pattern": ".*\\S.*",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Id"
+          },
           "project_path": {
             "anyOf": [
               {
@@ -661,6 +680,11 @@
               }
             ],
             "title": "Project Path"
+          },
+          "restore": {
+            "default": false,
+            "title": "Restore",
+            "type": "boolean"
           },
           "session_ids": {
             "anyOf": [

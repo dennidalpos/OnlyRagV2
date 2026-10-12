@@ -93,6 +93,45 @@ def test_full_prepare_activate_restart_rollback_keeps_all_artifacts(store):
     assert restart.returncode == 0 and "lancedb_store" in restart.stdout and "embedding_space_id" not in restart.stdout
 
 
+def test_empty_legacy_index_rebuild_preserves_prompt_history(tmp_path, monkeypatch):
+    root = tmp_path / "profile"
+    source = root / "data" / "lancedb_store"
+    source.mkdir(parents=True)
+    connection = service.connect(source)
+    connection.create_table("chunks", schema=pa.schema([
+        pa.field("vector", pa.list_(pa.float32())),
+        pa.field("chunk_id", pa.string()),
+        pa.field("doc_id", pa.string()),
+        pa.field("embedding_model", pa.string()),
+    ]))
+    connection.create_table("documents", schema=pa.schema([
+        pa.field("id", pa.string()),
+        pa.field("filename", pa.string()),
+        pa.field("file_type", pa.string()),
+        pa.field("ingested_at", pa.string()),
+        pa.field("num_chunks", pa.int64()),
+        pa.field("extracted_markdown", pa.string()),
+    ]))
+    connection.create_table("prompt_history", data=[
+        {"id": f"prompt_{index}", "session_id": "session", "vector": [0.1, 0.2]}
+        for index in range(9)
+    ])
+    history_before = service.table_evidence(connection)["prompt_history"]
+    monkeypatch.setattr(service, "resolve_embedding_space", lambda model, **kwargs: SPACE)
+
+    assert service.preview(root)["rebuilt_chunks"] == 0
+    identifier = service.prepare(root, SPACE.embedding_model)["rebuild_id"]
+    assert active_store(root / "data")[0].store_id == "legacy"
+    service.activate(root, identifier)
+    rebuilt = service.connect(root / "data" / "rebuilds" / identifier / "store")
+    assert rebuilt.open_table("chunks").count_rows() == 0
+    assert "embedding_space_id" in rebuilt.open_table("chunks").schema.names
+    assert service.table_evidence(rebuilt)["prompt_history"] == history_before
+    service.rollback(root, identifier)
+    assert active_store(root / "data")[0].store_id == "legacy"
+    assert service.table_evidence(service.connect(source))["prompt_history"] == history_before
+
+
 @pytest.mark.parametrize("location", ["source", "backup", "target", "archive", "retained"])
 def test_activation_refuses_every_changed_artifact(store, location):
     identifier = prepared(store)

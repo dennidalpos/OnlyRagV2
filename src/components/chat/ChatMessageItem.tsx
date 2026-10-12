@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Bot, Check, Copy, Loader2, Sparkles, User } from 'lucide-react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { ChatMessage, CitationSource, SourceLocation } from '../../types'
 import { useTranslation } from '../../i18n'
 import { electronApi } from '../../services/electronApi'
@@ -14,6 +16,39 @@ interface ChatMessageItemProps {
   copiedCitationIndex: number | null
   onCopyMessage: (msgId: string, text: string) => void
   onCopyCitation: (msgId: string, index: number, snippet: string) => void
+}
+
+function safeExternalUrl(href: string | undefined): string | null {
+  if (!href) return null
+  try {
+    const url = new URL(href)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
+function renderCitations(
+  children: React.ReactNode,
+  sources: CitationSource[] | undefined,
+  onOpen: (source: CitationSource) => void,
+  title: string,
+): React.ReactNode {
+  return React.Children.map(children, (child) => {
+    if (typeof child === 'string') {
+      return child.split(/(\[S[1-9]\d*\])/g).map((part, index) => {
+        const source = sources?.find((item) => `[${item.referenceId}]` === part && item.citationState === 'cited' && sourceLocationRequest(item))
+        return source ? (
+          <button key={index} type="button" onClick={() => onOpen(source)} className="text-cyan-300 underline focus-ring" title={title}>
+            {part}
+          </button>
+        ) : (
+          part
+        )
+      })
+    }
+    return child
+  })
 }
 
 /**
@@ -71,9 +106,9 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
       </div>
 
       {/* Message Bubble */}
-      <div className={`space-y-2 max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
+      <div className={`space-y-2 max-w-[85%] min-w-0 ${isUser ? 'items-end' : 'items-start'}`}>
         <div
-          className={`p-4 rounded-2xl text-xs leading-relaxed border select-text ${
+          className={`p-4 rounded-2xl text-sm leading-relaxed border select-text ${
             isUser
               ? 'bg-cyan-950/80 border-cyan-800/80 text-cyan-100 rounded-tr-sm shadow-md shadow-cyan-950/30'
               : 'bg-slate-900/90 border-slate-800 text-slate-200 rounded-tl-sm shadow-md shadow-slate-950/40'
@@ -97,25 +132,78 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
 
           {/* Message Text / Streaming State */}
           {msg.text ? (
-            <div className="whitespace-pre-wrap font-sans text-slate-200 selection:bg-cyan-500/30 selection:text-cyan-100">
-              {msg.text.split(/(\[S[1-9]\d*\])/g).map((part, index) => {
-                const source = msg.isStreaming
-                  ? undefined
-                  : msg.sources?.find((item) => `[${item.referenceId}]` === part && item.citationState === 'cited' && sourceLocationRequest(item))
-                return source ? (
-                  <button
-                    type="button"
-                    key={index}
-                    onClick={() => void openSource(source)}
-                    className="text-cyan-300 underline focus-ring"
-                    title={t('chat.openOriginal')}
-                  >
-                    {part}
-                  </button>
-                ) : (
-                  part
-                )
-              })}
+            <div className="font-sans text-slate-200 break-words selection:bg-cyan-500/30 selection:text-cyan-100">
+              {isUser || msg.isStreaming ? (
+                <div className="whitespace-pre-wrap">{msg.text}</div>
+              ) : (
+                <Markdown
+                  remarkPlugins={[remarkGfm]}
+                  skipHtml
+                  components={{
+                    p: ({ children }) => (
+                      <p className="mb-2 last:mb-0 whitespace-pre-wrap">
+                        {renderCitations(children, msg.sources, (source) => void openSource(source), t('chat.openOriginal'))}
+                      </p>
+                    ),
+                    li: ({ children }) => (
+                      <li className="my-0.5">{renderCitations(children, msg.sources, (source) => void openSource(source), t('chat.openOriginal'))}</li>
+                    ),
+                    th: ({ children }) => (
+                      <th className="border border-slate-700 bg-slate-800 px-2 py-1 text-left font-semibold">
+                        {renderCitations(children, msg.sources, (source) => void openSource(source), t('chat.openOriginal'))}
+                      </th>
+                    ),
+                    td: ({ children }) => (
+                      <td className="border border-slate-700 px-2 py-1 align-top">
+                        {renderCitations(children, msg.sources, (source) => void openSource(source), t('chat.openOriginal'))}
+                      </td>
+                    ),
+                    h1: ({ children }) => (
+                      <h1 className="mb-2 text-lg font-semibold">
+                        {renderCitations(children, msg.sources, (source) => void openSource(source), t('chat.openOriginal'))}
+                      </h1>
+                    ),
+                    h2: ({ children }) => (
+                      <h2 className="mb-2 text-base font-semibold">
+                        {renderCitations(children, msg.sources, (source) => void openSource(source), t('chat.openOriginal'))}
+                      </h2>
+                    ),
+                    h3: ({ children }) => (
+                      <h3 className="mb-2 font-semibold">
+                        {renderCitations(children, msg.sources, (source) => void openSource(source), t('chat.openOriginal'))}
+                      </h3>
+                    ),
+                    strong: ({ children }) => (
+                      <strong>{renderCitations(children, msg.sources, (source) => void openSource(source), t('chat.openOriginal'))}</strong>
+                    ),
+                    em: ({ children }) => <em>{renderCitations(children, msg.sources, (source) => void openSource(source), t('chat.openOriginal'))}</em>,
+                    del: ({ children }) => <del>{renderCitations(children, msg.sources, (source) => void openSource(source), t('chat.openOriginal'))}</del>,
+                    ul: ({ children }) => <ul className="mb-2 list-disc pl-5">{children}</ul>,
+                    ol: ({ children }) => <ol className="mb-2 list-decimal pl-5">{children}</ol>,
+                    blockquote: ({ children }) => <blockquote className="mb-2 border-l-2 border-slate-600 pl-3 text-slate-300">{children}</blockquote>,
+                    table: ({ children }) => (
+                      <div className="mb-2 max-w-full overflow-x-auto">
+                        <table className="min-w-max border-collapse text-left text-xs">{children}</table>
+                      </div>
+                    ),
+                    pre: ({ children }) => <pre className="mb-2 max-w-full overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs">{children}</pre>,
+                    code: ({ children, className }) => <code className={`${className || ''} rounded bg-slate-950 px-1 font-mono text-xs`}>{children}</code>,
+                    a: ({ children, href }) => {
+                      const safeHref = safeExternalUrl(href)
+                      return safeHref ? (
+                        <a href={safeHref} target="_blank" rel="noopener noreferrer" className="text-cyan-300 underline focus-ring">
+                          {children}
+                        </a>
+                      ) : (
+                        <span>{children}</span>
+                      )
+                    },
+                    img: ({ alt }) => <span>{alt || ''}</span>,
+                  }}
+                >
+                  {msg.text}
+                </Markdown>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2 text-cyan-400 animate-pulse py-1">
@@ -196,26 +284,26 @@ function ChatMessageSources({
 
   return (
     <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-2">
-      <div className="text-[11px] font-bold text-cyan-300 flex items-center justify-between">
+      <div className="text-xs font-bold text-cyan-300 flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <Sparkles className="w-3 h-3 text-cyan-400" />
           <span>{t('chat.sourcesTitle', { label: headerLabel })}</span>
         </div>
       </div>
-      <p className="text-[10px] text-slate-400">{t('chat.rankingScoreHint')}</p>
+      <p className="text-xs text-slate-400">{t('chat.rankingScoreHint')}</p>
       <div className="grid grid-cols-1 gap-1.5">
         {sources.map((src, idx) => (
           <div key={idx} className="p-2 bg-slate-950/70 border border-slate-800/80 rounded-xl space-y-1">
-            <div className="flex items-center justify-between text-[10px]">
-              <div className="flex items-center gap-1.5 truncate max-w-[280px]">
-                <span className="px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-800/60 text-cyan-300 font-mono text-[9px] font-bold">
+            <div className="flex flex-wrap items-start justify-between gap-2 text-xs">
+              <div className="flex min-w-32 flex-1 flex-wrap items-center gap-1.5">
+                <span className="px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-800/60 text-cyan-300 font-mono text-xs font-bold">
                   {t('chat.excerptLabel', { index: idx + 1 })}
                 </span>
-                <span className="font-semibold text-slate-300 truncate">{src.docName}</span>
-                {src.sectionHeader && <span className="text-slate-400 text-[9px] truncate">({src.sectionHeader})</span>}
+                <span className="font-semibold text-slate-300 break-all">{src.docName}</span>
+                {src.sectionHeader && <span className="text-slate-400 break-words">({src.sectionHeader})</span>}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-cyan-400 font-mono text-[9px] px-1.5 py-0.2 bg-cyan-950/80 border border-cyan-800/50 rounded-full">
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-cyan-400 font-mono text-xs px-1.5 py-0.5 bg-cyan-950/80 border border-cyan-800/50 rounded-full">
                   {t('chat.rankingScore')}: {src.score.toFixed(3)}
                 </span>
                 <button
@@ -239,7 +327,7 @@ function ChatMessageSources({
             ) : (
               <p className="text-xs text-slate-400">{t('chat.originalUnavailable')}</p>
             )}
-            <p className="text-[10px] text-slate-400 font-sans italic line-clamp-2 leading-relaxed">"{src.snippet}"</p>
+            <p className="text-xs text-slate-400 font-sans italic line-clamp-3 leading-relaxed">"{src.snippet}"</p>
           </div>
         ))}
       </div>

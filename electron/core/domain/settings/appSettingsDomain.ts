@@ -75,6 +75,7 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     ollamaMode,
     capabilityPolicyMode,
     fullAccess: raw.fullAccess === true,
+    allowFullExcelFormat: raw.allowFullExcelFormat === true,
     language,
     autoInstallHubSkills,
     autoInstallMinScore:

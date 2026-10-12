@@ -1,5 +1,6 @@
 import io
 import sys
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -55,6 +56,25 @@ def test_csv_stream_preserves_the_original_literals(sidecar_http_client, tmp_pat
     for value in ("0007", "NA", "0008", "Ready"):
         assert value in payload["extracted_markdown"]
     assert path.read_bytes() == content
+
+
+def test_csv_late_malformed_row_after_display_limit_fails():
+    content = "Code,Status\n" + "0007,Ready\n" * 1100 + "0008,Ready,unexpected\n"
+    with pytest.raises((pd.errors.ParserError, pd.errors.ParserWarning)):
+        extract_document_markdown("late.csv", content.encode(), max_tabular_rows=2)
+
+
+def test_csv_counts_omitted_rows_across_chunks():
+    content = "Code,Status\n" + "".join(f"{index},Ready\n" for index in range(1100))
+    markdown, _ = extract_document_markdown("many.csv", content.encode(), max_tabular_rows=2)
+    assert "su 1100 totali" in markdown
+    assert "1099" not in markdown
+
+
+def test_csv_blank_data_row_is_counted_instead_of_skipped():
+    markdown, _ = extract_document_markdown("blank.csv", b"Code,Status\nfirst,Ready\n\nlast,Ready\n", max_tabular_rows=1)
+    assert "su 3 totali" in markdown
+    assert "last" not in markdown
 
 
 def workbook_bytes(rows, extra_sheets=()):
@@ -129,6 +149,84 @@ def test_excel_reports_sheet_and_row_limits():
     assert "su 3 totali" in markdown and "fogli su 2 totali" in markdown
 
 
+def test_xlsx_counts_omitted_rows_beyond_first_batch():
+    content = workbook_bytes([[f"row-{index}"] for index in range(1100)])
+    markdown, _ = extract_document_markdown("many.xlsx", content, max_excel_rows=2)
+    assert "su 1100 totali" in markdown
+    assert "row-1099" not in markdown
+
+
+def test_xlsx_reports_selected_sheets_without_readable_cells():
+    content = workbook_bytes([], [("Second", [["visible"]])])
+    markdown, _ = extract_document_markdown("sheets.xlsx", content)
+    assert "visible" in markdown
+    assert "Fogli selezionati senza celle leggibili nel limite di righe: 1" in markdown
+
+
+@pytest.mark.parametrize("from_disk", [False, True])
+def test_xls_oversize_is_refused_before_parsing(tmp_path, from_disk):
+    content = b"x" * (8 * 1024 * 1024 + 1)
+    path = tmp_path / "oversize.xls"
+    if from_disk:
+        path.write_bytes(content)
+    with pytest.raises(ValueError, match="8 MiB parser limit"):
+        extract_document_markdown(path.name, b"" if from_disk else content, str(path) if from_disk else None)
+
+
+def test_xlsx_oversize_shared_strings_are_refused_before_loading():
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("xl/sharedStrings.xml", b"x" * (16 * 1024 * 1024 + 1))
+    with pytest.raises(ValueError, match="16 MiB parser limit"):
+        extract_document_markdown("oversize.xlsx", output.getvalue())
+
+
+def test_full_format_xlsx_keeps_last_coordinate_in_bounded_rag_extract():
+    book = Workbook()
+    book.active.cell(row=1_048_576, column=16_384, value="last-cell")
+    output = io.BytesIO()
+    book.save(output)
+    markdown, _ = extract_document_markdown("limits.xlsx", output.getvalue(), allow_full_excel_format=True)
+    assert "1048576" in markdown
+    assert "Col 16384" in markdown
+    assert "last-cell" in markdown
+    assert "Estratto RAG" in markdown
+
+
+def test_full_format_xlsx_declares_row_column_and_cell_selection(monkeypatch):
+    from sidecar.domain import ingestion
+
+    book = Workbook()
+    sheet = book.active
+    for column in range(1, 130):
+        sheet.cell(row=1, column=column, value="x" * 300 if column == 1 else f"value-{column}")
+    for row in range(2, 152):
+        sheet.cell(row=row, column=1, value=f"row-{row}")
+    output = io.BytesIO()
+    book.save(output)
+    monkeypatch.setattr(ingestion, "XLSX_MAX_SHARED_STRINGS_BYTES", -1)
+    with pytest.raises(ValueError, match="parser limit"):
+        extract_document_markdown("selection.xlsx", output.getvalue())
+    markdown, _ = extract_document_markdown("selection.xlsx", output.getvalue(), allow_full_excel_format=True)
+    assert "prime 150 righe non vuote su 151" in markdown
+    assert "prime 128 colonne non vuote su 129" in markdown
+    assert "Colonne omesse dall'estratto: 1" in markdown
+    assert "Celle abbreviate a 256 caratteri: 1" in markdown
+    assert "row-151" not in markdown
+
+
+def test_full_format_xls_bypasses_default_byte_gate_but_keeps_coordinates(monkeypatch):
+    from sidecar.domain import ingestion
+
+    content = (FIXTURES / "ragged.xls").read_bytes()
+    monkeypatch.setattr(ingestion, "XLS_MAX_SOURCE_BYTES", len(content) - 1)
+    with pytest.raises(ValueError, match="parser limit"):
+        extract_document_markdown("ragged.xls", content)
+    markdown, _ = extract_document_markdown("ragged.xls", content, allow_full_excel_format=True)
+    assert "Estratto RAG" in markdown
+    assert "Col 1" in markdown
+
+
 @pytest.mark.parametrize("extension,engine", [("xlsx", "openpyxl"), ("xls", "xlrd")])
 def test_excel_missing_engine_is_an_error(monkeypatch, extension, engine):
     content = workbook_bytes([["AB123"]]) if extension == "xlsx" else (FIXTURES / "ragged.xls").read_bytes()
@@ -195,6 +293,13 @@ def test_parquet_reports_row_limit():
     markdown, _ = extract_document_markdown("limited.parquet", content, max_tabular_rows=2)
     assert "first" in markdown and "second" in markdown
     assert "third" not in markdown and "su 3 totali" in markdown
+
+
+def test_parquet_counts_omitted_rows_across_batches():
+    content = parquet_bytes({"code": [f"row-{index}" for index in range(1100)]})
+    markdown, _ = extract_document_markdown("many.parquet", content, max_tabular_rows=2)
+    assert "su 1100 totali" in markdown
+    assert "row-1099" not in markdown
 
 
 def test_parquet_rejects_an_empty_selected_row_range():

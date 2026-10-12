@@ -17,6 +17,7 @@ export const sidecarIngestFilePayloadSchema = z
     normalizationModel: modelName.optional(),
     numCtx: contextTokens.optional(),
     normalizationThink: z.boolean().optional(),
+    allowFullExcelFormat: z.boolean().optional(),
     taskId,
   })
   .strict()

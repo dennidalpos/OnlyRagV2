@@ -17,6 +17,7 @@ export interface SidecarIngestStreamPayload {
   normalization_model?: string
   num_ctx?: number
   normalization_think?: boolean
+  allow_full_excel_format?: boolean
   embedding_model?: string
 }
 

@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../i18n'
+import { DEFAULT_APP_SETTINGS } from '../../shared/domain/settings/appSettingsDefaults'
 
 vi.mock('./useIngestedDocuments', () => ({
   notifyDocumentsChanged: vi.fn(),
@@ -18,13 +19,15 @@ describe('native ingestion file identity', () => {
   const resolveNativeFilePath = vi.fn()
   const ingestFile = vi.fn()
   const openFileDialog = vi.fn()
+  let allowFullExcelFormat = false
 
   function Harness() {
-    ingestion = useIngestion()
+    ingestion = useIngestion({ ...DEFAULT_APP_SETTINGS, allowFullExcelFormat })
     return <div role="alert">{ingestion.uploadError}</div>
   }
 
   beforeEach(async () => {
+    allowFullExcelFormat = false
     resolveNativeFilePath.mockReset().mockReturnValue('')
     ingestFile.mockReset().mockResolvedValue({ success: false, error: 'Isolated backend refusal' })
     openFileDialog.mockReset()
@@ -86,5 +89,13 @@ describe('native ingestion file identity', () => {
     await act(async () => ingestion.handleSelectFileNative())
     expect(ingestFile).toHaveBeenCalledWith(expect.objectContaining({ filePath: 'C:/second/report.md' }))
     expect(resolveNativeFilePath).not.toHaveBeenCalled()
+  })
+
+  it('passes the enabled Excel format setting with native ingestion', async () => {
+    allowFullExcelFormat = true
+    await act(async () => root.render(<I18nProvider initialLanguage="en"><Harness /></I18nProvider>))
+    openFileDialog.mockResolvedValue(['C:/docs/large.xlsx'])
+    await act(async () => ingestion.handleSelectFileNative())
+    expect(ingestFile).toHaveBeenCalledWith(expect.objectContaining({ allowFullExcelFormat: true }))
   })
 })

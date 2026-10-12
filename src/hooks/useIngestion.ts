@@ -502,6 +502,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         numCtx: resolveModelContextLength(visionModelName, settings?.modelContextLengths, hardwareDefault, modelMetrics[visionModelName]?.contextLength),
         taskId,
         normalizationThink: false,
+        allowFullExcelFormat: settings?.allowFullExcelFormat === true,
       })
 
       if (activeTaskIdRef.current !== taskId) return

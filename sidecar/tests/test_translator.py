@@ -199,6 +199,96 @@ def test_immutable_entity_masking_and_unmasking():
     assert "Send form to assistenza@pec.telepass.com or visit https://www.telepass.com for details." == unmasked
 
 
+@pytest.mark.parametrize("contact", ["first@example.com", "second@pec.EXAMPLE.com", "https://example.com/forms/123"])
+def test_contact_masking_is_atomic_when_company_matches_domain(contact):
+    source = f"Example S.p.A. inviare a {contact}."
+    masked, tokens = translator_module._mask_immutable_entities(source)
+    assert contact in tokens.values()
+    assert contact not in masked
+    assert not any("__PROT_" in value for value in tokens.values())
+    assert translator_module._unmask_immutable_entities(masked, tokens) == source
+
+
+def test_multiple_company_domain_contacts_restore_exactly():
+    source = "Example S.p.A.: First@example.com oppure second@pec.example.com entro 18/06/2024."
+    masked, tokens = translator_module._mask_immutable_entities(source)
+    assert {"First@example.com", "second@pec.example.com"} <= set(tokens.values())
+    translated = masked.replace("oppure", "or").replace("entro", "by")
+    assert translator_module._validated_translation(translated, masked, tokens) == source.replace("oppure", "or").replace("entro", "by")
+
+
+def test_written_notice_term_does_not_invent_objection():
+    source = "Il rimborso non è dovuto senza diffida scritta."
+    masked, tokens = translator_module._mask_immutable_entities(source, "Italian", "English")
+    assert "written notice" in tokens.values()
+    translated = masked.replace("Il rimborso non è dovuto senza", "No refund is due without")
+    assert translator_module._validated_translation(translated, masked, tokens, "Italian", "English") == "No refund is due without written notice."
+    _, tokens = translator_module._mask_immutable_entities(source, "Italian", "German")
+    assert "written notice" not in tokens.values()
+
+
+def test_order_return_instruction_keeps_verb_and_variable_order_deadline():
+    source = "Return order AB-923 within 7 working days after written confirmation."
+    masked, tokens = translator_module._mask_immutable_entities(source, "English", "Italian")
+    assert "Restituire l'ordine" in tokens.values()
+    translated = masked.replace("within", "entro").replace("working days after written confirmation", "giorni lavorativi dopo la conferma scritta")
+    assert translator_module._validated_translation(translated, masked, tokens, "English", "Italian") == "Restituire l'ordine AB-923 entro 7 giorni lavorativi dopo la conferma scritta."
+    for text in ("Return order status AB-923", "Return order form", "A Return order AB-923", "Order a return AB-923 within 7 days"):
+        _, other_tokens = translator_module._mask_immutable_entities(text, "English", "Italian")
+        assert "Restituire l'ordine" not in other_tokens.values()
+
+
+def test_known_brand_is_protected_next_to_han_without_matching_other_latin_words():
+    source = "按照Example提供的指示归还Example装置；SomeExample Exampled"
+    masked, tokens = translator_module._mask_immutable_entities(source, company_names=("Example",))
+    assert list(tokens.values()) == ["Example", "Example"]
+    assert "SomeExample Exampled" in masked
+    assert translator_module._unmask_immutable_entities(masked, tokens) == source
+
+
+def test_portuguese_nome_cognate_preserves_strict_marker_validation(monkeypatch):
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda text, *a, **kw: text)
+    assert translator_module._translate_texts_with_fallback(["NOME *"], "Italian", "Portuguese", "fixture") == ["NOME *"]
+    with pytest.raises(ValueError, match="untranslated"):
+        translator_module._translate_texts_with_fallback(["NOME *"], "Italian", "English", "fixture")
+    with pytest.raises(ValueError, match="untranslated"):
+        translator_module._translate_texts_with_fallback(["CAP *"], "Italian", "Portuguese", "fixture")
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda *a, **kw: "NOME")
+    with pytest.raises(ValueError, match="marker"):
+        translator_module._translate_texts_with_fallback(["NOME *"], "Italian", "Portuguese", "fixture")
+
+
+@pytest.mark.parametrize("addition", ["other@example.net", "https://other.example.net"])
+def test_translation_refuses_added_contact_after_valid_placeholder_restore(addition):
+    masked, tokens = translator_module._mask_immutable_entities("Inviare a first@example.com.")
+    output = masked.replace("Inviare a", "Send to") + " " + addition
+    with pytest.raises(ValueError, match="contact"):
+        translator_module._validated_translation(output, masked, tokens)
+
+
+def test_translation_refuses_unchanged_nonmarker_instruction(monkeypatch):
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda text, *a, **kw: text)
+    with pytest.raises(ValueError, match="untranslated"):
+        translator_module._translate_texts_with_fallback(["FIRMA LEGGIBILE DEL CLIENTE"], "Italian", "Spanish", "fixture")
+
+
+def test_translation_refuses_confident_wrong_language_and_uses_existing_fallback(monkeypatch):
+    calls = []
+
+    def translate(text, *args, is_batch=False, **kwargs):
+        calls.append(is_batch)
+        if is_batch:
+            return '<seg id="1">The customer requests cancellation of the previously identified contract.</seg><seg id="2">Zweiter Titel</seg>'
+        return "Der Kunde beantragt die Kündigung des zuvor angegebenen Vertrags."
+
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", translate)
+    result = translator_module._translate_texts_with_fallback(
+        ["Il cliente chiede la cessazione del contratto sopra indicato.", "Secondo titolo"], "Italian", "German", "fixture"
+    )
+    assert result == ["Der Kunde beantragt die Kündigung des zuvor angegebenen Vertrags.", "Zweiter Titel"]
+    assert calls == [True, False]
+
+
 @pytest.mark.parametrize("phrase, expected", [
     ("raccomandata a.r. entro", "registered mail with advice of delivery entro"),
     ("Raccomandata A/R", "Registered mail with advice of delivery"),
@@ -212,13 +302,32 @@ def test_postal_receipt_term_uses_verified_english_meaning(phrase, expected):
 
 @pytest.mark.parametrize("source, source_lang, target_lang", [
     ("A.R. autorizza il modulo AR-0042.", "Italian", "English"),
-    ("raccomandata a.r.", "Italian", "French"),
     ("raccomandata a.r.", "English", "Italian"),
     ("https://example.com/raccomandata a.r.", "Italian", "English"),
 ])
 def test_postal_term_does_not_rewrite_other_languages_initials_or_urls(source, source_lang, target_lang):
     masked, tokens = translator_module._mask_immutable_entities(source, source_lang, target_lang)
     assert translator_module._unmask_immutable_entities(masked, tokens) == source
+
+
+@pytest.mark.parametrize("language, expected", [
+    ("German", "Einschreiben mit Rückschein"),
+    ("French", "courrier recommandé avec avis de réception"),
+    ("Spanish", "correo certificado con aviso de recibo"),
+    ("Portuguese", "correio registado com aviso de receção"),
+    ("Russian", "заказное письмо с уведомлением о вручении"),
+    ("Chinese", "附回执的挂号邮件"),
+    ("Japanese", "受取通知付き書留郵便"),
+])
+def test_postal_receipt_survives_target_languages_and_missing_token_refuses(language, expected):
+    source = "Restituire per raccomandata a.r. entro 18/06/2024."
+    masked, tokens = translator_module._mask_immutable_entities(source, "Italian", language)
+    assert expected in tokens.values()
+    assert "raccomandata a.r." not in masked
+    assert expected in translator_module._unmask_immutable_entities(masked, tokens)
+    postal_token = next(token for token, value in tokens.items() if value == expected)
+    with pytest.raises(ValueError, match="protected"):
+        translator_module._unmask_immutable_entities(masked.replace(postal_token, ""), tokens)
 
 
 @pytest.mark.parametrize("texts", [["Inviare per raccomandata a.r. entro il 18/06/2024."], [
@@ -388,6 +497,178 @@ def test_company_products_and_postal_addresses_are_not_translated():
     assert "Via Esempio" not in masked
     result = translator_module._unmask_immutable_entities(masked.replace("Restituire", "Return"), tokens)
     assert result == source.replace("Restituire", "Return")
+
+
+def test_address_value_without_space_after_marker_stays_literal():
+    source = "INDIRIZZO RESIDENZA*VIA ESEMPIO NORD"
+    masked, tokens = translator_module._mask_immutable_entities(source)
+    assert "VIA ESEMPIO NORD" in tokens.values()
+    assert "INDIRIZZO RESIDENZA" in masked
+    assert translator_module._unmask_immutable_entities(masked, tokens) == source
+
+
+def test_document_company_context_protects_product_in_separate_block(monkeypatch):
+    blocks = [
+        {"text": "Example S.p.A.", "preserve_literal": True},
+        {"text": "CONTRATTO EXAMPLE FAMILY N.* 12345"},
+    ]
+
+    def translate(text, *args, **kwargs):
+        assert "EXAMPLE FAMILY" not in text
+        return text.replace("CONTRATTO", "CONTRACT")
+
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", translate)
+    translator_module._translate_pdf_blocks(blocks, "Italian", "English", "fixture")
+    assert blocks[1]["text"] == "CONTRACT EXAMPLE FAMILY N.* 12345"
+
+
+def test_merged_contract_label_keeps_company_product_atomic():
+    source = "CONTRATTOEXAMPLE FAMILY N.* 12345"
+    masked, tokens = translator_module._mask_immutable_entities(source, company_names=("Example",))
+    assert "EXAMPLE FAMILY" in tokens.values()
+    assert "CONTRATTO __PROT_" in masked
+    assert "CONTRATTO EXAMPLE FAMILY" in translator_module._unmask_immutable_entities(masked, tokens)
+
+
+@pytest.mark.parametrize("language, expected", [
+    ("English", "POSTAL CODE*"), ("German", "POSTLEITZAHL*"),
+    ("French", "CODE POSTAL*"), ("Spanish", "CÓDIGO POSTAL*"),
+    ("Portuguese", "CÓDIGO POSTAL*"), ("Russian", "ПОЧТОВЫЙ ИНДЕКС*"),
+    ("Chinese", "邮政编码*"), ("Japanese", "郵便番号*"),
+])
+def test_personal_form_postcode_uses_reviewed_role_without_model(language, expected, monkeypatch):
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda *a, **kw: pytest.fail("Known label must not use a model"))
+    result = translator_module._translate_texts_with_fallback(["CAP*"], "Italian", language, "fixture", personal_form=True)
+    assert result == [expected]
+
+
+def test_personal_form_unknown_text_still_requires_model_and_markers(monkeypatch):
+    seen = []
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda text, *a, **kw: seen.append(text) or text.replace("ALTRO CAMPO", "OTHER FIELD"))
+    assert translator_module._translate_texts_with_fallback(["ALTRO CAMPO*"], "Italian", "English", "fixture", personal_form=True) == ["OTHER FIELD*"]
+    assert seen == ["ALTRO CAMPO__PROT_ASTERISK_0__"]
+
+
+def test_personal_form_glossary_requires_both_name_roles_and_italian_source():
+    assert translator_module._is_personal_form(["NOME*", "COGNOME*"], "Italian")
+    assert not translator_module._is_personal_form(["NOME*", "ALTRO*"], "Italian")
+    assert not translator_module._is_personal_form(["NOME*", "COGNOME*"], "Portuguese")
+
+
+def test_personal_form_glossary_unknown_language_keeps_model_path():
+    assert translator_module._translated_form_label("N. __PROT_ENT_0__", "Korean") is None
+    assert translator_module._translated_form_label("CAP__PROT_ASTERISK_0__", "Korean") is None
+
+
+def test_personal_form_pec_and_address_share_one_protected_span():
+    source = "Inviare alla PEC\nsecond@pec.example.com ovvero per posta."
+    masked, tokens = translator_module._mask_immutable_entities(source, "Italian", "German", personal_form=True)
+    assert any("second@pec.example.com" in value and "(PEC)" in value for value in tokens.values())
+    assert len(tokens) == 1
+
+
+def test_inline_postcode_and_place_are_literal():
+    masked, tokens = translator_module._mask_immutable_entities("Casella 123 - 12345 EXAMPLECITY Via Example 9 - 54321 OTHERCITY.")
+    assert "12345 EXAMPLECITY" in tokens.values()
+    assert "OTHERCITY" not in masked
+
+
+def test_partial_or_changed_return_clauses_still_require_model():
+    for source in ("il cui elenco è disponibile tramite sito web e Call Center di Example", "spedendolo con posta ordinaria a Example S.p.A. Customer Care, Via Example 9 - 12345 Roma."):
+        assert translator_module._translated_form_clause(source, "English", ("Example",)) is None
+
+
+def test_pdf_personal_form_translates_delivery_alternatives_separately(monkeypatch):
+    calls = []
+
+    def translate(texts, *args):
+        calls.extend(texts)
+        return [text.replace("Inviare", "Send").replace("all'indirizzo", "to the address").replace("via posta", "by post") for text in texts]
+
+    monkeypatch.setattr(translator_module, "_translate_texts_with_fallback", translate)
+    blocks = [{"text": "NOME*"}, {"text": "COGNOME*"}, {"text": "Inviare all'indirizzo first@example.com, oppure all'indirizzo PEC second@example.com ovvero via posta Via Example 9."}]
+    translator_module._translate_pdf_blocks(blocks, "Italian", "English", "fixture")
+    assert len(calls) == 5
+    assert "oppure" not in " ".join(calls) and "ovvero" not in " ".join(calls)
+    assert blocks[-1]["text"] == "Send to the address first@example.com; or to the address PEC second@example.com; or by post Via Example 9."
+
+
+def test_personal_form_postal_box_cannot_be_interpreted_as_postcode():
+    source = "Customer Care, Casella Postale\n1234 succursale 56 - 12345 EXAMPLECITY"
+    masked, tokens = translator_module._mask_immutable_entities(source, "Italian", "Japanese", personal_form=True)
+    assert "私書箱1234、支局56" in tokens.values()
+    assert "12345 EXAMPLECITY" in tokens.values()
+    assert "1234" not in masked and "56" not in masked
+
+
+@pytest.mark.parametrize("language,points,website,telephone", [
+    ("English", "sales or assistance points", "website", "Call Center"),
+    ("German", "Verkaufsstellen oder Servicestellen", "Website", "Callcenter"),
+    ("French", "vente ou d'assistance", "site web", "centre d'appels"),
+    ("Spanish", "venta o de asistencia", "sitio web", "atención telefónica"),
+    ("Portuguese", "venda ou de assistência", "site", "atendimento telefónico"),
+    ("Russian", "продаж или обслуживания", "сайте", "телефонный"),
+    ("Chinese", "销售或服务", "网站", "电话客服中心"),
+    ("Japanese", "販売店またはサポート", "ウェブサイト", "コールセンター"),
+])
+def test_exact_return_clause_preserves_all_options_and_variable_brands(language, points, website, telephone, monkeypatch):
+    source = "A seguito dell'esercizio del diritto di recesso dal Contratto Example Family, il dispositivo Example/Example Europeo dovrà essere riconsegnato secondo le indicazioni fornite da Example, recandosi direttamente presso i punti vendita o di assistenza il cui elenco è disponibile tramite sito web e Call Center di Example"
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda *a, **kw: pytest.fail("An exact reviewed clause must not use the model"))
+    result = translator_module._translate_texts_with_fallback([source], "Italian", language, "fixture", company_names=("Example",), personal_form=True)[0]
+    assert "Example Family" in result and "Example/Example Europeo" in result
+    assert points in result and website in result and telephone in result
+    assert translator_module._translated_form_clause(source + " entro domani", language, ("Example",)) is None
+    assert translator_module._translated_form_clause(source.replace("Example", "Other"), language, ("Example",)) is None
+
+
+@pytest.mark.parametrize("language,receipt", [("English", "advice of delivery"), ("German", "Rückschein"), ("French", "avis de réception"), ("Spanish", "aviso de recibo"), ("Portuguese", "aviso de receção"), ("Russian", "уведомлением о вручении"), ("Chinese", "回执"), ("Japanese", "受取通知")])
+def test_exact_postal_return_preserves_delivery_receipt_and_full_address(language, receipt, monkeypatch):
+    source = "spedendolo con raccomandata a.r. a Example S.p.A. Customer Care, Via Example 9 – 12345 Roma."
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda *a, **kw: pytest.fail("An exact reviewed clause must not use the model"))
+    result = translator_module._translate_texts_with_fallback([source], "Italian", language, "fixture", company_names=("Example",), personal_form=True)[0]
+    assert "Example S.p.A. Customer Care" in result and "Via Example 9 – 12345 Roma" in result
+    assert receipt in result
+    assert translator_module._translated_form_clause(source + " Non inviare prima di lunedì.", language, ("Example",)) is None
+
+
+@pytest.mark.parametrize("language,post", [("English", "postal mail"), ("German", "per Post"), ("French", "courrier postal"), ("Spanish", "correo postal"), ("Portuguese", "correio postal"), ("Russian", "обычной почтой"), ("Chinese", "邮政寄送"), ("Japanese", "郵便で")])
+def test_exact_postal_submission_does_not_become_email(language, post, monkeypatch):
+    source = "inviato via posta all'indirizzo EXAMPLE S.p.A. - Customer Care, Casella Postale 1234 succursale 56 - 54321 EXAMPLECITY Via Example 9 - 12345 ROMA."
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", lambda *a, **kw: pytest.fail("Reviewed postal submission must not use the model"))
+    result = translator_module._translate_texts_with_fallback([source], "Italian", language, "fixture", company_names=("EXAMPLE",), personal_form=True)[0]
+    assert post in result
+    for value in ("EXAMPLE S.p.A.", "1234", "56", "54321 EXAMPLECITY", "Via Example 9 - 12345 ROMA"):
+        assert value in result
+    assert translator_module._translated_form_clause(source.replace("via posta", "via e-mail"), language, ("EXAMPLE",)) is None
+
+
+def test_pec_glossary_does_not_change_contacts_or_unknown_source_context():
+    source = "PEC first@example.com"
+    masked, tokens = translator_module._mask_immutable_entities(source, "Italian", "Japanese", personal_form=True)
+    assert translator_module._unmask_immutable_entities(masked, tokens) == "認証電子メール（PEC） first@example.com"
+    masked, tokens = translator_module._mask_immutable_entities(source, "Italian", "Japanese")
+    assert translator_module._unmask_immutable_entities(masked, tokens) == source
+
+
+def test_ocr_place_date_value_is_preserved_under_its_label(monkeypatch):
+    from sidecar.infrastructure import ocr
+    monkeypatch.setattr(ocr, "run_rapid_ocr_with_boxes", lambda image: [
+        {"bbox": (100, 200, 700, 250), "text": "LUOGO E DATA", "score": .99},
+        {"bbox": (100, 420, 700, 470), "text": "Borgo Esempio 18/06/2024", "score": .99},
+    ])
+    seen = []
+
+    def translate(text, *args, **kwargs):
+        seen.append(text)
+        return text.replace("LUOGO E DATA", "PLACE AND DATE")
+
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", translate)
+    with pymupdf.open() as doc:
+        blocks = translator_module._extract_ocr_page_blocks(doc.new_page())
+        translator_module._translate_pdf_blocks(blocks, "Italian", "English", "fixture")
+    assert blocks[-1]["preserve_literal"] is True
+    assert blocks[-1]["text"] == "Borgo Esempio 18/06/2024"
+    assert seen == ["LUOGO E DATA"]
 
 
 def test_address_protection_does_not_hide_delivery_instructions():
@@ -832,14 +1113,15 @@ def test_translate_pdf_clips_overflow_without_crashing(tmp_path, monkeypatch):
     marker = "UNIQUEMARKERXYZ"
     path = str(tmp_path / "overflow_sample.pdf")
     _make_pdf(path, text=marker)
+    replacement = "Testo tradotto estremamente lungo che supera la larghezza del testo originale."
 
     def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
         if is_batch:
             matches = re.findall(r'<seg\s+id=[\'"]?(\d+)[\'"]?>([\s\S]*?)</seg>', text)
             if matches:
-                return "\n".join([f'<seg id="{idx}">TRANSLATED-{val.strip()}-VERY-LONG-OUTPUT</seg>' for idx, val in matches])
-            return "\n".join([f'<seg id="{i+1}">TRANSLATED-{line.strip()}-VERY-LONG-OUTPUT</seg>' for i, line in enumerate(text.splitlines()) if line.strip()])
-        return f"TRANSLATED-{text}-VERY-LONG-OUTPUT"
+                return "\n".join([f'<seg id="{idx}">{replacement}</seg>' for idx, _ in matches])
+            return "\n".join([f'<seg id="{i+1}">{replacement}</seg>' for i, line in enumerate(text.splitlines()) if line.strip()])
+        return replacement
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
 
@@ -856,7 +1138,7 @@ def test_translate_pdf_clips_overflow_without_crashing(tmp_path, monkeypatch):
         # The oversized replacement is auto-fitted into the redacted bbox instead of failing the job.
         translated = pymupdf.open(str(tmp_path / data["filename"]))
         try:
-            assert "TRANSLATED" in translated[0].get_text()
+            assert "".join(replacement.split()) in "".join(translated[0].get_text().split())
         finally:
             translated.close()
     finally:
@@ -1026,6 +1308,39 @@ def test_pdf_reinsertion_preserves_literal_code_in_cjk_form(tmp_path):
         assert "CODE-123" in "".join(doc[0].get_text().split())
         assert "姓名*" in "".join(doc[0].get_text().split())
         assert {span["type"] for span in doc[0].get_texttrace()} == {0, 3}
+
+
+def test_pdf_autofit_rejects_native_fit_with_glyphs_outside_bounds():
+    rect = pymupdf.Rect(40, 40, 510, 90.9)
+    text = "\n".join(["あ" * 30 + " C"] * 4)
+    font = translator_module._resolve_pdf_font_file("Japanese")
+    assert not translator_module._fits_at_font_size(rect, text, 8., font)
+
+
+@pytest.mark.parametrize("language", ["Chinese", "Traditional Chinese", "Japanese", "Korean"])
+def test_pdf_reinsertion_autofits_complete_cjk_glyph_bounds(tmp_path, language):
+    size = 8.
+    block = {"bbox": (41.2, 41.2, 508.8, 89.7),
+             "size": size, "color": 0, "text": "\n".join(["あ" * 30 + " C-"] * 4)}
+    font = translator_module._resolve_pdf_font_file(language)
+    rect = translator_module._padded_block_rect(block)
+    with pymupdf.open() as native:
+        page = native.new_page()
+        assert page.insert_textbox(rect, block["text"], fontsize=size, fontfile=font, fontname="native") >= 0
+        assert any(not (rect + (-.01, -.01, .01, .01)).contains(pymupdf.Rect(bbox))
+                   for span in page.get_texttrace() for code, _, _, bbox in span["chars"]
+                   if not chr(code).isspace())
+    output = tmp_path / "translated.pdf"
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        translator_module._redact_and_reinsert_pdf_blocks(page, [block], font)
+        assert all(span["size"] < size for span in page.get_texttrace())
+        assert all((rect + (-.01, -.01, .01, .01)).contains(pymupdf.Rect(bbox))
+                   for span in page.get_texttrace() for code, _, _, bbox in span["chars"]
+                   if not chr(code).isspace())
+        doc.save(output, deflate=True, garbage=4, clean=True)
+    with pymupdf.open(output) as doc:
+        assert "".join(doc[0].get_text().split()) == "".join(block["text"].split())
 
 
 def test_pdf_translation_stream_exports_cjk_punctuation(tmp_path, monkeypatch):
@@ -1304,7 +1619,7 @@ def test_translate_texts_skips_segments_already_in_target_language(monkeypatch):
     """Verifies that text segments already in the target language bypass the LLM translation call entirely."""
     called_prompts = []
 
-    def fake_call_ollama(text, source_lang, target_lang, model, is_batch=False, expected_items=1):
+    def fake_call_ollama(text, source_lang, target_lang, model, is_batch=False, expected_items=1, **kwargs):
         called_prompts.append(text)
         if is_batch:
             return '<seg id="1">Traduzione di un testo in italiano</seg>'

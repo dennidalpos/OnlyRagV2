@@ -1,78 +1,57 @@
-# Dipendenze
+# Dipendenze e limiti noti
 
-Distribution terms and observed frozen notice gaps: [license inventory and policy proposal](./distribution-licenses.md). The MIT declaration does not replace component-specific terms; public distribution remains unqualified.
+Le dipendenze correnti sono in [package.json](../package.json), [package-lock.json](../package-lock.json), [requirements.txt](../sidecar/requirements.txt) e [constraints.txt](../sidecar/constraints.txt). Non usare i conteggi degli audit datati come stato corrente. La distribuzione richiede l'inventario reale dei componenti: [distribution.md](./distribution.md).
 
 ## Node/Electron
 
-- React, Vite, Electron, Tailwind e Monaco: UI e packaging.
-- `gpt-tokenizer`: stima BPE del contesto.
-- `zod`: contratti delle risposte strutturate.
-- `diff`: diff delle proposte di modifica.
-- `p-queue`: coda dei task Main.
-- `turndown`, `cheerio`: conversione web in Markdown.
-- `playwright`: validazione browser. Il terminale usa PowerShell tramite `PersistentPowerShellSession`, senza dipendenze native aggiuntive.
+React/Vite/Electron gestiscono UI e packaging. Il runtime usa depcheck in un worker dedicato per la scansione dipendenze; il Renderer usa `react-markdown`/`remark-gfm` per messaggi completati. Versioni e percorsi transitivi si verificano sui manifest installati.
 
 ## Python Sidecar
 
-- FastAPI/Uvicorn/Pydantic: HTTP e validazione.
-- LanceDB/NumPy/Pandas: persistenza e dati vettoriali.
-- openpyxl e xlrd: motori Excel espliciti per XLSX e XLS, inclusi nel bundle PyInstaller.
-- Arrow: dipendenza diretta per Parquet; PyInstaller include esplicitamente `pyarrow.parquet`.
-- PyMuPDF, python-docx, Pillow, RapidOCR (`rapidocr` 3, modelli PP-OCRv6 nel wheel), OpenCV (`opencv-python`, la build richiesta da `rapidocr`) e ONNX Runtime GPU: parsing/OCR.
-- `wordfreq`, `symspellpy`, `langdetect`: vocabolario e normalizzazione.
+FastAPI/Pydantic espongono REST, LanceDB e Arrow conservano i dati, pandas/openpyxl/xlrd leggono tabelle, PyMuPDF/python-docx elaborano documenti e RapidOCR/ONNX Runtime eseguono OCR. La build CPU usa un ambiente separato dal venv di sviluppo con GPU.
 
-Versioni e vincoli sono nei manifest [`package.json`](../package.json), [`sidecar/requirements.txt`](../sidecar/requirements.txt) e [`sidecar/constraints.txt`](../sidecar/constraints.txt). Non duplicarli nella documentazione.
+## Residui attuali
+
+Gli interventi compatibili upstream per braces, sprintf-js, la cache HTTP del builder e il sanitizer incorporato in Monaco sono aperti nel [tracker](../PROJECT_STATUS.json). Il worker limita e isola la scansione, ma non corregge il pacchetto braces. La cache HTTP Got del builder resta disabilitata; il controllo dell'artefatto scaricato è separato. La presenza di un pacchetto vulnerabile non dimostra da sola un input sfruttabile nell'app. Rivedere la catena di chiamata e l'advisory ufficiale prima di cambiare lockfile o confini di esecuzione.
+
+## Evidenze datate
+
+## Node/Electron
+
+[Evidenza e fonti](./libraries-history-2026-10-13.md#nodeelectron).
+
+## Python Sidecar
+
+[Evidenza e fonti](./libraries-history-2026-10-13.md#python-sidecar).
 
 ## DOMPurify dependency remediation — 2026-10-02
 
-The existing npm override now requires DOMPurify 3.4.16 or newer compatible 3.x; npm 11 regenerated the lockfile and changed exactly one installed package (3.4.14 to 3.4.16). `npm install --ignore-scripts --no-fund` reports zero vulnerabilities; `npm explain dompurify` verifies Monaco's resolved dependency. Build passes before and after the update. [Upstream advisory GHSA-p98j-92pf-mc4p](https://github.com/cure53/DOMPurify/security/advisories/GHSA-p98j-92pf-mc4p), checked 2026-10-02, identifies 3.4.16 as the patch for alert 25.
-
-Runtime review found an independent vendored DOMPurify 3.4.8 inside Monaco's ESM `domSanitize.js` path. The npm override does not replace that embedded implementation, and the renderer bundle is unchanged by this dependency-only update. Reviewed Monaco calls sanitize strings or fragments, without `IN_PLACE`; its `afterSanitizeAttributes` hook removes attributes, not nodes. The alert's specific exploit prerequisites were not found in this app path. This is not a general security certification of the old embedded copy: upstream update or scoped bundle resolution and real-editor verification remain tracked separately as `DEPENDENCY-MONACO-VENDORED-SANITIZER-01`. The patched lockfile was committed/pushed to `origin/master` in `f84cb6f` on explicit request. Authenticated GitHub API verification confirms [alert 25](https://github.com/dennidalpos/OnlyRagV2/security/dependabot/25) **fixed**, with `fixed_at=2026-10-02T20:10:59Z` (22:10:59 Europe/Rome); no alert was dismissed. The independent embedded Monaco sanitizer remains tracked.
+[Evidenza e fonti](./libraries-history-2026-10-13.md#dompurify-dependency-remediation--2026-10-02).
 
 ## Dependency audit snapshot — 2026-10-05
 
-At the 2026-10-05 audit, `npm audit --json` exited 1 with **six high package findings from two root advisories**. `braces` reaches the production Main dependency scanner through `depcheck` and the development graph tool through `skott`; `http-cache-semantics` is in the development packaging/download chain. The GitHub advisories checked on that date listed no patched versions, despite npm's suggested downgrade/fix metadata. Compatible remediation and actual exposure review are tracked separately in `DEPENDENCY-BRACES-REMEDIATION-01` and `DEPENDENCY-BUILD-CACHE-REVIEW-01`; no dependency or lockfile changed. This dated result supersedes the historical zero-vulnerability snapshot above without reopening the fixed DOMPurify alert; it is not a fresh advisory check on every later documentation update. Exact paths, official advisory links and limitations: [repository audit](./repository-residue-audit-2026-10-05.md#findings).
-
-The Sidecar log bypass found on 2026-10-05 is corrected on 2026-10-06: complete stdout/stderr lines pass through the existing Main sanitizer before diagnostics and `sidecar.log`, including EOF tails and split credentials. The file writer also sanitizes direct callers before appending; rotation retains these sanitized records. Retrieval logs query length/top-k, never the query body. Log-write failures emit a sanitized warning. Existing historical logs and unredacted live diagnosis artifacts are not rewritten or removed; their preservation policy remains. [Verification](./verification.md#sidecar-log-privacy--2026-10-06).
+[Evidenza e fonti](./libraries-history-2026-10-13.md#dependency-audit-snapshot--2026-10-05).
 
 ## Dependency remediation and residuals — 2026-10-06
 
-Fresh `npm audit --json` reported **19 package findings: 8 high, 11 moderate**, from six root advisories. The current reviewed advisories explicitly identify patches for [compression](https://github.com/advisories/GHSA-vc2v-76pw-4v95), [source-map-js](https://github.com/advisories/GHSA-68fv-2mgg-jv7q) and [smol-toml](https://github.com/advisories/GHSA-r4xh-jqrq-34v2). `npm update compression source-map-js smol-toml --ignore-scripts --no-fund` regenerated the lockfile within existing dependency constraints: compression 1.8.2, source-map-js 1.2.2 and smol-toml 1.9.0. The compression patch adds its upstream `destroy` dependency; direct manifest ranges and integrity checks are unchanged. npm's [update semantics](https://docs.npmjs.com/cli/v11/commands/npm-update/) were checked before updating. No force fix, override, downgrade or vendor edit was used.
-
-Afterward, audit still exits **1** with **16 package findings: 6 high, 10 moderate**, from three root advisories: [braces](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), [http-cache-semantics](https://github.com/advisories/GHSA-ch52-4w7c-c8xp) and the newly tracked [sprintf-js](https://github.com/advisories/GHSA-hp3w-g68c-fv3c). Each official advisory still declares no patched version on 2026-10-06; a registry version outside a listed affected range is not alone proof of a reviewed fix. The first two tasks remain open, and `DEPENDENCY-SPRINTF-REMEDIATION-01` records the new residue. sprintf-js reaches production depcheck through js-yaml/argparse and the optional development packaging chain through global-agent/roarr. No application exploit was demonstrated.
-
-Production scanner review found fixed ignore patterns and default parser globs. findup-sync receives literal `package.json` and avoids its glob branch on that call. Development skott accepts operator-supplied patterns. These inspected paths do not establish an attacker-controlled braces pattern. The 2026-10-06 completeness repair refuses partial parser/directory results and blocks successful project verification without complete dependency evidence. The approved worker isolation is now implemented as recorded below; it contains parser work without patching braces. [Completeness repair](./verification.md#dependency-verification-completeness--2026-10-06). The build-cache review is complete with the bounded disposition below; its upstream package finding remains tracked. [Security patch snapshot](./verification.md#dependency-security-patches--2026-10-06).
+[Evidenza e fonti](./libraries-history-2026-10-13.md#dependency-remediation-and-residuals--2026-10-06).
 
 ## Build download cache disposition — 2026-10-06
 
-`DEPENDENCY-BUILD-CACHE-REVIEW-01` is complete as an exposure review with a bounded disposition: keep Got HTTP caching disabled and retain verified artifact-cache readback. Installed electron-builder resolves its own `@electron/get` 3.1.0/Got 11.8.6, whereas Electron runtime installation resolves `@electron/get` 5.1.0/Fetch. The former downloader passes only supplied download options; Got defaults to `cache: undefined`, and only a configured cache invokes cacheable-request. Current build configuration and builder artifact calls do not enable it. The artifact cache stores files by URL and validates checksums; it is separate from an HTTP response cache. No cross-user disclosure was reproduced or claimed.
-
-The retained loopback check [`buildDownloadCachePolicy.mjs`](../scripts/e2e/buildDownloadCachePolicy.mjs), also added to Windows CI, verifies two same-URL network downloads despite a synthetic `max-stale` request, no response-cookie replay, checksum-validated artifact reuse, rejection/redownload of corrupt cached bytes and refusal of an incorrect download checksum while preserving the valid cache. This exercises the installed downloader/artifact library, not a complete installer or public download campaign. The guard requires review if build HTTP-cache/checksum configuration changes.
-
-The [official advisory](https://github.com/advisories/GHSA-ch52-4w7c-c8xp), reread 2026-10-06, still lists no patched version. The dependency and audit finding remain present; `DEPENDENCY-BUILD-CACHE-UPSTREAM-01` retains compatible upstream removal/patch and changed-path review. No lockfile, vendor source or checksum/TLS policy changed. Official versioned [downloader source](https://github.com/electron/get/blob/v3.1.0/src/GotDownloader.ts) was checked against the installed implementation. [Verification](./verification.md#build-download-cache-review--2026-10-06).
+[Evidenza e fonti](./libraries-history-2026-10-13.md#build-download-cache-disposition--2026-10-06).
 
 ## Dependency scanner isolation — 2026-10-10
 
-The user approved and implementation completed the worker strategy for `DEPENDENCY-BRACES-REMEDIATION-01`. Each depcheck scan and peer-manifest read runs in a dedicated Node worker packaged beside Main as `dependencyScanWorker.js`. The result shape, fixed ignores, incomplete-scan refusal and 60-second default deadline remain. Main never falls back to in-process parsing when the worker is absent or fails. The scanner does not invoke workspace scripts or write workspace files.
-
-The deadline includes queue wait and worker startup. Main terminates only the worker created for that scan on timeout, cancellation or shutdown and waits for its exit; failure maps to `scanned=false`, and late messages cannot certify refused scans. Verification forwards its abort signal. One scanner is active and at most 32 are queued; expired/cancelled queued work is never dispatched. Heap limits are 256 MiB old generation and 32 MiB young generation, with a 4 MiB stack. A 200-file synthetic TypeScript scan (550 KiB) completes in 1.58s with 56.4 MiB terminal heap in Node; actual Electron 43.7.4 loads the same entry and installed depcheck parsers from a synthetic ASAR, with 47.2 MiB terminal heap. Terminal heap is not peak memory. Worker limits do not bound all native allocations or provide an OS security sandbox.
-
-Acceptance passes baseline dependency-integrity checks, real compiled-worker valid/missing-import and invalid-source/peer-manifest fixtures, synchronous-loop termination with responsive host timers, cancellation during parsing/in queue, bounded admission, shutdown, crash/malformed response/missing entry refusal, fresh retry and native Electron ASAR resolution. depcheck remains external for dynamic parser resolution. No dependency, persisted format, Renderer IPC or personal store changes. [Executed checks and limits](./verification.md#dependency-scanner-isolation--2026-10-10).
-
-This is bounded containment of parser work, not a braces package patch or complete semantic scan certification. The [reviewed braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), reread 2026-10-10, still declares no patched version. Upstream remediation, development skott exposure and the existing sprintf-js finding remain separate residuals. [Node 24 worker lifecycle and resource limits](https://nodejs.org/docs/latest-v24.x/api/worker_threads.html) and the [depcheck API](https://github.com/depcheck/depcheck#api) support this proposal; resource limits and termination require native verification in the shipped Electron runtime.
+[Evidenza e fonti](./libraries-history-2026-10-13.md#dependency-scanner-isolation--2026-10-10).
 
 ## Chat Markdown dependencies — 2026-10-11
 
-`react-markdown` 10.1.0 and `remark-gfm` 4.0.1 are direct Renderer dependencies for completed assistant answers, including tables. The renderer uses component overrides for source references and safe links; it does not enable raw HTML. The installed lockfile was regenerated with npm 11. `npm audit --omit=dev` still reports seven package findings rooted in the separately tracked `braces` and `sprintf-js` advisories; this update did not resolve those upstream findings. Upstream behavior: [react-markdown](https://github.com/remarkjs/react-markdown/blob/main/readme.md), [remark-gfm](https://github.com/remarkjs/remark-gfm).
+[Evidenza e fonti](./libraries-history-2026-10-13.md#chat-markdown-dependencies--2026-10-11).
 
 ## Controlli
 
-`npm run quality:static` (errori di lint Biome, format-check Biome di ogni file incluso da `biome.json`, guard IPC e di layering; `noExplicitAny` è un errore in ogni file, test compresi (il JSON non fidato ai confini usa l'alias documentato `UntrustedJson` di `shared/types`; i doppi di test usano tipi espliciti, `as unknown as T` o `as never`); i `catch` usano `unknown` con [`errorMessage`](../shared/domain/errors/errorMessage.ts)), `npm run audit:deadcode` e `npm run audit:cycles` coprono qualità, export orfani e dipendenze circolari. `audit:deadcode` esegue knip due volte: la modalità normale conta anche i test come entry, `--production` solo le entry marcate `!` in [`knip.json`](../knip.json), così un export usato solo dai test risulta orfano; gli hook di test voluti (reset di cache, `__testing`) portano il tag JSDoc `@internal`. I log passano da [`logRedactor.ts`](../electron/logRedactor.ts).
+[Evidenza e fonti](./libraries-history-2026-10-13.md#controlli).
 
 ## sprintf-js exposure disposition - 2026-10-13
 
-`DEPENDENCY-SPRINTF-REMEDIATION-01` is complete as a bounded exposure/mitigation review. `npm explain sprintf-js` confirms production 1.0.3 through depcheck 1.4.7/js-yaml 3.15.2/argparse 1.0.10 and optional build 1.1.3 through @electron/get 3.1.0/global-agent 3.0.0/roarr 2.15.4. Both installed copies reproduce the precision-triggered RangeError. No compatible upstream patch is claimed: the [official advisory](https://github.com/advisories/GHSA-hp3w-g68c-fv3c), reread on 2026-10-13, still lists no patched version.
-
-The production API imports js-yaml's library; argparse belongs to its separate CLI. An actual depcheck scan of package scripts, Travis YAML and Serverless YAML containing precision payloads loads js-yaml but neither argparse nor sprintf-js, while still reporting missing imports. The existing single bounded worker remains mandatory; no parser runs in Main. In the optional builder proxy, installed global-agent calls use fixed log messages and place proxy configuration, URLs, headers and errors in context data. Instrumenting the real installed formatter verifies five such log operations without interpreting their precision payloads as format strings.
-
-[`dependencySprintfExposure.mjs`](../scripts/e2e/dependencySprintfExposure.mjs) retains this gate in Windows CI. It uses two fresh child processes with 30-second limits and temporary synthetic input; it does not execute workspace scripts or contact public/proxy endpoints. Existing compiled-worker and native Electron 43.7.4 ASAR checks pass separately. No dependency, lockfile, vendored source, production interface or personal state changes. This proves the traced paths, not every future parser/plugin/proxy configuration or package remediation. `DEPENDENCY-SPRINTF-UPSTREAM-01` retains compatible upstream replacement/patch and any changed-caller exposure review.
+[Evidenza e fonti](./libraries-history-2026-10-13.md#sprintf-js-exposure-disposition---2026-10-13).

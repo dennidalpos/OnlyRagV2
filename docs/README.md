@@ -1,50 +1,30 @@
 # Documentazione OnlyRag V2
 
-Documentazione tecnica breve, verificata contro il codice. I contratti prevalgono sulle descrizioni:
+Le guide descrivono il comportamento verificato nel codice al **13 ottobre 2026**. Per API e comandi prevalgono [`shared/ipc/ipcContract.ts`](../shared/ipc/ipcContract.ts), [`sidecar/main.py`](../sidecar/main.py), [`sidecar/schemas.py`](../sidecar/schemas.py) e [`package.json`](../package.json). Il lavoro aperto è nel [`tracker`](../PROJECT_STATUS.json).
 
-- IPC: contratto in [`../shared/ipc/ipcContract.ts`](../shared/ipc/ipcContract.ts), Preload in [`../electron/preload.ts`](../electron/preload.ts), handler in [`../electron/core/presentation/`](../electron/core/presentation/).
-- REST: [`../sidecar/main.py`](../sidecar/main.py), schemi in [`../sidecar/schemas.py`](../sidecar/schemas.py) e OpenAPI in [`../sidecar/contracts/openapi-2.5.0.json`](../sidecar/contracts/openapi-2.5.0.json).
-- Comandi: [`../package.json`](../package.json).
+## Guide per ambito
 
-## Ambiti
-
-| Ambito | Documento |
+| Ambito | Guida |
 | --- | --- |
 | Architettura e confini | [`architecture.md`](./architecture.md) |
-| Electron Main e processi | [`electron-main.md`](./electron-main.md) |
-| Renderer React | [`frontend.md`](./frontend.md) |
-| Model/runtime memory fit | [`model-runtime-fit.md`](./model-runtime-fit.md) |
-| Local model task baselines | [`model-task-baselines.md`](./model-task-baselines.md) |
-| Frozen content acceptance | [`content-acceptance.md`](./content-acceptance.md) |
-| Coding Agent (Panoramica) | [`agent.md`](./agent.md) |
-| Agent Runtime e orchestrazione | [`agent-runtime.md`](./agent-runtime.md) |
-| Agent Guardrail e progresso | [`agent-guards.md`](./agent-guards.md) |
-| Agent Diagnostica e auto-healing | [`agent-diagnostics.md`](./agent-diagnostics.md) |
-| IPC | [`api-ipc.md`](./api-ipc.md) |
-| REST Sidecar | [`api-rest.md`](./api-rest.md) |
-| RAG, OCR e traduzione | [`rag-sidecar.md`](./rag-sidecar.md) |
-| Setup, test e release | [`operations.md`](./operations.md) |
+| Renderer, Main e contratti | [`frontend.md`](./frontend.md), [`electron-main.md`](./electron-main.md), [`api-ipc.md`](./api-ipc.md), [`api-rest.md`](./api-rest.md) |
+| Ingestion, OCR e originali | [`ingestion.md`](./ingestion.md) |
+| Embedding e ricerca | [`retrieval.md`](./retrieval.md) |
+| Traduzione | [`translation.md`](./translation.md) |
+| Coding Agent | [`coding-agent.md`](./coding-agent.md) |
+| Setup, comandi e dati protetti | [`operations.md`](./operations.md) |
 | Dipendenze | [`libraries.md`](./libraries.md) |
-| Distribution licenses and policy | [`distribution-licenses.md`](./distribution-licenses.md) |
-| Approved AGPL distribution proposal | [`distribution-agpl-proposal.md`](./distribution-agpl-proposal.md) |
-| CPU packaging and release evidence | [`distribution-cpu-release.md`](./distribution-cpu-release.md) |
-| Decisioni non ovvie | [`decisions.md`](./decisions.md) |
-| Verifica e limiti noti | [`verification.md`](./verification.md) |
-| Audit del Coding Agent (2026-09-26) | [`coding-agent-audit-2026-09-26.md`](./coding-agent-audit-2026-09-26.md) |
-| Critical application audit (2026-10-01) | [`critical-app-audit-2026-10-01.md`](./critical-app-audit-2026-10-01.md) |
-| Repository residue audit (2026-10-05) | [`repository-residue-audit-2026-10-05.md`](./repository-residue-audit-2026-10-05.md) |
-| Backlog | [`../PROJECT_STATUS.json`](../PROJECT_STATUS.json) |
+| Distribuzione locale | [`distribution.md`](./distribution.md) |
+| Verifica attuale e limiti | [`verification-current.md`](./verification-current.md) |
 
-## Regole
+## Specifiche e prove conservate
 
-- Non duplicare payload o versioni qui: aggiornare prima codice, tipi o OpenAPI.
-- `npm run docs:check` controlla link locali e comandi `npm run` in `docs/`, `README.md` e `skills/`.
-- Aggiornare la pagina dell'ambito interessato; evitare di riaprire diari storici o note duplicate.
+[`model-task-baselines.md`](./model-task-baselines.md), [`model-runtime-fit.md`](./model-runtime-fit.md) e [`content-acceptance.md`](./content-acceptance.md) definiscono profili e corpus con i loro limiti. [`agent-runtime.md`](./agent-runtime.md), [`agent-guards.md`](./agent-guards.md) e [`agent-diagnostics.md`](./agent-diagnostics.md) contengono dettagli del Coding Agent. [`distribution-licenses.md`](./distribution-licenses.md), [`distribution-cpu-release.md`](./distribution-cpu-release.md) e [`distribution-agpl-proposal.md`](./distribution-agpl-proposal.md) conservano inventari, decisioni e hash dei candidati.
 
-## Lettura rapida
+[`verification.md`](./verification.md), [`rag-sidecar.md`](./rag-sidecar.md), [`agent-runtime.md`](./agent-runtime.md) e [`libraries.md`](./libraries.md) mantengono gli ancoraggi dei link precedenti e rinviano agli archivi datati. Audit e revisioni di corpus sono **evidenze**, non descrizioni correnti: [`repository-residue-audit-2026-10-05.md`](./repository-residue-audit-2026-10-05.md), [`critical-app-audit-2026-10-01.md`](./critical-app-audit-2026-10-01.md), [`reliability-audit-2026-09-30.md`](./reliability-audit-2026-09-30.md), [`reliability-audit-2026-10-01.md`](./reliability-audit-2026-10-01.md), [`coding-agent-audit-2026-09-26.md`](./coding-agent-audit-2026-09-26.md), [`request-ledger-human-review-2026-10-10.md`](./request-ledger-human-review-2026-10-10.md), [`translation-language-audit-2026-10-13.md`](./translation-language-audit-2026-10-13.md) e [`translation-fidelity-2026-10-01.md`](./translation-fidelity-2026-10-01.md).
 
-- Nuovo contributore: [`operations.md`](./operations.md) → [`architecture.md`](./architecture.md).
-- Coding Agent: [`agent.md`](./agent.md) ([`agent-runtime.md`](./agent-runtime.md), [`agent-guards.md`](./agent-guards.md), [`agent-diagnostics.md`](./agent-diagnostics.md)) → [`api-ipc.md`](./api-ipc.md) → [`verification.md`](./verification.md).
-- Sidecar: [`rag-sidecar.md`](./rag-sidecar.md) → [`api-rest.md`](./api-rest.md).
+[`prompt_test_sequenza.txt`](./prompt_test_sequenza.txt) è un input di prova congelato. [`licenses/`](./licenses/) conserva testi, attribuzioni e inventari di licenza; [`DISTRIBUTION-LICENSE.md`](../DISTRIBUTION-LICENSE.md) è la nota destinata al pacchetto. Le skill locali in [`skills/`](../skills/) sono istruzioni eseguibili, controllate con la documentazione.
 
-Audit di affidabilita e archivio del backlog: [`reliability-audit-2026-09-30.md`](./reliability-audit-2026-09-30.md).
+`npm run docs:check` controlla link locali, ancoraggi Markdown e comandi `npm run`. Una prova offline, un PDF esportato o un build riuscito non equivalgono a qualifica semantica o dell'app installata.
+
+Le vecchie panoramiche `agent.md` e `decisions.md`, duplicate rispetto alle guide per ambito, sono state ritirate; l'audit datato conserva il riferimento alla seconda.

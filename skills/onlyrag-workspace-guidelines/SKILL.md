@@ -10,7 +10,7 @@ description: Repository architecture, state-safety and verification boundaries f
 - Renderer accesses privileged functions only through `window.electronAPI` in `electron/preload.ts`; IPC handlers live in `electron/core/presentation/`.
 - `sidecar/main.py` and `sidecar/schemas.py` define the local FastAPI contract. Main HTTP access goes through `sidecarHttpClient.ts`.
 - Ollama generation is serialized by `ollamaGenerationScheduler`; resolve installed models from `/api/tags`.
-- Agent project runs use disposable workspaces. Keep filesystem, shell, network, installation, publish and commit approvals inside their existing guards.
+- Agent project runs modify the selected workspace in place; preserve checkpoints and read versions. The ordinary profile applies its existing tool gates; Guided/Auto `fullAccess` bypasses application approval and contextual command gates, while Ask stays read-only.
 - Keep the selected model, runtime digest, budgets and `num_ctx` stable within an agent run; compact prompt content rather than shrinking the runtime window.
 - Planning confirms the ledger before proposing candidates and binds review references. Keep raw prompt history; do not reintroduce a legacy transcript rewrite.
 

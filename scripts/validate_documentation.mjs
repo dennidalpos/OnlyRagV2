@@ -24,6 +24,24 @@ function localLinkTarget(rawTarget) {
   return target
 }
 
+function headingAnchors(content) {
+  const counts = new Map()
+  const anchors = new Set()
+  for (const line of content.split(/\r?\n/)) {
+    const match = /^#{1,6} (.+?)\s*#*\s*$/.exec(line)
+    if (!match) continue
+    const base = match[1]
+      .toLowerCase()
+      .trim()
+      .replace(/[^\p{L}\p{N}_\- ]/gu, '')
+      .replace(/ /g, '-')
+    const count = counts.get(base) ?? 0
+    anchors.add(count === 0 ? base : `${base}-${count}`)
+    counts.set(base, count + 1)
+  }
+  return anchors
+}
+
 export function validateDocumentation({ docsRoot, packageJsonPath, additionalRoots = [], additionalFiles = [] }) {
   const errors = []
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
@@ -35,14 +53,32 @@ export function validateDocumentation({ docsRoot, packageJsonPath, additionalRoo
   ]
   const linkPattern = /\[[^\]]*\]\(([^)]+)\)/g
   const npmRunPattern = /\bnpm\s+run\s+([A-Za-z0-9:_-]+)/g
+  const anchorsByPath = new Map()
+
+  function anchorsFor(filePath) {
+    if (!anchorsByPath.has(filePath)) anchorsByPath.set(filePath, headingAnchors(fs.readFileSync(filePath, 'utf8')))
+    return anchorsByPath.get(filePath)
+  }
 
   for (const filePath of files) {
     const content = fs.readFileSync(filePath, 'utf8')
     for (const match of content.matchAll(linkPattern)) {
       const target = localLinkTarget(match[1])
-      if (!target) continue
-      const resolved = path.resolve(path.dirname(filePath), target)
-      if (!fs.existsSync(resolved)) errors.push(`${displayPath(filePath, docsRoot)}: broken local link '${target}'`)
+      if (target) {
+        const resolved = path.resolve(path.dirname(filePath), target)
+        if (!fs.existsSync(resolved)) errors.push(`${displayPath(filePath, docsRoot)}: broken local link '${target}'`)
+      }
+      const [targetPath, rawAnchor] = match[1].trim().replace(/^<|>$/g, '').split('#', 2)
+      if (!rawAnchor || (targetPath && !target)) continue
+      const resolved = targetPath ? path.resolve(path.dirname(filePath), targetPath.split('?', 1)[0]) : filePath
+      if (!fs.existsSync(resolved) || path.extname(resolved).toLowerCase() !== '.md') continue
+      let anchor
+      try {
+        anchor = decodeURIComponent(rawAnchor)
+      } catch {
+        continue
+      }
+      if (!anchorsFor(resolved).has(anchor)) errors.push(`${displayPath(filePath, docsRoot)}: broken local anchor '${match[1]}'`)
     }
     for (const match of content.matchAll(npmRunPattern)) {
       const scriptName = match[1]
@@ -59,7 +95,14 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     docsRoot: path.resolve(process.argv[2] ?? path.join(repositoryRoot, 'docs')),
     packageJsonPath: path.resolve(process.argv[3] ?? path.join(repositoryRoot, 'package.json')),
     additionalRoots: usesDefaultDocsRoot ? [path.join(repositoryRoot, 'skills')] : [],
-    additionalFiles: usesDefaultDocsRoot ? [path.join(repositoryRoot, 'README.md')] : [],
+    additionalFiles: usesDefaultDocsRoot
+      ? [
+          path.join(repositoryRoot, 'README.md'),
+          path.join(repositoryRoot, 'AGENTS.md'),
+          path.join(repositoryRoot, 'DISTRIBUTION-LICENSE.md'),
+          path.join(repositoryRoot, 'sidecar', 'tests', 'fixtures', 'README.md'),
+        ]
+      : [],
   })
   if (result.errors.length > 0) {
     console.error(`Documentation validation failed with ${result.errors.length} error(s):`)

@@ -1,7 +1,7 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
 import { validateDocumentation } from './validate_documentation.mjs'
 
 describe('documentation validation', () => {
@@ -29,6 +29,24 @@ describe('documentation validation', () => {
     expect(validateDocumentation({ docsRoot: path.join(tempDir, 'docs'), packageJsonPath: path.join(tempDir, 'package.json') }).errors).toEqual([
       "docs/index.md: broken local link 'missing.md'",
       "docs/index.md: undocumented npm script 'deploy' does not exist in package.json",
+    ])
+  })
+
+  it('checks heading anchors, including duplicate headings', () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'docs', 'index.md'),
+      '[First](architecture.md#section) [Second](architecture.md#section-1) [Bad](architecture.md#missing)',
+    )
+    fs.writeFileSync(path.join(tempDir, 'docs', 'architecture.md'), '# Section\n\n## Section\n')
+    expect(validateDocumentation({ docsRoot: path.join(tempDir, 'docs'), packageJsonPath: path.join(tempDir, 'package.json') }).errors).toEqual([
+      "docs/index.md: broken local anchor 'architecture.md#missing'",
+    ])
+  })
+
+  it('checks anchors within the same file', () => {
+    fs.writeFileSync(path.join(tempDir, 'docs', 'index.md'), '# Available\n\n[Good](#available) [Bad](#absent)')
+    expect(validateDocumentation({ docsRoot: path.join(tempDir, 'docs'), packageJsonPath: path.join(tempDir, 'package.json') }).errors).toEqual([
+      "docs/index.md: broken local anchor '#absent'",
     ])
   })
 

@@ -19,7 +19,12 @@ vi.mock('../application/sidecarAppService', () => ({
   },
 }))
 
+vi.mock('../application/sessionHistoryAppService', () => ({
+  sessionHistoryAppService: { indexPromptHistory: vi.fn().mockResolvedValue({ success: true }) },
+}))
+
 import { sidecarAppService } from '../application/sidecarAppService'
+import { sessionHistoryAppService } from '../application/sessionHistoryAppService'
 import { registerSidecarIpcHandlers } from './sidecarIpc'
 import { setTrustedIpcWindowProvider } from './secureIpcMain'
 
@@ -38,6 +43,19 @@ describe('sidecar IPC facade', () => {
     await expect(handlers.get('sidecar:restart')?.(trustedEvent)).resolves.toEqual({ success: true })
 
     expect(sidecarAppService.restartSidecar).toHaveBeenCalledOnce()
+  })
+
+  it('forwards validated prompt history to the session lifecycle service', async () => {
+    const payload = {
+      id: 'history-1',
+      sessionId: 'session-1',
+      workspacePath: 'D:/fixture',
+      prompt: 'Fixture prompt',
+      outcome: 'success',
+      startedAt: '2026-10-13T10:00:00Z',
+    }
+    await expect(handlers.get('history:index')?.(trustedEvent, payload)).resolves.toEqual({ success: true })
+    expect(sessionHistoryAppService.indexPromptHistory).toHaveBeenCalledWith(payload)
   })
 
   it('validates ingest payloads before forwarding normalized values', async () => {

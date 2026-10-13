@@ -31,7 +31,7 @@ export async function safeAtomicWrite(filePath: string, content: string | Buffer
     let failure: { error: unknown } | undefined
 
     try {
-      await fs.promises.writeFile(tempPath, content, 'utf-8')
+      await fs.promises.writeFile(tempPath, content, { encoding: 'utf-8', flush: true })
 
       let renamed = false
       let attempts = 0

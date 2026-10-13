@@ -4,6 +4,7 @@ import {
   isTerminatingScript,
   pickPrimaryVerification,
   resolveVerificationCommands,
+  resolvePackageManager,
   type WorkspaceManifest,
 } from './projectVerificationResolver'
 
@@ -17,6 +18,36 @@ function manifest(scripts: Record<string, string> | null, files: string[] = []):
 const primaryOf = (m: WorkspaceManifest) => pickPrimaryVerification(resolveVerificationCommands(m))
 
 describe('resolveVerificationCommands', () => {
+  it.each(['npm', 'pnpm', 'yarn'])('uses an explicit %s declaration for existing scripts', (manager) => {
+    const workspace = manifest({ test: 'node verify.cjs' })
+    workspace.packageJson!.packageManager = `${manager}@1.2.3`
+    expect(resolveVerificationCommands(workspace)[0].command).toBe(`${manager} run test`)
+  })
+
+  it.each([
+    ['package-lock.json', 'npm'],
+    ['npm-shrinkwrap.json', 'npm'],
+    ['pnpm-lock.yaml', 'pnpm'],
+    ['yarn.lock', 'yarn'],
+  ])('uses the unique %s manager fact', (lockfile, manager) => {
+    expect(resolveVerificationCommands(manifest({ build: 'node verify.cjs' }, [lockfile]))[0].command).toBe(`${manager} run build`)
+  })
+
+  it.each(['bun@1.2.3', 'pnpm; touch file', 'pnpm', 'yarn@latest', '', 42])('refuses unsupported or malformed manager declaration %s', (value) => {
+    const workspace = manifest({ test: 'node verify.cjs' })
+    workspace.packageJson!.packageManager = value
+    expect(resolvePackageManager(workspace)).toBeNull()
+    expect(resolveVerificationCommands(workspace)).toEqual([])
+  })
+
+  it('refuses conflicting facts but preserves a direct installed compiler fallback', () => {
+    const workspace = manifest({ test: 'node verify.cjs' }, ['pnpm-lock.yaml', 'yarn.lock', 'tsconfig.json', 'node_modules/typescript/bin/tsc'])
+    expect(resolvePackageManager(workspace)).toBeNull()
+    expect(resolveVerificationCommands(workspace).map((item) => item.command)).toEqual(['node node_modules/typescript/bin/tsc --noEmit'])
+    const contradictory = manifest({ test: 'node verify.cjs' }, ['package-lock.json'])
+    contradictory.packageJson!.packageManager = 'pnpm@1.2.3'
+    expect(resolveVerificationCommands(contradictory)).toEqual([])
+  })
   it('offers nothing for a workspace with no manifest and no tsconfig', () => {
     expect(resolveVerificationCommands(manifest(null))).toEqual([])
     expect(primaryOf(manifest(null))).toBeNull()

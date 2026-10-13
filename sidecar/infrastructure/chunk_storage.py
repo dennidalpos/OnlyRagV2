@@ -7,6 +7,14 @@ _SPACE_FIELDS = tuple(EmbeddingSpace.__dataclass_fields__)
 CHUNK_PROVENANCE_FIELDS = (*_SPACE_FIELDS, "embedding_space_id")
 
 
+def distinct_chunk_provenance(table: Any, doc_filter: str | None = None) -> list[dict]:
+    """Group every field so invalid metadata cannot hide behind a valid space ID."""
+    query = table.search().select(list(CHUNK_PROVENANCE_FIELDS))
+    if doc_filter:
+        query = query.where(doc_filter, prefilter=True)
+    return query.limit(None).to_arrow().group_by(list(CHUNK_PROVENANCE_FIELDS)).aggregate([]).to_pylist()
+
+
 def chunk_embedding_space(row: dict) -> EmbeddingSpace:
     try:
         space = EmbeddingSpace(**{key: row[key] for key in _SPACE_FIELDS})

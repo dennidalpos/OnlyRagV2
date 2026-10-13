@@ -2,7 +2,11 @@ import { describe, it, expect, afterEach } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import http from 'node:http'
 import { PersistentPowerShellSession } from './persistentPowerShellSession'
+import { withVerificationEnvironment } from './powerShellCommand'
+import { resolveVerificationCommands } from '../../domain/agent/projectVerificationResolver'
+import { readWorkspaceManifest } from '../filesystem/workspaceManifestReader'
 
 /** Cases that spawn a real powershell.exe: it exists only on Windows, so other hosts report them as skipped. */
 const itWithPowerShell = it.skipIf(process.platform !== 'win32')
@@ -29,6 +33,104 @@ describe('PersistentPowerShellSession Unit Tests', () => {
       session = null
     }
   })
+
+  itWithPowerShell('scopes verification download refusal and restores environment after failure', async () => {
+    session = new PersistentPowerShellSession(process.cwd())
+    await session.execute("$env:COREPACK_ENABLE_NETWORK = 'fixture-original'; $env:npm_config_pm_on_fail = $null")
+    const run = await session.execute(
+      withVerificationEnvironment("Write-Output $env:COREPACK_ENABLE_NETWORK; Write-Output $env:npm_config_pm_on_fail; node -e 'process.exit(7)'"),
+    )
+    expect(run.code).toBe(7)
+    expect(run.stdout).toContain('0')
+    expect(run.stdout).toContain('error')
+    const restored = await session.execute("Write-Output $env:COREPACK_ENABLE_NETWORK; Write-Output ('restored:' + ($null -eq $env:npm_config_pm_on_fail))")
+    expect(restored.stdout).toContain('fixture-original')
+    expect(restored.stdout).toContain('restored:True')
+    const unavailable = await session.execute(withVerificationEnvironment('onlyrag_fixture_missing_tool_20261013'))
+    expect(unavailable.code).not.toBe(0)
+    await session.execute("$env:PATH = ''")
+    const absentManager = await session.execute(withVerificationEnvironment('yarn run test'))
+    expect(absentManager.code).toBe(127)
+    expect(absentManager.stderr).toContain('VERIFICATION_TOOL_UNAVAILABLE:yarn')
+  })
+
+  itWithPowerShell(
+    'runs available native npm/pnpm scripts or refuses absent tools without acquisition',
+    async () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-native-manager-'))
+      let requests = 0
+      const server = http.createServer((_, response) => {
+        requests++
+        response.writeHead(500)
+        response.end('No fixture downloads are permitted')
+      })
+      try {
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+        const address = server.address()
+        if (!address || typeof address === 'string') throw new Error('Missing fixture listener')
+        session = new PersistentPowerShellSession(root)
+        await session.execute(`$env:npm_config_registry = 'http://127.0.0.1:${address.port}'`)
+        const checker =
+          "const fs=require('node:fs'); if(fs.readFileSync('input.txt','utf8')!=='fixture-original') throw new Error('Changed source'); console.log('SOURCE_READBACK_OK')"
+        fs.writeFileSync(path.join(root, 'verify.cjs'), checker)
+        fs.writeFileSync(path.join(root, 'input.txt'), 'fixture-original')
+        let testedPnpm = false
+        for (const manager of ['npm', 'pnpm']) {
+          const available = await session.execute(`Write-Output ([bool](Get-Command '${manager}' -CommandType Application -ErrorAction SilentlyContinue))`)
+          expect(available.code).toBe(0)
+          if (!available.stdout.includes('True')) {
+            const absent = await session.execute(withVerificationEnvironment(`${manager} run test`))
+            expect(absent.code).toBe(127)
+            expect(absent.stderr).toContain(`VERIFICATION_TOOL_UNAVAILABLE:${manager}`)
+            continue
+          }
+          const version = await session.execute(withVerificationEnvironment(`${manager} --version`), undefined, undefined, 10000)
+          expect(version.code).toBe(0)
+          const match = version.stdout.match(/\b\d+\.\d+\.\d+\b/)
+          if (!match) throw new Error(`No native ${manager} version`)
+          fs.writeFileSync(
+            path.join(root, 'package.json'),
+            JSON.stringify({
+              packageManager: `${manager}@${match[0]}`,
+              scripts: { test: 'node verify.cjs' },
+              ...(manager === 'pnpm' ? { dependencies: { semver: `file:${path.resolve('node_modules/semver').replace(/\\/g, '/')}` } } : {}),
+            }),
+          )
+          if (manager === 'pnpm') {
+            testedPnpm = true
+            // Native preparation uses the existing local semver package, with no network or app dependency change.
+            const prepared = await session.execute('pnpm --pm-on-fail=error --runtime-on-fail=error install --offline', undefined, undefined, 10000)
+            expect(prepared.code).toBe(0)
+          }
+          const commands = resolveVerificationCommands(readWorkspaceManifest(root))
+          expect(commands[0].command).toBe(`${manager} run test`)
+          const result = await session.execute(withVerificationEnvironment(commands[0].command), undefined, undefined, 10000)
+          expect(result.code, result.stdout + result.stderr).toBe(0)
+          expect(result.stdout).toContain('SOURCE_READBACK_OK')
+          fs.unlinkSync(path.join(root, 'package.json'))
+        }
+        if (testedPnpm) {
+          const retainedLock = fs.readFileSync(path.join(root, 'pnpm-lock.yaml'))
+          fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ packageManager: 'pnpm@0.0.0', scripts: { test: 'node verify.cjs' } }))
+          const refused = await session.execute(withVerificationEnvironment('pnpm run test'), undefined, undefined, 10000)
+          expect(refused.code).not.toBe(0)
+          expect(refused.stdout + refused.stderr).toMatch(/version|pnpm/i)
+          expect(fs.readFileSync(path.join(root, 'pnpm-lock.yaml'))).toEqual(retainedLock)
+        }
+        expect(requests).toBe(0)
+        expect(fs.readFileSync(path.join(root, 'input.txt'), 'utf8')).toBe('fixture-original')
+        expect(fs.readdirSync(root).sort()).toEqual(
+          testedPnpm ? ['input.txt', 'node_modules', 'package.json', 'pnpm-lock.yaml', 'verify.cjs'] : ['input.txt', 'verify.cjs'],
+        )
+      } finally {
+        await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+        session?.dispose()
+        session = null
+        await removeWhenReleased(root)
+      }
+    },
+    20000,
+  )
 
   itWithPowerShell('should execute basic PowerShell command and capture stdout', async () => {
     session = new PersistentPowerShellSession(process.cwd())

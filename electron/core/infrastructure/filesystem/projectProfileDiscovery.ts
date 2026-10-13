@@ -7,7 +7,7 @@ import {
   type ProjectProfileProject,
   type ProjectProfileToolchain,
 } from '../../domain/agent/projectProfileContract'
-import { resolveVerificationCommands } from '../../domain/agent/projectVerificationResolver'
+import { resolvePackageManager, resolveVerificationCommands } from '../../domain/agent/projectVerificationResolver'
 import { readWorkspaceManifest } from './workspaceManifestReader'
 
 const PROJECT_MANIFESTS = [
@@ -41,17 +41,11 @@ function detectToolchain(rootPath: string, manifestFiles: string[]): ProjectProf
 
   if (manifestFiles.includes('package.json')) {
     languages.add('javascript')
-    try {
-      const packageJson = JSON.parse(fs.readFileSync(path.join(rootPath, 'package.json'), 'utf-8')) as {
-        packageManager?: string
-        scripts?: Record<string, unknown>
-        dependencies?: Record<string, unknown>
-        devDependencies?: Record<string, unknown>
-      }
-      if (packageJson.packageManager?.startsWith('pnpm')) packageManagers.add('pnpm')
-      else if (fs.existsSync(path.join(rootPath, 'pnpm-lock.yaml'))) packageManagers.add('pnpm')
-      else if (fs.existsSync(path.join(rootPath, 'yarn.lock'))) packageManagers.add('yarn')
-      else packageManagers.add('npm')
+    const manifest = readWorkspaceManifest(rootPath)
+    const packageJson = manifest.packageJson
+    if (packageJson) {
+      const manager = resolvePackageManager(manifest)
+      if (manager) packageManagers.add(manager)
       for (const script of Object.keys(packageJson.scripts || {})) declaredScripts.add(script)
       const deps = { ...packageJson.dependencies, ...packageJson.devDependencies }
       if (deps.vitest || deps.jest || deps.mocha) testFrameworks.add(deps.vitest ? 'vitest' : deps.jest ? 'jest' : 'mocha')
@@ -61,8 +55,6 @@ function detectToolchain(rootPath: string, manifestFiles: string[]): ProjectProf
         languages.delete('javascript')
         languages.add('typescript')
       }
-    } catch {
-      packageManagers.add('npm')
     }
   }
   if (manifestFiles.includes('requirements.txt') || manifestFiles.includes('pyproject.toml')) languages.add('python')

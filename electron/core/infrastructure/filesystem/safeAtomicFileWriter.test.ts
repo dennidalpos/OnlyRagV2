@@ -13,9 +13,7 @@ describe('safeAtomicFileWriter Unit Tests', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-    try {
-      fs.rmSync(testDir, { recursive: true, force: true })
-    } catch {}
+    fs.rmSync(testDir, { recursive: true, force: true })
   })
 
   it('releases completed and failed paths without discarding a newer queued write', async () => {
@@ -56,6 +54,25 @@ describe('safeAtomicFileWriter Unit Tests', () => {
     await expect(safeAtomicWrite(target, 'replacement')).rejects.toMatchObject({ code: 'EIO' })
     expect(fs.readFileSync(target, 'utf8')).toBe('retained')
     expect(fs.readdirSync(testDir)).toEqual(['state.json'])
+  })
+
+  it('refuses replacement after a native staging flush failure and permits a fresh queued retry', async () => {
+    const target = path.join(testDir, 'state.json')
+    fs.writeFileSync(target, 'retained')
+    const handle = await fs.promises.open(target, 'r')
+    const handlePrototype = Object.getPrototypeOf(handle) as typeof handle
+    await handle.close()
+    const sync = vi.spyOn(handlePrototype, 'sync').mockRejectedValueOnce(Object.assign(new Error('Controlled flush refusal'), { code: 'EIO' }))
+    const rename = vi.spyOn(fs.promises, 'rename')
+    await expect(safeAtomicWrite(target, 'replacement')).rejects.toMatchObject({ code: 'EIO' })
+    expect(sync).toHaveBeenCalledTimes(1)
+    expect(rename).not.toHaveBeenCalled()
+    expect(fs.readFileSync(target, 'utf8')).toBe('retained')
+    expect(pendingAtomicWritePathCount()).toBe(0)
+    expect(fs.readdirSync(testDir)).toEqual(['state.json'])
+    await expect(safeAtomicWrite(target, 'retried')).resolves.toBe(true)
+    expect(sync).toHaveBeenCalledTimes(2)
+    expect(fs.readFileSync(target, 'utf8')).toBe('retried')
   })
 
   it('keeps bounded lock retries and commits after a transient refusal', async () => {

@@ -9,6 +9,7 @@ import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer
 import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import { WEB_UI_SMOKE_VERIFICATION } from '../domain/agent/milestoneVerificationPromotion'
 import { verifyWebUi } from '../infrastructure/process/webUiSmokeVerifier'
+import { withVerificationEnvironment } from '../infrastructure/process/powerShellCommand'
 
 /** Long enough for a cold `npm run build` on a small project, short enough to not hang a turn. */
 const VERIFICATION_TIMEOUT_MS = 180_000
@@ -103,8 +104,17 @@ export async function runProjectVerification(
     }
 
     const shell = agentToolExecutorService.getOrCreateShellSession(verification.projectRootPath)
-    const res = await shell.execute(security.sanitizedCommand, (chunk) => onOutput?.(chunk.trim()), undefined, VERIFICATION_TIMEOUT_MS, signal)
+    const command = /^(npm|pnpm|yarn) run /.test(security.sanitizedCommand) ? withVerificationEnvironment(security.sanitizedCommand) : security.sanitizedCommand
+    const res = await shell.execute(command, (chunk) => onOutput?.(chunk.trim()), undefined, VERIFICATION_TIMEOUT_MS, signal)
     if (signal?.aborted) return interrupted
+    if (res.code === 127 && res.stderr.includes('VERIFICATION_TOOL_UNAVAILABLE:')) {
+      return {
+        ...interrupted,
+        command: verificationLabel,
+        failureDetail: `Verification tool is unavailable for project ${verification.projectRelativePath}. ${res.stderr}`,
+        evidenceLevel,
+      }
+    }
     if (res.code !== 0 || res.timedOut) {
       const result: VerificationRunResult = {
         hasVerificationCommand: true,

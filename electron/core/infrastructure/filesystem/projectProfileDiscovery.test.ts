@@ -16,6 +16,19 @@ describe('project profile discovery', () => {
     expect(discoverProjectProfile(root)).toMatchObject({ classification: 'empty', projects: [] })
   })
 
+  it.each(['npm', 'pnpm', 'yarn'])('keeps declared %s discovery and commands consistent', (manager) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-manager-'))
+    roots.push(root)
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ packageManager: `${manager}@1.2.3`, scripts: { test: 'node verify.cjs' } }))
+    const project = discoverProjectProfile(root).projects[0]
+    expect(project.toolchain.packageManagers).toEqual([manager])
+    expect(project.verificationCommands[0].command).toBe(`${manager} run test`)
+    fs.writeFileSync(path.join(root, manager === 'npm' ? 'yarn.lock' : 'package-lock.json'), '')
+    const refused = discoverProjectProfile(root).projects[0]
+    expect(refused.toolchain.packageManagers).toEqual([])
+    expect(refused.verificationCommands).toEqual([])
+  })
+
   it('keeps a workspace without any manifest classified as empty', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-no-manifest-'))
     roots.push(root)

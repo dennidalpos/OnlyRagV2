@@ -51,7 +51,7 @@ def main():
     (probe / 'ocr-output.txt').write_text(output, encoding='utf-8')
     if output.strip() != 'ONLYRAG CPU 12345' or ocr._rapidocr_cuda_available():
         raise RuntimeError(f'CPU OCR fixture failed: {output!r}')
-    report = {'scope': 'Real CPU source OCR; frozen Sidecar startup/auth/PDF export. No Ollama calls. Not full restarted-desktop/RAG or arbitrary OCR qualification.',
+    report = {'scope': 'Real CPU source and frozen OCR; frozen startup/auth/PDF export and fallback retrieval. No real model calls. Not full restarted-desktop or arbitrary OCR/model qualification.',
               'sourceProviders': onnxruntime.get_available_providers(), 'ocrInputSha256': sha256(image_path), 'ocrOutput': output}
 
     with socket.socket() as guard:
@@ -109,6 +109,30 @@ def main():
             report['frozenSidecarSha256'] = sha256(executable)
             if 'ONLYRAG CPU 12345' not in text or '日本語' not in text:
                 raise RuntimeError(f'Frozen Unicode PDF export failed: {text!r}')
+            original_image_hash = sha256(image_path)
+            request = urllib.request.Request('http://127.0.0.1:8000/ingest-path-stream', data=json.dumps({
+                'file_path': str(image_path), 'normalize_with_llm': False,
+                'embedding_model': 'nomic-embed-text', 'task_id': f'cpu-ocr-{uuid.uuid4().hex}',
+            }).encode('utf-8'), headers={'Content-Type': 'application/json', 'X-OnlyRag-Token': token})
+            with urllib.request.urlopen(request, timeout=90) as response:
+                events = [json.loads(line) for line in response if line.strip()]
+            done = [event for event in events if event['type'] == 'done']
+            if len(done) != 1 or any(event['type'] == 'error' for event in events):
+                raise RuntimeError('Frozen OCR ingestion did not finish; inspect retained events.')
+            record = done[0]['data']
+            if ('ONLYRAG CPU 12345' not in record['extracted_markdown'] or not record['used_fallback_embeddings']
+                    or sha256(image_path) != original_image_hash):
+                raise RuntimeError('Frozen OCR/readback or declared fallback/original preservation failed.')
+            report['frozenOcrEvents'] = events
+            report['frozenOcrText'] = record['extracted_markdown']
+            request = urllib.request.Request('http://127.0.0.1:8000/vector/search', data=json.dumps({
+                'query': 'ONLYRAG CPU 12345', 'doc_id': record['id'], 'top_k': 1,
+            }).encode('utf-8'), headers={'Content-Type': 'application/json', 'X-OnlyRag-Token': token})
+            with urllib.request.urlopen(request, timeout=20) as response:
+                retrieved = json.load(response)
+            if len(retrieved) != 1 or retrieved[0]['doc_id'] != record['id'] or 'ONLYRAG CPU 12345' not in retrieved[0]['text']:
+                raise RuntimeError('Frozen native fallback/lexical retrieval missed its OCR fixture.')
+            report['frozenRetrieval'] = retrieved
         except Exception as error:
             report.update(status='failed', error=str(error))
             (probe / 'result.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
@@ -119,7 +143,7 @@ def main():
                 child.wait(timeout=10)
     report['status'] = 'passed'
     (probe / 'result.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-    print(f'PASS: real CPU OCR, owned frozen startup/auth and Unicode PDF export; evidence {probe}')
+    print(f'PASS: real source/frozen CPU OCR, owned startup/auth, Unicode PDF and native fallback retrieval; evidence {probe}')
 
 
 if __name__ == '__main__':

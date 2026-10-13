@@ -1,7 +1,8 @@
 from typing import Any, Dict, List, Optional
 from sidecar.config import CHUNKS_TABLE_NAME, DOCS_TABLE_NAME, logger
 from sidecar.schemas import SearchRequest, SearchResult
-from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, database_operation, delete_document_records, CHUNK_PROVENANCE_FIELDS, chunk_embedding_space, require_versioned_chunk_table
+from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, database_operation, delete_document_records
+from sidecar.infrastructure.chunk_storage import chunk_embedding_space, distinct_chunk_provenance, require_versioned_chunk_table
 from sidecar.infrastructure.embeddings import (
     generate_embedding_batch,
     EmbeddingSpaceMismatchError,
@@ -38,10 +39,7 @@ def _sql_literal(value: str) -> str:
 def _stored_embedding_spaces(ctbl: Any, doc_filter: Optional[str]) -> list:
     """Do not assign a current digest or policy retroactively to old rows."""
     dimension = require_versioned_chunk_table(ctbl)
-    query = ctbl.search().select(list(CHUNK_PROVENANCE_FIELDS))
-    if doc_filter:
-        query = query.where(doc_filter, prefilter=True)
-    rows = query.limit(None).to_list()
+    rows = distinct_chunk_provenance(ctbl, doc_filter)
     spaces = {}
     for row in rows:
         space = chunk_embedding_space(row)

@@ -9,7 +9,7 @@ import pyarrow as pa
 from typing import List, Optional, Any, Dict
 from sidecar.config import DATA_DIR, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
 from sidecar.infrastructure.embeddings import EmbeddingSpaceMismatchError, validate_embedding_vectors
-from sidecar.infrastructure.chunk_storage import CHUNK_PROVENANCE_FIELDS, chunk_embedding_space, chunk_schema, require_versioned_chunk_table
+from sidecar.infrastructure.chunk_storage import chunk_embedding_space, chunk_schema, distinct_chunk_provenance, require_versioned_chunk_table
 from sidecar.infrastructure.document_recovery import DocumentRecovery, restore_document
 from sidecar.infrastructure.store_control import StoreLease, active_store, atomic_json, list_store_tables, read_json, safe_path
 from sidecar import config
@@ -147,7 +147,7 @@ def append_records(
                 stored_dimension = require_versioned_chunk_table(stored_table)
                 if stored_dimension != dimension:
                     raise EmbeddingSpaceMismatchError(f"Index dimension is {stored_dimension}, encoder dimension is {dimension}; explicitly rebuild with verified backup/readback/rollback before changing encoder.")
-                stored_rows = stored_table.search().select(list(CHUNK_PROVENANCE_FIELDS)).limit(None).to_list()
+                stored_rows = distinct_chunk_provenance(stored_table)
                 incoming_policies = {space.embedding_model.partition(":")[0]: space.embedding_preparation for space in spaces}
                 for row in stored_rows:
                     stored_space = chunk_embedding_space(row)

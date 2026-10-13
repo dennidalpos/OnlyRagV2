@@ -1,7 +1,14 @@
+import { valid as validVersion } from 'semver'
+
 /** Workspace manifest probe interface. */
 export interface WorkspaceManifest {
   /** Parsed package.json, or null when absent/unparseable. */
-  packageJson: { scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> } | null
+  packageJson: {
+    packageManager?: unknown
+    scripts?: Record<string, string>
+    dependencies?: Record<string, string>
+    devDependencies?: Record<string, string>
+  } | null
   /** Relative paths that exist in the workspace root. */
   hasFile: (relativePath: string) => boolean
 }
@@ -37,6 +44,24 @@ const TERMINATING_SUBCOMMANDS = new Set(['build', 'generate', 'export'])
 /** Whole-project typecheck CLIs. */
 const WHOLE_PROJECT_CHECKERS = /(^|[\s&|;/\\])(tsc|vue-tsc|svelte-check|astro\s+check)([\s&|;]|$)/
 
+/** Ambiguous manager facts cannot authorize a guessed script runner. */
+export function resolvePackageManager(manifest: WorkspaceManifest): 'npm' | 'pnpm' | 'yarn' | null {
+  const locks = new Set<'npm' | 'pnpm' | 'yarn'>()
+  if (manifest.hasFile('package-lock.json') || manifest.hasFile('npm-shrinkwrap.json')) locks.add('npm')
+  if (manifest.hasFile('pnpm-lock.yaml')) locks.add('pnpm')
+  if (manifest.hasFile('yarn.lock')) locks.add('yarn')
+  if (locks.size > 1) return null
+  const declared = manifest.packageJson?.packageManager
+  if (declared !== undefined) {
+    if (typeof declared !== 'string') return null
+    const match = /^(npm|pnpm|yarn)@(.+)$/.exec(declared)
+    if (!match || !validVersion(match[2])) return null
+    const manager = match[1] as 'npm' | 'pnpm' | 'yarn'
+    return locks.size && !locks.has(manager) ? null : manager
+  }
+  return locks.values().next().value ?? 'npm'
+}
+
 /** Evaluates verification coverage of a script. */
 export function coverageOfScript(kind: VerificationKind, scriptBody: string): VerificationCoverage {
   if (kind === 'test') return 'entry-reachable'
@@ -69,15 +94,17 @@ export function isTerminatingScript(scriptBody: string): boolean {
 export function resolveVerificationCommands(manifest: WorkspaceManifest): VerificationCommand[] {
   const commands: VerificationCommand[] = []
   const scripts = manifest.packageJson?.scripts ?? {}
+  const manager = resolvePackageManager(manifest)
 
   for (const kind of ['build', 'typecheck', 'test', 'lint'] as VerificationKind[]) {
     for (const name of SCRIPT_CANDIDATES[kind]) {
+      if (!manager) break
       const body = scripts[name]
       if (typeof body !== 'string' || !body.trim()) continue
       if (!isTerminatingScript(body)) continue
       commands.push({
         kind,
-        command: `npm run ${name}`,
+        command: `${manager} run ${name}`,
         coverage: coverageOfScript(kind, body),
         source: `package.json script "${name}"`,
       })

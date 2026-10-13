@@ -99,6 +99,16 @@ describe('project verification dependency evidence', () => {
     expect(result).toMatchObject({ status: 'verified', passed: true, verifiedCommands: ['npm run test'] })
   })
 
+  it('does not certify an absent declared package manager or fall back to npm', async () => {
+    write('package.json', JSON.stringify({ name: 'fixture', packageManager: 'yarn@4.0.0', scripts: { test: 'node verify.cjs' } }))
+    execute.mockResolvedValue({ code: 127, stdout: '', stderr: 'VERIFICATION_TOOL_UNAVAILABLE:yarn' })
+    const result = await runProjectVerification(root, undefined, undefined, true)
+    expect(result.status).toBe('unverifiable')
+    expect(result.command).toContain('yarn run test')
+    expect(verifyWebUi).not.toHaveBeenCalled()
+    expect(execute.mock.calls[0][0]).toContain('COREPACK_ENABLE_NETWORK')
+  })
+
   it('does not certify a discovered project without a terminating verification command', async () => {
     nodeProject()
     write('server/requirements.txt', 'pytest\n')

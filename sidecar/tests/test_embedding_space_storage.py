@@ -105,6 +105,21 @@ def test_malformed_stored_provenance_never_reaches_vector_comparison(tmp_path, m
         search_service.perform_vector_search(SearchRequest(query="Alpha"))
 
 
+@pytest.mark.parametrize("field,value", [("embedding_model_digest", "b" * 64), ("embedding_dimension", 768)])
+def test_shared_space_id_does_not_hide_corrupt_metadata_in_another_document(tmp_path, monkeypatch, field, value):
+    space = encoder_fixture(monkeypatch)
+    first = ingest(tmp_path, "a.md", "Alpha original")
+    second = ingest(tmp_path, "b.md", "Beta original")
+    table = db.lance_db.open_table("chunks")
+    table.update(where=f"doc_id = '{second['id']}'", values={field: value})
+    assert search_service._stored_embedding_spaces(table, f"doc_id = '{first['id']}'") == [space]
+    def forbidden(*args, **kwargs):
+        raise AssertionError("query encoder must not be called")
+    monkeypatch.setattr(search_service, "generate_embedding_batch", forbidden)
+    with pytest.raises(EmbeddingSpaceMismatchError, match="malformed"):
+        search_service.perform_vector_search(SearchRequest(query="Alpha"))
+
+
 @pytest.mark.parametrize("replacement", [False, True])
 def test_preparation_change_requires_rebuild_and_preserves_original_records(tmp_path, monkeypatch, replacement):
     encoder_fixture(monkeypatch, preparation="raw-v1")

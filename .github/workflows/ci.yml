@@ -49,6 +49,20 @@ jobs:
           node scripts/e2e/buildDownloadCachePolicy.mjs
           if ($LASTEXITCODE -ne 0) { throw "Build download cache policy failed with exit code $LASTEXITCODE." }
 
+      - name: Verify Dependency Formatter Exposure (Fail-Fast)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          node scripts/e2e/dependencySprintfExposure.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Dependency formatter exposure failed with exit code $LASTEXITCODE." }
+
+      - name: Verify Native State Writer Interruption (Fail-Fast)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          node scripts/e2e/stateWriterCrashDurability.mjs
+          if ($LASTEXITCODE -ne 0) { throw "State writer interruption failed with exit code $LASTEXITCODE." }
+
       - name: Run Static Quality Gate (Fail-Fast)
         shell: pwsh
         run: |

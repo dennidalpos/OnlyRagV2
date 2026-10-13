@@ -499,7 +499,7 @@ def extract_tabular_document(
         if not allow_full_excel_format and xls_size > XLS_MAX_SOURCE_BYTES:
             raise ValueError("XLS source exceeds the 8 MiB parser limit; export as XLSX or CSV.")
         excel_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
-        with pd.ExcelFile(excel_source, engine="xlrd", engine_kwargs={"on_demand": True}) as xls:
+        with pd.ExcelFile(excel_source, engine="xlrd", engine_kwargs={"on_demand": True, "ragged_rows": True}) as xls:
             sheets_output = []
             skipped_sheets = 0
             total_sheets_count = len(xls.sheet_names)

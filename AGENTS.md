@@ -1,12 +1,12 @@
 # Repository Instructions
 
-`v1.6 · 2026-10-13` — Save as `AGENTS.md` in repository root. Fill project placeholders. Link to modular docs instead of duplicating them.
+`v1.6 · 2026-10-14` — Repository instructions. Link to modular docs instead of duplicating them.
 
 ## 1. Stack & Environment
-- Purpose: [Descrizione breve scopo e target]
+- Purpose: App desktop locale per documenti, ricerca RAG, traduzione e Coding Agent.
 - Mode: Greenfield (non in produzione salvo specifica contraria)
-- Target: Web Responsive (Desktop 1080p, Tablet, Smartphone), [API/CLI]
-- Stack & Tools: [Linguaggio, Framework, Package Manager, Test/Build Tools]
+- Target: Electron Windows con renderer responsive (Desktop 1080p, Tablet, Smartphone), Sidecar REST locale e CLI di manutenzione.
+- Stack & Tools: TypeScript, React, Vite, Electron, Python/FastAPI, npm, Vitest, pytest e PowerShell.
 - Riferimenti:
   * Central Second Brain: `D:\GITHUB\SecondBrain` (tech radar, playbooks e gotchas cross-progetto)
   * Local Memory: `memory.md` (decisioni architetturali persistenti e gotchas di questo repo)
@@ -34,10 +34,10 @@
 ## 4. Commands
 | Task | Command | Shell / Cwd | Note |
 |---|---|---|---|
-| Install | `npm install` | bash / root | Setup pulito dipendenze |
-| Dev | `npm run dev` | bash / root | Server di sviluppo locale |
-| Targeted checks | `npm test -- -t "target"` | bash / root | Test rapidi mirati all'ambito modificato |
-| Full checks | `npm run test && npm run build` | bash / root | Gate pre-commit/push (test completi + build) |
+| Install | `npm install` | PowerShell / root | Setup pulito dipendenze |
+| Dev | `npm run dev` | PowerShell / root | Server di sviluppo locale |
+| Targeted checks | `npx vitest run <percorso>` | PowerShell / root | Test rapidi mirati all'ambito modificato |
+| Full checks | `npm run test && npm run build` | PowerShell / root | Gate pre-commit/push (test completi + build) |
 
 ## 5. Boundaries & Gotchas
 - Documentazione: File modulari per ambito in `docs/`; vietati file monolitici.

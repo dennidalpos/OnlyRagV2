@@ -10,6 +10,9 @@ const entry = fileURLToPath(import.meta.url)
 const root = path.resolve(path.dirname(entry), '../..')
 const require = createRequire(path.join(root, 'package.json'))
 const depcheckRequire = createRequire(require.resolve('depcheck'))
+const electronBuilderRequire = createRequire(require.resolve('electron-builder/package.json'))
+const builderDependency = Object.keys(electronBuilderRequire('./package.json').dependencies).find((name) => name === 'app-builder-lib')
+assert(builderDependency, 'electron-builder must declare app-builder-lib')
 const precision = '%.101f'
 
 if (process.argv[2] === 'scanner') {
@@ -33,7 +36,7 @@ if (process.argv[2] === 'scanner') {
   }
 } else if (process.argv[2] === 'proxy') {
   // Only this child instruments the installed formatter; production modules remain untouched.
-  const builderRequire = createRequire(require.resolve('app-builder-lib'))
+  const builderRequire = createRequire(electronBuilderRequire.resolve(builderDependency))
   const getRequire = createRequire(builderRequire.resolve('@electron/get'))
   const agentRequire = createRequire(getRequire.resolve('global-agent'))
   const formatter = agentRequire('sprintf-js')

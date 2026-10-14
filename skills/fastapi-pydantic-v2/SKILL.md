@@ -1,12 +1,14 @@
 ---
 name: fastapi-pydantic-v2
-description: Sidecar endpoint and schema rules for OnlyRag V2.
+description: Change OnlyRag Sidecar REST routes or Pydantic request and response schemas, including streaming ingestion, translation, search, and cancellation.
+triggers: ["sidecar api", "fastapi", "pydantic", "api-rest", "sidecar/main.py", "sidecar/schemas.py"]
+tags: ["rest contract", "sidecar"]
 ---
 
-# FastAPI Sidecar
+# Sidecar REST contracts
 
-- Define routes in `sidecar/main.py` and request/response models in `sidecar/schemas.py`.
-- Keep handlers thin and move blocking CPU or filesystem work to `asyncio.to_thread`.
-- Return typed responses and `HTTPException` for expected client errors; do not leak traces or local paths.
-- Close documents and files on every outcome.
-- Regenerate OpenAPI with `npm run generate:openapi` after a REST contract change and verify with `npm run test:sidecar`.
+- Edit routes in `sidecar/main.py` and strict request/response models in `sidecar/schemas.py`; update Main's client in `electron/core/infrastructure/http/sidecarHttpClient.ts` when the wire contract changes.
+- Preserve the launch-token middleware for non-health requests and the configured CORS origin boundary. Validate inputs before filesystem or database work.
+- Use `asyncio.to_thread` for blocking handlers. Keep synchronous streaming generators off the event loop and preserve their NDJSON `progress`, `done`, `error` and `cancelled` outcomes.
+- Return expected client failures as `HTTPException`; do not expose traces or local paths from unhandled errors. Close opened documents on every outcome.
+- After a contract change, run `npm run generate:openapi`, targeted pytest, and `npm run docs:check`.

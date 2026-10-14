@@ -5,11 +5,13 @@
 
 # Decisions & Trade-offs
 
+- Repository skill files are workspace-local development guidance, not default skills for unrelated user projects. Keep `skills/*/SKILL.md` scoped by precise `description`, `triggers` and `tags`; the runtime matcher uses these fields and defaults to three active skills per task.
 - Greenfield cleanup may remove obsolete code, but retained live-campaign evidence, original documents, personal stores and migration backups are protected until their separate acceptance or disposal decision.
 - The tracker contains only open work. Dated verification and audit documents retain historical results.
 
 # Lessons Learned & Gotchas
 
+- The generic Codex skill validator rejects OnlyRag's supported `triggers` and `tags` frontmatter. Validate repository skills against `skillRepository.ts` and the runtime matcher instead of removing those fields.
 - Il log audit Coding Agent usa un solo interruttore per payload completi; redige credenziali ma conserva percorsi ed errori utili. Il log operativo generale resta più restrittivo.
 - Nel Coding Agent, `sourceLines` dell'inventario usa le righe originali non vuote della richiesta; un riferimento invalido ammette una sola riprova con errore esplicito, mai una correzione automatica dei numeri.
 - Per installer esterni senza digest o firma verificabile prima dell'esecuzione, aprire la pagina ufficiale costante nel browser; distinguere apertura, installazione e disponibilità del servizio.

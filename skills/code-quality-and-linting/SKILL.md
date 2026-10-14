@@ -1,16 +1,15 @@
 ---
 name: code-quality-and-linting
-description: Verified local quality commands for OnlyRag V2.
+description: Choose OnlyRag verification commands when changing TypeScript, Python, IPC contracts, documentation, or release-bound code.
+triggers: ["typecheck", "quality:static", "test:sidecar", "test:skills", "docs:check", "full checks"]
+tags: ["verification", "lint", "build"]
 ---
 
-# Quality checks
+# Verification commands
 
-- Start with the smallest relevant check; do not hide pre-existing failures.
-- `npm run test:fast` runs the Vitest suite.
-- `npm run test:sidecar` checks the Python Sidecar.
-- `npm run typecheck` checks TypeScript; `npm run quality:static` checks Biome formatting/lint plus IPC and layering rules.
-- `npm run audit:cycles` checks dependency cycles; `npm run audit:deadcode` runs Knip.
-- `npm run docs:check` validates local Markdown links, heading anchors and documented npm scripts.
-- `npm run format:check` runs `git diff --check HEAD` on the current diff.
-
-Commands and packaging/cleanup details are maintained in `docs/operations.md`.
+- Run targeted TypeScript tests with `npx vitest run <path>` and Python tests with `.venv\Scripts\python.exe -m pytest -q <path>`.
+- Run `npm run typecheck` for TypeScript contracts and `npm run quality:static` for Biome, IPC registration and layering. `npm run test:skills` targets skill-domain tests.
+- Run `npm run test:sidecar` for the Python Sidecar suite and optional health probe; `npm run generate:openapi` after REST contract changes.
+- Run `npm run docs:check` for local Markdown links, anchors and npm script names. `npm run format:check` checks the diff with `git diff --check HEAD`.
+- Use `npm run audit:cycles` for dependency cycles and `npm run audit:deadcode` for Knip when relevant.
+- Before commit or push, run the repository gate `npm run test && npm run build`; report any failing command and keep its exit code visible.

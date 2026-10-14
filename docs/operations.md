@@ -18,6 +18,10 @@ Eseguire i comandi da PowerShell nella radice del repository. Le versioni dichia
 
 La CI Windows in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) installa il runtime Electron anche con `node node_modules/electron/install.js`. Test e build non qualificano modelli, semantica, profili personali o perdita di alimentazione.
 
+## Installazione manuale di Ollama
+
+Il comando **Avvia / Installa Ollama** tenta di avviare `ollama.exe` locale. Se non parte, apre nel browser la [pagina ufficiale per Windows](https://ollama.com/download/windows). L'app non scarica né esegue l'installer: il browser gestisce redirect e download, e l'utente completa l'installazione. L'esito IPC distingue l'avvio del processo dall'apertura della pagina; nessuno dei due certifica che il server sia online. Ripetere la diagnostica dopo l'installazione. L'apertura usa l'[API `shell.openExternal` di Electron](https://www.electronjs.org/docs/latest/api/shell/) con URL costante, secondo le [indicazioni di sicurezza di Electron](https://www.electronjs.org/docs/latest/tutorial/security/#15-do-not-use-shellexternal-with-untrusted-content).
+
 ## Offline embedding store maintenance — 2026-10-10
 
 [`scripts/rebuild_embeddings.py`](../scripts/rebuild_embeddings.py) espone `preview`, `prepare`, `activate` e `rollback`, sempre con `--root` esplicito. `prepare` richiede un encoder nativo selezionato, conserva backup, originali e candidato; `activate` cambia il puntatore versionato solo dopo readback. Operazioni fallite mantengono gli artefatti e restituiscono errore. Chiudere l'app prima della manutenzione, soprattutto per runtime precedenti che non condividono il lease. Nessun esempio di comando autorizza un rebuild personale. Contratto e limiti in [`retrieval.md`](./retrieval.md); prova datata in [`verification.md`](./verification.md#offline-embedding-store-rebuild--2026-10-10).

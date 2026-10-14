@@ -11,7 +11,6 @@ const settings: AppSettings = {
   capabilityPolicyMode: 'network-approved',
   ollamaHost: 'http://127.0.0.1:11434',
   enableCodingAgentDebugLog: false,
-  includeCodingAgentDebugPayloads: true,
 }
 
 describe('CodingAgentDebugToggle', () => {
@@ -29,7 +28,7 @@ describe('CodingAgentDebugToggle', () => {
     container.remove()
   })
 
-  it('hides the saved payload preference while logging is off and restores it when enabled', async () => {
+  it('uses one switch for complete debug logging', async () => {
     const onUpdateSettings = vi.fn()
     const renderControls = async (current: AppSettings) =>
       act(async () =>
@@ -47,10 +46,8 @@ describe('CodingAgentDebugToggle', () => {
 
     await renderControls({ ...settings, enableCodingAgentDebugLog: true })
     const switches = container.querySelectorAll('[role="switch"]')
-    expect(switches).toHaveLength(2)
-    expect(switches[1].getAttribute('aria-checked')).toBe('true')
-    expect(container.textContent).toContain('Solo log audit Coding Agent e bundle diagnostici')
-    await act(async () => (switches[1] as HTMLButtonElement).click())
-    expect(onUpdateSettings).toHaveBeenCalledWith({ includeCodingAgentDebugPayloads: false })
+    expect(switches).toHaveLength(1)
+    expect(switches[0].getAttribute('aria-checked')).toBe('true')
+    expect(container.textContent).toContain('prompt, sorgenti e risposte')
   })
 })

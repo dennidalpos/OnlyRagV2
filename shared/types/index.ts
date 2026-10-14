@@ -305,8 +305,6 @@ export interface AppSettings {
   customPromptOverrides?: Record<string, string>
   maxToolCallSteps?: number
   enableCodingAgentDebugLog?: boolean
-  /** Opt-in for full prompts, snippets and tool payloads in audit log. */
-  includeCodingAgentDebugPayloads?: boolean
   /** Audit log generations retained on disk. */
   codingAgentDebugRetentionFiles?: number
   /** Per-model thinking preference: on/off, or a reasoning level the model reports in /api/show. */

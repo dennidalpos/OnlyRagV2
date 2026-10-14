@@ -529,7 +529,6 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                             settings={settings}
                             metrics={modelMetrics[modelName]}
                             hardwareDefault={hardwareDefault}
-                            diagnostics={diagnostics}
                             onUpdateSettings={onUpdateSettings}
                           />
 

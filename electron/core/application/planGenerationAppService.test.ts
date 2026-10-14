@@ -199,6 +199,63 @@ describe('PlanGenerationAppService', () => {
     expect(ollamaAppService.generateStructured).not.toHaveBeenCalled()
   })
 
+  it('audits request extraction when the single debug switch is enabled', async () => {
+    const ledger = {
+      request: 'Add login',
+      obligations: [
+        { id: 'r1', sourceLines: [1], requirement: 'Add login', subject: 'login', scope: 'global', targets: [], closedInventory: false, conditions: [] },
+      ],
+    }
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({ status: 'complete', content: JSON.stringify(ledger) })
+    const start = vi.spyOn(codingAgentLogger, 'logSessionStart').mockImplementation(() => {})
+    const step = vi.spyOn(codingAgentLogger, 'logPlanningStep').mockImplementation(() => {})
+    const end = vi.spyOn(codingAgentLogger, 'logSessionEnd').mockImplementation(() => {})
+    try {
+      const result = await planGenerationAppService.generatePlanText({
+        prompt: 'Add login',
+        operationId: 'debug-scope',
+        settings: { ...settings, enableCodingAgentDebugLog: true },
+      })
+      expect(result.status).toBe('scope_confirmation_required')
+      expect(start).toHaveBeenCalledWith('debug-scope', 'Add login', 'guided', settings.codingModel, undefined, true)
+      expect(step.mock.calls.map(([, phase]) => phase)).toEqual([
+        'RUNTIME',
+        'PROJECT DISCOVERY',
+        'REQUEST LEDGER CALL 1',
+        'REQUEST LEDGER RESPONSE 1',
+        'REQUEST LEDGER VALIDATION 1',
+        'REQUEST LEDGER READY',
+      ])
+      expect(end).toHaveBeenCalledWith('debug-scope', 0, true, 'Request ledger ready for confirmation.')
+    } finally {
+      start.mockRestore()
+      step.mockRestore()
+      end.mockRestore()
+    }
+  })
+
+  it('closes the debug audit when model metadata fails before extraction', async () => {
+    vi.mocked(ollamaAppService.getModelContextLength).mockRejectedValueOnce(new Error('Model metadata unavailable'))
+    const start = vi.spyOn(codingAgentLogger, 'logSessionStart').mockImplementation(() => {})
+    const step = vi.spyOn(codingAgentLogger, 'logPlanningStep').mockImplementation(() => {})
+    const end = vi.spyOn(codingAgentLogger, 'logSessionEnd').mockImplementation(() => {})
+    try {
+      const result = await planGenerationAppService.generatePlanText({
+        prompt: 'Add login',
+        operationId: 'debug-metadata',
+        settings: { ...settings, enableCodingAgentDebugLog: true },
+      })
+      expect(result).toMatchObject({ status: 'error', error: 'Model metadata unavailable' })
+      expect(start).toHaveBeenCalledOnce()
+      expect(step).toHaveBeenCalledWith('debug-metadata', 'ERROR', 'Model metadata unavailable')
+      expect(end).toHaveBeenCalledWith('debug-metadata', 0, false, 'Model metadata unavailable')
+    } finally {
+      start.mockRestore()
+      step.mockRestore()
+      end.mockRestore()
+    }
+  })
+
   it('retains an incomplete request extraction as an error with no automatic candidate or extraction retry', async () => {
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
       status: 'transport_error',
@@ -739,6 +796,7 @@ describe('PlanGenerationAppService', () => {
       [],
       ['Storage: local'],
       expect.arrayContaining([expect.objectContaining({ sourceInterventionId: 'm-2' })]),
+      undefined,
     )
   })
 

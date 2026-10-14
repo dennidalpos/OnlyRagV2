@@ -3,13 +3,13 @@ import type { OllamaGenerationOptions } from '../../../shared/types'
 import { ollamaHttpClient, type OllamaModelMetrics, type OllamaStructuredRequest, type OllamaStructuredResponse } from '../infrastructure/http/ollamaHttpClient'
 import { normalizeOllamaHost } from '../../../shared/domain/ollamaHost'
 export type { OllamaModelMetrics, OllamaStructuredRequest, OllamaStructuredResponse }
-import { ollamaInstallerRepository } from '../infrastructure/process/ollamaInstallerRepository'
+import { ollamaInstallerRepository, type OllamaInstallOrLaunchResult } from '../infrastructure/process/ollamaInstallerRepository'
 import { ollamaModelUpdateAppService, type ModelUpdateCheckResult } from './ollamaModelUpdateAppService'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 export type { ModelUpdateCheckResult }
 
 export class OllamaAppService {
-  installOrLaunchOllama(): Promise<{ success: boolean; message?: string; error?: string }> {
+  installOrLaunchOllama(): Promise<OllamaInstallOrLaunchResult> {
     return ollamaInstallerRepository.installOrLaunch()
   }
 

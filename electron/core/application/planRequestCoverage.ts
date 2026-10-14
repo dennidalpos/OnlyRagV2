@@ -64,9 +64,13 @@ export async function reviewPlanRequestCoverage(
   claims: readonly PlanCoverageClaim[],
   confirmedDecisions: readonly string[] = [],
   compiledInterventions: readonly PlanMilestone[] = [],
+  trace?: (phase: string, detail: string) => void,
 ): Promise<string | undefined> {
   const error = validateRequestLedger(ledger, ledger.request) || validateCoverageClaims(ledger, evidence, claims)
-  if (error) return error
+  if (error) {
+    trace?.('COVERAGE VALIDATION', error)
+    return error
+  }
   const obligations = ledger.obligations.filter((item) => item.scope !== 'context')
   if (!obligations.length) return 'Request ledger contains no actionable obligations'
   const schema = reviewReferenceSchema(obligations, claims)
@@ -79,6 +83,7 @@ export async function reviewPlanRequestCoverage(
   })
   let response
   try {
+    trace?.('COVERAGE CALL', `System prompt:\n${SYSTEM}\nInput:\n${userContent}`)
     response = await ollamaAppService.generateStructured({
       ...request,
       systemPrompt: SYSTEM,
@@ -91,12 +96,17 @@ export async function reviewPlanRequestCoverage(
       },
     })
   } catch (error: unknown) {
+    trace?.('COVERAGE ERROR', errorMessage(error))
     if (error instanceof OllamaGenerationCancelledError) throw error
     return `Plan request coverage review failed: ${errorMessage(error)}`
   }
+  trace?.('COVERAGE RESPONSE', `Status: ${response.status}\nOutput:\n${response.content}\n${'error' in response ? response.error || '' : ''}`)
   if (response.status !== 'complete') return `Plan request coverage review failed: ${response.error || response.status}`
   const parsed = validateStructuredContent(response.content, responseSchema)
-  if (parsed.status === 'invalid') return `Invalid plan request coverage review: ${parsed.error}`
+  if (parsed.status === 'invalid') {
+    trace?.('COVERAGE VALIDATION', parsed.error)
+    return `Invalid plan request coverage review: ${parsed.error}`
+  }
   const seen = new Set<string>()
   for (const item of parsed.data.requirements) {
     if (!obligations.some((obligation) => obligation.id === item.obligationId) || seen.has(item.obligationId))
@@ -111,6 +121,7 @@ export async function reviewPlanRequestCoverage(
   const bound = schema.safeParse(parsed.data)
   if (!bound.success) return 'Invalid plan request coverage review: references exceed the confirmed ledger'
   const missing = parsed.data.requirements.filter((item) => item.status !== 'covered')
+  trace?.('COVERAGE VALIDATION', missing.length ? `Missing: ${missing.map((item) => item.obligationId).join(', ')}` : 'Valid')
   return missing.length
     ? `Plan request coverage failed: ${missing.map((item) => `${item.obligationId} (${item.status}): ${item.reason}`).join('; ')}`
     : undefined

@@ -9,6 +9,7 @@ export interface WizardStepHardwareProps {
   recommendations: HardwareRecommendations
   downloadedModels: string[]
   isInstallingOllama: boolean
+  ollamaSetupFeedback?: 'manual-download' | 'launched' | 'error' | null
   isInitialSetup?: boolean
   onLaunchOrInstallOllama: () => void
   isRemoteMode?: boolean
@@ -23,6 +24,7 @@ export const WizardStepHardware: React.FC<WizardStepHardwareProps> = ({
   recommendations,
   downloadedModels,
   isInstallingOllama,
+  ollamaSetupFeedback,
   isInitialSetup,
   onLaunchOrInstallOllama,
   isRemoteMode = false,
@@ -134,6 +136,16 @@ export const WizardStepHardware: React.FC<WizardStepHardwareProps> = ({
           </div>
         )}
       </div>
+
+      {ollamaSetupFeedback && (
+        <p role="status" aria-live="polite" className="text-xs text-slate-300">
+          {ollamaSetupFeedback === 'manual-download'
+            ? t('sidebar.ollamaSetupManual')
+            : ollamaSetupFeedback === 'launched'
+              ? t('sidebar.ollamaSetupLaunched')
+              : t('sidebar.ollamaSetupError')}
+        </p>
+      )}
 
       {/* Starter setup reviewed before any download or save. */}
       <div className="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex items-center justify-between gap-3">

@@ -73,6 +73,7 @@ export function describeInvalidStructuredResponse(
 export async function generateStructuredWithRecovery<T>(
   request: OllamaStructuredRequest,
   validate: (content: string) => StructuredContentValidation<T> | Promise<StructuredContentValidation<T>>,
+  trace?: (phase: string, detail: string) => void,
 ): Promise<RecoveredStructuredResult<T>> {
   let currentRequest = request
   let transportFailure: RecoveryFailureState | undefined
@@ -81,8 +82,10 @@ export async function generateStructuredWithRecovery<T>(
   for (let attempt = 1; attempt <= 2; attempt++) {
     let response
     try {
+      trace?.(`CALL ${attempt}`, `System prompt:\n${currentRequest.systemPrompt}\nInput:\n${currentRequest.userContent}`)
       response = await ollamaAppService.generateStructured(currentRequest)
     } catch (error: unknown) {
+      trace?.(`CALL ${attempt} ERROR`, error instanceof Error ? error.message : String(error))
       if (error instanceof OllamaGenerationCancelledError) return { status: 'error', error: error.message, attempts: attempt }
       const message = error instanceof Error ? error.message : String(error)
       const decision = recordRecoveryFailure(transportFailure, normalizedSignature('transport', message))
@@ -94,6 +97,7 @@ export async function generateStructuredWithRecovery<T>(
       }
       continue
     }
+    trace?.(`RESPONSE ${attempt}`, `Status: ${response.status}\nOutput:\n${response.content}\n${'error' in response ? response.error || '' : ''}`)
     if (response.status === 'incomplete') {
       const message = response.error || `Ollama structured response ${response.status}`
       const maximumOutput = maximumStructuredOutput(currentRequest)
@@ -135,6 +139,7 @@ export async function generateStructuredWithRecovery<T>(
     }
 
     const validated = await validate(response.content)
+    trace?.(`VALIDATION ${attempt}`, validated.status === 'valid' ? 'Valid' : validated.error)
     if (validated.status === 'valid') return { status: 'success', data: validated.data, content: response.content, attempts: attempt }
     logger.log('WARN', 'StructuredGeneration', describeInvalidStructuredResponse(request.model, attempt, response, currentRequest, validated.error))
 

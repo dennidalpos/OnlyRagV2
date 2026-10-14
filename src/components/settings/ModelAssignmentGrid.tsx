@@ -102,7 +102,6 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
                 settings={settings}
                 metrics={metrics[codingModel]}
                 hardwareDefault={resolveAgentContextTokens('Auto', extractHardwareFacts(diagnostics))}
-                diagnostics={diagnostics}
                 onUpdateSettings={onUpdateSettings}
               />
             )}
@@ -143,7 +142,6 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
                 settings={settings}
                 metrics={metrics[chatModel]}
                 hardwareDefault={hardwareDefault}
-                diagnostics={diagnostics}
                 onUpdateSettings={onUpdateSettings}
               />
             )}
@@ -180,7 +178,6 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
                 settings={settings}
                 metrics={metrics[translationModel]}
                 hardwareDefault={hardwareDefault}
-                diagnostics={diagnostics}
                 onUpdateSettings={onUpdateSettings}
               />
             )}
@@ -225,7 +222,6 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
                 settings={settings}
                 metrics={metrics[visionModel]}
                 hardwareDefault={hardwareDefault}
-                diagnostics={diagnostics}
                 onUpdateSettings={onUpdateSettings}
               />
             )}

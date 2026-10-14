@@ -1,82 +1,46 @@
-import { app } from 'electron'
+import { shell } from 'electron'
 import path from 'node:path'
-import https from 'node:https'
-import http from 'node:http'
 import fs from 'node:fs'
-import { spawn, exec } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { logger } from '../logging/logger'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
+const OLLAMA_DOWNLOAD_PAGE = 'https://ollama.com/download/windows'
+
+export type OllamaInstallOrLaunchResult = { success: true; action: 'launched' | 'manual-download' } | { success: false; error: string }
+
 export class OllamaInstallerRepository {
-  installOrLaunch(): Promise<{ success: boolean; message?: string; error?: string }> {
+  async installOrLaunch(): Promise<OllamaInstallOrLaunchResult> {
     logger.log('INFO', 'OllamaInstallerRepo', 'User requested Ollama launch or installation...')
 
-    const localAppData = process.env.LOCALAPPDATA || ''
-    const possibleOllamaExes = [path.join(localAppData, 'Programs/Ollama/ollama app.exe'), path.join(localAppData, 'Programs/Ollama/ollama.exe'), 'ollama.exe']
+    const localAppData = process.env.LOCALAPPDATA
+    const localExe = localAppData ? path.join(localAppData, 'Programs', 'Ollama', 'ollama.exe') : null
+    const executable = localExe && fs.existsSync(localExe) ? localExe : 'ollama.exe'
 
-    for (const exePath of possibleOllamaExes) {
-      if (exePath === 'ollama.exe' || fs.existsSync(exePath)) {
-        try {
-          logger.log('INFO', 'OllamaInstallerRepo', `Attempting to launch Ollama: ${exePath}`)
-          const p = spawn(exePath, ['serve'], { detached: true, stdio: 'ignore' })
-          p.unref()
-          return Promise.resolve({ success: true, message: 'Ollama launched.' })
-        } catch (err: unknown) {
-          logger.log('WARN', 'OllamaInstallerRepo', `Failed launching ${exePath}: ${errorMessage(err)}`)
-        }
-      }
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(executable, ['serve'], { detached: true, stdio: 'ignore' })
+        child.once('spawn', () => {
+          child.unref()
+          resolve()
+        })
+        child.once('error', reject)
+      })
+      logger.log('INFO', 'OllamaInstallerRepo', `Ollama process started: ${executable}`)
+      return { success: true, action: 'launched' }
+    } catch (err: unknown) {
+      logger.log('INFO', 'OllamaInstallerRepo', `Ollama launch unavailable: ${errorMessage(err)}`)
     }
 
-    const tempInstallerPath = path.join(app.getPath('temp'), 'OllamaSetup.exe')
-    const downloadUrl = 'https://ollama.com/download/OllamaSetup.exe'
-    logger.log('INFO', 'OllamaInstallerRepo', `Downloading Ollama installer from ${downloadUrl}...`)
-
-    return new Promise((resolve) => {
-      const file = fs.createWriteStream(tempInstallerPath)
-
-      const cleanupAndFail = (errMsg: string) => {
-        try {
-          if (fs.existsSync(tempInstallerPath)) fs.unlinkSync(tempInstallerPath)
-        } catch (unlinkErr: unknown) {
-          logger.log('WARN', 'OllamaInstallerRepo', `Failed unlinking temp installer on error: ${errorMessage(unlinkErr)}`)
-        }
-        logger.log('ERROR', 'OllamaInstallerRepo', `Installer download failed: ${errMsg}`)
-        resolve({ success: false, error: errMsg })
-      }
-
-      const handleResponse = (response: http.IncomingMessage) => {
-        if (response.statusCode === 301 || response.statusCode === 302) {
-          const redirectUrl = response.headers.location
-          if (redirectUrl) {
-            https.get(redirectUrl, handleResponse).on('error', (err) => cleanupAndFail(err.message))
-            return
-          }
-        }
-        if (response.statusCode !== 200) {
-          cleanupAndFail(`HTTP status ${response.statusCode}`)
-          return
-        }
-
-        response.pipe(file)
-        file.on('finish', () => {
-          file.close(() => {
-            logger.log('INFO', 'OllamaInstallerRepo', 'OllamaSetup.exe downloaded. Launching installer...')
-            exec(`"${tempInstallerPath}"`, (err) => {
-              if (err) logger.log('WARN', 'OllamaInstallerRepo', `Installer closed: ${err.message}`)
-              try {
-                if (fs.existsSync(tempInstallerPath)) fs.unlinkSync(tempInstallerPath)
-              } catch (cleanErr: unknown) {
-                logger.log('WARN', 'OllamaInstallerRepo', `Failed unlinking temp installer after exec: ${errorMessage(cleanErr)}`)
-              }
-            })
-            resolve({ success: true, message: 'Installer launched.' })
-          })
-        })
-      }
-
-      const request = https.get(downloadUrl, handleResponse)
-      request.on('error', (err) => cleanupAndFail(err.message))
-    })
+    try {
+      await shell.openExternal(OLLAMA_DOWNLOAD_PAGE)
+      logger.log('INFO', 'OllamaInstallerRepo', 'Opened official Ollama Windows download page for manual installation.')
+      return { success: true, action: 'manual-download' }
+    } catch (err: unknown) {
+      const message = `Could not open Ollama download page: ${errorMessage(err)}`
+      logger.log('ERROR', 'OllamaInstallerRepo', message)
+      return { success: false, error: message }
+    }
   }
 }
 

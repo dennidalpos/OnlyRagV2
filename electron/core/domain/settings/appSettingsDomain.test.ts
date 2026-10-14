@@ -59,12 +59,12 @@ describe('AppSettingsDomain Unit Tests', () => {
     ).toEqual({ 'qwen3:4b': true })
   })
 
-  it('preserves the saved sensitive-payload preference while logging is off', () => {
+  it('drops the retired payload preference', () => {
     const settings = sanitizeAppSettings({
       enableCodingAgentDebugLog: false,
       includeCodingAgentDebugPayloads: true,
-    })
-    expect(settings.includeCodingAgentDebugPayloads).toBe(true)
+    } as Record<string, unknown>)
+    expect(settings).not.toHaveProperty('includeCodingAgentDebugPayloads')
     expect(settings.enableCodingAgentDebugLog).toBe(false)
   })
 

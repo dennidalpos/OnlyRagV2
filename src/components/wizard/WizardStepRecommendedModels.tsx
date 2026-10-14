@@ -2,7 +2,7 @@ import React from 'react'
 import { Code, MessageSquare, Eye, Activity, Sparkles } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { findInstalledOllamaOption } from '../../services/ollamaModelOptions'
-import { formatModelFit, type ModelFitVerdict } from '../../services/hardwareRecommendationEngine'
+import type { ModelFitVerdict } from '../../services/hardwareRecommendationEngine'
 import { ModelSelect } from '../settings/ModelSelect'
 
 export interface WizardStepRecommendedModelsProps {
@@ -58,7 +58,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
   const renderOption = (name: string, coding = false) => {
     return (
       <option key={name} value={name}>
-        {`✓ ${name} [${t('common.ready')}] — ${formatModelFit(getModelFit(name, coding))}`}
+        {`✓ ${name} [${t('common.ready')}] — ${getModelFit(name, coding).contextTokens} ctx`}
       </option>
     )
   }
@@ -70,7 +70,6 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
         <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
         <span>{t('wizardModels.intro')}</span>
       </div>
-      <p className="text-xs text-amber-300">{t('hardwareWizard.memoryHint')}</p>
 
       {/* 1. AI Coding Agent Studio */}
       <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-3">

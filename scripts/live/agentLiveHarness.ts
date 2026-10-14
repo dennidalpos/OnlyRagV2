@@ -71,7 +71,7 @@ export function loadRealSettings(overrides: Omit<Partial<AppSettings>, 'codingMo
   // A live run is a diagnosis: its snapshot must show which file the model rewrote, what the
   // prompt said and the runner's own error text, not only hashes and '[details redacted]' (the
   // 2026-09-24 full-task loop could not be read back otherwise).
-  const diagnostics: Partial<AppSettings> = { enableCodingAgentDebugLog: true, includeCodingAgentDebugPayloads: true }
+  const diagnostics: Partial<AppSettings> = { enableCodingAgentDebugLog: true }
   codingAgentLogger.mirrorUnredactedTo(LIVE_UNREDACTED_AUDIT_PATH)
   // The file is the versioned envelope { version, settings }: spreading it raw ran rerun-20260926e on
   // defaults (25 steps instead of the user's 50) with every user setting ignored.

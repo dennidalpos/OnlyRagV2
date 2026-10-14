@@ -22,7 +22,6 @@ import {
 import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 import { resolveOllamaThinkingPreference, resolveStructuredThinkValue } from '../../../shared/domain/agent/ollamaThinkingPolicy'
-import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/agent/codingAgentDebugPolicy'
 import { ollamaAppService } from './ollamaAppService'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 import { reviewPlanRequestCoverage } from './planRequestCoverage'
@@ -223,17 +222,23 @@ export class PlanGenerationAppService {
       }
     }
     const controller = new AbortController()
+    const auditSessionId = req.operationId || `plan-flow-${Date.now()}`
     if (req.operationId) this.operations.set(req.operationId, controller)
     try {
-      return await this.generateOwnedPlan(req, controller.signal)
+      return await this.generateOwnedPlan(req, controller.signal, auditSessionId)
     } catch (error: unknown) {
-      return { status: 'error', objective: '', decisions: [], retainedEvidence: [], milestones: [], supersededWork: [], error: errorMessage(error) }
+      const message = errorMessage(error)
+      if (req.settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logPlanningStep(auditSessionId, 'ERROR', message)
+        codingAgentLogger.logSessionEnd(auditSessionId, 0, false, message)
+      }
+      return { status: 'error', objective: '', decisions: [], retainedEvidence: [], milestones: [], supersededWork: [], error: message }
     } finally {
       if (req.operationId) this.operations.delete(req.operationId)
     }
   }
 
-  private async generateOwnedPlan(req: PlanGenerationRequest, signal: AbortSignal): Promise<PlanGenerationResult> {
+  private async generateOwnedPlan(req: PlanGenerationRequest, signal: AbortSignal, auditSessionId: string): Promise<PlanGenerationResult> {
     const model = resolveConfiguredModel('coding', req.settings, req.model)
     if (!model) {
       const previous = req.previousPlan
@@ -247,8 +252,17 @@ export class PlanGenerationAppService {
         error: noConfiguredModelMessage('coding'),
       }
     }
+    const trace = req.settings.enableCodingAgentDebugLog
+      ? (phase: string, detail: string) => codingAgentLogger.logPlanningStep(auditSessionId, phase, detail)
+      : undefined
+    if (trace) {
+      codingAgentLogger.configureRetention(req.settings.codingAgentDebugRetentionFiles || 2)
+      codingAgentLogger.logSessionStart(auditSessionId, req.prompt, 'guided', model, req.workspacePath, true)
+    }
     const confirmationError = req.confirmedCoverage && validateRequestLedger(req.confirmedCoverage, req.prompt)
-    if (confirmationError)
+    if (confirmationError) {
+      trace?.('CONFIRMED LEDGER VALIDATION', confirmationError)
+      if (trace) codingAgentLogger.logSessionEnd(auditSessionId, 0, false, confirmationError)
       return {
         status: 'error',
         objective: '',
@@ -258,6 +272,7 @@ export class PlanGenerationAppService {
         supersededWork: [],
         error: confirmationError,
       }
+    }
     const confirmedCoverage = req.confirmedCoverage ? requestCoverageLedgerSchema.parse(req.confirmedCoverage) : undefined
     const cachedGpu = hardwareProbe.getCachedGpuInfo()
     const memInfo = hardwareProbe.getMemoryInfo()
@@ -277,8 +292,10 @@ export class PlanGenerationAppService {
     runtimeOpts.num_ctx = resolveModelContextLength(model, req.settings.modelContextLengths, runtimeOpts.num_ctx, trainedContext)
     runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx)
     runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx)
+    trace?.('RUNTIME', `Model: ${model}\nContext: ${runtimeOpts.num_ctx}\nOutput budget: ${runtimeOpts.num_predict}`)
 
     const discovery = collectProjectPlanningFacts(req.workspacePath, req.prompt, req.previousDecisions)
+    trace?.('PROJECT DISCOVERY', JSON.stringify(discovery))
     const profile = discovery.profile
     const hasExistingProject = Boolean(profile && profile.classification !== 'empty') || discovery.facts.hasFiles
     const executableVerificationCommands = discovery.facts.verification.executableCommands
@@ -321,8 +338,10 @@ export class PlanGenerationAppService {
         options: runtimeOpts,
       }
       if (!confirmedCoverage) {
-        const scopeDraft = await draftRequestLedger(request, req.prompt, confirmedDecisions)
+        const scopeDraft = await draftRequestLedger(request, req.prompt, confirmedDecisions, signal, trace)
         signal.throwIfAborted()
+        trace?.('REQUEST LEDGER READY', JSON.stringify(scopeDraft))
+        if (trace) codingAgentLogger.logSessionEnd(auditSessionId, 0, true, 'Request ledger ready for confirmation.')
         return {
           status: 'scope_confirmation_required',
           scopeDraft,
@@ -333,50 +352,55 @@ export class PlanGenerationAppService {
           supersededWork: [],
         }
       }
-      const response = await generateStructuredWithRecovery(request, async (content) => {
-        signal.throwIfAborted()
-        const validated = validateStructuredContent(content, planningPhaseResponseSchema)
-        if (validated.status === 'invalid') {
-          return {
-            status: 'invalid',
-            error: `Invalid plan response: ${validated.error}`,
+      const response = await generateStructuredWithRecovery(
+        request,
+        async (content) => {
+          signal.throwIfAborted()
+          const validated = validateStructuredContent(content, planningPhaseResponseSchema)
+          if (validated.status === 'invalid') {
+            return {
+              status: 'invalid',
+              error: `Invalid plan response: ${validated.error}`,
+            }
           }
-        }
-        const freshPlan = normalizeFreshPlanReferences(validated.data, previousInterventions)
-        const sanitized = sanitizeVerificationCommands(freshPlan, executableVerificationCommands, discovery.scaffold.requirements[0]?.path)
-        const error =
-          sanitized.error ||
-          incompatibleGreenfieldScaffold(sanitized.plan || freshPlan, discovery.scaffold, req.prompt) ||
-          reconcilePreviousWork(sanitized.plan || freshPlan, previousInterventions)
-        if (error) return { status: 'invalid', error }
-        const candidate = compilePlanMilestones(toMilestones(sanitized.plan!), verification, discovery.scaffold)
-        const evidence: CoverageEvidence[] = [
-          ...sanitized.plan!.interventions.flatMap((item) =>
-            item.acceptanceCriteria.map((statement) => ({
-              source: 'planned' as const,
-              interventionId: item.id,
-              statement,
+          const freshPlan = normalizeFreshPlanReferences(validated.data, previousInterventions)
+          const sanitized = sanitizeVerificationCommands(freshPlan, executableVerificationCommands, discovery.scaffold.requirements[0]?.path)
+          const error =
+            sanitized.error ||
+            incompatibleGreenfieldScaffold(sanitized.plan || freshPlan, discovery.scaffold, req.prompt) ||
+            reconcilePreviousWork(sanitized.plan || freshPlan, previousInterventions)
+          if (error) return { status: 'invalid', error }
+          const candidate = compilePlanMilestones(toMilestones(sanitized.plan!), verification, discovery.scaffold)
+          const evidence: CoverageEvidence[] = [
+            ...sanitized.plan!.interventions.flatMap((item) =>
+              item.acceptanceCriteria.map((statement) => ({
+                source: 'planned' as const,
+                interventionId: item.id,
+                statement,
+              })),
+            ),
+            ...retained.map((item) => ({
+              source: 'retained' as const,
+              interventionId: item.interventionId,
+              statement: `${item.summary}: ${item.verificationReferences.join('; ')}`,
             })),
-          ),
-          ...retained.map((item) => ({
-            source: 'retained' as const,
-            interventionId: item.interventionId,
-            statement: `${item.summary}: ${item.verificationReferences.join('; ')}`,
-          })),
-        ].map((item, index) => ({ ...item, id: index + 1 }))
-        const coverageError = await reviewPlanRequestCoverage(
-          request,
-          confirmedCoverage,
-          evidence,
-          sanitized.plan!.coverageClaims,
-          confirmedDecisions,
-          candidate,
-        )
-        signal.throwIfAborted()
-        if (coverageError) return { status: 'invalid', error: coverageError }
-        compiledMilestones = candidate
-        return { status: 'valid', data: sanitized.plan! }
-      })
+          ].map((item, index) => ({ ...item, id: index + 1 }))
+          const coverageError = await reviewPlanRequestCoverage(
+            request,
+            confirmedCoverage,
+            evidence,
+            sanitized.plan!.coverageClaims,
+            confirmedDecisions,
+            candidate,
+            trace,
+          )
+          signal.throwIfAborted()
+          if (coverageError) return { status: 'invalid', error: coverageError }
+          compiledMilestones = candidate
+          return { status: 'valid', data: sanitized.plan! }
+        },
+        trace,
+      )
       signal.throwIfAborted()
       if (response.status === 'success') {
         structuredPlan = response.data
@@ -385,6 +409,7 @@ export class PlanGenerationAppService {
       }
     } catch (error: unknown) {
       generationError = errorMessage(error) || 'Plan generation failed'
+      trace?.('ERROR', generationError)
     }
 
     if (generationError) logger.log('WARN', 'PlanGenerationAppService', `Plan generation failed: ${generationError}`)
@@ -407,17 +432,7 @@ export class PlanGenerationAppService {
       milestones,
       supersededWork: [...(req.previousPlan?.supersededWork || []), ...(structuredPlan?.supersededWork || [])],
     }
-    if (req.settings.enableCodingAgentDebugLog) {
-      const auditSessionId = req.operationId || `plan-flow-${Date.now()}`
-      codingAgentLogger.configureRetention(req.settings.codingAgentDebugRetentionFiles || 2)
-      codingAgentLogger.logSessionStart(
-        auditSessionId,
-        req.prompt,
-        'guided',
-        req.model || req.settings.codingModel || req.settings.defaultModel || 'default',
-        req.workspacePath,
-        isCodingAgentDebugPayloadCaptureEnabled(req.settings),
-      )
+    if (trace) {
       codingAgentLogger.logPlanGeneration(auditSessionId, req.prompt, milestones.length, 'guided')
       if (confirmedCoverage) codingAgentLogger.logRequestCoverage(auditSessionId, JSON.stringify(confirmedCoverage))
       const auditSucceeded = !generationError && milestones.length > 0

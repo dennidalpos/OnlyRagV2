@@ -62,6 +62,7 @@ export const AppLayout: React.FC = () => {
   const [isDiagnosticsDrawerOpen, setIsDiagnosticsDrawerOpen] = useState(false)
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false)
   const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false)
+  const [ollamaSetupFeedback, setOllamaSetupFeedback] = useState<'manual-download' | 'launched' | 'error' | null>(null)
 
   const [settings, setSettings] = useState<AppSettings>(() => ({ ...DEFAULT_APP_SETTINGS }))
   // Nothing is saved, migrated or diagnosed until settings.json has been read: a failed read must never be
@@ -384,8 +385,20 @@ export const AppLayout: React.FC = () => {
               type="button"
               onClick={async () => {
                 if (window.electronAPI?.installOrLaunchOllama) {
-                  await window.electronAPI.installOrLaunchOllama()
-                  runDiagnosticsScan()
+                  setOllamaSetupFeedback(null)
+                  try {
+                    const result = await window.electronAPI.installOrLaunchOllama()
+                    if (!result.success) {
+                      logger.error('AppLayout', result.error)
+                      setOllamaSetupFeedback('error')
+                    } else {
+                      setOllamaSetupFeedback(result.action)
+                      if (result.action === 'launched') runDiagnosticsScan()
+                    }
+                  } catch (err: unknown) {
+                    logger.error('AppLayout', `Ollama setup failed: ${errorMessage(err)}`)
+                    setOllamaSetupFeedback('error')
+                  }
                 }
               }}
               aria-label={t('sidebar.installLaunchOllama')}
@@ -393,6 +406,16 @@ export const AppLayout: React.FC = () => {
             >
               <Zap className="w-3.5 h-3.5 fill-current" /> {t('sidebar.installLaunchOllama')}
             </button>
+          )}
+
+          {diagnostics?.ollama.status !== 'online' && !isRemoteOllama && ollamaSetupFeedback && (
+            <p role="status" aria-live="polite" className="text-xs text-slate-300">
+              {ollamaSetupFeedback === 'manual-download'
+                ? t('sidebar.ollamaSetupManual')
+                : ollamaSetupFeedback === 'launched'
+                  ? t('sidebar.ollamaSetupLaunched')
+                  : t('sidebar.ollamaSetupError')}
+            </p>
           )}
 
           {diagnostics?.ollama.status !== 'online' && isRemoteOllama && (

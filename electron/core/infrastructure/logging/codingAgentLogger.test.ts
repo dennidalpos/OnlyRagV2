@@ -51,6 +51,18 @@ describe('CodingAgentLogger Unit Tests', () => {
     expect(content).toContain('Successfully wrote file src/Counter.tsx')
   })
 
+  it('keeps planning errors and paths visible while redacting credentials', () => {
+    loggerInstance.logSessionStart('planning-session', 'Fix src/App.tsx', 'guided', 'model', 'D:/Workspace', true)
+    loggerInstance.logPlanningStep('planning-session', 'REQUEST LEDGER VALIDATION 1', 'Invalid source lines: OBL-001; token=private-key')
+
+    const content = fs.readFileSync(logPath, 'utf-8')
+    expect(content).toContain('Fix src/App.tsx')
+    expect(content).toContain('D:/Workspace')
+    expect(content).toContain('Invalid source lines: OBL-001')
+    expect(content).toContain('token=[redacted]')
+    expect(content).not.toContain('private-key')
+  })
+
   it('records turn-policy denials as failed tool results', () => {
     loggerInstance.logToolCall('policy-session', 1, 'write_file', { filePath: 'src/App.tsx' })
     loggerInstance.logToolResult('policy-session', 1, 'write_file', '[TURN TOOL POLICY DENIED] Tool "write_file" is not available for this phase.')
@@ -226,7 +238,7 @@ second run`,
     })
 
     const content = fs.readFileSync(logPath, 'utf-8')
-    expect(content).toContain('[url]')
+    expect(content).toContain('https://example.test?access_token=[redacted]')
     expect(content).toContain('[redacted]')
     expect(content).not.toContain('secret-value')
     expect(content).not.toContain('secret-password')
@@ -247,7 +259,9 @@ second run`,
 
     const redacted = fs.readFileSync(path.join(tempDir, 'coding_agent_audit.log'), 'utf-8')
     const unredacted = fs.readFileSync(mirrorPath, 'utf-8')
-    expect(redacted).toContain('[details redacted]')
+    expect(redacted).toContain('ReferenceError: App is not defined')
+    expect(redacted).toContain('Last useful error: vite build failed')
+    expect(redacted).not.toContain('secret-value')
     expect(unredacted).toContain('ReferenceError: App is not defined')
     expect(unredacted).toContain('Last useful error: vite build failed')
     expect(unredacted).not.toContain('secret-value')

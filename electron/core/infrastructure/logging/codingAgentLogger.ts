@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { logger } from './logger'
-import { redactSecrets, sanitizeLogMessage } from '../../../logRedactor'
+import { redactSecrets } from '../../../logRedactor'
 import { AgentRunMetrics } from '../../domain/agent/agentRunMetrics'
 import { createHash } from 'node:crypto'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
@@ -19,7 +19,7 @@ export class CodingAgentLogger {
   private previousPromptBySession = new Map<string, { step: number; prompt: string }>()
   private runMetricsBySession = new Map<string, AgentRunMetrics>()
   private payloadCaptureBySession = new Map<string, boolean>()
-  /** Local live-run diagnosis only (scripts/live): the app never sets it, so persisted app logs stay redacted. */
+  /** Local live-run diagnosis only (scripts/live). */
   private unredactedMirrorPath: string | null = null
 
   constructor(options?: { logFilePath?: string; maxSizeBytes?: number; maxRetainedFiles?: number }) {
@@ -186,7 +186,7 @@ export class CodingAgentLogger {
       const timestamp = new Date().toISOString()
       const format = (redact: (message: string) => string) =>
         `\n================================================================================\n[${timestamp}] ${redact(sectionHeader)}\n================================================================================\n${redact(bodyContent).trim()}\n`
-      fs.appendFileSync(this.logFilePath, format(sanitizeLogMessage), 'utf-8')
+      fs.appendFileSync(this.logFilePath, format(redactSecrets), 'utf-8')
       if (this.unredactedMirrorPath) fs.appendFileSync(this.unredactedMirrorPath, format(redactSecrets), 'utf-8')
     } catch (err: unknown) {
       logger.log('WARN', 'CodingAgentLogger', `Failed writing agent audit log: ${errorMessage(err)}`)
@@ -219,14 +219,16 @@ ${reason ? (this.includesPayload(sessionId) ? `Reason: ${reason}` : CodingAgentL
   }
 
   public logPlanGeneration(sessionId: string, prompt: string, milestonesCount: number, mode: string): void {
-    const promptDetail = this.includesPayload(sessionId)
-      ? `Source Prompt: "${prompt.slice(0, 300)}"`
-      : CodingAgentLogger.payloadSummary('Source Prompt', prompt)
+    const promptDetail = this.includesPayload(sessionId) ? `Source Prompt: "${prompt}"` : CodingAgentLogger.payloadSummary('Source Prompt', prompt)
     const content = `Session ID: ${sessionId}
 Mode: ${mode.toUpperCase()}
 Generated Plan Milestones Count: ${milestonesCount}
 ${promptDetail}`
     this.writeEntry(`[PLAN GENERATION FLOW] Session: ${sessionId}`, content)
+  }
+
+  public logPlanningStep(sessionId: string, phase: string, detail: string): void {
+    this.writeEntry(`[PLAN ${phase}] Session: ${sessionId}`, `Session ID: ${sessionId}\n${detail}`)
   }
 
   public logSkillsMatched(sessionId: string, skills: string[]): void {
@@ -264,7 +266,7 @@ ${promptDetail}`
         `${header} | Baseline: full prompt (${prompt.length} chars)
 Turn Prompt Payload:
 \`\`\`
-${prompt.slice(0, 15000)}
+${prompt}
 \`\`\``,
       )
       return
@@ -280,7 +282,7 @@ ${prompt.slice(0, 15000)}
         `${header} | Diverged from step ${previous.step} (${prompt.length} chars)
 Turn Prompt Payload:
 \`\`\`
-${prompt.slice(0, 15000)}
+${prompt}
 \`\`\``,
       )
       return
@@ -293,7 +295,7 @@ ${prompt.slice(0, 15000)}
 [First ${sharedChars} chars identical to step ${previous.step}'s prompt — see that entry for ${sessionId}]
 Turn Prompt Delta:
 \`\`\`
-${tail.slice(0, 15000)}
+${tail}
 \`\`\``,
     )
   }

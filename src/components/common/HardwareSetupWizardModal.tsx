@@ -68,6 +68,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const [ocrEngine, setOcrEngine] = useState<'native_cuda' | 'vision_model'>(settings.ocrEngine || 'native_cuda')
 
   const [isInstallingOllama, setIsInstallingOllama] = useState(false)
+  const [ollamaSetupFeedback, setOllamaSetupFeedback] = useState<'manual-download' | 'launched' | 'error' | null>(null)
   const [isPullingModels, setIsPullingModels] = useState(false)
   const [pullingStatusText, setPullingStatusText] = useState('')
   const [pullProgressPercent, setPullProgressPercent] = useState(0)
@@ -221,12 +222,20 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const handleLaunchOrInstallOllama = async () => {
     if (!window.electronAPI?.installOrLaunchOllama) return
     setIsInstallingOllama(true)
+    setOllamaSetupFeedback(null)
     try {
-      await window.electronAPI.installOrLaunchOllama()
-      onRefreshDiagnostics()
+      const result = await window.electronAPI.installOrLaunchOllama()
+      if (!result.success) {
+        logger.error('HardwareWizard', result.error)
+        setOllamaSetupFeedback('error')
+      } else {
+        setOllamaSetupFeedback(result.action)
+        if (result.action === 'launched') onRefreshDiagnostics()
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       logger.error('HardwareWizard', `Failed launching/installing Ollama: ${msg}`)
+      setOllamaSetupFeedback('error')
     } finally {
       setIsInstallingOllama(false)
     }
@@ -481,6 +490,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             recommendations={recommendations}
             downloadedModels={downloadedModels}
             isInstallingOllama={isInstallingOllama}
+            ollamaSetupFeedback={ollamaSetupFeedback}
             isInitialSetup={isInitialSetup}
             onLaunchOrInstallOllama={handleLaunchOrInstallOllama}
             isRemoteMode={isRemoteOllama}

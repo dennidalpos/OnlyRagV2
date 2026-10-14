@@ -120,7 +120,7 @@ describe('AiDebugBundleService Unit Tests', () => {
     const bundle = await aiDebugBundleService.generateDebugBundle({
       sessionId: 'session-123',
       workspacePath: 'D:/TestWorkspace',
-      settings: { enableCodingAgentDebugLog: true, includeCodingAgentDebugPayloads: true } as never,
+      settings: { enableCodingAgentDebugLog: true } as never,
       activeModelName: 'qwen2.5-coder:7b',
       activeSkills: ['test-skill'],
     })
@@ -171,7 +171,7 @@ describe('AiDebugBundleService Unit Tests', () => {
     const savedPreferenceWithLoggingOff = await aiDebugBundleService.generateDebugBundle({
       sessionId: 'metadata-session',
       workspacePath: 'D:/PrivateWorkspace',
-      settings: { enableCodingAgentDebugLog: false, includeCodingAgentDebugPayloads: true } as never,
+      settings: { enableCodingAgentDebugLog: false } as never,
     })
     expect(savedPreferenceWithLoggingOff).not.toContain('private prompt')
     expect(savedPreferenceWithLoggingOff).not.toContain('src/private.ts')

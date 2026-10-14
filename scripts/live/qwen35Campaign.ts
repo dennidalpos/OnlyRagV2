@@ -129,7 +129,6 @@ export async function createQwen35Campaign(
     ...DEFAULT_APP_SETTINGS,
     language: 'en',
     enableCodingAgentDebugLog: true,
-    includeCodingAgentDebugPayloads: true,
     verifyBeforeFinish: true,
     customPromptOverrides: {},
     codingModel: QWEN35_MODEL,

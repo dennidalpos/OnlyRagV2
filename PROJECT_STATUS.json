@@ -4,9 +4,9 @@
   ],
   "todo_autonomous": [
     {
-      "id": "OLLAMA-INSTALLER-INTEGRITY-01",
+      "id": "AGENT-DEBUG-AUDIT-COMPLETENESS-01",
       "p": "P1",
-      "task": "Replace unverified OllamaSetup.exe download-and-execute flow with an authenticated, integrity-checked install path or explicit manual download; handle redirects, completion and failures (electron/core/infrastructure/process/ollamaInstallerRepository.ts)."
+      "task": "Qualify offline Coding Agent audit readback across prompt deltas, file rotation, restart and planning failures; preserve every retained step and verify clear/retention behavior in isolated roots (docs/agent-runtime.md)."
     },
     {
       "id": "PYTHON-DEPENDENCY-ADVISORY-AUDIT-01",
@@ -183,7 +183,7 @@
     {
       "id": "AGENT-REQUEST-LEDGER-LIVE-QUALIFICATION-01",
       "p": "P1",
-      "decision": "Qualify real-model request extraction and planning against confirmed ledgers; preserve all spent calls, failures and reviews (docs/agent-runtime.md)."
+      "decision": "Qualify real-model request extraction and planning against confirmed ledgers, including enabled debug audit readback on the restarted installed app; preserve all spent calls, failures and reviews (docs/agent-runtime.md)."
     },
     {
       "id": "TRANSLATION-MARKERS-INSTALLED-01",

@@ -34,8 +34,8 @@ describe('wizard model choices', () => {
     expect(optionValues).toContain('vision-model:latest')
     expect(optionValues).not.toContain('retired:1b')
     expect(container.querySelector('[role="status"]')?.textContent).toContain('retired:1b')
-    expect(container.textContent).toContain('16384 ctx · 2.0–3.0 GiB')
-    expect(container.textContent).toContain('cache')
+    expect(container.textContent).toContain('16384 ctx')
+    expect(container.textContent).not.toContain('GiB')
 
     await act(async () => root.unmount())
     container.remove()

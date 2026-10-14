@@ -95,7 +95,10 @@ export interface IpcInvokeContract {
   'ollama:pull-model': { payload: { modelName: string; host?: string }; result: { success: boolean; data?: string; error?: string } }
   'ollama:cancel-pull': { payload: void; result: Success }
   'ollama:delete-model': { payload: { modelName: string; host?: string }; result: Success }
-  'ollama:install-or-launch': { payload: void; result: { success: boolean; message?: string; error?: string } }
+  'ollama:install-or-launch': {
+    payload: void
+    result: { success: true; action: 'launched' | 'manual-download' } | { success: false; error: string }
+  }
   'ollama:generate-stream': {
     payload: { model: string; prompt: string; options?: OllamaGenerationOptions; host?: string; operationId: string }
     result: Success

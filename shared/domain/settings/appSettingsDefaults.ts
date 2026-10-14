@@ -23,7 +23,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   capabilityPolicyMode: 'network-approved',
   maxToolCallSteps: DEFAULT_AGENT_STEP_BUDGET,
   enableCodingAgentDebugLog: false,
-  includeCodingAgentDebugPayloads: false,
   codingAgentDebugRetentionFiles: 2,
   modelThinkingPreferences: {},
   hasCompletedInitialSetup: false,

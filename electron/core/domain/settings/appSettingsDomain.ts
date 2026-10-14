@@ -83,8 +83,6 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     enableSkillRouter: typeof raw.enableSkillRouter === 'boolean' ? raw.enableSkillRouter : defaults.enableSkillRouter,
     maxToolCallSteps: normalizeAgentStepBudget(raw.maxToolCallSteps),
     enableCodingAgentDebugLog: typeof raw.enableCodingAgentDebugLog === 'boolean' ? raw.enableCodingAgentDebugLog : defaults.enableCodingAgentDebugLog,
-    includeCodingAgentDebugPayloads:
-      typeof raw.includeCodingAgentDebugPayloads === 'boolean' ? raw.includeCodingAgentDebugPayloads : defaults.includeCodingAgentDebugPayloads,
     codingAgentDebugRetentionFiles:
       typeof raw.codingAgentDebugRetentionFiles === 'number' && raw.codingAgentDebugRetentionFiles >= 1 && raw.codingAgentDebugRetentionFiles <= 5
         ? Math.floor(raw.codingAgentDebugRetentionFiles)

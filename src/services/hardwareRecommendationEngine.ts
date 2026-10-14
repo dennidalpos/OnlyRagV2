@@ -1,5 +1,4 @@
 import { DiagnosticsData, RunningModelDetails, OllamaModelMetrics, AppSettings } from '../types'
-import { translate } from '../i18n/I18nContext'
 import {
   calculateRealUsableVram,
   classifyHardwareProfileTier,
@@ -52,24 +51,6 @@ export function buildModelFitLookup(
     const context = resolveModelContextLength(modelName, settings.modelContextLengths, hardwareContext, metrics[modelName]?.contextLength)
     return assessModelRuntimeFit(modelName, context, knownFacts, metrics[modelName])
   }
-}
-
-export function formatModelFit(fit: ModelFitVerdict): string {
-  const size =
-    fit.maximumGB === undefined
-      ? `~${fit.minimumGB.toFixed(1)} + ?`
-      : fit.minimumGB === fit.maximumGB
-        ? fit.maximumGB.toFixed(1)
-        : `${fit.minimumGB.toFixed(1)}–${fit.maximumGB.toFixed(1)}`
-  const labels = {
-    gpu_possible: 'hardwareWizard.memoryGpu',
-    cpu_offload_possible: 'hardwareWizard.memoryOffload',
-    cpu_possible: 'hardwareWizard.memoryCpu',
-    insufficient: 'hardwareWizard.memoryInsufficient',
-    unknown: 'hardwareWizard.memoryUnknown',
-  } as const
-  const basis = fit.basis === 'observed' ? translate('hardwareWizard.memoryObserved') : translate('hardwareWizard.memoryEstimated')
-  return `${fit.contextTokens} ctx · ${size} GiB · ${translate(labels[fit.placement])} · ${basis}${fit.uncertain ? ' ?' : ''}`
 }
 
 export { isOllamaModelInstalled } from '../../shared/domain/agent/modelTagMatcher'

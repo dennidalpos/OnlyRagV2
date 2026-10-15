@@ -136,6 +136,7 @@ export function useCodingAgent(settings?: AppSettings) {
     },
     refreshAfterDeletionRecovery: history.refreshAfterDeletionRecovery,
     refreshRecoveredHistory: history.refreshRecoveredHistory,
+    exportUnsavedSessions: history.exportUnsavedSessions,
     // Execution
     agentMode: execution.agentMode,
     setAgentMode: execution.setAgentMode,

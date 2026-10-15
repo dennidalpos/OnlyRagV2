@@ -249,6 +249,7 @@ export interface IpcInvokeContract {
   'sessions:list': { payload: { workspacePath?: string | null }; result: CodingSession[] }
   'sessions:save': { payload: CodingSession; result: CodingSession | null }
   'sessions:stage': { payload: CodingSession; result: boolean }
+  'sessions:export-snapshot': { payload: { session: CodingSession; destinationDirectory: string }; result: string }
   'sessions:history-recovery-list': { payload: void; result: CodingHistoryRecoverySummary[] }
   'sessions:history-recovery-action': {
     payload: { recoveryId: string; action: 'retry' | 'export'; destinationDirectory?: string }
@@ -404,6 +405,7 @@ export const IPC_INVOKE_METHODS = {
   listCodingSessions: 'sessions:list',
   saveCodingSession: 'sessions:save',
   stageCodingSession: 'sessions:stage',
+  exportCodingSessionSnapshot: 'sessions:export-snapshot',
   listCodingHistoryRecovery: 'sessions:history-recovery-list',
   actOnCodingHistoryRecovery: 'sessions:history-recovery-action',
   deleteCodingSession: 'sessions:delete',

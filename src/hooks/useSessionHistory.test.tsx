@@ -13,6 +13,7 @@ describe('useSessionHistory persistence', () => {
   let history: History
   const saveCodingSession = vi.fn<(session: CodingSession) => Promise<CodingSession | null>>(async (session) => session)
   const stageCodingSession = vi.fn<(session: CodingSession) => Promise<boolean>>(async () => true)
+  const exportCodingSessionSnapshot = vi.fn(async (_payload: { session: CodingSession; destinationDirectory: string }) => 'C:/export/snapshot.json')
 
   function Harness({ workspacePath = 'C:/workspace' }: { workspacePath?: string } = {}) {
     history = useSessionHistory(workspacePath)
@@ -24,10 +25,12 @@ describe('useSessionHistory persistence', () => {
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       saveCodingSession,
       stageCodingSession,
+      exportCodingSessionSnapshot,
       listCodingSessions: vi.fn(async () => []),
     }
     saveCodingSession.mockReset().mockImplementation(async (session) => session)
     stageCodingSession.mockReset().mockResolvedValue(true)
+    exportCodingSessionSnapshot.mockReset().mockResolvedValue('C:/export/snapshot.json')
     container = document.createElement('div')
     root = createRoot(container)
     await act(async () => root.render(<Harness />))
@@ -91,6 +94,40 @@ describe('useSessionHistory persistence', () => {
     await act(async () => history.retryStorage())
     expect(history.storageFailed).toBe(false)
     expect(history.sessions).toHaveLength(1)
+  })
+
+  it('exports the latest failed memory revision without acknowledging storage or allowing close', async () => {
+    stageCodingSession.mockResolvedValue(false)
+    saveCodingSession.mockResolvedValue(null)
+    const sessionId = history.activeSessionId
+    await act(async () => history.updateSessionContent(sessionId, { actionLogs: [{ id: 'first' } as never] }))
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    await act(async () => history.updateSessionContent(sessionId, { actionLogs: [{ id: 'latest' } as never] }))
+    let paths: string[] = []
+    await act(async () => {
+      paths = await history.exportUnsavedSessions('C:/export')
+    })
+    expect(paths).toEqual(['C:/export/snapshot.json'])
+    expect(exportCodingSessionSnapshot).toHaveBeenCalledWith({
+      destinationDirectory: 'C:/export',
+      session: expect.objectContaining({ id: sessionId, actionLogs: [{ id: 'latest' }] }),
+    })
+    expect(history.storageFailed).toBe(true)
+    const flush = (window as unknown as { __onlyragFlushCodingHistory: () => Promise<boolean> }).__onlyragFlushCodingHistory
+    expect(await flush()).toBe(false)
+    exportCodingSessionSnapshot.mockRejectedValueOnce(new Error('Export destination unavailable'))
+    await expect(history.exportUnsavedSessions('C:/export')).rejects.toThrow('Export destination unavailable')
+    expect(await flush()).toBe(false)
+    stageCodingSession.mockResolvedValue(true)
+    saveCodingSession.mockImplementation(async (session) => session)
+    await act(async () => history.retryStorage())
+    expect(saveCodingSession.mock.lastCall?.[0].actionLogs).toEqual([{ id: 'latest' }])
+    expect(await flush()).toBe(true)
+  })
+
+  it('refuses an export without failed snapshots', async () => {
+    await expect(history.exportUnsavedSessions('C:/export')).rejects.toThrow('No unsaved')
+    expect(exportCodingSessionSnapshot).not.toHaveBeenCalled()
   })
 
   it.each(['reject', 'false'])('retains failed session changes and retries acknowledgement: %s', async (failure) => {

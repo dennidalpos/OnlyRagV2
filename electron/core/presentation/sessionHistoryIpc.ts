@@ -11,6 +11,9 @@ export function registerSessionHistoryIpcHandlers() {
   })
 
   ipcMain.handle('sessions:stage', async (_event, session) => sessionHistoryAppService.stageSession(session))
+  ipcMain.handle('sessions:export-snapshot', async (_event, { session, destinationDirectory }) =>
+    sessionHistoryAppService.exportSessionSnapshot(session, destinationDirectory),
+  )
   ipcMain.handle('sessions:history-recovery-list', async () => sessionHistoryAppService.listHistoryRecovery())
   ipcMain.handle('sessions:history-recovery-action', async (_event, payload) => {
     if (payload.action === 'retry') return sessionHistoryAppService.retryHistoryRecovery(payload.recoveryId)

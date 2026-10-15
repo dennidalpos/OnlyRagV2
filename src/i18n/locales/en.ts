@@ -265,6 +265,7 @@ export const en: TranslationSchema = {
     storageFailed:
       'Session or project data could not be read or saved. An unreadable archive is never replaced. Pending session changes remain in memory: keep this view open and retry.',
     storageRetry: 'Retry storage',
+    storageExportMemory: 'Export changes held in memory',
     historyRecovery: 'A retained coding history snapshot needs recovery:',
     historyRecoveryRetry: 'Retry history',
     historyRecoveryExport: 'Export snapshot',

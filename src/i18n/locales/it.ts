@@ -268,6 +268,7 @@ export const it = {
     storageFailed:
       'Impossibile leggere o salvare sessioni o progetti. Un archivio illeggibile non viene sostituito. Le modifiche alle sessioni restano in memoria: tieni aperta questa vista e riprova.',
     storageRetry: 'Riprova archiviazione',
+    storageExportMemory: 'Esporta modifiche in memoria',
     historyRecovery: 'Una copia dello storico del Coding Agent richiede recupero:',
     historyRecoveryRetry: 'Riprova storico',
     historyRecoveryExport: 'Esporta copia',

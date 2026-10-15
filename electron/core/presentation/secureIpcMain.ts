@@ -168,6 +168,7 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
   'sessions:list': workspacePathOnly,
   'sessions:save': session,
   'sessions:stage': session,
+  'sessions:export-snapshot': obj({ session, destinationDirectory: path }),
   'sessions:history-recovery-list': null,
   'sessions:history-recovery-action': obj({
     recoveryId: z.string().regex(/^[0-9a-f]{64}$/),

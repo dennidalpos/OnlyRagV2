@@ -14,7 +14,7 @@ L'[audit Python del 2026-10-15](./python-dependency-audit-2026-10-15.md) confron
 
 ## Residui attuali
 
-Gli interventi compatibili upstream per braces, sprintf-js, la cache HTTP del builder e il sanitizer incorporato in Monaco sono aperti nel [tracker](../PROJECT_STATUS.json). Il worker limita e isola la scansione, ma non corregge il pacchetto braces. La cache HTTP Got del builder resta disabilitata; il controllo dell'artefatto scaricato è separato. La presenza di un pacchetto vulnerabile non dimostra da sola un input sfruttabile nell'app. Rivedere la catena di chiamata e l'advisory ufficiale prima di cambiare lockfile o confini di esecuzione.
+Gli interventi compatibili upstream per braces, sprintf-js e il sanitizer incorporato in Monaco sono aperti nel [tracker](../PROJECT_STATUS.json). Il worker limita e isola la scansione, ma non corregge il pacchetto braces. La cache HTTP Got del builder resta disabilitata; `http-cache-semantics` è aggiornato alla 4.3.0, fuori dall'intervallo dell'advisory contestato dal manutentore ([riesame e limiti](#riesame-dependabot-del-15-ottobre-2026)). Il controllo dell'artefatto scaricato è separato. La presenza di un pacchetto vulnerabile non dimostra da sola un input sfruttabile nell'app. Rivedere la catena di chiamata e l'advisory ufficiale prima di cambiare lockfile o confini di esecuzione.
 
 ## Evidenze datate
 
@@ -57,3 +57,13 @@ Gli interventi compatibili upstream per braces, sprintf-js, la cache HTTP del bu
 ## sprintf-js exposure disposition - 2026-10-13
 
 [Evidenza e fonti](./libraries-history-2026-10-13.md#sprintf-js-exposure-disposition---2026-10-13).
+
+## Riesame Dependabot del 15 ottobre 2026
+
+Gli avvisi aperti verificati tramite API GitHub sono `braces` (alto, GHSA-vfj7-8cjw-p6xm), `http-cache-semantics` (alto, GHSA-ch52-4w7c-c8xp) e `sprintf-js` (moderato, GHSA-hp3w-g68c-fv3c). Le 16 segnalazioni iniziali di `npm audit` includono i pacchetti dipendenti: non sono 16 advisory distinti.
+
+`npm update http-cache-semantics --ignore-scripts --no-fund` aggiorna esclusivamente la dipendenza transitiva di sviluppo da 4.2.0 a 4.3.0, compatibile con `cacheable-request` 7.0.4 (`^4.0.0`). Il manifest resta invariato; npm rigenera URL e integrità nel lockfile. L'audit successivo non segnala più questo pacchetto e riporta 15 pacchetti coinvolti (5 alti, 10 moderati), radicati nei due advisory residui.
+
+La versione 4.3.0 è fuori dall'intervallo dell'[advisory cache](https://github.com/advisories/GHSA-ch52-4w7c-c8xp), ma questo non certifica una correzione del comportamento `max-stale`: l'advisory non indica una prima versione corretta e il [manutentore contesta la segnalazione](https://github.com/kornelski/http-cache-semantics/issues/56#issuecomment-5975759591). Il [cambio upstream](https://github.com/kornelski/http-cache-semantics/commit/9fb520be70eff3ff502fe965d9c3265ca2c64e26) riguarda invece `Vary`. Il controllo locale del downloader conferma cache HTTP disabilitata, assenza di riutilizzo dei cookie di risposta, riuso degli artefatti verificati e rifiuto di cache corrotta/checksum errato. Il task `DEPENDENCY-BUILD-CACHE-UPSTREAM-01` è chiuso per aggiornamento fuori intervallo e verifica della configurazione, senza dichiarare una patch del comportamento contestato.
+
+Per [braces](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) e [sprintf-js](https://github.com/advisories/GHSA-hp3w-g68c-fv3c), advisory e registro npm confermano ancora nessuna versione corretta disponibile (ultime versioni 3.0.3 e 1.1.3). Restano aperti i rispettivi task upstream. L'isolamento del parser in worker e i controlli di esposizione del formatter sono mitigazioni limitate, non eliminano i pacchetti vulnerabili. Nessun downgrade forzato o esclusione degli avvisi è applicato. [Ricevuta dei controlli](./verification-2026-10-15.md#riesame-dependabot).

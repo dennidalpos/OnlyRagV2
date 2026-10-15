@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { CodingSession } from '../../../../shared/types'
@@ -159,6 +159,17 @@ export class SessionHistoryRecoveryJournal {
     if (digest(await fs.promises.readFile(target, 'utf8')) !== digest(await fs.promises.readFile(source, 'utf8'))) {
       throw new Error('Coding history recovery export readback failed')
     }
+    return target
+  }
+
+  async exportSnapshot(session: CodingSession, destinationDirectory: string): Promise<string> {
+    const snapshot = normalized(session)
+    const destination = path.resolve(destinationDirectory)
+    if (!(await fs.promises.stat(destination)).isDirectory()) throw new Error('Recovery export destination is not a directory')
+    const target = path.join(destination, `coding-history-snapshot-${randomUUID()}.json`)
+    const content = JSON.stringify({ version: 1, session: snapshot, sessionSha256: digest(JSON.stringify(snapshot)) })
+    await fs.promises.writeFile(target, content, { encoding: 'utf8', flag: 'wx', flush: true })
+    if ((await fs.promises.readFile(target, 'utf8')) !== content) throw new Error('Coding history snapshot export readback failed')
     return target
   }
 }

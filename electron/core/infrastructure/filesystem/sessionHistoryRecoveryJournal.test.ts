@@ -8,8 +8,8 @@ vi.mock('./sessionHistoryRepository', () => ({
   sessionHistoryRepository: { listSessions: vi.fn(async () => []) },
 }))
 
-import { sessionHistoryRepository } from './sessionHistoryRepository'
 import { SessionHistoryRecoveryJournal } from './sessionHistoryRecoveryJournal'
+import { sessionHistoryRepository } from './sessionHistoryRepository'
 
 const original: CodingSession = {
   id: 'session-1',
@@ -70,6 +70,33 @@ describe('coding history recovery journal', () => {
     expect((await journal.stage({ ...original, title: 'Second unsaved revision' })).baseSha256).toBe('unreadable')
     expect((await journal.read(staged.recoveryId)).session.title).toBe('Second unsaved revision')
     expect(sessionHistoryRepository.listSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('exports a memory snapshot independently of unavailable internal stores with exclusive files and readback', async () => {
+    await fs.promises.rm(root, { recursive: true })
+    await fs.promises.writeFile(root, 'blocked recovery directory')
+    vi.mocked(sessionHistoryRepository.listSessions).mockRejectedValue(new Error('Canonical history unavailable'))
+    const destination = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'onlyrag-memory-export-'))
+    try {
+      const snapshot = { ...original, title: 'Unsaved memory revision' }
+      await expect(journal.stage(snapshot)).rejects.toThrow()
+      vi.mocked(sessionHistoryRepository.listSessions).mockClear()
+      const first = await journal.exportSnapshot(snapshot, destination)
+      const firstBytes = await fs.promises.readFile(first, 'utf8')
+      const exported = JSON.parse(firstBytes)
+      expect(exported.session).toMatchObject(snapshot)
+      expect(exported.sessionSha256).toBe(journal.hashSession(snapshot))
+      const second = await journal.exportSnapshot({ ...snapshot, title: 'Newer revision' }, destination)
+      expect(second).not.toBe(first)
+      expect(await fs.promises.readFile(first, 'utf8')).toBe(firstBytes)
+      expect(await fs.promises.readFile(root, 'utf8')).toBe('blocked recovery directory')
+      expect(sessionHistoryRepository.listSessions).not.toHaveBeenCalled()
+      await expect(journal.exportSnapshot(snapshot, root)).rejects.toThrow('not a directory')
+      await expect(journal.exportSnapshot(snapshot, path.join(destination, 'missing'))).rejects.toThrow()
+    } finally {
+      await fs.promises.rm(destination, { recursive: true, force: true })
+      await fs.promises.unlink(root)
+    }
   })
 
   it('refuses a modified snapshot in read and list without acknowledging or removing it', async () => {

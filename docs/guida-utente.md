@@ -299,7 +299,7 @@ I diagrammi SVG sono incorporati sotto ogni percorso e restano apribili singolar
 1. Nel progetto seleziona una sessione oppure crea una **Nuova Sessione Progetto**; controlla progetto e sessione prima di riusare una richiesta. **Nuova chat** avvia una nuova conversazione nel contesto previsto.
 2. Usa **Storico Prompt Progetto** o **Cerca nello storico prompt di tutti i progetti** per trovare richieste e relativi esiti. Rivedi il testo prima di eseguirlo nuovamente.
 3. Per eliminare una sessione o **Svuota storico progetto**, leggi e conferma la richiesta mostrata; annulla per conservarla. Controlla il risultato e passa a 19 se compare un avviso di recupero.
-4. Con **Impossibile leggere o salvare sessioni o progetti**, tieni aperta la vista e usa **Riprova archiviazione**; i percorsi aggiuntivi di recupero sono in 19.
+4. Con **Impossibile leggere o salvare sessioni o progetti**, tieni aperta la vista e usa **Riprova archiviazione**. Se il salvataggio continua a fallire, **Esporta modifiche in memoria** salva le revisioni non archiviate in una cartella scelta da te: controlla il percorso mostrato. Annullare il dialogo non crea copie; un errore non conferma il salvataggio. L'esportazione conserva una copia separata, ma la chiusura resta bloccata se nessun archivio riconosce le modifiche. I percorsi aggiuntivi di recupero sono in 19.
 
 **Da sapere.** Rimuovere un progetto dall’elenco non è un comando per cancellarne la cartella sul disco. Non confondere l’eliminazione dello storico con il ripristino dei file di lavoro.
 

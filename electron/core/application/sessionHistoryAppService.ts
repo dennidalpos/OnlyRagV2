@@ -147,6 +147,11 @@ export class SessionHistoryAppService {
     return this.runExclusive(() => sessionHistoryRecoveryJournal.export(recoveryId, destinationDirectory))
   }
 
+  async exportSessionSnapshot(session: CodingSession, destinationDirectory: string): Promise<string> {
+    // Export must remain available even when both internal stores are unreadable.
+    return this.runExclusive(() => sessionHistoryRecoveryJournal.exportSnapshot(session, destinationDirectory))
+  }
+
   async indexPromptHistory(payload: Parameters<typeof sidecarAppService.indexPromptHistory>[0]): Promise<{ success: boolean }> {
     return this.runExclusive(async () => {
       if (await this.pendingFor([payload.sessionId])) return { success: false }

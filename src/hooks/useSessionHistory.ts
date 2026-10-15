@@ -173,6 +173,23 @@ export function useSessionHistory(workspacePath: string | null) {
     setLoadRevision((revision) => revision + 1)
   }, [])
 
+  const exportUnsavedSessions = useCallback(
+    async (destinationDirectory: string): Promise<string[]> => {
+      await flushPendingWrites()
+      const snapshots = Array.from(failedWritesRef.current.values())
+      const exportSnapshot = window.electronAPI?.exportCodingSessionSnapshot
+      if (!exportSnapshot || snapshots.length === 0) throw new Error('No unsaved coding history snapshot is available')
+      const paths: string[] = []
+      for (const session of snapshots) {
+        const payload = JSON.parse(JSON.stringify(session)) as CodingSession
+        paths.push(await exportSnapshot({ session: payload, destinationDirectory }))
+      }
+      // An external copy does not acknowledge canonical history or release the close guard.
+      return paths
+    },
+    [flushPendingWrites],
+  )
+
   const refreshAfterDeletionRecovery = useCallback((sessionIds: readonly string[]) => {
     for (const sessionId of sessionIds) {
       const pending = pendingWritesRef.current.get(sessionId)
@@ -518,6 +535,7 @@ export function useSessionHistory(workspacePath: string | null) {
     isLoadingSessions,
     storageFailed: loadFailed || saveFailed || deleteFailed,
     retryStorage,
+    exportUnsavedSessions,
     refreshRecoveredHistory,
     refreshAfterDeletionRecovery,
     createSession,

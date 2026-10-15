@@ -4,12 +4,6 @@
   ],
   "todo_autonomous": [
     {
-      "id": "CODING-HISTORY-DUAL-FAILURE-EXPORT-01",
-      "p": "P1",
-      "task": "Export the still-in-memory coding session snapshot when both canonical history and Main recovery staging reject writes; qualify blocked close and independent export readback in an isolated desktop profile (docs/verification.md).",
-      "verify": "Force canonical and recovery-staging write failures in an isolated desktop profile; verify close stays blocked, export the in-memory revision and independently read back identical content. Run the coding-session and recovery-journal regression tests."
-    },
-    {
       "id": "TEST-WEB-DOWNLOAD-STREAM-FAILURE-01",
       "p": "P1",
       "task": "Exercise download file-stream open/write failures and cancellation races against webClient.downloadFile; ensure one failure result, no unhandled stream error and no partial file (electron/core/infrastructure/http/webClient.ts).",
@@ -173,11 +167,6 @@
       "id": "DEPENDENCY-MONACO-VENDORED-SANITIZER-01",
       "p": "P3",
       "task": "Track Monaco bundled sanitizer advisory and verify the embedded exposure path (docs/verification.md)."
-    },
-    {
-      "id": "DEPENDENCY-BUILD-CACHE-UPSTREAM-01",
-      "p": "P3",
-      "task": "Track build-cache advisory and validate actual electron-builder download configuration (docs/verification.md)."
     }
   ],
   "todo_user_required": [

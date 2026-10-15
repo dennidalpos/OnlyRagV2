@@ -87,7 +87,14 @@ export function SessionDeletionRecoveryBanner({ storageFailed, onResolved }: Pro
       {operations.map((operation) => (
         <div key={operation.operationId} className="flex flex-wrap items-center gap-2 py-1">
           <span>
-            {t(operation.status === 'complete' ? 'coding.deletionRecoveryComplete' : 'coding.deletionRecovery')} {operation.workspacePath || ''}
+            {t(
+              operation.status === 'incomplete'
+                ? 'coding.deletionRecoveryIncomplete'
+                : operation.status === 'complete'
+                  ? 'coding.deletionRecoveryComplete'
+                  : 'coding.deletionRecovery',
+            )}{' '}
+            {operation.workspacePath || ''}
           </span>
           <button
             type="button"
@@ -99,7 +106,7 @@ export function SessionDeletionRecoveryBanner({ storageFailed, onResolved }: Pro
           </button>
           <button
             type="button"
-            disabled={busyId !== null}
+            disabled={busyId !== null || operation.status === 'incomplete'}
             onClick={() => void act(operation, 'restore')}
             className="rounded border border-amber-600 px-2 py-1 disabled:opacity-50"
           >

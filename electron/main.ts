@@ -1,6 +1,6 @@
 // Must stay the first import: it fixes the app name and userData before any module reads them.
 import { isElectronE2ETest } from './appIdentity'
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, dialog } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { pathToFileURL } from 'node:url'
@@ -104,6 +104,48 @@ function createWindow() {
     bindRenderer()
   })
   ownedWindow.on('closed', () => invalidateRenderer())
+  let closeApproved = false
+  let closeChecking = false
+  ownedWindow.on('close', (event) => {
+    if (closeApproved || ownedWindow.webContents.isDestroyed()) return
+    event.preventDefault()
+    if (closeChecking) return
+    closeChecking = true
+    let timer: ReturnType<typeof setTimeout>
+    void Promise.race([
+      ownedWindow.webContents.executeJavaScript('window.__onlyragFlushCodingHistory?.() ?? true'),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), 10_000)
+      }),
+    ])
+      .then((safe) => {
+        if (ownedWindow.isDestroyed()) return
+        if (safe) {
+          closeApproved = true
+          ownedWindow.close()
+        } else {
+          void dialog.showMessageBox(ownedWindow, {
+            type: 'warning',
+            buttons: ['Keep open'],
+            message: 'Coding history is not yet retained. Retry storage before closing.',
+          })
+        }
+      })
+      .catch((error: unknown) => {
+        logger.log('WARN', 'MainProcess', `Coding history close check failed: ${String(error)}`)
+        if (!ownedWindow.isDestroyed()) {
+          void dialog.showMessageBox(ownedWindow, {
+            type: 'warning',
+            buttons: ['Keep open'],
+            message: 'Coding history could not be checked. Retry storage before closing.',
+          })
+        }
+      })
+      .finally(() => {
+        clearTimeout(timer)
+        closeChecking = false
+      })
+  })
 
   // The UI needs no camera, microphone, geolocation or notification permissions.
   win.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))

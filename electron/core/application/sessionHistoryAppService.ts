@@ -4,6 +4,7 @@ import { agentSessionStateRepository } from '../infrastructure/filesystem/agentS
 import { deleteConversationCheckpoints } from '../infrastructure/filesystem/agentCheckpointStore'
 import { sessionDeletionJournal, type SessionDeletionRecoveryRecord } from '../infrastructure/filesystem/sessionDeletionJournal'
 import { sessionHistoryRepository } from '../infrastructure/filesystem/sessionHistoryRepository'
+import { sessionHistoryRecoveryJournal } from '../infrastructure/filesystem/sessionHistoryRecoveryJournal'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { sidecarAppService } from './sidecarAppService'
 import { sessionDeletionRunGate } from './sessionDeletionRunGate'
@@ -79,6 +80,7 @@ export class SessionHistoryAppService {
         }
         codingAgentLogger.removeSessionFromAuditLog(sessionId)
       }
+      for (const { session } of record.copies) await sessionHistoryRecoveryJournal.removeDeleted(session)
       record.status = 'complete'
       record.error = undefined
       return this.outcome(await sessionDeletionJournal.update(record))
@@ -95,8 +97,54 @@ export class SessionHistoryAppService {
   async saveSession(session: CodingSession): Promise<CodingSession | null> {
     return this.runExclusive(async () => {
       if (await this.pendingFor([session.id])) return null
-      return sessionHistoryRepository.saveSession(session)
+      const saved = await sessionHistoryRepository.saveSession(session)
+      if (saved) await sessionHistoryRecoveryJournal.acknowledge(saved)
+      return saved
     })
+  }
+
+  async stageSession(session: CodingSession): Promise<boolean> {
+    return this.runExclusive(async () => {
+      if (await this.pendingFor([session.id])) return false
+      await sessionHistoryRecoveryJournal.stage(session)
+      return true
+    })
+  }
+
+  async listHistoryRecovery(): Promise<Array<{ recoveryId: string; sessionId: string; workspacePath: string | null }>> {
+    return this.runExclusive(async () =>
+      (await sessionHistoryRecoveryJournal.list()).map(({ recoveryId, session }) => ({
+        recoveryId,
+        sessionId: session.id,
+        workspacePath: session.workspacePath,
+      })),
+    )
+  }
+
+  async retryHistoryRecovery(recoveryId: string): Promise<{ status: 'complete' | 'refused'; error?: string }> {
+    return this.runExclusive(async () => {
+      const record = await sessionHistoryRecoveryJournal.read(recoveryId)
+      if (await this.pendingFor([record.session.id])) return { status: 'refused', error: 'Session deletion owns this history' }
+      try {
+        const current = (await sessionHistoryRepository.listSessions(record.session.workspacePath)).find((item) => item.id === record.session.id)
+        const currentHash = current ? sessionHistoryRecoveryJournal.hashSession(current) : null
+        if (currentHash !== record.baseSha256 && currentHash !== record.sessionSha256) {
+          return { status: 'refused', error: 'Changed session history conflicts with recovery' }
+        }
+        if (currentHash !== record.sessionSha256) {
+          const saved = await sessionHistoryRepository.saveSession(record.session)
+          if (!saved) return { status: 'refused', error: 'Session history write was not acknowledged' }
+        }
+        await sessionHistoryRecoveryJournal.acknowledge(record.session)
+        return { status: 'complete' }
+      } catch (error: unknown) {
+        return { status: 'refused', error: error instanceof Error ? error.message : String(error) }
+      }
+    })
+  }
+
+  async exportHistoryRecovery(recoveryId: string, destinationDirectory: string): Promise<string> {
+    return this.runExclusive(() => sessionHistoryRecoveryJournal.export(recoveryId, destinationDirectory))
   }
 
   async indexPromptHistory(payload: Parameters<typeof sidecarAppService.indexPromptHistory>[0]): Promise<{ success: boolean }> {
@@ -193,6 +241,9 @@ export class SessionHistoryAppService {
         status: status as 'pending' | 'restoring' | 'complete',
         error,
       }))
+    for (const preparation of await sessionDeletionJournal.listIncompletePreparations()) {
+      summaries.push({ operationId: preparation.operationId, workspacePath: null, sessionIds: [], status: 'incomplete', error: preparation.error })
+    }
     return { operations: summaries.slice(offset, offset + 50), total: summaries.length }
   }
 
@@ -270,7 +321,13 @@ export class SessionHistoryAppService {
   }
 
   async exportDeletion(operationId: string, destinationDirectory: string): Promise<string> {
-    return this.runExclusive(() => sessionDeletionJournal.exportBundle(operationId, destinationDirectory))
+    return this.runExclusive(async () => {
+      const incomplete = await sessionDeletionJournal.listIncompletePreparations()
+      if (incomplete.some((item) => item.operationId === operationId)) {
+        return sessionDeletionJournal.exportIncompletePreparation(operationId, destinationDirectory)
+      }
+      return sessionDeletionJournal.exportBundle(operationId, destinationDirectory)
+    })
   }
 }
 

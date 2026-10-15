@@ -10,6 +10,8 @@ React/Vite/Electron gestiscono UI e packaging. Il runtime usa depcheck in un wor
 
 FastAPI/Pydantic espongono REST, LanceDB e Arrow conservano i dati, pandas/openpyxl/xlrd leggono tabelle, PyMuPDF/python-docx elaborano documenti e RapidOCR/ONNX Runtime eseguono OCR. La build CPU usa un ambiente separato dal venv di sviluppo con GPU.
 
+L'[audit Python del 2026-10-15](./python-dependency-audit-2026-10-15.md) confronta il lock del candidato CPU con il manifest e interroga PyPI e OSV tramite `pip-audit` per 69 pacchetti release e 81 di sviluppo: nessun advisory noto nei quattro risultati datati. La verifica non copre vulnerabilità di librerie native incorporate o advisory futuri.
+
 ## Residui attuali
 
 Gli interventi compatibili upstream per braces, sprintf-js, la cache HTTP del builder e il sanitizer incorporato in Monaco sono aperti nel [tracker](../PROJECT_STATUS.json). Il worker limita e isola la scansione, ma non corregge il pacchetto braces. La cache HTTP Got del builder resta disabilitata; il controllo dell'artefatto scaricato è separato. La presenza di un pacchetto vulnerabile non dimostra da sola un input sfruttabile nell'app. Rivedere la catena di chiamata e l'advisory ufficiale prima di cambiare lockfile o confini di esecuzione.

@@ -12,6 +12,7 @@ describe('useSessionHistory persistence', () => {
   let root: Root
   let history: History
   const saveCodingSession = vi.fn<(session: CodingSession) => Promise<CodingSession | null>>(async (session) => session)
+  const stageCodingSession = vi.fn<(session: CodingSession) => Promise<boolean>>(async () => true)
 
   function Harness({ workspacePath = 'C:/workspace' }: { workspacePath?: string } = {}) {
     history = useSessionHistory(workspacePath)
@@ -22,14 +23,17 @@ describe('useSessionHistory persistence', () => {
     vi.useFakeTimers()
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       saveCodingSession,
+      stageCodingSession,
       listCodingSessions: vi.fn(async () => []),
     }
     saveCodingSession.mockReset().mockImplementation(async (session) => session)
+    stageCodingSession.mockReset().mockResolvedValue(true)
     container = document.createElement('div')
     root = createRoot(container)
     await act(async () => root.render(<Harness />))
     await act(async () => vi.runAllTimersAsync())
     saveCodingSession.mockClear()
+    stageCodingSession.mockClear()
   })
 
   afterEach(async () => {
@@ -49,6 +53,27 @@ describe('useSessionHistory persistence', () => {
     await act(async () => vi.advanceTimersByTimeAsync(600))
     expect(saveCodingSession).toHaveBeenCalledTimes(1)
     expect(saveCodingSession.mock.calls[0][0].actionLogs).toHaveLength(50)
+  })
+
+  it('stages a persistable revision before the debounced canonical save', async () => {
+    const sessionId = history.activeSessionId
+    await act(async () => history.updateSessionContent(sessionId, { actionLogs: [{ id: 'staged' } as never] }))
+    expect(stageCodingSession).toHaveBeenCalledWith(expect.objectContaining({ id: sessionId, actionLogs: [{ id: 'staged' }] }))
+    expect(saveCodingSession).not.toHaveBeenCalled()
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    expect(saveCodingSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses close while neither canonical history nor Main staging acknowledges a revision', async () => {
+    stageCodingSession.mockResolvedValue(false)
+    saveCodingSession.mockResolvedValue(null)
+    await act(async () => history.updateSessionContent(history.activeSessionId, { actionLogs: [{ id: 'at-risk' } as never] }))
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    const flush = (window as Window & { __onlyragFlushCodingHistory?: () => Promise<boolean> }).__onlyragFlushCodingHistory
+    expect(flush).toBeDefined()
+    expect(await flush!()).toBe(false)
+    stageCodingSession.mockResolvedValue(true)
+    expect(await flush!()).toBe(true)
   })
 
   it('shows a failed load without creating a replacement session, then retries', async () => {

@@ -4,24 +4,9 @@
   ],
   "todo_autonomous": [
     {
-      "id": "AGENT-DEBUG-AUDIT-COMPLETENESS-01",
+      "id": "CODING-HISTORY-DUAL-FAILURE-EXPORT-01",
       "p": "P1",
-      "task": "Qualify offline Coding Agent audit readback across prompt deltas, file rotation, restart and planning failures; preserve every retained step and verify clear/retention behavior in isolated roots (docs/agent-runtime.md)."
-    },
-    {
-      "id": "PYTHON-DEPENDENCY-ADVISORY-AUDIT-01",
-      "p": "P2",
-      "task": "Audit pinned Sidecar requirements and packaged CPU dependency set with a vetted Python advisory scanner; document affected runtime paths and compatible remediations without changing dependencies blindly (sidecar/requirements-*.txt)."
-    },
-    {
-      "id": "SESSION-DELETION-STAGING-RESOLUTION-01",
-      "p": "P2",
-      "task": "Resolve staged session deletion and partial cleanup through crash/restart readback (docs/verification.md)."
-    },
-    {
-      "id": "CODING-HISTORY-CLOSE-DURABILITY-01",
-      "p": "P2",
-      "task": "Qualify coding history persistence across close, interruption and restart (docs/verification.md)."
+      "task": "Export the still-in-memory coding session snapshot when both canonical history and Main recovery staging reject writes; qualify blocked close and independent export readback in an isolated desktop profile (docs/verification.md)."
     },
     {
       "id": "DISTRIBUTION-CURRENT-SOURCE-QUALIFICATION-01",

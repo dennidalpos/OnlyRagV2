@@ -41,6 +41,11 @@ export interface SessionDeletionRecoveryRecord {
   error?: string
 }
 
+export interface IncompleteDeletionPreparation {
+  operationId: string
+  error: string
+}
+
 function sha256(data: Buffer | string): string {
   return createHash('sha256').update(data).digest('hex')
 }
@@ -259,6 +264,11 @@ export class SessionDeletionJournal {
   }
 
   async list(): Promise<SessionDeletionRecoveryRecord[]> {
+    await this.resolvePreparations()
+    return Promise.all((await this.entries()).filter((entry) => !entry.name.startsWith('.preparing-')).map((entry) => this.readRecord(entry.name, false)))
+  }
+
+  private async entries(): Promise<fs.Dirent[]> {
     let entries: fs.Dirent[]
     try {
       entries = await fs.promises.readdir(this.root, { withFileTypes: true })
@@ -266,11 +276,55 @@ export class SessionDeletionJournal {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return []
       throw error
     }
-    for (const entry of entries) {
-      if (!entry.isDirectory()) throw new Error('Unsupported deletion recovery entry')
-      if (entry.name.startsWith('.preparing-')) throw new Error(`Incomplete deletion preparation retained: ${entry.name}`)
+    for (const entry of entries) if (!entry.isDirectory()) throw new Error('Unsupported deletion recovery entry')
+    return entries
+  }
+
+  private async resolvePreparations(): Promise<void> {
+    for (const entry of await this.entries()) {
+      if (!entry.name.startsWith('.preparing-')) continue
+      const operationId = entry.name.slice('.preparing-'.length)
+      let record: SessionDeletionRecoveryRecord
+      try {
+        const directory = this.preparationDir(operationId)
+        record = await this.readRecord(operationId, true, directory)
+        if (record.status !== 'pending' || record.historyDeleted || record.indexDeleted || record.stateDeleted.length || record.checkpointsDeleted.length)
+          continue
+        if (fs.existsSync(this.operationDir(operationId))) continue
+        await fs.promises.rename(directory, this.operationDir(operationId))
+      } catch {
+        // An incomplete or conflicting preparation remains available for export.
+      }
     }
-    return Promise.all(entries.map((entry) => this.readRecord(entry.name, false)))
+  }
+
+  async listIncompletePreparations(): Promise<IncompleteDeletionPreparation[]> {
+    await this.resolvePreparations()
+    return (await this.entries())
+      .filter((entry) => entry.name.startsWith('.preparing-'))
+      .map((entry) => ({ operationId: entry.name.slice('.preparing-'.length), error: 'Incomplete deletion preparation retained' }))
+  }
+
+  async exportIncompletePreparation(operationId: string, destinationDirectory: string): Promise<string> {
+    const source = this.preparationDir(operationId)
+    assertDirectory(source)
+    const destination = path.resolve(destinationDirectory)
+    assertDirectory(destination)
+    const target = path.join(destination, `session-deletion-incomplete-${operationId}`)
+    if (fs.existsSync(target)) throw new Error('Recovery export already exists')
+    const files = listFiles(source)
+    await fs.promises.mkdir(target)
+    for (const relative of files) {
+      if (!safeRelative(relative)) throw new Error('Unsafe deletion recovery asset path')
+      const original = path.join(source, relative)
+      const copy = path.join(target, relative)
+      await fs.promises.mkdir(path.dirname(copy), { recursive: true })
+      const before = await hashFile(original)
+      await fs.promises.copyFile(original, copy, fs.constants.COPYFILE_EXCL)
+      const after = await hashFile(copy)
+      if (before.bytes !== after.bytes || before.sha256 !== after.sha256) throw new Error('Recovery export readback failed')
+    }
+    return target
   }
 
   async update(record: SessionDeletionRecoveryRecord): Promise<SessionDeletionRecoveryRecord> {

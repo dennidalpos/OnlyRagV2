@@ -10,6 +10,15 @@ export function registerSessionHistoryIpcHandlers() {
     return sessionHistoryAppService.saveSession(session)
   })
 
+  ipcMain.handle('sessions:stage', async (_event, session) => sessionHistoryAppService.stageSession(session))
+  ipcMain.handle('sessions:history-recovery-list', async () => sessionHistoryAppService.listHistoryRecovery())
+  ipcMain.handle('sessions:history-recovery-action', async (_event, payload) => {
+    if (payload.action === 'retry') return sessionHistoryAppService.retryHistoryRecovery(payload.recoveryId)
+    if (!payload.destinationDirectory) return { status: 'refused', error: 'Export destination is required' }
+    const exportPath = await sessionHistoryAppService.exportHistoryRecovery(payload.recoveryId, payload.destinationDirectory)
+    return { status: 'complete', exportPath }
+  })
+
   ipcMain.handle('sessions:delete', async (_event, { sessionId, workspacePath }) => {
     return sessionHistoryAppService.deleteSession(sessionId, workspacePath)
   })

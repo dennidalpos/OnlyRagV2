@@ -167,6 +167,13 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
   'projects:remove': obj({ projectPath: path }),
   'sessions:list': workspacePathOnly,
   'sessions:save': session,
+  'sessions:stage': session,
+  'sessions:history-recovery-list': null,
+  'sessions:history-recovery-action': obj({
+    recoveryId: z.string().regex(/^[0-9a-f]{64}$/),
+    action: z.enum(['retry', 'export']),
+    destinationDirectory: path.optional(),
+  }),
   'sessions:delete': obj({ sessionId: short, workspacePath: optionalPath }),
   'sessions:clear': workspacePathOnly,
   'sessions:recovery-list': obj({ offset: z.number().int().nonnegative().max(1_000_000).optional() }),

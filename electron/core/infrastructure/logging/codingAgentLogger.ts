@@ -24,7 +24,8 @@ export class CodingAgentLogger {
 
   constructor(options?: { logFilePath?: string; maxSizeBytes?: number; maxRetainedFiles?: number }) {
     const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : process.cwd()
-    const logDir = path.join(baseDir, 'logs')
+    this.logFilePath = options?.logFilePath || path.join(baseDir, 'logs', 'coding_agent_audit.log')
+    const logDir = path.dirname(this.logFilePath)
     if (!fs.existsSync(logDir)) {
       try {
         fs.mkdirSync(logDir, { recursive: true })
@@ -32,7 +33,6 @@ export class CodingAgentLogger {
         console.error('Failed creating log directory for coding agent audit:', err)
       }
     }
-    this.logFilePath = options?.logFilePath || path.join(logDir, 'coding_agent_audit.log')
     this.maxSizeBytes = options?.maxSizeBytes ?? 10 * 1024 * 1024
     this.maxRetainedFiles = Math.max(1, options?.maxRetainedFiles ?? 2)
     this.cleanupRetainedFiles()
@@ -70,6 +70,18 @@ export class CodingAgentLogger {
     return `${label}: [payload omitted] | Chars: ${value.length} | SHA-256: ${digest}`
   }
 
+  private static auditEntries(raw: string): string[] {
+    return raw.split(/\n={80}\n(?=\[\d{4}-\d{2}-\d{2}T)/).filter(Boolean)
+  }
+
+  private static entrySessionId(entry: string): string | null {
+    const header = entry.split('\n', 1)[0]
+    const headerSession = header.match(/\bSession: ([^\r\n]+)$/)
+    if (headerSession) return headerSession[1]
+    const body = entry.slice(entry.indexOf('\n' + '='.repeat(80) + '\n') + 82)
+    return body.match(/^Session ID: ([^|\r\n]+)/)?.[1]?.trim() || null
+  }
+
   /** Returns every persisted audit entry for one session, including rotated files. */
   public readSessionAuditLog(sessionId: string): string {
     if (!sessionId) return ''
@@ -81,10 +93,7 @@ export class CodingAgentLogger {
       ]
       const entries = files.flatMap((filePath) => {
         if (!fs.existsSync(filePath)) return []
-        return fs
-          .readFileSync(filePath, 'utf-8')
-          .split(/\n={80}\n/)
-          .filter((entry) => entry.includes(`Session: ${sessionId}`) || entry.includes(`Session ID: ${sessionId}`))
+        return CodingAgentLogger.auditEntries(fs.readFileSync(filePath, 'utf-8')).filter((entry) => CodingAgentLogger.entrySessionId(entry) === sessionId)
       })
       return entries.join('\n================================================================================\n').trim()
     } catch (err: unknown) {
@@ -115,18 +124,22 @@ export class CodingAgentLogger {
   public removeSessionFromAuditLog(sessionId: string): boolean {
     if (!sessionId || typeof sessionId !== 'string') return false
     try {
-      const logFiles = [this.logFilePath, path.join(path.dirname(this.logFilePath), 'coding_agent_audit.1.log')]
+      const logDir = path.dirname(this.logFilePath)
+      const logFiles = [
+        this.logFilePath,
+        ...Array.from({ length: this.maxRetainedFiles - 1 }, (_, index) => path.join(logDir, `coding_agent_audit.${index + 1}.log`)),
+      ]
 
       for (const filePath of logFiles) {
         if (!fs.existsSync(filePath)) continue
         const raw = fs.readFileSync(filePath, 'utf-8')
-        if (!raw.includes(sessionId)) continue
-
-        const entries = raw.split(/\n={80}\n/)
-        const filtered = entries.filter((entry) => !entry.includes(`Session: ${sessionId}`) && !entry.includes(`Session ID: ${sessionId}`))
-        const cleaned = filtered.join('\n================================================================================\n')
-        fs.writeFileSync(filePath, cleaned, 'utf-8')
+        const entries = CodingAgentLogger.auditEntries(raw)
+        const filtered = entries.filter((entry) => CodingAgentLogger.entrySessionId(entry) !== sessionId)
+        if (filtered.length === entries.length) continue
+        fs.writeFileSync(filePath, filtered.map((entry) => `\n${'='.repeat(80)}\n${entry}`).join(''), 'utf-8')
       }
+      this.previousPromptBySession.delete(sessionId)
+      this.payloadCaptureBySession.delete(sessionId)
       return true
     } catch (err: unknown) {
       logger.log('WARN', 'CodingAgentLogger', `Failed removing session ${sessionId} from audit log: ${errorMessage(err)}`)
@@ -140,6 +153,8 @@ export class CodingAgentLogger {
       const stats = fs.statSync(this.logFilePath)
       if (stats.size >= this.maxSizeBytes) {
         const logDir = path.dirname(this.logFilePath)
+        // Any partial rotation can evict a prompt anchor; a new generation starts fresh.
+        this.previousPromptBySession.clear()
         this.cleanupRetainedFiles()
         try {
           for (let index = this.maxRetainedFiles - 1; index >= 2; index--) {
@@ -150,8 +165,8 @@ export class CodingAgentLogger {
           }
           if (this.maxRetainedFiles > 1) fs.renameSync(this.logFilePath, path.join(logDir, 'coding_agent_audit.1.log'))
           else fs.writeFileSync(this.logFilePath, '', 'utf-8')
-        } catch {
-          fs.writeFileSync(this.logFilePath, '', 'utf-8')
+        } catch (err: unknown) {
+          logger.log('WARN', 'CodingAgentLogger', `Failed rotating audit log: ${errorMessage(err)}`)
         }
       }
     } catch (err: unknown) {
@@ -252,6 +267,7 @@ ${promptDetail}`
   }
 
   public logTurnPrompt(sessionId: string, step: number, model: string, numCtx: number, prompt: string): void {
+    this.rotateIfNeeded()
     const header = `Session ID: ${sessionId} | Step: ${step} | Target Model: ${model} | Context Limit: ${numCtx}`
     if (!this.includesPayload(sessionId)) {
       this.writeEntry(`[STEP ${step} - PROMPT SENT TO LLM] Session: ${sessionId}`, `${header}\n${CodingAgentLogger.payloadSummary('Turn Prompt', prompt)}`)

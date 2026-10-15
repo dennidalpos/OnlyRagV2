@@ -265,8 +265,15 @@ export const en: TranslationSchema = {
     storageFailed:
       'Session or project data could not be read or saved. An unreadable archive is never replaced. Pending session changes remain in memory: keep this view open and retry.',
     storageRetry: 'Retry storage',
+    historyRecovery: 'A retained coding history snapshot needs recovery:',
+    historyRecoveryRetry: 'Retry history',
+    historyRecoveryExport: 'Export snapshot',
+    historyRecoveryExportTitle: 'Choose a folder for the coding history snapshot',
+    historyRecoveryRefused: 'History recovery was refused',
     deletionRecovery: 'Session deletion needs recovery. The original snapshots are retained.',
     deletionRecoveryComplete: 'Deleted session backup retained. Restore or export remains available.',
+    deletionRecoveryIncomplete:
+      'Session deletion preparation was interrupted. Originals and staging bytes are retained; export the staging evidence for review.',
     deletionRetry: 'Retry deletion',
     deletionRestore: 'Restore session',
     deletionExport: 'Export recovery',

@@ -14,9 +14,21 @@ vi.mock('../infrastructure/filesystem/sessionHistoryRepository', () => ({
     saveSession: vi.fn(),
   },
 }))
+vi.mock('../infrastructure/filesystem/sessionHistoryRecoveryJournal', () => ({
+  sessionHistoryRecoveryJournal: {
+    stage: vi.fn(),
+    read: vi.fn(),
+    list: vi.fn(async () => []),
+    acknowledge: vi.fn(),
+    removeDeleted: vi.fn(),
+    export: vi.fn(),
+    hashSession: vi.fn((session: unknown) => JSON.stringify(session)),
+  },
+}))
 vi.mock('../infrastructure/filesystem/sessionDeletionJournal', () => ({
   sessionDeletionJournal: {
     list: vi.fn(async () => [...state.records.values()]),
+    listIncompletePreparations: vi.fn(async () => []),
     read: vi.fn(async (id: string) => {
       const record = state.records.get(id)
       if (!record) throw new Error('Missing recovery record')
@@ -55,6 +67,7 @@ vi.mock('../infrastructure/filesystem/sessionDeletionJournal', () => ({
     verifyRestoreAssets: vi.fn(),
     verifyDeletionAssets: vi.fn(),
     exportBundle: vi.fn(async () => 'C:/synthetic/export'),
+    exportIncompletePreparation: vi.fn(async () => 'C:/synthetic/incomplete-export'),
   },
 }))
 vi.mock('../infrastructure/filesystem/agentSessionStateRepository', () => ({
@@ -85,6 +98,7 @@ vi.mock('./sessionDeletionRunGate', () => ({
 import { SessionHistoryAppService } from './sessionHistoryAppService'
 import { sessionHistoryRepository } from '../infrastructure/filesystem/sessionHistoryRepository'
 import { sessionDeletionJournal } from '../infrastructure/filesystem/sessionDeletionJournal'
+import { sessionHistoryRecoveryJournal } from '../infrastructure/filesystem/sessionHistoryRecoveryJournal'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { deleteConversationCheckpoints } from '../infrastructure/filesystem/agentCheckpointStore'
 import { sidecarAppService } from './sidecarAppService'
@@ -163,6 +177,19 @@ describe('session deletion recovery', () => {
     expect(sidecarAppService.removePromptHistoryForSessions).toHaveBeenLastCalledWith(['session'], 'operation-1')
   })
 
+  it('lists and exports incomplete preparation without treating it as a deletable session', async () => {
+    const service = new SessionHistoryAppService()
+    vi.mocked(sessionDeletionJournal.listIncompletePreparations).mockResolvedValue([
+      { operationId: 'staged-id', error: 'Incomplete deletion preparation retained' },
+    ])
+    expect((await service.listDeletionRecovery()).operations).toEqual([
+      { operationId: 'staged-id', workspacePath: null, sessionIds: [], status: 'incomplete', error: 'Incomplete deletion preparation retained' },
+    ])
+    expect(await service.exportDeletion('staged-id', 'C:/synthetic')).toBe('C:/synthetic/incomplete-export')
+    expect(sessionDeletionJournal.exportIncompletePreparation).toHaveBeenCalledWith('staged-id', 'C:/synthetic')
+    await expect(service.retryDeletion('staged-id')).rejects.toThrow('Missing recovery record')
+  })
+
   it('restores retained history and assets, then explicitly reindexes prompts', async () => {
     const service = new SessionHistoryAppService()
     vi.mocked(agentSessionStateRepository.clearSessionState).mockResolvedValueOnce(false)
@@ -226,5 +253,31 @@ describe('session deletion recovery', () => {
     expect(await service.retryDeletion('operation-1')).toMatchObject({ status: 'complete' })
     expect(agentSessionStateRepository.clearSessionState).toHaveBeenCalledTimes(1)
     expect(deleteConversationCheckpoints).toHaveBeenCalledTimes(2)
+  })
+
+  it('stages before canonical acknowledgement and keeps refused saves recoverable', async () => {
+    const service = new SessionHistoryAppService()
+    const session = copy('history').session
+    vi.mocked(sessionHistoryRepository.saveSession).mockResolvedValueOnce(null).mockResolvedValueOnce(session)
+    expect(await service.stageSession(session)).toBe(true)
+    expect(await service.saveSession(session)).toBeNull()
+    expect(sessionHistoryRecoveryJournal.acknowledge).not.toHaveBeenCalled()
+    expect(await service.saveSession(session)).toEqual(session)
+    expect(sessionHistoryRecoveryJournal.acknowledge).toHaveBeenCalledWith(session)
+  })
+
+  it('refuses a recovery that would overwrite a changed canonical revision', async () => {
+    const service = new SessionHistoryAppService()
+    const session = copy('history').session
+    vi.mocked(sessionHistoryRecoveryJournal.read).mockResolvedValue({
+      recoveryId: 'recovery',
+      session,
+      baseSha256: 'base',
+      sessionSha256: 'staged',
+    } as never)
+    vi.mocked(sessionHistoryRepository.listSessions).mockResolvedValue([{ ...session, title: 'Changed' }])
+    expect(await service.retryHistoryRecovery('recovery')).toMatchObject({ status: 'refused', error: expect.stringContaining('conflicts') })
+    expect(sessionHistoryRepository.saveSession).not.toHaveBeenCalled()
+    expect(sessionHistoryRecoveryJournal.acknowledge).not.toHaveBeenCalled()
   })
 })

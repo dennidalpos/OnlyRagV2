@@ -74,13 +74,25 @@ export interface SessionDeletionRecoverySummary {
   operationId: string
   workspacePath: string | null
   sessionIds: string[]
-  status: 'pending' | 'restoring' | 'complete'
+  status: 'pending' | 'restoring' | 'complete' | 'incomplete'
   error?: string
 }
 
 export interface SessionDeletionRecoveryPage {
   operations: SessionDeletionRecoverySummary[]
   total: number
+}
+
+export interface CodingHistoryRecoverySummary {
+  recoveryId: string
+  sessionId: string
+  workspacePath: string | null
+}
+
+export interface CodingHistoryRecoveryOutcome {
+  status: 'complete' | 'refused'
+  error?: string
+  exportPath?: string
 }
 
 /** Renderer → Main request/response channels: `payload` is `void` for channels without input. */
@@ -236,6 +248,12 @@ export interface IpcInvokeContract {
   }
   'sessions:list': { payload: { workspacePath?: string | null }; result: CodingSession[] }
   'sessions:save': { payload: CodingSession; result: CodingSession | null }
+  'sessions:stage': { payload: CodingSession; result: boolean }
+  'sessions:history-recovery-list': { payload: void; result: CodingHistoryRecoverySummary[] }
+  'sessions:history-recovery-action': {
+    payload: { recoveryId: string; action: 'retry' | 'export'; destinationDirectory?: string }
+    result: CodingHistoryRecoveryOutcome
+  }
   'sessions:delete': { payload: { sessionId: string; workspacePath?: string | null }; result: SessionDeletionOutcome }
   'sessions:clear': { payload: { workspacePath?: string | null }; result: SessionDeletionOutcome }
   'sessions:recovery-list': { payload: { offset?: number }; result: SessionDeletionRecoveryPage }
@@ -385,6 +403,9 @@ export const IPC_INVOKE_METHODS = {
   exportAiDebugBundle: 'agent:export-ai-debug-bundle',
   listCodingSessions: 'sessions:list',
   saveCodingSession: 'sessions:save',
+  stageCodingSession: 'sessions:stage',
+  listCodingHistoryRecovery: 'sessions:history-recovery-list',
+  actOnCodingHistoryRecovery: 'sessions:history-recovery-action',
   deleteCodingSession: 'sessions:delete',
   clearCodingSessions: 'sessions:clear',
   listSessionDeletionRecovery: 'sessions:recovery-list',

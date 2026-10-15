@@ -28,6 +28,7 @@ import { resolveAgentCapabilityProfile } from '../../../shared/domain/agent/agen
 import { AgentCapabilityProfileControls } from './AgentCapabilityProfileControls'
 import { Modal } from '../common/Modal'
 import { SessionDeletionRecoveryBanner } from './SessionDeletionRecoveryBanner'
+import { CodingHistoryRecoveryBanner } from './CodingHistoryRecoveryBanner'
 
 export type { AgentMode }
 
@@ -179,6 +180,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
           </div>
         )}
         <SessionDeletionRecoveryBanner storageFailed={c.storageFailed} onResolved={c.refreshAfterDeletionRecovery} />
+        <CodingHistoryRecoveryBanner storageFailed={c.storageFailed} onRecovered={c.refreshRecoveredHistory} />
         {/* Main Workspace Split Layout */}
         <div className="flex-1 flex overflow-hidden">
           {/* Full Workspace Explorer Sidebar */}

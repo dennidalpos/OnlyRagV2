@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="1245" viewBox="0 0 360 1245" role="img" aria-labelledby="title desc" xml:lang="it">
+<title id="title">23 · Modelli, assegnazioni e OCR</title>
+<desc id="desc">Usa Setup Wizard Hardware &amp; Modelli per esaminare hardware e proposte oppure inserisci il nome in Scarica Modello. Attendi l’esito; con errore correggi la causa e riprova. Assegna i modelli ai ruoli richiesti: Coding, Chat/RAG, Traduzione, Vision/OCR ed Embedding; quelli specialistici sono opzionali. Un modello selezionato ma non installato non è pronto all’uso. Scegli OCR Nativo (RapidOCR / ONNX) o Vision LLM Multimodale (Ollama Vision). L’OCR nativo non implica automaticamente accelerazione GPU: controlla lo stato mostrato. Regola contesto e, dove disponibili, Thinking e Campionamento per il Coding Agent. Verifica Aggiornamenti cerca nuove versioni; Update now le scarica. Attendi la fine prima di usare un modello in aggiornamento. Scarica RAM libera il modello in esecuzione; Elimina Modello richiede conferma e ne rimuove i pesi. Dopo download o modifica aggiorna l’elenco, controlla le assegnazioni e la conferma di salvataggio, quindi torna alla funzione.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 Z" fill="#526779"/></marker></defs>
+<rect width="360" height="1245" fill="#ffffff"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="24" y="25" font-size="14" letter-spacing="0.5" fill="#526779">ONLYRAG V2 / GUIDA UTENTE</text>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="600" fill="#183249"><tspan x="180" y="53">23 · Modelli, assegnazioni e OCR</tspan></text>
+<g id="n0" data-node="s">
+<rect x="46" y="101" width="268" height="70" rx="30" fill="#183249" stroke="#183249" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#ffffff"><tspan x="180" y="125.5">Apri Modelli AI &amp;</tspan><tspan x="180" y="146.5">Assegnazione per Modulo</tspan></text>
+</g>
+<g id="n1" data-node="q">
+<polygon points="180,227 296,293 180,359 64,293" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="282.5">Modello</tspan><tspan x="180" y="303.5">disponibile?</tspan></text>
+</g>
+<g id="n2" data-node="a">
+<rect x="46" y="415" width="268" height="91" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="439.5">Assegna il modello al</tspan><tspan x="180" y="460.5">modulo; scegli OCR e</tspan><tspan x="180" y="481.5">contesto</tspan></text>
+</g>
+<g id="n3" data-node="t">
+<rect x="46" y="562" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="586.5">Attendi il salvataggio;</tspan><tspan x="180" y="607.5">torna alla funzione → 00</tspan></text>
+</g>
+<g id="n4" data-node="a">
+<rect x="46" y="688" width="268" height="91" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="712.5">Setup Wizard Hardware &amp;</tspan><tspan x="180" y="733.5">Modelli oppure Scarica</tspan><tspan x="180" y="754.5">Modello</tspan></text>
+</g>
+<g id="n5" data-node="q">
+<polygon points="180,835 296,901 180,967 64,901" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="890.5">Download</tspan><tspan x="180" y="911.5">riuscito?</tspan></text>
+</g>
+<g id="n6" data-node="t">
+<rect x="46" y="1023" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1047.5">Aggiorna l’elenco e assegna</tspan><tspan x="180" y="1068.5">il modello</tspan></text>
+</g>
+<g id="n7" data-node="t">
+<rect x="46" y="1149" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1173.5">Leggi l’errore e riprova;</tspan><tspan x="180" y="1194.5">non considerarlo pronto</tspan></text>
+</g>
+<path data-edge="0-1" d="M 180 173 V 224" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="1-2" d="M 180 361 V 412" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="1-2"><rect x="183" y="376" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="386">Sì</tspan></text></g>
+<path data-edge="1-4" d="M 298 293 H 346 V 660 H 180 V 685" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="1-4"><rect x="300" y="264.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="274">No</tspan></text></g>
+<path data-edge="2-3" d="M 180 508 V 559" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="4-5" d="M 180 781 V 832" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="5-6" d="M 180 969 V 1020" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="5-6"><rect x="183" y="984" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="994">Sì</tspan></text></g>
+<path data-edge="5-7" d="M 298 901 H 346 V 1121 H 180 V 1146" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="5-7"><rect x="300" y="872.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="882">No</tspan></text></g>
+</g>
+</svg>

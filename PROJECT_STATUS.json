@@ -6,7 +6,38 @@
     {
       "id": "CODING-HISTORY-DUAL-FAILURE-EXPORT-01",
       "p": "P1",
-      "task": "Export the still-in-memory coding session snapshot when both canonical history and Main recovery staging reject writes; qualify blocked close and independent export readback in an isolated desktop profile (docs/verification.md)."
+      "task": "Export the still-in-memory coding session snapshot when both canonical history and Main recovery staging reject writes; qualify blocked close and independent export readback in an isolated desktop profile (docs/verification.md).",
+      "verify": "Force canonical and recovery-staging write failures in an isolated desktop profile; verify close stays blocked, export the in-memory revision and independently read back identical content. Run the coding-session and recovery-journal regression tests."
+    },
+    {
+      "id": "TEST-WEB-DOWNLOAD-STREAM-FAILURE-01",
+      "p": "P1",
+      "task": "Exercise download file-stream open/write failures and cancellation races against webClient.downloadFile; ensure one failure result, no unhandled stream error and no partial file (electron/core/infrastructure/http/webClient.ts).",
+      "verify": "npx vitest run electron/core/infrastructure/http/webClient.test.ts; add isolated open/write-error, abort and redirect-race cases asserting one failure result, no unhandled error and no leftover partial file."
+    },
+    {
+      "id": "TEST-RECOVERY-BANNERS-01",
+      "p": "P1",
+      "task": "Cover refused, retry, export and failed-list states in CodingHistoryRecoveryBanner and SessionDeletionRecoveryBanner; both renderer components have zero measured branch coverage (src/components/coding).",
+      "verify": "Add renderer tests for both recovery banners: refused operations, retry, export destination cancellation, export success/failure and failed listing; verify recovery-state button availability and callbacks."
+    },
+    {
+      "id": "TEST-MANAGED-VITE-LOOPBACK-FLAKE-01",
+      "p": "P2",
+      "task": "Investigate the intermittent plain-Vite managed preview refusal: the full suite observed the assigned port reachable at 127.0.0.2 despite the requested 127.0.0.1 binding; the isolated five-test file subsequently passed (docs/verification-2026-10-15.md).",
+      "verify": "Repeat the managedDevServerRepository tests with isolated workspaces and capture the child output plus actual listening addresses on failure; identify whether Vite binding or the reachability probe is responsible, preserve wildcard-binding rejection and pass the full JavaScript suite."
+    },
+    {
+      "id": "TEST-SOURCE-PDF-RENDER-BUDGET-01",
+      "p": "P2",
+      "task": "Test source-location refusal for an oversized retained PDF page before rendering, including unchanged archive and clear error (sidecar/infrastructure/source_provenance.py).",
+      "verify": ".venv/Scripts/python.exe -m pytest -q sidecar/tests/test_source_provenance.py; add a PDF render-budget case asserting refusal before rendering and byte-identical retained originals."
+    },
+    {
+      "id": "TEST-SOURCE-JUNCTION-WINDOWS-01",
+      "p": "P2",
+      "task": "Qualify source archive path containment with a Windows junction; the directory-symlink test is skipped on hosts without symlink privilege (sidecar/infrastructure/source_provenance.py).",
+      "verify": "Use an isolated Windows directory junction escaping the source root; assert source lookup refuses it without changing either archive, and record whether the junction case actually ran."
     },
     {
       "id": "DISTRIBUTION-CURRENT-SOURCE-QUALIFICATION-01",

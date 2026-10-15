@@ -6,6 +6,7 @@ Le guide descrivono il comportamento verificato nel codice al **13 ottobre 2026*
 
 | Ambito | Guida |
 | --- | --- |
+| Guida visiva per l’utente finale (15 ottobre 2026) | [Scelte e flussi per ogni funzione](./guida-utente.md) |
 | Architettura e confini | [`architecture.md`](./architecture.md) |
 | Renderer, Main e contratti | [`frontend.md`](./frontend.md), [`electron-main.md`](./electron-main.md), [`api-ipc.md`](./api-ipc.md), [`api-rest.md`](./api-rest.md) |
 | Ingestion, OCR e originali | [`ingestion.md`](./ingestion.md) |

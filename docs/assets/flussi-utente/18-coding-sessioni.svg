@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="1218" viewBox="0 0 360 1218" role="img" aria-labelledby="title desc" xml:lang="it">
+<title id="title">18 · Gestire sessioni e storico progetto</title>
+<desc id="desc">Nel progetto seleziona una sessione oppure crea una Nuova Sessione Progetto; controlla progetto e sessione prima di riusare una richiesta. Nuova chat avvia una nuova conversazione nel contesto previsto. Usa Storico Prompt Progetto o Cerca nello storico prompt di tutti i progetti per trovare richieste e relativi esiti. Rivedi il testo prima di eseguirlo nuovamente. Per eliminare una sessione o Svuota storico progetto, leggi e conferma la richiesta mostrata; annulla per conservarla. Controlla il risultato e passa a 19 se compare un avviso di recupero. Con Impossibile leggere o salvare sessioni o progetti, tieni aperta la vista e usa Riprova archiviazione; i percorsi aggiuntivi di recupero sono in 19.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 Z" fill="#526779"/></marker></defs>
+<rect width="360" height="1218" fill="#ffffff"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="24" y="25" font-size="14" letter-spacing="0.5" fill="#526779">ONLYRAG V2 / GUIDA UTENTE</text>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="600" fill="#183249"><tspan x="180" y="53">18 · Gestire sessioni e storico</tspan><tspan x="180" y="74">progetto</tspan></text>
+<g id="n0" data-node="s">
+<rect x="46" y="122" width="268" height="70" rx="30" fill="#183249" stroke="#183249" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#ffffff"><tspan x="180" y="146.5">Controlla progetto e</tspan><tspan x="180" y="167.5">sessione attivi</tspan></text>
+</g>
+<g id="n1" data-node="a">
+<rect x="46" y="248" width="268" height="70" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="272.5">Apri una sessione oppure</tspan><tspan x="180" y="293.5">Nuova Sessione Progetto</tspan></text>
+</g>
+<g id="n2" data-node="q">
+<polygon points="180,374 296,440 180,506 64,440" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="429.5">Vuoi eliminare</tspan><tspan x="180" y="450.5">lo storico?</tspan></text>
+</g>
+<g id="n3" data-node="a">
+<rect x="46" y="562" width="268" height="70" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="586.5">Leggi la conferma di</tspan><tspan x="180" y="607.5">eliminazione</tspan></text>
+</g>
+<g id="n4" data-node="q">
+<polygon points="180,688 296,754 180,820 64,754" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="754">Confermi?</tspan></text>
+</g>
+<g id="n5" data-node="t">
+<rect x="46" y="876" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="900.5">Controlla l’esito;</tspan><tspan x="180" y="921.5">eventuale recupero → 19</tspan></text>
+</g>
+<g id="n6" data-node="t">
+<rect x="46" y="1002" width="268" height="64" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1034">Annulla: storico conservato</tspan></text>
+</g>
+<g id="n7" data-node="t">
+<rect x="46" y="1122" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1146.5">Cerca o riusa un prompt;</tspan><tspan x="180" y="1167.5">continua nella sessione</tspan></text>
+</g>
+<path data-edge="0-1" d="M 180 194 V 245" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="1-2" d="M 180 320 V 371" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="2-3" d="M 180 508 V 559" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="2-3"><rect x="183" y="523" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="533">Sì</tspan></text></g>
+<path data-edge="2-7" d="M 298 440 H 346 V 1094 H 180 V 1119" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="2-7"><rect x="300" y="411.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="421">No</tspan></text></g>
+<path data-edge="3-4" d="M 180 634 V 685" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="4-5" d="M 180 822 V 873" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="4-5"><rect x="183" y="837" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="847">Sì</tspan></text></g>
+<path data-edge="4-6" d="M 62 754 H 14 V 974 H 180 V 999" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="4-6"><rect x="18" y="725.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="39" y="735">No</tspan></text></g>
+</g>
+</svg>

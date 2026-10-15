@@ -62,4 +62,39 @@ describe('coding history recovery journal', () => {
       await fs.promises.rm(exportDir, { recursive: true, force: true })
     }
   })
+
+  it('preserves an unreadable canonical baseline across later staging attempts', async () => {
+    vi.mocked(sessionHistoryRepository.listSessions).mockRejectedValueOnce(new Error('store unavailable'))
+    const staged = await journal.stage({ ...original, title: 'First unsaved revision' })
+    expect(staged.baseSha256).toBe('unreadable')
+    expect((await journal.stage({ ...original, title: 'Second unsaved revision' })).baseSha256).toBe('unreadable')
+    expect((await journal.read(staged.recoveryId)).session.title).toBe('Second unsaved revision')
+    expect(sessionHistoryRepository.listSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses a modified snapshot in read and list without acknowledging or removing it', async () => {
+    const staged = await journal.stage({ ...original, title: 'Unsaved' })
+    const file = path.join(root, `${staged.recoveryId}.json`)
+    await fs.promises.writeFile(file, JSON.stringify({ ...staged, session: { ...staged.session, title: 'Tampered' } }))
+    await expect(journal.read(staged.recoveryId)).rejects.toThrow('corrupt')
+    await expect(journal.list()).rejects.toThrow('corrupt')
+    await expect(journal.acknowledge(original)).rejects.toThrow('corrupt')
+    expect(await fs.promises.readFile(file, 'utf8')).toContain('Tampered')
+  })
+
+  it('refuses invalid or occupied export targets without changing the staged snapshot', async () => {
+    const staged = await journal.stage({ ...original, title: 'Unsaved' })
+    const exportDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'onlyrag-history-export-test-'))
+    try {
+      await expect(journal.export('../outside', exportDir)).rejects.toThrow('Invalid coding history recovery identity')
+      await expect(journal.export(staged.recoveryId, path.join(exportDir, 'missing'))).rejects.toThrow()
+      const target = path.join(exportDir, `coding-history-recovery-${staged.recoveryId}.json`)
+      await fs.promises.writeFile(target, 'existing export')
+      await expect(journal.export(staged.recoveryId, exportDir)).rejects.toThrow()
+      expect(await fs.promises.readFile(target, 'utf8')).toBe('existing export')
+      expect((await journal.read(staged.recoveryId)).session.title).toBe('Unsaved')
+    } finally {
+      await fs.promises.rm(exportDir, { recursive: true, force: true })
+    }
+  })
 })

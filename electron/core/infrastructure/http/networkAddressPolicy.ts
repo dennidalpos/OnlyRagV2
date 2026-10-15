@@ -46,6 +46,11 @@ export function publicOnlyLookup(
 ): void {
   dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
     if (err) return callback(err, '')
+    if (addresses.length === 0) {
+      const error: NodeJS.ErrnoException = new Error(`No DNS addresses found for ${hostname}`)
+      error.code = 'ENOTFOUND'
+      return callback(error, '')
+    }
     const blocked = addresses.find((entry) => isPrivateNetworkAddress(entry.address))
     if (blocked) {
       const error: NodeJS.ErrnoException = new Error(

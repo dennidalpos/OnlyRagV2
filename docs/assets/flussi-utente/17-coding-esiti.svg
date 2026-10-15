@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="1239" viewBox="0 0 360 1239" role="img" aria-labelledby="title desc" xml:lang="it">
+<title id="title">17 · Controllare esiti e ripristinare file</title>
+<desc id="desc">Durante il task Arresta richiede l’interruzione; attendi l’esito. Consulta Evidenze finali, File Modificati, Diff Monaco e l’output del Terminale. Distingui una verifica Superata, Fallita o Non disponibile. Una dichiarazione dell’assistente non sostituisce i risultati dei controlli. Per modifiche manuali usa l’editor e Salva File (Ctrl+S); il terminale permette comandi con Esegui, soggetti ai controlli applicabili. Se disponibile, Ripristina lo stato precedente propone il recupero da checkpoint. Leggi la conferma: riporta i file coperti allo stato precedente e rimuove quelli creati dalla run. Conferma solo se è ciò che vuoi, oppure annulla. Dopo il ripristino controlla conferma, errori ed effetti residui. Se conservi le modifiche, verifica il risultato prima di inviare un’altra richiesta.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 Z" fill="#526779"/></marker></defs>
+<rect width="360" height="1239" fill="#ffffff"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="24" y="25" font-size="14" letter-spacing="0.5" fill="#526779">ONLYRAG V2 / GUIDA UTENTE</text>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="600" fill="#183249"><tspan x="180" y="53">17 · Controllare esiti e</tspan><tspan x="180" y="74">ripristinare file</tspan></text>
+<g id="n0" data-node="s">
+<rect x="46" y="122" width="268" height="64" rx="30" fill="#183249" stroke="#183249" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#ffffff"><tspan x="180" y="154">Attendi l’esito della run</tspan></text>
+</g>
+<g id="n1" data-node="a">
+<rect x="46" y="242" width="268" height="70" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="266.5">Leggi Evidenze finali, File</tspan><tspan x="180" y="287.5">Modificati e Diff Monaco</tspan></text>
+</g>
+<g id="n2" data-node="q">
+<polygon points="180,368 296,434 180,500 64,434" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="423.5">Vuoi</tspan><tspan x="180" y="444.5">ripristinare?</tspan></text>
+</g>
+<g id="n3" data-node="a">
+<rect x="46" y="556" width="268" height="70" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="580.5">Ripristina lo stato</tspan><tspan x="180" y="601.5">precedente, se disponibile</tspan></text>
+</g>
+<g id="n4" data-node="q">
+<polygon points="180,682 296,748 180,814 64,748" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="737.5">Confermi il</tspan><tspan x="180" y="758.5">ripristino?</tspan></text>
+</g>
+<g id="n5" data-node="t">
+<rect x="46" y="870" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="894.5">Controlla file ripristinati</tspan><tspan x="180" y="915.5">ed effetti residui</tspan></text>
+</g>
+<g id="n6" data-node="t">
+<rect x="46" y="996" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1020.5">Annulla: modifiche</tspan><tspan x="180" y="1041.5">conservate</tspan></text>
+</g>
+<g id="n7" data-node="t">
+<rect x="46" y="1122" width="268" height="91" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1146.5">Conserva il lavoro;</tspan><tspan x="180" y="1167.5">verifica prima di</tspan><tspan x="180" y="1188.5">proseguire</tspan></text>
+</g>
+<path data-edge="0-1" d="M 180 188 V 239" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="1-2" d="M 180 314 V 365" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="2-3" d="M 180 502 V 553" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="2-3"><rect x="183" y="517" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="527">Sì</tspan></text></g>
+<path data-edge="2-7" d="M 298 434 H 346 V 1094 H 180 V 1119" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="2-7"><rect x="300" y="405.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="415">No</tspan></text></g>
+<path data-edge="3-4" d="M 180 628 V 679" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="4-5" d="M 180 816 V 867" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="4-5"><rect x="183" y="831" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="841">Sì</tspan></text></g>
+<path data-edge="4-6" d="M 62 748 H 14 V 968 H 180 V 993" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="4-6"><rect x="18" y="719.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="39" y="729">No</tspan></text></g>
+</g>
+</svg>

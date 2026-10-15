@@ -8,6 +8,7 @@
 - Repository skill files are workspace-local development guidance, not default skills for unrelated user projects. Keep `skills/*/SKILL.md` scoped by precise `description`, `triggers` and `tags`; the runtime matcher uses these fields and defaults to three active skills per task.
 - Greenfield cleanup may remove obsolete code, but retained live-campaign evidence, original documents, personal stores and migration backups are protected until their separate acceptance or disposal decision.
 - The tracker contains only open work. Dated verification and audit documents retain historical results.
+- La guida per l'utente finale è `docs/guida-utente.md`, con SVG statici modificabili in `docs/assets/flussi-utente/` e percorsi testuali equivalenti. Conservare collegamenti relativi e risorse locali per consultazione offline senza dipendenze di rendering dei diagrammi.
 
 # Lessons Learned & Gotchas
 
@@ -21,3 +22,5 @@
 - Coding history uses a Main-owned per-session recovery journal before debounced canonical writes. Remove it only after the identical normalized revision is acknowledged; an older save advances its base digest. Retry refuses a divergent canonical revision and leaves Export available.
 - Diagnostic scripts should resolve transitive packages through their declaring direct dependency; direct imports of a transitive package fail `knip` and depend on lockfile hoisting.
 - Per l'audit Python della build CPU, confrontare il lock generato con `component-manifest.json` e interrogare il lock completo: i soli `.dist-info` conservati da PyInstaller non rappresentano l'intero insieme delle dipendenze. `pip freeze` omette `pip`, che può comparire nel lock.
+- Per documentare le scelte dell'utente, verificare visibilità dei controlli e richieste effettive nei componenti/hook: una voce in `src/i18n/locales/it.ts` non prova che la funzione sia attiva. Il percorso di importazione esaminato passa `normalizeWithLlm: false`; `Pianifica` non compare in modalità Ask.
+- Gli ancoraggi Markdown del validatore eliminano la punteggiatura prima di convertire gli spazi in trattini: un titolo con ` · ` produce due trattini. Nei titoli numerati della guida usare numero e spazio, lasciando il punto mediano alle etichette dei diagrammi.

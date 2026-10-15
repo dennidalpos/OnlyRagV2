@@ -146,6 +146,48 @@ def test_root_gate_and_copy_budget_preserve_source(tmp_path, monkeypatch):
     assert file.read_text(encoding="utf-8") == "original"
 
 
+def test_archive_refuses_corrupt_extraction_and_oversized_read(tmp_path, monkeypatch):
+    file = tmp_path / "source.md"
+    file.write_text("Payment is due within 21 days.", encoding="utf-8")
+    doc_id = ingest(file)
+    archive_path = source.SOURCE_ROOT / doc_id / "extraction.json"
+    valid = archive_path.read_text(encoding="utf-8")
+    changed = json.loads(valid)
+    changed["raw_markdown"] = "changed without a matching revision"
+    archive_path.write_text(json.dumps(changed), encoding="utf-8")
+    with pytest.raises(ValueError, match="revision mismatch"):
+        source._archive(doc_id)
+    archive_path.write_text(valid, encoding="utf-8")
+    monkeypatch.setattr(source, "MAX_SOURCE_BYTES", 1)
+    request = request_for(result_for(doc_id))
+    with pytest.raises(ValueError, match="read budget"):
+        source.resolve_source_location(**request)
+
+
+def test_extraction_is_immutable(tmp_path):
+    file = tmp_path / "source.md"
+    file.write_text("Payment is due within 21 days.", encoding="utf-8")
+    doc_id = ingest(file)
+    retained = source.SOURCE_ROOT / doc_id
+    with pytest.raises(ValueError, match="immutable"):
+        source.save_extraction(doc_id, retained / "original.md", "a" * 64, "source.md", [(1, "changed")], False)
+
+
+def test_archive_refuses_symlinked_document_directory(tmp_path):
+    file = tmp_path / "source.md"
+    file.write_text("Payment is due within 21 days.", encoding="utf-8")
+    doc_id = ingest(file)
+    retained = source.SOURCE_ROOT / doc_id
+    moved = tmp_path / "moved-archive"
+    retained.rename(moved)
+    try:
+        retained.symlink_to(moved, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("Directory symlinks are unavailable on this host")
+    with pytest.raises(ValueError, match="escapes"):
+        source._archive(doc_id)
+
+
 def test_recovery_gate_blocks_source_access(tmp_path):
     db._journal_path.write_text("invalid journal", encoding="utf-8")
     try:

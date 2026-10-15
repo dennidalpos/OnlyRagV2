@@ -36,4 +36,17 @@ describe('validateWorkspaceRealpath', () => {
     expect(result.safePath).toBeNull()
     expect(result.error).toContain('Symlink or junction escape blocked')
   })
+
+  it('rejects lexical traversal before checking a nonexistent target', () => {
+    const result = validateWorkspaceRealpath(path.join('..', 'outside', 'new.txt'), workspace)
+    expect(result.safePath).toBeNull()
+    expect(result.error).toContain('outside workspace root')
+    expect(fs.existsSync(path.join(outside, 'new.txt'))).toBe(false)
+  })
+
+  it('fails closed when the workspace root is unavailable', () => {
+    const result = validateWorkspaceRealpath('new.txt', path.join(baseDir, 'missing-workspace'))
+    expect(result.safePath).toBeNull()
+    expect(result.error).toContain('Realpath validation failed')
+  })
 })

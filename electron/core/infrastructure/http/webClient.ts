@@ -407,12 +407,14 @@ export class WebClient {
           if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
             fileStream.close(() => {
               removePartialFile()
+              if (redirectCount >= MAX_DOWNLOAD_REDIRECTS) {
+                resolve({ success: false, error: `Download exceeded ${MAX_DOWNLOAD_REDIRECTS} redirect hops.` })
+                return
+              }
+              const redirectUrl = new URL(res.headers.location!, urlCheck.safeUrl!).toString()
+              this.downloadFile(redirectUrl, targetFilePath, workspaceRoot, signal, redirectCount + 1, fullAccess).then(resolve)
             })
-            if (redirectCount >= MAX_DOWNLOAD_REDIRECTS) {
-              return resolve({ success: false, error: `Download exceeded ${MAX_DOWNLOAD_REDIRECTS} redirect hops.` })
-            }
-            const redirectUrl = new URL(res.headers.location, urlCheck.safeUrl!).toString()
-            return this.downloadFile(redirectUrl, targetFilePath, workspaceRoot, signal, redirectCount + 1, fullAccess).then(resolve)
+            return
           }
 
           if (res.statusCode && res.statusCode >= 400) {

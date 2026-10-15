@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="1071" viewBox="0 0 360 1071" role="img" aria-labelledby="title desc" xml:lang="it">
+<title id="title">14 · Scegliere progetto e modalità</title>
+<desc id="desc">Usa Apri Cartella Workspace per agganciare il progetto; annullare il dialogo non seleziona una nuova cartella. Controlla Progetto Attivo prima di inviare richieste. Standalone indica che non hai agganciato un progetto. Scegli Chiedi (Solo lettura / Ask) per analisi senza modificare file né eseguire comandi; Guidata per revisionare le azioni che cambiano il workspace; Auto per eseguirle nei limiti dei permessi scelti. Da Opzioni Prompt allega documenti ingeriti; usa Pin sui file per includerli nel contesto e Unpin o la rimozione dell’allegato per escluderli. Configura i permessi con 24 e prepara la richiesta in 15.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 Z" fill="#526779"/></marker></defs>
+<rect width="360" height="1071" fill="#ffffff"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="24" y="25" font-size="14" letter-spacing="0.5" fill="#526779">ONLYRAG V2 / GUIDA UTENTE</text>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="600" fill="#183249"><tspan x="180" y="53">14 · Scegliere progetto e modalità</tspan></text>
+<g id="n0" data-node="s">
+<rect x="46" y="101" width="268" height="64" rx="30" fill="#183249" stroke="#183249" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#ffffff"><tspan x="180" y="133">Apri Coding Agent</tspan></text>
+</g>
+<g id="n1" data-node="a">
+<rect x="46" y="221" width="268" height="70" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="245.5">Apri Cartella Workspace</tspan><tspan x="180" y="266.5">oppure usa Standalone</tspan></text>
+</g>
+<g id="n2" data-node="q">
+<polygon points="180,347 296,413 180,479 64,413" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="413">Solo analisi?</tspan></text>
+</g>
+<g id="n3" data-node="t">
+<rect x="46" y="535" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="559.5">Chiedi (Ask): lettura e</tspan><tspan x="180" y="580.5">risposta → 15</tspan></text>
+</g>
+<g id="n4" data-node="q">
+<polygon points="180,661 296,727 180,793 64,727" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="716.5">Vuoi revisionare</tspan><tspan x="180" y="737.5">le modifiche?</tspan></text>
+</g>
+<g id="n5" data-node="t">
+<rect x="46" y="849" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="873.5">Guidata: conferme per le</tspan><tspan x="180" y="894.5">azioni previste → 15</tspan></text>
+</g>
+<g id="n6" data-node="t">
+<rect x="46" y="975" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="999.5">Auto: esecuzione secondo i</tspan><tspan x="180" y="1020.5">permessi → 15</tspan></text>
+</g>
+<path data-edge="0-1" d="M 180 167 V 218" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="1-2" d="M 180 293 V 344" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="2-3" d="M 180 481 V 532" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="2-3"><rect x="183" y="496" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="506">Sì</tspan></text></g>
+<path data-edge="2-4" d="M 298 413 H 346 V 633 H 180 V 658" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="2-4"><rect x="300" y="384.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="394">No</tspan></text></g>
+<path data-edge="4-5" d="M 180 795 V 846" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="4-5"><rect x="183" y="810" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="820">Sì</tspan></text></g>
+<path data-edge="4-6" d="M 298 727 H 346 V 947 H 180 V 972" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="4-6"><rect x="300" y="698.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="708">No</tspan></text></g>
+</g>
+</svg>

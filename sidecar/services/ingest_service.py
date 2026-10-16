@@ -4,6 +4,7 @@ import json
 import uuid
 import base64
 import datetime
+from pathlib import Path
 from typing import Optional, List, Dict, Any, Generator, Tuple
 from concurrent.futures import ThreadPoolExecutor
 import pymupdf
@@ -31,10 +32,14 @@ from sidecar.domain.router import classify_file_type, analyze_pdf_page_structure
 from sidecar.services.task_cancellation import TaskCancelled, raise_if_cancelled, register_task, unregister_task
 from sidecar.services.search_service import get_stored_document
 from sidecar.infrastructure.source_provenance import retain_original, save_extraction
+from sidecar.infrastructure import source_provenance
 
 
-def _cleanup_partial_ingestion(doc_id: str) -> None:
+def _cleanup_partial_ingestion(doc_id: str, owned_archive: Optional[Path]) -> None:
+    if owned_archive is None:
+        return
     delete_document_records(doc_id)
+    source_provenance.remove_owned_archive(doc_id, owned_archive)
 
 def _build_chunk_records(
     raw_chunks: List[Tuple[int, str, str]],
@@ -86,6 +91,10 @@ def process_and_index_document_generator(
     """
     filename = os.path.basename(file_path)
     doc_id = str(uuid.uuid4())
+    owned_archive = None
+    def archive_created(directory: Path) -> None:
+        nonlocal owned_archive
+        owned_archive = directory
     # Progress labels must name the engine the pages actually went through, not a fixed one.
     ocr_engine_label = "Vision LLM OCR" if is_vision_ocr_requested(vision_prompt) else "OCR Layout"
 
@@ -94,7 +103,7 @@ def process_and_index_document_generator(
     try:
         raise_if_cancelled(task_id)
         caller_path = file_path
-        retained_path, source_revision = retain_original(doc_id, file_path, lambda: raise_if_cancelled(task_id))
+        retained_path, source_revision = retain_original(doc_id, file_path, lambda: raise_if_cancelled(task_id), archive_created)
         file_path = str(retained_path)
         original_pages: List[Tuple[int, str]] = []
         yield json.dumps({
@@ -318,8 +327,14 @@ def process_and_index_document_generator(
         }) + "\n"
 
     except TaskCancelled:
-        _cleanup_partial_ingestion(doc_id)
-        yield json.dumps({"type": "cancelled", "task_id": task_id, "fileName": filename}) + "\n"
+        try:
+            _cleanup_partial_ingestion(doc_id, owned_archive)
+        except Exception as cleanup_error:
+            logger.error("Ingestion cancellation cleanup failed for %s: %s", doc_id, cleanup_error)
+            yield json.dumps({"type": "error", "error": "Cancellation cleanup failed; preserve the task archive and database recovery artifacts.",
+                              "task_id": task_id, "fileName": filename}) + "\n"
+        else:
+            yield json.dumps({"type": "cancelled", "task_id": task_id, "fileName": filename}) + "\n"
     except NormalizationReviewRequired as review:
         logger.warning("Normalization review required for %s (%s pages flagged); no indexing performed.", filename, len(review.issues))
         yield json.dumps({
@@ -344,6 +359,7 @@ def process_and_index_document_generator(
 def update_and_reindex_document(
     doc_id: str,
     new_markdown: str,
+    expected_revision: str,
     embedding_model: str = DEFAULT_EMBEDDING_MODEL,
 ) -> IngestResponse:
     """Prepare the new index before committing either table."""
@@ -353,6 +369,9 @@ def update_and_reindex_document(
     old_doc = get_stored_document(doc_id)
     if old_doc is None:
         raise ValueError(f"Document {doc_id} not found in database")
+    if old_doc.get("ingested_at") != expected_revision:
+        from sidecar.infrastructure.db import DatabaseConflictError
+        raise DatabaseConflictError("Document changed since it was loaded; reload before saving. Your draft has not been applied.")
     filename = old_doc.get("filename", "document.md")
     persisted_path = old_doc.get("file_path", "")
     file_type = old_doc.get("file_type", "text")
@@ -383,7 +402,7 @@ def update_and_reindex_document(
         "file_type": file_type,
         "used_fallback_embeddings": used_fallback_embeddings
     }]
-    write_document_records(new_doc_record[0], chunk_records)
+    write_document_records(new_doc_record[0], chunk_records, expected_document=old_doc)
 
     logger.info(f"Re-indexed document {doc_id} ({filename}): {len(chunk_records)} chunks updated in LanceDB (status={doc_status}).")
 

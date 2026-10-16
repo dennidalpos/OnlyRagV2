@@ -576,6 +576,8 @@ export const it = {
     allFiles: 'Tutti i file',
     saveSuccess: 'Modifiche salvate e vettori LanceDB ri-indicizzati con successo!',
     saveFailed: 'Errore durante il salvataggio del documento',
+    reloadLatest: 'Scarta bozza e ricarica',
+    reloadLatestHint: 'La bozza verrà sostituita con il documento salvato più recente. Esporta prima la bozza se vuoi conservarne una copia.',
     cancelledByUser: 'Ingestione annullata. File temporanei e dati parziali del task rimossi.',
     failedUnknown: 'Ingestione non riuscita: errore sconosciuto dal Sidecar.',
   },

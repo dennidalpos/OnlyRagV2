@@ -12,6 +12,8 @@
 
 # Lessons Learned & Gotchas
 
+- Le bozze documentali conservano `ingestedAt` originale anche dopo refresh della lista: `expectedRevision`/`expected_revision` attraversano IPC e REST e un conflitto non autorizza il rebase automatico. La cache verifica identità e revisione della risposta. Nella traduzione PDF/DOCX, taskId esiste prima dell'invio e il lock segue il risultato IPC anche dopo unmount; `cancelled` richiede il terminale Sidecar. La chiusura Main attende sia `__onlyragFlushSettings` sia lo storico Coding; un salvataggio rifiutato mantiene aperta la finestra. Crash e desktop installato richiedono qualifica separata.
+
 - The generic Codex skill validator rejects OnlyRag's supported `triggers` and `tags` frontmatter. Validate repository skills against `skillRepository.ts` and the runtime matcher instead of removing those fields.
 - Il log audit Coding Agent usa un solo interruttore per payload completi; redige credenziali ma conserva percorsi ed errori utili. Il log operativo generale resta più restrittivo.
 - I delta dei prompt nell'audit dipendono da una baseline nella stessa generazione conservata: azzerare l'ancora a ogni rotazione, leggere solo le generazioni presenti in ordine e attribuire le voci tramite identità strutturata, non tramite testo libero nel payload.

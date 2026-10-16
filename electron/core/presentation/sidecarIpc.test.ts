@@ -16,6 +16,9 @@ vi.mock('../application/sidecarAppService', () => ({
     getStatus: vi.fn().mockResolvedValue({ status: 'online' }),
     restartSidecar: vi.fn().mockResolvedValue({ success: true }),
     ingestFile: vi.fn().mockResolvedValue({ success: true }),
+    exportDocument: vi.fn().mockResolvedValue({ success: true }),
+    updateDocument: vi.fn().mockResolvedValue({ success: true }),
+    translateDocumentInplace: vi.fn().mockResolvedValue({ success: false, cancelled: true }),
   },
 }))
 
@@ -23,10 +26,10 @@ vi.mock('../application/sessionHistoryAppService', () => ({
   sessionHistoryAppService: { indexPromptHistory: vi.fn().mockResolvedValue({ success: true }) },
 }))
 
-import { sidecarAppService } from '../application/sidecarAppService'
 import { sessionHistoryAppService } from '../application/sessionHistoryAppService'
-import { registerSidecarIpcHandlers } from './sidecarIpc'
+import { sidecarAppService } from '../application/sidecarAppService'
 import { setTrustedIpcWindowProvider } from './secureIpcMain'
+import { registerSidecarIpcHandlers } from './sidecarIpc'
 
 const trustedContents = { mainFrame: {} }
 const trustedEvent = { sender: trustedContents, senderFrame: trustedContents.mainFrame }
@@ -43,6 +46,23 @@ describe('sidecar IPC facade', () => {
     await expect(handlers.get('sidecar:restart')?.(trustedEvent)).resolves.toEqual({ success: true })
 
     expect(sidecarAppService.restartSidecar).toHaveBeenCalledOnce()
+  })
+
+  it('requires and forwards the editor revision and preassigned translation identity', async () => {
+    const update = handlers.get('ingest:update')!
+    expect(() => update(trustedEvent, { docId: 'doc-1', markdownContent: '# Edit' })).toThrow('Invalid IPC payload')
+    await update(trustedEvent, { docId: 'doc-1', markdownContent: '# Edit', expectedRevision: 't1' })
+    expect(sidecarAppService.updateDocument).toHaveBeenCalledWith('doc-1', '# Edit', 't1')
+    const translate = handlers.get('ingest:translate-inplace')!
+    const payload = { docId: 'doc-1', sourceLang: 'it', targetLang: 'en', model: 'fixture' }
+    expect(() => translate(trustedEvent, payload)).toThrow('Invalid IPC payload')
+    await expect(translate(trustedEvent, { ...payload, taskId: 'translation-1' })).resolves.toMatchObject({ cancelled: true })
+    expect(sidecarAppService.translateDocumentInplace).toHaveBeenCalledWith('doc-1', 'it', 'en', 'translation-1', 'fixture', undefined, undefined, undefined)
+  })
+
+  it.each(['md', 'pdf', 'docx', 'html', 'htm'])('allows %s export through the real IPC validator', async (format) => {
+    await expect(handlers.get('ingest:export')?.(trustedEvent, { markdownContent: '# Document', format })).resolves.toEqual({ success: true })
+    expect(sidecarAppService.exportDocument).toHaveBeenCalledWith('# Document', format, undefined)
   })
 
   it('forwards validated prompt history to the session lifecycle service', async () => {

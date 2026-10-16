@@ -20,6 +20,8 @@
     "test:e2e:agent-browser": "vitest run --config vitest.agent-browser.config.mts",
     "test:e2e:cold-start": "npm run build && node ./scripts/e2e/coldStartNetwork.mjs",
     "test:e2e:settings-bootstrap": "npm run build && node ./scripts/e2e/settingsBootstrap.mjs",
+    "test:e2e:settings-close": "npm run build && node ./scripts/e2e/settingsCloseDurability.mjs",
+    "test:e2e:document-revision": "npm run build && node ./scripts/e2e/documentRevisionRecovery.mjs",
     "test:e2e:bundle-ux": "npm run build && node ./scripts/e2e/bundleUx.mjs",
     "test:e2e:ingest-translate": "npm run build && node ./scripts/e2e/ingestTranslate.mjs",
     "test:e2e:sidecar-ownership": "vitest run --config vitest.sidecar.config.mts",

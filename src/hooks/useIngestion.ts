@@ -1,18 +1,19 @@
 import type { editor } from 'monaco-editor'
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { IngestedDocument, AppSettings, DiagnosticsData, IngestionStreamProgressPayload, NormalizationReview } from '../types'
-import { electronApi } from '../services/electronApi'
-import { logger } from '../lib/logger'
-import { useIngestedDocuments, notifyDocumentsChanged } from './useIngestedDocuments'
-import { useDocumentMarkdown } from './useDocumentMarkdown'
-import { peekDocumentMarkdown, primeDocumentMarkdown } from '../services/documentMarkdown'
-import { useTranslation as useI18n, type TranslationKey } from '../i18n'
-import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from '../services/globalTaskLock'
-import { normalizeError } from '../lib/errors/errorNormalizer'
-import { resolveNodeTemplate } from '../constants/promptConfig'
-import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
 import { resolveModelContextLength } from '../../shared/domain/settings/modelContextPreference'
+import { resolveNodeTemplate } from '../constants/promptConfig'
+import { type TranslationKey, useTranslation as useI18n } from '../i18n'
+import { normalizeError } from '../lib/errors/errorNormalizer'
+import { logger } from '../lib/logger'
+import { peekDocumentMarkdown, primeDocumentMarkdown } from '../services/documentMarkdown'
+import { electronApi } from '../services/electronApi'
+import { acquireGlobalTaskLock, peekGlobalTaskLock, releaseGlobalTaskLock } from '../services/globalTaskLock'
+import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
+import { AppSettings, DiagnosticsData, IngestedDocument, IngestionStreamProgressPayload, NormalizationReview } from '../types'
+import { useDocumentMarkdown } from './useDocumentMarkdown'
+import { notifyDocumentsChanged, useIngestedDocuments } from './useIngestedDocuments'
 import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 
 /** The `images:analysis` template that goes on the wire, or `undefined` to stay on local RapidOCR. */
@@ -105,7 +106,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   const [syncScroll, setSyncScroll] = useState<boolean>(true)
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string } | null>(null)
-  const draftsRef = useRef(new Map<string, string>())
+  const draftsRef = useRef(new Map<string, { content: string; ingestedAt: string; markdown: string | null }>())
   const markdownRef = useRef('')
   const selectedDocRef = useRef<IngestedDocument | null>(null)
   const savingRef = useRef<{ docId: string; content: string } | null>(null)
@@ -144,7 +145,8 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     if (doc) {
       const pendingChangesText = pending?.docId === doc.id && pending.content !== content
       if (source?.id === doc.id && content === source.markdown && !pendingChangesText) draftsRef.current.delete(doc.id)
-      else draftsRef.current.set(doc.id, content)
+      else if (source?.id === doc.id) draftsRef.current.set(doc.id, { content, ingestedAt: source.ingestedAt, markdown: source.markdown })
+      else draftsRef.current.set(doc.id, { content, ingestedAt: doc.ingestedAt, markdown: null })
     }
     updateMarkdownContent(content)
   }, [])
@@ -154,8 +156,9 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     if (!selectedDocId || selectedDocVersion === undefined || loadedMarkdown === null) return
     const source = editorSourceRef.current
     if (source?.id === selectedDocId && source.ingestedAt === selectedDocVersion) return
-    editorSourceRef.current = { id: selectedDocId, ingestedAt: selectedDocVersion, markdown: loadedMarkdown }
-    const content = draftsRef.current.get(selectedDocId) ?? loadedMarkdown
+    const draft = draftsRef.current.get(selectedDocId)
+    editorSourceRef.current = { id: selectedDocId, ingestedAt: draft?.ingestedAt ?? selectedDocVersion, markdown: draft?.markdown ?? loadedMarkdown }
+    const content = draft?.content ?? loadedMarkdown
     markdownRef.current = content
     updateMarkdownContent(content)
   }, [selectedDocId, selectedDocVersion, loadedMarkdown])
@@ -171,7 +174,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     setSelectedDoc(doc)
     if (doc && editorSourceRef.current?.id === doc.id) return
     editorSourceRef.current = null
-    const content = doc ? (draftsRef.current.get(doc.id) ?? peekDocumentMarkdown(doc) ?? '') : ''
+    const content = doc ? (draftsRef.current.get(doc.id)?.content ?? peekDocumentMarkdown(doc) ?? '') : ''
     markdownRef.current = content
     updateMarkdownContent(content)
   }, [])
@@ -202,12 +205,13 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     const taskId = activeTaskIdRef.current
     if (!taskId) return
     if (window.electronAPI?.cancelTask) {
-      await window.electronAPI.cancelTask({ taskId })
+      try {
+        const result = await window.electronAPI.cancelTask({ taskId })
+        if (!result.success) setUploadError(result.message || t('ingestion.failedUnknown'))
+      } catch (error) {
+        setUploadError(normalizeError(error, 'Ingestion cancellation').message)
+      }
     }
-    activeTaskIdRef.current = null
-    setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 })
-    setIsUploading(false)
-    setUploadError(t('ingestion.cancelledByUser'))
   }
 
   // Real-time streaming progress subscription from Electron/FastAPI sidecar
@@ -508,7 +512,9 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
       if (activeTaskIdRef.current !== taskId) return
 
       if (!res.success) {
-        if (res.normalizationReview) {
+        if (res.cancelled) {
+          setUploadError(t('ingestion.cancelledByUser'))
+        } else if (res.normalizationReview) {
           setNormalizationReview(res.normalizationReview)
           setUploadError(null)
         } else {
@@ -598,22 +604,26 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   const handleSaveDocument = async () => {
     const doc = selectedDocRef.current
     const source = editorSourceRef.current
-    if (!doc || !source || source.id !== doc.id || source.ingestedAt !== doc.ingestedAt || savingRef.current) return
+    if (!doc || !source || source.id !== doc.id || savingRef.current) return
     const content = markdownRef.current
     const epoch = selectionEpochRef.current
     savingRef.current = { docId: doc.id, content }
     let confirmedMarkdown = source.markdown
     setIsSaving(true)
     setSaveStatus(null)
+    let succeeded = false
     if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current)
     const ownsStatus = () => mountedRef.current && selectionEpochRef.current === epoch
 
     try {
-      const res = await electronApi().updateIngestedDocument({ docId: doc.id, markdownContent: content })
+      const res = await electronApi().updateIngestedDocument({ docId: doc.id, markdownContent: content, expectedRevision: source.ingestedAt })
       if (res.success && res.data) {
+        succeeded = true
         confirmedMarkdown = res.data.extractedMarkdown
         primeDocumentMarkdown(res.data)
-        if (draftsRef.current.get(doc.id) === content) draftsRef.current.delete(doc.id)
+        const draft = draftsRef.current.get(doc.id)
+        if (draft?.content === content) draftsRef.current.delete(doc.id)
+        else if (draft) draftsRef.current.set(doc.id, { ...draft, ingestedAt: res.data.ingestedAt, markdown: res.data.extractedMarkdown })
         const current = selectedDocRef.current
         if (mountedRef.current && current?.id === doc.id && current.ingestedAt === doc.ingestedAt) {
           editorSourceRef.current = { id: res.data.id, ingestedAt: res.data.ingestedAt, markdown: res.data.extractedMarkdown }
@@ -633,9 +643,35 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         setSaveStatus({ success: false, message: normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message })
     } finally {
       savingRef.current = null
-      if (draftsRef.current.get(doc.id) === confirmedMarkdown) draftsRef.current.delete(doc.id)
+      if (draftsRef.current.get(doc.id)?.content === confirmedMarkdown) draftsRef.current.delete(doc.id)
       if (mountedRef.current) setIsSaving(false)
-      if (ownsStatus()) saveStatusTimerRef.current = setTimeout(() => setSaveStatus(null), 4000)
+      if (ownsStatus() && succeeded) saveStatusTimerRef.current = setTimeout(() => setSaveStatus(null), 4000)
+    }
+  }
+
+  /** Explicit discard after UI confirmation; a failed read or newer typing keeps the draft. */
+  const handleReloadDocument = async () => {
+    const doc = selectedDocRef.current
+    if (!doc || savingRef.current) return
+    const content = markdownRef.current
+    const epoch = selectionEpochRef.current
+    savingRef.current = { docId: doc.id, content }
+    setIsSaving(true)
+    try {
+      const latest = await electronApi().getIngestedDocument({ docId: doc.id })
+      if (!latest || latest.id !== doc.id) throw new Error(t('common.documentLoadFailed'))
+      if (!mountedRef.current || epoch !== selectionEpochRef.current || content !== markdownRef.current) return
+      primeDocumentMarkdown(latest)
+      draftsRef.current.delete(doc.id)
+      editorSourceRef.current = null
+      showDocument(latest)
+      setSaveStatus(null)
+      notifyDocumentsChanged()
+    } catch (error) {
+      if (mountedRef.current && epoch === selectionEpochRef.current) setSaveStatus({ success: false, message: errorMessage(error) })
+    } finally {
+      savingRef.current = null
+      if (mountedRef.current) setIsSaving(false)
     }
   }
 
@@ -650,6 +686,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     isSaving,
     saveStatus,
     handleSaveDocument,
+    handleReloadDocument,
     isUploading,
     uploadError,
     setUploadError,

@@ -22,12 +22,12 @@ export function registerSidecarIpcHandlers() {
     )
   })
 
-  ipcMain.handle('ingest:update', async (_, { docId, markdownContent }) => {
-    return sidecarAppService.updateDocument(docId, markdownContent)
+  ipcMain.handle('ingest:update', async (_, { docId, markdownContent, expectedRevision }) => {
+    return sidecarAppService.updateDocument(docId, markdownContent, expectedRevision)
   })
 
-  ipcMain.handle('ingest:translate-inplace', async (_, { docId, sourceLang, targetLang, model, targetDir, numCtx, think }) => {
-    return sidecarAppService.translateDocumentInplace(docId, sourceLang, targetLang, model, targetDir, numCtx, think)
+  ipcMain.handle('ingest:translate-inplace', async (_, { docId, sourceLang, targetLang, taskId, model, targetDir, numCtx, think }) => {
+    return sidecarAppService.translateDocumentInplace(docId, sourceLang, targetLang, taskId, model, targetDir, numCtx, think)
   })
 
   ipcMain.handle('ingest:page-preview', async (_, { docId, pageNumber }) => {

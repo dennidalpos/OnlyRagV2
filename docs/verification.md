@@ -4,6 +4,18 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Indice delle evidenze precedenti
 
+## Revisioni e ciclo di vita dei flussi — 2026-10-16
+
+[Contratti migrati, recupero delle bozze, cancellazione, timeout e chiusura impostazioni](./verification-flow-contracts-2026-10-16.md).
+
+## Budget di rendering delle pagine PDF originali — 2026-10-16
+
+[Rifiuto prima del rendering, integrità dell'archivio e limiti](./verification-2026-10-16.md#budget-di-rendering-delle-pagine-pdf-originali).
+
+## Preview Vite gestita e sonde TCP — 2026-10-16
+
+[Autoconnessione, readiness, riproduttori nativi e limiti](./verification-2026-10-16.md#preview-vite-gestita-e-sonde-tcp).
+
 ## Correzione delle dipendenze — 2026-10-16
 
 [Patch locale braces, rimozione sprintf-js e prove di compatibilità](./dependency-remediation-2026-10-16.md).

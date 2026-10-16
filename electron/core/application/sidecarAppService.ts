@@ -1,21 +1,27 @@
 import path from 'node:path'
 import { z } from 'zod'
-import { randomUUID } from 'node:crypto'
-import type { RendererEventSink } from '../domain/ports/rendererEventSink'
+import type { DocumentExportFormat } from '../../../shared/domain/documentExport'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import type { IpcEventContract } from '../../../shared/ipc/ipcContract'
+import type {
+  IngestedDocument,
+  IngestedDocumentContent,
+  OllamaThinkValue,
+  PromptHistorySearchResult,
+  SourceLocationRequest,
+  VectorSearchResult,
+} from '../../../shared/types'
 import type { DesktopShellPort } from '../domain/ports/desktopShellPort'
-import { allWindowsEventSink } from '../infrastructure/electron/rendererEventSinks'
+import type { RendererEventSink } from '../domain/ports/rendererEventSink'
+import { toIngestionProgressPayload, toTranslateProgressPayload } from '../domain/sidecarContract'
 import { electronDesktopShell } from '../infrastructure/electron/electronDesktopShell'
+import { allWindowsEventSink } from '../infrastructure/electron/rendererEventSinks'
+import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
+import { type SidecarDocumentRecord, type SidecarDocumentSummary, sidecarHttpClient } from '../infrastructure/http/sidecarHttpClient'
 import { logger } from '../infrastructure/logging/logger'
 import { sidecarProcessManager } from '../infrastructure/process/sidecarProcessManager'
 import { taskRunner } from '../infrastructure/process/taskRunner'
-import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
-import { sidecarHttpClient, type SidecarDocumentRecord, type SidecarDocumentSummary } from '../infrastructure/http/sidecarHttpClient'
-import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
-import type { IngestedDocument, IngestedDocumentContent, OllamaThinkValue, PromptHistorySearchResult, VectorSearchResult } from '../../../shared/types'
-import type { IpcEventContract } from '../../../shared/ipc/ipcContract'
-import { toIngestionProgressPayload, toTranslateProgressPayload } from '../domain/sidecarContract'
-import { errorMessage } from '../../../shared/domain/errors/errorMessage'
-import type { SourceLocationRequest } from '../../../shared/types'
 
 export function normalizeIngestedFileType(fileType?: string, filename?: string): IngestedDocument['fileType'] {
   const rawType = (fileType || filename?.split('.').pop() || '').trim().toLowerCase().replace(/^\./, '')
@@ -87,6 +93,7 @@ export class SidecarAppService {
       return { success: false, error: 'Invalid file path' }
     }
     const effectiveTaskId = taskId || `ingest-${Date.now()}`
+    let registered = false
     logger.log(
       'INFO',
       'SidecarApp',
@@ -124,6 +131,7 @@ export class SidecarAppService {
             },
             { sourcePath: resolvedPath },
           )
+          registered = true
         },
       )
 
@@ -135,22 +143,23 @@ export class SidecarAppService {
       return {
         success: false,
         error: result.error || 'Ingestion failed',
+        ...(result.cancelled ? { cancelled: true } : {}),
         ...(result.normalizationReview ? { normalizationReview: result.normalizationReview } : {}),
       }
     } catch (err: unknown) {
       logger.log('ERROR', 'SidecarApp', `Unexpected ingestion exception: ${errorMessage(err)}`)
       return { success: false, error: errorMessage(err) }
     } finally {
-      taskRunner.unregisterActiveTask(effectiveTaskId)
+      if (registered) taskRunner.unregisterActiveTask(effectiveTaskId)
     }
   }
 
-  async updateDocument(docId: string, markdownContent: string) {
+  async updateDocument(docId: string, markdownContent: string, expectedRevision: string) {
     if (!docId || typeof docId !== 'string') {
       return { success: false, error: 'Invalid document ID' }
     }
     logger.log('INFO', 'SidecarApp', `Updating document: ${docId}`)
-    const result = await sidecarHttpClient.updateDocument(docId, markdownContent, await this.configuredEmbeddingModel())
+    const result = await sidecarHttpClient.updateDocument(docId, markdownContent, expectedRevision, await this.configuredEmbeddingModel())
     if (result.success && result.data) {
       return { success: true, data: toIngestedDocumentContent(result.data) }
     }
@@ -161,6 +170,7 @@ export class SidecarAppService {
     docId: string,
     sourceLang: string,
     targetLang: string,
+    taskId: string,
     model?: string,
     targetDir?: string,
     numCtx?: number,
@@ -169,9 +179,9 @@ export class SidecarAppService {
     if (!docId || typeof docId !== 'string') {
       return { success: false, error: 'Invalid document ID' }
     }
-    const taskId = `translate-${randomUUID()}`
     logger.log('INFO', 'SidecarApp', `Translating document in place (streaming): ${docId} (${sourceLang} -> ${targetLang})`)
     let result: Awaited<ReturnType<typeof sidecarHttpClient.translateDocumentInplaceStream>>
+    let registered = false
     try {
       result = await sidecarHttpClient.translateDocumentInplaceStream(
         docId,
@@ -185,17 +195,20 @@ export class SidecarAppService {
           task_id: taskId,
         },
         (event) => this.relayProgress('ingest:translate-progress', toTranslateProgressPayload(event, taskId), event.type),
-        (cancel) => taskRunner.registerActiveTask(taskId, 'translation', cancel),
+        (cancel) => {
+          taskRunner.registerActiveTask(taskId, 'translation', cancel)
+          registered = true
+        },
       )
     } finally {
-      taskRunner.unregisterActiveTask(taskId)
+      if (registered) taskRunner.unregisterActiveTask(taskId)
     }
 
     if (result.success && result.data) {
-      return { success: true, data: toIngestedDocumentContent(result.data) }
+      return { success: true, data: { ...toIngestedDocumentContent(result.data), status: 'translated' as const } }
     }
 
-    return { success: false, error: result.error || 'Translation failed' }
+    return { success: false, error: result.error || 'Translation failed', ...(result.cancelled ? { cancelled: true } : {}) }
   }
 
   getDocumentPagePreview(docId: string, pageNumber: number) {
@@ -320,15 +333,15 @@ export class SidecarAppService {
 
   async exportDocument(
     markdownContent: string,
-    format: string,
+    format: DocumentExportFormat,
     outputFolder?: string,
   ): Promise<{ success: boolean; message?: string; filePath?: string; error?: string }> {
     if (typeof markdownContent !== 'string' || !markdownContent.trim()) {
       return { success: false, error: 'Il contenuto del documento è vuoto.' }
     }
 
-    const cleanFormat = (format || 'pdf').toLowerCase()
-    const defaultExt = cleanFormat === 'pdf' ? 'pdf' : cleanFormat === 'docx' ? 'docx' : 'md'
+    const cleanFormat = format === 'htm' ? 'html' : format
+    const defaultExt = cleanFormat
     const generatedFilename = `OnlyRag_Export_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.${defaultExt}`
 
     try {
@@ -374,10 +387,10 @@ export class SidecarAppService {
           return { success: false, error: writeRes.error }
         }
         this.desktop.showItemInFolder(targetPath)
-        logger.log('INFO', 'SidecarApp', `PDF/DOCX document exported successfully to: ${targetPath}`)
+        logger.log('INFO', 'SidecarApp', `${defaultExt.toUpperCase()} document exported successfully to: ${targetPath}`)
         return {
           success: true,
-          message: `Documento PDF esportato con successo in: ${path.basename(targetPath)}`,
+          message: `Documento ${defaultExt.toUpperCase()} esportato con successo in: ${path.basename(targetPath)}`,
           filePath: targetPath,
         }
       } else {

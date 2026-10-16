@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef, Suspense, lazy } from 'react'
+import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react'
 import { AppSettings } from '../../types'
 import { DEFAULT_APP_SETTINGS } from '../../../shared/domain/settings/appSettingsDefaults'
 import { Layers, FileText, MessageSquare, Languages, Code, Settings, Zap, Cpu, HardDrive, Terminal, Info, Globe, Download, Check, X } from 'lucide-react'
@@ -21,6 +21,7 @@ import { useTranslation, Language } from '../../i18n'
 import { logger } from '../../lib/logger'
 import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { useSettingsPersistence } from '../../hooks/useSettingsPersistence'
 
 export type NavTab = 'ingestion' | 'chat' | 'translation' | 'coding' | 'settings'
 
@@ -70,9 +71,8 @@ export const AppLayout: React.FC = () => {
   const [settingsBootstrap, setSettingsBootstrap] = useState<{ status: 'loading' | 'ready' | 'failed'; error?: string }>({ status: 'loading' })
   const [settingsLoadAttempt, setSettingsLoadAttempt] = useState(0)
   const settingsReady = settingsBootstrap.status === 'ready'
-  const saveChain = useRef<Promise<unknown>>(Promise.resolve())
-  const [settingsSave, setSettingsSave] = useState<{ status: 'idle' | 'saving' | 'saved' | 'failed' }>({ status: 'idle' })
   const [settingsSaveAttempt, setSettingsSaveAttempt] = useState(0)
+  const settingsSave = useSettingsPersistence(settings, settingsReady, settingsSaveAttempt)
   const isRemoteOllama = isRemoteOllamaMode(settings)
 
   // Load and synchronize settings with canonical Electron main process filesystem store
@@ -101,31 +101,6 @@ export const AppLayout: React.FC = () => {
       isMounted = false
     }
   }, [setLanguage, settingsLoadAttempt])
-
-  useEffect(() => {
-    if (!settingsReady) return
-    let cancelled = false
-    setSettingsSave({ status: 'saving' })
-    const timer = setTimeout(() => {
-      const snapshot = settings
-      saveChain.current = saveChain.current
-        .then(async () => {
-          if (cancelled) return
-          const save = window.electronAPI?.saveAppSettings
-          if (!save || (await save(snapshot)) !== true) throw new Error('Settings save failed')
-          if (!cancelled) setSettingsSave({ status: 'saved' })
-        })
-        .catch((err: unknown) => {
-          const message = errorMessage(err)
-          logger.error('AppLayout', `Failed saving settings: ${message}`)
-          if (!cancelled) setSettingsSave({ status: 'failed' })
-        })
-    }, 100)
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [settings, settingsReady, settingsSaveAttempt])
 
   const handleUpdateSettings = useCallback(
     (newSettings: Partial<AppSettings>) => {

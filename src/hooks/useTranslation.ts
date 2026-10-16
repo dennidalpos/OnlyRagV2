@@ -136,7 +136,7 @@ function useTranslationBase(
   const setIsTranslating = useCallback(
     (busy: boolean): boolean => {
       if (busy) {
-        if (ownsJobRef.current || activeJobRef.current !== null || !acquireGlobalTaskLock('translation')) return false
+        if (ownsJobRef.current || activeJobRef.current !== null || peekGlobalTaskLock() !== null || !acquireGlobalTaskLock('translation')) return false
         ownsJobRef.current = true
         setActiveJob(jobKind)
       } else if (ownsJobRef.current) {
@@ -151,7 +151,8 @@ function useTranslationBase(
   )
   useEffect(
     () => () => {
-      if (!ownsJobRef.current) return
+      // In-place work owns its lock until its IPC promise settles, even after unmount.
+      if (!ownsJobRef.current || jobKind === 'inplace') return
       ownsJobRef.current = false
       releaseGlobalTaskLock('translation')
       if (activeJobRef.current === jobKind) setActiveJob(null)
@@ -177,7 +178,8 @@ function useTranslationBase(
   const crossModuleBlockMessage = (): string | null => {
     if (activeJobRef.current !== null && activeJobRef.current !== jobKind) return t('translation.otherJobRunning')
     const busyModule = peekGlobalTaskLock()
-    if (!busyModule || busyModule === 'translation') return null
+    if (!busyModule) return null
+    if (busyModule === 'translation') return t('translation.otherJobRunning')
     return t('common.crossModuleTaskBlocked', { module: t(busyModule === 'coding' ? 'common.moduleNameCoding' : 'common.moduleNameIngestion') })
   }
 
@@ -535,18 +537,26 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
   const [translateProgress, setTranslateProgress] = useState<TranslateProgressPayload | null>(null)
   const [status, setStatus] = useState<{ success: boolean; message: string; filename?: string } | null>(null)
   const [isCancelling, setIsCancelling] = useState(false)
-  // Main assigns the task id and reports it on every progress event of the running job.
+  // Identity exists before dispatch, including before the first progress event.
   const activeTaskIdRef = useRef<string | null>(null)
-  const cancelRequestedRef = useRef(false)
+  const mountedRef = useRef(true)
 
   // Listen to live streaming translation progress from Electron / sidecar
   useEffect(() => {
+    mountedRef.current = true
     const unsubscribe = window.electronAPI?.onTranslateProgress?.((payload) => {
-      if (payload.taskId) activeTaskIdRef.current = payload.taskId
+      if (!mountedRef.current || payload.taskId !== activeTaskIdRef.current) return
       setTranslateProgress(payload)
     })
     return () => {
+      mountedRef.current = false
       unsubscribe?.()
+      const taskId = activeTaskIdRef.current
+      if (taskId) {
+        void window.electronAPI?.cancelTask?.({ taskId }).catch((error: unknown) => {
+          logger.warn('InplaceTranslation', `Unmount cancellation failed: ${errorMessage(error)}`)
+        })
+      }
     }
   }, [])
 
@@ -569,7 +579,7 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
 
   const handleStartInplaceTranslation = async (overrideDoc?: IngestedDocument) => {
     const docToTranslate = overrideDoc || selectedDoc
-    if (!docToTranslate || isTranslating) return
+    if (!docToTranslate || activeTaskIdRef.current || !mountedRef.current) return
 
     const blockedMessage = base.crossModuleBlockMessage()
     if (blockedMessage) {
@@ -590,12 +600,13 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
     if (!setIsTranslating(true)) return
     setStatus(null)
     setTranslateProgress(null)
-    activeTaskIdRef.current = null
-    cancelRequestedRef.current = false
+    const taskId = crypto.randomUUID()
+    activeTaskIdRef.current = taskId
 
     try {
       const res = await electronApi().translateDocumentInplace({
         docId: docToTranslate.id,
+        taskId,
         sourceLang,
         targetLang,
         model: generation.model,
@@ -604,7 +615,8 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
         think: generation.think,
       })
 
-      if (cancelRequestedRef.current && !(res.success && res.data)) {
+      if (!mountedRef.current) return
+      if (res.cancelled) {
         setStatus({ success: false, message: t('translation.inplaceCancelled') })
       } else if (res.success && res.data) {
         setStatus({
@@ -622,13 +634,14 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
       }
     } catch (err: unknown) {
       const normalized = normalizeError(err, 'InplaceTranslation')
-      setStatus({
-        success: false,
-        message: t('translation.inplaceError', { message: normalized.message }),
-      })
+      if (mountedRef.current)
+        setStatus({
+          success: false,
+          message: t('translation.inplaceError', { message: normalized.message }),
+        })
     } finally {
       activeTaskIdRef.current = null
-      setIsCancelling(false)
+      if (mountedRef.current) setIsCancelling(false)
       setIsTranslating(false)
     }
   }
@@ -637,9 +650,16 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
   const handleCancelInplaceTranslation = async () => {
     const taskId = activeTaskIdRef.current
     if (!taskId || !window.electronAPI?.cancelTask) return
-    cancelRequestedRef.current = true
     setIsCancelling(true)
-    await window.electronAPI.cancelTask({ taskId })
+    try {
+      const result = await window.electronAPI.cancelTask({ taskId })
+      if (!result.success) throw new Error(result.message || 'Cancellation request failed')
+    } catch (error) {
+      if (mountedRef.current && activeTaskIdRef.current === taskId) {
+        setStatus({ success: false, message: errorMessage(error) })
+        setIsCancelling(false)
+      }
+    }
   }
 
   return {
@@ -661,7 +681,7 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
     handleSelectTargetDir,
     handleStartInplaceTranslation,
     isCancelling,
-    canCancel: isTranslating && Boolean(translateProgress?.taskId),
+    canCancel: isTranslating && Boolean(activeTaskIdRef.current),
     handleCancelInplaceTranslation,
   }
 }

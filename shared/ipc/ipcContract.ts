@@ -4,16 +4,17 @@
  * its channel, and `IElectronAPI` is derived from the same entries. An invoke channel takes one
  * object payload (or none), never a positional argument list.
  */
+import type { DocumentExportFormat } from '../domain/documentExport'
 import type {
   AgentActionLog,
   AgentApprovalRequest,
   AgentChangeMetrics,
   AgentContextBudgetBreakdown,
   AgentDoneResult,
+  AgentExecutionMode,
   AgentPlan,
   AgentPlanState,
   AgentRunIdentity,
-  AgentExecutionMode,
   AgentTaskRequest,
   AppSettings,
   ArtifactRecord,
@@ -24,15 +25,14 @@ import type {
   GuestOsInfo,
   HubSkillItem,
   IngestedDocument,
-  SourceLocation,
-  SourceLocationRequest,
   IngestedDocumentContent,
+  TranslatedDocumentContent,
   IngestionStreamProgressPayload,
-  NormalizationReview,
   InterviewAnalysisResult,
   InterviewQuestion,
   LogEntry,
   LogLevel,
+  NormalizationReview,
   OllamaGenerationOptions,
   OllamaGenerationStatus,
   OllamaModelMetrics,
@@ -51,6 +51,8 @@ import type {
   SkillHubSource,
   SkillInstallApprovalRequest,
   SkillSaveInput,
+  SourceLocation,
+  SourceLocationRequest,
   TaskQueueStatus,
   TranslateProgressPayload,
   UserInterviewAnswer,
@@ -140,12 +142,21 @@ export interface IpcInvokeContract {
       normalizationThink?: boolean
       allowFullExcelFormat?: boolean
     }
-    result: DocumentResult & { normalizationReview?: NormalizationReview }
+    result: DocumentResult & { normalizationReview?: NormalizationReview; cancelled?: boolean }
   }
-  'ingest:update': { payload: { docId: string; markdownContent: string }; result: DocumentResult }
+  'ingest:update': { payload: { docId: string; markdownContent: string; expectedRevision: string }; result: DocumentResult }
   'ingest:translate-inplace': {
-    payload: { docId: string; sourceLang: string; targetLang: string; model?: string; targetDir?: string; numCtx?: number; think?: OllamaThinkValue }
-    result: DocumentResult
+    payload: {
+      docId: string
+      sourceLang: string
+      targetLang: string
+      taskId: string
+      model?: string
+      targetDir?: string
+      numCtx?: number
+      think?: OllamaThinkValue
+    }
+    result: { success: boolean; data?: TranslatedDocumentContent; error?: string; cancelled?: boolean }
   }
   'ingest:page-preview': { payload: { docId: string; pageNumber: number }; result: PagePreviewData | null }
   'ingest:source-location': { payload: SourceLocationRequest; result: SourceLocation }
@@ -154,8 +165,8 @@ export interface IpcInvokeContract {
   'ingest:delete': { payload: { docId: string }; result: Success }
   'ingest:search': { payload: { query: string; topK?: number; docIds?: string[] }; result: VectorSearchResult[] }
   'ingest:export': {
-    payload: { markdownContent: string; format: string; outputFolder?: string }
-    result: { success: boolean; message?: string; error?: string }
+    payload: { markdownContent: string; format: DocumentExportFormat; outputFolder?: string }
+    result: { success: boolean; message?: string; filePath?: string; error?: string }
   }
   'task:cancel': { payload: { taskId?: string }; result: { success: boolean; message?: string } }
   'workspace:list-files': { payload: { dirPath?: string }; result: WorkspaceFile[] }

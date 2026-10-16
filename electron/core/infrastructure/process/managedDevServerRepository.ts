@@ -32,12 +32,15 @@ async function availablePort(): Promise<number> {
   })
 }
 
-function canConnect(host: string, port: number): Promise<boolean> {
+export function canConnect(host: string, port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = net.connect({ host, port, timeout: 300 })
     socket.once('connect', () => {
+      // An ephemeral source port can collide with the destination on loopback.
+      // TCP self-connect is not evidence of a listener at that endpoint.
+      const reachedListener = socket.localAddress !== socket.remoteAddress || socket.localPort !== socket.remotePort
       socket.destroy()
-      resolve(true)
+      resolve(reachedListener)
     })
     socket.once('error', () => resolve(false))
     socket.once('timeout', () => {
@@ -123,24 +126,29 @@ export class ManagedDevServerRepository {
     })
     try {
       const deadline = Date.now() + this.startupTimeoutMs
-      while (Date.now() < deadline && !(await canConnect(LOOPBACK_HOST, port))) {
+      let listening = false
+      while (Date.now() < deadline) {
+        if (await canConnect(LOOPBACK_HOST, port)) {
+          listening = true
+          break
+        }
         if (child.exitCode !== null || child.signalCode !== null) {
-          throw new Error(`The dev script exited before listening on ${LOOPBACK_HOST}:${port}.\n${owned.output}`)
+          throw new Error(`The dev script exited before listening on ${LOOPBACK_HOST}:${port}.`)
         }
         await delay(100)
       }
-      if (!(await canConnect(LOOPBACK_HOST, port))) {
-        throw new Error(`The dev script did not listen on ${LOOPBACK_HOST}:${port} within ${this.startupTimeoutMs} ms.\n${owned.output}`)
+      if (!listening) {
+        throw new Error(`The dev script did not listen on ${LOOPBACK_HOST}:${port} within ${this.startupTimeoutMs} ms.`)
       }
       await assertLoopbackOnly(port)
       if (child.exitCode !== null || child.signalCode !== null) {
-        throw new Error(`The dev script exited after opening ${LOOPBACK_HOST}:${port}.\n${owned.output}`)
+        throw new Error(`The dev script exited after opening ${LOOPBACK_HOST}:${port}.`)
       }
       this.servers.set(key, owned)
       return { pid: child.pid, port, output: owned.output }
     } catch (error) {
       this.stopOwned(child)
-      throw error
+      throw new Error(`${error instanceof Error ? error.message : String(error)}\nDev script output:\n${owned.output}`, { cause: error })
     }
   }
 

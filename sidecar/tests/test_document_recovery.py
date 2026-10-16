@@ -56,7 +56,7 @@ def test_embedding_failure_preserves_document_and_chunks(monkeypatch):
         raise RuntimeError("embedding failure")
     monkeypatch.setattr(ingest_service, "_build_chunk_records", fail)
     with pytest.raises(RuntimeError, match="embedding failure"):
-        ingest_service.update_and_reindex_document("one", "replacement")
+        ingest_service.update_and_reindex_document("one", "replacement", expected_revision=search_service.get_stored_document("one")["ingested_at"])
     assert (rows("documents"), rows("chunks")) == before
     assert not db._journal_path.exists()
 
@@ -77,7 +77,7 @@ def test_chunk_schema_failure_returns_server_error_and_preserves_data(monkeypatc
     monkeypatch.setattr(ingest_service, "_build_chunk_records", lambda *args: (bad_chunks, False))
     with TestClient(main.app, raise_server_exceptions=False) as client:
         before = rows("documents"), rows("chunks")
-        response = client.put("/documents/one", json={"markdown_content": "new"})
+        response = client.put("/documents/one", json={"markdown_content": "new", "expected_revision": "2026-09-30"})
     assert response.status_code == 500
     assert (rows("documents"), rows("chunks")) == before
 

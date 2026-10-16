@@ -2,8 +2,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { I18nProvider } from '../i18n'
 import { DEFAULT_APP_SETTINGS } from '../../shared/domain/settings/appSettingsDefaults'
+import { I18nProvider } from '../i18n'
 
 vi.mock('./useIngestedDocuments', () => ({
   notifyDocumentsChanged: vi.fn(),
@@ -89,6 +89,32 @@ describe('native ingestion file identity', () => {
     await act(async () => ingestion.handleSelectFileNative())
     expect(ingestFile).toHaveBeenCalledWith(expect.objectContaining({ filePath: 'C:/second/report.md' }))
     expect(resolveNativeFilePath).not.toHaveBeenCalled()
+  })
+
+  it.each(['cancelled', 'error'] as const)('keeps ingestion busy until the cleanup result: %s', async (terminal) => {
+    let finish!: (value: unknown) => void
+    ingestFile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    openFileDialog.mockResolvedValue(['C:/fixture/private.txt'])
+    window.electronAPI = { ...window.electronAPI!, cancelTask: vi.fn(async () => ({ success: true })) }
+    let pending!: Promise<void>
+    await act(async () => {
+      pending = ingestion.handleSelectFileNative()
+    })
+    expect(ingestion.isUploading).toBe(true)
+    await act(async () => ingestion.handleCancelIngestion())
+    expect(ingestion.isUploading).toBe(true)
+    expect(ingestion.uploadError).toBeNull()
+    await act(async () => {
+      finish(terminal === 'cancelled' ? { success: false, cancelled: true } : { success: false, error: 'Cleanup failed; preserve archive' })
+      await pending
+    })
+    expect(ingestion.isUploading).toBe(false)
+    expect(ingestion.uploadError).toContain(terminal === 'cancelled' ? 'cancelled' : 'Cleanup failed')
   })
 
   it('passes the enabled Excel format setting with native ingestion', async () => {

@@ -1,9 +1,27 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import http from 'node:http'
+import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { ManagedDevServerRepository } from './managedDevServerRepository'
+import { canConnect, ManagedDevServerRepository } from './managedDevServerRepository'
+
+function listeningRows(port: number): string[] {
+  if (process.platform !== 'win32') return []
+  try {
+    if (!process.env.SystemRoot) throw new Error('SystemRoot is unavailable.')
+    return execFileSync(path.join(process.env.SystemRoot, 'System32', 'netstat.exe'), ['-ano', '-p', 'tcp'], {
+      encoding: 'utf-8',
+      windowsHide: true,
+      timeout: 5000,
+    })
+      .split(/\r?\n/)
+      .filter((row) => row.trim().split(/\s+/)[1]?.endsWith(`:${port}`))
+  } catch (error) {
+    return [`Listener snapshot unavailable: ${String(error)}`]
+  }
+}
 
 describe('managed dev server tools', () => {
   it('starts only the workspace dev script, probes loopback and stops only its owned process', async () => {
@@ -44,23 +62,108 @@ describe('managed dev server tools', () => {
     }
   }, 20_000)
 
-  it('starts a plain Vite dev script on the assigned loopback port', async () => {
-    const root = fs.mkdtempSync(path.join(process.cwd(), 'node_modules', 'onlyrag-vite-preview-'))
-    const server = new ManagedDevServerRepository()
+  it.each(
+    process.platform === 'win32'
+      ? ['ordinary allocation', 'forced TCP self-connect', 'single readiness success']
+      : ['ordinary allocation', 'single readiness success'],
+  )(
+    'starts a plain Vite dev script on the assigned loopback port: %s',
+    async (allocation) => {
+      const root = fs.mkdtempSync(path.join(process.cwd(), 'node_modules', 'onlyrag-vite-preview-'))
+      const server = new ManagedDevServerRepository()
+      const connections: object[] = []
+      let ready = false
+      let redundantReadinessProbes = 0
+      const connect = net.connect
+      const connectionSpy = vi.spyOn(net, 'connect').mockImplementation(((options: net.NetConnectOpts) => {
+        const target = options as net.TcpNetConnectOpts
+        const forceSelfConnect = allocation === 'forced TCP self-connect' && target.host === '127.0.0.2'
+        const refuseRedundantProbe = allocation === 'single readiness success' && ready && target.host === '127.0.0.1'
+        if (refuseRedundantProbe) redundantReadinessProbes++
+        const socket = connect(
+          refuseRedundantProbe ? { ...target, port: 0 } : forceSelfConnect ? { ...target, localAddress: target.host, localPort: target.port } : options,
+        )
+        socket.once('connect', () => {
+          if (target.host === '127.0.0.1') ready = true
+          const remotePort = socket.remotePort
+          connections.push({
+            local: socket.address(),
+            remoteAddress: socket.remoteAddress,
+            remotePort,
+            listeners: socket.remoteAddress === '127.0.0.2' && remotePort ? listeningRows(remotePort) : undefined,
+          })
+        })
+        return socket
+      }) as typeof net.connect)
+      let passed = false
+      try {
+        fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { dev: 'vite' } }), 'utf-8')
+        fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><title>Managed preview</title>', 'utf-8')
+        fs.writeFileSync(
+          path.join(root, 'vite.config.mjs'),
+          "import fs from 'node:fs'; export default { plugins: [{ name: 'listener-receipt', configureServer(server) { server.httpServer.once('listening', () => fs.writeFileSync('listener.json', JSON.stringify({ address: server.httpServer.address(), pid: process.pid }))) } }] }",
+          'utf-8',
+        )
+
+        const started = await server.start(root)
+        const response = await server.probe(root, `http://127.0.0.1:${started.port}/`)
+
+        expect(response.status).toBe(200)
+        expect(response.body).toContain('Managed preview')
+        const listener = JSON.parse(fs.readFileSync(path.join(root, 'listener.json'), 'utf-8'))
+        expect(listener.address).toMatchObject({ address: '127.0.0.1', port: started.port })
+        if (allocation === 'forced TCP self-connect') {
+          expect(connections).toContainEqual(
+            expect.objectContaining({
+              local: { address: '127.0.0.2', family: 'IPv4', port: started.port },
+              remoteAddress: '127.0.0.2',
+              remotePort: started.port,
+            }),
+          )
+        }
+        expect(redundantReadinessProbes).toBe(0)
+        passed = true
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            root,
+            error: String(error),
+            connections,
+            listener: fs.existsSync(path.join(root, 'listener.json')) ? fs.readFileSync(path.join(root, 'listener.json'), 'utf-8') : null,
+          }),
+        )
+        throw error
+      } finally {
+        connectionSpy.mockRestore()
+        server.stopAll()
+        if (passed) fs.rmSync(root, { recursive: true, force: true })
+      }
+    },
+    30_000,
+  )
+
+  it.runIf(process.platform === 'win32')('does not mistake a real TCP self-connect for a listening dev server', async () => {
+    const reservation = net.createServer()
+    await new Promise<void>((resolve) => reservation.listen(0, '127.0.0.2', resolve))
+    const address = reservation.address()
+    if (!address || typeof address === 'string') throw new Error('Missing reservation address.')
+    await new Promise<void>((resolve, reject) => reservation.close((error) => (error ? reject(error) : resolve())))
+    const connect = net.connect
+    let endpoints: { localAddress?: string; remoteAddress?: string; localPort?: number; remotePort?: number } | undefined
+    const connectionSpy = vi.spyOn(net, 'connect').mockImplementation(((options: net.TcpNetConnectOpts) => {
+      const socket = connect({ ...options, localAddress: '127.0.0.2', localPort: address.port })
+      socket.once('connect', () => {
+        endpoints = { localAddress: socket.localAddress, remoteAddress: socket.remoteAddress, localPort: socket.localPort, remotePort: socket.remotePort }
+      })
+      return socket
+    }) as typeof net.connect)
     try {
-      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { dev: 'vite' } }), 'utf-8')
-      fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><title>Managed preview</title>', 'utf-8')
-
-      const started = await server.start(root)
-      const response = await server.probe(root, `http://127.0.0.1:${started.port}/`)
-
-      expect(response.status).toBe(200)
-      expect(response.body).toContain('Managed preview')
+      expect(await canConnect('127.0.0.2', address.port)).toBe(false)
+      expect(endpoints).toEqual({ localAddress: '127.0.0.2', remoteAddress: '127.0.0.2', localPort: address.port, remotePort: address.port })
     } finally {
-      server.stopAll()
-      fs.rmSync(root, { recursive: true, force: true })
+      connectionSpy.mockRestore()
     }
-  }, 30_000)
+  })
 
   it('rejects a workspace without a dev script', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-no-dev-'))
@@ -72,23 +175,31 @@ describe('managed dev server tools', () => {
     }
   })
 
-  it('rejects a dev script that ignores HOST and binds the assigned port on all interfaces', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-wildcard-dev-'))
-    const server = new ManagedDevServerRepository()
-    try {
-      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { dev: 'node server.cjs' } }), 'utf-8')
-      fs.writeFileSync(
-        path.join(root, 'server.cjs'),
-        "require('node:http').createServer((_req, res) => res.end('exposed')).listen(Number(process.env.PORT), '0.0.0.0')",
-        'utf-8',
-      )
-      await expect(server.start(root)).rejects.toThrow('must bind only')
-      expect(() => server.stop(root)).toThrow('No managed dev server')
-    } finally {
-      server.stopAll()
-      fs.rmSync(root, { recursive: true, force: true })
-    }
-  }, 20_000)
+  it.each(['0.0.0.0', '::'])(
+    'rejects a dev script that ignores HOST and binds the assigned port on %s',
+    async (host) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-wildcard-dev-'))
+      const server = new ManagedDevServerRepository()
+      try {
+        fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { dev: 'node server.cjs' } }), 'utf-8')
+        fs.writeFileSync(
+          path.join(root, 'server.cjs'),
+          `require('node:http').createServer((_req, res) => res.end('exposed')).listen(Number(process.env.PORT), '${host}')`,
+          'utf-8',
+        )
+        const error = await server.start(root).catch((error: Error) => error)
+        expect(error).toBeInstanceOf(Error)
+        expect(String(error)).toContain('must bind only')
+        expect(String(error)).toContain('Dev script output:')
+        expect(String(error)).toContain('node server.cjs')
+        expect(() => server.stop(root)).toThrow('No managed dev server')
+      } finally {
+        server.stopAll()
+        fs.rmSync(root, { recursive: true, force: true })
+      }
+    },
+    20_000,
+  )
 
   it('rejects a dev script that ignores the assigned PORT', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-wrong-port-dev-'))

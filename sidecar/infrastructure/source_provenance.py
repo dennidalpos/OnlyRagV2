@@ -3,7 +3,7 @@ import base64
 import hashlib
 import os
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
 
 import pymupdf
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sidecar.config import DATA_DIR, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME
 from sidecar.infrastructure.db import database_operation, get_existing_tables, lance_db, validate_doc_id
 from sidecar.schemas import SourceProvenance, SourceLocationResponse
+from sidecar.infrastructure.store_control import safe_path
 
 SOURCE_ROOT = Path(DATA_DIR) / "source-documents"
 MAX_SOURCE_BYTES = 512 * 1024 * 1024
@@ -49,13 +50,16 @@ def _path(doc_id: str, name: str) -> Path:
     return target
 
 
-def retain_original(doc_id: str, file_path: str, check_cancelled) -> tuple[Path, str]:
+def retain_original(doc_id: str, file_path: str, check_cancelled,
+                    on_created: Optional[Callable[[Path], None]] = None) -> tuple[Path, str]:
     """Copy and hash bounded blocks before extraction; never modify the caller's file."""
     suffix = Path(file_path).suffix.lower().lstrip(".")
     if not suffix.isascii() or not suffix.isalnum():
         suffix = "bin"
     target = _path(doc_id, f"original.{suffix}")
     target.parent.mkdir(parents=True, exist_ok=False)
+    if on_created is not None:
+        on_created(target.parent)
     digest = hashlib.sha256()
     total = 0
     with open(file_path, "rb") as source, target.open("xb") as retained:
@@ -69,6 +73,24 @@ def retain_original(doc_id: str, file_path: str, check_cancelled) -> tuple[Path,
         retained.flush()
         os.fsync(retained.fileno())
     return target, digest.hexdigest()
+
+
+def remove_owned_archive(doc_id: str, owned_directory: Path) -> None:
+    """Remove only the new task's directory, after its database rollback succeeded."""
+    validate_doc_id(doc_id)
+    directory = safe_path(SOURCE_ROOT, doc_id)
+    if directory != owned_directory:
+        raise ValueError("Source cleanup ownership mismatch.")
+    if not directory.exists():
+        return
+    entries = list(directory.iterdir())
+    for entry in entries:
+        safe_path(directory, entry.name)
+        if not entry.is_file() or not (entry.name.startswith("original.") or entry.name in ("extraction.json", "extraction.tmp")):
+            raise ValueError("Unexpected source cleanup artifact; preserve the archive.")
+    for entry in entries:
+        safe_path(directory, entry.name).unlink()
+    directory.rmdir()
 
 
 def save_extraction(doc_id: str, retained: Path, source_revision: str, filename: str,

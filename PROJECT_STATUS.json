@@ -4,18 +4,6 @@
   ],
   "todo_autonomous": [
     {
-      "id": "TEST-MANAGED-VITE-LOOPBACK-FLAKE-01",
-      "p": "P2",
-      "task": "Investigate the intermittent plain-Vite managed preview refusal: the full suite observed the assigned port reachable at 127.0.0.2 despite the requested 127.0.0.1 binding; the isolated five-test file subsequently passed (docs/verification-2026-10-15.md).",
-      "verify": "Repeat the managedDevServerRepository tests with isolated workspaces and capture the child output plus actual listening addresses on failure; identify whether Vite binding or the reachability probe is responsible, preserve wildcard-binding rejection and pass the full JavaScript suite."
-    },
-    {
-      "id": "TEST-SOURCE-PDF-RENDER-BUDGET-01",
-      "p": "P2",
-      "task": "Test source-location refusal for an oversized retained PDF page before rendering, including unchanged archive and clear error (sidecar/infrastructure/source_provenance.py).",
-      "verify": ".venv/Scripts/python.exe -m pytest -q sidecar/tests/test_source_provenance.py; add a PDF render-budget case asserting refusal before rendering and byte-identical retained originals."
-    },
-    {
       "id": "TEST-SOURCE-JUNCTION-WINDOWS-01",
       "p": "P2",
       "task": "Qualify source archive path containment with a Windows junction; the directory-symlink test is skipped on hosts without symlink privilege (sidecar/infrastructure/source_provenance.py).",
@@ -64,12 +52,12 @@
     {
       "id": "SETTINGS-CLOSE-DURABILITY-01",
       "p": "P2",
-      "task": "Qualify settings persistence through close, interruption and restart (docs/verification.md)."
+      "task": "Qualify installed-desktop settings persistence and forced-interruption recovery beyond the isolated Main/Preload close, failed-write retry and restart readback tests (docs/verification.md)."
     },
     {
       "id": "UX-FIRST-USE-SIMPLIFICATION-01",
       "p": "P2",
-      "task": "Simplify the first-use path and validate desktop, tablet and phone layouts (docs/frontend.md)."
+      "task": "Simplify first use and qualify desktop/tablet/phone layouts. Isolated 2026-10-16 screenshots verify the new conflict banner at 1920/768/390 px but show existing ingestion panes/toolbars clipped on tablet/phone (docs/verification-flow-contracts-2026-10-16.md, docs/frontend.md)."
     },
     {
       "id": "CHAT-DURABLE-HISTORY-01",
@@ -94,7 +82,7 @@
     {
       "id": "TRANSLATION-INPLACE-UNMOUNT-CANCELLATION-01",
       "p": "P2",
-      "task": "Qualify in-place translation cancellation and unmount ownership (docs/translation.md)."
+      "task": "Qualify installed-desktop in-place translation cancellation with a real Sidecar/model, including pre-progress stop, unmount and transport-loss outcomes beyond deterministic ownership/terminal tests (docs/translation.md)."
     },
     {
       "id": "AGENT-UNGRACEFUL-SHUTDOWN-RECOVERY-01",

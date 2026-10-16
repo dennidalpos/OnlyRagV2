@@ -32,6 +32,7 @@ import { DocumentListTable } from './DocumentListTable'
 import { VectorSearchPanel } from './VectorSearchPanel'
 import { SourcePagePreview } from './SourcePagePreview'
 import { NormalizationReviewPanel } from './NormalizationReviewPanel'
+import { InlineDestructiveConfirm } from '../common/InlineDestructiveConfirm'
 import { useIngestion } from '../../hooks/useIngestion'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
@@ -387,8 +388,8 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
         {/* Save Status Notification Banner */}
         {ing.saveStatus && (
           <div
-            role="status"
-            className={`px-4 py-2.5 border-b flex items-center justify-between text-xs font-semibold shrink-0 transition-all ${
+            role={ing.saveStatus.success ? 'status' : 'alert'}
+            className={`px-4 py-2.5 border-b flex flex-wrap gap-2 items-center justify-between text-xs font-semibold shrink-0 transition-all ${
               ing.saveStatus.success
                 ? 'bg-emerald-950/80 border-emerald-800 text-emerald-300 shadow-md shadow-emerald-950/40'
                 : 'bg-rose-950/80 border-rose-800 text-rose-300'
@@ -398,6 +399,20 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
               {ing.saveStatus.success ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertTriangle className="w-4 h-4 text-rose-400" />}
               <span>{ing.saveStatus.message}</span>
             </div>
+            {!ing.saveStatus.success && ing.selectedDoc && !ing.isSaving && (
+              <div className="flex items-center gap-2">
+                <button type="button" className="px-2 py-1 rounded focus-ring" onClick={() => ing.handleExportMarkdown('md')}>
+                  {t('common.export')}
+                </button>
+                <InlineDestructiveConfirm
+                  icon={RefreshCw}
+                  actionLabel={t('ingestion.reloadLatest')}
+                  itemLabel={ing.selectedDoc.filename}
+                  hint={t('ingestion.reloadLatestHint')}
+                  onConfirm={() => void ing.handleReloadDocument()}
+                />
+              </div>
+            )}
           </div>
         )}
 

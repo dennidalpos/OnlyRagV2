@@ -27,7 +27,7 @@ from sidecar.schemas import (
     IndexPromptHistoryRequest, PromptHistorySearchRequest, PromptHistorySearchResult,
     PromptHistoryRemoveRequest, TranslateInplaceRequest,
 )
-from sidecar.infrastructure.db import lance_db, get_existing_tables, run_db_maintenance, recover_database, DatabaseRecoveryError, database_operation
+from sidecar.infrastructure.db import lance_db, get_existing_tables, run_db_maintenance, recover_database, DatabaseRecoveryError, DatabaseConflictError, database_operation
 from sidecar.infrastructure.ocr import detect_gpu_acceleration, get_ocr_runtime_info
 from sidecar.domain.exporter import export_markdown_to_file
 from sidecar.services.ingest_service import (
@@ -90,6 +90,11 @@ async def require_launch_token(request: Request, call_next):
         if not hmac.compare_digest(supplied.encode(), SIDECAR_AUTH_TOKEN.encode()):
             return JSONResponse(status_code=401, content={"detail": "Missing or invalid sidecar token"})
     return await call_next(request)
+
+
+@app.exception_handler(DatabaseConflictError)
+async def database_conflict_handler(request: Request, exc: DatabaseConflictError):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 @app.exception_handler(Exception)
@@ -166,7 +171,7 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
         media_type="application/x-ndjson"
     )
 
-@app.put("/documents/{doc_id}", response_model=IngestResponse, responses={500: {"description": "Database update failed"}})
+@app.put("/documents/{doc_id}", response_model=IngestResponse, responses={409: {"description": "Document changed during re-indexing"}, 500: {"description": "Database update failed"}})
 async def update_document(doc_id: str, req: UpdateDocumentRequest):
     logger.info(f"Updating and re-indexing document {doc_id} in LanceDB")
     try:
@@ -174,6 +179,7 @@ async def update_document(doc_id: str, req: UpdateDocumentRequest):
             update_and_reindex_document,
             doc_id,
             req.markdown_content,
+            req.expected_revision,
             req.embedding_model or DEFAULT_EMBEDDING_MODEL,
         )
     except ValueError as val_err:
@@ -253,7 +259,7 @@ async def delete_document(doc_id: str):
         logger.error(f"Error deleting document {doc_id}: {e}")
         raise
 
-@app.post("/vector/search", response_model=List[SearchResult], responses={500: {"description": "Database search failed"}})
+@app.post("/vector/search", response_model=List[SearchResult], responses={409: {"description": "Database changed during query encoding"}, 500: {"description": "Database search failed"}})
 async def search_vector_db(req: SearchRequest):
     logger.info("Performing LanceDB vector search (query_length=%s, top_k=%s)", len(req.query), req.top_k)
     return await asyncio.to_thread(perform_vector_search, req)

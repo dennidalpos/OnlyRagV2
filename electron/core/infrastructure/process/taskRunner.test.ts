@@ -38,7 +38,7 @@ describe('TaskRunner Unit & Reliability Tests', () => {
     fs.writeFileSync(tempFile, 'partial residue data', 'utf-8')
 
     const destroyMock = vi.fn()
-    runner.registerActiveTask('task-to-cancel', 'ingestion', destroyMock, {
+    runner.registerActiveTask('task-to-cancel', 'export', destroyMock, {
       sourcePath: sourceFile,
       temporaryResiduePath: tempFile,
     })
@@ -50,6 +50,16 @@ describe('TaskRunner Unit & Reliability Tests', () => {
     expect(fs.existsSync(tempFile)).toBe(false)
 
     fs.rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it.each(['ingestion', 'translation'] as const)('keeps %s cancellable until its owner confirms settlement', (type) => {
+    const requestCancel = vi.fn()
+    runner.registerActiveTask('pending-sidecar', type, requestCancel)
+    expect(runner.cancelTask('pending-sidecar')).toMatchObject({ success: true, message: expect.stringContaining('awaiting Sidecar') })
+    expect(runner.cancelTask('pending-sidecar').success).toBe(true)
+    expect(requestCancel).toHaveBeenCalledTimes(2)
+    runner.unregisterActiveTask('pending-sidecar')
+    expect(runner.cancelTask('pending-sidecar').success).toBe(false)
   })
 
   it('should preserve sources during lifecycle cancellation and clean temporary residues', () => {

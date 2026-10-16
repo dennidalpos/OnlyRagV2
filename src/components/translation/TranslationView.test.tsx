@@ -23,10 +23,10 @@ describe('TranslationView in-place job lifecycle', () => {
   let container: HTMLDivElement
   let root: Root
   let emitProgress: (payload: TranslateProgressPayload) => void = () => {}
-  let finishTranslation: (result: { success: boolean; error?: string }) => void = () => {}
+  let finishTranslation: (result: { success: boolean; error?: string; cancelled?: boolean }) => void = () => {}
   const cancelTask = vi.fn(async () => ({ success: true }))
   const translateDocumentInplace = vi.fn(
-    () =>
+    (_request: { taskId: string }) =>
       new Promise((resolve) => {
         finishTranslation = resolve
       }),
@@ -70,7 +70,8 @@ describe('TranslationView in-place job lifecycle', () => {
   it('keeps the job, its progress and the task lock across tab switches, and cancels it', async () => {
     await click(tab(/Layout-Preserving/))
     await click(button(/Start Layout-Preserving Translation/))
-    await act(async () => emitProgress({ taskId: 'translate-1', type: 'progress', percent: 40 }))
+    const taskId = translateDocumentInplace.mock.calls[0][0].taskId
+    await act(async () => emitProgress({ taskId, type: 'progress', percent: 40 }))
     expect(peekGlobalTaskLock()).toBe('translation')
 
     await click(tab(/Text & Markdown/))
@@ -81,9 +82,9 @@ describe('TranslationView in-place job lifecycle', () => {
     await click(tab(/Layout-Preserving/))
     expect(container.textContent).toContain('40')
     await click(button(/^Cancel$/))
-    expect(cancelTask).toHaveBeenCalledWith({ taskId: 'translate-1' })
+    expect(cancelTask).toHaveBeenCalledWith({ taskId })
 
-    await act(async () => finishTranslation({ success: false, error: 'socket hang up' }))
+    await act(async () => finishTranslation({ success: false, cancelled: true }))
     expect(container.textContent).toContain('Translation cancelled')
     expect(peekGlobalTaskLock()).toBeNull()
     await click(tab(/Text & Markdown/))

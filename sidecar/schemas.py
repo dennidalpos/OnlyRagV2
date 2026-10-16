@@ -99,6 +99,7 @@ class IngestPathRequest(StrictRequest):
 
 class UpdateDocumentRequest(StrictRequest):
     markdown_content: str = Field(..., min_length=1, max_length=10_000_000)
+    expected_revision: str = Field(..., min_length=1, max_length=200, pattern=NON_BLANK)
     embedding_model: Optional[str] = MODEL_NAME
 
 

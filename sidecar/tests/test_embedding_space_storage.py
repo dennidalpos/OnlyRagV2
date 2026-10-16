@@ -52,7 +52,7 @@ def test_different_native_dimension_rejects_replacement_without_data_loss(tmp_pa
     before = db.lance_db.open_table("documents").to_arrow().to_pylist(), db.lance_db.open_table("chunks").to_arrow().to_pylist()
     encoder_fixture(monkeypatch, 768)
     with pytest.raises(EmbeddingSpaceMismatchError, match="Index dimension is 1024"):
-        ingest_service.update_and_reindex_document(doc["id"], "Alpha replacement")
+        ingest_service.update_and_reindex_document(doc["id"], "Alpha replacement", expected_revision=search_service.get_stored_document(doc["id"])["ingested_at"])
     assert (db.lance_db.open_table("documents").to_arrow().to_pylist(), db.lance_db.open_table("chunks").to_arrow().to_pylist()) == before
     assert not db._journal_path.exists()
 
@@ -128,7 +128,7 @@ def test_preparation_change_requires_rebuild_and_preserves_original_records(tmp_
     encoder_fixture(monkeypatch)
     if replacement:
         with pytest.raises(EmbeddingSpaceMismatchError, match="preparation changed"):
-            ingest_service.update_and_reindex_document(doc["id"], "Alpha replacement")
+            ingest_service.update_and_reindex_document(doc["id"], "Alpha replacement", expected_revision=search_service.get_stored_document(doc["id"])["ingested_at"])
     else:
         with pytest.raises(AssertionError, match="preparation changed"):
             ingest(tmp_path, "b.md", "Beta new")

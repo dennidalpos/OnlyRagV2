@@ -16,6 +16,8 @@ vi.mock('./useOllamaModelMetrics', () => ({ useOllamaModelMetrics: () => ({ metr
 
 import { useDocumentTranslation, useInplaceTranslation } from './useTranslation'
 import { clearDocumentMarkdownCache } from '../services/documentMarkdown'
+import { peekGlobalTaskLock } from '../services/globalTaskLock'
+import type { TranslateProgressPayload } from '../types'
 
 // The list carries metadata only; the Markdown comes from getIngestedDocument on demand.
 const markdownDoc = { id: 'md-1', filename: 'notes.md', fileType: 'md', numPages: 1, ingestedAt: 't1' } as unknown as IngestedDocument
@@ -189,5 +191,106 @@ describe('translation hooks', () => {
     expect(generateOllamaStream).not.toHaveBeenCalled()
     expect(documentTranslation.translationError).toMatch(/Could not load the document content/)
     expect(documentTranslation.isTranslating).toBe(false)
+  })
+
+  it('can stop before the first progress and waits for confirmed cancellation', async () => {
+    let finish!: (result: { success: boolean; cancelled?: boolean }) => void
+    let progress!: (payload: TranslateProgressPayload) => void
+    const translate = vi.fn(
+      (_request: { taskId: string }) =>
+        new Promise<{ success: boolean; cancelled?: boolean }>((resolve) => {
+          finish = resolve
+        }),
+    )
+    const cancelTask = vi.fn(async () => ({ success: true }))
+    window.electronAPI = {
+      ...window.electronAPI!,
+      translateDocumentInplace: translate,
+      cancelTask,
+      onTranslateProgress: (callback) => {
+        progress = callback
+        return () => {}
+      },
+    }
+    await render({ translationModel: 'translator', translationOutputFolder: 'D:/fixture' })
+    let running!: Promise<void>
+    await act(async () => {
+      running = inplaceTranslation.handleStartInplaceTranslation()
+    })
+    // The request carries its identity before the Sidecar produces any event.
+    const request = translate.mock.calls[0][0]
+    expect(request.taskId).toBeTypeOf('string')
+    expect(inplaceTranslation.canCancel).toBe(true)
+    await act(async () => progress({ type: 'progress', taskId: 'unrelated', percent: 80 }))
+    expect(inplaceTranslation.translateProgress).toBeNull()
+    await act(async () => inplaceTranslation.handleCancelInplaceTranslation())
+    expect(cancelTask).toHaveBeenCalledWith({ taskId: request.taskId })
+    expect(inplaceTranslation.isTranslating).toBe(true)
+    expect(peekGlobalTaskLock()).toBe('translation')
+    await act(async () => {
+      finish({ success: false, cancelled: true })
+      await running
+    })
+    expect(inplaceTranslation.status?.message).toMatch(/cancel/i)
+    expect(peekGlobalTaskLock()).toBeNull()
+  })
+
+  it('cancels on unmount and holds the global lock until the old operation settles', async () => {
+    let finish!: (result: { success: boolean; error?: string }) => void
+    const translate = vi.fn(
+      () =>
+        new Promise<{ success: boolean; error?: string }>((resolve) => {
+          finish = resolve
+        }),
+    )
+    const cancelTask = vi.fn(async () => ({ success: true }))
+    window.electronAPI = { ...window.electronAPI!, translateDocumentInplace: translate, cancelTask }
+    const settings = { translationModel: 'translator', translationOutputFolder: 'D:/fixture' }
+    await render(settings)
+    let running!: Promise<void>
+    await act(async () => {
+      running = inplaceTranslation.handleStartInplaceTranslation()
+    })
+    await act(async () => root.unmount())
+    expect(cancelTask).toHaveBeenCalledOnce()
+    expect(peekGlobalTaskLock()).toBe('translation')
+    root = createRoot(container)
+    await render(settings)
+    await act(async () => inplaceTranslation.handleStartInplaceTranslation())
+    expect(translate).toHaveBeenCalledOnce()
+    await act(async () => {
+      finish({ success: false, error: 'Server stopped' })
+      await running
+    })
+    expect(peekGlobalTaskLock()).toBeNull()
+    expect(inplaceTranslation.isTranslating).toBe(false)
+  })
+
+  it('keeps a failed cancellation distinct from a server cancellation terminal', async () => {
+    let finish!: (result: { success: boolean; error?: string }) => void
+    window.electronAPI = {
+      ...window.electronAPI!,
+      translateDocumentInplace: vi.fn(
+        () =>
+          new Promise<{ success: boolean; error?: string }>((resolve) => {
+            finish = resolve
+          }),
+      ),
+      cancelTask: vi.fn(async () => ({ success: false, message: 'Relay unavailable' })),
+    }
+    await render({ translationModel: 'translator', translationOutputFolder: 'D:/fixture' })
+    let running!: Promise<void>
+    await act(async () => {
+      running = inplaceTranslation.handleStartInplaceTranslation()
+    })
+    await act(async () => inplaceTranslation.handleCancelInplaceTranslation())
+    expect(inplaceTranslation.status?.message).toBe('Relay unavailable')
+    expect(inplaceTranslation.isTranslating).toBe(true)
+    expect(inplaceTranslation.isCancelling).toBe(false)
+    await act(async () => {
+      finish({ success: false, error: 'Storage failure' })
+      await running
+    })
+    expect(inplaceTranslation.status?.message).toBe('Storage failure')
   })
 })

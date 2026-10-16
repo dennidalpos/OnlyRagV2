@@ -55,6 +55,9 @@ export function loadDocumentMarkdown(doc: DocumentKey): Promise<string | null> {
     .then(() => electronApi().getIngestedDocument({ docId: doc.id }))
     .then((loaded) => {
       if (!loaded) return null
+      if (loaded.id !== doc.id || loaded.ingestedAt !== doc.ingestedAt) {
+        throw new Error('Document response does not match the requested revision; reload the document list.')
+      }
       const markdown = loaded.extractedMarkdown || ''
       remember(key, markdown)
       return markdown

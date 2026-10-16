@@ -1,12 +1,12 @@
-import { app } from 'electron'
-import path from 'node:path'
+import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
-import { spawn } from 'node:child_process'
+import path from 'node:path'
+import { app } from 'electron'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
+import { logger } from '../logging/logger'
 import { PersistentPowerShellSession } from './persistentPowerShellSession'
 import { normalizePowerShellCommand } from './powerShellCommand'
-import { logger } from '../logging/logger'
-import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export type ActiveTaskType = 'ingestion' | 'translation' | 'ollama_stream' | 'export' | 'terminal_command'
 
@@ -29,6 +29,7 @@ export class TaskRunner {
   private terminalSessions = new Map<string, PersistentPowerShellSession>()
 
   registerActiveTask(id: string, type: ActiveTaskType, destroyFn: () => void, paths: ActiveTaskPaths = {}): string {
+    if (this.activeTasksMap.has(id)) throw new Error(`Task ${id} is already active`)
     const task: ActiveTask = {
       id,
       type,
@@ -43,6 +44,7 @@ export class TaskRunner {
 
   unregisterActiveTask(id: string) {
     if (this.activeTasksMap.has(id)) {
+      this.cleanupTemporaryResidue(this.activeTasksMap.get(id)!)
       this.activeTasksMap.delete(id)
       logger.log('INFO', 'TaskRunner', `Unregistered completed task: ${id}`)
     }
@@ -58,10 +60,16 @@ export class TaskRunner {
     try {
       logger.log('INFO', 'TaskRunner', `Cancelling task [${task.type}]: ${id}`)
       task.destroy()
+      if (task.type === 'ingestion' || task.type === 'translation') {
+        return { success: true, message: `Cancellation requested for task ${id}; awaiting Sidecar completion.` }
+      }
       this.activeTasksMap.delete(id)
       this.cleanupTemporaryResidue(task)
 
-      return { success: true, message: `Task ${id} cancelled successfully and residues cleaned.` }
+      return {
+        success: true,
+        message: `Task ${id} cancelled successfully and residues cleaned.`,
+      }
     } catch (err: unknown) {
       logger.log('ERROR', 'TaskRunner', `Error cancelling task ${id}: ${errorMessage(err)}`)
       return { success: false, message: `Error cancelling task: ${errorMessage(err)}` }

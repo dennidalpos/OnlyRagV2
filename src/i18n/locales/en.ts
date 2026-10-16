@@ -569,6 +569,8 @@ export const en: TranslationSchema = {
     allFiles: 'All files',
     saveSuccess: 'Changes saved and LanceDB vectors re-indexed successfully!',
     saveFailed: 'Error while saving the document',
+    reloadLatest: 'Discard draft and reload',
+    reloadLatestHint: 'This replaces your draft with the latest saved document. Export the draft first if you want to keep a copy.',
     cancelledByUser: 'Ingestion cancelled. Temporary files and partial task data were removed.',
     failedUnknown: 'Ingestion failed: unknown error from the Sidecar.',
     fileWithoutDiskPath: 'This file has no local disk path. Select a file saved on this device.',

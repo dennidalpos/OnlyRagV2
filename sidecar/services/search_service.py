@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 from sidecar.config import CHUNKS_TABLE_NAME, DOCS_TABLE_NAME, logger
 from sidecar.schemas import SearchRequest, SearchResult
-from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, database_operation, delete_document_records
+from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, database_operation, delete_document_records, DatabaseConflictError
 from sidecar.infrastructure.chunk_storage import chunk_embedding_space, distinct_chunk_provenance, require_versioned_chunk_table
 from sidecar.infrastructure.embeddings import (
     generate_embedding_batch,
@@ -69,20 +69,11 @@ def _lexical_candidates(ctbl: Any, query: str, doc_filter: Optional[str], limit:
     return search.limit(limit).to_list()
 
 
-@database_operation
 def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
     """Fuse independent dense and native lexical ranks, then apply the lexical heuristic."""
     query_raw = req.query.strip()
     if not query_raw:
         return []
-
-    if CHUNKS_TABLE_NAME not in get_existing_tables():
-        return []
-
-    ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
-
-    top_k = req.top_k or 5
-    fetch_limit = max(top_k * 5, 50)
 
     # Multi-document filtering support
     raw_doc_ids = set()
@@ -103,14 +94,49 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
 
     doc_filter = " OR ".join([f"doc_id = '{d_id}'" for d_id in sorted(allowed_doc_ids)]) if allowed_doc_ids else None
 
+    snapshot = _prepare_search(doc_filter)
+    if snapshot is None:
+        return []
+    versions, spaces = snapshot
+    batches = []
+    for space in spaces:
+        batch = generate_embedding_batch([query_raw], model=space.embedding_model, expected_space=space, role="query")
+        if batch.space != space:
+            raise EmbeddingSpaceMismatchError("Query and stored embedding spaces differ.")
+        batches.append(batch)
+    return _search_current_index(req, query_raw, allowed_doc_ids, doc_filter, versions, batches)
+
+
+def _search_versions() -> dict:
+    existing = set(get_existing_tables())
+    return {name: lance_db.open_table(name).version if name in existing else None
+            for name in (DOCS_TABLE_NAME, CHUNKS_TABLE_NAME)}
+
+
+@database_operation
+def _prepare_search(doc_filter: Optional[str]):
+    versions = _search_versions()
+    if versions[CHUNKS_TABLE_NAME] is None:
+        return None
+    return versions, _stored_embedding_spaces(lance_db.open_table(CHUNKS_TABLE_NAME), doc_filter)
+
+
+@database_operation
+def _search_current_index(req, query_raw, allowed_doc_ids, doc_filter, versions, batches) -> List[SearchResult]:
+    if _search_versions() != versions:
+        raise DatabaseConflictError("Database changed during query encoding; retry the search.")
+    ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
+    # Check provenance as well as versions before consuming prepared query vectors.
+    if _stored_embedding_spaces(ctbl, doc_filter) != [batch.space for batch in batches]:
+        raise DatabaseConflictError("Embedding provenance changed during query encoding; retry the search.")
+    top_k = req.top_k or 5
+    fetch_limit = max(top_k * 5, 50)
     # Dense retrieval per embedding model; rankings merged by rank across spaces
     chunk_map: Dict[str, Dict[str, Any]] = {}
     dense_ranks: Dict[str, int] = {}
 
-    for space in _stored_embedding_spaces(ctbl, doc_filter):
-        batch = generate_embedding_batch([query_raw], model=space.embedding_model, expected_space=space, role="query")
-        if batch.space != space:
-            raise EmbeddingSpaceMismatchError("Query and stored embedding spaces differ.")
+    for batch in batches:
+        space = batch.space
         query_vec = batch.vectors[0]
         model_filter = f"embedding_space_id = '{_sql_literal(space.metadata()['embedding_space_id'])}'"
         where_clause = f"({doc_filter}) AND {model_filter}" if doc_filter else model_filter

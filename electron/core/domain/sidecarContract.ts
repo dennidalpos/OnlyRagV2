@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DOCUMENT_EXPORT_FORMATS } from '../../../shared/domain/documentExport'
 import type { IngestionStreamProgressPayload, NormalizationReview, TranslateProgressPayload } from '../../../shared/types'
 
 const nonBlank = z.string().trim().min(1)
@@ -26,6 +27,7 @@ export const sidecarUpdateDocumentPayloadSchema = z
   .object({
     docId: nonBlank.max(200),
     markdownContent: z.string().min(1).max(10_000_000),
+    expectedRevision: nonBlank.max(200),
   })
   .strict()
 
@@ -34,6 +36,7 @@ export const sidecarTranslatePayloadSchema = z
     docId: nonBlank.max(200),
     sourceLang: nonBlank.max(100),
     targetLang: nonBlank.max(100),
+    taskId,
     model: modelName.optional(),
     targetDir: boundedPath.optional(),
     numCtx: contextTokens.optional(),
@@ -60,7 +63,7 @@ export const sidecarSearchPayloadSchema = z
 export const sidecarExportPayloadSchema = z
   .object({
     markdownContent: z.string().min(1).max(10_000_000),
-    format: z.enum(['pdf', 'docx', 'html', 'htm']),
+    format: z.enum(DOCUMENT_EXPORT_FORMATS),
     outputFolder: boundedPath.optional(),
   })
   .strict()
@@ -68,6 +71,36 @@ export const sidecarExportPayloadSchema = z
 const count = z.number().int().nonnegative()
 const percent = z.number().min(0).max(100)
 const text = z.string().max(20_000)
+
+/** Wire document fields shared by REST reads and mutation results. */
+const documentFields = {
+  id: nonBlank.max(200),
+  filename: nonBlank.max(4096),
+  file_size: count,
+  num_pages: count,
+  num_chunks: count,
+  ingested_at: nonBlank.max(200),
+  file_type: nonBlank.max(100),
+  used_fallback_embeddings: z.boolean().optional(),
+}
+export const sidecarDocumentSummarySchema = z.object({
+  ...documentFields,
+  status: z.enum(['indexed', 'indexed_fallback']),
+  file_path: nonBlank.max(4096),
+})
+export const sidecarDocumentRecordSchema = sidecarDocumentSummarySchema.extend({ extracted_markdown: z.string() })
+// Ingest/update responses have no file_path; translation results carry a distinct output filePath.
+export const sidecarIngestResultSchema = z.object({
+  ...documentFields,
+  status: z.enum(['indexed', 'indexed_fallback']),
+  extracted_markdown: z.string(),
+})
+export const sidecarTranslationResultSchema = z.object({
+  ...documentFields,
+  status: z.literal('translated'),
+  filePath: nonBlank.max(4096),
+  extracted_markdown: z.string(),
+})
 
 const normalizationReviewSchema = z
   .object({

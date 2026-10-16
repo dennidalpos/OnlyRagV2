@@ -83,10 +83,13 @@ export interface IngestedDocument {
   usedFallbackEmbeddings?: boolean
 }
 
-/** A document with its extracted Markdown: `ingest:get`, ingestion, update and translation results. */
+/** An indexed document with its extracted Markdown: `ingest:get`, ingestion and update results. */
 export interface IngestedDocumentContent extends IngestedDocument {
   extractedMarkdown: string
 }
+
+/** A translated output file is not an indexed document revision. */
+export type TranslatedDocumentContent = Omit<IngestedDocumentContent, 'status'> & { status: 'translated' }
 
 export interface NormalizationReview {
   originalMarkdown: string

@@ -2,10 +2,14 @@
 
 Il Renderer passa il percorso del file a Main tramite il Preload. Main valida la richiesta e usa il Sidecar FastAPI per estrazione, OCR, normalizzazione facoltativa, embedding e salvataggio. Il contratto eseguibile è in [`sidecar/main.py`](../sidecar/main.py), [`sidecar/schemas.py`](../sidecar/schemas.py) e [`electron/core/infrastructure/http/sidecarHttpClient.ts`](../electron/core/infrastructure/http/sidecarHttpClient.ts).
 
+Il salvataggio dell'editor include la revisione originale della bozza. Un conflitto conserva testo e avviso: è possibile esportare la bozza o confermare lo scarto e ricaricare il documento salvato. Il reload non scarta nulla se la lettura fallisce o l'utente ha scritto altro durante l'attesa. Contratto e prove: [revisioni e ciclo di vita](./verification-flow-contracts-2026-10-16.md).
+
 ## Comportamento attuale
 
 - `POST /ingest-path-stream` emette progresso NDJSON; `POST /tasks/cancel` prende il `task_id`. L'originale del chiamante non viene modificato. Le nuove ingestion conservano una copia verificabile in `data/source-documents/<doc_id>`.
 - Il Sidecar prepara chunk e vettori prima del commit coordinato. `data/document-recovery.json` blocca operazioni dipendenti se il recupero fallisce; non promuovere o cancellare il journal a mano.
+- L'annullamento rimuove documento/chunk del task e solo la copia originale creata da quel task, dopo rollback riuscito. Main mantiene aperto lo stream e il Renderer resta occupato fino a `cancelled` o `error`; un errore di recupero o pulizia non viene presentato come pulizia completata. Gli archivi preesistenti non sono bonificati.
+- L'export desktop accetta PDF, DOCX, Markdown e HTML (`htm` normalizzato a `html`). Markdown viene scritto direttamente, gli altri formati passano al convertitore Sidecar con l'estensione corrispondente.
 - La normalizzazione LLM usa il contesto selezionato e un budget esplicito. Se non può preservare il contenuto, restituisce l'estrazione originale per revisione e non indicizza il risultato rifiutato. L'accettazione automatica riguarda soltanto differenze di spaziatura approvate.
 - CSV/TSV conserva stringhe letterali come `0007`, `12.50` e `NA`. CSV, Parquet, XLSX e XLS producono estratti RAG limitati e segnalano righe, colonne o celle omesse. I parser rifiutano input malformati prima di scrivere l'indice.
 - L'opzione **Excel: format dimensions** vale per una singola ingestion. Mantiene le coordinate massime del formato, ma l'estratto indicizzato resta limitato. XLS carica ancora un foglio selezionato tramite xlrd: i casi numerici estremi verificati non stabiliscono un limite generale di memoria.

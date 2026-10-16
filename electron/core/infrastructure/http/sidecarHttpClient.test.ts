@@ -1,7 +1,19 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { SidecarHttpClient } from './sidecarHttpClient'
+
+const documentRecord = {
+  id: 'doc-1',
+  filename: 'fixture.txt',
+  file_size: 4,
+  num_pages: 1,
+  num_chunks: 1,
+  extracted_markdown: 'Text',
+  status: 'indexed',
+  ingested_at: 't1',
+  file_type: 'text',
+}
 
 function createMockServer(routes: Array<{ method: string; path: string; handler: (req: http.IncomingMessage, res: http.ServerResponse) => void }>) {
   return new Promise<{ server: http.Server; baseUrl: string }>((resolve) => {
@@ -22,6 +34,188 @@ function createMockServer(routes: Array<{ method: string; path: string; handler:
 }
 
 describe('SidecarHttpClient Unit Tests', () => {
+  it.each(['{bad-json}\n', '{"type":"done","data":{"id":"incomplete"}}\n', '{"type":"progress","percent":101}\n', '{"type":"unknown"}\n'])(
+    'refuses malformed stream data before a later valid done: %s',
+    async (prefix) => {
+      const mock = await createMockServer([
+        {
+          method: 'POST',
+          path: '/',
+          handler: (_req, res) => {
+            res.end(prefix + JSON.stringify({ type: 'done', data: documentRecord }) + '\n')
+          },
+        },
+      ])
+      try {
+        const result = await new SidecarHttpClient(mock.baseUrl).ingestFileStream({ file_path: 'fixture', task_id: 'validation' }, () => {})
+        expect(result.success).toBe(false)
+        expect(result.data).toBeUndefined()
+      } finally {
+        mock.server.closeAllConnections()
+        await new Promise<void>((resolve) => mock.server.close(() => resolve()))
+      }
+    },
+  )
+
+  it.each(['done', 'cancelled', 'progress'])('rejects %s following a done terminal', async (type) => {
+    const mock = await createMockServer([
+      {
+        method: 'POST',
+        path: '/',
+        handler: (_req, res) => {
+          res.end([JSON.stringify({ type: 'done', data: documentRecord }), JSON.stringify({ type, data: documentRecord })].join('\n') + '\n')
+        },
+      },
+    ])
+    try {
+      const result = await new SidecarHttpClient(mock.baseUrl).ingestFileStream({ file_path: 'fixture', task_id: 'terminal' }, () => {})
+      expect(result.success).toBe(false)
+    } finally {
+      mock.server.closeAllConnections()
+      await new Promise<void>((resolve) => mock.server.close(() => resolve()))
+    }
+  })
+
+  it('bounds total elapsed time even when a response keeps sending bytes', async () => {
+    const mock = await createMockServer([
+      {
+        method: 'POST',
+        path: '/',
+        handler: (_req, res) => {
+          res.writeHead(200)
+          res.write(' ')
+          const interval = setInterval(() => res.write(' '), 5)
+          const end = setTimeout(() => res.end('{}'), 300)
+          res.on('close', () => {
+            clearInterval(interval)
+            clearTimeout(end)
+          })
+        },
+      },
+    ])
+    try {
+      const result = await new SidecarHttpClient(mock.baseUrl).postJsonEnvelope('/', {}, 50)
+      expect(result).toMatchObject({ success: false, error: expect.stringContaining('timed out after 50ms') })
+    } finally {
+      mock.server.closeAllConnections()
+      await new Promise<void>((resolve) => mock.server.close(() => resolve()))
+    }
+  })
+
+  it('refuses malformed document reads and a valid record for the wrong identity', async () => {
+    const mock = await createMockServer([
+      {
+        method: 'GET',
+        path: '/',
+        handler: (req, res) => {
+          res.end(req.url === '/documents' ? '[{"id":"incomplete"}]' : JSON.stringify({ ...documentRecord, file_path: 'fixture.txt' }))
+        },
+      },
+    ])
+    try {
+      const client = new SidecarHttpClient(mock.baseUrl)
+      expect(await client.listDocuments()).toBeNull()
+      expect(await client.getDocument('another-document')).toBeNull()
+    } finally {
+      mock.server.closeAllConnections()
+      await new Promise<void>((resolve) => mock.server.close(() => resolve()))
+    }
+  })
+  it.each(['cancelled', 'error'] as const)('waits for ingestion cleanup acknowledgement: %s', async (terminal) => {
+    let stream: http.ServerResponse | undefined
+    let acknowledgeCancel!: () => void
+    const cancelReceived = new Promise<void>((resolve) => {
+      acknowledgeCancel = resolve
+    })
+    const mock = await createMockServer([
+      {
+        method: 'POST',
+        path: '/ingest-path-stream',
+        handler: (_req, res) => {
+          stream = res
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+          res.write('{"type":"progress"}\n')
+        },
+      },
+      {
+        method: 'POST',
+        path: '/tasks/cancel',
+        handler: (_req, res) => {
+          res.end('{"status":"success","message":"Cancellation requested"}')
+          acknowledgeCancel()
+        },
+      },
+    ])
+    try {
+      let cancel: (() => void) | undefined
+      let settled = false
+      const pending = new SidecarHttpClient(mock.baseUrl)
+        .ingestFileStream(
+          { file_path: 'fixture.txt', task_id: 'cancel-cleanup' },
+          (event) => {
+            if (event.type === 'progress') cancel?.()
+          },
+          (fn) => {
+            cancel = fn
+          },
+        )
+        .then((result) => {
+          settled = true
+          return result
+        })
+      await cancelReceived
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(settled).toBe(false)
+      stream!.end(JSON.stringify({ type: terminal, error: 'Cleanup failed; preserve archive' }) + '\n')
+      const result = await pending
+      expect(result.success).toBe(false)
+      if (terminal === 'cancelled') expect(result).toMatchObject({ cancelled: true })
+      else expect(result.error).toContain('Cleanup failed')
+    } finally {
+      mock.server.closeAllConnections()
+      await new Promise<void>((resolve) => mock.server.close(() => resolve()))
+    }
+  })
+
+  it.each(['json', 'ndjson', 'ndjson-no-newline'] as const)('preserves UTF-8 at every byte boundary in %s responses', async (kind) => {
+    const text = 'città 漢 😀'
+    const wire = Buffer.from(
+      kind === 'json'
+        ? JSON.stringify({ text })
+        : `${JSON.stringify({ type: 'progress', step: text })}\n${JSON.stringify({ type: 'done', data: { ...documentRecord, extracted_markdown: text } })}${kind === 'ndjson' ? '\n' : ''}`,
+    )
+    let split = 0
+    const mock = await createMockServer([
+      {
+        method: 'POST',
+        path: '/',
+        handler: (_req, res) => {
+          res.writeHead(200, { 'Content-Type': kind === 'json' ? 'application/json' : 'application/x-ndjson' })
+          res.write(wire.subarray(0, split))
+          // Separate socket reads, including splits within a multibyte character.
+          setTimeout(() => res.end(wire.subarray(split)), 5)
+        },
+      },
+    ])
+    try {
+      const client = new SidecarHttpClient(mock.baseUrl)
+      for (split = 1; split < wire.length; split++) {
+        const steps: unknown[] = []
+        const result =
+          kind === 'json'
+            ? await client.postJsonEnvelope('/probe', {}, 1000)
+            : await client.ingestFileStream({ file_path: 'fixture.txt', task_id: 'utf8' }, (event) => {
+                if (event.type === 'progress') steps.push(event.step)
+              })
+        expect(result).toEqual({ success: true, data: kind === 'json' ? { text } : { ...documentRecord, extracted_markdown: text } })
+        if (kind !== 'json') expect(steps).toEqual([text])
+      }
+    } finally {
+      mock.server.closeAllConnections()
+      await new Promise<void>((resolve) => mock.server.close(() => resolve()))
+    }
+  })
+
   it.each(['valid', 'wrong-document', 'malformed-span'] as const)('validates source-location identity and exact spans (%s)', async (scenario) => {
     const revision = 'a'.repeat(64)
     const payload = {
@@ -172,6 +366,8 @@ describe('SidecarHttpClient Unit Tests', () => {
               {
                 id: 'doc-1',
                 filename: 'report.pdf',
+                file_path: 'D:/fixture/report.pdf',
+                file_type: 'pdf',
                 file_size: 1024,
                 num_pages: 2,
                 num_chunks: 5,
@@ -188,7 +384,7 @@ describe('SidecarHttpClient Unit Tests', () => {
         path: '/documents/doc-1',
         handler: (_req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ success: true }))
+          res.end(JSON.stringify({ status: 'success', message: 'Deleted' }))
         },
       },
       {
@@ -200,6 +396,7 @@ describe('SidecarHttpClient Unit Tests', () => {
             JSON.stringify({
               id: 'doc-1',
               filename: 'report.pdf',
+              file_type: 'pdf',
               file_size: 1024,
               num_pages: 2,
               num_chunks: 5,
@@ -230,6 +427,7 @@ describe('SidecarHttpClient Unit Tests', () => {
               data: {
                 id: 'doc-new',
                 filename: 'doc.txt',
+                file_type: 'text',
                 file_size: 50,
                 num_pages: 1,
                 num_chunks: 1,
@@ -247,7 +445,16 @@ describe('SidecarHttpClient Unit Tests', () => {
         path: '/export',
         handler: (_req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ base64_content: Buffer.from('PDF Content').toString('base64') }))
+          res.end(
+            JSON.stringify({
+              status: 'success',
+              format: 'pdf',
+              file_name: 'export.pdf',
+              file_path: 'D:/fixture/export.pdf',
+              message: 'Exported',
+              base64_content: Buffer.from('PDF Content').toString('base64'),
+            }),
+          )
         },
       },
     ])
@@ -278,7 +485,7 @@ describe('SidecarHttpClient Unit Tests', () => {
   })
 
   it('updates document via PUT /documents/:id', async () => {
-    const res = await client.updateDocument('doc-1', '# Updated')
+    const res = await client.updateDocument('doc-1', '# Updated', 't1')
     expect(res.success).toBe(true)
     expect(res.data?.extracted_markdown).toBe('# Updated')
   })
@@ -407,13 +614,15 @@ describe('SidecarHttpClient health failures', () => {
     expect(res).toEqual({ success: false, error: 'No translatable text blocks found in document' })
   })
 
-  it('relays a translation cancel to the Sidecar task before dropping the stream', async () => {
+  it('waits for the translation terminal after relaying cancellation', async () => {
     const cancelled: string[] = []
+    let stream: http.ServerResponse | undefined
     const slow = await createMockServer([
       {
         method: 'POST',
         path: '/documents/doc-1/translate-inplace-stream',
         handler: (_req, res) => {
+          stream = res
           res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
           res.write(`${JSON.stringify({ type: 'start', total_pages: 3 })}\n`)
         },
@@ -424,7 +633,7 @@ describe('SidecarHttpClient health failures', () => {
         handler: (req, res) => {
           cancelled.push(new URL(req.url || '', 'http://x').searchParams.get('task_id') || '')
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end('{}')
+          res.end('{"status":"success","message":"Cancellation requested"}')
         },
       },
     ])
@@ -440,8 +649,14 @@ describe('SidecarHttpClient health failures', () => {
       },
     )
 
-    expect((await pending).success).toBe(false)
+    let settled = false
+    void pending.then(() => {
+      settled = true
+    })
     await expect.poll(() => cancelled).toEqual(['translate-42'])
+    expect(settled).toBe(false)
+    stream!.end('{"type":"cancelled"}\n')
+    expect(await pending).toMatchObject({ success: false, cancelled: true })
   })
 
   it('sends the launch token on every request once set', async () => {
@@ -487,7 +702,7 @@ describe('SidecarHttpClient health failures', () => {
     ])
     servers.push(recorder.server)
 
-    await new SidecarHttpClient(recorder.baseUrl).updateDocument('doc-1', '# Edited', 'mxbai-embed-large')
-    expect(received).toEqual({ markdown_content: '# Edited', embedding_model: 'mxbai-embed-large' })
+    await new SidecarHttpClient(recorder.baseUrl).updateDocument('doc-1', '# Edited', 't1', 'mxbai-embed-large')
+    expect(received).toEqual({ markdown_content: '# Edited', expected_revision: 't1', embedding_model: 'mxbai-embed-large' })
   })
 })

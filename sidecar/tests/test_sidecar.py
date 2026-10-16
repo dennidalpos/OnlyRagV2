@@ -54,7 +54,7 @@ def test_route_failures_answer_with_the_generic_error_contract(monkeypatch):
     lenient_client = TestClient(app, raise_server_exceptions=False)
 
     responses = [
-        lenient_client.put("/documents/doc-1", json={"markdown_content": "# x"}),
+        lenient_client.put("/documents/doc-1", json={"markdown_content": "# x", "expected_revision": "t1"}),
         lenient_client.post("/export", json={"markdown_content": "# x", "export_format": "pdf"}),
     ]
 

@@ -7,6 +7,7 @@ La provenienza dei vettori e la ricerca sono implementate in [`embeddings.py`](.
 - Ogni spazio nativo conserva modello, digest, dimensione, normalizzazione e preparazione. Documento e query devono usare la stessa identità completa. Gli indici legacy senza provenienza non ricevono un'identità presunta; un cambio di modello o preparazione richiede un rebuild verificato.
 - Nomic usa prefissi diversi per documento e query; Qwen usa un'istruzione sulla query; BGE-M3 e lo spazio hash mantengono testo raw. Solo errori di trasporto dell'encoder possono produrre il fallback hash, in uno spazio distinto.
 - La ricerca combina candidati densi e BM25 nativo, applica il filtro documento e ordina con RRF e segnali lessicali. Il punteggio è un ordine di ranking, non una probabilità di correttezza né una prova che una risposta sia supportata.
+- La codifica della query avviene fuori dal lock del database, lasciando disponibili health e letture. Prima della ricerca vengono ricontrollate versioni delle tabelle e provenienza degli encoder: un cambiamento restituisce un conflitto esplicito, senza usare lo snapshot superato.
 - La navigazione di una fonte verifica ID, revisioni, span e hash dell'originale. Una posizione valida non certifica la verità della frase generata.
 - Il rebuild offline richiede una radice dichiarata, backup/readback e attivazione esplicita tramite `data/active-store.json`; non migra automaticamente profili personali. Comandi e rifiuti sono in [`operations.md`](./operations.md).
 

@@ -38,5 +38,5 @@ def test_contract_errors_are_structured_and_non_destructive():
     assert unsupported_format.status_code == 422
     assert unsupported_format.json()["detail"][0]["loc"] == ["body", "export_format"]
 
-    missing_document = client.put("/documents/not-found-contract", json={"markdown_content": "# title"})
+    missing_document = client.put("/documents/not-found-contract", json={"markdown_content": "# title", "expected_revision": "t1"})
     assert missing_document.status_code == 404

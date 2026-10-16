@@ -211,6 +211,53 @@ describe('useIngestion loads the selected document on demand', () => {
     expect(ingestion.markdownContent).toBe('# A draft')
   })
 
+  it('keeps the original base revision through refresh, selection changes and a rejected stale save', async () => {
+    await resolveDocument('a', '# A original')
+    await act(async () => ingestion.setMarkdownContent('# A old draft'))
+    const refreshed = { ...docA, ingestedAt: 't2', extractedMarkdown: '# External winner' }
+    primeDocumentMarkdown(refreshed)
+    await act(async () => documentsStore.notify?.([refreshed, docB]))
+    await act(async () => ingestion.handleSelectDoc(docB))
+    await act(async () => ingestion.handleSelectDoc(refreshed))
+    const update = vi.fn(async () => ({ success: false, error: 'Document changed; reload before saving.' }))
+    window.electronAPI = { ...window.electronAPI!, updateIngestedDocument: update }
+    await act(async () => ingestion.handleSaveDocument())
+    expect(update).toHaveBeenCalledWith({ docId: 'a', markdownContent: '# A old draft', expectedRevision: 't1' })
+    expect(ingestion.markdownContent).toBe('# A old draft')
+    expect(ingestion.saveStatus?.success).toBe(false)
+    expect(peekDocumentMarkdown(refreshed)).toBe('# External winner')
+  })
+
+  it.each(['confirmed', 'unavailable', 'newer typing'] as const)('discards a draft only after an owned successful reload: %s', async (scenario) => {
+    await resolveDocument('a', '# Original')
+    await act(async () => ingestion.setMarkdownContent('# Draft'))
+    let finish!: (value: unknown) => void
+    getIngestedDocument.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    let reloading!: Promise<void>
+    await act(async () => {
+      reloading = ingestion.handleReloadDocument()
+    })
+    if (scenario === 'newer typing') await act(async () => ingestion.setMarkdownContent('# New typing'))
+    const latest = { ...docA, ingestedAt: 't2', extractedMarkdown: '# Latest saved' }
+    await act(async () => {
+      finish(scenario === 'unavailable' ? null : latest)
+      await reloading
+    })
+    expect(ingestion.markdownContent).toBe(scenario === 'confirmed' ? '# Latest saved' : scenario === 'unavailable' ? '# Draft' : '# New typing')
+    if (scenario === 'confirmed') {
+      const update = vi.fn(async () => ({ success: false, error: 'Deliberate refusal' }))
+      window.electronAPI = { ...window.electronAPI!, updateIngestedDocument: update }
+      await act(async () => ingestion.setMarkdownContent('# New edit'))
+      await act(async () => ingestion.handleSaveDocument())
+      expect(update).toHaveBeenCalledWith({ docId: 'a', markdownContent: '# New edit', expectedRevision: 't2' })
+    } else expect(ingestion.isDirty).toBe(true)
+  })
+
   it('keeps an independently refreshed revision when an older save settles', async () => {
     await resolveDocument('a', '# A')
     await act(async () => ingestion.setMarkdownContent('# A saved'))

@@ -161,10 +161,54 @@ describe('settings save feedback', () => {
     expect(save).not.toHaveBeenCalled()
   })
 
-  it('cancels pending debounce writes when the layout is unmounted', async () => {
+  it('submits pending debounce writes when the layout is unmounted', async () => {
     await mount()
     await act(async () => root.unmount())
     await tick()
-    expect(save).not.toHaveBeenCalled()
+    expect(save).toHaveBeenCalledWith(initial)
+  })
+
+  it('flushes the latest settings before debounce and reports a rejected close save', async () => {
+    await mount()
+    await click('[data-testid="edit"]')
+    const flush = (window as unknown as { __onlyragFlushSettings: () => Promise<boolean> }).__onlyragFlushSettings
+    save.mockResolvedValueOnce(false)
+    await act(async () => {
+      expect(await flush()).toBe(false)
+    })
+    expect(save.mock.calls[0][0].chatModel).toBe('originalx')
+    await act(async () => {
+      expect(await flush()).toBe(true)
+    })
+    await tick()
+    expect(save).toHaveBeenCalledTimes(2)
+  })
+
+  it('holds close through an active save and writes the latest changed snapshot afterwards', async () => {
+    let finish!: (saved: boolean) => void
+    save.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve
+        }),
+    )
+    await mount()
+    await tick()
+    await click('[data-testid="edit"]')
+    let settled = false
+    let closing!: Promise<boolean>
+    await act(async () => {
+      closing = (window as unknown as { __onlyragFlushSettings: () => Promise<boolean> }).__onlyragFlushSettings().then((result) => {
+        settled = true
+        return result
+      })
+    })
+    expect(settled).toBe(false)
+    expect(save).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      finish(true)
+      expect(await closing).toBe(true)
+    })
+    expect(save.mock.calls.at(-1)?.[0].chatModel).toBe('originalx')
   })
 })

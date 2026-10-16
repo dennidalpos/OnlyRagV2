@@ -40,6 +40,17 @@ describe('on-demand document Markdown', () => {
     expect(await loadDocumentMarkdown(doc('gone'))).toBe('# gone')
   })
 
+  it.each([
+    { id: 'a', ingestedAt: 't2' },
+    { id: 'another-document', ingestedAt: 't1' },
+  ])('refuses a response for another identity or revision: %j', async (response) => {
+    getIngestedDocument.mockResolvedValueOnce({ ...response, extractedMarkdown: 'Unrelated revision' })
+    expect(await loadDocumentMarkdown(doc('a'))).toBeNull()
+    expect(peekDocumentMarkdown(doc('a'))).toBeUndefined()
+    expect(peekDocumentMarkdown(response)).toBeUndefined()
+    expect(await loadDocumentMarkdown(doc('a'))).toBe('# a')
+  })
+
   it('returns null when the IPC call fails and retries it later', async () => {
     getIngestedDocument.mockRejectedValueOnce(new Error('ipc down'))
 

@@ -8,6 +8,8 @@ I prefissi attivi comprendono `agent`, `artifacts`, `diagnostics`, `dialog`, `hi
 
 `sessions:delete` e `sessions:clear` restituiscono `refused`, `pending` o `complete`; le azioni di recupero hanno ID di operazione e non cancellano implicitamente le copie conservate. `ingest:file` accetta `taskId` e l'opzione Excel. Una normalizzazione da rivedere è un risultato rifiutato con `originalMarkdown` e problemi per pagina.
 
+`ingest:update` richiede `expectedRevision`, la revisione originale della bozza (`ingestedAt`), anche dopo un aggiornamento della lista. `ingest:translate-inplace` richiede `taskId`, assegnato dal Renderer prima dell'invio. I vecchi payload senza questi campi vengono rifiutati: Renderer, Main e Sidecar devono essere aggiornati insieme. Il risultato di traduzione rappresenta un file con stato `translated`, non una nuova revisione indicizzata; `cancelled` è esposto soltanto dopo il terminale Sidecar.
+
 ## Eventi Renderer
 
 Eventi `agent:*`, `ingest:*`, `ollama:*` e `workspace:*` sono tipizzati nel contratto. Gli eventi agente portano l'identità della run; gli stream Ollama usano `operationId`; eventi Sidecar fuori schema vengono scartati. Un listener restituisce la funzione di unsubscribe. La traduzione e l'ingestion accettano solo risultati completi e confermati.

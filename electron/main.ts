@@ -113,7 +113,9 @@ function createWindow() {
     closeChecking = true
     let timer: ReturnType<typeof setTimeout>
     void Promise.race([
-      ownedWindow.webContents.executeJavaScript('window.__onlyragFlushCodingHistory?.() ?? true'),
+      ownedWindow.webContents.executeJavaScript(
+        'Promise.all([window.__onlyragFlushCodingHistory?.() ?? true, window.__onlyragFlushSettings?.() ?? true]).then(results => results.every(Boolean))',
+      ),
       new Promise<boolean>((resolve) => {
         timer = setTimeout(() => resolve(false), 10_000)
       }),
@@ -127,17 +129,17 @@ function createWindow() {
           void dialog.showMessageBox(ownedWindow, {
             type: 'warning',
             buttons: ['Keep open'],
-            message: 'Coding history is not yet retained. Retry storage before closing.',
+            message: 'Settings or coding history are not yet saved. Retry storage before closing.',
           })
         }
       })
       .catch((error: unknown) => {
-        logger.log('WARN', 'MainProcess', `Coding history close check failed: ${String(error)}`)
+        logger.log('WARN', 'MainProcess', `Storage close check failed: ${String(error)}`)
         if (!ownedWindow.isDestroyed()) {
           void dialog.showMessageBox(ownedWindow, {
             type: 'warning',
             buttons: ['Keep open'],
-            message: 'Coding history could not be checked. Retry storage before closing.',
+            message: 'Unsaved data could not be checked. Retry storage before closing.',
           })
         }
       })

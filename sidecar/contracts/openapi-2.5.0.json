@@ -1262,6 +1262,13 @@
             ],
             "title": "Embedding Model"
           },
+          "expected_revision": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": ".*\\S.*",
+            "title": "Expected Revision",
+            "type": "string"
+          },
           "markdown_content": {
             "maxLength": 10000000,
             "minLength": 1,
@@ -1270,7 +1277,8 @@
           }
         },
         "required": [
-          "markdown_content"
+          "markdown_content",
+          "expected_revision"
         ],
         "title": "UpdateDocumentRequest",
         "type": "object"
@@ -1462,6 +1470,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "description": "Document changed during re-indexing"
           },
           "422": {
             "content": {
@@ -1963,6 +1974,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "description": "Database changed during query encoding"
           },
           "422": {
             "content": {

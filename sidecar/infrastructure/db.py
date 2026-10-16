@@ -31,6 +31,10 @@ class DatabaseRecoveryError(RuntimeError):
     """The store is unavailable until its pending recovery succeeds."""
 
 
+class DatabaseConflictError(RuntimeError):
+    """A prepared operation no longer matches the current database revision."""
+
+
 def database_operation(function):
     """Keep readers and single-table writers outside coordinated document commits."""
     @wraps(function)
@@ -168,10 +172,21 @@ def append_records(
     return tbl
 
 
-def write_document_records(document: Dict[str, Any], chunks: List[Dict[str, Any]]) -> None:
+@database_operation
+def write_document_records(document: Dict[str, Any], chunks: List[Dict[str, Any]],
+                           expected_document: Optional[Dict[str, Any]] = None) -> None:
     doc_id = validate_doc_id(document["id"])
     if any(chunk["doc_id"] != doc_id for chunk in chunks):
         raise ValueError("Chunk document id does not match the document.")
+    if expected_document is not None:
+        current = []
+        if DOCS_TABLE_NAME in get_existing_tables():
+            current = lance_db.open_table(DOCS_TABLE_NAME).search().where(f"id = '{doc_id}'").limit(1).to_list()
+        if not current:
+            raise ValueError(f"Document {doc_id} not found in database")
+        if any(str(current[0].get(key, "")) != expected_document.get(key, "")
+               for key in ("ingested_at", "extracted_markdown")):
+            raise DatabaseConflictError("Document changed during re-indexing; reload before saving again.")
     with document_mutation(doc_id):
         if chunks:
             append_records(CHUNKS_TABLE_NAME, chunks, delete_where=f"doc_id = '{doc_id}'", match_key="chunk_id")

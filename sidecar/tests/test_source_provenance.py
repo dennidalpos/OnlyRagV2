@@ -1,6 +1,7 @@
 """Real retained files, native stores and authenticated-route location semantics."""
 import hashlib
 import json
+from unittest.mock import Mock
 
 import pymupdf
 import pytest
@@ -66,6 +67,40 @@ def test_late_pdf_page_opens_retained_original_not_derived_preview(tmp_path):
     assert source.resolve_source_location(**request_for(result)).exact_quote == location.exact_quote
 
 
+@pytest.mark.parametrize("width,height", [(3000, 2400), (2400, 3000)])
+def test_oversized_pdf_source_refuses_before_rendering_and_preserves_archive(
+        tmp_path, monkeypatch, sidecar_http_client, width, height):
+    file = tmp_path / "oversized.pdf"
+    with pymupdf.open() as pdf:
+        page = pdf.new_page(width=width, height=height)
+        page.insert_text((72, 72), "Payment is due within 21 days after delivery.")
+        assert page.rect.width * page.rect.height * (120 / 72) ** 2 == pytest.approx(20_000_000)
+        pdf.save(file)
+    original_bytes = file.read_bytes()
+    doc_id = ingest(file)
+    result = result_for(doc_id)
+    assert result.provenance.location_kind == "original"
+    assert result.provenance.page_number == 1
+    archive_dir = source.SOURCE_ROOT / doc_id
+    archive_before = {path.name: path.read_bytes() for path in archive_dir.iterdir()}
+    assert archive_before["original.pdf"] == original_bytes
+    assert "extraction.json" in archive_before
+
+    # Fail immediately if the guard regresses, without allocating an oversized pixmap.
+    render = Mock(side_effect=AssertionError("Oversized page must not be rendered"))
+    monkeypatch.setattr(pymupdf.Page, "get_pixmap", render)
+    request = request_for(result)
+    with pytest.raises(ValueError, match="^Original page exceeds its rendering budget\\.$"):
+        source.resolve_source_location(**request)
+    params = {key: value for key, value in request.items() if key != "doc_id"}
+    response = sidecar_http_client.get(f"/documents/{doc_id}/source-location", params=params)
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Original page exceeds its rendering budget."}
+    render.assert_not_called()
+    assert file.read_bytes() == original_bytes
+    assert {path.name: path.read_bytes() for path in archive_dir.iterdir()} == archive_before
+
+
 @pytest.mark.parametrize("change", ["edit", "delete", "wrong_document", "bad_revision", "bad_span", "tampered_original"])
 def test_stale_invalid_and_deleted_references_fail_closed(tmp_path, change):
     file = tmp_path / "contract.md"
@@ -73,7 +108,7 @@ def test_stale_invalid_and_deleted_references_fail_closed(tmp_path, change):
     doc_id = ingest(file)
     request = request_for(result_for(doc_id))
     if change == "edit":
-        ingest_service.update_and_reindex_document(doc_id, "Payment is due within 30 days.")
+        ingest_service.update_and_reindex_document(doc_id, "Payment is due within 30 days.", expected_revision=search_service.get_stored_document(doc_id)["ingested_at"])
     elif change == "delete":
         db.delete_document_records(doc_id)
     elif change == "wrong_document":
@@ -98,7 +133,7 @@ def test_duplicate_names_have_distinct_identity_and_repeated_text_is_ambiguous(t
     a, b = ingest(left / "contract.md"), ingest(right / "contract.md")
     assert a != b
     assert result_for(a).doc_id == a and result_for(b).doc_id == b
-    ingest_service.update_and_reindex_document(a, "# A\nPayment is due within 30 days.")
+    ingest_service.update_and_reindex_document(a, "# A\nPayment is due within 30 days.", expected_revision=search_service.get_stored_document(a)["ingested_at"])
     derived = search_service.perform_vector_search(SearchRequest(query="Payment", doc_ids=[a]))[0]
     assert derived.provenance.location_kind == "derived"
     assert derived.provenance.span_start is None

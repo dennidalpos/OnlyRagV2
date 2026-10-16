@@ -5,8 +5,8 @@ Il Renderer usa solo `window.electronAPI` esposta da [`electron/preload.ts`](../
 ## Viste e proprietà dei dati
 
 - Chat: [`useChatEngine.ts`](../src/hooks/useChatEngine.ts) gestisce streaming e contesto; [`useChatHistory.ts`](../src/hooks/useChatHistory.ts) conserva la cronologia nel formato localStorage corrente. Errori di lettura impediscono di sovrascrivere l'originale; la durata dopo crash di un turno attivo resta aperta.
-- Ingestion: la lista carica metadati, il Markdown arriva su richiesta. Le bozze restano per documento durante la vista montata e un salvataggio tardivo non cambia la selezione. Unmount/crash e limite di memoria delle bozze restano aperti.
-- Traduzione: [`useTranslation.ts`](../src/hooks/useTranslation.ts) separa la selezione Markdown da PDF/DOCX; un blocco condiviso consente un job alla volta. Il job PDF/DOCX già inviato al Sidecar non è ancora cancellato in modo affidabile prima del primo evento.
+- Ingestion: la lista carica metadati, il Markdown arriva su richiesta e la cache ne verifica la revisione. Le bozze restano per documento con la propria revisione di base durante la vista montata; un salvataggio tardivo non cambia la selezione. Dopo un rifiuto si può esportare la bozza o confermare lo scarto e ricaricare la versione salvata: una lettura fallita mantiene la bozza. Unmount/crash e limite di memoria delle bozze restano aperti.
+- Traduzione: [`useTranslation.ts`](../src/hooks/useTranslation.ts) separa la selezione Markdown da PDF/DOCX; un blocco condiviso consente un job alla volta. L'identità PDF/DOCX esiste prima dell'invio; Stop e unmount chiedono la cancellazione e mantengono il blocco fino al risultato IPC. Eventi di altre operazioni sono ignorati; un errore di trasporto non viene presentato come cancellazione confermata.
 - Coding Agent: [`useCodingAgent.ts`](../src/hooks/useCodingAgent.ts) compone esecuzione, sessione, allegati, file e terminale. Gli eventi sono legati all'identità della run; i salvataggi rifiutati restano visibili per retry mentre la vista è attiva.
 
 ## Interfaccia e accessibilità
@@ -27,7 +27,7 @@ Il punteggio mostrato ordina i passaggi recuperati e non è una probabilità o u
 
 ## Salvataggio delle impostazioni — 2026-10-02
 
-Un errore mantiene il valore confermato e rende disponibile il retry. La chiusura durante debounce o scrittura rimane aperta in `SETTINGS-CLOSE-DURABILITY-01`.
+[`useSettingsPersistence.ts`](../src/hooks/useSettingsPersistence.ts) serializza debounce, retry e flush di chiusura. Main attende impostazioni e storico Coding; una scrittura rifiutata mantiene aperta la finestra e rende disponibile il retry. Unmount invia comunque i valori pendenti. Crash, interruzioni forzate e desktop installato restano nel perimetro di `SETTINGS-CLOSE-DURABILITY-01`.
 
 ## Hook e servizi
 

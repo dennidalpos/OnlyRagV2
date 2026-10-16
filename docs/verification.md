@@ -4,6 +4,14 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Indice delle evidenze precedenti
 
+## Download e ciclo di vita degli stream — 2026-10-16
+
+[Prove isolate, correzione e limiti](./verification-2026-10-16.md).
+
+## Banner di recupero dello storico e delle cancellazioni — 2026-10-16
+
+[Test renderer e copertura misurata](./verification-2026-10-16.md#banner-di-recupero-dello-storico-e-delle-cancellazioni).
+
 ## CPU notice audit — 2026-10-12
 
 [Evidenza datata](./verification-history-2026-10-13.md#cpu-notice-audit--2026-10-12).

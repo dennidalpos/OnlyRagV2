@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import EventEmitter from 'node:events'
+import { PassThrough } from 'node:stream'
 import type { ClientRequest, IncomingHttpHeaders, IncomingMessage, RequestOptions } from 'node:http'
 import { htmlToCleanMarkdown, parseDuckDuckGoHtmlResults, WebClient } from './webClient'
 
@@ -17,7 +18,7 @@ function createMockRequest(): MockClientRequest {
 }
 
 function createMockResponse(statusCode: number, headers: IncomingHttpHeaders = {}, statusMessage?: string): IncomingMessage {
-  return Object.assign(new EventEmitter(), { statusCode, headers, statusMessage, setEncoding: vi.fn() }) as unknown as IncomingMessage
+  return Object.assign(new EventEmitter(), { statusCode, headers, statusMessage, setEncoding: vi.fn(), destroy: vi.fn() }) as unknown as IncomingMessage
 }
 
 function mockHttpsGet(response: IncomingMessage, request: MockClientRequest, onResponse?: (response: IncomingMessage) => void, deferred = false): void {
@@ -36,6 +37,10 @@ function mockHttpsGet(response: IncomingMessage, request: MockClientRequest, onR
     else invokeCallback()
     return request
   }) as unknown as typeof https.get)
+}
+
+function createDownloadResponse(statusCode = 200, headers: IncomingHttpHeaders = {}): IncomingMessage & PassThrough {
+  return Object.assign(new PassThrough(), { statusCode, headers }) as IncomingMessage & PassThrough
 }
 
 describe('WebClient Unit Tests & SSRF Protection', () => {
@@ -297,6 +302,337 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
       expect(fs.existsSync(targetPath)).toBe(false)
     } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('returns an asynchronous file-open failure without an unhandled stream error', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-open-error-'))
+    const targetPath = path.join(tempRoot, 'failed.bin')
+    const originalCreate = fs.createWriteStream
+    let output: fs.WriteStream | undefined
+    vi.spyOn(fs, 'createWriteStream').mockImplementation((filePath, options) => {
+      output = originalCreate(filePath, {
+        ...(typeof options === 'object' ? options : {}),
+        fs: {
+          open: (_path, _flags, _mode, callback) => queueMicrotask(() => callback(Object.assign(new Error('open denied'), { code: 'EACCES' }))),
+          write: fs.write,
+          close: fs.close,
+        },
+      })
+      return output
+    })
+    const response = createDownloadResponse()
+    const request = createMockRequest()
+    mockHttpsGet(response, request, () => response.end('payload'), true)
+    try {
+      await expect(client.downloadFile('https://example.com/file.bin', targetPath, tempRoot)).resolves.toMatchObject({ success: false, error: 'open denied' })
+      expect(output?.closed).toBe(true)
+      expect(request.destroy).toHaveBeenCalledTimes(1)
+      expect(fs.existsSync(targetPath)).toBe(false)
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('closes and removes a partially written file before returning a disk-write failure', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-write-error-'))
+    const targetPath = path.join(tempRoot, 'failed.bin')
+    const originalCreate = fs.createWriteStream
+    let output: fs.WriteStream | undefined
+    vi.spyOn(fs, 'createWriteStream').mockImplementation((filePath, options) => {
+      output = originalCreate(filePath, {
+        ...(typeof options === 'object' ? options : {}),
+        fs: {
+          open: fs.open,
+          write: ((fd, buffer, offset, length, position, callback) => {
+            fs.writeSync(fd, buffer, offset, Math.min(length ?? buffer.byteLength, 2), position)
+            queueMicrotask(() => callback(Object.assign(new Error('disk full'), { code: 'ENOSPC' }), 0, buffer))
+          }) as typeof fs.write,
+          close: fs.close,
+        },
+      })
+      return output
+    })
+    const response = createDownloadResponse()
+    const request = createMockRequest()
+    mockHttpsGet(response, request, () => response.end('payload'), true)
+    try {
+      await expect(client.downloadFile('https://example.com/file.bin', targetPath, tempRoot)).resolves.toMatchObject({ success: false, error: 'disk full' })
+      expect(output?.closed).toBe(true)
+      expect(request.destroy).toHaveBeenCalledTimes(1)
+      expect(fs.existsSync(targetPath)).toBe(false)
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('waits for an outstanding write on abort and ignores late failures after a replacement is saved', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-abort-write-'))
+    const targetPath = path.join(tempRoot, 'partial.bin')
+    const originalCreate = fs.createWriteStream
+    let output: fs.WriteStream | undefined
+    let completeWrite: () => void = () => {
+      throw new Error('Write did not start')
+    }
+    let markWriting: () => void = () => {}
+    const writing = new Promise<void>((resolve) => {
+      markWriting = resolve
+    })
+    vi.spyOn(fs, 'createWriteStream').mockImplementation((filePath, options) => {
+      output = originalCreate(filePath, {
+        ...(typeof options === 'object' ? options : {}),
+        fs: {
+          open: fs.open,
+          write: ((fd, buffer, offset, length, position, callback) => {
+            fs.writeSync(fd, buffer, offset, length, position)
+            completeWrite = () => callback(Object.assign(new Error('late disk failure'), { code: 'EIO' }), 0, buffer)
+            markWriting()
+          }) as typeof fs.write,
+          close: fs.close,
+        },
+      })
+      return output
+    })
+    const response = createDownloadResponse()
+    const request = createMockRequest()
+    const controller = new AbortController()
+    mockHttpsGet(response, request, () => response.write('partial'), true)
+    try {
+      let settled = false
+      const pending = client.downloadFile('https://example.com/file.bin', targetPath, tempRoot, controller.signal).then((result) => {
+        settled = true
+        return result
+      })
+      await writing
+      controller.abort()
+      request.emit('error', new Error('late request error'))
+      request.emit('timeout')
+      await Promise.resolve()
+      expect(settled).toBe(false)
+      expect(fs.readFileSync(targetPath, 'utf8')).toBe('partial')
+      completeWrite()
+      await expect(pending).resolves.toEqual({ success: false, error: 'Download cancelled by AbortSignal' })
+      expect(output?.closed).toBe(true)
+      expect(request.destroy).toHaveBeenCalledTimes(1)
+      expect(fs.existsSync(targetPath)).toBe(false)
+
+      fs.writeFileSync(targetPath, 'replacement')
+      request.emit('error', new Error('obsolete request'))
+      request.emit('timeout')
+      response.emit('error', new Error('obsolete response'))
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(fs.readFileSync(targetPath, 'utf8')).toBe('replacement')
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('discards a response arriving after cancellation without opening the target', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-late-response-'))
+    const targetPath = path.join(tempRoot, 'file.bin')
+    const response = createDownloadResponse()
+    const request = createMockRequest()
+    const controller = new AbortController()
+    const create = vi.spyOn(fs, 'createWriteStream')
+    mockHttpsGet(response, request, undefined, true)
+    try {
+      const pending = client.downloadFile('https://example.com/file.bin', targetPath, tempRoot, controller.signal)
+      controller.abort()
+      await expect(pending).resolves.toEqual({ success: false, error: 'Download cancelled by AbortSignal' })
+      expect(create).not.toHaveBeenCalled()
+      expect(response.destroyed).toBe(true)
+      expect(fs.existsSync(targetPath)).toBe(false)
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the redirected file when retired requests fail or the completed signal is aborted', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-redirect-success-'))
+    const targetPath = path.join(tempRoot, 'file.bin')
+    const redirect = createDownloadResponse(302, { location: '/final' })
+    const response = createDownloadResponse()
+    const firstRequest = createMockRequest()
+    const finalRequest = createMockRequest()
+    const controller = new AbortController()
+    const create = vi.spyOn(fs, 'createWriteStream')
+    mockHttpsGet(redirect, firstRequest, undefined, true)
+    vi.mocked(https.get)
+      .mockImplementationOnce(((
+        _url: string | URL | RequestOptions,
+        _options?: RequestOptions | ((response: IncomingMessage) => void),
+        callback?: (response: IncomingMessage) => void,
+      ) => {
+        queueMicrotask(() => callback?.(redirect))
+        return firstRequest
+      }) as typeof https.get)
+      .mockImplementationOnce(((
+        _url: string | URL | RequestOptions,
+        _options?: RequestOptions | ((response: IncomingMessage) => void),
+        callback?: (response: IncomingMessage) => void,
+      ) => {
+        queueMicrotask(() => {
+          callback?.(response)
+          firstRequest.emit('error', new Error('obsolete redirect error'))
+          firstRequest.emit('timeout')
+          response.end('complete')
+        })
+        return finalRequest
+      }) as typeof https.get)
+    try {
+      await expect(client.downloadFile('https://example.com/start', targetPath, tempRoot, controller.signal)).resolves.toEqual({
+        success: true,
+        downloadedBytes: 8,
+      })
+      expect(vi.mocked(https.get).mock.calls[1][0].toString()).toBe('https://example.com/final')
+      expect(create).toHaveBeenCalledTimes(1)
+      expect(redirect.destroyed).toBe(true)
+      controller.abort()
+      firstRequest.emit('timeout')
+      finalRequest.emit('error', new Error('late socket error'))
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(fs.readFileSync(targetPath, 'utf8')).toBe('complete')
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('cancels the active redirect hop and leaves no file when its response arrives late', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-redirect-abort-'))
+    const targetPath = path.join(tempRoot, 'file.bin')
+    const redirect = createDownloadResponse(302, { location: '/final' })
+    const response = createDownloadResponse()
+    const firstRequest = createMockRequest()
+    const finalRequest = createMockRequest()
+    const controller = new AbortController()
+    let sendFinalResponse: () => void = () => {
+      throw new Error('Redirect did not start')
+    }
+    let markRedirected: () => void = () => {}
+    const redirected = new Promise<void>((resolve) => {
+      markRedirected = resolve
+    })
+    mockHttpsGet(redirect, firstRequest, undefined, true)
+    vi.mocked(https.get)
+      .mockImplementationOnce(((
+        _url: string | URL | RequestOptions,
+        _options?: RequestOptions | ((response: IncomingMessage) => void),
+        callback?: (response: IncomingMessage) => void,
+      ) => {
+        queueMicrotask(() => callback?.(redirect))
+        return firstRequest
+      }) as typeof https.get)
+      .mockImplementationOnce(((
+        _url: string | URL | RequestOptions,
+        _options?: RequestOptions | ((response: IncomingMessage) => void),
+        callback?: (response: IncomingMessage) => void,
+      ) => {
+        sendFinalResponse = () => callback?.(response)
+        markRedirected()
+        return finalRequest
+      }) as typeof https.get)
+    try {
+      const pending = client.downloadFile('https://example.com/start', targetPath, tempRoot, controller.signal)
+      await redirected
+      controller.abort()
+      sendFinalResponse()
+      response.end('late body')
+      await expect(pending).resolves.toEqual({ success: false, error: 'Download cancelled by AbortSignal' })
+      expect(firstRequest.destroy).toHaveBeenCalledTimes(1)
+      expect(finalRequest.destroy).toHaveBeenCalledTimes(1)
+      expect(response.destroyed).toBe(true)
+      expect(fs.existsSync(targetPath)).toBe(false)
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it.each(['error', 'aborted'] as const)('removes the partial file on a response %s before completion', async (event) => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-response-error-'))
+    const targetPath = path.join(tempRoot, 'file.bin')
+    const response = createDownloadResponse()
+    const request = createMockRequest()
+    const originalCreate = fs.createWriteStream
+    vi.spyOn(fs, 'createWriteStream').mockImplementation((filePath, options) => {
+      const output = originalCreate(filePath, options)
+      output.once('open', () => {
+        response.emit(event, new Error('broken response'))
+      })
+      return output
+    })
+    mockHttpsGet(response, request, () => response.write('partial'), true)
+    try {
+      const result = await client.downloadFile('https://example.com/file.bin', targetPath, tempRoot)
+      expect(result).toEqual({ success: false, error: event === 'error' ? 'broken response' : 'Download response aborted before completion' })
+      expect(request.destroy).toHaveBeenCalledTimes(1)
+      expect(fs.existsSync(targetPath)).toBe(false)
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['http://127.0.0.1/private', 'SSRF Protection'],
+    ['file:///C:/private', 'Forbidden protocol'],
+    ['http://[invalid', 'Invalid download redirect'],
+  ])('rejects redirect %s without modifying the destination', async (location, error) => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-redirect-refused-'))
+    const targetPath = path.join(tempRoot, 'existing.bin')
+    fs.writeFileSync(targetPath, 'original')
+    const create = vi.spyOn(fs, 'createWriteStream')
+    const response = createDownloadResponse(302, { location })
+    mockHttpsGet(response, createMockRequest(), undefined, true)
+    try {
+      const result = await client.downloadFile('https://example.com/start', targetPath, tempRoot)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain(error)
+      expect(create).not.toHaveBeenCalled()
+      expect(response.destroyed).toBe(true)
+      expect(fs.readFileSync(targetPath, 'utf8')).toBe('original')
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it.each(['complete', 'disconnect'] as const)('handles a real loopback HTTP redirect followed by %s', async (outcome) => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-local-http-'))
+    const targetPath = path.join(tempRoot, 'file.bin')
+    let disconnect: () => void = () => {}
+    const server = http.createServer((request, response) => {
+      if (request.url === '/start') {
+        response.writeHead(302, { location: '/file' })
+        response.end()
+        return
+      }
+      response.writeHead(200, { 'content-type': 'text/plain' })
+      response.write('payload')
+      if (outcome === 'complete') response.end()
+      else disconnect = () => response.destroy()
+    })
+    const originalCreate = fs.createWriteStream
+    vi.spyOn(fs, 'createWriteStream').mockImplementation((filePath, options) => {
+      const output = originalCreate(filePath, options)
+      if (outcome === 'disconnect') output.once('open', () => disconnect())
+      return output
+    })
+    try {
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+      const address = server.address()
+      if (!address || typeof address === 'string') throw new Error('Expected a loopback TCP listener')
+      // Full access is confined to this isolated loopback fixture; public-only policy is tested separately.
+      const result = await client.downloadFile(`http://127.0.0.1:${address.port}/start`, targetPath, tempRoot, undefined, 0, true)
+      if (outcome === 'complete') {
+        expect(result).toEqual({ success: true, downloadedBytes: 7 })
+        expect(fs.readFileSync(targetPath, 'utf8')).toBe('payload')
+      } else {
+        expect(result.success).toBe(false)
+        expect(result.error).toContain('aborted')
+        expect(fs.existsSync(targetPath)).toBe(false)
+      }
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
       fs.rmSync(tempRoot, { recursive: true, force: true })
     }
   })

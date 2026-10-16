@@ -371,97 +371,144 @@ export class WebClient {
         return resolve({ success: false, error: `Failed creating directory: ${errorMessage(dirErr)}` })
       }
 
-      const fileStream = fs.createWriteStream(safeDestPath)
+      let req: http.ClientRequest | undefined
+      let response: http.IncomingMessage | undefined
+      let fileStream: fs.WriteStream | undefined
       let downloadedBytes = 0
+      let terminal = false
+      let fileOpened = false
+      let fileFinished = false
 
-      const removePartialFile = () => {
-        try {
-          if (fs.existsSync(safeDestPath)) {
-            fs.unlinkSync(safeDestPath)
-          }
-        } catch (unlinkErr) {
-          logger.log('WARN', 'WebClient', `Failed unlinking partial download at ${safeDestPath}: ${unlinkErr}`)
-        }
-      }
-
-      const cleanupAndFail = (errorMessage: string, destroyRequest = false) => {
-        if (destroyRequest) {
-          req.destroy()
-        }
-        fileStream.close(() => {
-          removePartialFile()
-        })
-        resolve({ success: false, error: errorMessage })
-      }
-
-      const req = client.get(
-        targetUrl,
-        {
-          headers: {
-            'User-Agent': this.userAgent,
-          },
-          timeout: 60000,
-          lookup: fullAccess ? undefined : publicOnlyLookup,
-        },
-        (res) => {
-          if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-            fileStream.close(() => {
-              removePartialFile()
-              if (redirectCount >= MAX_DOWNLOAD_REDIRECTS) {
-                resolve({ success: false, error: `Download exceeded ${MAX_DOWNLOAD_REDIRECTS} redirect hops.` })
-                return
+      const cleanupAndFail = (message: string) => {
+        if (terminal) return
+        terminal = true
+        signal?.removeEventListener('abort', onAbort)
+        response?.destroy()
+        req?.destroy()
+        const complete = () => {
+          if (fileOpened) {
+            try {
+              fs.unlinkSync(safeDestPath)
+            } catch (unlinkErr) {
+              if ((unlinkErr as NodeJS.ErrnoException).code !== 'ENOENT') {
+                message += `; Failed removing partial download: ${errorMessage(unlinkErr)}`
+                logger.log('WARN', 'WebClient', message)
               }
-              const redirectUrl = new URL(res.headers.location!, urlCheck.safeUrl!).toString()
-              this.downloadFile(redirectUrl, targetFilePath, workspaceRoot, signal, redirectCount + 1, fullAccess).then(resolve)
-            })
-            return
+            }
           }
+          resolve({ success: false, error: message })
+        }
+        // On Windows the descriptor must be closed before removing the partial file.
+        if (fileStream && !fileStream.closed) {
+          fileStream.once('close', complete)
+          fileStream.destroy()
+        } else {
+          complete()
+        }
+      }
 
-          if (res.statusCode && res.statusCode >= 400) {
-            return cleanupAndFail(`HTTP ${res.statusCode} ${res.statusMessage || ''}`, false)
-          }
+      const onAbort = () => cleanupAndFail('Download cancelled by AbortSignal')
+      signal?.addEventListener('abort', onAbort, { once: true })
+      if (signal?.aborted) {
+        onAbort()
+        return
+      }
 
-          if (!fullAccess && !downloadMimeAllowed(res.headers['content-type'])) {
-            return cleanupAndFail(`Download MIME type is not allowed: ${res.headers['content-type']}`, true)
-          }
-
-          res.on('data', (chunk) => {
-            downloadedBytes += chunk.length
-            if (!fullAccess && downloadedBytes === chunk.length && !downloadMimeAllowed(res.headers['content-type'], Buffer.from(chunk))) {
-              cleanupAndFail('Download content does not match declared MIME type.', true)
+      try {
+        req = client.get(
+          targetUrl,
+          {
+            headers: {
+              'User-Agent': this.userAgent,
+            },
+            timeout: 60000,
+            lookup: fullAccess ? undefined : publicOnlyLookup,
+          },
+          (res) => {
+            response = res
+            res.on('error', (err: Error) => cleanupAndFail(err.message))
+            res.once('aborted', () => cleanupAndFail('Download response aborted before completion'))
+            if (terminal) {
+              res.destroy()
               return
             }
-            if (downloadedBytes > MAX_DOWNLOAD_BYTES) {
-              cleanupAndFail('Download exceeded 100MB safety limit.', true)
+            if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+              if (redirectCount >= MAX_DOWNLOAD_REDIRECTS) {
+                cleanupAndFail(`Download exceeded ${MAX_DOWNLOAD_REDIRECTS} redirect hops.`)
+                return
+              }
+              let redirectUrl: string
+              try {
+                redirectUrl = new URL(res.headers.location, targetUrl).toString()
+              } catch (err) {
+                cleanupAndFail(`Invalid download redirect: ${errorMessage(err)}`)
+                return
+              }
+              // Retire this hop before handing the signal and destination to the next one.
+              terminal = true
+              signal?.removeEventListener('abort', onAbort)
+              res.destroy()
+              req?.destroy()
+              this.downloadFile(redirectUrl, targetFilePath, workspaceRoot, signal, redirectCount + 1, fullAccess).then(resolve)
+              return
             }
-          })
 
-          res.pipe(fileStream)
+            if (res.statusCode && res.statusCode >= 400) {
+              cleanupAndFail(`HTTP ${res.statusCode} ${res.statusMessage || ''}`)
+              return
+            }
 
-          fileStream.on('finish', () => {
-            fileStream.close(() => {
+            if (!fullAccess && !downloadMimeAllowed(res.headers['content-type'])) {
+              cleanupAndFail(`Download MIME type is not allowed: ${res.headers['content-type']}`)
+              return
+            }
+
+            try {
+              fileStream = fs.createWriteStream(safeDestPath)
+            } catch (err) {
+              cleanupAndFail(errorMessage(err))
+              return
+            }
+            fileStream.once('open', () => {
+              fileOpened = true
+            })
+            fileStream.on('error', (err) => cleanupAndFail(err.message))
+            fileStream.once('finish', () => {
+              fileFinished = true
+            })
+            fileStream.once('close', () => {
+              if (terminal) return
+              if (!fileFinished) {
+                cleanupAndFail('Download file closed before completion')
+                return
+              }
+              terminal = true
+              signal?.removeEventListener('abort', onAbort)
               logger.log('INFO', 'WebClient', `Successfully downloaded ${downloadedBytes} bytes to ${safeDestPath}`)
               resolve({ success: true, downloadedBytes })
             })
-          })
-        },
-      )
 
-      req.on('error', (err) => {
-        cleanupAndFail(err.message, false)
-      })
+            res.on('data', (chunk: Buffer) => {
+              if (terminal) return
+              downloadedBytes += chunk.length
+              if (!fullAccess && downloadedBytes === chunk.length && !downloadMimeAllowed(res.headers['content-type'], Buffer.from(chunk))) {
+                cleanupAndFail('Download content does not match declared MIME type.')
+                return
+              }
+              if (downloadedBytes > MAX_DOWNLOAD_BYTES) {
+                cleanupAndFail('Download exceeded 100MB safety limit.')
+              }
+            })
 
-      req.on('timeout', () => {
-        cleanupAndFail('Download request timed out (60s limit)', true)
-      })
-
-      signal?.addEventListener(
-        'abort',
-        () => {
-          cleanupAndFail('Download cancelled by AbortSignal', true)
-        },
-        { once: true },
-      )
+            res.pipe(fileStream)
+          },
+        )
+        req.on('error', (err) => cleanupAndFail(err.message))
+        req.on('timeout', () => cleanupAndFail('Download request timed out (60s limit)'))
+        if (terminal) req.destroy()
+      } catch (err) {
+        cleanupAndFail(errorMessage(err))
+      }
     })
   }
 }

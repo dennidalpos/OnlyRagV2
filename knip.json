@@ -14,5 +14,5 @@
   "project": ["src/**/*.{ts,tsx,css}!", "electron/**/*.{ts,tsx}!", "shared/**/*.{ts,tsx}!", "!src/test/**!"],
   "ignoreExportsUsedInFile": true,
   "ignoreBinaries": ["nvidia-smi"],
-  "ignoreDependencies": ["@types/diff", "@biomejs/biome"]
+  "ignoreDependencies": ["@types/diff", "@biomejs/biome", "braces"]
 }

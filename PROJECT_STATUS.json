@@ -102,11 +102,6 @@
       "task": "Qualify agent recovery after ungraceful shutdown with checkpoint readback (docs/agent-runtime.md)."
     },
     {
-      "id": "DEPENDENCY-SPRINTF-UPSTREAM-01",
-      "p": "P2",
-      "task": "Recheck upstream sprintf-js advisory and the retained exposure probes before package changes (docs/verification.md)."
-    },
-    {
       "id": "STATE-WRITER-CRASH-DURABILITY-01",
       "p": "P2",
       "task": "Qualify state-writer directory metadata and power-loss durability beyond file flush tests (docs/verification.md)."
@@ -119,7 +114,7 @@
     {
       "id": "DEPENDENCY-BRACES-UPSTREAM-01",
       "p": "P2",
-      "task": "Track braces advisory remediation without unsafe depcheck or skott downgrade (docs/verification.md)."
+      "task": "Replace the maintained local braces 3.0.4+onlyrag.1 fork only when an upstream release passes the same parser/AST depth, clean npm ci and native Electron/ASAR regression checks; preserve provenance and MIT notices (docs/dependency-remediation-2026-10-16.md)."
     },
     {
       "id": "RAG-EMBEDDING-REBUILD-QUALIFICATION-01",

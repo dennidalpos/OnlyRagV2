@@ -4,6 +4,10 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Indice delle evidenze precedenti
 
+## Correzione delle dipendenze — 2026-10-16
+
+[Patch locale braces, rimozione sprintf-js e prove di compatibilità](./dependency-remediation-2026-10-16.md).
+
 ## Download e ciclo di vita degli stream — 2026-10-16
 
 [Prove isolate, correzione e limiti](./verification-2026-10-16.md).

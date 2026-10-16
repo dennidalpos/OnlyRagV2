@@ -14,7 +14,7 @@ L'[audit Python del 2026-10-15](./python-dependency-audit-2026-10-15.md) confron
 
 ## Residui attuali
 
-Gli interventi compatibili upstream per braces, sprintf-js e il sanitizer incorporato in Monaco sono aperti nel [tracker](../PROJECT_STATUS.json). Il worker limita e isola la scansione, ma non corregge il pacchetto braces. La cache HTTP Got del builder resta disabilitata; `http-cache-semantics` è aggiornato alla 4.3.0, fuori dall'intervallo dell'advisory contestato dal manutentore ([riesame e limiti](#riesame-dependabot-del-15-ottobre-2026)). Il controllo dell'artefatto scaricato è separato. La presenza di un pacchetto vulnerabile non dimostra da sola un input sfruttabile nell'app. Rivedere la catena di chiamata e l'advisory ufficiale prima di cambiare lockfile o confini di esecuzione.
+Il [riesame del 16 ottobre](./dependency-remediation-2026-10-16.md) elimina tutte le copie di `sprintf-js` e applica una patch locale tracciata a `braces`: il risultato dell'audit npm non sostituisce le prove della patch. Restano nel [tracker](../PROJECT_STATUS.json) la sostituzione futura del fork con upstream verificato e il sanitizer incorporato in Monaco. Il worker di scansione conserva i propri limiti indipendenti. La cache HTTP Got del builder resta disabilitata; `http-cache-semantics` è alla 4.3.0, fuori dall'intervallo dell'advisory contestato dal manutentore ([riesame e limiti](#riesame-dependabot-del-15-ottobre-2026)). Il controllo dell'artefatto scaricato è separato. Rivedere catena di chiamata e advisory ufficiali prima di cambiare lockfile o confini di esecuzione.
 
 ## Evidenze datate
 

@@ -54,17 +54,16 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const hardwareDefault = useMemo(() => resolveMaxContextTokens('Auto', hardwareFacts), [hardwareFacts])
   const { metrics: modelMetrics } = useOllamaModelMetrics(settings.ollamaHost)
   const selectedModel = resolveConfiguredModel('chat', settings)
-  const contextBudget = useMemo(
-    () =>
+  const budgetForModel = useCallback(
+    (model: string) =>
       resolveChatContextBudget(
         hardwareFacts,
         'Auto',
-        resolveModelContextLength(selectedModel, settings.modelContextLengths, hardwareDefault, modelMetrics[selectedModel]?.contextLength),
+        resolveModelContextLength(model, settings.modelContextLengths, hardwareDefault, modelMetrics[model]?.contextLength),
       ),
-    [hardwareFacts, hardwareDefault, modelMetrics, selectedModel, settings.modelContextLengths],
+    [hardwareFacts, hardwareDefault, modelMetrics, settings.modelContextLengths],
   )
-  const budgetRef = useRef(contextBudget)
-  budgetRef.current = contextBudget
+  const contextBudget = useMemo(() => budgetForModel(selectedModel), [budgetForModel, selectedModel])
 
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const {
@@ -372,7 +371,6 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       }),
     )
 
-    let budget = budgetRef.current
     const hasSelectedDocs = run.docIds.size > 0
 
     messagesRef.current = [...messagesRef.current, userMsg, botMsg]
@@ -386,9 +384,14 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     }, 50)
 
     try {
+      // Capture the routed model and its window before any asynchronous work in this turn.
+      const routingResult = evaluateDomainIntent(userText, settings)
+      const modelToUse = routingResult.modelName
+      let budget = budgetForModel(modelToUse)
+      const think = chosenThinkValue(resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics))
       if (!(await checkpointConversation(run.conversationId, messagesRef.current, run.docIds, true))) throw new Error(t('chat.storageSaveError'))
       if (!isCurrentRun()) return
-      const routingResult = evaluateDomainIntent(userText, settings)
+      if (!modelToUse) throw new Error(noConfiguredModelMessage('chat'))
       logger.info('ChatEngine', `Domain Router: ${routingResult.domain.toUpperCase()} -> Model: ${routingResult.modelName} (${routingResult.reason})`)
 
       const effectiveSystemPrompt = getEffectivePrompt('chat', settings).prompt
@@ -514,8 +517,6 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         updateRunMessage(run, contextNotice, citationSources)
       }
 
-      const modelToUse = routingResult.modelName
-      if (!modelToUse) throw new Error(noConfiguredModelMessage('chat'))
       const docContextBlock = chatDocumentContext(boundedContext, hasSelectedDocs)
 
       const promptSections = [effectiveSystemPrompt, temporalContext, docContextBlock].filter(Boolean)
@@ -572,7 +573,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
                 num_ctx: budget.maxNumCtx,
                 num_thread: resolveChatThreadCount(hardwareFacts.cpuCount),
                 keep_alive: budget.keepAlive,
-                think: chosenThinkValue(resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics)),
+                think,
               },
               host: settings.ollamaHost,
               operationId,

@@ -1,6 +1,10 @@
 import http from 'node:http'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import crypto from 'node:crypto'
 import type { AddressInfo } from 'node:net'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DesktopShellPort } from '../domain/ports/desktopShellPort'
 import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
@@ -11,11 +15,29 @@ import { normalizeIngestedFileType, SidecarAppService, sidecarAppService } from 
 afterEach(() => vi.restoreAllMocks())
 
 describe('export format routing', () => {
+  it.each(['md', 'pdf', 'docx', 'html', 'htm'] as const)('preserves simultaneous %s exports in the configured folder', async (format) => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-export-'))
+    vi.spyOn(Date, 'now').mockReturnValue(1792231201234)
+    vi.spyOn(sidecarHttpClient, 'exportDocument').mockImplementation(async (content) => ({
+      success: true,
+      data: { base64_content: Buffer.from(content).toString('base64') },
+    }))
+    const service = new SidecarAppService(undefined, { showItemInFolder: vi.fn() } as unknown as DesktopShellPort)
+    try {
+      const contents = ['First città 漢 😀', 'Second document']
+      const results = await Promise.all(contents.map((content) => service.exportDocument(content, format, folder)))
+      expect(results.every((result) => result.success)).toBe(true)
+      expect(new Set(results.map((result) => result.filePath)).size).toBe(2)
+      results.forEach((result, i) => expect(fs.readFileSync(result.filePath!, 'utf8')).toBe(contents[i]))
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
   it.each(['md', 'pdf', 'docx', 'html', 'htm'] as const)('writes the declared %s format and extension', async (format) => {
     const content = '# città 漢 😀'
     const converted = Buffer.from('<converted>città 漢 😀</converted>')
-    const writeText = vi.spyOn(documentIoRepository, 'writeText').mockReturnValue({ success: true })
-    const writeBuffer = vi.spyOn(documentIoRepository, 'writeBuffer').mockReturnValue({ success: true })
+    const createFile = vi.spyOn(documentIoRepository, 'createExportFile').mockReturnValue({ success: true })
     const convert = vi.spyOn(sidecarHttpClient, 'exportDocument').mockResolvedValue({ success: true, data: { base64_content: converted.toString('base64') } })
     vi.spyOn(documentIoRepository, 'exists').mockReturnValue(true)
     const showItemInFolder = vi.fn()
@@ -25,14 +47,82 @@ describe('export format routing', () => {
     expect(result.success).toBe(true)
     expect(result.filePath).toMatch(new RegExp(`\\.${normalized}$`))
     if (format === 'md') {
-      expect(writeText).toHaveBeenCalledWith(result.filePath, content)
+      expect(createFile).toHaveBeenCalledWith(result.filePath, content)
       expect(convert).not.toHaveBeenCalled()
     } else {
       expect(convert).toHaveBeenCalledWith(content, normalized)
-      expect(writeBuffer).toHaveBeenCalledWith(result.filePath, converted)
-      expect(writeText).not.toHaveBeenCalled()
+      expect(createFile).toHaveBeenCalledWith(result.filePath, converted)
     }
     expect(showItemInFolder).toHaveBeenCalledWith(result.filePath)
+  })
+})
+
+describe('export destination ownership', () => {
+  let folder: string
+  const showItemInFolder = vi.fn()
+  const showSaveDialog = vi.fn<DesktopShellPort['showSaveDialog']>()
+  const service = new SidecarAppService(undefined, { showItemInFolder, showSaveDialog } as unknown as DesktopShellPort)
+  beforeEach(() => {
+    folder = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-export-ownership-'))
+    showItemInFolder.mockClear()
+    showSaveDialog.mockReset()
+  })
+  afterEach(() => fs.rmSync(folder, { recursive: true, force: true }))
+
+  it.each([1, 2, 3])('preserves colliding files and bounds retry after %i collisions', async (count) => {
+    const identities = ['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000003'] as const
+    const uuid = vi.spyOn(crypto, 'randomUUID')
+    identities.forEach((id) => uuid.mockReturnValueOnce(id))
+    const date = new Date().toISOString().slice(0, 10)
+    const originals = identities.slice(0, count).map((id) => path.join(folder, `OnlyRag_Export_${date}_${id}.md`))
+    originals.forEach((file) => fs.writeFileSync(file, 'Keep existing bytes'))
+    const write = vi.spyOn(documentIoRepository, 'createExportFile')
+    const result = await service.exportDocument('New content', 'md', folder)
+    expect(result.success).toBe(count < 3)
+    expect(write).toHaveBeenCalledTimes(Math.min(count + 1, 3))
+    originals.forEach((file) => expect(fs.readFileSync(file, 'utf8')).toBe('Keep existing bytes'))
+    if (count < 3) {
+      expect(fs.readFileSync(result.filePath!, 'utf8')).toBe('New content')
+      expect(showItemInFolder).toHaveBeenCalledOnce()
+    } else {
+      expect(result.error).toContain('3 tentativi')
+      expect(showItemInFolder).not.toHaveBeenCalled()
+    }
+  })
+
+  it('reports a refused write immediately without retry or success notification', async () => {
+    const write = vi.spyOn(documentIoRepository, 'createExportFile').mockReturnValue({ success: false, error: 'Access denied', collision: false })
+    const result = await service.exportDocument('Retained input', 'md', folder)
+    expect(result).toEqual({ success: false, error: 'Access denied' })
+    expect(write).toHaveBeenCalledOnce()
+    expect(showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it.each(['md', 'pdf'] as const)('replaces only the explicitly chosen %s destination', async (format) => {
+    const chosen = path.join(folder, `chosen.${format}`)
+    fs.writeFileSync(chosen, 'Old content')
+    showSaveDialog.mockResolvedValueOnce(chosen)
+    vi.spyOn(sidecarHttpClient, 'exportDocument').mockResolvedValue({ success: true, data: { base64_content: Buffer.from('New content').toString('base64') } })
+    const create = vi.spyOn(documentIoRepository, 'createExportFile')
+    expect((await service.exportDocument('New content', format)).success).toBe(true)
+    expect(fs.readFileSync(chosen, 'utf8')).toBe('New content')
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('does not convert or write when the save dialog is cancelled', async () => {
+    showSaveDialog.mockResolvedValueOnce(null)
+    const convert = vi.spyOn(sidecarHttpClient, 'exportDocument')
+    expect((await service.exportDocument('Original', 'pdf')).success).toBe(false)
+    expect(convert).not.toHaveBeenCalled()
+    expect(fs.readdirSync(folder)).toEqual([])
+    expect(showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it('does not create a destination when conversion fails', async () => {
+    vi.spyOn(sidecarHttpClient, 'exportDocument').mockResolvedValue({ success: false, error: 'Conversion refused' })
+    expect(await service.exportDocument('Original', 'pdf', folder)).toEqual({ success: false, error: 'Conversion refused' })
+    expect(fs.readdirSync(folder)).toEqual([])
+    expect(showItemInFolder).not.toHaveBeenCalled()
   })
 })
 

@@ -1,4 +1,5 @@
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { z } from 'zod'
 import type { DocumentExportFormat } from '../../../shared/domain/documentExport'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
@@ -342,12 +343,14 @@ export class SidecarAppService {
 
     const cleanFormat = format === 'htm' ? 'html' : format
     const defaultExt = cleanFormat
-    const generatedFilename = `OnlyRag_Export_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.${defaultExt}`
+    const newFilename = () => `OnlyRag_Export_${new Date().toISOString().slice(0, 10)}_${crypto.randomUUID()}.${defaultExt}`
+    const generatedFilename = newFilename()
 
     try {
       let targetPath: string
-      if (outputFolder && outputFolder.trim() && documentIoRepository.exists(outputFolder)) {
-        targetPath = path.join(outputFolder, generatedFilename)
+      const automaticFolder = outputFolder?.trim() && documentIoRepository.exists(outputFolder) ? outputFolder : undefined
+      if (automaticFolder) {
+        targetPath = path.join(automaticFolder, generatedFilename)
       } else {
         const chosenPath = await this.desktop.showSaveDialog({
           title: `Esporta Documento (${defaultExt.toUpperCase()})`,
@@ -364,40 +367,34 @@ export class SidecarAppService {
         targetPath = chosenPath
       }
 
-      if (defaultExt === 'md') {
-        const writeRes = documentIoRepository.writeText(targetPath, markdownContent)
-        if (!writeRes.success) {
-          return { success: false, error: writeRes.error }
+      let content: string | Buffer = markdownContent
+      if (defaultExt !== 'md') {
+        const sidecarRes = await sidecarHttpClient.exportDocument(markdownContent, cleanFormat)
+        if (!sidecarRes.success || !sidecarRes.data?.base64_content) {
+          return { success: false, error: sidecarRes.error || 'Impossibile completare la generazione del documento dal sidecar.' }
         }
-        this.desktop.showItemInFolder(targetPath)
-        logger.log('INFO', 'SidecarApp', `Markdown document exported successfully to: ${targetPath}`)
-        return {
-          success: true,
-          message: `Documento Markdown salvato con successo: ${path.basename(targetPath)}`,
-          filePath: targetPath,
-        }
+        content = Buffer.from(sidecarRes.data.base64_content, 'base64')
       }
 
-      const sidecarRes = await sidecarHttpClient.exportDocument(markdownContent, cleanFormat)
-
-      if (sidecarRes.success && sidecarRes.data?.base64_content) {
-        const fileBuffer = Buffer.from(sidecarRes.data.base64_content, 'base64')
-        const writeRes = documentIoRepository.writeBuffer(targetPath, fileBuffer)
-        if (!writeRes.success) {
-          return { success: false, error: writeRes.error }
-        }
-        this.desktop.showItemInFolder(targetPath)
-        logger.log('INFO', 'SidecarApp', `${defaultExt.toUpperCase()} document exported successfully to: ${targetPath}`)
-        return {
-          success: true,
-          message: `Documento ${defaultExt.toUpperCase()} esportato con successo in: ${path.basename(targetPath)}`,
-          filePath: targetPath,
+      if (automaticFolder) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const writeRes = documentIoRepository.createExportFile(targetPath, content)
+          if (writeRes.success) break
+          if (!writeRes.collision) return { success: false, error: writeRes.error }
+          if (attempt === 2) return { success: false, error: 'Impossibile creare un nome di export libero dopo 3 tentativi.' }
+          targetPath = path.join(automaticFolder, newFilename())
         }
       } else {
-        return {
-          success: false,
-          error: sidecarRes.error || 'Impossibile completare la generazione del file PDF dal sidecar.',
-        }
+        const writeRes =
+          typeof content === 'string' ? documentIoRepository.writeText(targetPath, content) : documentIoRepository.writeBuffer(targetPath, content)
+        if (!writeRes.success) return { success: false, error: writeRes.error }
+      }
+      this.desktop.showItemInFolder(targetPath)
+      logger.log('INFO', 'SidecarApp', `${defaultExt.toUpperCase()} document exported successfully to: ${targetPath}`)
+      return {
+        success: true,
+        message: `Documento ${defaultExt.toUpperCase()} esportato con successo in: ${path.basename(targetPath)}`,
+        filePath: targetPath,
       }
     } catch (err: unknown) {
       logger.log('ERROR', 'SidecarApp', `Export exception: ${errorMessage(err)}`)

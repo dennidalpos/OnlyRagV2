@@ -74,7 +74,40 @@ export class DocumentIoRepository {
     return { files: Array.from(new Set(files)), failures }
   }
 
-  /** Writes to a `.tmp` sibling of `targetPath` first, then renames it into place — the same write-temp-then-swap discipline already used for PDF in-place translation (sidecar/domain/translator.py's `file_path + ".translating.tmp"` + `os.replace()`), so a write tha */
+  /** Automatic exports must never replace an existing destination, including a concurrent writer's. */
+  createExportFile(targetPath: string, content: string | Buffer): { success: boolean; error?: string; collision?: boolean } {
+    let descriptor: number | undefined
+    let ownedFile: fs.Stats | undefined
+    try {
+      descriptor = fs.openSync(targetPath, 'wx')
+      ownedFile = fs.fstatSync(descriptor)
+      fs.writeFileSync(descriptor, content, 'utf8')
+      fs.fsyncSync(descriptor)
+      fs.closeSync(descriptor)
+      descriptor = undefined
+      return { success: true }
+    } catch (err: unknown) {
+      const collision = !ownedFile && descriptor === undefined && (err as NodeJS.ErrnoException).code === 'EEXIST'
+      if (descriptor !== undefined) {
+        try {
+          fs.closeSync(descriptor)
+        } catch {
+          /* Preserve the original write failure. */
+        }
+      }
+      if (ownedFile) {
+        try {
+          const current = fs.lstatSync(targetPath)
+          if (current.dev === ownedFile.dev && current.ino === ownedFile.ino) fs.unlinkSync(targetPath)
+        } catch {
+          /* An unremovable partial export remains identifiable at its unique path. */
+        }
+      }
+      return { success: false, error: errorMessage(err), collision }
+    }
+  }
+
+  /** Explicitly chosen destinations use a temporary sibling before replacement. */
   writeText(targetPath: string, content: string): { success: boolean; error?: string } {
     const tmpPath = `${targetPath}.tmp-${process.pid}-${Date.now()}`
     try {

@@ -4,6 +4,10 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Indice delle evidenze precedenti
 
+## Export e contesto chat — 2026-10-17
+
+[HTML letterale, destinazioni esclusive, codice DOCX e budget del modello effettivo](./verification-export-chat-2026-10-17.md).
+
 ## Revisioni e ciclo di vita dei flussi — 2026-10-16
 
 [Contratti migrati, recupero delle bozze, cancellazione, timeout e chiusura impostazioni](./verification-flow-contracts-2026-10-16.md).

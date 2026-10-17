@@ -9,10 +9,11 @@ import { OllamaGenerationScheduler } from '../../electron/core/infrastructure/ht
 import { resolvePromptCharBudget } from '../services/chatContextBudget'
 
 const documentStore: { documents: IngestedDocument[] } = { documents: [] }
+const metricStore: { metrics: Record<string, { contextLength: number; capabilities: string[] }> } = { metrics: {} }
 vi.mock('./useIngestedDocuments', () => ({
   useIngestedDocuments: () => ({ documents: documentStore.documents, refetchDocuments: vi.fn() }),
 }))
-vi.mock('./useOllamaModelMetrics', () => ({ useOllamaModelMetrics: () => ({ metrics: {} }) }))
+vi.mock('./useOllamaModelMetrics', () => ({ useOllamaModelMetrics: () => ({ metrics: metricStore.metrics }) }))
 
 import { useChatEngine } from './useChatEngine'
 
@@ -80,6 +81,7 @@ describe('chat document grounding', () => {
     vi.useFakeTimers()
     vi.resetAllMocks()
     settingsOverride = {}
+    metricStore.metrics = {}
     recovery = { revision: 'missing', state: null }
     documentStore.documents = [docA, docB]
     localStorage.clear()
@@ -120,6 +122,45 @@ describe('chat document grounding', () => {
     expect(chat.messages.at(-1)?.text).toContain('1/1 documents loaded')
     expect(chat.messages.at(-1)?.sources).toBeUndefined()
     expect(chat.isGenerating).toBe(false)
+  })
+
+  it.each([
+    ['medicalModel', 'Antibiotic therapy for pneumonia', 'medical-fixture', 2048, undefined, 2048],
+    ['legalModel', 'Contratto clausola risarcimento tribunale', 'legal-fixture', 8192, 3072, 3072],
+  ] as const)('sizes the turn for the routed %s rather than the general model', async (role, query, model, preference, maximum, expected) => {
+    settingsOverride = { [role]: model, modelContextLengths: { 'fixture-model': 4096, [model]: preference } }
+    if (maximum) metricStore.metrics = { [model]: { contextLength: maximum, capabilities: ['completion'] } }
+    await act(async () => {
+      chat.toggleDocSelection('a')
+      chat.setInput(query)
+    })
+    getIngestedDocument.mockResolvedValueOnce({ ...docA, extractedMarkdown: 'Context details '.repeat(1000) })
+    await act(async () => chat.handleSendMessage())
+    expect(generateOllamaStream).toHaveBeenCalledOnce()
+    const request = generateOllamaStream.mock.calls[0][0]
+    expect(request).toMatchObject({ model, options: { num_ctx: expected } })
+    expect(request.prompt.length).toBeLessThanOrEqual(resolvePromptCharBudget(expected))
+  })
+
+  it('keeps the routed window fixed while retrieval waits and settings change', async () => {
+    settingsOverride = { medicalModel: 'medical-fixture', modelContextLengths: { 'fixture-model': 4096, 'medical-fixture': 2048 } }
+    const search = deferred<VectorSearchResult[]>()
+    searchVectorDb.mockReturnValueOnce(search.promise)
+    await act(async () => {
+      chat.toggleDocSelection('a')
+      chat.setInput('Antibiotic therapy for pneumonia')
+    })
+    let completion!: Promise<void>
+    await act(async () => {
+      completion = chat.handleSendMessage()
+    })
+    settingsOverride = { medicalModel: 'other-model', modelContextLengths: { 'medical-fixture': 8192 } }
+    await act(async () => chat.setInput('Next question'))
+    await act(async () => {
+      search.resolve([])
+      await completion
+    })
+    expect(generateOllamaStream.mock.calls[0][0]).toMatchObject({ model: 'medical-fixture', options: { num_ctx: 2048 } })
   })
 
   it('bounds a saturated retrieved prompt at a 2048-token preference and keeps source cards tied to included passages', async () => {

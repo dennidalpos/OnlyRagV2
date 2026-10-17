@@ -2,6 +2,7 @@ import os
 import base64
 import datetime
 import html
+import tempfile
 import pymupdf
 from typing import Dict, Any, List
 from sidecar.config import EXPORT_DIR, logger
@@ -99,6 +100,18 @@ def _render_docx_from_markdown(markdown_content: str, output_path: str):
                                 run.font.bold = True
         table_rows_buffer = []
 
+    def flush_code_block():
+        nonlocal code_block_lines
+        p = doc.add_paragraph()
+        p.paragraph_format.left_indent = Pt(12)
+        p.paragraph_format.space_before = Pt(6)
+        p.paragraph_format.space_after = Pt(6)
+        run = p.add_run("\n".join(code_block_lines))
+        run.font.name = 'Consolas'
+        run.font.size = Pt(9.5)
+        run.font.color.rgb = RGBColor(40, 40, 40)
+        code_block_lines = []
+
     for raw_line in lines:
         line = raw_line.rstrip()
 
@@ -106,18 +119,8 @@ def _render_docx_from_markdown(markdown_content: str, output_path: str):
         if line.strip().startswith("```"):
             if in_code_block:
                 flush_table_buffer()
-                code_text = "\n".join(code_block_lines)
-                code_block_lines = []
+                flush_code_block()
                 in_code_block = False
-                
-                p = doc.add_paragraph()
-                p.paragraph_format.left_indent = Pt(12)
-                p.paragraph_format.space_before = Pt(6)
-                p.paragraph_format.space_after = Pt(6)
-                run = p.add_run(code_text)
-                run.font.name = 'Consolas'
-                run.font.size = Pt(9.5)
-                run.font.color.rgb = RGBColor(40, 40, 40)
             else:
                 flush_table_buffer()
                 in_code_block = True
@@ -162,6 +165,8 @@ def _render_docx_from_markdown(markdown_content: str, output_path: str):
             p.add_run(line.strip())
 
     flush_table_buffer()
+    if in_code_block:
+        flush_code_block()
     doc.save(output_path)
 
 
@@ -169,10 +174,12 @@ def export_markdown_to_file(markdown_content: str, export_format: str = "pdf") -
     """Compiles Markdown into structured PDF, DOCX, HTML, or raw MD file preserving original layout."""
     fmt = export_format.lower().strip()
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Exclusive per-request directory: concurrent renders cannot share or replace a file.
+    output_dir = tempfile.mkdtemp(prefix="export-", dir=EXPORT_DIR)
 
     if fmt == "pdf":
         export_filename = f"export_{ts}.pdf"
-        file_path = os.path.join(EXPORT_DIR, export_filename)
+        file_path = os.path.join(output_dir, export_filename)
         try:
             _render_pdf_from_markdown(markdown_content, file_path)
             with open(file_path, "rb") as f:
@@ -192,7 +199,7 @@ def export_markdown_to_file(markdown_content: str, export_format: str = "pdf") -
 
     elif fmt == "docx":
         export_filename = f"export_{ts}.docx"
-        file_path = os.path.join(EXPORT_DIR, export_filename)
+        file_path = os.path.join(output_dir, export_filename)
         try:
             _render_docx_from_markdown(markdown_content, file_path)
             with open(file_path, "rb") as f:
@@ -212,7 +219,7 @@ def export_markdown_to_file(markdown_content: str, export_format: str = "pdf") -
 
     elif fmt in ["html", "htm"]:
         export_filename = f"export_{ts}.html"
-        file_path = os.path.join(EXPORT_DIR, export_filename)
+        file_path = os.path.join(output_dir, export_filename)
         try:
             html_wrapper = f"""<!DOCTYPE html>
 <html>
@@ -229,7 +236,7 @@ def export_markdown_to_file(markdown_content: str, export_format: str = "pdf") -
     </style>
 </head>
 <body>
-    <pre>{markdown_content}</pre>
+    <pre>{html.escape(markdown_content)}</pre>
 </body>
 </html>"""
             with open(file_path, "w", encoding="utf-8") as f:
@@ -252,7 +259,7 @@ def export_markdown_to_file(markdown_content: str, export_format: str = "pdf") -
 
     else:
         export_filename = f"export_{ts}.md"
-        file_path = os.path.join(EXPORT_DIR, export_filename)
+        file_path = os.path.join(output_dir, export_filename)
         try:
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(markdown_content)

@@ -48,6 +48,14 @@ describe('sidecar IPC facade', () => {
     expect(sidecarAppService.restartSidecar).toHaveBeenCalledOnce()
   })
 
+  it('refuses invalid draft identities, duplicate drafts and untrusted draft callers', () => {
+    const save = handlers.get('ingest:save-drafts')!
+    const draft = { docId: 'a', content: 'draft', ingestedAt: 't1', markdown: 'original' }
+    expect(() => save(trustedEvent, { revision: 'missing', drafts: [draft, draft] })).toThrow('Invalid IPC payload')
+    expect(() => save(trustedEvent, { revision: 'missing', drafts: [{ ...draft, ingestedAt: '' }] })).toThrow('Invalid IPC payload')
+    expect(() => save({ sender: {}, senderFrame: {} }, { revision: 'missing', drafts: [draft] })).toThrow()
+  })
+
   it('requires and forwards the editor revision and preassigned translation identity', async () => {
     const update = handlers.get('ingest:update')!
     expect(() => update(trustedEvent, { docId: 'doc-1', markdownContent: '# Edit' })).toThrow('Invalid IPC payload')

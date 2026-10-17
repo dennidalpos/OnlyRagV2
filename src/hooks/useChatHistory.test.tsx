@@ -25,6 +25,10 @@ describe('chat persistence recovery', () => {
     await act(async () => root.render(<Harness />))
   }
   beforeEach(() => {
+    window.electronAPI = {
+      loadChatRecovery: vi.fn(async () => ({ revision: 'missing', state: null })),
+      saveChatRecovery: vi.fn(async (snapshot: import('../../shared/domain/chatHistory').ChatHistoryRecovery) => snapshot),
+    } as unknown as NonNullable<typeof window.electronAPI>
     vi.useFakeTimers()
     window.localStorage.clear()
     container = document.createElement('div')
@@ -77,5 +81,41 @@ describe('chat persistence recovery', () => {
     expect(history.storageError).toBeNull()
     expect(history.conversations.map((conversation) => conversation.id)).toEqual(['saved', pendingId])
     expect(history.conversations.find((conversation) => conversation.id === pendingId)?.title).toBe('Pending')
+  })
+
+  it('retains edits when the Main checkpoint fails even though the local copy was written', async () => {
+    await mount()
+    const fail = vi.spyOn(window.electronAPI!, 'saveChatRecovery').mockRejectedValueOnce(new Error('disk full'))
+    await act(async () => {
+      history.setConversations((current) => current.map((conversation) => ({ ...conversation, title: 'Pending Main acknowledgement' })))
+    })
+    await act(async () => {
+      expect(await history.flushHistory()).toBe(false)
+    })
+    expect(history.storageError).toBe('save')
+    expect(history.conversations[0].title).toBe('Pending Main acknowledgement')
+    await act(async () => {
+      await history.retryPersistence()
+    })
+    expect(history.storageError).toBeNull()
+    expect(fail).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not replace a failed Main bootstrap with local data before retry', async () => {
+    window.localStorage.setItem('onlyrag_chat_conversations', JSON.stringify([saved]))
+    vi.spyOn(window.electronAPI!, 'loadChatRecovery').mockRejectedValueOnce(new Error('unreadable Main archive'))
+    await mount()
+    expect(history.ready).toBe(false)
+    expect(history.storageError).toBe('load')
+    await act(async () => {
+      vi.advanceTimersByTime(1000)
+      await history.flushHistory()
+    })
+    expect(window.electronAPI!.saveChatRecovery).not.toHaveBeenCalled()
+    expect(history.conversations[0].messages[0].text).toBe('Original')
+    await act(async () => {
+      await history.retryPersistence()
+    })
+    expect(history.ready).toBe(true)
   })
 })

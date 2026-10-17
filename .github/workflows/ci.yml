@@ -93,6 +93,14 @@ jobs:
           # The Vitest suite runs once, in the coverage step below.
           ./scripts/lint_format.ps1 -Fast -SkipTests
 
+      - name: Verify Chat and Document Draft Recovery (Fail-Fast)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # The serial lint step built Main, Preload and Renderer for the smoke test.
+          node scripts/e2e/chatDraftRecovery.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Chat/draft recovery failed with exit code $LASTEXITCODE." }
+
       - name: Run Coverage Gate (Fail-Fast)
         shell: pwsh
         run: |

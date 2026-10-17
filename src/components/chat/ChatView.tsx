@@ -619,7 +619,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                       onChange={c.handleInputChange}
                       placeholder={t('chat.inputPlaceholder')}
                       aria-label={t('chat.inputPlaceholder')}
-                      disabled={c.isGenerating || isCurrentChatModelUpdating}
+                      disabled={!c.historyReady || c.isGenerating || isCurrentChatModelUpdating}
                       className="w-full pl-4 pr-10 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/80 transition-all font-sans disabled:opacity-50"
                     />
                   </div>

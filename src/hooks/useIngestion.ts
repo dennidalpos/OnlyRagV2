@@ -1,6 +1,7 @@
 import type { editor } from 'monaco-editor'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useDocumentDrafts } from './useDocumentDrafts'
 import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
 import { resolveModelContextLength } from '../../shared/domain/settings/modelContextPreference'
 import { resolveNodeTemplate } from '../constants/promptConfig'
@@ -106,7 +107,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   const [syncScroll, setSyncScroll] = useState<boolean>(true)
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string } | null>(null)
-  const draftsRef = useRef(new Map<string, { content: string; ingestedAt: string; markdown: string | null }>())
+  const { draftsRef, ready: draftsReady, error: draftStorageError, changeDraft, retry: retryDraftStorage } = useDocumentDrafts()
   const markdownRef = useRef('')
   const selectedDocRef = useRef<IngestedDocument | null>(null)
   const savingRef = useRef<{ docId: string; content: string } | null>(null)
@@ -137,23 +138,27 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
 
   // Keep drafts for this mounted view; saving never replaces a newer edit.
   const editorSourceRef = useRef<{ id: string; ingestedAt: string; markdown: string } | null>(null)
-  const setMarkdownContent = useCallback((content: string) => {
-    markdownRef.current = content
-    const doc = selectedDocRef.current
-    const source = editorSourceRef.current
-    const pending = savingRef.current
-    if (doc) {
-      const pendingChangesText = pending?.docId === doc.id && pending.content !== content
-      if (source?.id === doc.id && content === source.markdown && !pendingChangesText) draftsRef.current.delete(doc.id)
-      else if (source?.id === doc.id) draftsRef.current.set(doc.id, { content, ingestedAt: source.ingestedAt, markdown: source.markdown })
-      else draftsRef.current.set(doc.id, { content, ingestedAt: doc.ingestedAt, markdown: null })
-    }
-    updateMarkdownContent(content)
-  }, [])
+  const setMarkdownContent = useCallback(
+    (content: string) => {
+      if (!draftsReady) return
+      markdownRef.current = content
+      const doc = selectedDocRef.current
+      const source = editorSourceRef.current
+      const pending = savingRef.current
+      if (doc) {
+        const pendingChangesText = pending?.docId === doc.id && pending.content !== content
+        if (source?.id === doc.id && content === source.markdown && !pendingChangesText) changeDraft(doc.id, null)
+        else if (source?.id === doc.id) changeDraft(doc.id, { content, ingestedAt: source.ingestedAt, markdown: source.markdown })
+        else changeDraft(doc.id, { content, ingestedAt: doc.ingestedAt, markdown: null })
+      }
+      updateMarkdownContent(content)
+    },
+    [changeDraft, draftsReady],
+  )
   const selectedDocId = selectedDoc?.id
   const selectedDocVersion = selectedDoc?.ingestedAt
   useEffect(() => {
-    if (!selectedDocId || selectedDocVersion === undefined || loadedMarkdown === null) return
+    if (!draftsReady || !selectedDocId || selectedDocVersion === undefined || loadedMarkdown === null) return
     const source = editorSourceRef.current
     if (source?.id === selectedDocId && source.ingestedAt === selectedDocVersion) return
     const draft = draftsRef.current.get(selectedDocId)
@@ -161,7 +166,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     const content = draft?.content ?? loadedMarkdown
     markdownRef.current = content
     updateMarkdownContent(content)
-  }, [selectedDocId, selectedDocVersion, loadedMarkdown])
+  }, [selectedDocId, selectedDocVersion, loadedMarkdown, draftsReady])
 
   // Restore local drafts; unloaded documents cannot be saved.
   const showDocument = useCallback((doc: IngestedDocument | null) => {
@@ -410,7 +415,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         () => setUploadError(null),
       )
       if (!deleted) return
-      draftsRef.current.delete(id)
+      changeDraft(id, null)
       notifyDocumentsChanged()
       if (selectedDocRef.current?.id === id) {
         const remaining = documents.filter((d) => d.id !== id)
@@ -622,8 +627,8 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         confirmedMarkdown = res.data.extractedMarkdown
         primeDocumentMarkdown(res.data)
         const draft = draftsRef.current.get(doc.id)
-        if (draft?.content === content) draftsRef.current.delete(doc.id)
-        else if (draft) draftsRef.current.set(doc.id, { ...draft, ingestedAt: res.data.ingestedAt, markdown: res.data.extractedMarkdown })
+        if (draft?.content === content) changeDraft(doc.id, null)
+        else if (draft) changeDraft(doc.id, { ...draft, ingestedAt: res.data.ingestedAt, markdown: res.data.extractedMarkdown })
         const current = selectedDocRef.current
         if (mountedRef.current && current?.id === doc.id && current.ingestedAt === doc.ingestedAt) {
           editorSourceRef.current = { id: res.data.id, ingestedAt: res.data.ingestedAt, markdown: res.data.extractedMarkdown }
@@ -643,7 +648,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         setSaveStatus({ success: false, message: normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message })
     } finally {
       savingRef.current = null
-      if (draftsRef.current.get(doc.id)?.content === confirmedMarkdown) draftsRef.current.delete(doc.id)
+      if (draftsRef.current.get(doc.id)?.content === confirmedMarkdown) changeDraft(doc.id, null)
       if (mountedRef.current) setIsSaving(false)
       if (ownsStatus() && succeeded) saveStatusTimerRef.current = setTimeout(() => setSaveStatus(null), 4000)
     }
@@ -662,7 +667,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
       if (!latest || latest.id !== doc.id) throw new Error(t('common.documentLoadFailed'))
       if (!mountedRef.current || epoch !== selectionEpochRef.current || content !== markdownRef.current) return
       primeDocumentMarkdown(latest)
-      draftsRef.current.delete(doc.id)
+      changeDraft(doc.id, null)
       editorSourceRef.current = null
       showDocument(latest)
       setSaveStatus(null)
@@ -676,6 +681,9 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   }
 
   return {
+    draftsReady,
+    draftStorageError,
+    retryDraftStorage,
     isPromptModalOpen,
     setIsPromptModalOpen,
     documents,

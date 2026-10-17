@@ -99,7 +99,7 @@ describe('chatContextCompactor Unit Tests', () => {
       const turns = buildLongConversation()
       for (const availableChars of [8000, 2000, 500, 0]) {
         const res = compactChatHistory(turns, sampleBudget, true, availableChars)
-        expect(res.historyBlock.length, `history block overflowed a ${availableChars}-char budget`).toBeLessThanOrEqual(availableChars + 80)
+        expect(res.historyBlock.length, `history block overflowed a ${availableChars}-char budget`).toBeLessThanOrEqual(availableChars)
       }
     })
 

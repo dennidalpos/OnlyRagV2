@@ -13,6 +13,7 @@ Eseguire i comandi da PowerShell nella radice del repository. Le versioni dichia
 | Test mirati | `npx vitest run <percorso>`; `.venv\Scripts\python.exe -m pytest -q <percorso>` | Usare per problemi concreti, con fixture isolate. |
 | Suite complete | `npm run test:fast -- --silent=true`; `.venv\Scripts\python.exe -m pytest -q` | Solo quando un problema o un gate di rilascio lo richiede; le ultime ricevute sono in [`verification-current.md`](./verification-current.md). |
 | Build | `npm run build` | Genera bundle locali. Non rieseguito qui. |
+| Recupero chat e bozze | `npm run test:e2e:chat-drafts` | Build e prova Electron isolata di interruzione, riavvio, revisione obsoleta e rifiuto della chiusura; nessuna generazione reale. |
 | OpenAPI | `npm run generate:openapi` | Rigenera il contratto dopo modifiche REST. Non rieseguito qui. |
 | Installer | `npm run package:win` | Crea un nuovo candidato CPU in `release/cpu-*`; non installa né pubblica. Non rieseguito qui. |
 

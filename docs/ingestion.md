@@ -4,6 +4,8 @@ Il Renderer passa il percorso del file a Main tramite il Preload. Main valida la
 
 Il salvataggio dell'editor include la revisione originale della bozza. Un conflitto conserva testo e avviso: è possibile esportare la bozza o confermare lo scarto e ricaricare il documento salvato. Il reload non scarta nulla se la lettura fallisce o l'utente ha scritto altro durante l'attesa. Contratto e prove: [revisioni e ciclo di vita](./verification-flow-contracts-2026-10-16.md).
 
+Le bozze dell'editor vengono salvate in un archivio Main separato dall'indice: la revisione originale resta obbligatoria dopo il recupero. Un rifiuto espone Riprova ed export; la chiusura attende gli snapshot pendenti. Il bootstrap fallito lascia il testo in sola lettura e non sovrascrive l'archivio. [Prove e limiti](./verification-chat-drafts-context-2026-10-16.md).
+
 ## Comportamento attuale
 
 - `POST /ingest-path-stream` emette progresso NDJSON; `POST /tasks/cancel` prende il `task_id`. L'originale del chiamante non viene modificato. Le nuove ingestion conservano una copia verificabile in `data/source-documents/<doc_id>`.

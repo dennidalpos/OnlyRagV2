@@ -4,8 +4,8 @@ Il Renderer usa solo `window.electronAPI` esposta da [`electron/preload.ts`](../
 
 ## Viste e proprietà dei dati
 
-- Chat: [`useChatEngine.ts`](../src/hooks/useChatEngine.ts) gestisce streaming e contesto; [`useChatHistory.ts`](../src/hooks/useChatHistory.ts) conserva la cronologia nel formato localStorage corrente. Errori di lettura impediscono di sovrascrivere l'originale; la durata dopo crash di un turno attivo resta aperta.
-- Ingestion: la lista carica metadati, il Markdown arriva su richiesta e la cache ne verifica la revisione. Le bozze restano per documento con la propria revisione di base durante la vista montata; un salvataggio tardivo non cambia la selezione. Dopo un rifiuto si può esportare la bozza o confermare lo scarto e ricaricare la versione salvata: una lettura fallita mantiene la bozza. Unmount/crash e limite di memoria delle bozze restano aperti.
+- Chat: [`useChatEngine.ts`](../src/hooks/useChatEngine.ts) gestisce streaming e contesto; [`useChatHistory.ts`](../src/hooks/useChatHistory.ts) conserva il formato localStorage corrente e attende una copia di recupero riconosciuta dal Main. Domanda e risposta attiva vengono checkpointate durante lo streaming; una risposta recuperata in corso è marcata incompleta. Errori di lettura impediscono di sovrascrivere l'originale; un salvataggio rifiutato blocca la chiusura normale. Il formato localStorage esistente resta leggibile.
+- Ingestion: la lista carica metadati, il Markdown arriva su richiesta e la cache ne verifica la revisione. Le bozze vengono conservate dal Main con la propria revisione di base e ricaricate al montaggio; un salvataggio tardivo non cambia la selezione. Dopo un rifiuto si può esportare la bozza o confermare lo scarto e ricaricare la versione salvata: una lettura fallita mantiene la bozza. Il bootstrap delle bozze precede la modifica; errori di archivio espongono Riprova ed export. Il recupero non ribasa una bozza su una revisione successiva. Desktop installato, memoria complessiva e perdita di alimentazione restano da qualificare.
 - Traduzione: [`useTranslation.ts`](../src/hooks/useTranslation.ts) separa la selezione Markdown da PDF/DOCX; un blocco condiviso consente un job alla volta. L'identità PDF/DOCX esiste prima dell'invio; Stop e unmount chiedono la cancellazione e mantengono il blocco fino al risultato IPC. Eventi di altre operazioni sono ignorati; un errore di trasporto non viene presentato come cancellazione confermata.
 - Coding Agent: [`useCodingAgent.ts`](../src/hooks/useCodingAgent.ts) compone esecuzione, sessione, allegati, file e terminale. Gli eventi sono legati all'identità della run; i salvataggi rifiutati restano visibili per retry mentre la vista è attiva.
 
@@ -52,3 +52,7 @@ Lo stack di modali isola il livello attivo; i test Chrome tastiera/tree passano 
 ## Chat readable output — 2026-10-11
 
 I riferimenti sorgente restano azionabili fuori da codice e link; URL esterni sono limitati a HTTP(S). Le prove di layout sono fixture, non garanzie di latenza per cronologie arbitrarie.
+
+## Recupero e budget chat — 2026-10-16
+
+La chiusura attende anche chat e bozze. Il contesto chat riserva prima istruzioni, data, domanda e risposta; documenti e storico usano soltanto lo spazio residuo. È un limite in caratteri stimati, non una misura esatta dei token del modello. Contratti, prove e limiti sono in [recupero chat e bozze](./verification-chat-drafts-context-2026-10-16.md).

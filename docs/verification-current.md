@@ -24,3 +24,8 @@ In ordine: sonde isolate di chiusura/riavvio per stato e checkpoint; misure comp
 La documentazione tecnica è stata confrontata con i punti di ingresso e i contratti del codice, suddivisa per ambito e indicizzata in [`README.md`](./README.md). I resoconti estesi precedenti restano negli archivi datati; i duplicati `agent.md` e `decisions.md` sono stati rimossi. Corretti anche i riferimenti non aggiornati nelle skill locali.
 
 Verifica di questa modifica: `npm run docs:check` (48 file), sei test mirati del validatore, Biome sui due file del validatore e `git diff --check`, tutti superati. Suite applicative complete non ripetute perché la modifica non cambia il comportamento dell'app. Le attività aperte restano nel [`tracker`](../PROJECT_STATUS.json); nessuna campagna modello, installazione o migrazione personale è stata avviata.
+
+
+## Aggiornamento mirato — 2026-10-17
+
+Il [lotto chat, bozze e contesto](./verification-chat-drafts-context-2026-10-16.md), iniziato il 16 ottobre, aggiunge checkpoint chat nel Main, recupero delle bozze con revisione originale e limite complessivo del prompt stimato. Le prove Electron isolate qualificano interruzione forzata del processo, recupero della risposta parziale come incompleta, rifiuto della chiusura, retry e readback al riavvio. Suite completa frontend 2.863 passati, regressioni finali mirate 63 passati, Python 537 passati e un caso symlink saltato; build, statico e smoke passati. Non sono qualificati desktop installato, perdita di alimentazione o qualità semantica; le attività residue restano nel tracker, con priorità P1 per il layout ingestion.

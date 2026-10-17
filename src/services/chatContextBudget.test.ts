@@ -1,7 +1,27 @@
 import { describe, it, expect } from 'vitest'
-import { resolveChatContextBudget, resolveChatThreadCount, resolvePromptCharBudget } from './chatContextBudget'
+import { resolveChatContextBudget, resolveChatThreadCount, resolvePromptCharBudget, allocateChatDocumentBudget, chatDocumentContext } from './chatContextBudget'
 
 describe('chatContextBudget', () => {
+  it('reserves mandatory input and the reply before allocating document context on small model windows', () => {
+    for (const numCtx of [512, 2048, 4096, 8192]) {
+      for (const vramGB of [8, 12, 24]) {
+        const budget = resolveChatContextBudget({ hasGpu: true, vramTotalMB: vramGB * 1024 }, 'Auto', numCtx)
+        expect(budget.maxNumCtx).toBe(numCtx)
+        const fitted = allocateChatDocumentBudget(budget, 'Instructions', 'Date', 'Question', true)
+        if (fitted) {
+          const prompt = ['Instructions', 'Date', chatDocumentContext('x'.repeat(fitted.totalContextChars), true), 'User: Question\nAssistant:'].join('\n\n')
+          expect(prompt.length).toBeLessThanOrEqual(resolvePromptCharBudget(numCtx))
+          expect(fitted.vectorContextChars).toBeLessThanOrEqual(fitted.totalContextChars)
+        }
+      }
+    }
+  })
+
+  it('refuses oversized mandatory instructions or question without silently cutting either', () => {
+    const budget = resolveChatContextBudget({}, 'Auto', 2048)
+    expect(allocateChatDocumentBudget(budget, 'x'.repeat(4000), '', 'Question', false)).toBeNull()
+    expect(allocateChatDocumentBudget(budget, '', '', '😀'.repeat(4000), true)).toBeNull()
+  })
   const MINIMAL_HOST = { hasGpu: false, vramTotalMB: 0, systemRamGB: 8, cpuCount: 4 }
   const CPU_WORKSTATION = { hasGpu: false, vramTotalMB: 0, systemRamGB: 64, cpuCount: 32 }
   const MIDRANGE_HOST = { hasGpu: true, vramTotalMB: 8192, systemRamGB: 16, cpuCount: 16 }

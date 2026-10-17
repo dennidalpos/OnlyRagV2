@@ -37,7 +37,7 @@ const GENERATION_RESERVE_TOKENS = 1024
 
 /** Total chars the assembled prompt may occupy on a host, once the answer's own token reserve is held back. */
 export function resolvePromptCharBudget(maxNumCtx: number): number {
-  const usableTokens = Math.max(512, maxNumCtx - GENERATION_RESERVE_TOKENS)
+  const usableTokens = Math.max(0, maxNumCtx - Math.min(GENERATION_RESERVE_TOKENS, Math.floor(maxNumCtx / 2)))
   return Math.floor(usableTokens * APPROX_CHARS_PER_TOKEN)
 }
 
@@ -140,5 +140,38 @@ export function resolveChatContextBudget(
   const isMinimal = declaredProfile === 'Auto' && isMinimalHardwareHost(facts)
   const budget = isMinimal ? MINIMAL_HOST_BUDGET : TIER_BUDGETS[profileTier]
 
-  return { profileTier, isMinimal, ...budget, maxNumCtx: maxNumCtxOverride ? Math.max(2048, Math.floor(maxNumCtxOverride)) : budget.maxNumCtx }
+  return { profileTier, isMinimal, ...budget, maxNumCtx: maxNumCtxOverride ? Math.max(1, Math.floor(maxNumCtxOverride)) : budget.maxNumCtx }
+}
+
+/** This same wrapper is measured before retrieval and used for the final prompt. */
+export function chatDocumentContext(text: string, selected: boolean): string {
+  if (!selected)
+    return '[ATTACHMENT CONTEXT STATUS]\nNo documents or attachments are currently selected. If the user asks to read or analyze specific documents, ask them to select a document or mention @filename. For general knowledge, answer normally.\n[END ATTACHMENT CONTEXT STATUS]'
+  return (
+    '[INDEXED DOCUMENT CONTEXT (LanceDB)]\n' +
+    'Use only the document text supplied below for document claims. Retrieved passages are candidates, not verified support. An excerpt is incomplete: do not claim access to omitted text or complete-document coverage. If the supplied text does not support the answer, say so.\n' +
+    'Cite each supported document claim immediately with its supplied passage reference, such as [S1]. Use only references supplied in this turn. Do not cite a passage that does not support the claim, and do not invent references for document previews.\n' +
+    'If a sentence combines facts from multiple passages, cite every needed reference next to that sentence. Keep citations beside their claims, rather than in a separate final list.\n\n' +
+    text +
+    '\n[END DOCUMENT CONTEXT]'
+  )
+}
+
+export function allocateChatDocumentBudget(
+  budget: ChatContextBudget,
+  instructions: string,
+  temporal: string,
+  question: string,
+  selected: boolean,
+): ChatContextBudget | null {
+  const fixed = [instructions, temporal, chatDocumentContext('', selected), `User: ${question}\nAssistant:`].filter(Boolean).join('\n\n')
+  const remaining = resolvePromptCharBudget(budget.maxNumCtx) - fixed.length
+  if (remaining < 0) return null
+  const totalContextChars = Math.min(budget.totalContextChars, remaining)
+  return {
+    ...budget,
+    totalContextChars,
+    vectorContextChars: Math.min(budget.vectorContextChars, totalContextChars),
+    perDocumentPreviewChars: Math.min(budget.perDocumentPreviewChars, totalContextChars),
+  }
 }

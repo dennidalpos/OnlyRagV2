@@ -131,7 +131,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
           </div>
 
           {/* Message Text / Streaming State */}
-          {msg.text ? (
+          {msg.text || msg.interrupted ? (
             <div className="font-sans text-slate-200 break-words selection:bg-cyan-500/30 selection:text-cyan-100">
               {isUser || msg.isStreaming ? (
                 <div className="whitespace-pre-wrap">{msg.text}</div>
@@ -212,6 +212,11 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
             </div>
           )}
 
+          {msg.interrupted && (
+            <p role="status" className="text-amber-300">
+              {t('chat.generationInterrupted')}
+            </p>
+          )}
           {/* Retrieved candidate passages */}
           {msg.invalidSourceReferences?.length ? (
             <p role="status" className="text-amber-300">

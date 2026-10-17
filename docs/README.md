@@ -20,6 +20,8 @@ Le guide descrivono il comportamento verificato nel codice al **13 ottobre 2026*
 
 ## Specifiche e prove conservate
 
+Checkpoint chat, archivio delle bozze e budget complessivo del prompt del 16 ottobre sono descritti in [recupero e contesto](./verification-chat-drafts-context-2026-10-16.md).
+
 La verifica del repository del 14 ottobre 2026 è in [`repository-audit-2026-10-14.md`](./repository-audit-2026-10-14.md).
 
 Le regressioni del 16 ottobre su UTF-8, aggiornamenti concorrenti, export, pulizia dell'ingestion annullata e lock della ricerca sono in [`verification-behavior-contracts-2026-10-16.md`](./verification-behavior-contracts-2026-10-16.md).

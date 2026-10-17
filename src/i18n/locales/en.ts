@@ -18,6 +18,7 @@ export const en: TranslationSchema = {
     confirm: 'Confirm scope and generate plan',
   },
   common: {
+    retry: 'Retry',
     appName: 'OnlyRag V2',
     tagline: 'Local AI Studio & Vector RAG',
     version: 'Version',
@@ -119,6 +120,8 @@ export const en: TranslationSchema = {
   chat: {
     removeUnavailableSelection: 'Selection missing from the list: {id}. Click to deselect.',
     generationStopped: 'Generation stopped. This response is incomplete.',
+    generationInterrupted: 'Generation was interrupted before completion. This response is incomplete.',
+    promptTooLarge: 'The instructions and question exceed the selected context. Shorten them or choose a larger context.',
     groundingSearchFailed: 'Document search failed.',
     groundingListFailed: 'The document list is unavailable.',
     groundingDeleted: '{name}: no longer indexed (deleted).',
@@ -570,6 +573,7 @@ export const en: TranslationSchema = {
     saveSuccess: 'Changes saved and LanceDB vectors re-indexed successfully!',
     saveFailed: 'Error while saving the document',
     reloadLatest: 'Discard draft and reload',
+    draftStorageFailed: 'Document draft recovery could not be saved or loaded. Keep this window open and retry, or export your edits.',
     reloadLatestHint: 'This replaces your draft with the latest saved document. Export the draft first if you want to keep a copy.',
     cancelledByUser: 'Ingestion cancelled. Temporary files and partial task data were removed.',
     failedUnknown: 'Ingestion failed: unknown error from the Sidecar.',

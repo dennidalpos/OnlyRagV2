@@ -1,8 +1,11 @@
 import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { sidecarAppService } from '../application/sidecarAppService'
 import { sessionHistoryAppService } from '../application/sessionHistoryAppService'
+import { documentDraftAppService } from '../application/documentDraftAppService'
 
 export function registerSidecarIpcHandlers() {
+  ipcMain.handle('ingest:load-drafts', () => documentDraftAppService.load())
+  ipcMain.handle('ingest:save-drafts', (_, snapshot) => documentDraftAppService.save(snapshot))
   ipcMain.handle('ingest:source-location', (_, payload) => sidecarAppService.getSourceLocation(payload))
   ipcMain.handle('sidecar:restart', async () => {
     return sidecarAppService.restartSidecar()

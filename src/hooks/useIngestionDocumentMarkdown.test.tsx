@@ -50,7 +50,11 @@ describe('useIngestion loads the selected document on demand', () => {
     pending.clear()
     getIngestedDocument.mockClear()
     clearDocumentMarkdownCache()
-    ;(window as unknown as { electronAPI: unknown }).electronAPI = { getIngestedDocument }
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      getIngestedDocument,
+      loadDocumentDrafts: vi.fn(async () => ({ revision: 'missing', drafts: [] })),
+      saveDocumentDrafts: vi.fn(async (snapshot: import('../../shared/domain/documentDraft').DocumentDraftSnapshot) => snapshot),
+    }
     container = document.createElement('div')
     root = createRoot(container)
     await act(async () =>

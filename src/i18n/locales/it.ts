@@ -18,6 +18,7 @@ export const it = {
     confirm: 'Conferma ambito e genera piano',
   },
   common: {
+    retry: 'Riprova',
     appName: 'OnlyRag V2',
     tagline: 'AI Studio Locale & Vector RAG',
     version: 'Versione',
@@ -120,6 +121,8 @@ export const it = {
   chat: {
     removeUnavailableSelection: 'Selezione assente dall’elenco: {id}. Premi per deselezionare.',
     generationStopped: 'Generazione interrotta. Questa risposta è incompleta.',
+    generationInterrupted: 'La generazione è stata interrotta prima del completamento. Questa risposta è incompleta.',
+    promptTooLarge: 'Le istruzioni e la domanda superano il contesto selezionato. Riducile o scegli un contesto più ampio.',
     groundingSearchFailed: 'Ricerca nei documenti fallita.',
     groundingListFailed: 'Elenco dei documenti non disponibile.',
     groundingDeleted: '{name}: non più indicizzato (eliminato).',
@@ -577,6 +580,7 @@ export const it = {
     saveSuccess: 'Modifiche salvate e vettori LanceDB ri-indicizzati con successo!',
     saveFailed: 'Errore durante il salvataggio del documento',
     reloadLatest: 'Scarta bozza e ricarica',
+    draftStorageFailed: 'Impossibile salvare o caricare il recupero delle bozze. Mantieni aperta la finestra e riprova, oppure esporta le modifiche.',
     reloadLatestHint: 'La bozza verrà sostituita con il documento salvato più recente. Esporta prima la bozza se vuoi conservarne una copia.',
     cancelledByUser: 'Ingestione annullata. File temporanei e dati parziali del task rimossi.',
     failedUnknown: 'Ingestione non riuscita: errore sconosciuto dal Sidecar.',

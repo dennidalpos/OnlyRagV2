@@ -27,3 +27,9 @@ Eventi `agent:*`, `ingest:*`, `ollama:*` e `workspace:*` sono tipizzati nel cont
 `system:open-distribution-licenses` non riceve un percorso dal Renderer; Main apre la directory di notice scelta per l'ambiente. Stato della distribuzione in [`distribution.md`](./distribution.md).
 
 La superficie REST separata è in [`api-rest.md`](./api-rest.md); i residui di persistenza, cancellazione e qualifica sono nel [`tracker`](../PROJECT_STATUS.json).
+
+## Bozze documentali — 2026-10-16
+
+`ingest:load-drafts` restituisce `{ revision, drafts }`; `ingest:save-drafts` richiede lo snapshot e la revisione attesa. Schemi condivisi in [`documentDraft.ts`](../shared/domain/documentDraft.ts): identità uniche, massimo 100 bozze, 10 milioni di caratteri per testo e 20 milioni complessivi includendo le basi originali. I limiti rifiutano la scrittura senza troncare la bozza in memoria; l’export resta separato. Main rifiuta chiamanti estranei e archivi illeggibili, conserva la copia precedente e verifica il readback. [Prove](./verification-chat-drafts-context-2026-10-16.md).
+
+`chat:load-recovery` e `chat:save-recovery` usano lo snapshot validato di [`chatHistory.ts`](../shared/domain/chatHistory.ts), con identità di conversazione uniche e selezione esistente. Il Main conserva `chat-history-recovery.json` e copia precedente; gli schemi della cronologia localStorage vengono riusati. Il bootstrap precede le modifiche e un checkpoint rifiutato impedisce nuova generazione e chiusura normale.

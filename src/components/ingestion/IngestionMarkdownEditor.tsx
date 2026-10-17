@@ -7,9 +7,10 @@ interface IngestionMarkdownEditorProps {
   onChange: (value: string) => void
   onMount: ComponentProps<typeof Editor>['onMount']
   wordWrap: boolean
+  readOnly?: boolean
 }
 
-export function IngestionMarkdownEditor({ content, onChange, onMount, wordWrap }: IngestionMarkdownEditorProps) {
+export function IngestionMarkdownEditor({ content, onChange, onMount, wordWrap, readOnly }: IngestionMarkdownEditorProps) {
   return (
     <Editor
       height="100%"
@@ -19,7 +20,7 @@ export function IngestionMarkdownEditor({ content, onChange, onMount, wordWrap }
       value={content}
       onChange={(value) => onChange(value || '')}
       onMount={onMount}
-      options={getStandardMonacoOptions({ minimap: false, wordWrap, lineNumbers: 'on' })}
+      options={{ ...getStandardMonacoOptions({ minimap: false, wordWrap, lineNumbers: 'on' }), readOnly }}
     />
   )
 }

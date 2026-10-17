@@ -5,6 +5,8 @@
  * object payload (or none), never a positional argument list.
  */
 import type { DocumentExportFormat } from '../domain/documentExport'
+import type { DocumentDraftSnapshot } from '../domain/documentDraft'
+import type { ChatHistoryRecovery } from '../domain/chatHistory'
 import type {
   AgentActionLog,
   AgentApprovalRequest,
@@ -99,6 +101,8 @@ export interface CodingHistoryRecoveryOutcome {
 
 /** Renderer → Main request/response channels: `payload` is `void` for channels without input. */
 export interface IpcInvokeContract {
+  'chat:load-recovery': { payload: void; result: ChatHistoryRecovery }
+  'chat:save-recovery': { payload: ChatHistoryRecovery; result: ChatHistoryRecovery }
   'diagnostics:run': { payload: { host?: string }; result: DiagnosticsData }
   'diagnostics:get-logs': { payload: void; result: LogEntry[] }
   'diagnostics:clear-logs': { payload: void; result: boolean }
@@ -162,6 +166,8 @@ export interface IpcInvokeContract {
   'ingest:source-location': { payload: SourceLocationRequest; result: SourceLocation }
   'ingest:list': { payload: void; result: IngestedDocument[] | null }
   'ingest:get': { payload: { docId: string }; result: IngestedDocumentContent | null }
+  'ingest:load-drafts': { payload: void; result: DocumentDraftSnapshot }
+  'ingest:save-drafts': { payload: DocumentDraftSnapshot; result: DocumentDraftSnapshot }
   'ingest:delete': { payload: { docId: string }; result: Success }
   'ingest:search': { payload: { query: string; topK?: number; docIds?: string[] }; result: VectorSearchResult[] }
   'ingest:export': {
@@ -348,6 +354,8 @@ export type IpcEventChannel = keyof IpcEventContract
 
 /** `window.electronAPI` methods that invoke one channel with the caller's payload. */
 export const IPC_INVOKE_METHODS = {
+  loadChatRecovery: 'chat:load-recovery',
+  saveChatRecovery: 'chat:save-recovery',
   runDiagnostics: 'diagnostics:run',
   getLogs: 'diagnostics:get-logs',
   clearLogs: 'diagnostics:clear-logs',
@@ -376,6 +384,8 @@ export const IPC_INVOKE_METHODS = {
   getSourceLocation: 'ingest:source-location',
   getIngestedDocuments: 'ingest:list',
   getIngestedDocument: 'ingest:get',
+  loadDocumentDrafts: 'ingest:load-drafts',
+  saveDocumentDrafts: 'ingest:save-drafts',
   deleteIngestedDocument: 'ingest:delete',
   searchVectorDb: 'ingest:search',
   exportDocument: 'ingest:export',

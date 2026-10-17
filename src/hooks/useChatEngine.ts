@@ -6,7 +6,13 @@ import { getEffectivePrompt } from '../constants/promptConfig'
 import { evaluateDomainIntent } from '../services/domainRouter'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { useTranslation } from '../i18n'
-import { resolveChatContextBudget, resolveChatThreadCount, resolvePromptCharBudget } from '../services/chatContextBudget'
+import {
+  resolveChatContextBudget,
+  resolveChatThreadCount,
+  resolvePromptCharBudget,
+  allocateChatDocumentBudget,
+  chatDocumentContext,
+} from '../services/chatContextBudget'
 import { compactChatHistory } from '../services/chatContextCompactor'
 import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
 import { normalizeError } from '../lib/errors/errorNormalizer'
@@ -61,8 +67,17 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   budgetRef.current = contextBudget
 
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
-  const { conversations, setConversations, activeConversationId, setActiveConversationId, storageError, retryPersistence } =
-    useChatHistory(createDefaultGreetingMessage)
+  const {
+    conversations,
+    setConversations,
+    activeConversationId,
+    setActiveConversationId,
+    storageError,
+    retryPersistence,
+    checkpointConversation,
+    flushHistory,
+    ready: historyReady,
+  } = useChatHistory(createDefaultGreetingMessage)
 
   const activeConversation = useMemo(() => {
     return conversations.find((c) => c.id === activeConversationId) || conversations[0]
@@ -100,6 +115,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const isScrolledUpRef = useRef<boolean>(false)
 
   const prevActiveIdRef = useRef<string>(activeConversationId)
+  const hydratedHistory = useRef(false)
 
   const persistConversationState = useCallback((msgs: ChatMessage[], docIds: Set<string>, convId: string) => {
     if (!convId) return
@@ -119,15 +135,19 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     })
   }, [])
 
-  const updateRunMessage = useCallback((run: ChatRun, text: string, sources?: CitationSource[], invalidSourceReferences?: string[]) => {
-    if (activeRunRef.current !== run) return
-    run.text = text
-    const next = messagesRef.current.map((msg) =>
-      msg.id === run.botMsgId ? { ...msg, text, ...(sources ? { sources } : {}), ...(invalidSourceReferences ? { invalidSourceReferences } : {}) } : msg,
-    )
-    messagesRef.current = next
-    setMessages(next)
-  }, [])
+  const updateRunMessage = useCallback(
+    (run: ChatRun, text: string, sources?: CitationSource[], invalidSourceReferences?: string[]) => {
+      if (activeRunRef.current !== run) return
+      run.text = text
+      const next = messagesRef.current.map((msg) =>
+        msg.id === run.botMsgId ? { ...msg, text, ...(sources ? { sources } : {}), ...(invalidSourceReferences ? { invalidSourceReferences } : {}) } : msg,
+      )
+      messagesRef.current = next
+      setMessages(next)
+      checkpointConversation(run.conversationId, next, run.docIds)
+    },
+    [checkpointConversation],
+  )
 
   const settleRun = useCallback(
     (run: ChatRun) => {
@@ -140,9 +160,12 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       isGeneratingRef.current = false
       setIsGenerating(false)
       trackOperation(null)
-      persistConversationState(messagesRef.current, run.docIds, run.conversationId)
+      const next = messagesRef.current.map((message) => (message.id === run.botMsgId ? { ...message, isStreaming: false } : message))
+      messagesRef.current = next
+      setMessages(next)
+      checkpointConversation(run.conversationId, next, run.docIds, true)
     },
-    [persistConversationState, trackOperation],
+    [checkpointConversation, trackOperation],
   )
 
   const cancelActiveRun = useCallback(async () => {
@@ -160,8 +183,17 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     }
   }, [settleRun, updateRunMessage, t])
 
-  // Keep streamed tokens out of the persistent history until the response settles.
+  // Active runs checkpoint separately, including text not yet painted by React.
   useEffect(() => {
+    if (!historyReady) return
+    if (!hydratedHistory.current) {
+      hydratedHistory.current = true
+      prevActiveIdRef.current = activeConversationId
+      messagesRef.current = activeConversation.messages
+      setMessages(activeConversation.messages)
+      setSelectedDocIds(new Set(activeConversation.selectedDocIds))
+      return
+    }
     // Do not persist the previous conversation into the newly selected one.
     if (prevActiveIdRef.current !== activeConversationId) {
       prevActiveIdRef.current = activeConversationId
@@ -173,7 +205,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     if (isGeneratingRef.current) return
 
     persistConversationState(messages, selectedDocIds, activeConversationId)
-  }, [messages, selectedDocIds, activeConversationId, persistConversationState])
+  }, [messages, selectedDocIds, activeConversationId, persistConversationState, historyReady])
 
   const handleScroll = useCallback(() => {
     if (!messagesContainerRef.current) return
@@ -265,7 +297,19 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const handleStopGeneration = cancelActiveRun
 
   useEffect(() => {
+    const closeBridge = window as Window & { __onlyragFlushChat?: () => Promise<boolean> }
+    const flush = () => {
+      const run = activeRunRef.current
+      if (run) {
+        const next = messagesRef.current.map((message) => (message.id === run.botMsgId ? { ...message, text: run.text } : message))
+        checkpointConversation(run.conversationId, next, run.docIds)
+      }
+      return flushHistory()
+    }
+    closeBridge.__onlyragFlushChat = flush
     return () => {
+      flush()
+      if (closeBridge.__onlyragFlushChat === flush) delete closeBridge.__onlyragFlushChat
       const run = activeRunRef.current
       activeRunRef.current = null
       if (streamThrottleTimer.current) {
@@ -278,13 +322,13 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         })
       }
     }
-  }, [])
+  }, [checkpointConversation, flushHistory])
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault()
     }
-    if (!input.trim() || isGeneratingRef.current) return
+    if (!historyReady || !input.trim() || isGeneratingRef.current) return
 
     const userText = input.trim()
     const operationId = crypto.randomUUID()
@@ -313,6 +357,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       id: botMsgId,
       sender: 'bot',
       text: '',
+      isStreaming: true,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     }
 
@@ -327,7 +372,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       }),
     )
 
-    const budget = budgetRef.current
+    let budget = budgetRef.current
     const hasSelectedDocs = run.docIds.size > 0
 
     messagesRef.current = [...messagesRef.current, userMsg, botMsg]
@@ -341,8 +386,26 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     }, 50)
 
     try {
+      if (!(await checkpointConversation(run.conversationId, messagesRef.current, run.docIds, true))) throw new Error(t('chat.storageSaveError'))
+      if (!isCurrentRun()) return
       const routingResult = evaluateDomainIntent(userText, settings)
       logger.info('ChatEngine', `Domain Router: ${routingResult.domain.toUpperCase()} -> Model: ${routingResult.modelName} (${routingResult.reason})`)
+
+      const effectiveSystemPrompt = getEffectivePrompt('chat', settings).prompt
+
+      const now = new Date()
+      const formattedDate = now.toLocaleDateString(undefined, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+      const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      const temporalContext = `[TEMPORAL CONTEXT]\nCurrent system date and time: ${now.toISOString().split('T')[0]} (${formattedDate}, ${formattedTime})\nAlways use this temporal information to accurately answer any questions regarding the current date, time, day of the week, month, or year.`
+
+      const allocated = allocateChatDocumentBudget(budget, effectiveSystemPrompt, temporalContext, userText, hasSelectedDocs)
+      if (!allocated) throw new Error(t('chat.promptTooLarge'))
+      budget = allocated
 
       let vectorContextText = ''
       let citationSources: CitationSource[] = []
@@ -371,6 +434,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
               const availableChars = budget.vectorContextChars - usedChars - separatorChars - header.length
               if (availableChars <= 0) break
               const body = res.text.slice(0, availableChars).replace(/[\uD800-\uDBFF]$/, '')
+              if (!body.trim()) continue
               const block = header + body
               includedBlocks.push(block)
               usedChars += block.length + separatorChars
@@ -434,7 +498,9 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         const excerptHeader = `[Document Excerpt: ${name} | original ${full.length} chars; incomplete]\n`
         const complete = full.length <= budget.perDocumentPreviewChars && fullHeader.length + full.length + separatorChars <= remainingChars
         const header = complete ? fullHeader : excerptHeader
-        const body = full.slice(0, Math.min(budget.perDocumentPreviewChars, Math.max(0, remainingChars - separatorChars - header.length)))
+        const body = full
+          .slice(0, Math.min(budget.perDocumentPreviewChars, Math.max(0, remainingChars - separatorChars - header.length)))
+          .replace(/[\uD800-\uDBFF]$/, '')
         if (!complete) partialDocs.push(name)
         if (!body.trim()) continue
         const block = header + body
@@ -450,37 +516,14 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
       const modelToUse = routingResult.modelName
       if (!modelToUse) throw new Error(noConfiguredModelMessage('chat'))
-      const effectiveSystemPrompt = getEffectivePrompt('chat', settings).prompt
-
-      const now = new Date()
-      const formattedDate = now.toLocaleDateString(undefined, {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-      const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      const temporalContext = `[TEMPORAL CONTEXT]\nCurrent system date and time: ${now.toISOString().split('T')[0]} (${formattedDate}, ${formattedTime})\nAlways use this temporal information to accurately answer any questions regarding the current date, time, day of the week, month, or year.`
-
-      const docContextBlock = boundedContext
-        ? `[INDEXED DOCUMENT CONTEXT (LanceDB)]\n` +
-          `Use only the document text supplied below for document claims. Retrieved passages are candidates, not verified support. An excerpt is incomplete: do not claim access to omitted text or complete-document coverage. If the supplied text does not support the answer, say so.\n` +
-          `Cite each supported document claim immediately with its supplied passage reference, such as [S1]. Use only references supplied in this turn. Do not cite a passage that does not support the claim, and do not invent references for document previews.\n` +
-          `If a sentence combines facts from multiple passages, cite every needed reference next to that sentence. Keep citations beside their claims, rather than in a separate final list.\n` +
-          (partialDocs.length > 0 ? `Incomplete or omitted document previews: ${partialDocs.join(', ')}.\n` : '') +
-          '\n' +
-          `${boundedContext}\n` +
-          `[END DOCUMENT CONTEXT]`
-        : `[ATTACHMENT CONTEXT STATUS]\n` +
-          `No documents or attachments are currently selected. If the user asks to analyze, inspect, summarize, or read specific documents, files, logs, or attachments (such as "analizza log" or "riassumi allegato"), inform the user clearly in their language that no attachments are selected, and invite them to select a document from the left sidebar or mention '@filename'. If the question is general knowledge, answer normally.\n` +
-          `[END ATTACHMENT CONTEXT STATUS]`
+      const docContextBlock = chatDocumentContext(boundedContext, hasSelectedDocs)
 
       const promptSections = [effectiveSystemPrompt, temporalContext, docContextBlock].filter(Boolean)
       const systemPromptWithContext = promptSections.join('\n\n')
 
       // Compact history into the space left by instructions and document context.
       const turnSuffix = `User: ${userText}\nAssistant:`
-      const historyBudgetChars = Math.max(0, resolvePromptCharBudget(budget.maxNumCtx) - systemPromptWithContext.length - turnSuffix.length)
+      const historyBudgetChars = Math.max(0, resolvePromptCharBudget(budget.maxNumCtx) - systemPromptWithContext.length - turnSuffix.length - 4)
       const compactionResult = compactChatHistory(messages, budget, hasSelectedDocs, historyBudgetChars)
       const previousTurns = compactionResult.historyBlock
       if (compactionResult.isCompacted) {
@@ -497,6 +540,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       }
       promptParts.push(turnSuffix)
       const finalPrompt = promptParts.join('\n\n')
+      if (finalPrompt.length > resolvePromptCharBudget(budget.maxNumCtx)) throw new Error(t('chat.promptTooLarge'))
 
       if (window.electronAPI?.generateOllamaStream) {
         let accumulated = ''
@@ -571,6 +615,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
   const loadConversation = useCallback(
     (id: string) => {
+      if (!historyReady) return
       if (id === activeConversationId) return
       const target = conversations.find((c) => c.id === id)
       if (!target) return
@@ -586,10 +631,11 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       setInput('')
       setShowMentions(false)
     },
-    [conversations, selectedDocIds, activeConversationId, persistConversationState, setActiveConversationId, cancelActiveRun],
+    [conversations, selectedDocIds, activeConversationId, persistConversationState, setActiveConversationId, cancelActiveRun, historyReady],
   )
 
   const handleNewChat = useCallback(() => {
+    if (!historyReady) return
     void cancelActiveRun()
     persistConversationState(messagesRef.current, selectedDocIds, activeConversationId)
     setInput('')
@@ -609,10 +655,11 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     setConversations((prev) => [newConv, ...prev])
     setActiveConversationId(newConv.id)
     setMessages(newConv.messages)
-  }, [selectedDocIds, activeConversationId, persistConversationState, setConversations, setActiveConversationId, cancelActiveRun])
+  }, [selectedDocIds, activeConversationId, persistConversationState, setConversations, setActiveConversationId, cancelActiveRun, historyReady])
 
   const deleteConversation = useCallback(
     (id: string) => {
+      if (!historyReady) return
       if (activeConversationId === id) {
         void cancelActiveRun()
         setInput('')
@@ -647,18 +694,22 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         return nextList
       })
     },
-    [activeConversationId, cancelActiveRun, setActiveConversationId, setConversations],
+    [activeConversationId, cancelActiveRun, setActiveConversationId, setConversations, historyReady],
   )
 
-  const renameConversation = useCallback((id: string, newTitle: string) => {
-    if (!newTitle.trim()) return
-    setConversations((prev) => {
-      const updated = prev.map((c) => (c.id === id ? { ...c, title: newTitle.trim(), updatedAt: new Date().toISOString() } : c))
-      return updated
-    })
-  }, [])
+  const renameConversation = useCallback(
+    (id: string, newTitle: string) => {
+      if (!historyReady || !newTitle.trim()) return
+      setConversations((prev) => {
+        const updated = prev.map((c) => (c.id === id ? { ...c, title: newTitle.trim(), updatedAt: new Date().toISOString() } : c))
+        return updated
+      })
+    },
+    [historyReady],
+  )
 
   return {
+    historyReady,
     storageError,
     retryPersistence,
     isPromptModalOpen,

@@ -17,7 +17,8 @@
     {
       "id": "DOC-LARGE-EXTRACTION-REVIEW-01",
       "p": "P2",
-      "task": "Qualify large document extraction and review coverage without silent truncation (docs/ingestion.md)."
+      "task": "Align ingestion/read, normalization review, update and export document-size limits. A 10,000,001-character result currently passes read schemas but fails update/export (electron/core/domain/sidecarContract.ts).",
+      "verify": "Test below/at/above the chosen boundary; all admitted documents remain fully reviewable and exportable without silent truncation."
     },
     {
       "id": "RAG-STRUCTURE-AWARE-CHUNKING-01",
@@ -32,12 +33,14 @@
     {
       "id": "CHAT-EFFECTIVE-CONTEXT-ALLOCATION-01",
       "p": "P2",
-      "task": "Measure and bound effective chat context allocation across model profiles (docs/model-runtime-fit.md)."
+      "task": "Qualify actual model-token allocation and semantic document coverage beyond the implemented total character budget, response reserve and explicit oversized-input refusal (docs/verification-chat-drafts-context-2026-10-16.md).",
+      "verify": "Measure exact prompt/completion token use across declared model profiles; verify retained document coverage and citations without treating the character estimate as tokenizer proof."
     },
     {
       "id": "XLS-PARSER-MEMORY-ADMISSION-01",
       "p": "P2",
-      "task": "Bound adversarial XLS memory use before parsing and qualify packaged desktop behavior (docs/ingestion.md)."
+      "task": "Bound XLS memory before sheet materialization, including allowFullExcelFormat, which bypasses the 8 MiB source guard (sidecar/domain/ingestion.py:499). Qualify packaged desktop separately.",
+      "verify": "Measure isolated-process memory/time; enforce admission before expensive allocation; refusal preserves source bytes and index."
     },
     {
       "id": "RAG-INDEX-METADATA-EFFICIENCY-01",
@@ -56,13 +59,15 @@
     },
     {
       "id": "UX-FIRST-USE-SIMPLIFICATION-01",
-      "p": "P2",
-      "task": "Simplify first use and qualify desktop/tablet/phone layouts. Isolated 2026-10-16 screenshots verify the new conflict banner at 1920/768/390 px but show existing ingestion panes/toolbars clipped on tablet/phone (docs/verification-flow-contracts-2026-10-16.md, docs/frontend.md)."
+      "p": "P1",
+      "task": "Correct ingestion panels and toolbars clipped at tablet/phone widths, then simplify first use (src/components/ingestion/IngestionView.tsx; docs/verification-flow-contracts-2026-10-16.md).",
+      "verify": "At 1920x1080, 768x1024 and 390x844, selection, editing, save, export and conflict recovery are visible and keyboard reachable."
     },
     {
       "id": "CHAT-DURABLE-HISTORY-01",
       "p": "P2",
-      "task": "Qualify durable chat history and recovery after interruption (docs/verification.md)."
+      "task": "Qualify installed-desktop chat recovery and broader interruption/power-loss windows. Main-owned checkpoints, incomplete response recovery, failed-write close refusal and controlled process-interruption restart pass in isolated development profiles (docs/verification-chat-drafts-context-2026-10-16.md).",
+      "verify": "Use explicitly isolated installed-desktop profiles; preserve acknowledged question/partial response; distinguish unacknowledged tokens and power-loss durability."
     },
     {
       "id": "QUALITY-PYTHON-CRITICAL-PATHS-01",
@@ -77,7 +82,8 @@
     {
       "id": "DOC-EDITOR-DRAFT-DURABILITY-01",
       "p": "P2",
-      "task": "Qualify document-editor draft persistence across close and restart (docs/ingestion.md)."
+      "task": "Qualify installed-desktop draft durability and broader interruption/power-loss windows beyond the Main archive, original-revision recovery, failed-write retry and restart readback implemented in development (docs/verification-chat-drafts-context-2026-10-16.md).",
+      "verify": "Exercise multiple real isolated drafts, concurrent canonical revisions, failed storage, crash and restart; never rebase stale drafts or overwrite unreadable archives."
     },
     {
       "id": "TRANSLATION-INPLACE-UNMOUNT-CANCELLATION-01",
@@ -144,7 +150,7 @@
     {
       "id": "QUALITY-CONTENT-LIVE-QUALIFICATION-01",
       "p": "P1",
-      "decision": "Qualify retrieval, supported answers, citations, response language and normalization on broader fixed corpora and restarted desktop; preserve failed campaigns (docs/content-acceptance.md, docs/verification.md)."
+      "decision": "Qualify retrieval, supported answers, citations, response language and normalization on broader fixed corpora and restarted desktop; preserve failed campaigns (docs/content-acceptance.md, docs/verification.md). Historical approved-policy replay jointly accepted 5/12 answers (docs/content-acceptance.md); this is not a measurement of current code. New live campaigns require separate explicit authorization."
     },
     {
       "id": "LOCAL-MODEL-ROLE-QUALIFICATION-01",

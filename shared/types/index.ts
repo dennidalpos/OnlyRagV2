@@ -189,6 +189,7 @@ export interface ChatMessage {
   sources?: CitationSource[]
   invalidSourceReferences?: string[]
   isStreaming?: boolean
+  interrupted?: boolean
 }
 
 export interface ChatConversation {

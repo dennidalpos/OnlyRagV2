@@ -1,11 +1,12 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { IngestedDocument, IngestedDocumentContent, VectorSearchResult } from '../types'
+import type { AppSettings, IngestedDocument, IngestedDocumentContent, VectorSearchResult } from '../types'
 import { I18nProvider } from '../i18n'
 import { DEFAULT_APP_SETTINGS } from '../../shared/domain/settings/appSettingsDefaults'
 import { primeDocumentMarkdown, clearDocumentMarkdownCache } from '../services/documentMarkdown'
 import { OllamaGenerationScheduler } from '../../electron/core/infrastructure/http/ollamaGenerationScheduler'
+import { resolvePromptCharBudget } from '../services/chatContextBudget'
 
 const documentStore: { documents: IngestedDocument[] } = { documents: [] }
 vi.mock('./useIngestedDocuments', () => ({
@@ -31,6 +32,8 @@ function deferred<T>() {
 describe('chat document grounding', () => {
   let root: Root
   let chat: ReturnType<typeof useChatEngine>
+  let settingsOverride: Partial<AppSettings> = {}
+  let recovery: import('../../shared/domain/chatHistory').ChatHistoryRecovery
   const getIngestedDocuments = vi.fn(async () => documentStore.documents as IngestedDocument[] | null)
   const getIngestedDocument = vi.fn(
     async ({ docId }: { docId: string }): Promise<IngestedDocumentContent | null> => ({
@@ -46,7 +49,7 @@ describe('chat document grounding', () => {
   const cancelOllamaStream = vi.fn(async () => ({ success: true }))
 
   function Harness() {
-    chat = useChatEngine({ ...DEFAULT_APP_SETTINGS, defaultModel: 'fixture-model' }, null)
+    chat = useChatEngine({ ...DEFAULT_APP_SETTINGS, defaultModel: 'fixture-model', ...settingsOverride }, null)
     return (
       <div>
         {chat.messages.map((message) => (
@@ -76,6 +79,8 @@ describe('chat document grounding', () => {
   beforeEach(async () => {
     vi.useFakeTimers()
     vi.resetAllMocks()
+    settingsOverride = {}
+    recovery = { revision: 'missing', state: null }
     documentStore.documents = [docA, docB]
     localStorage.clear()
     clearDocumentMarkdownCache()
@@ -85,6 +90,11 @@ describe('chat document grounding', () => {
       searchVectorDb,
       generateOllamaStream,
       cancelOllamaStream,
+      loadChatRecovery: vi.fn(async () => structuredClone(recovery)),
+      saveChatRecovery: vi.fn(async (snapshot: import('../../shared/domain/chatHistory').ChatHistoryRecovery) => {
+        recovery = structuredClone(snapshot)
+        return recovery
+      }),
     }
     root = createRoot(document.createElement('div'))
     await act(async () =>
@@ -110,6 +120,35 @@ describe('chat document grounding', () => {
     expect(chat.messages.at(-1)?.text).toContain('1/1 documents loaded')
     expect(chat.messages.at(-1)?.sources).toBeUndefined()
     expect(chat.isGenerating).toBe(false)
+  })
+
+  it('bounds a saturated retrieved prompt at a 2048-token preference and keeps source cards tied to included passages', async () => {
+    settingsOverride = { modelContextLengths: { 'fixture-model': 2048 } }
+    getIngestedDocument.mockResolvedValueOnce({ ...docA, extractedMarkdown: 'Document details 😀 '.repeat(1000) })
+    searchVectorDb.mockResolvedValueOnce([{ chunk_id: 'a_chunk_0', doc_id: 'a', doc_name: 'a.md', text: 'Retrieved details 😀 '.repeat(1000), score: 0.2 }])
+    await send()
+    expect(generateOllamaStream).toHaveBeenCalledOnce()
+    const prompt = generateOllamaStream.mock.calls[0][0].prompt
+    expect(prompt.length).toBeLessThanOrEqual(resolvePromptCharBudget(2048))
+    expect(prompt).toContain('User: Find the delivery deadline in these documents')
+    for (const source of chat.messages.at(-1)?.sources ?? []) expect(prompt).toContain(`[${source.referenceId}:`)
+    expect(prompt).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+  })
+
+  it('rejects an oversized question before retrieval or model dispatch', async () => {
+    await act(async () => chat.setInput('Question '.repeat(2000)))
+    await act(async () => chat.handleSendMessage())
+    expect(generateOllamaStream).not.toHaveBeenCalled()
+    expect(searchVectorDb).not.toHaveBeenCalled()
+    expect(chat.messages.at(-1)?.text).toContain('exceed the selected context')
+    expect(chat.isGenerating).toBe(false)
+  })
+
+  it('does not attach a citation card for a passage with no supplied readable text', async () => {
+    searchVectorDb.mockResolvedValueOnce([{ chunk_id: 'empty', doc_id: 'a', doc_name: 'a.md', text: '  ', score: 0.2 }])
+    await send()
+    expect(generateOllamaStream.mock.calls[0][0].prompt).not.toContain('[S1:')
+    expect(chat.messages.at(-1)?.sources ?? []).toEqual([])
   })
   it.each(['rejected', 'missing', 'empty'] as const)('blocks a partially loaded selection when content is %s', async (failure) => {
     if (failure === 'rejected') getIngestedDocument.mockRejectedValueOnce(new Error('load down'))
@@ -376,6 +415,21 @@ describe('chat document grounding', () => {
     expect(generateOllamaStream).not.toHaveBeenCalled()
     expect(getIngestedDocuments).not.toHaveBeenCalled()
   })
+  it('does not dispatch a cancelled run after its delayed Main question checkpoint completes', async () => {
+    const checkpoint = deferred<import('../../shared/domain/chatHistory').ChatHistoryRecovery>()
+    const write = vi.spyOn(window.electronAPI!, 'saveChatRecovery').mockImplementationOnce(() => checkpoint.promise)
+    const { completion } = await start([])
+    await act(async () => {
+      await chat.handleStopGeneration()
+    })
+    await act(async () => {
+      checkpoint.resolve(write.mock.calls[0][0])
+      await completion
+    })
+    expect(generateOllamaStream).not.toHaveBeenCalled()
+    expect(chat.messages.at(-1)?.text).toContain('Generation stopped')
+  })
+
   it('rejects duplicate sends synchronously before React rerenders', async () => {
     const retrieval = deferred<VectorSearchResult[]>()
     searchVectorDb.mockReturnValueOnce(retrieval.promise)
@@ -395,6 +449,73 @@ describe('chat document grounding', () => {
     })
     expect(generateOllamaStream).toHaveBeenCalledOnce()
   })
+  it('checkpoints an active turn during a continuous stream and restores it as incomplete', async () => {
+    const generation = deferred<{ success: boolean }>()
+    let chunk!: (text: string) => void
+    generateOllamaStream.mockImplementationOnce((_request, onChunk) => {
+      chunk = onChunk
+      return generation.promise
+    })
+    const { completion } = await start([])
+    expect(JSON.parse(localStorage.getItem('onlyrag_chat_conversations')!)[0].messages.at(-2).sender).toBe('user')
+    for (let i = 0; i < 12; i++) {
+      await act(async () => {
+        chunk('partial ')
+        vi.advanceTimersByTime(50)
+      })
+    }
+    const checkpoint = JSON.parse(localStorage.getItem('onlyrag_chat_conversations')!)[0].messages.at(-1)
+    expect(checkpoint.text).toContain('partial')
+    expect(checkpoint.isStreaming).toBe(true)
+    await act(async () => root.unmount())
+    localStorage.clear() // Chromium's latest local copy may not survive process interruption.
+    root = createRoot(document.createElement('div'))
+    await act(async () =>
+      root.render(
+        <I18nProvider initialLanguage="en">
+          <Harness />
+        </I18nProvider>,
+      ),
+    )
+    expect(chat.messages.at(-1)?.interrupted).toBe(true)
+    expect(chat.messages.at(-1)?.isStreaming).toBe(false)
+    expect(chat.messages.at(-1)?.text).toBe('partial '.repeat(12))
+    await act(async () => {
+      generation.resolve({ success: true })
+      await completion
+    })
+    expect(chat.messages.at(-1)?.interrupted).toBe(true)
+  })
+
+  it('flushes unpainted tokens on close and refuses a failed history write until retry', async () => {
+    const generation = deferred<{ success: boolean }>()
+    let chunk!: (text: string) => void
+    generateOllamaStream.mockImplementationOnce((_request, onChunk) => {
+      chunk = onChunk
+      return generation.promise
+    })
+    const { completion } = await start([])
+    const flush = (window as unknown as { __onlyragFlushChat: () => Promise<boolean> }).__onlyragFlushChat
+    const failure = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('full')
+    })
+    await act(async () => {
+      chunk('not yet painted')
+      expect(await flush()).toBe(false)
+    })
+    expect(chat.storageError).toBe('save')
+    failure.mockRestore()
+    await act(async () => {
+      expect(await flush()).toBe(true)
+    })
+    expect(JSON.parse(localStorage.getItem('onlyrag_chat_conversations')!)[0].messages.at(-1).text).toBe('not yet painted')
+    await act(async () => {
+      generation.resolve({ success: true })
+      await completion
+    })
+    expect(chat.messages.at(-1)?.isStreaming).toBe(false)
+  })
+
   it('preserves unflushed text at Stop and persists only the stopped response', async () => {
     searchVectorDb.mockResolvedValueOnce([{ chunk_id: 'a_chunk_0', doc_id: 'a', doc_name: 'a.md', text: 'Payment in 21 days.', score: 0.2 }])
     const generation = deferred<{ success: boolean }>()

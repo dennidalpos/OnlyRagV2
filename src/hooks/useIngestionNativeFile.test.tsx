@@ -31,7 +31,13 @@ describe('native ingestion file identity', () => {
     resolveNativeFilePath.mockReset().mockReturnValue('')
     ingestFile.mockReset().mockResolvedValue({ success: false, error: 'Isolated backend refusal' })
     openFileDialog.mockReset()
-    window.electronAPI = { resolveNativeFilePath, ingestFile, openFileDialog } as unknown as NonNullable<typeof window.electronAPI>
+    window.electronAPI = {
+      resolveNativeFilePath,
+      ingestFile,
+      openFileDialog,
+      loadDocumentDrafts: vi.fn(async () => ({ revision: 'missing', drafts: [] })),
+      saveDocumentDrafts: vi.fn(async (snapshot: import('../../shared/domain/documentDraft').DocumentDraftSnapshot) => snapshot),
+    } as unknown as NonNullable<typeof window.electronAPI>
     root = createRoot(document.createElement('div'))
     await act(async () =>
       root.render(

@@ -385,6 +385,21 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
           </div>
         )}
 
+        {ing.draftStorageError && (
+          <div role="alert" className="px-4 py-2.5 border-b border-rose-800 bg-rose-950/80 text-rose-200 flex flex-wrap gap-2 items-center text-xs">
+            <span>
+              {t('ingestion.draftStorageFailed')} {ing.draftStorageError}
+            </span>
+            <button type="button" className="px-2 py-1 rounded focus-ring" onClick={() => void ing.retryDraftStorage()}>
+              {t('common.retry')}
+            </button>
+            {ing.selectedDoc && (
+              <button type="button" className="px-2 py-1 rounded focus-ring" onClick={() => ing.handleExportMarkdown('md')}>
+                {t('common.export')}
+              </button>
+            )}
+          </div>
+        )}
         {/* Save Status Notification Banner */}
         {ing.saveStatus && (
           <div
@@ -886,6 +901,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
                   <div className="flex-1 bg-[#080c14]">
                     <Suspense fallback={<div className="p-4 text-xs text-slate-400">{t('common.loading')}</div>}>
                       <IngestionMarkdownEditor
+                        readOnly={ing.draftsReady === false}
                         content={ing.markdownContent}
                         onChange={ing.setMarkdownContent}
                         onMount={ing.handleEditorDidMount}

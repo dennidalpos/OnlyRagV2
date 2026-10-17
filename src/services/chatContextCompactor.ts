@@ -26,8 +26,8 @@ function distillTurn(userText: string, botText: string): string {
 }
 
 /**
- * Automatically compacts chat history based on dynamic hardware budget without hardcoded turn dropping.
- * Preserves 100% of historical turns through rolling semantic synopsis when total dialogue exceeds available budget.
+ * Compacts older turns to extractive summaries and trims the oldest text when needed.
+ * Summaries and trimming are lossy; the caller's available character budget is a hard ceiling.
  */
 export function compactChatHistory(
   messages: ChatMessage[],
@@ -132,8 +132,15 @@ export function compactChatHistory(
   const combined = [summarySection, recentSection].filter(Boolean).join('\n\n')
 
   // Hard ceiling.
+  const marker = '[...older conversation trimmed to fit the context window]\n\n'
   const bounded =
-    combined.length > baseBudget ? `[...older conversation trimmed to fit the context window]\n\n${combined.slice(combined.length - baseBudget)}` : combined
+    combined.length <= baseBudget
+      ? combined
+      : baseBudget <= marker.length
+        ? baseBudget === 0
+          ? ''
+          : combined.slice(-baseBudget).replace(/^[\uDC00-\uDFFF]/, '')
+        : marker + combined.slice(-(baseBudget - marker.length)).replace(/^[\uDC00-\uDFFF]/, '')
 
   return {
     historyBlock: bounded,

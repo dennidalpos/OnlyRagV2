@@ -94,7 +94,7 @@ I diagrammi SVG sono incorporati sotto ogni percorso e restano apribili singolar
 2. Se serve correggere, modifica il Markdown e premi **Salva Modifiche** o **Ctrl+S**. Il salvataggio aggiorna anche i vettori usati dalla ricerca.
 3. Attendi la conferma di salvataggio. Con errore conserva aperta la vista: riprova o esporta il contenuto corrente con 05. Se non modifichi il testo, prosegui direttamente a esportazione o chat.
 
-**Da sapere.** Le correzioni riguardano il testo indicizzato, non il file originale. Le bozze restano disponibili durante la vista montata; chiusura e crash non garantiscono il recupero del testo non salvato. Non c’è un pulsante dedicato per annullare tutte le modifiche della bozza.
+**Da sapere.** Le correzioni riguardano il testo indicizzato, non il file originale. Le bozze vengono conservate separatamente dal documento salvato e riproposte dopo riavvio con la revisione originale. Un avviso di recupero fallito offre **Riprova** ed esportazione; la chiusura normale resta bloccata se le nuove modifiche non sono state conservate. Le ultime battute prima di un arresto forzato possono non essere ancora checkpointate; la perdita di alimentazione non è qualificata. Non c’è un pulsante dedicato per annullare tutte le modifiche della bozza.
 
 ### 05 Copiare o esportare un documento
 
@@ -180,7 +180,7 @@ I diagrammi SVG sono incorporati sotto ogni percorso e restano apribili singolar
 3. **Elimina conversazione** rimuove la conversazione selezionata: non presumere una conferma aggiuntiva o un cestino. Copia prima ciò che serve.
 4. Con errore di lettura o salvataggio premi **Riprova salvataggio**. Se persiste, tieni aperta l’app e usa **Copia Messaggio** per conservare il contenuto importante.
 
-**Da sapere.** I nuovi messaggi possono restare solo nella sessione corrente finché la persistenza non viene ripristinata. La durata di un turno attivo dopo crash o chiusura non è garantita.
+**Da sapere.** I nuovi messaggi possono restare solo nella sessione corrente finché la persistenza non viene ripristinata. La domanda attende il checkpoint locale prima della generazione; durante la risposta lo storico viene aggiornato a intervalli. Dopo un riavvio una risposta recuperata prima del completamento mostra un avviso di risposta incompleta. La chiusura normale attende anche lo storico chat; un arresto forzato può perdere il testo successivo all’ultimo checkpoint.
 
 ## Traduzione
 

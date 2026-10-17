@@ -1,5 +1,7 @@
 import { ipcMain, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
+import { documentDraftSnapshotSchema } from '../../../shared/domain/documentDraft'
+import { chatHistoryWriteSchema } from '../../../shared/domain/chatHistory'
 import { requestCoverageLedgerSchema } from '../../../shared/domain/agent/requestCoverageLedger'
 import { sourceLocationRequestSchema } from '../../../shared/domain/sourceProvenance'
 import {
@@ -134,6 +136,8 @@ const docId = obj({ docId: sidecarUpdateDocumentPayloadSchema.shape.docId })
 
 /** One schema per channel of the contract (`null`: the channel takes no payload); the compiler rejects a missing channel. */
 const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null> = {
+  'chat:load-recovery': null,
+  'chat:save-recovery': chatHistoryWriteSchema,
   'settings:get': null,
   'settings:save': settings,
   'sidecar:restart': null,
@@ -268,6 +272,8 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
   'ingest:source-location': sourceLocationRequestSchema,
   'ingest:list': null,
   'ingest:get': docId,
+  'ingest:load-drafts': null,
+  'ingest:save-drafts': documentDraftSnapshotSchema,
   'ingest:delete': docId,
   'ingest:search': sidecarSearchPayloadSchema,
   'ingest:export': sidecarExportPayloadSchema,

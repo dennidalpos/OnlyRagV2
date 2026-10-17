@@ -114,7 +114,7 @@ function createWindow() {
     let timer: ReturnType<typeof setTimeout>
     void Promise.race([
       ownedWindow.webContents.executeJavaScript(
-        'Promise.all([window.__onlyragFlushCodingHistory?.() ?? true, window.__onlyragFlushSettings?.() ?? true]).then(results => results.every(Boolean))',
+        'Promise.all([window.__onlyragFlushCodingHistory?.() ?? true, window.__onlyragFlushSettings?.() ?? true, window.__onlyragFlushChat?.() ?? true, window.__onlyragFlushDocumentDrafts?.() ?? true]).then(results => results.every(Boolean))',
       ),
       new Promise<boolean>((resolve) => {
         timer = setTimeout(() => resolve(false), 10_000)
@@ -129,7 +129,7 @@ function createWindow() {
           void dialog.showMessageBox(ownedWindow, {
             type: 'warning',
             buttons: ['Keep open'],
-            message: 'Settings or coding history are not yet saved. Retry storage before closing.',
+            message: 'Settings, history or document drafts are not yet saved. Retry storage before closing.',
           })
         }
       })

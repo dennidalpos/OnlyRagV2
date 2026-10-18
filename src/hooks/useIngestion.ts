@@ -1,5 +1,6 @@
 import type { editor } from 'monaco-editor'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import { MAX_DOCUMENT_TEXT_UNITS } from '../../shared/domain/documentLimits'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDocumentDrafts } from './useDocumentDrafts'
 import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
@@ -135,6 +136,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   // and copied into the editor once per document version (see editorSourceRef below).
   const { markdown: loadedMarkdown } = useDocumentMarkdown(selectedDoc)
   const isDirty = selectedDoc !== null && loadedMarkdown !== null && markdownContent !== loadedMarkdown
+  const documentTextTooLarge = markdownContent.length > MAX_DOCUMENT_TEXT_UNITS
 
   // Keep drafts for this mounted view; saving never replaces a newer edit.
   const editorSourceRef = useRef<{ id: string; ingestedAt: string; markdown: string } | null>(null)
@@ -148,7 +150,9 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
       if (doc) {
         const pendingChangesText = pending?.docId === doc.id && pending.content !== content
         if (source?.id === doc.id && content === source.markdown && !pendingChangesText) changeDraft(doc.id, null)
-        else if (source?.id === doc.id) changeDraft(doc.id, { content, ingestedAt: source.ingestedAt, markdown: source.markdown })
+        // A legacy oversized base remains readable in its canonical store; persist its revision, not an invalid duplicate.
+        else if (source?.id === doc.id)
+          changeDraft(doc.id, { content, ingestedAt: source.ingestedAt, markdown: source.markdown.length <= MAX_DOCUMENT_TEXT_UNITS ? source.markdown : null })
         else changeDraft(doc.id, { content, ingestedAt: doc.ingestedAt, markdown: null })
       }
       updateMarkdownContent(content)
@@ -375,6 +379,10 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   }
 
   const exportMarkdownContent = async (content: string, format: 'pdf' | 'md') => {
+    if (format !== 'md' && content.length > MAX_DOCUMENT_TEXT_UNITS) {
+      setExportStatus({ active: false, message: t('ingestion.documentTextTooLarge'), isError: true })
+      return
+    }
     setExportStatus({ active: true, message: t('ingestion.exportPreparing', { format: format.toUpperCase() }) })
     try {
       const res = await electronApi().exportDocument({ markdownContent: content, format })
@@ -611,6 +619,10 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     const source = editorSourceRef.current
     if (!doc || !source || source.id !== doc.id || savingRef.current) return
     const content = markdownRef.current
+    if (content.length > MAX_DOCUMENT_TEXT_UNITS) {
+      setSaveStatus({ success: false, message: t('ingestion.documentTextTooLarge') })
+      return
+    }
     const epoch = selectionEpochRef.current
     savingRef.current = { docId: doc.id, content }
     let confirmedMarkdown = source.markdown
@@ -681,6 +693,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   }
 
   return {
+    documentTextTooLarge,
     draftsReady,
     draftStorageError,
     retryDraftStorage,

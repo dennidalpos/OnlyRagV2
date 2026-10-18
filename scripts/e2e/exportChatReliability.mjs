@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, execFileSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -174,6 +174,32 @@ require(${JSON.stringify(path.join(root, 'dist-electron/main.js'))})
     }
   }
   assert.equal(new Set(results).size, 10)
+  // Production IPC refuses conversion before any Sidecar request, while literal Markdown remains a recovery path.
+  const beforeLargeExport = await application.evaluate(() => globalThis.__exportRequests)
+  const previousBytes = results.map((file) => fs.readFileSync(file))
+  const largeRecovery = await page.evaluate(async (output) => {
+    const text = '😀'.repeat(5_000_001) + '\nLAST_SOURCE_LINE'
+    const refused = []
+    for (const format of ['pdf', 'docx', 'html', 'htm']) {
+      try {
+        await window.electronAPI.exportDocument({ markdownContent: text, format, outputFolder: output })
+        refused.push(false)
+      } catch {
+        refused.push(true)
+      }
+    }
+    return { refused, recovered: await window.electronAPI.exportDocument({ markdownContent: text, format: 'md', outputFolder: output }) }
+  }, output)
+  assert(largeRecovery.refused.every(Boolean))
+  assert.equal(largeRecovery.recovered.success, true)
+  assert.equal(await application.evaluate(() => globalThis.__exportRequests), beforeLargeExport)
+  const largeText = '😀'.repeat(5_000_001) + '\nLAST_SOURCE_LINE'
+  assert.equal(fs.statSync(largeRecovery.recovered.filePath).size, Buffer.byteLength(largeText))
+  assert.equal(
+    createHash('sha256').update(fs.readFileSync(largeRecovery.recovered.filePath)).digest('hex'),
+    createHash('sha256').update(largeText).digest('hex'),
+  )
+  results.forEach((file, i) => assert(fs.readFileSync(file).equals(previousBytes[i])))
   const chosen = path.join(output, 'chosen.md')
   fs.writeFileSync(chosen, 'Previous export')
   await application.evaluate(({ dialog }, chosen) => {
@@ -214,7 +240,7 @@ require(${JSON.stringify(path.join(root, 'dist-electron/main.js'))})
   application = undefined
   complete = true
   console.log(
-    '[PASS] Real Main/Preload/Sidecar: 10 distinct exports, literal HTML, PDF/DOCX code readback, explicit replacement, cancellation/refusal; desktop chat routes 3 models with their own context. No real-model calls.',
+    '[PASS] Real Main/Preload/Sidecar: 10 distinct exports, literal HTML, PDF/DOCX code readback, oversized Unicode Markdown recovery with SHA-256 readback and refused conversions, explicit replacement, cancellation/refusal; desktop chat routes 3 models with their own context. No real-model calls.',
   )
 } finally {
   if (application) await application.close()

@@ -579,6 +579,8 @@ export const it = {
     allFiles: 'Tutti i file',
     saveSuccess: 'Modifiche salvate e vettori LanceDB ri-indicizzati con successo!',
     saveFailed: 'Errore durante il salvataggio del documento',
+    documentTextTooLarge:
+      'Questo testo supera il limite di modifica e conversione. Esporta il testo completo in Markdown oppure riducilo esplicitamente prima di salvare. Il documento salvato non cambia.',
     reloadLatest: 'Scarta bozza e ricarica',
     draftStorageFailed: 'Impossibile salvare o caricare il recupero delle bozze. Mantieni aperta la finestra e riprova, oppure esporta le modifiche.',
     reloadLatestHint: 'La bozza verrà sostituita con il documento salvato più recente. Esporta prima la bozza se vuoi conservarne una copia.',

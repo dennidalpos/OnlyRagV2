@@ -1,5 +1,9 @@
 from typing import Annotated, Any, Dict, Literal, Optional, List, Union
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, model_validator
+from sidecar.domain.document_limits import MAX_DOCUMENT_TEXT_UNITS, require_document_text
+
+DocumentText = Annotated[str, Field(max_length=MAX_DOCUMENT_TEXT_UNITS,
+    description="At most 10,000,000 UTF-16 code units, including document headings."), AfterValidator(require_document_text)]
 
 NON_BLANK = r".*\S.*"
 MODEL_NAME = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
@@ -16,7 +20,7 @@ class IngestResponse(BaseModel):
     file_size: int
     num_pages: int
     num_chunks: int
-    extracted_markdown: str
+    extracted_markdown: DocumentText
     status: str
     ingested_at: str
     file_type: str
@@ -98,7 +102,7 @@ class IngestPathRequest(StrictRequest):
         return self
 
 class UpdateDocumentRequest(StrictRequest):
-    markdown_content: str = Field(..., min_length=1, max_length=10_000_000)
+    markdown_content: DocumentText = Field(..., min_length=1)
     expected_revision: str = Field(..., min_length=1, max_length=200, pattern=NON_BLANK)
     embedding_model: Optional[str] = MODEL_NAME
 
@@ -164,7 +168,7 @@ class SearchResult(BaseModel):
     provenance: Optional[SourceProvenance] = None
 
 class ExportRequest(StrictRequest):
-    markdown_content: str = Field(..., min_length=1, max_length=10_000_000)
+    markdown_content: DocumentText = Field(..., min_length=1)
     export_format: Literal["pdf", "docx", "html", "htm"] = "pdf"
 
 # ---------------------------------------------------------------------------

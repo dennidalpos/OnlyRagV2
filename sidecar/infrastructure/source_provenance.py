@@ -12,9 +12,11 @@ from sidecar.config import DATA_DIR, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME
 from sidecar.infrastructure.db import database_operation, get_existing_tables, lance_db, validate_doc_id
 from sidecar.schemas import SourceProvenance, SourceLocationResponse
 from sidecar.infrastructure.store_control import safe_path
+from sidecar.domain.document_limits import require_document_text, require_document_pages
 
 SOURCE_ROOT = Path(DATA_DIR) / "source-documents"
 MAX_SOURCE_BYTES = 512 * 1024 * 1024
+# Preserve the historical code-point read budget for old archives; new writes also pass the UTF-16 guard.
 MAX_EXTRACTION_CHARS = 10_000_000
 
 
@@ -95,6 +97,7 @@ def remove_owned_archive(doc_id: str, owned_directory: Path) -> None:
 
 def save_extraction(doc_id: str, retained: Path, source_revision: str, filename: str,
                     pages: list[tuple[int, str]], paginated: bool) -> None:
+    require_document_pages(len(pages))
     parts = [f"# {filename}\n\n"]
     spans = []
     cursor = len(parts[0])
@@ -105,6 +108,7 @@ def save_extraction(doc_id: str, retained: Path, source_revision: str, filename:
         spans.append(SourcePage(number=number, start=start, end=start + len(text)))
         cursor = start + len(text) + 2
     raw = "".join(parts).removesuffix("\n\n")
+    require_document_text(raw)
     archive = SourceArchive(source_revision=source_revision, extraction_revision=text_revision(raw),
                             original_name=filename, original_file=retained.name, raw_markdown=raw,
                             pages=spans, paginated=paginated)

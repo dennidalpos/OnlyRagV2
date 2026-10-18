@@ -2,6 +2,8 @@
 
 Lotto autorizzato con «traccia e procedi», iniziato il 16 ottobre e verificato il 17 ottobre 2026. I punti successivi dell'analisi restano nel tracker esistente: layout responsive, limiti dei documenti grandi, ammissione XLS e qualifica semantica live. Nessun commit, push, installazione, migrazione personale o nuova generazione con modelli reali.
 
+Decisione successiva del 17 ottobre 2026: il target è il solo desktop Windows. Il task per il layout tablet/telefono è stato ritirato dal tracker, non completato; quei viewport restano evidenze storiche fuori dal target attuale. Vedi il [riallineamento del perimetro](./verification-current.md#perimetro-desktop--2026-10-17). Le altre qualifiche residue restano aperte.
+
 ## Contratti e criteri di completamento
 
 | Ambito | Comportamento e criterio |

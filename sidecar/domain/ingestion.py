@@ -128,11 +128,13 @@ def extract_tables_from_page(page: pymupdf.Page) -> Tuple[List[str], List[Any]]:
     return md_tables, table_rects
 
 from sidecar.domain.llm_normalizer import normalize_page_markdown_with_llm, NormalizationReviewRequired
+from sidecar.domain.document_limits import require_document_text, require_document_pages
 
 
 def assemble_document_markdown(filename: str, page_blocks: List[Tuple[int, str]]) -> str:
+    require_document_pages(len(page_blocks))
     sections = [f"## Page {page}\n\n{text}" for page, text in page_blocks]
-    return f"# {filename}\n\n" + "\n\n".join(sections)
+    return require_document_text(f"# {filename}\n\n" + "\n\n".join(sections))
 
 
 def raise_normalization_review_if_needed(filename: str, work_items: List[Dict[str, Any]]) -> None:

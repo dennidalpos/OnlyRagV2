@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IngestedDocument } from '../types'
 import { I18nProvider } from '../i18n'
+import { MAX_DOCUMENT_TEXT_UNITS } from '../../shared/domain/documentLimits'
 
 const documentsStore: { documents: IngestedDocument[]; notify?: (docs: IngestedDocument[]) => void } = { documents: [] }
 
@@ -69,6 +70,51 @@ describe('useIngestion loads the selected document on demand', () => {
 
   afterEach(async () => {
     await act(async () => root.unmount())
+  })
+
+  it('retains an oversized edit for Markdown recovery and refuses save until the user reduces it', async () => {
+    await resolveDocument('a', '# Saved original')
+    const exportDocument = vi.fn(async () => ({ success: true }))
+    const updateIngestedDocument = vi.fn(async () => ({ success: false, error: 'Deliberate refusal' }))
+    window.electronAPI = { ...window.electronAPI!, exportDocument, updateIngestedDocument }
+    const text = '😀'.repeat(MAX_DOCUMENT_TEXT_UNITS / 2 + 1)
+    await act(async () => ingestion.setMarkdownContent(text))
+    expect(ingestion.documentTextTooLarge).toBe(true)
+    expect(ingestion.markdownContent.length).toBe(text.length)
+    await act(async () => ingestion.handleSaveDocument())
+    expect(updateIngestedDocument).not.toHaveBeenCalled()
+    await act(async () => ingestion.handleExportMarkdown('pdf'))
+    expect(exportDocument).not.toHaveBeenCalled()
+    await act(async () => ingestion.handleExportMarkdown('md'))
+    expect(exportDocument).toHaveBeenCalledWith({ markdownContent: text, format: 'md' })
+    await act(async () => ingestion.retryDraftStorage())
+    expect(ingestion.draftStorageError).toBeTruthy()
+    expect(ingestion.markdownContent.length).toBe(text.length)
+    await act(async () => ingestion.setMarkdownContent('# Explicit reduction'))
+    await act(async () => ingestion.retryDraftStorage())
+    expect(ingestion.documentTextTooLarge).toBe(false)
+    expect(ingestion.draftStorageError).toBeNull()
+    await act(async () => ingestion.handleSaveDocument())
+    expect(updateIngestedDocument).toHaveBeenCalledWith({ docId: 'a', markdownContent: '# Explicit reduction', expectedRevision: 't1' })
+  })
+
+  it('reads legacy oversized text and preserves its original revision when a smaller draft is saved', async () => {
+    const text = 'A'.repeat(MAX_DOCUMENT_TEXT_UNITS + 1)
+    await resolveDocument('a', text)
+    expect(ingestion.markdownContent.length).toBe(text.length)
+    expect(ingestion.documentTextTooLarge).toBe(true)
+    const exportDocument = vi.fn(async () => ({ success: true }))
+    const saveDocumentDrafts = vi.fn(async (snapshot: import('../../shared/domain/documentDraft').DocumentDraftSnapshot) => snapshot)
+    const updateIngestedDocument = vi.fn(async () => ({ success: false, error: 'Deliberate refusal' }))
+    window.electronAPI = { ...window.electronAPI!, exportDocument, saveDocumentDrafts, updateIngestedDocument }
+    await act(async () => ingestion.handleExportMarkdown('md'))
+    expect(exportDocument).toHaveBeenCalledWith({ markdownContent: text, format: 'md' })
+    await act(async () => ingestion.setMarkdownContent('# Explicit reduction'))
+    await act(async () => ingestion.retryDraftStorage())
+    expect(ingestion.draftStorageError).toBeNull()
+    expect(saveDocumentDrafts.mock.calls.at(-1)?.[0].drafts).toEqual([{ docId: 'a', content: '# Explicit reduction', markdown: null, ingestedAt: 't1' }])
+    await act(async () => ingestion.handleSaveDocument())
+    expect(updateIngestedDocument).toHaveBeenCalledWith({ docId: 'a', markdownContent: '# Explicit reduction', expectedRevision: 't1' })
   })
 
   it('never shows the previous document while the next one loads', async () => {

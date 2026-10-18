@@ -28,6 +28,7 @@ from sidecar.domain.ingestion import (
     PDF_PAGE_RENDER_CONCURRENCY
 )
 from sidecar.domain.llm_normalizer import NormalizationReviewRequired
+from sidecar.domain.document_limits import DocumentSizeError, require_document_text, require_document_pages
 from sidecar.domain.router import classify_file_type, analyze_pdf_page_structure, DocumentCategory, PageRoutingStrategy
 from sidecar.services.task_cancellation import TaskCancelled, raise_if_cancelled, register_task, unregister_task
 from sidecar.services.search_service import get_stored_document
@@ -137,6 +138,7 @@ def process_and_index_document_generator(
 
                 try:
                     num_pages = len(pdf_doc)
+                    require_document_pages(num_pages)
                     yield json.dumps({
                         "type": "progress",
                         "percent": 10,
@@ -213,7 +215,7 @@ def process_and_index_document_generator(
                 raise_normalization_review_if_needed(filename, work_items)
                 full_markdown = assemble_document_markdown(filename, page_blocks)
                 original_pages = [(item["page_num"], item["original_markdown"]) for item in work_items]
-            except (TaskCancelled, NormalizationReviewRequired):
+            except (TaskCancelled, NormalizationReviewRequired, DocumentSizeError):
                 raise
             except Exception as pdf_err:
                 raise ValueError("PDF extraction failed; no indexing performed.") from pdf_err
@@ -246,7 +248,10 @@ def process_and_index_document_generator(
 
         raise_if_cancelled(task_id)
 
-        full_markdown = sanitize_extracted_text(full_markdown)
+        full_markdown = require_document_text(sanitize_extracted_text(full_markdown))
+        # Qualify the complete original archive before chunking or any embedding request.
+        save_extraction(doc_id, retained_path, source_revision, filename, original_pages,
+                        category in (DocumentCategory.PDF, DocumentCategory.IMAGE))
 
         yield json.dumps({
             "type": "progress",
@@ -295,8 +300,6 @@ def process_and_index_document_generator(
         }]
 
         raise_if_cancelled(task_id)
-        save_extraction(doc_id, retained_path, source_revision, filename, original_pages,
-                        category in (DocumentCategory.PDF, DocumentCategory.IMAGE))
         write_document_records(doc_record[0], chunk_records)
         raise_if_cancelled(task_id)
 
@@ -365,7 +368,8 @@ def update_and_reindex_document(
     """Prepare the new index before committing either table."""
     validate_doc_id(doc_id)
 
-    clean_markdown = sanitize_extracted_text(new_markdown)
+    require_document_text(new_markdown)
+    clean_markdown = require_document_text(sanitize_extracted_text(new_markdown))
     old_doc = get_stored_document(doc_id)
     if old_doc is None:
         raise ValueError(f"Document {doc_id} not found in database")

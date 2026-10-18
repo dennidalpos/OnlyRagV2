@@ -3,6 +3,7 @@ import crypto from 'node:crypto'
 import { z } from 'zod'
 import type { DocumentExportFormat } from '../../../shared/domain/documentExport'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { DOCUMENT_TEXT_LIMIT_MESSAGE, MAX_DOCUMENT_TEXT_UNITS } from '../../../shared/domain/documentLimits'
 import type { IpcEventContract } from '../../../shared/ipc/ipcContract'
 import type {
   IngestedDocument,
@@ -339,6 +340,9 @@ export class SidecarAppService {
   ): Promise<{ success: boolean; message?: string; filePath?: string; error?: string }> {
     if (typeof markdownContent !== 'string' || !markdownContent.trim()) {
       return { success: false, error: 'Il contenuto del documento è vuoto.' }
+    }
+    if (format !== 'md' && markdownContent.length > MAX_DOCUMENT_TEXT_UNITS) {
+      return { success: false, error: DOCUMENT_TEXT_LIMIT_MESSAGE }
     }
 
     const cleanFormat = format === 'htm' ? 'html' : format

@@ -170,6 +170,7 @@
             "type": "string"
           },
           "markdown_content": {
+            "description": "At most 10,000,000 UTF-16 code units, including document headings.",
             "maxLength": 10000000,
             "minLength": 1,
             "title": "Markdown Content",
@@ -555,6 +556,8 @@
       "IngestResponse": {
         "properties": {
           "extracted_markdown": {
+            "description": "At most 10,000,000 UTF-16 code units, including document headings.",
+            "maxLength": 10000000,
             "title": "Extracted Markdown",
             "type": "string"
           },
@@ -1270,6 +1273,7 @@
             "type": "string"
           },
           "markdown_content": {
+            "description": "At most 10,000,000 UTF-16 code units, including document headings.",
             "maxLength": 10000000,
             "minLength": 1,
             "title": "Markdown Content",
@@ -1473,6 +1477,9 @@
           },
           "409": {
             "description": "Document changed during re-indexing"
+          },
+          "413": {
+            "description": "Sanitized document exceeds its text budget"
           },
           "422": {
             "content": {

@@ -5,12 +5,15 @@ import urllib.error
 from collections import Counter
 from typing import Optional, List, Dict, Any
 from sidecar.config import OLLAMA_BASE_URL, logger
+from sidecar.domain.document_limits import require_document_text, require_document_pages
 
 _PROTECTED_TOKEN = re.compile(r"(?<!\w)[+-]?\w*\d[\w./:@+-]*\b")
 
 
 class NormalizationReviewRequired(Exception):
     def __init__(self, original_markdown: str, issues: List[Dict[str, Any]]):
+        require_document_text(original_markdown)
+        require_document_pages(len(issues))
         super().__init__("Normalization requires review; the original extraction was preserved and was not indexed.")
         self.original_markdown = original_markdown
         self.issues = issues

@@ -38,6 +38,8 @@ Versioni locali: Node 24.20.0, Python 3.13.15, FastAPI 0.141.1, Starlette 1.7.0,
 
 Il test del banner salva immagini in `test-results/flow-contracts-1792186275822/` per desktop 1920×1080, tablet 768×1024 e telefono 390×844. Il banner e le sue azioni restano nel viewport; le immagini sono state ispezionate. La vista ingestion preesistente lascia invece pannelli e parte della toolbar fuori vista ai due formati minori: il residuo è specificato nel task esistente `UX-FIRST-USE-SIMPLIFICATION-01`, senza attribuire al test una qualifica responsive dell'intera applicazione.
 
+Decisione successiva del 17 ottobre 2026: il target è il solo desktop Windows. Il task citato sopra è stato ritirato, non completato; prove e rilievi tablet/telefono sono conservati come evidenze storiche fuori dal target attuale. Vedi il [riallineamento del perimetro](./verification-current.md#perimetro-desktop--2026-10-17).
+
 Tre tentativi iniziali della prova UI selezionavano la textarea IME readonly di Monaco anziché la superficie di modifica; il selettore e l'attesa del testo sono stati corretti. I profili falliti sono conservati in `%TEMP%/onlyrag-document-revision-8aeXqh`, `%TEMP%/onlyrag-document-revision-Xv0NgG` e `%TEMP%/onlyrag-document-revision-ukl5MU`. Non sono errori del salvataggio applicativo né prove omesse.
 
 ## Limiti e lavoro residuo

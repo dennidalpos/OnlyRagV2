@@ -1,6 +1,8 @@
 """Real retained files, native stores and authenticated-route location semantics."""
 import hashlib
 import json
+import os
+import subprocess
 from unittest.mock import Mock
 
 import pymupdf
@@ -221,6 +223,61 @@ def test_archive_refuses_symlinked_document_directory(tmp_path):
         pytest.skip("Directory symlinks are unavailable on this host")
     with pytest.raises(ValueError, match="escapes"):
         source._archive(doc_id)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows junction fixture")
+def test_source_lookup_refuses_real_junction_and_preserves_archives(tmp_path, sidecar_http_client):
+    file = tmp_path / "source.md"
+    other_file = tmp_path / "other.md"
+    for path in (file, other_file):
+        path.write_text("Payment is due within 21 days after delivery.", encoding="utf-8")
+    doc_id, other_id = ingest(file), ingest(other_file)
+    request = request_for(result_for(doc_id))
+    other_request = request_for(result_for(other_id))
+    retained = source.SOURCE_ROOT / doc_id
+    other_archive = source.SOURCE_ROOT / other_id
+    moved = tmp_path / "outside-source-root"
+
+    def archive_bytes(directory):
+        return {path.name: path.read_bytes() for path in directory.iterdir()}
+
+    archive_before = archive_bytes(retained)
+    other_before = archive_bytes(other_archive)
+    originals_before = {path: path.read_bytes() for path in (file, other_file)}
+    rows_before = {name: db.lance_db.open_table(name).to_arrow().to_pylist() for name in ("documents", "chunks")}
+    assert retained.resolve().is_relative_to(tmp_path.resolve())
+    assert moved.parent.resolve() == tmp_path.resolve()
+    assert not moved.resolve().is_relative_to(source.SOURCE_ROOT.resolve())
+    retained.rename(moved)
+    try:
+        # Fixed command text; paths travel as environment values, never shell source.
+        subprocess.run(
+            ["pwsh", "-NoProfile", "-NonInteractive", "-Command",
+             "New-Item -ItemType Junction -Path $env:ONLYRAG_TEST_JUNCTION_LINK "
+             "-Target $env:ONLYRAG_TEST_JUNCTION_TARGET -ErrorAction Stop | Out-Null"],
+            env={**os.environ, "ONLYRAG_TEST_JUNCTION_LINK": str(retained),
+                 "ONLYRAG_TEST_JUNCTION_TARGET": str(moved)},
+            capture_output=True, check=True, timeout=15,
+        )
+        assert retained.is_junction()
+        assert not retained.is_symlink()
+        assert retained.resolve() == moved.resolve()
+        for lookup in (lambda: source._archive(doc_id), lambda: source.resolve_source_location(**request)):
+            with pytest.raises(ValueError, match="^Source location escapes the document root\\.$"):
+                lookup()
+        params = {key: value for key, value in request.items() if key != "doc_id"}
+        response = sidecar_http_client.get(f"/documents/{doc_id}/source-location", params=params)
+        assert response.status_code == 404
+        assert response.json() == {"detail": "Source location escapes the document root."}
+        assert source.resolve_source_location(**other_request).exact_quote == "Payment is due within 21 days after delivery."
+    finally:
+        if retained.is_junction():
+            retained.rmdir()  # Remove only the link, never its destination.
+    assert not retained.exists()
+    assert archive_bytes(moved) == archive_before
+    assert archive_bytes(other_archive) == other_before
+    assert {path: path.read_bytes() for path in originals_before} == originals_before
+    assert {name: db.lance_db.open_table(name).to_arrow().to_pylist() for name in rows_before} == rows_before
 
 
 def test_recovery_gate_blocks_source_access(tmp_path):

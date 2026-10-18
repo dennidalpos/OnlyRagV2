@@ -572,6 +572,8 @@ export const en: TranslationSchema = {
     allFiles: 'All files',
     saveSuccess: 'Changes saved and LanceDB vectors re-indexed successfully!',
     saveFailed: 'Error while saving the document',
+    documentTextTooLarge:
+      'This text exceeds the editing and conversion limit. Export the complete text as Markdown, or reduce it explicitly before saving. The saved document is unchanged.',
     reloadLatest: 'Discard draft and reload',
     draftStorageFailed: 'Document draft recovery could not be saved or loaded. Keep this window open and retry, or export your edits.',
     reloadLatestHint: 'This replaces your draft with the latest saved document. Export the draft first if you want to keep a copy.',

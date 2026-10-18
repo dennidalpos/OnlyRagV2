@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DOCUMENT_EXPORT_FORMATS } from '../../../shared/domain/documentExport'
+import { documentTextSchema, DOCUMENT_TEXT_LIMIT_MESSAGE, MAX_DOCUMENT_TEXT_UNITS } from '../../../shared/domain/documentLimits'
 import type { IngestionStreamProgressPayload, NormalizationReview, TranslateProgressPayload } from '../../../shared/types'
 
 const nonBlank = z.string().trim().min(1)
@@ -26,7 +27,7 @@ export const sidecarIngestFilePayloadSchema = z
 export const sidecarUpdateDocumentPayloadSchema = z
   .object({
     docId: nonBlank.max(200),
-    markdownContent: z.string().min(1).max(10_000_000),
+    markdownContent: documentTextSchema.min(1),
     expectedRevision: nonBlank.max(200),
   })
   .strict()
@@ -62,11 +63,17 @@ export const sidecarSearchPayloadSchema = z
 
 export const sidecarExportPayloadSchema = z
   .object({
-    markdownContent: z.string().min(1).max(10_000_000),
+    // Local literal Markdown writing is the recovery path for existing documents and unsaved oversized edits.
+    markdownContent: z.string().min(1),
     format: z.enum(DOCUMENT_EXPORT_FORMATS),
     outputFolder: boundedPath.optional(),
   })
   .strict()
+  .superRefine((payload, context) => {
+    if (payload.format !== 'md' && payload.markdownContent.length > MAX_DOCUMENT_TEXT_UNITS) {
+      context.addIssue({ code: 'custom', path: ['markdownContent'], message: DOCUMENT_TEXT_LIMIT_MESSAGE })
+    }
+  })
 
 const count = z.number().int().nonnegative()
 const percent = z.number().min(0).max(100)
@@ -88,12 +95,13 @@ export const sidecarDocumentSummarySchema = z.object({
   status: z.enum(['indexed', 'indexed_fallback']),
   file_path: nonBlank.max(4096),
 })
+// Legacy canonical text stays readable for explicit reduction or literal Markdown recovery.
 export const sidecarDocumentRecordSchema = sidecarDocumentSummarySchema.extend({ extracted_markdown: z.string() })
 // Ingest/update responses have no file_path; translation results carry a distinct output filePath.
 export const sidecarIngestResultSchema = z.object({
   ...documentFields,
   status: z.enum(['indexed', 'indexed_fallback']),
-  extracted_markdown: z.string(),
+  extracted_markdown: documentTextSchema,
 })
 export const sidecarTranslationResultSchema = z.object({
   ...documentFields,
@@ -104,7 +112,7 @@ export const sidecarTranslationResultSchema = z.object({
 
 const normalizationReviewSchema = z
   .object({
-    original_markdown: z.string().min(1).max(10_000_000),
+    original_markdown: documentTextSchema.min(1),
     issues: z
       .array(
         z

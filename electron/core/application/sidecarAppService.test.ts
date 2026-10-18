@@ -11,10 +11,41 @@ import { documentIoRepository } from '../infrastructure/filesystem/documentIoRep
 import { SidecarHttpClient, sidecarHttpClient } from '../infrastructure/http/sidecarHttpClient'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { normalizeIngestedFileType, SidecarAppService, sidecarAppService } from './sidecarAppService'
+import { MAX_DOCUMENT_TEXT_UNITS } from '../../../shared/domain/documentLimits'
 
 afterEach(() => vi.restoreAllMocks())
 
 describe('export format routing', () => {
+  it('recovers oversized Unicode as complete Markdown without conversion or replacing previous exports', async () => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-large-markdown-'))
+    const content = '😀'.repeat(MAX_DOCUMENT_TEXT_UNITS / 2 + 1) + '\nLAST_SOURCE_LINE'
+    const convert = vi.spyOn(sidecarHttpClient, 'exportDocument')
+    const showItemInFolder = vi.fn()
+    const showSaveDialog = vi.fn()
+    const service = new SidecarAppService(undefined, { showItemInFolder, showSaveDialog } as unknown as DesktopShellPort)
+    try {
+      const previous = path.join(folder, 'previous.md')
+      fs.writeFileSync(previous, 'Keep this export')
+      for (const format of ['pdf', 'docx', 'html', 'htm'] as const) {
+        expect((await service.exportDocument(content, format, folder)).success).toBe(false)
+      }
+      expect(convert).not.toHaveBeenCalled()
+      expect(showSaveDialog).not.toHaveBeenCalled()
+      expect(showItemInFolder).not.toHaveBeenCalled()
+      const result = await service.exportDocument(content, 'md', folder)
+      expect(result.success).toBe(true)
+      expect(fs.statSync(result.filePath!).size).toBe(Buffer.byteLength(content))
+      expect(crypto.createHash('sha256').update(fs.readFileSync(result.filePath!)).digest('hex')).toBe(
+        crypto.createHash('sha256').update(content).digest('hex'),
+      )
+      expect(fs.readFileSync(previous, 'utf8')).toBe('Keep this export')
+      expect(convert).not.toHaveBeenCalled()
+      expect(showItemInFolder).toHaveBeenCalledOnce()
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
   it.each(['md', 'pdf', 'docx', 'html', 'htm'] as const)('preserves simultaneous %s exports in the configured folder', async (format) => {
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-export-'))
     vi.spyOn(Date, 'now').mockReturnValue(1792231201234)

@@ -116,14 +116,14 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
       const handleKeyDown = (e: KeyboardEvent) => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
           e.preventDefault()
-          if (ing.isDirty && !ing.isSaving) {
+          if (ing.isDirty && !ing.isSaving && !ing.documentTextTooLarge) {
             ing.handleSaveDocument()
           }
         }
       }
       window.addEventListener('keydown', handleKeyDown)
       return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [isActive, ing.isDirty, ing.isSaving, ing.handleSaveDocument])
+    }, [isActive, ing.isDirty, ing.isSaving, ing.documentTextTooLarge, ing.handleSaveDocument])
 
     // Parse markdown into distinct paginated sections robustly
     const parsedPages = useMemo(() => {
@@ -476,6 +476,15 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
           </div>
         )}
 
+        {ing.documentTextTooLarge && (
+          <div role="alert" className="px-4 py-2.5 border-b border-amber-800 bg-amber-950/80 text-amber-100 flex flex-wrap gap-2 items-center text-xs">
+            <span>{t('ingestion.documentTextTooLarge')}</span>
+            <button type="button" className="px-2 py-1 rounded focus-ring" onClick={() => ing.handleExportMarkdown('md')}>
+              {t('ingestion.normalizationReviewExport')}
+            </button>
+          </div>
+        )}
+
         {ing.normalizationReview && (
           <NormalizationReviewPanel
             review={ing.normalizationReview}
@@ -654,7 +663,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
                   <button
                     type="button"
                     onClick={ing.handleSaveDocument}
-                    disabled={!ing.isDirty || ing.isSaving}
+                    disabled={!ing.isDirty || ing.isSaving || ing.documentTextTooLarge}
                     aria-label={t('ingestion.saveChanges')}
                     title={`${t('ingestion.saveChanges')} (Ctrl+S)`}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all focus-ring active:scale-95 shadow-md ${

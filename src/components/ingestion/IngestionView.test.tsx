@@ -9,9 +9,11 @@ const state = vi.hoisted(() => ({
   markdownContent: '',
   isDirty: true,
   isSaving: false,
+  documentTextTooLarge: false,
   ingestionProgress: { active: false },
   leftPaneRef: { current: null },
   handleSaveDocument: vi.fn(async () => {}),
+  handleExportMarkdown: vi.fn(async () => {}),
 }))
 vi.mock('../../hooks/useIngestion', () => ({ useIngestion: () => state }))
 vi.mock('./VectorSearchPanel', () => ({ VectorSearchPanel: () => null }))
@@ -21,10 +23,14 @@ import { IngestionView } from './IngestionView'
 
 describe('IngestionView save shortcuts', () => {
   let root: Root
+  let container: HTMLDivElement
   beforeEach(() => {
     state.handleSaveDocument.mockClear()
     state.isSaving = false
-    root = createRoot(document.createElement('div'))
+    state.documentTextTooLarge = false
+    state.handleExportMarkdown.mockClear()
+    container = document.createElement('div')
+    root = createRoot(container)
   })
   afterEach(async () => {
     await act(async () => root.unmount())
@@ -61,6 +67,18 @@ describe('IngestionView save shortcuts', () => {
   it('does not start a second save while the active view is saving', async () => {
     state.isSaving = true
     await render(true)
+    await shortcut()
+    expect(state.handleSaveDocument).not.toHaveBeenCalled()
+  })
+  it('shows an actionable Markdown recovery warning and refuses the save shortcut for oversized text', async () => {
+    state.documentTextTooLarge = true
+    await render(true)
+    const warning = container.querySelector('[role="alert"]')
+    expect(warning?.textContent).toContain('Export the complete text as Markdown')
+    const exportButton = warning?.querySelector('button')
+    if (!exportButton) throw new Error('Markdown recovery action missing')
+    await act(async () => exportButton.click())
+    expect(state.handleExportMarkdown).toHaveBeenCalledWith('md')
     await shortcut()
     expect(state.handleSaveDocument).not.toHaveBeenCalled()
   })

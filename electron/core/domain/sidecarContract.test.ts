@@ -1,13 +1,50 @@
 import { describe, expect, it } from 'vitest'
+import { MAX_DOCUMENT_TEXT_UNITS } from '../../../shared/domain/documentLimits'
+import { documentDraftsSchema } from '../../../shared/domain/documentDraft'
 import {
   parseNormalizationReview,
   sidecarExportPayloadSchema,
+  sidecarDocumentRecordSchema,
+  sidecarIngestResultSchema,
+  sidecarUpdateDocumentPayloadSchema,
   sidecarIngestFilePayloadSchema,
   sidecarSearchPayloadSchema,
   sidecarTranslatePayloadSchema,
   toIngestionProgressPayload,
   toTranslateProgressPayload,
 } from './sidecarContract'
+
+describe('document size admission and recovery', () => {
+  it.each(['ASCII', 'astral Unicode'] as const)('agrees at either side of the UTF-16 boundary for %s', (kind) => {
+    const fields = {
+      id: 'doc',
+      filename: 'a.md',
+      file_size: 1,
+      num_pages: 1,
+      num_chunks: 1,
+      ingested_at: 't1',
+      file_type: 'md',
+      status: 'indexed',
+      file_path: 'a.md',
+    }
+    for (const delta of [-1, 0, 1]) {
+      const units = MAX_DOCUMENT_TEXT_UNITS + delta
+      const text = kind === 'ASCII' ? 'A'.repeat(units) : '😀'.repeat(Math.floor(units / 2)) + (units % 2 ? 'A' : '')
+      const admitted = delta <= 0
+      expect(text.length).toBe(units)
+      expect(sidecarIngestResultSchema.safeParse({ ...fields, extracted_markdown: text }).success).toBe(admitted)
+      expect(sidecarUpdateDocumentPayloadSchema.safeParse({ docId: 'doc', markdownContent: text, expectedRevision: 't1' }).success).toBe(admitted)
+      expect(documentDraftsSchema.safeParse([{ docId: 'doc', content: text, markdown: text, ingestedAt: 't1' }]).success).toBe(admitted)
+      expect(parseNormalizationReview({ original_markdown: text, issues: [{ page: 1, reason: 'truncated' }] }) !== null).toBe(admitted)
+      for (const format of ['pdf', 'docx', 'html', 'htm'] as const) {
+        expect(sidecarExportPayloadSchema.safeParse({ markdownContent: text, format }).success).toBe(admitted)
+      }
+      // Existing canonical text stays readable and recoverable even when new admission is refused.
+      expect(sidecarDocumentRecordSchema.safeParse({ ...fields, extracted_markdown: text }).success).toBe(true)
+      expect(sidecarExportPayloadSchema.safeParse({ markdownContent: text, format: 'md' }).success).toBe(true)
+    }
+  })
+})
 
 describe('normalization review contract', () => {
   it.each(['context_missing', 'context_budget_exceeded'] as const)('retains source-preserving context refusal: %s', (reason) => {

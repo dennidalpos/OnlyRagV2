@@ -4,6 +4,14 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Indice delle evidenze precedenti
 
+## Limiti documentali e recupero Markdown — 2026-10-18
+
+[Soglia UTF-16 coerente, rifiuto prima dell'indicizzazione e recupero del testo oltre soglia](./verification-document-limits-2026-10-18.md).
+
+## Archivi sorgente e junction Windows — 2026-10-18
+
+[Junction reale rifiutata, archivi e indice preservati](./verification-source-junction-2026-10-18.md).
+
 ## Export e contesto chat — 2026-10-17
 
 [HTML letterale, destinazioni esclusive, codice DOCX e budget del modello effettivo](./verification-export-chat-2026-10-17.md).

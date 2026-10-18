@@ -1,24 +1,13 @@
 {
   "important_notes": [
-    "Current owner scope is offline only: no new real-model calls, app installation, personal-store migration, public release or evidence disposal without explicit authorization. Preserve frozen expectations, spent markers, original data and failed campaigns; details remain in docs/verification-current.md and dated evidence."
+    "Current owner scope is offline only: no new real-model calls, app installation, personal-store migration, public release or evidence disposal without explicit authorization. Preserve frozen expectations, spent markers, original data and failed campaigns; details remain in docs/verification-current.md and dated evidence.",
+    "Owner decision 2026-10-17: Windows desktop only; tablet and smartphone qualification is out of scope. The mobile-layout task was withdrawn, not completed; retain historical evidence (docs/verification-current.md)."
   ],
   "todo_autonomous": [
-    {
-      "id": "TEST-SOURCE-JUNCTION-WINDOWS-01",
-      "p": "P2",
-      "task": "Qualify source archive path containment with a Windows junction; the directory-symlink test is skipped on hosts without symlink privilege (sidecar/infrastructure/source_provenance.py).",
-      "verify": "Use an isolated Windows directory junction escaping the source root; assert source lookup refuses it without changing either archive, and record whether the junction case actually ran."
-    },
     {
       "id": "DISTRIBUTION-CURRENT-SOURCE-QUALIFICATION-01",
       "p": "P2",
       "task": "Qualify that current installer, notices and source archive match exactly, including independent readback (docs/distribution.md)."
-    },
-    {
-      "id": "DOC-LARGE-EXTRACTION-REVIEW-01",
-      "p": "P2",
-      "task": "Align ingestion/read, normalization review, update and export document-size limits. A 10,000,001-character result currently passes read schemas but fails update/export (electron/core/domain/sidecarContract.ts).",
-      "verify": "Test below/at/above the chosen boundary; all admitted documents remain fully reviewable and exportable without silent truncation."
     },
     {
       "id": "RAG-STRUCTURE-AWARE-CHUNKING-01",
@@ -39,7 +28,7 @@
     {
       "id": "XLS-PARSER-MEMORY-ADMISSION-01",
       "p": "P2",
-      "task": "Bound XLS memory before sheet materialization, including allowFullExcelFormat, which bypasses the 8 MiB source guard (sidecar/domain/ingestion.py:499). Qualify packaged desktop separately.",
+      "task": "Bound XLS memory before sheet materialization, including allowFullExcelFormat, which bypasses the 8 MiB source guard (sidecar/domain/ingestion.py, extract_tabular_document). Qualify packaged desktop separately.",
       "verify": "Measure isolated-process memory/time; enforce admission before expensive allocation; refusal preserves source bytes and index."
     },
     {
@@ -56,12 +45,6 @@
       "id": "SETTINGS-CLOSE-DURABILITY-01",
       "p": "P2",
       "task": "Qualify installed-desktop settings persistence and forced-interruption recovery beyond the isolated Main/Preload close, failed-write retry and restart readback tests (docs/verification.md)."
-    },
-    {
-      "id": "UX-FIRST-USE-SIMPLIFICATION-01",
-      "p": "P1",
-      "task": "Correct ingestion panels and toolbars clipped at tablet/phone widths, then simplify first use (src/components/ingestion/IngestionView.tsx; docs/verification-flow-contracts-2026-10-16.md).",
-      "verify": "At 1920x1080, 768x1024 and 390x844, selection, editing, save, export and conflict recovery are visible and keyboard reachable."
     },
     {
       "id": "CHAT-DURABLE-HISTORY-01",

@@ -17,6 +17,7 @@ from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from sidecar.domain.document_limits import DocumentSizeError
 
 from sidecar.config import ALLOWED_ORIGINS, SIDECAR_AUTH_HEADER, SIDECAR_AUTH_TOKEN, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
 from sidecar.schemas import (
@@ -171,7 +172,7 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
         media_type="application/x-ndjson"
     )
 
-@app.put("/documents/{doc_id}", response_model=IngestResponse, responses={409: {"description": "Document changed during re-indexing"}, 500: {"description": "Database update failed"}})
+@app.put("/documents/{doc_id}", response_model=IngestResponse, responses={409: {"description": "Document changed during re-indexing"}, 413: {"description": "Sanitized document exceeds its text budget"}, 500: {"description": "Database update failed"}})
 async def update_document(doc_id: str, req: UpdateDocumentRequest):
     logger.info(f"Updating and re-indexing document {doc_id} in LanceDB")
     try:
@@ -182,6 +183,8 @@ async def update_document(doc_id: str, req: UpdateDocumentRequest):
             req.expected_revision,
             req.embedding_model or DEFAULT_EMBEDDING_MODEL,
         )
+    except DocumentSizeError as size_err:
+        raise HTTPException(status_code=413, detail=str(size_err))
     except ValueError as val_err:
         raise HTTPException(status_code=404, detail=str(val_err))
     except Exception as e:

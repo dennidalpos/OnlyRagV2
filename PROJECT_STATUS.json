@@ -5,25 +5,22 @@
   ],
   "todo_autonomous": [
     {
-      "id": "CI-CHAT-DRAFT-RECOVERY-QUALIFICATION-01",
-      "p": "P1",
-      "task": "Qualify the corrected chat/draft recovery probe on the exact resulting commit in Windows CI. Run 39144849431 failed at the Monaco view-lines click; keyboard-input focus and native minimum/1080p recovery now pass locally (docs/verification-chat-drafts-ci-2026-10-18.md).",
-      "verify": "Require a successful remote chat/draft recovery step and subsequent coverage/Sidecar gates on the resulting commit. Preserve the failed run; local passes do not close remote qualification. Commit and push were explicitly authorized for final consolidation on 2026-10-18; retain this task until the new remote run succeeds."
-    },
-    {
       "id": "DISTRIBUTION-CURRENT-SOURCE-QUALIFICATION-01",
       "p": "P2",
-      "task": "Qualify that current installer, notices and source archive match exactly, including independent readback (docs/distribution.md)."
+      "task": "Qualify that current installer, notices and source archive match exactly, including independent readback (docs/distribution.md).",
+      "verify": "Record exact commit, installer/source/notices hashes and independent extraction/readback; account for every shipped component without substituting historical candidate evidence."
     },
     {
       "id": "RAG-STRUCTURE-AWARE-CHUNKING-01",
       "p": "P2",
-      "task": "Evaluate structure-aware chunking against the frozen retrieval corpus (docs/retrieval.md)."
+      "task": "Evaluate structure-aware chunking against the frozen retrieval corpus (docs/retrieval.md).",
+      "verify": "Compare baseline and candidate on the same frozen corpus, queries and expectations; record retrieval/citation regressions and an explicit accept/reject decision before integration."
     },
     {
       "id": "CHAT-DOCUMENT-COVERAGE-01",
       "p": "P2",
-      "task": "Expose and verify document coverage used in chat answers (docs/retrieval.md)."
+      "task": "Expose and verify document coverage used in chat answers (docs/retrieval.md).",
+      "verify": "Show which documents and passages actually enter the prompt, including exclusions/truncation; verify the displayed coverage against captured context and citations on deterministic multi-document cases."
     },
     {
       "id": "CHAT-EFFECTIVE-CONTEXT-ALLOCATION-01",
@@ -46,12 +43,14 @@
     {
       "id": "HISTORY-EMBEDDING-CORRECTNESS-01",
       "p": "P2",
-      "task": "Qualify history retrieval encoder provenance and scoring across real isolated stores (docs/retrieval.md)."
+      "task": "Qualify history retrieval encoder provenance and scoring across real isolated stores (docs/retrieval.md).",
+      "verify": "Verify encoder identity, dimensions and scoring on isolated nonempty histories; reject incompatible spaces and preserve source records. Real encoder calls need separate authorization."
     },
     {
       "id": "SETTINGS-CLOSE-DURABILITY-01",
       "p": "P2",
-      "task": "Qualify installed-desktop settings persistence and forced-interruption recovery beyond the isolated Main/Preload close, failed-write retry and restart readback tests (docs/verification.md)."
+      "task": "Qualify installed-desktop settings persistence and forced-interruption recovery beyond the isolated Main/Preload close, failed-write retry and restart readback tests (docs/verification.md).",
+      "verify": "After installation is explicitly authorized, use an isolated profile to verify acknowledged settings after close, failed-write retry, forced interruption and restart; retain before/after readback."
     },
     {
       "id": "CHAT-DURABLE-HISTORY-01",
@@ -62,12 +61,14 @@
     {
       "id": "QUALITY-PYTHON-CRITICAL-PATHS-01",
       "p": "P2",
-      "task": "Add critical-path Python quality checks with meaningful failure signals (docs/verification.md)."
+      "task": "Add critical-path Python quality checks with meaningful failure signals (docs/verification.md).",
+      "verify": "Select checks for ingestion, retrieval and persistence failure paths; demonstrate that representative defects fail the checks and that the current code passes, then wire them into the documented gate."
     },
     {
       "id": "SOURCE-ARCHIVE-LIFECYCLE-01",
       "p": "P2",
-      "task": "Qualify source archive retention, navigation and cleanup throughout document lifecycle (docs/retrieval.md)."
+      "task": "Qualify source archive retention, navigation and cleanup throughout document lifecycle (docs/retrieval.md).",
+      "verify": "Exercise create, revision, navigation, delete and cleanup in isolated storage; verify surviving citations and original bytes, orphan policy and rejection of paths outside the owned archive."
     },
     {
       "id": "DOC-EDITOR-DRAFT-DURABILITY-01",
@@ -78,62 +79,74 @@
     {
       "id": "TRANSLATION-INPLACE-UNMOUNT-CANCELLATION-01",
       "p": "P2",
-      "task": "Qualify installed-desktop in-place translation cancellation with a real Sidecar/model, including pre-progress stop, unmount and transport-loss outcomes beyond deterministic ownership/terminal tests (docs/translation.md)."
+      "task": "Qualify installed-desktop in-place translation cancellation with a real Sidecar/model, including pre-progress stop, unmount and transport-loss outcomes beyond deterministic ownership/terminal tests (docs/translation.md).",
+      "verify": "With explicit installed-app/model authorization, exercise stop before progress, unmount and transport loss; verify task ownership, terminal outcome and source/output preservation."
     },
     {
       "id": "AGENT-UNGRACEFUL-SHUTDOWN-RECOVERY-01",
       "p": "P2",
-      "task": "Qualify agent recovery after ungraceful shutdown with checkpoint readback (docs/agent-runtime.md)."
+      "task": "Qualify agent recovery after ungraceful shutdown with checkpoint readback (docs/agent-runtime.md).",
+      "verify": "Interrupt an owned isolated agent process and restart; read back checkpoints, pending work and terminal state without duplicate execution or loss of acknowledged history."
     },
     {
       "id": "STATE-WRITER-CRASH-DURABILITY-01",
       "p": "P2",
-      "task": "Qualify state-writer directory metadata and power-loss durability beyond file flush tests (docs/verification.md)."
+      "task": "Qualify state-writer directory metadata and power-loss durability beyond file flush tests (docs/verification.md).",
+      "verify": "Test interruption around replacement and directory-metadata persistence on declared Windows storage; distinguish process termination from power loss and retain exact acknowledged revisions."
     },
     {
       "id": "PROJECT-VERIFICATION-NATIVE-QUALIFICATION-01",
       "p": "P2",
-      "task": "Qualify native verification commands for discovered non-Node projects (docs/agent-guards.md)."
+      "task": "Qualify native verification commands for discovered non-Node projects (docs/agent-guards.md).",
+      "verify": "Use discovered non-Node fixture projects with their native manifests/toolchains; verify successful commands and genuine failures, bounded execution and accurate reporting without Node fallback."
     },
     {
       "id": "DEPENDENCY-BRACES-UPSTREAM-01",
       "p": "P2",
-      "task": "Replace the maintained local braces 3.0.4+onlyrag.1 fork only when an upstream release passes the same parser/AST depth, clean npm ci and native Electron/ASAR regression checks; preserve provenance and MIT notices (docs/dependency-remediation-2026-10-16.md)."
+      "task": "Replace the maintained local braces 3.0.4+onlyrag.1 fork only when an upstream release passes the same parser/AST depth, clean npm ci and native Electron/ASAR regression checks; preserve provenance and MIT notices (docs/dependency-remediation-2026-10-16.md).",
+      "verify": "An upstream candidate must pass parser/AST depth regressions, clean npm ci and native Electron/ASAR checks while preserving notices; audit disappearance alone is insufficient."
     },
     {
       "id": "RAG-EMBEDDING-REBUILD-QUALIFICATION-01",
       "p": "P2",
-      "task": "Qualify installed-desktop rebuild, larger stores, encoder quality and power-loss behavior in isolated roots; any further personal rebuild needs separate authorization (docs/rag-sidecar.md)."
+      "task": "Qualify installed-desktop rebuild, larger stores, encoder quality and power-loss behavior in isolated roots; any further personal rebuild needs separate authorization (docs/rag-sidecar.md).",
+      "verify": "After necessary installation/model authorization, rebuild isolated larger stores, verify encoder provenance, readback and interrupted-rebuild recovery; do not operate on personal stores without separate authorization."
     },
     {
       "id": "CLEANUP-LOGS-POLICY-ALIGNMENT-01",
       "p": "P2",
-      "task": "Align log cleanup behavior with the documented retention and privacy policy (docs/operations.md)."
+      "task": "Align log cleanup behavior with the documented retention and privacy policy (docs/operations.md).",
+      "verify": "Compare implementation to operations.md retention/privacy rules; verify eligible and retained logs on isolated fixtures, ownership boundaries and preservation of protected evidence."
     },
     {
       "id": "RELEASE-CANDIDATE-EVIDENCE-EXTRACTION-01",
       "p": "P2",
-      "task": "Extract and verify retained release-candidate evidence without modifying protected artifacts (docs/distribution.md)."
+      "task": "Extract and verify retained release-candidate evidence without modifying protected artifacts (docs/distribution.md).",
+      "verify": "Read retained candidate artifacts without changing them; verify recorded hashes and extract a traceable evidence inventory, separating missing evidence from passed checks."
     },
     {
       "id": "LEGACY-SESSION-COMPAT-01",
       "p": "P3",
-      "task": "Retire legacy session compatibility only after real nonempty migration, backup and readback are qualified (docs/agent-runtime.md)."
+      "task": "Retire legacy session compatibility only after real nonempty migration, backup and readback are qualified (docs/agent-runtime.md).",
+      "verify": "Require an authorized nonempty migration with verified backup and readback, then prove no supported caller depends on the compatibility path before removing it."
     },
     {
       "id": "DISTRIBUTION-PACKAGE-SIZE-01",
       "p": "P3",
-      "task": "Measure current CPU package and optional acceleration footprint against OCR and offline-startup acceptance (docs/distribution-cpu-release.md)."
+      "task": "Measure current CPU package and optional acceleration footprint against OCR and offline-startup acceptance (docs/distribution-cpu-release.md).",
+      "verify": "Measure exact current CPU installer/unpacked sizes and optional acceleration separately; retain component accounting and OCR/offline-startup results for the same candidate."
     },
     {
       "id": "DISTRIBUTION-UPDATE-PATH-01",
       "p": "P3",
-      "task": "Define and qualify a manual update and rollback path preserving user data (docs/distribution.md)."
+      "task": "Define and qualify a manual update and rollback path preserving user data (docs/distribution.md).",
+      "verify": "Document and exercise manual update and rollback between declared versions using isolated nonempty data; verify backup, settings/document readback and recovery on failure."
     },
     {
       "id": "DEPENDENCY-MONACO-VENDORED-SANITIZER-01",
       "p": "P3",
-      "task": "Track Monaco bundled sanitizer advisory and verify the embedded exposure path (docs/verification.md)."
+      "task": "Track Monaco bundled sanitizer advisory and verify the embedded exposure path (docs/verification.md).",
+      "verify": "Identify the sanitizer version actually bundled in Monaco and reachable rendering paths; verify advisory applicability and any mitigation/update with relevant rendering regressions."
     }
   ],
   "todo_user_required": [

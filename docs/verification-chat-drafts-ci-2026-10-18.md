@@ -4,7 +4,7 @@ Lotto autorizzato con «procedi» dopo l'analisi del checkout `d8e690717f0e26704
 
 ## Problema e riproduzione
 
-La [CI del commit corrente](https://github.com/dennidalpos/OnlyRagV2/actions/runs/39144849431) fallisce nel passo `Verify Chat and Document Draft Recovery`: il click al centro di `.monaco-editor .view-lines` scade dopo 30 secondi perché il canvas `decorationsOverviewRuler` intercetta gli eventi. Coverage e Sidecar successivi sono saltati, non passati. Le precedenti suite locali restano evidenze distinte.
+La [CI del commit iniziale](https://github.com/dennidalpos/OnlyRagV2/actions/runs/39144849431) fallisce nel passo `Verify Chat and Document Draft Recovery`: il click al centro di `.monaco-editor .view-lines` scade dopo 30 secondi perché il canvas `decorationsOverviewRuler` intercetta gli eventi. Coverage e Sidecar successivi sono saltati, non passati. Le precedenti suite locali restano evidenze distinte.
 
 Il probe originale passa sul desktop locale predefinito e nei viewport di prova 1280×720 e 1024×700. Ridimensionando invece la **finestra nativa** a 1024×720 si riproduce lo stesso timeout: viewport 1010×683, `.view-lines` da x=982 a x=1010, larghezza 28; il punto centrale x=996 cade nel canvas largo 14 pixel. Screenshot e JSON geometrici confermano il bersaglio. Questo riproduce il meccanismo del log remoto; risoluzione e DPI esatti del runner non sono disponibili.
 
@@ -32,10 +32,16 @@ Durante la diagnosi, il click diretto sul textbox non era appropriato: l'input n
 
 Runtime locali: Node 24.20.0, Electron 43.7.4, Playwright 1.62.1, Monaco 0.56.0, Python 3.13.15. Il runner fallito dichiarava Node 24.19.0. Il funzionamento è verificato sui runtime locali; le API di focus e click sono confrontate con la [documentazione ufficiale Playwright](https://playwright.dev/docs/api/class-locator#locator-focus) e il controllo [Receives Events](https://playwright.dev/docs/actionability#receives-events). La documentazione corrente non qualifica da sola una versione diversa.
 
-## Stato aperto e recupero
+## Stato al termine del lotto locale e recupero
 
 `CI-CHAT-DRAFT-RECOVERY-QUALIFICATION-01` resta **aperto** nel tracker esistente. Completamento remoto: run positivo sul commit risultante, con probe chat/bozze e gate coverage/Sidecar successivi tutti eseguiti e passati. Non basta ripetere il run del vecchio commit. Commit e push richiedono autorizzazione separata; non sono stati eseguiti. Tracker: 43 ID univoci, 25 autonomi e 18 con decisione utente; le altre 42 voci restano invariate.
 
 Backup dei file interessati precedente alle modifiche, verificato SHA-256, in `%TEMP%/onlyrag-ci-recovery-ylvvqv5x/backup`; nello stesso scratch si conserva il riproduttore originale strumentato. Riproduzione iniziale fallita conservata in `%TEMP%/onlyrag-chat-drafts-B36xzx`, con `editor-diagnostic.json` e `before-click.png`. Gli ulteriori tentativi diagnostici falliti non sono stati eliminati.
 
 La prova verifica persistenza e recupero meccanici in sviluppo con Renderer/Main/Preload reali e servizi documento/generazione simulati. Non qualifica layout generale alla finestra minima, app installata, modelli reali, semantica o perdita di alimentazione. Il task XLS resta il lavoro offline successivo. Nessuna installazione, migrazione personale o scrittura nei dati dell'utente.
+
+## Qualifica remota conclusa — 19 ottobre 2026
+
+Il [run 39162219398](https://github.com/dennidalpos/OnlyRagV2/actions/runs/39162219398), completato il 18 ottobre e riletto durante la riconciliazione, qualifica il commit risultante `c0cd5a3db3d2bb1bc3bdfe79962ff279a4862792`. GitHub restituisce `success` per il job Windows e per `Verify Chat and Document Draft Recovery (Fail-Fast)`, `Run Coverage Gate (Fail-Fast)` e `Run Sidecar & LanceDB Tests (Fail-Fast)`, tutti eseguiti. Il workflow e il probe del commit includono le sequenze native 1024×720 e 1920×1080.
+
+Soddisfatto il criterio remoto, `CI-CHAT-DRAFT-RECOVERY-QUALIFICATION-01` è rimosso dagli aperti: restano 42 attività, 24 autonome e 18 con decisione utente. Il [run fallito 39144849431](https://github.com/dennidalpos/OnlyRagV2/actions/runs/39144849431) e le prove diagnostiche restano conservati. Le precedenti dichiarazioni di qualifica aperta sono storiche; persistono i limiti su app installata, modelli reali, semantica e perdita di alimentazione.

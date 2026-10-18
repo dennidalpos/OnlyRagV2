@@ -1,6 +1,6 @@
 # Istruzioni del repository: OnlyRagV2
 
-Revisione 2.0 — 2026-10-15. Vincoli specifici del progetto; i contenuti comuni sono gestiti separatamente.
+Revisione 2.4 — 2026-10-18. Vincoli specifici del progetto; i contenuti comuni sono gestiti separatamente.
 
 ## Contesto
 
@@ -32,10 +32,13 @@ Comandi verificati staticamente contro i file del progetto; questa revisione del
 
 - Consultare README e documentazione effettivamente presenti; versioni dai manifest/lockfile, non da ipotesi sullo stack.
 - PROJECT_STATUS.json è il tracker esistente: contiene lavoro aperto, senza storico dei task conclusi; preservarne lo schema.
-- memory.md conserva decisioni e particolarità tecniche locali; aggiornarlo solo con fatti durevoli pertinenti.
+- repos/OnlyRagV2/memory.md e repos/OnlyRagV2/context.md (nel dossier SecondBrain) conservano decisioni tecniche durevoli, gotcha e architettura; aggiornarli a fine task.
 - Eseguire i controlli previsti per la modifica prima di un commit richiesto. Nessun commit o push automatico.
 - Preservare dati persistenti e configurazioni esterne; non estendere la manutenzione a operazioni distruttive non autorizzate.
 
 <!-- secondbrain:repository:begin -->
 Dossier SecondBrain di questo repository: repos/OnlyRagV2, relativo alla radice di SecondBrain indicata nelle istruzioni globali.
+- Leggi a inizio task: questo AGENTS.md, repos/OnlyRagV2/context.md, repos/OnlyRagV2/memory.md e PROJECT_STATUS.json (o repos/OnlyRagV2/tracker.md).
+- Scrivi a fine task: decisioni e gotcha in repos/OnlyRagV2/memory.md; architettura e stato in repos/OnlyRagV2/context.md; attività aperte nel tracker.
+- Igiene di fine task: rimuovi sempre file e cartelle temporanei (.scratch, .system_generated, test-results, dist/backup-*, script di prova, worktree temporanei) prima di concludere, poi esegui secondbrain.ps1 -Sync.
 <!-- secondbrain:repository:end -->

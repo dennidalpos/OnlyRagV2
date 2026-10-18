@@ -14,7 +14,7 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Recupero chat e bozze in CI — 2026-10-18
 
-[Riproduzione del click intercettato, focus tastiera e verifiche locali; qualifica remota aperta](./verification-chat-drafts-ci-2026-10-18.md).
+[Riproduzione del click intercettato, focus tastiera e verifiche locali; qualifica remota conclusa su c0cd5a3](./verification-chat-drafts-ci-2026-10-18.md).
 
 ## Limiti documentali e recupero Markdown — 2026-10-18
 

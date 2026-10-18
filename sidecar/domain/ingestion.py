@@ -19,6 +19,10 @@ from sidecar.config import (
 )
 from sidecar.infrastructure.ocr import run_layout_ocr, run_vision_ocr
 from sidecar.domain.sanitizer import sanitize_extracted_text
+from sidecar.domain.tabular import (
+    TABULAR_MAX_COLUMNS, TABULAR_MAX_CELL_CHARS, TABULAR_MAX_RENDER_CHARS,
+    _check_tabular_row, _extract_full_format_excel_sheet,
+)
 from sidecar.domain.vision_prompt import is_vision_ocr_requested, render_vision_prompt
 from sidecar.domain.router import (
     classify_file_type,
@@ -31,33 +35,11 @@ from sidecar.domain.router import (
 PDF_PAGE_RENDER_CONCURRENCY = 3
 XLS_MAX_SOURCE_BYTES = 8 * 1024 * 1024
 XLSX_MAX_SHARED_STRINGS_BYTES = 16 * 1024 * 1024
-EXCEL_RAG_MAX_COLUMNS = 128
-EXCEL_RAG_MAX_CELL_CHARS = 256
-TABULAR_MAX_COLUMNS = 256
-TABULAR_MAX_CELL_CHARS = 64 * 1024
-TABULAR_MAX_ROW_CHARS = 128 * 1024
-TABULAR_MAX_RENDER_CHARS = 4 * 1024 * 1024
 XLSX_MAX_XML_BYTES = 32 * 1024 * 1024
 XLSX_MAX_TOTAL_XML_BYTES = 128 * 1024 * 1024
 PARQUET_MAX_ROW_GROUP_BYTES = 32 * 1024 * 1024
 PARQUET_MAX_BATCH_BYTES = 8 * 1024 * 1024
 _CSV_FIELD_LIMIT_LOCK = threading.Lock()
-
-
-def _check_tabular_row(row, source, max_columns=TABULAR_MAX_COLUMNS):
-    if max_columns is not None and len(row) > max_columns:
-        raise ValueError(f"{source} row exceeds the {max_columns}-column parser limit.")
-    size = 0
-    for value in row:
-        if value is None:
-            continue
-        length = len(str(value))
-        if length > TABULAR_MAX_CELL_CHARS:
-            raise ValueError(f"{source} cell exceeds the {TABULAR_MAX_CELL_CHARS}-character parser limit.")
-        size += length
-        if size > TABULAR_MAX_ROW_CHARS:
-            raise ValueError(f"{source} row exceeds the {TABULAR_MAX_ROW_CHARS}-character parser limit.")
-    return size
 
 
 def _frame_text_size(frame, source):
@@ -344,65 +326,6 @@ def extract_pdf_document(
     raise_normalization_review_if_needed(filename, work_items)
     return results
 
-def _extract_full_format_excel_sheet(sheet_name, rows, max_row, max_column, limit_rows):
-    retained = []
-    columns = []
-    seen_columns = set()
-    omitted_columns = set()
-    nonempty_rows = 0
-    shortened_cells = 0
-    for row_number, row in rows:
-        _check_tabular_row(row, "Excel", max_columns=None)
-        if row_number > max_row:
-            raise ValueError(f"Excel row {row_number} exceeds the format limit of {max_row}.")
-        selected = {"Row": row_number}
-        has_value = False
-        for column_number, value in enumerate(row, start=1):
-            if column_number > max_column:
-                raise ValueError(f"Excel column {column_number} exceeds the format limit of {max_column}.")
-            if value is None or value == "":
-                continue
-            has_value = True
-            if column_number not in seen_columns:
-                seen_columns.add(column_number)
-                if nonempty_rows < limit_rows and len(columns) < EXCEL_RAG_MAX_COLUMNS:
-                    columns.append(column_number)
-                else:
-                    omitted_columns.add(column_number)
-            if nonempty_rows < limit_rows and column_number in columns:
-                cell = str(value)
-                if len(cell) > EXCEL_RAG_MAX_CELL_CHARS:
-                    cell = cell[:EXCEL_RAG_MAX_CELL_CHARS]
-                    shortened_cells += 1
-                selected[f"Col {column_number}"] = cell
-        if has_value:
-            nonempty_rows += 1
-            if len(retained) < limit_rows:
-                retained.append(selected)
-    if not retained:
-        return None
-    frame = pd.DataFrame(retained, columns=["Row", *(f"Col {column}" for column in columns)]).fillna("")
-    result = f"### Foglio: {sheet_name}\n\n{frame.to_markdown(tablefmt='pipe', index=False, disable_numparse=True)}"
-    result += (f"\n\n> [!NOTE]\n> Estratto RAG: prime {len(retained)} righe non vuote su {nonempty_rows}; "
-               f"prime {len(columns)} colonne non vuote su {len(seen_columns)}. "
-               "Row e Col indicano le coordinate originali. Il file originale è conservato.")
-    if omitted_columns:
-        result += f"\n> Colonne omesse dall'estratto: {len(omitted_columns)}."
-    if shortened_cells:
-        result += f"\n> Celle abbreviate a {EXCEL_RAG_MAX_CELL_CHARS} caratteri: {shortened_cells}."
-    return result
-
-
-def _xls_rows(sheet, datemode):
-    from xlrd import XL_CELL_DATE, xldate_as_datetime
-
-    for row_number in range(sheet.nrows):
-        yield row_number + 1, [
-            xldate_as_datetime(cell.value, datemode) if cell.ctype == XL_CELL_DATE else cell.value
-            for cell in sheet.row(row_number)
-        ]
-
-
 def extract_tabular_document(
     filename: str,
     content: bytes,
@@ -500,75 +423,15 @@ def extract_tabular_document(
         xls_size = os.path.getsize(file_path) if file_path and os.path.exists(file_path) else len(content)
         if not allow_full_excel_format and xls_size > XLS_MAX_SOURCE_BYTES:
             raise ValueError("XLS source exceeds the 8 MiB parser limit; export as XLSX or CSV.")
-        excel_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
-        with pd.ExcelFile(excel_source, engine="xlrd", engine_kwargs={"on_demand": True, "ragged_rows": True}) as xls:
-            sheets_output = []
-            skipped_sheets = 0
-            total_sheets_count = len(xls.sheet_names)
-            processed_sheets = xls.sheet_names[:limit_sheets]
+        from importlib.util import find_spec
+        from sidecar.infrastructure.xls_process import extract_xls_contained
 
-            for sheet_name in processed_sheets:
-                if allow_full_excel_format:
-                    sheet = xls.book.sheet_by_name(sheet_name)
-                    try:
-                        if sheet.nrows > 65_536 or sheet.ncols > 256:
-                            raise ValueError("XLS worksheet exceeds the 65,536-row or 256-column format limit.")
-                        sheet_md = _extract_full_format_excel_sheet(
-                            sheet_name,
-                            _xls_rows(sheet, xls.book.datemode),
-                            65_536, 256, min(limit_excel_rows, EXCEL_MAX_ROWS_PER_SHEET),
-                        )
-                        if sheet_md:
-                            sheets_output.append(sheet_md)
-                        else:
-                            skipped_sheets += 1
-                    finally:
-                        xls.book.unload_sheet(sheet_name)
-                    continue
-                sheet = xls.book.sheet_by_name(sheet_name)
-                try:
-                    if sheet.ncols > TABULAR_MAX_COLUMNS:
-                        raise ValueError(f"Excel exceeds the {TABULAR_MAX_COLUMNS}-column parser limit.")
-                    retained_rows = []
-                    total_sheet_rows = 0
-                    retained_chars = 0
-                    for row_number, row in _xls_rows(sheet, xls.book.datemode):
-                        row_chars = _check_tabular_row(row, "Excel")
-                        if any(cell is not None and cell != "" for cell in row):
-                            total_sheet_rows = row_number
-                        if row_number <= limit_excel_rows:
-                            retained_chars += row_chars
-                            if retained_chars > TABULAR_MAX_RENDER_CHARS:
-                                raise ValueError("Excel selected cells exceed the parser render limit.")
-                            retained_rows.append(row)
-                finally:
-                    xls.book.unload_sheet(sheet_name)
-                retained_rows = retained_rows[:min(total_sheet_rows, limit_excel_rows)]
-                if not retained_rows:
-                    skipped_sheets += 1
-                    continue
-                df = pd.DataFrame(retained_rows).fillna("")
-                if not any(str(cell).strip() for cell in df.to_numpy().flat):
-                    skipped_sheets += 1
-                    continue
-                df.columns = [f"Col {i+1}" for i in range(len(df.columns))]
-                md_table = df.to_markdown(tablefmt="pipe", index=False, disable_numparse=True) or ""
-
-                sheet_md = f"### Foglio: {sheet_name}\n\n{md_table}"
-                if total_sheet_rows > limit_excel_rows:
-                    sheet_md += f"\n\n> [!NOTE]\n> Tabella troncata a {limit_excel_rows} righe (su {total_sheet_rows} totali nel foglio '{sheet_name}').\n"
-                sheets_output.append(sheet_md)
-
-            if not sheets_output:
-                raise ValueError("Excel extraction produced no readable cells in the selected sheets.")
-
-            combined_excel_md = "\n\n".join(sheets_output)
-            if skipped_sheets:
-                combined_excel_md += f"\n\n> [!NOTE]\n> Fogli selezionati senza celle leggibili nel limite di righe: {skipped_sheets}.\n"
-            if total_sheets_count > limit_sheets:
-                combined_excel_md += f"\n\n> [!NOTE]\n> Mostrati i primi {len(processed_sheets)} fogli su {total_sheets_count} totali nella cartella Excel.\n"
-
-            return [(1, combined_excel_md)]
+        if find_spec("xlrd") is None:
+            raise ImportError("Install xlrd for XLS support.")
+        return extract_xls_contained(
+            content, file_path, min(limit_excel_rows, EXCEL_MAX_ROWS_PER_SHEET) if allow_full_excel_format else limit_excel_rows,
+            limit_sheets, allow_full_excel_format,
+        )
 
     if ext == ".parquet":
         import pyarrow.parquet as parquet

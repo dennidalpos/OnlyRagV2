@@ -9,6 +9,10 @@ if _parent_dir not in sys.path:
 if _current_dir not in sys.path:
     sys.path.insert(0, _current_dir)
 
+if __name__ == "__main__" and sys.argv[1:] == ["--xls-worker"]:
+    from sidecar.xls_worker import main as run_xls_worker
+    raise SystemExit(run_xls_worker())
+
 import asyncio
 import hmac
 import json

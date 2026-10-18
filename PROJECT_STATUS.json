@@ -5,6 +5,12 @@
   ],
   "todo_autonomous": [
     {
+      "id": "CI-CHAT-DRAFT-RECOVERY-QUALIFICATION-01",
+      "p": "P1",
+      "task": "Qualify the corrected chat/draft recovery probe on the exact resulting commit in Windows CI. Run 39144849431 failed at the Monaco view-lines click; keyboard-input focus and native minimum/1080p recovery now pass locally (docs/verification-chat-drafts-ci-2026-10-18.md).",
+      "verify": "Require a successful remote chat/draft recovery step and subsequent coverage/Sidecar gates on the resulting commit. Preserve the failed run; local passes do not close remote qualification. Commit and push were explicitly authorized for final consolidation on 2026-10-18; retain this task until the new remote run succeeds."
+    },
+    {
       "id": "DISTRIBUTION-CURRENT-SOURCE-QUALIFICATION-01",
       "p": "P2",
       "task": "Qualify that current installer, notices and source archive match exactly, including independent readback (docs/distribution.md)."
@@ -28,13 +34,14 @@
     {
       "id": "XLS-PARSER-MEMORY-ADMISSION-01",
       "p": "P2",
-      "task": "Bound XLS memory before sheet materialization, including allowFullExcelFormat, which bypasses the 8 MiB source guard (sidecar/domain/ingestion.py, extract_tabular_document). Qualify packaged desktop separately.",
-      "verify": "Measure isolated-process memory/time; enforce admission before expensive allocation; refusal preserves source bytes and index."
+      "task": "Qualify the contained XLS worker in the frozen/installed Windows desktop. Source execution now applies Windows Job commit/process limits before parser admission (including full-format opt-in and global strings), a timeout and one-worker queue (docs/verification-xls-admission-2026-10-18.md).",
+      "verify": "Retain source qualification evidence; verify the packaged --xls-worker entrypoint, native job assignment, failure/timeout/owner-crash cleanup, bounded output and source/index preservation in isolated roots. Coordinate limits do not guarantee admission of dense XLS beyond the memory budget. Do not close on source-only tests."
     },
     {
       "id": "RAG-INDEX-METADATA-EFFICIENCY-01",
       "p": "P2",
-      "task": "Measure and reduce index metadata I/O on larger corpora (docs/retrieval.md)."
+      "task": "Qualify retrieval efficiency beyond the measured Windows source fixtures (10k/100k chunks, one declared 128-dimensional space). Full-search/FTS/lock/archive I/O is measured and repeated per-result archive/document reads are removed within each request (docs/verification-retrieval-efficiency-2026-10-18.md).",
+      "verify": "Retain source measurements and exact result/data equality. Qualify representative text/vector distributions and dimensions, larger corpora, concurrent read/write responsiveness, real encoder latency and isolated installed-desktop behavior before closure; real-model calls and installation require explicit authorization. Preserve full-field provenance, revision conflicts and unindexed-tail retrieval; no unversioned cache or automatic personal-store maintenance."
     },
     {
       "id": "HISTORY-EMBEDDING-CORRECTNESS-01",

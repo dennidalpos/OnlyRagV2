@@ -289,6 +289,76 @@ def test_recovery_gate_blocks_source_access(tmp_path):
         db._journal_path.unlink()
 
 
+def test_search_reads_each_document_once_and_revalidates_on_next_request(tmp_path, monkeypatch):
+    from collections import Counter
+    from pathlib import Path
+
+    file = tmp_path / "clauses.md"
+    clauses = [f"Payment clause {i} is due within {i + 21} days." for i in range(5)]
+    file.write_text("\n\n".join(clauses), encoding="utf-8")
+    doc_id = ingest(file)
+    chunks = db.lance_db.open_table("chunks")
+    template = chunks.to_arrow().to_pylist()[0]
+    db.append_records("chunks", [{**template, "chunk_id": f"individual_{i}", "text": text}
+                                 for i, text in enumerate(clauses)])
+    before = {name: db.lance_db.open_table(name).to_arrow().to_pylist() for name in db.get_existing_tables()}
+    read = Path.read_text
+    reads = Counter()
+    def count(path, *args, **kwargs):
+        if path.name == "extraction.json":
+            reads[path.parent.name] += 1
+        return read(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "read_text", count)
+    request = SearchRequest(query="Payment", top_k=5, doc_id=doc_id)
+    results = search_service.perform_vector_search(request)
+    assert len(results) == 5
+    assert all(result.provenance.location_kind == "original" for result in results)
+    assert reads == {doc_id: 1}
+    assert {name: db.lance_db.open_table(name).to_arrow().to_pylist() for name in before} == before
+    for result in results:
+        assert source.resolve_source_location(**request_for(result)).exact_quote == result.provenance.exact_quote
+    reads.clear()
+    db.lance_db.open_table("documents").update(where=f"id = '{doc_id}'", values={"extracted_markdown": "New canonical text"})
+    updated = search_service.perform_vector_search(request)
+    assert reads == {doc_id: 1}
+    assert all(row.provenance.index_revision == source.text_revision("New canonical text") for row in updated)
+    assert all(row.provenance.index_revision != results[0].provenance.index_revision for row in updated)
+    archive = source.SOURCE_ROOT / doc_id / "extraction.json"
+    data = json.loads(archive.read_text(encoding="utf-8"))
+    data["raw_markdown"] += "tampered"
+    archive.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ValueError, match="Original extraction revision mismatch"):
+        search_service.perform_vector_search(request)
+
+
+def test_batch_keeps_interleaved_document_identity_and_rereads_missing_archives(tmp_path):
+    left, right = tmp_path / "left.md", tmp_path / "right.md"
+    left.write_text("Payment for Alpha is due in 21 days.", encoding="utf-8")
+    right.write_text("Payment for Beta is due in 30 days.", encoding="utf-8")
+    a, b = ingest(left), ingest(right)
+    entries = [(b, right.read_text(encoding="utf-8"), "Beta"),
+               (a, left.read_text(encoding="utf-8"), "Alpha"),
+               (b, "Rewritten clause with no original span", "Derived"),
+               (None, "No document", None),
+               (a, left.read_text(encoding="utf-8"), "Alpha again")]
+    results = source.chunk_source_provenance_batch(entries)
+    assert [p.location_kind if p else None for p in results] == ["original", "original", "derived", None, "original"]
+    assert results[0].source_revision == hashlib.sha256(right.read_bytes()).hexdigest()
+    assert results[1].source_revision == results[4].source_revision == hashlib.sha256(left.read_bytes()).hexdigest()
+    assert results[0].exact_quote == right.read_text(encoding="utf-8")
+    assert results[1].section_header == "Alpha" and results[4].section_header == "Alpha again"
+    archive = source.SOURCE_ROOT / a / "extraction.json"
+    held = archive.with_suffix(".held")
+    archive.rename(held)
+    try:
+        missing = source.chunk_source_provenance_batch(entries)
+        assert missing[1] is None and missing[4] is None
+        assert missing[0] == results[0]
+    finally:
+        held.rename(archive)
+    assert source.chunk_source_provenance_batch(entries) == results
+
+
 def test_failed_document_commit_preserves_old_store_and_keeps_archive_inaccessible(tmp_path, monkeypatch):
     file = tmp_path / "old.md"
     file.write_text("Payment is due within 21 days after delivery.", encoding="utf-8")

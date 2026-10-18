@@ -4,6 +4,10 @@ Questa pagina mantiene i collegamenti storici. Per il comportamento attuale legg
 
 ## Indice delle evidenze precedenti
 
+## Ammissione XLS in processo Windows — 2026-10-18
+
+[Worker contenuto prima del parser, limiti di commit/tempo e preservazione dei dati; frozen/installato ancora aperti](./verification-xls-admission-2026-10-18.md). Il nuovo limite si applica anche all'opt-in formato completo; la precedente accettazione del XLS numerico massimo descrive il candidato storico.
+
 ## CSV/TSV literal integrity — 2026-10-02
 
 [Evidenza datata](./rag-sidecar-history-2026-10-13.md#csvtsv-literal-integrity--2026-10-02).

@@ -711,7 +711,7 @@ export const en: TranslationSchema = {
     wordWrapDesc: 'Automatic line wrapping in Monaco editors and previews.',
     fullExcelFormat: 'Excel: format dimensions',
     fullExcelFormatDesc:
-      'Accept .xls up to 65,536 × 256 and .xlsx up to 1,048,576 × 16,384. RAG uses a declared sample of rows, columns and cells; complex files may need substantial memory.',
+      'Allow .xls coordinates up to 65,536 × 256 and .xlsx up to 1,048,576 × 16,384, within resource limits. RAG uses a declared sample. If XLS exceeds its memory or time limits, export it as CSV/XLSX.',
     soundEffects: 'Sound Effects',
     soundEffectsDesc: 'Audio cues for errors, confirmations, and completed tasks.',
     generalPreferencesSection: 'Preferences & User Interface',

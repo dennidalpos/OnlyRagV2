@@ -4,6 +4,18 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Indice delle evidenze precedenti
 
+## Ricerca, FTS e I/O degli archivi — 2026-10-18
+
+[Misure native su 10.000/100.000 chunk, lettura della provenienza per documento e qualifiche residue](./verification-retrieval-efficiency-2026-10-18.md).
+
+## Ammissione XLS in processo Windows — 2026-10-18
+
+[Limiti nativi prima della materializzazione, misure e rifiuti senza modificare l'indice](./verification-xls-admission-2026-10-18.md).
+
+## Recupero chat e bozze in CI — 2026-10-18
+
+[Riproduzione del click intercettato, focus tastiera e verifiche locali; qualifica remota aperta](./verification-chat-drafts-ci-2026-10-18.md).
+
 ## Limiti documentali e recupero Markdown — 2026-10-18
 
 [Soglia UTF-16 coerente, rifiuto prima dell'indicizzazione e recupero del testo oltre soglia](./verification-document-limits-2026-10-18.md).

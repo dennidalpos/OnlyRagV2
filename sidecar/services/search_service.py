@@ -8,7 +8,7 @@ from sidecar.infrastructure.embeddings import (
     EmbeddingSpaceMismatchError,
 )
 from sidecar.infrastructure.reranker import rerank_candidates
-from sidecar.infrastructure.source_provenance import chunk_source_provenance
+from sidecar.infrastructure.source_provenance import chunk_source_provenance_batch
 
 _LEXICAL_COLUMNS = ("text", "doc_name", "section_header")
 
@@ -202,6 +202,9 @@ def _search_current_index(req, query_raw, allowed_doc_ids, doc_filter, versions,
             candidate["lexical_score"], candidate["rrf_score"], candidate["fused_rank"], rank, candidate["score"],
         )
 
+    provenances = chunk_source_provenance_batch([
+        (d.get("doc_id") or None, d["text"], d.get("section_header")) for d in reranked_dicts
+    ])
     return [
         SearchResult(
             chunk_id=d["chunk_id"],
@@ -210,9 +213,9 @@ def _search_current_index(req, query_raw, allowed_doc_ids, doc_filter, versions,
             section_header=d.get("section_header"),
             text=d["text"],
             score=d["score"],
-            provenance=chunk_source_provenance(d["doc_id"], d["text"], d.get("section_header")) if d.get("doc_id") else None,
+            provenance=provenance,
         )
-        for d in reranked_dicts
+        for d, provenance in zip(reranked_dicts, provenances, strict=True)
     ]
 
 

@@ -717,7 +717,7 @@ export const it = {
     wordWrapDesc: 'Ritorno a capo automatico negli editor Monaco e anteprime.',
     fullExcelFormat: 'Excel: dimensioni del formato',
     fullExcelFormatDesc:
-      'Accetta .xls fino a 65.536 × 256 e .xlsx fino a 1.048.576 × 16.384. Il RAG usa un estratto dichiarato di righe, colonne e celle; file complessi possono richiedere molta memoria.',
+      'Consente coordinate .xls fino a 65.536 × 256 e .xlsx fino a 1.048.576 × 16.384, entro i limiti di risorse. Il RAG usa un estratto dichiarato. Se un XLS supera i limiti di memoria o tempo, esportalo in CSV/XLSX.',
     soundEffects: 'Effetti Sonori',
     soundEffectsDesc: 'Segnali acustici per errori, conferme e completamento task.',
     generalPreferencesSection: 'Preferenze & Interfaccia Utente',

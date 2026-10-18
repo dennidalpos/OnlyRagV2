@@ -143,14 +143,36 @@ def _record(table_name: str, column: str, identifier: str) -> Optional[dict]:
     return rows[0] if rows else None
 
 
-@database_operation
 def chunk_source_provenance(doc_id: str, text: str, section: Optional[str]) -> Optional[SourceProvenance]:
+    return chunk_source_provenance_batch([(doc_id, text, section)])[0]
+
+
+@database_operation
+def chunk_source_provenance_batch(chunks: list[tuple[Optional[str], str, Optional[str]]]) -> list[Optional[SourceProvenance]]:
+    """Read each document once within this operation; never reuse it across requests."""
+    groups: dict[str, list[tuple[int, str, Optional[str]]]] = {}
+    results: list[Optional[SourceProvenance]] = [None] * len(chunks)
+    for index, (doc_id, text, section) in enumerate(chunks):
+        if doc_id is not None:
+            groups.setdefault(doc_id, []).append((index, text, section))
+    for doc_id, entries in groups.items():
+        # The helper releases this document's archive before loading the next one.
+        for index, provenance in _document_chunk_provenances(doc_id, entries):
+            results[index] = provenance
+    return results
+
+
+def _document_chunk_provenances(doc_id: str, entries: list[tuple[int, str, Optional[str]]]) -> list[tuple[int, SourceProvenance]]:
     archive = _archive(doc_id)
     document = _record(DOCS_TABLE_NAME, "id", doc_id)
     if archive is None or document is None:
-        return None
-    body = text.partition("\n")[2] if text.startswith("[Document: ") else text
+        return []
     index_revision = text_revision(document["extracted_markdown"])
+    return [(index, _chunk_provenance(archive, index_revision, text, section)) for index, text, section in entries]
+
+
+def _chunk_provenance(archive: SourceArchive, index_revision: str, text: str, section: Optional[str]) -> SourceProvenance:
+    body = text.partition("\n")[2] if text.startswith("[Document: ") else text
     base = dict(source_revision=archive.source_revision, extraction_revision=archive.extraction_revision,
                 index_revision=index_revision, section_header=section)
     start = archive.raw_markdown.find(body) if body else -1

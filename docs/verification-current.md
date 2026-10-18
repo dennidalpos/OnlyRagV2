@@ -1,12 +1,12 @@
 # Verifica corrente per ambito
 
-Allineamento del **18 ottobre 2026**. Il [`tracker`](../PROJECT_STATUS.json) è la fonte dello stato aperto: 42 attività, 24 autonome e 18 con decisione utente. Questo riepilogo distingue la verifica meccanica dalla qualità dei risultati e dall'app installata. Le ricevute, i fallimenti e gli hash storici restano in [`verification-history-2026-10-13.md`](./verification-history-2026-10-13.md); i lotti successivi sono indicizzati in [`verification.md`](./verification.md).
+Allineamento del **18 ottobre 2026**. Il [`tracker`](../PROJECT_STATUS.json) è la fonte dello stato aperto: 43 attività, 25 autonome e 18 con decisione utente. Questo riepilogo distingue la verifica meccanica dalla qualità dei risultati e dall'app installata. Le ricevute, i fallimenti e gli hash storici restano in [`verification-history-2026-10-13.md`](./verification-history-2026-10-13.md); i lotti successivi sono indicizzati in [`verification.md`](./verification.md).
 
 | Ambito | Verificato | Ancora aperto |
 | --- | --- | --- |
 | Build e sorgenti | Build corrente Renderer/Main/Preload passata. Candidato CPU storico: installer e archivio sorgente con hash, 998 record sorgente, 3.598 file installati e corrispondenza dei sei moduli Sidecar congelati; probe CPU OCR/auth/PDF/ricerca fallback passati. | Il candidato storico non qualifica il codice dei lotti successivi: corrispondenza installer/sorgenti correnti, installazione e riavvio sul profilo reale, firma, diritti, pubblicazione e consegna del sorgente restano aperti. |
-| Test deterministici | Ultimo passaggio completo: 2.890 test TypeScript e 568 Python passati, un symlink saltato; build e qualità statica passate. I risultati PowerShell restano nelle ricevute storiche. | CI remota e condizioni non rappresentate dai fixture. |
-| Ingestion e ricerca | Parser e rifiuti isolati, OCR CPU congelato, provenienza vettoriale, filtri, FTS e proiezione dei metadati verificati nei casi dichiarati. Soglia UTF-16 coerente, rifiuto prima di chunk/embedding, recupero Markdown oltre soglia e junction Windows qualificati nei lotti del 18 ottobre. | Memoria XLS avversaria, ricerca/FTS/I/O su corpus più ampi, qualità multilingue e copertura completa dei documenti. |
+| Test deterministici | Consolidamento finale: suite complete 2.890 TypeScript e 583 Python passati, un symlink saltato; build, statico e probe Electron chat/bozze nei due profili nativi passati. I risultati PowerShell restano nelle ricevute storiche. | Ultima CI remota verificata fallita sul precedente commit nel probe chat/bozze; correzione locale verificata, qualifica sul commit consolidato aperta. Restano le condizioni non rappresentate dai fixture. |
+| Ingestion e ricerca | Parser e rifiuti isolati, OCR CPU congelato, provenienza vettoriale, filtri, FTS e proiezione dei metadati verificati nei casi dichiarati. Ricerca/FTS/lock/I/O misurati su 10.000/100.000 chunk dichiarati; riletture della provenienza eliminate nella stessa ricerca. Soglia UTF-16, recupero Markdown e junction Windows qualificati nei lotti del 18 ottobre. | XLS nel worker frozen/desktop installato, ricerca su distribuzioni/dimensioni più ampie e in contesa, encoder reali, qualità multilingue e copertura completa dei documenti. |
 | Traduzione | Corpus congelato di quattro documenti: 4/4 contenuto e lingua nella configurazione dichiarata. Un modulo italiano: 8/8 lingue con modello 4B e glossario limitato. Replay del candidato congelato senza nuove chiamate modello. | Altri documenti e configurazioni, layout visivo DOCX, consegna e prova dell'app installata/riavviata. |
 | Agente | Guard, isolamento, recupero e verifiche native su fixture; quattro richieste umanamente confermate conservate con esiti e rifiuti. | Estrazione/planning live e TaskLab completi: 0 sequenze/stadi qualificati. Nuove campagne modello restano sospese. |
 | Persistenza | Writer con flush del file, rename e 16 tagli isolati; originali preservati. Checkpoint Main di chat e bozze, revisione originale, chiusura rifiutata su scrittura fallita, retry e recupero dopo interruzione del processo isolato verificati. | Desktop installato, ulteriori finestre di interruzione, metadata directory e perdita di alimentazione. |
@@ -17,7 +17,7 @@ Da PowerShell nella radice del repository: `npm run docs:check` per link e coman
 
 ## Prossimo lavoro offline
 
-Proposta successiva: ammissione XLS prima della materializzazione; seguono misure di ricerca/FTS/archivi e verifica per i tool non Node. I checkpoint già implementati non sono da duplicare: i relativi task conservano soltanto le qualifiche ulteriori dichiarate nel tracker. Nessuna di queste voci autorizza migrazioni personali, pulizia dei dati, installazione, pubblicazione o nuove chiamate ai modelli.
+Priorità corrente: qualificare in CI il probe chat/bozze corretto e verificato localmente nel [lotto del 18 ottobre](./verification-chat-drafts-ci-2026-10-18.md). Il worker XLS è implementato e qualificato nei sorgenti Windows; la sua qualifica frozen/desktop installato resta nel task esistente. Il [lotto ricerca/FTS/I/O](./verification-retrieval-efficiency-2026-10-18.md) misura ora 10.000/100.000 chunk dichiarati e rimuove le riletture dell'archivio nella stessa ricerca; il task conserva distribuzioni/dimensioni più ampie, contesa, encoder e desktop installato. Resta disponibile il lavoro offline di verifica per i tool non Node. I checkpoint già implementati non sono da duplicare: i relativi task conservano soltanto le qualifiche ulteriori dichiarate nel tracker. Nessuna di queste voci autorizza migrazioni personali, pulizia dei dati, installazione, pubblicazione o nuove chiamate ai modelli.
 
 ## Passaggio di sessione sulla documentazione · 2026-10-13
 
@@ -61,3 +61,44 @@ Tracker verificato: stesso schema e 42 ID aperti univoci; task junction e limiti
 Gate completi ripetuti prima del commit: `npm run test -- --reporter=dot --silent=true`, 2.890 passati in 320 file, 200,47 s; `.venv\Scripts\python.exe -B -m pytest -q -rs --tb=short -p no:cacheprovider`, 568 passati e un symlink saltato, 130,19 s. `npm run docs:check`, `npm run quality:static` e `git diff --check` passati. I sorgenti applicativi coincidono con quelli della build e delle prove Electron già registrate nel lotto documentale. Diff rivisto; la scansione mirata dei file modificati non rileva chiavi private o formati comuni di token, senza costituire una certificazione generale di sicurezza.
 
 Backup verificato di file modificati/non tracciati, patch binaria e bundle Git precedente al commit in `%TEMP%/onlyrag-final-consolidation-a7abcdfa84df4e04af2a8dd6d103d926`. SHA del commit e conferma del push sono registrati nel dossier SecondBrain dopo la verifica sul remoto; la CI remota resta distinta dai gate locali.
+
+## Recupero chat e bozze in CI — 2026-10-18
+
+La [CI di d8e6907](https://github.com/dennidalpos/OnlyRagV2/actions/runs/39144849431) è fallita sul click centrale di Monaco; coverage e Sidecar successivi sono stati saltati. Il [lotto mirato](./verification-chat-drafts-ci-2026-10-18.md) riproduce il canvas che intercetta il click nella finestra nativa minima. Il probe usa ora il focus dell'input tastiera reale, verifica il focus e conserva le asserzioni di checkpoint, interruzione, revisione, rifiuto della chiusura, retry e readback. Entrambi i profili desktop, 1024×720 e 1920×1080, passano localmente; aggiunti diagnostica geometrica e screenshot in caso di fallimento.
+
+Build passata; coverage completa con 2.890 test passati e soglie superate; Python 568 passati e un symlink saltato. Le precedenti prove locali restano valide nei propri limiti, ma non attestano CI verde. `CI-CHAT-DRAFT-RECOVERY-QUALIFICATION-01` resta aperto fino a un run remoto positivo sul commit risultante, inclusi i gate successivi. Nessuna modifica applicativa, modello reale, installazione, migrazione personale, commit o push in questo lotto.
+
+## Ammissione XLS in processo Windows — 2026-10-18
+
+Il [lotto XLS](./verification-xls-admission-2026-10-18.md) sposta materializzazione e stringhe globali in un processo senza database/OCR/modelli. Prima di inviare il workbook, il servizio Python assegna il worker a un Job Windows con limiti di commit e numero di processi; un solo worker, timeout 60 secondi e output limitato. Il budget dichiarato è 512 MiB: soglia Win32 di 496 MiB con 16 MiB di riserva per il conteggio di picco. Il limite resta attivo con l'opt-in formato completo. Il foglio numerico massimo prima accettato dal candidato storico viene ora rifiutato nel caso denso oltre budget; il caso sparso all'ultima coordinata rimane ammesso in formato completo.
+
+Il task XLS resta aperto per worker frozen/desktop installato. Le prove sorgente verificano limite di allocazione reale, timeout, mancata ammissione, arresto del proprietario, coordinate, fogli multipli, stringhe globali e invariabilità di indice e archivi preesistenti sui rifiuti. La copia originale del task fallito resta conservata secondo la politica esistente. Non sono state avviate installazioni, migrazioni personali o nuove chiamate a modelli; nessun commit o push.
+
+Verifiche finali del lotto XLS: suite completa TypeScript 2.890 passati; Python 581 passati e un symlink saltato; build, compilazione sintattica Python, qualità statica, documentazione su 66 pagine e diff passati. I 43 ID del tracker sono conservati: aggiornata soltanto la voce XLS con il residuo frozen/installato e i relativi criteri.
+
+## Ricerca, FTS e I/O degli archivi — 2026-10-18
+
+Il [lotto RAG](./verification-retrieval-efficiency-2026-10-18.md) misura ricerca completa, primo FTS, coda non indicizzata, navigazione, lock e letture su 10.000/100.000 chunk con encoder dichiarato. Per cinque risultati dello stesso documento, archivio e revisione canonica vengono ora verificati una volta nella richiesta: letture logiche dell'archivio ridotte dell'80%, senza cache tra richieste. Sul fixture maggiore la mediana completa passa da 310,47 a 166,11 ms; risultati ordinati, provenienza, archivi e record coincidono. Campioni e hash dei sorgenti sono conservati nei dati collegati al resoconto.
+
+Suite completa Python: 583 passati e un symlink saltato, junction reale eseguita. AST su 65 file, qualità statica su 851 file/103 handler, documentazione su 67 pagine, confronto tracker e diff passati. I 43 ID restano aperti: aggiornata soltanto la voce RAG rispetto all'inizio del lotto, con residui per distribuzioni/dimensioni più ampie, contesa, encoder e desktop installato. Il probe CI e il lavoro XLS preesistenti sono preservati. Nessuna nuova chiamata modello, installazione, migrazione personale, pulizia delle evidenze, commit o push. Build, suite TypeScript completa ed Electron non ripetuti per questo cambiamento Python.
+
+## Consolidamento finale CI, XLS e RAG — 2026-10-18
+
+L'utente ha successivamente richiesto allineamento di tracker e SecondBrain, commit e push finale, consolidamento dei branch sul principale ed eliminazione di quelli obsoleti. Questa richiesta autorizza le operazioni Git del lotto; le precedenti note «nessun commit o push» descrivono le fasi anteriori.
+
+Remoto Git/GitHub verificato: `https://github.com/dennidalpos/OnlyRagV2.git`, pubblico, principale `master`. Prima del commit, HEAD e remoto coincidono su `d8e690717f0e26704127d80b3549d86dceb6f2ef`. Dopo fetch, inventario locale, riferimenti remoti effettivi, worktree e PR aperte confermano soltanto `master`: nessun branch da unire o eliminare. I riferimenti interni degli IDE sono conservati.
+
+Tracker: stesso schema, 43 ID aperti univoci (25 autonomi e 18 con decisione utente). Le qualifiche XLS frozen/installato e RAG più ampie restano aperte; la voce CI registra ora l'autorizzazione Git e conserva il requisito del run remoto positivo sul commit risultante, inclusi coverage e Sidecar. I risultati locali non chiudono la qualifica remota; il run fallito `39144849431` resta conservato.
+
+Gate pre-commit ripetuti sul codice finale:
+
+| Comando | Esito |
+| --- | --- |
+| `npm run test -- --reporter=dot --silent=true` | 2.890 passati in 320 file, 205,93 s. |
+| `.venv\Scripts\python.exe -B -m pytest -q -rs --tb=short -p no:cacheprovider` | 583 passati e un symlink saltato, 186,76 s. Junction reale eseguita. |
+| `npm run build` | TypeScript, Renderer, Main e Preload passati. |
+| `node scripts/e2e/chatDraftRecovery.mjs` | Passato nei profili nativi 1024×720 e 1920×1080, con interruzione, retry e readback. Nessun modello reale. |
+| `npm run quality:static`, `npm run docs:check`, `git diff --check` | Passati: 851 file/103 handler e 67 pagine Markdown. |
+| Confronto tracker e ricevute RAG | 43 ID univoci; hash dei report e dei sorgenti finali corrispondenti. |
+
+Diff rivisto; scansione mirata dei 26 file del lotto senza riscontri di chiavi private o formati comuni di token, senza certificazione generale di sicurezza. Backup verificato dei file modificati/non tracciati e del dossier, patch binaria e bundle Git validato in `%TEMP%/onlyrag-publish-046e767737804206bbdae8a9d0fff79f`. SHA del commit e readback remoto vengono registrati nel dossier dopo il push. Nessuna installazione, migrazione personale, nuova chiamata modello, cancellazione di evidenze o pubblicazione di installer.

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { sourceProvenanceSchema } from './sourceProvenance'
+import { chatContextCoverageSchema } from './chatContextCoverage'
 
 const citationSchema = z
   .object({
@@ -31,6 +32,7 @@ export const chatHistorySchema = z.array(
             timestamp: z.string(),
             sources: z.array(citationSchema).optional(),
             invalidSourceReferences: z.array(z.string().max(32)).optional(),
+            contextCoverage: chatContextCoverageSchema.optional(),
             isStreaming: z.boolean().optional(),
             interrupted: z.boolean().optional(),
           })

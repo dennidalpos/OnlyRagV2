@@ -1,26 +1,21 @@
 {
   "important_notes": [
     "Current owner scope is offline only: no new real-model calls, app installation, personal-store migration, public release or evidence disposal without explicit authorization. Preserve frozen expectations, spent markers, original data and failed campaigns; details remain in docs/verification-current.md and dated evidence.",
-    "Owner decision 2026-10-17: Windows desktop only; tablet and smartphone qualification is out of scope. The mobile-layout task was withdrawn, not completed; retain historical evidence (docs/verification-current.md)."
+    "Owner decision 2026-10-17: Windows desktop only; tablet and smartphone qualification is out of scope. The mobile-layout task was withdrawn, not completed; retain historical evidence (docs/verification-current.md).",
+    "Session handoff 2026-10-19: chat context coverage, Python critical-path gate and source archive lifecycle are complete; 39 open IDs remain (21 autonomous, 18 user-required). See docs/session-handoff-2026-10-19.md. Available offline follow-up: PROJECT-VERIFICATION-NATIVE-QUALIFICATION-01, after checking actual native manifests/toolchains; preserve the other priorities and acceptance gates. Owner explicitly authorized this session's commit/push to master; installation, new real-model campaigns, personal-store operations and installer/public-release gates remain separate."
   ],
   "todo_autonomous": [
     {
       "id": "DISTRIBUTION-CURRENT-SOURCE-QUALIFICATION-01",
       "p": "P2",
-      "task": "Complete same-artifact Windows distribution qualification beyond the verified 95752a0 local candidate: automatic production startup and installed/restarted desktop, representative parser workloads and real versioned embeddings/normalization/translation. File correspondence, frozen HTTP parsers/normalization guards, XLS containment and packaged native IPC restart/translation fixtures pass (docs/verification-current-source-2026-10-19.md).",
-      "verify": "Reuse retained candidate cpu-20261018-220641-87a891b9 and its exact source/hash evidence; rebuild only if qualifying changed runtime sources. Preserve the passed offline receipts; qualify automatic startup and recovery in the installed desktop, representative parser workloads and actual encoder/model behavior on the same artifact. Installation and real-model calls require separate explicit authorization. Keep component-rights and public-delivery gates separate; fixtures and explicit restart IPC do not certify installed startup or semantic quality."
+      "task": "Qualify a new same-artifact Windows candidate for the changed current runtime, including per-answer chat context coverage absent from the retained 95752a0 installer. Preserve the historical candidate's passed file correspondence, frozen HTTP parsers/normalization guards, XLS containment and packaged native IPC restart/translation fixtures (docs/verification-current-source-2026-10-19.md). Automatic startup, installed/restarted desktop, representative parser workloads and real versioned embeddings/normalization/translation remain open.",
+      "verify": "Retain cpu-20261018-220641-87a891b9 and its exact source/hash evidence as historical; do not relabel it as the changed current runtime. Current-source qualification now requires a newly built candidate and matching source snapshot, then same-artifact frozen OCR/parser/recovery/embedding checks, automatic startup and installed/restarted desktop, representative workloads and actual encoder/model behavior. Installation and real-model calls require separate explicit authorization. Keep component-rights and public-delivery gates separate; fixtures and explicit restart IPC do not certify installed startup or semantic quality. No installer rebuild is implied by this source commit/push handoff."
     },
     {
       "id": "RAG-STRUCTURE-AWARE-CHUNKING-01",
       "p": "P2",
       "task": "Evaluate structure-aware chunking against the frozen retrieval corpus (docs/retrieval.md).",
       "verify": "Compare baseline and candidate on the same frozen corpus, queries and expectations; record retrieval/citation regressions and an explicit accept/reject decision before integration."
-    },
-    {
-      "id": "CHAT-DOCUMENT-COVERAGE-01",
-      "p": "P2",
-      "task": "Expose and verify document coverage used in chat answers (docs/retrieval.md).",
-      "verify": "Show which documents and passages actually enter the prompt, including exclusions/truncation; verify the displayed coverage against captured context and citations on deterministic multi-document cases."
     },
     {
       "id": "CHAT-EFFECTIVE-CONTEXT-ALLOCATION-01",
@@ -57,18 +52,6 @@
       "p": "P2",
       "task": "Qualify installed-desktop chat recovery and broader interruption/power-loss windows. Main checkpoints, incomplete response recovery, failed-write close refusal and controlled interruption/restart pass in development and the current packaged app with isolated profiles and simulated generation services (docs/verification-current-source-2026-10-19.md).",
       "verify": "Use explicitly isolated installed-desktop profiles; preserve acknowledged question/partial response; distinguish unacknowledged tokens and power-loss durability."
-    },
-    {
-      "id": "QUALITY-PYTHON-CRITICAL-PATHS-01",
-      "p": "P2",
-      "task": "Add critical-path Python quality checks with meaningful failure signals (docs/verification.md).",
-      "verify": "Select checks for ingestion, retrieval and persistence failure paths; demonstrate that representative defects fail the checks and that the current code passes, then wire them into the documented gate."
-    },
-    {
-      "id": "SOURCE-ARCHIVE-LIFECYCLE-01",
-      "p": "P2",
-      "task": "Qualify source archive retention, navigation and cleanup throughout document lifecycle (docs/retrieval.md).",
-      "verify": "Exercise create, revision, navigation, delete and cleanup in isolated storage; verify surviving citations and original bytes, orphan policy and rejection of paths outside the owned archive."
     },
     {
       "id": "DOC-EDITOR-DRAFT-DURABILITY-01",

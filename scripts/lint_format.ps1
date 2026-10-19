@@ -15,6 +15,7 @@
     Esegue unicamente la suite di unit test TypeScript.
 .PARAMETER SkipTests
     Salta la suite Vitest (la CI la esegue una sola volta, con coverage, in uno step dedicato).
+    I controlli Python critici restano obbligatori.
 #>
 
 [CmdletBinding()]
@@ -115,6 +116,12 @@ try {
         }
     } else {
         throw "[FAIL] Required sidecar directory not found: $sidecarDir"
+    }
+
+    # Behavioral admission/retrieval/persistence checks complement syntax compilation.
+    & $venvPython (Join-Path $rootDir "scripts/check_python_critical.py")
+    if ($LASTEXITCODE -ne 0) {
+        throw "[FAIL] Python critical-path gate failed with exit code $LASTEXITCODE."
     }
 
     # 5. Vitest Serial Test Suite

@@ -10,6 +10,7 @@ Eseguire i comandi da PowerShell nella radice del repository. Le versioni dichia
 | Avvio | `npm run dev` | Avvia Vite/Electron e il Sidecar; può leggere il profilo di sviluppo. Non rieseguito qui. |
 | Documentazione | `npm run docs:check` | Controlla link, ancoraggi Markdown e nomi degli script. Verificato in questa revisione. |
 | Tipi/statico | `npm run typecheck`, `npm run quality:static` | Controlli sorgente; eseguire se cambiano contratti o codice. Non necessari per sole pagine Markdown. |
+| Percorsi Python critici | `npm run quality:python` | 15 casi offline su ammissione, ricerca e persistenza. Esegue regressioni native esistenti in un subprocess isolato; errori, casi mancanti o saltati fanno fallire il gate. Incluso nel lint seriale anche con `-SkipTests`. [Qualifica e limiti](./verification-python-critical-2026-10-19.md). |
 | Test mirati | `npx vitest run <percorso>`; `.venv\Scripts\python.exe -m pytest -q <percorso>` | Usare per problemi concreti, con fixture isolate. |
 | Suite complete | `npm run test:fast -- --silent=true`; `.venv\Scripts\python.exe -m pytest -q` | Solo quando un problema o un gate di rilascio lo richiede; le ultime ricevute sono in [`verification-current.md`](./verification-current.md). |
 | Build | `npm run build` | Genera bundle locali. Non rieseguito qui. |
@@ -32,5 +33,7 @@ Il comando **Avvia / Installa Ollama** tenta di avviare `ollama.exe` locale. Se 
 [`clean_repo.ps1`](../scripts/clean_repo.ps1), [`clean_workspace.ps1`](../scripts/clean_workspace.ps1) e [`cleanup_policy.ps1`](../scripts/cleanup_policy.ps1) rifiutano percorsi non ammessi, reparse point, file tracciati e dati protetti. I modi Repo, TestResidues e Full richiedono `-DisposablePaths` con percorsi assoluti esaminati; Full esclude i profili. `-WhatIf` applica il preflight senza cancellare. `StopAppProcesses` rifiuta: chiudere l'app deliberatamente. Non classificare `.onlyrag`, `userdata_dev`, campagne live, checkpoint, backup o vecchi scratch come eliminabili dal nome. Eventuali residui hanno una decisione separata nel tracker (`RETAINED-RESIDUE-DISPOSAL-01`). Nessuna pulizia reale è stata eseguita per questa revisione.
 
 ## Disinstallazione e dati
+
+Gli archivi `source-documents` sono protetti dalla policy di cleanup. La rimozione di un documento dall'indice conserva l'originale e l'estrazione; anche gli originali di ingestioni fallite restano da valutare separatamente. L'annullamento pulisce soltanto l'archivio della nuova ingestione posseduta dopo il rollback riuscito. [Ciclo di vita e verifica](./retrieval.md#ciclo-di-vita-degli-archivi-originali).
 
 La configurazione NSIS ha `deleteAppDataOnUninstall: false` in [`package.json`](../package.json). L'installer locale è non firmato per default; `-RequireSignature` richiede una firma valida, mentre `-SkipSidecar` è rifiutato. Stato di licenze, sorgenti e aggiornamento in [`distribution.md`](./distribution.md).

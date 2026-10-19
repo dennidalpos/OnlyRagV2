@@ -4,6 +4,18 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Indice delle evidenze precedenti
 
+## Ciclo di vita degli archivi sorgente — 2026-10-19
+
+[Creazione, revisione, navigazione, cancellazione dall'indice, conservazione e rifiuti del cleanup con junction Windows reali](./verification-source-archive-lifecycle-2026-10-19.md).
+
+## Gate Python dei percorsi critici — 2026-10-19
+
+[Ammissione, ricerca e rollback: gate offline con controlli obbligatori e tre mutazioni rilevate su copie isolate](./verification-python-critical-2026-10-19.md).
+
+## Contesto documentale per risposta chat — 2026-10-19
+
+[Testo effettivamente incluso, troncamenti/esclusioni, checkpoint e recupero Electron offline](./verification-chat-coverage-2026-10-19.md).
+
 ## Candidato corrente: corrispondenza e prove locali — 2026-10-19
 
 [Estrazione indipendente installer, sorgenti/notice e codice congelato; probe CPU, parser/XLS frozen e recupero/traduzione confezionati con fixture dichiarate, task ancora aperto](./verification-current-source-2026-10-19.md).

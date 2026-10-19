@@ -188,6 +188,7 @@ export interface ChatMessage {
   timestamp: string
   sources?: CitationSource[]
   invalidSourceReferences?: string[]
+  contextCoverage?: import('../domain/chatContextCoverage').ChatContextCoverage
   isStreaming?: boolean
   interrupted?: boolean
 }

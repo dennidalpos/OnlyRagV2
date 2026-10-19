@@ -80,6 +80,80 @@ describe('retrieved candidate scores', () => {
     }
   })
 
+  it.each([
+    [
+      'en',
+      'Document context sent for this answer',
+      'Truncated',
+      'Excluded',
+      'Outside selected documents',
+      'Context limit',
+      'Earlier conversation context is separate.',
+    ],
+    [
+      'it',
+      'Contesto documentale inviato per questa risposta',
+      'Troncato',
+      'Escluso',
+      'Fuori dai documenti selezionati',
+      'Limite del contesto',
+      'Il contesto della conversazione precedente è separato.',
+    ],
+  ] as const)(
+    'shows saved coverage, literal supplied text and exclusions without inventing citations (%s)',
+    async (language, title, truncated, excluded, scope, budget, hint) => {
+      const container = document.createElement('div')
+      const root = createRoot(container)
+      const message: ChatMessage = {
+        id: 'coverage',
+        sender: 'bot',
+        text: 'Answer',
+        timestamp: '12:00',
+        contextCoverage: {
+          retrieval: 'completed',
+          items: [
+            {
+              kind: 'passage',
+              docId: 'a',
+              docName: 'same.md',
+              chunkId: 'a1',
+              referenceId: 'S1',
+              status: 'truncated',
+              originalChars: 99,
+              text: '<script>literal</script> 😀',
+            },
+            { kind: 'passage', docId: 'x', docName: 'other.md', chunkId: 'x1', status: 'excluded', originalChars: 123, text: '', reason: 'scope' },
+            { kind: 'preview', docId: 'b', docName: 'same.md', status: 'excluded', originalChars: 1000, text: '', reason: 'budget' },
+          ],
+        },
+      }
+      try {
+        await act(async () =>
+          root.render(
+            <I18nProvider initialLanguage={language}>
+              <ChatMessageItem msg={message} isCopied={false} copiedCitationIndex={null} onCopyMessage={vi.fn()} onCopyCitation={vi.fn()} />
+            </I18nProvider>,
+          ),
+        )
+        const details = container.querySelector('details')!
+        expect(details.querySelector('summary')?.textContent).toBe(title)
+        expect(details.textContent).toContain(truncated)
+        expect(details.textContent).toContain(excluded)
+        expect(details.textContent).toContain(scope)
+        expect(details.textContent).toContain(budget)
+        expect(details.textContent).toContain(hint)
+        expect(details.textContent).toContain('0/1000')
+        expect(details.textContent).toContain('[S1]')
+        expect(details.querySelector('pre')?.textContent).toBe(message.contextCoverage!.items[0].text)
+        expect(details.querySelector('script')).toBeNull()
+        expect(details.querySelector('button')).toBeNull()
+      } finally {
+        await act(async () => root.unmount())
+        container.remove()
+      }
+    },
+  )
+
   it('preserves user text and does not parse incomplete streaming markdown', async () => {
     const container = document.createElement('div')
     const root = createRoot(container)

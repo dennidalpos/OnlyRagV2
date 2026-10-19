@@ -26,6 +26,7 @@ Comandi verificati staticamente contro i file del progetto; questa revisione del
 | **Setup Dev** | `npm run setup:dev` | pwsh / root | Configurazione ambiente completo (Node + venv Python) |
 | **Dev** | `npm run dev` | pwsh / root | Server di sviluppo locale con hot reload |
 | **Targeted checks** | `npx vitest run <percorso>` | pwsh / root | Test rapidi mirati all'ambito modificato |
+| **Python critical paths** | `npm run quality:python` | pwsh / root | Gate offline su ammissione, ricerca e persistenza; rifiuta controlli mancanti o saltati |
 | **Full checks** | `npm run test && pytest` | pwsh / root | **Gate obbligatorio pre-commit** (test completi frontend e backend) |
 
 ## Riferimenti e collaborazione
@@ -39,6 +40,6 @@ Comandi verificati staticamente contro i file del progetto; questa revisione del
 <!-- secondbrain:repository:begin -->
 Dossier SecondBrain di questo repository: repos/OnlyRagV2, relativo alla radice di SecondBrain indicata nelle istruzioni globali.
 - Leggi a inizio task: questo AGENTS.md, repos/OnlyRagV2/context.md, repos/OnlyRagV2/memory.md e PROJECT_STATUS.json (o repos/OnlyRagV2/tracker.md).
-- Scrivi a fine task: decisioni e gotcha in repos/OnlyRagV2/memory.md; architettura e stato in repos/OnlyRagV2/context.md; attività aperte nel tracker.
-- Igiene di fine task: rimuovi sempre file e cartelle temporanei (.scratch, .system_generated, test-results, dist/backup-*, script di prova, worktree temporanei) prima di concludere, poi esegui secondbrain.ps1 -Sync.
+- Nei task di scrittura aggiorna solo novità pertinenti: decisioni e gotcha in repos/OnlyRagV2/memory.md; architettura e stato in repos/OnlyRagV2/context.md; attività nel tracker preservandone schema e storico.
+- Nei task di scrittura pulisci temporanei del task e residui confermati, preservando dati e lavoro unico; rivedi diff e git status --ignored. Esegui secondbrain.ps1 -Sync dopo modifiche a dossier o direttive, oppure su richiesta. Nei task di sola lettura segnala i residui senza rimuoverli.
 <!-- secondbrain:repository:end -->

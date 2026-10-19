@@ -30,6 +30,13 @@ describe('chat history storage', () => {
           text: 'Answer [S1]',
           timestamp: '12:00',
           invalidSourceReferences: ['S99'],
+          contextCoverage: {
+            retrieval: 'completed',
+            items: [
+              { kind: 'preview', docId: 'doc', docName: 'a.pdf', originalChars: 20, text: '😀x', status: 'truncated' },
+              { kind: 'passage', docId: 'doc', docName: 'a.pdf', chunkId: 'omitted', originalChars: 20, text: '', status: 'excluded', reason: 'budget' },
+            ],
+          },
           sources: [
             {
               docName: 'a.pdf',
@@ -69,6 +76,28 @@ describe('chat history storage', () => {
     expect(loaded.conversations).toEqual([extended])
     saveChatHistory(loaded.conversations, 'one', storage)
     expect(JSON.parse(storage.getItem('onlyrag_chat_conversations')!)).toEqual([extended])
+  })
+  it.each([
+    { status: 'included', text: 'part', originalChars: 20 },
+    { status: 'truncated', text: 'all', originalChars: 3 },
+    { status: 'excluded', text: 'not omitted', originalChars: 20, reason: 'budget' },
+    { status: 'excluded', text: '', originalChars: 20 },
+    { status: 'excluded', text: '', originalChars: -1, reason: 'scope' },
+    { status: 'included', text: 'all', originalChars: 3, surprise: true },
+  ])('refuses inconsistent saved coverage instead of presenting it as sent: %j', (item) => {
+    const stored = {
+      ...conversation,
+      messages: [
+        {
+          ...conversation.messages[0],
+          contextCoverage: {
+            retrieval: 'completed',
+            items: [{ kind: 'preview', docId: 'doc', docName: 'doc.md', ...item }],
+          },
+        },
+      ],
+    }
+    expect(loadChatHistory(store(JSON.stringify([stored]))).error).toBe('invalid')
   })
   it('reads the existing storage format without changing it', () => {
     const raw = JSON.stringify([conversation])

@@ -25,6 +25,7 @@ import { noConfiguredModelMessage, resolveConfiguredModel } from '../../shared/d
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
 import { useChatHistory } from './useChatHistory'
 import { citationForSuppliedPassage, resolveAnswerReferences } from '../services/chatSourceReferences'
+import type { ChatContextCoverage } from '../../shared/domain/chatContextCoverage'
 
 interface ChatRun {
   id: string
@@ -135,11 +136,19 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   }, [])
 
   const updateRunMessage = useCallback(
-    (run: ChatRun, text: string, sources?: CitationSource[], invalidSourceReferences?: string[]) => {
+    (run: ChatRun, text: string, sources?: CitationSource[], invalidSourceReferences?: string[], contextCoverage?: ChatContextCoverage) => {
       if (activeRunRef.current !== run) return
       run.text = text
       const next = messagesRef.current.map((msg) =>
-        msg.id === run.botMsgId ? { ...msg, text, ...(sources ? { sources } : {}), ...(invalidSourceReferences ? { invalidSourceReferences } : {}) } : msg,
+        msg.id === run.botMsgId
+          ? {
+              ...msg,
+              text,
+              ...(sources ? { sources } : {}),
+              ...(invalidSourceReferences ? { invalidSourceReferences } : {}),
+              ...(contextCoverage ? { contextCoverage } : {}),
+            }
+          : msg,
       )
       messagesRef.current = next
       setMessages(next)
@@ -415,6 +424,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       const groundingFailures: string[] = []
       let contextNotice = ''
       const scopedDocIds = hasSelectedDocs ? Array.from(run.docIds) : undefined
+      const coverage: ChatContextCoverage = { retrieval: hasSelectedDocs && routingResult.requiresRetrieval ? 'completed' : 'skipped', items: [] }
 
       // Retrieval runs ONLY when documents are explicitly selected and the query is non-chitchat
       if (hasSelectedDocs && routingResult.requiresRetrieval) {
@@ -424,24 +434,52 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
           if (!Array.isArray(searchResults)) throw new Error('Invalid retrieval response')
           if (searchResults.length > 0) {
-            const validResults = searchResults.filter((res) => res && res.text && (!res.doc_id || run.docIds.has(res.doc_id)))
             const includedBlocks: string[] = []
             const includedSources: CitationSource[] = []
             let usedChars = 0
+            let candidateIndex = 0
+            let budgetExhausted = false
 
-            for (let idx = 0; idx < validResults.length; idx++) {
-              const res = validResults[idx]
-              const referenceId = `S${idx + 1}`
+            for (const res of searchResults) {
+              const item: ChatContextCoverage['items'][number] = {
+                kind: 'passage',
+                docId: res.doc_id,
+                docName: res.doc_name || 'Document',
+                chunkId: res.chunk_id,
+                originalChars: res.text.length,
+                text: '',
+                status: 'excluded',
+                reason: 'budget',
+              }
+              coverage.items.push(item)
+              if (res.doc_id && !run.docIds.has(res.doc_id)) {
+                item.reason = 'scope'
+                continue
+              }
+              if (res.text) candidateIndex++
+              if (!res.text.trim()) {
+                item.reason = 'empty'
+                continue
+              }
+              if (budgetExhausted) continue
+              const referenceId = `S${candidateIndex}`
               const header = `[${referenceId}: ${res.doc_name || 'Document'} | Section: ${res.section_header || 'General'}]\n`
               const separatorChars = includedBlocks.length > 0 ? 7 : 0
               const availableChars = budget.vectorContextChars - usedChars - separatorChars - header.length
-              if (availableChars <= 0) break
+              if (availableChars <= 0) {
+                budgetExhausted = true
+                continue
+              }
               const body = res.text.slice(0, availableChars).replace(/[\uD800-\uDBFF]$/, '')
               if (!body.trim()) continue
               const block = header + body
               includedBlocks.push(block)
               usedChars += block.length + separatorChars
               includedSources.push(citationForSuppliedPassage(res, body, referenceId))
+              item.text = body
+              item.referenceId = referenceId
+              item.status = body.length === res.text.length ? 'included' : 'truncated'
+              delete item.reason
             }
 
             vectorContextText = includedBlocks.join('\n\n---\n\n')
@@ -454,7 +492,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         }
       }
 
-      const activeDocTexts: { name: string; full: string }[] = []
+      const activeDocTexts: { id: string; name: string; full: string }[] = []
       if (hasSelectedDocs) {
         // Fresh metadata and content detect deletion; cached Markdown is not proof of availability.
         try {
@@ -476,7 +514,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
             } else if (!result.value.extractedMarkdown?.trim()) {
               groundingFailures.push(t('chat.groundingEmpty', { name }))
             } else {
-              activeDocTexts.push({ name, full: result.value.extractedMarkdown })
+              activeDocTexts.push({ id: selectedDocs[index].id, name, full: result.value.extractedMarkdown })
             }
           })
         } catch (err: unknown) {
@@ -495,7 +533,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       let remainingChars = Math.max(0, budget.totalContextChars - vectorContextText.length - (vectorContextText ? contextSeparator.length : 0))
       const documentBlocks: string[] = []
       const partialDocs: string[] = []
-      for (const { name, full } of activeDocTexts) {
+      for (const { id, name, full } of activeDocTexts) {
         const separatorChars = documentBlocks.length > 0 ? 7 : 0
         const fullHeader = `[Full Document: ${name}]\n`
         const excerptHeader = `[Document Excerpt: ${name} | original ${full.length} chars; incomplete]\n`
@@ -505,6 +543,15 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           .slice(0, Math.min(budget.perDocumentPreviewChars, Math.max(0, remainingChars - separatorChars - header.length)))
           .replace(/[\uD800-\uDBFF]$/, '')
         if (!complete) partialDocs.push(name)
+        coverage.items.push({
+          kind: 'preview',
+          docId: id,
+          docName: name,
+          originalChars: full.length,
+          text: body.trim() ? body : '',
+          status: body.trim() ? (body.length === full.length ? 'included' : 'truncated') : 'excluded',
+          ...(body.trim() ? {} : { reason: 'budget' as const }),
+        })
         if (!body.trim()) continue
         const block = header + body
         documentBlocks.push(block)
@@ -564,6 +611,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           logger.info('ChatEngine', `Context budget [${budget.profileTier}${budget.isMinimal ? '/minimal' : ''}]: selected num_ctx ${budget.maxNumCtx}`)
 
           if (!isCurrentRun()) return
+          if (hasSelectedDocs) updateRunMessage(run, contextNotice, citationSources, undefined, coverage)
           run.dispatched = true
           const result = await window.electronAPI.generateOllamaStream(
             {

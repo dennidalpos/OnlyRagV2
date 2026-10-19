@@ -243,6 +243,93 @@ describe('chat document grounding', () => {
     expect(prompt).not.toContain('[Full Document: a.md]')
     expect(chat.messages.at(-1)?.text).toContain('Partial document context')
     expect(chat.conversations[0].messages.at(-1)?.text).toContain('Partial document context')
+    const coverage = chat.messages.at(-1)?.contextCoverage?.items[0]
+    expect(coverage).toMatchObject({ kind: 'preview', docId: 'a', status: 'truncated', originalChars: text.length })
+    expect(coverage?.text).toBe(text.slice(0, coverage?.text.length))
+    expect(prompt).toContain(coverage!.text)
+  })
+  it('records exactly the supplied multi-document previews and candidates, including budget and scope exclusions', async () => {
+    settingsOverride = { modelContextLengths: { 'fixture-model': 2048 } }
+    const longPassage = 'Delivery in 21 days 😀. '.repeat(1000)
+    getIngestedDocument.mockResolvedValueOnce({ ...docA, extractedMarkdown: 'First document 😀 '.repeat(1000) })
+    getIngestedDocument.mockResolvedValueOnce({ ...docB, extractedMarkdown: 'Second document 😀 '.repeat(1000) })
+    searchVectorDb.mockResolvedValueOnce([
+      { chunk_id: 'a1', doc_id: 'a', doc_name: 'a.md', text: longPassage, score: 1 },
+      { chunk_id: 'b1', doc_id: 'b', doc_name: 'b.md', text: 'UNSENT_BUDGET_PASSAGE', score: 0.8 },
+      { chunk_id: 'x1', doc_id: 'other', doc_name: 'other.md', text: 'UNSENT_SCOPE_PASSAGE', score: 0.7 },
+      { chunk_id: 'a2', doc_id: 'a', doc_name: 'a.md', text: '  ', score: 0.6 },
+    ])
+    generateOllamaStream.mockImplementationOnce(async (_request, onChunk) => {
+      onChunk('Delivery in 21 days [S1].')
+      return { success: true }
+    })
+    await send(['a', 'b'])
+    const prompt = generateOllamaStream.mock.calls[0][0].prompt
+    const answer = chat.messages.at(-1)!
+    const coverage = answer.contextCoverage!
+    expect(coverage.retrieval).toBe('completed')
+    expect(coverage.items.filter((item) => item.kind === 'preview').map((item) => item.docId)).toEqual(['a', 'b'])
+    expect(coverage.items.filter((item) => item.kind === 'passage').map((item) => [item.chunkId, item.status, item.reason])).toEqual([
+      ['a1', 'truncated', undefined],
+      ['b1', 'excluded', 'budget'],
+      ['x1', 'excluded', 'scope'],
+      ['a2', 'excluded', 'empty'],
+    ])
+    for (const item of coverage.items) {
+      if (item.status === 'excluded') expect(item.text).toBe('')
+      else {
+        expect(prompt).toContain(item.text)
+        expect(item.text.length).toBeLessThanOrEqual(item.originalChars)
+        expect(item.text).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+      }
+    }
+    expect(prompt).not.toContain('UNSENT_BUDGET_PASSAGE')
+    expect(prompt).not.toContain('UNSENT_SCOPE_PASSAGE')
+    expect(answer.sources?.map((source) => [source.referenceId, source.citationState])).toEqual([['S1', 'cited']])
+    expect(coverage.items.filter((item) => item.referenceId).map((item) => item.referenceId)).toEqual(['S1'])
+    expect(chat.conversations[0].messages.at(-1)?.contextCoverage).toEqual(coverage)
+    expect(recovery.state?.conversations[0].messages.at(-1)?.contextCoverage).toEqual(coverage)
+  })
+  it('records complete previews when retrieval is empty and leaves general chat without document coverage', async () => {
+    await send(['a', 'b'])
+    expect(chat.messages.at(-1)?.contextCoverage).toEqual({
+      retrieval: 'completed',
+      items: [
+        { kind: 'preview', docId: 'a', docName: 'a.md', originalChars: 10, text: 'Readable a', status: 'included' },
+        { kind: 'preview', docId: 'b', docName: 'b.md', originalChars: 10, text: 'Readable b', status: 'included' },
+      ],
+    })
+    await act(async () => chat.handleNewChat())
+    await send([])
+    expect(chat.messages.at(-1)?.contextCoverage).toBeUndefined()
+  })
+  it('does not claim context was sent when preparation fails or Stop precedes dispatch', async () => {
+    getIngestedDocument.mockRejectedValueOnce(new Error('unavailable'))
+    await send()
+    expect(chat.messages.at(-1)?.contextCoverage).toBeUndefined()
+    const retrieval = deferred<VectorSearchResult[]>()
+    searchVectorDb.mockReturnValueOnce(retrieval.promise)
+    const { completion } = await start([])
+    await act(async () => chat.handleStopGeneration())
+    await act(async () => {
+      retrieval.resolve([])
+      await completion
+    })
+    expect(generateOllamaStream).not.toHaveBeenCalled()
+    expect(chat.messages.at(-1)?.contextCoverage).toBeUndefined()
+  })
+  it('reports skipped retrieval separately from an empty search when selected previews are supplied', async () => {
+    await act(async () => {
+      chat.toggleDocSelection('a')
+      chat.setInput('Hello')
+    })
+    await act(async () => chat.handleSendMessage())
+    expect(searchVectorDb).not.toHaveBeenCalled()
+    expect(generateOllamaStream.mock.calls[0][0].prompt).toContain('[Full Document: a.md]\nReadable a')
+    expect(chat.messages.at(-1)?.contextCoverage).toEqual({
+      retrieval: 'skipped',
+      items: [{ kind: 'preview', docId: 'a', docName: 'a.md', originalChars: 10, text: 'Readable a', status: 'included' }],
+    })
   })
   it('persists only completed, supplied citations and reports unknown references', async () => {
     searchVectorDb.mockResolvedValueOnce([

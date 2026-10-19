@@ -10,6 +10,7 @@
     "setup:dev": "powershell -ExecutionPolicy Bypass -File ./scripts/setup_dev_environment.ps1",
     "format:check": "git diff --check HEAD",
     "quality:static": "node ./scripts/check_static_quality.mjs",
+    "quality:python": ".venv\\Scripts\\python.exe scripts/check_python_critical.py",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:fast": "vitest run --reporter=dot",

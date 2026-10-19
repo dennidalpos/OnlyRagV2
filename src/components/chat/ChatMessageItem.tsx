@@ -8,6 +8,7 @@ import { electronApi } from '../../services/electronApi'
 import { sourceLocationRequest } from '../../services/chatSourceReferences'
 import { Modal } from '../common/Modal'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { ChatContextCoveragePanel } from './ChatContextCoveragePanel'
 
 interface ChatMessageItemProps {
   msg: ChatMessage
@@ -218,6 +219,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
             </p>
           )}
           {/* Retrieved candidate passages */}
+          {!isUser && msg.contextCoverage && <ChatContextCoveragePanel coverage={msg.contextCoverage} />}
           {msg.invalidSourceReferences?.length ? (
             <p role="status" className="text-amber-300">
               {t('chat.invalidSourceReferences', { references: msg.invalidSourceReferences.join(', ') })}

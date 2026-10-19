@@ -149,9 +149,9 @@ I diagrammi SVG sono incorporati sotto ogni percorso e restano apribili singolar
 1. Per interrogare documenti selezionali in **Contesto LanceDB** o collegali con **@**; **Aggiorna Documenti** aggiorna l’elenco. Senza selezione puoi inviare la domanda, ma non stai interrogando il corpus documentale.
 2. Scrivi la richiesta, anche da **Domande Rapide**, e premi **Invia** o **Invio**; **Shift+Invio** aggiunge una riga. **Opzioni Prompt** e **Personalizza System Prompt** consentono di regolare contesto e istruzioni.
 3. Durante la generazione usa **Ferma** per interrompere. La risposta risultante è incompleta. In caso di contesto bloccato, selezione assente o servizio indisponibile, correggi il problema e invia nuovamente la domanda.
-4. Se appare un avviso di contesto parziale, le parti omesse non sono visibili al modello: riduci la selezione o fai domande più mirate. Per una risposta completata passa a 09.
+4. Apri **Contesto documentale inviato per questa risposta** per vedere anteprime e passaggi inclusi, troncati o esclusi; **Testo inviato** mostra il contenuto effettivo di ciascun elemento incluso. Se appare un avviso di contesto parziale, riduci la selezione o fai domande più mirate. Per una risposta completata passa a 09.
 
-**Da sapere.** Se un modello è in aggiornamento, attendi il completamento. Se un’altra funzione occupa il blocco di esecuzione, termina o interrompi quella lavorazione prima di riprovare. Con runtime remoto i prompt vengono inviati al server configurato in 22.
+**Da sapere.** Il dettaglio riguarda il testo documentale aggiunto in quel turno e resta nella cronologia: l’anteprima è confrontata con il Markdown estratto e il passaggio con il candidato restituito dalla ricerca. Non misura la copertura semantica o i token del modello; lo storico della conversazione può contenere altro contesto precedente. I passaggi fuori dal numero richiesto alla ricerca non sono valutati. Le risposte precedenti all’introduzione del dettaglio non hanno questo riepilogo. Se un modello è in aggiornamento, attendi il completamento. Se un’altra funzione occupa il blocco di esecuzione, termina o interrompi quella lavorazione prima di riprovare. Con runtime remoto i prompt vengono inviati al server configurato in 22.
 
 ### 09 Verificare risposta e fonti
 

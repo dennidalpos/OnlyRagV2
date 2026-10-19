@@ -14,7 +14,10 @@ async function verifyRecovery(width, height) {
   fs.mkdirSync(userData)
   fs.writeFileSync(
     path.join(userData, 'settings.json'),
-    JSON.stringify({ version: 2, settings: { language: 'en', hasCompletedInitialSetup: true, defaultModel: 'offline-fixture' } }),
+    JSON.stringify({
+      version: 2,
+      settings: { language: 'en', hasCompletedInitialSetup: true, defaultModel: 'offline-fixture', ollamaHost: 'http://127.0.0.1:1' },
+    }),
   )
   const environment = { ...process.env, ONLYRAG_E2E_TEST: '1', ONLYRAG_E2E_USER_DATA: userData, ELECTRON_DISABLE_SECURITY_WARNINGS: '1' }
   delete environment.ELECTRON_RUN_AS_NODE
@@ -48,14 +51,16 @@ async function verifyRecovery(width, height) {
         globalThis.__closeWarnings.push(options.message)
         return { response: 0, checkboxChecked: false }
       }
-      for (const channel of ['ingest:list', 'ingest:get', 'ingest:update', 'ollama:generate-stream']) ipcMain.removeHandler(channel)
+      for (const channel of ['ingest:list', 'ingest:get', 'ingest:update', 'ingest:search', 'ollama:generate-stream']) ipcMain.removeHandler(channel)
       ipcMain.handle('ingest:list', () => [{ ...globalThis.__document }])
       ipcMain.handle('ingest:get', () => ({ ...globalThis.__document }))
+      ipcMain.handle('ingest:search', () => [{ chunk_id: 'doc_chunk_0', doc_id: 'doc', doc_name: 'notes.md', text: 'A supplied passage.', score: 0.5 }])
       ipcMain.handle('ingest:update', (_event, request) => {
         globalThis.__saveRequests.push(request)
         return { success: false, error: 'Document changed; draft retained.' }
       })
       ipcMain.handle('ollama:generate-stream', (event, request) => {
+        globalThis.__chatPrompt = request.prompt
         event.sender.send('ollama:chunk', { operationId: request.operationId, chunk: 'A partial offline answer' })
         return new Promise(() => {})
       })
@@ -88,6 +93,7 @@ async function verifyRecovery(width, height) {
     assert.equal(initialDraft.ingestedAt, 't1')
     assert.equal(initialDraft.content, '# Recovered draft')
     await page.getByRole('tab', { name: 'RAG & Chat', exact: true }).click()
+    await page.getByRole('button', { name: /^notes.md \(/ }).click()
     await page.getByRole('textbox', { name: /^Ask your documents/ }).fill('An offline question')
     await page.getByRole('textbox', { name: /^Ask your documents/ }).press('Enter')
     // This Playwright runtime treats Promise predicates as truthy in waitForFunction.
@@ -108,6 +114,26 @@ async function verifyRecovery(width, height) {
     assert(partialSaved, 'The automatic Main checkpoint must contain the partial answer before interruption')
     const recoveredBeforeKill = JSON.parse(fs.readFileSync(path.join(userData, 'chat-history-recovery.json'), 'utf8'))
     assert.equal(recoveredBeforeKill.state.conversations.at(-1).messages.at(-1).text, 'A partial offline answer')
+    const coverage = recoveredBeforeKill.state.conversations.at(-1).messages.at(-1).contextCoverage
+    assert.deepEqual(coverage, {
+      retrieval: 'completed',
+      items: [
+        {
+          kind: 'passage',
+          docId: 'doc',
+          docName: 'notes.md',
+          chunkId: 'doc_chunk_0',
+          originalChars: 19,
+          text: 'A supplied passage.',
+          status: 'included',
+          referenceId: 'S1',
+        },
+        { kind: 'preview', docId: 'doc', docName: 'notes.md', originalChars: 10, text: '# Original', status: 'included' },
+      ],
+    })
+    const prompt = await application.evaluate(() => globalThis.__chatPrompt)
+    assert(prompt.includes('[S1: notes.md | Section: General]\nA supplied passage.'))
+    assert(prompt.includes('[Full Document: notes.md]\n# Original'))
     // Only the process tree returned by this isolated launch is terminated.
     // The application exits after renderer crashes, so recovery requires a fresh launch.
     const interrupted = application.waitForEvent('close', { timeout: 20_000 })
@@ -118,6 +144,18 @@ async function verifyRecovery(width, height) {
     await page.getByRole('tab', { name: 'RAG & Chat', exact: true }).click()
     await page.getByText('Generation was interrupted before completion. This response is incomplete.', { exact: true }).waitFor()
     await page.getByText('A partial offline answer', { exact: true }).waitFor()
+    const coveragePanel = page
+      .locator('details')
+      .filter({ has: page.getByText('Document context sent for this answer', { exact: true }) })
+      .first()
+    await coveragePanel.locator('summary').first().click()
+    assert((await coveragePanel.innerText()).includes('Document preview'))
+    assert((await coveragePanel.innerText()).includes('[S1]'))
+    const restoredCoverage = await page.evaluate(async () => {
+      const recovery = await window.electronAPI.loadChatRecovery()
+      return recovery.state.conversations.at(-1).messages.at(-1).contextCoverage
+    })
+    assert.deepEqual(restoredCoverage, coverage)
     await page.getByRole('tab', { name: 'Doc Ingestion', exact: true }).click()
     await page.waitForFunction(() => document.querySelector('.monaco-editor .view-lines')?.textContent?.includes('Recovered'))
     await page.getByRole('button', { name: 'Save Changes', exact: true }).click()

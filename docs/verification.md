@@ -4,6 +4,10 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Indice delle evidenze precedenti
 
+## Candidato corrente: corrispondenza e prove locali — 2026-10-19
+
+[Estrazione indipendente installer, sorgenti/notice e codice congelato; probe CPU, parser/XLS frozen e recupero/traduzione confezionati con fixture dichiarate, task ancora aperto](./verification-current-source-2026-10-19.md).
+
 ## Ricerca, FTS e I/O degli archivi — 2026-10-18
 
 [Misure native su 10.000/100.000 chunk, lettura della provenienza per documento e qualifiche residue](./verification-retrieval-efficiency-2026-10-18.md).

@@ -1,0 +1,350 @@
+{
+  "task": "DISTRIBUTION-CURRENT-SOURCE-QUALIFICATION-01",
+  "date": "2026-10-19",
+  "status": "partial",
+  "sourceCommit": "95752a01857707f9280ee2192c0598fa17122601",
+  "release": "release/cpu-20261018-220641-87a891b9",
+  "installer": {
+    "path": "OnlyRag V2 Setup 1.0.0.exe",
+    "sha256": "fd4e5f176cc1f5f8262025f8bff11382130775a172e194c5b61449543b7b708e",
+    "bytes": 416382368
+  },
+  "source": {
+    "path": "OnlyRag-1.0.0-source.zip",
+    "sha256": "6cf5a7ff133c83572689b2e5460a6af80a9e2ce0a3daa9f1c69bec16e6f4e1c3"
+  },
+  "signature": "NotSigned",
+  "verified": {
+    "projectSourceRecords": 1111,
+    "dependencySourceFiles": 72,
+    "payloadFiles": 3589,
+    "noticeFiles": 914,
+    "pythonDistributions": 69,
+    "nodeBuildEnvironmentPackages": 711,
+    "frozenProjectModules": [
+      "sidecar.config",
+      "sidecar.domain.document_limits",
+      "sidecar.domain.exporter",
+      "sidecar.domain.ingestion",
+      "sidecar.domain.llm_normalizer",
+      "sidecar.domain.router",
+      "sidecar.domain.sanitizer",
+      "sidecar.domain.tabular",
+      "sidecar.domain.translation_terms",
+      "sidecar.domain.translator",
+      "sidecar.domain.vision_prompt",
+      "sidecar.domain.word_segmenter",
+      "sidecar.domain.xls_reader",
+      "sidecar.infrastructure.chunk_storage",
+      "sidecar.infrastructure.db",
+      "sidecar.infrastructure.document_recovery",
+      "sidecar.infrastructure.embeddings",
+      "sidecar.infrastructure.ocr",
+      "sidecar.infrastructure.reranker",
+      "sidecar.infrastructure.source_provenance",
+      "sidecar.infrastructure.store_control",
+      "sidecar.infrastructure.store_rebuild_manifest",
+      "sidecar.infrastructure.xls_process",
+      "sidecar.schemas",
+      "sidecar.services.ingest_service",
+      "sidecar.services.prompt_history_service",
+      "sidecar.services.search_service",
+      "sidecar.services.task_cancellation",
+      "sidecar.services.vocab_service",
+      "sidecar.xls_worker"
+    ],
+    "frozenEntrypoint": "main",
+    "sidecarSha256": "49df4d42498a9eb3723b958b702de42939ffd514b18ab12821a9c6c4ba83bac4"
+  },
+  "asar": {
+    "generatedFiles": 54,
+    "packageRecords": 249,
+    "missingComponentRecords": [],
+    "sha256": "e768d4d40bfd48601d6377a397c8f936c807c0dc0991107e42109e96e53b4f88"
+  },
+  "probes": {
+    "cpu": "passed; qualification-6a079778/result.json",
+    "packagedRecovery": "passed at native 1024x720 and 1920x1080; isolated profiles and mocked document/generation services",
+    "frozenParsers": {
+      "scope": "Frozen HTTP table parsers and normalization with declared local response fixture; native source controller with exact frozen XLS worker. No real models or installation.",
+      "checks": [
+        {
+          "check": "existing HTTP regression suite",
+          "exitCode": 0,
+          "selectors": [
+            "sidecar/tests/test_tabular_ingestion.py::test_malformed_csv_never_indexes_partial_content",
+            "sidecar/tests/test_tabular_ingestion.py::test_csv_stream_preserves_the_original_literals",
+            "sidecar/tests/test_tabular_ingestion.py::test_adversarial_table_stream_never_indexes_partial_content",
+            "sidecar/tests/test_tabular_ingestion.py::test_excel_stream_retains_cells",
+            "sidecar/tests/test_tabular_ingestion.py::test_excel_stream_failure_cannot_index",
+            "sidecar/tests/test_tabular_ingestion.py::test_parquet_stream_retains_values",
+            "sidecar/tests/test_tabular_ingestion.py::test_parquet_stream_failure_cannot_index",
+            "sidecar/tests/test_normalization_ingestion.py::test_normalization_stream_rejection_retains_the_original",
+            "sidecar/tests/test_normalization_ingestion.py::test_normalization_stream_review_includes_all_original_pages",
+            "sidecar/tests/test_normalization_ingestion.py::test_normalization_stream_valid_cleanup_indexes",
+            "sidecar/tests/test_normalization_ingestion.py::test_lexical_rewrites_require_review_before_indexing",
+            "sidecar/tests/test_normalization_ingestion.py::test_context_refusal_retains_complete_http_source_without_indexing"
+          ]
+        },
+        {
+          "check": "frozen HTTP dense refusal",
+          "full": false,
+          "error": "XLS source exceeds the 8 MiB parser limit; export as XLSX or CSV.",
+          "indexAndSourcesPreserved": true
+        },
+        {
+          "check": "frozen HTTP dense refusal",
+          "full": true,
+          "error": "XLS parser exceeded its 512 MiB memory budget; export as CSV or XLSX.",
+          "indexAndSourcesPreserved": true
+        },
+        {
+          "check": "frozen HTTP sparse maximum coordinate",
+          "documentId": "b57c07fb-76c8-4c02-b618-6d03e61f11cf",
+          "sourcePreserved": true
+        },
+        {
+          "check": "frozen HTTP recovery after refusal",
+          "documentId": "de670808-7323-4723-8ae9-ea2101585806"
+        },
+        {
+          "check": "frozen worker small",
+          "peakCommitBytes": 71385088,
+          "elapsedSeconds": 0.5777817999987747,
+          "outputBytes": 737,
+          "pid": 1540
+        },
+        {
+          "check": "frozen worker dense",
+          "peakCommitBytes": 521142272,
+          "elapsedSeconds": 8.427392599998711,
+          "outputBytes": 92,
+          "pid": 20268
+        },
+        {
+          "check": "frozen worker sparse",
+          "peakCommitBytes": 82001920,
+          "elapsedSeconds": 0.6981503999995766,
+          "outputBytes": 290,
+          "pid": 26660
+        },
+        {
+          "check": "frozen worker strings",
+          "peakCommitBytes": 187748352,
+          "elapsedSeconds": 0.6420866000007663,
+          "outputBytes": 82664,
+          "pid": 9292
+        },
+        {
+          "check": "frozen worker shared-strings",
+          "peakCommitBytes": 520372224,
+          "elapsedSeconds": 0.7988335000009101,
+          "outputBytes": 92,
+          "pid": 12560
+        },
+        {
+          "check": "frozen worker timeout reaped",
+          "error": "XLS parser exceeded its 0.01-second time budget; export as CSV or XLSX."
+        },
+        {
+          "check": "frozen worker recovery after timeout"
+        },
+        {
+          "check": "frozen encoder provenance",
+          "declaredDimension": 768,
+          "changedDigestStatus": 500,
+          "originalDigestRecovery": true,
+          "indexPreserved": true
+        }
+      ],
+      "normalizationFixtureRequests": 12,
+      "status": "passed",
+      "ownedSidecarStopped": true
+    },
+    "frozenOwnerCrash": {
+      "scope": "Actual frozen Sidecar/controller and worker, isolated state; owner termination and restart; declared response fixture, no real models.",
+      "preservedDocumentId": "096a0f78-f2b1-4b70-bc97-48c96c8ad7ae",
+      "workerPid": 25832,
+      "ownerPid": 19264,
+      "workerTerminatedOnOwnerCrash": true,
+      "interruptedHttpOutcome": "ReadError",
+      "restartReadback": true,
+      "newXlsIngestionAfterRestart": true,
+      "status": "passed",
+      "ownedSidecarStopped": true
+    },
+    "packagedNativeFlow": {
+      "scope": "Packaged Main/Preload/Renderer and owned frozen Sidecar, isolated E2E profile; explicit production restart path, synthetic local Ollama responses; no installation or real models",
+      "ingestions": [
+        {
+          "name": "flow.docx",
+          "id": "7fbae774-f0a2-42bb-94df-fd520371d729",
+          "markdown": "# flow.docx\n\n## Page 1\n\nIl documento contiene una prova."
+        },
+        {
+          "name": "flow.pdf",
+          "id": "b7d5abd9-01f8-4891-9b57-b857ae2dac51",
+          "markdown": "# flow.pdf\n\n## Page 1\n\nIl documento contiene una prova."
+        },
+        {
+          "name": "literal.css",
+          "id": "027de963-ba56-4f89-a48f-1cce8950e77d",
+          "markdown": "# literal.css\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        },
+        {
+          "name": "literal.html",
+          "id": "e24cec72-fb0e-45d0-b28a-aa037e99a9e5",
+          "markdown": "# literal.html\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        },
+        {
+          "name": "literal.js",
+          "id": "9084d2fa-1907-4bb4-b5ed-e616c46ca27a",
+          "markdown": "# literal.js\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        },
+        {
+          "name": "literal.json",
+          "id": "da88efa9-78ce-45f3-b55a-0346cb40f9e4",
+          "markdown": "# literal.json\n\n## Page 1\n\n```json\n{\n  \"label\": \"FixtureLiteral\",\n  \"value\": \"AB123\"\n}\n```"
+        },
+        {
+          "name": "literal.md",
+          "id": "5f6a8ad2-8662-45bc-a08d-8b37f20357cd",
+          "markdown": "# literal.md\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        },
+        {
+          "name": "literal.ps1",
+          "id": "ec2ce3db-b914-4d13-b000-6a46c1bdaa28",
+          "markdown": "# literal.ps1\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        },
+        {
+          "name": "literal.py",
+          "id": "de218ed4-2561-445f-880b-c43643816fe6",
+          "markdown": "# literal.py\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        },
+        {
+          "name": "literal.sh",
+          "id": "64a5dc41-9ca8-4d24-a244-38f7c6759560",
+          "markdown": "# literal.sh\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        },
+        {
+          "name": "literal.sql",
+          "id": "7666b769-a31f-48c3-b9f5-b7e1672ff41c",
+          "markdown": "# literal.sql\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        },
+        {
+          "name": "literal.ts",
+          "id": "7bef188c-f931-41fc-8e3e-b8c5be32df1c",
+          "markdown": "# literal.ts\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        },
+        {
+          "name": "literal.tsv",
+          "id": "0a08e6e6-c01e-46df-b919-eb2b384e647a",
+          "markdown": "# literal.tsv\n\n## Page 1\n\n| label          | value   |\n|:---------------|:--------|\n| FixtureLiteral | AB123   |"
+        },
+        {
+          "name": "literal.txt",
+          "id": "40c92801-678a-4146-8be3-f8aa4812670a",
+          "markdown": "# literal.txt\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        },
+        {
+          "name": "literal.xml",
+          "id": "b0beb578-93e3-4860-9df0-721612696192",
+          "markdown": "# literal.xml\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        },
+        {
+          "name": "literal.yaml",
+          "id": "e0107785-b965-4ae8-a24c-0ad04f6555a7",
+          "markdown": "# literal.yaml\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        },
+        {
+          "name": "literal.yml",
+          "id": "62c58e09-ac98-4e58-a74f-8eaed106de82",
+          "markdown": "# literal.yml\n\n## Page 1\n\nFixtureLiteral AB123 value"
+        }
+      ],
+      "translations": [
+        {
+          "name": "flow.docx",
+          "filePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\packaged-native-flow-verified\\translated\\flow_english.docx"
+        },
+        {
+          "name": "flow.pdf",
+          "filePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\packaged-native-flow-verified\\translated\\flow_english.pdf"
+        }
+      ],
+      "restartReadback": true,
+      "translationRefusalPreservedOutputs": true,
+      "status": "passed",
+      "applicationClosed": true,
+      "independentTranslationReadback": true,
+      "sourceHashesPreserved": true,
+      "fixtureRequests": 4
+    },
+    "frozenHttpTests": "29 passed in 11.18 s; exit 0; synthetic loopback encoder and normalization fixture"
+  },
+  "fullChecks": {
+    "typescript": "2890 passed in 320 files; 215.75 s; exit 0",
+    "python": "583 passed, 1 legacy symlink skipped; 186.18 s; exit 0; real junction executed"
+  },
+  "retainedEvidence": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6",
+  "evidenceHashes": {
+    "package.log": "50667ef555e51fb6803b989caf2dbd25aaeeea883f75c84798f44e1ebb34e062",
+    "verify_correspondence.py": "6dc2815108e2f45982b2c6bc55a807a654c303549e3e1eb5567a35519d2431b9",
+    "correspondence.json": "3cd12c6dbd0ce8ecfca4fbad9fc0708205aff126401a9e7de9ca0e6cdf7f598c",
+    "verify_asar.cjs": "7ca799f03d42856c1790c9cf4b3fa9d85fff55abfd87d49b619ce6bb844c4983",
+    "asar-readback.json": "06892c8d97beec5198f57788729b40fa87cdc15784895c0b5cc5fe7b3cff4fb8",
+    "packagedChatDraftRecovery.mjs": "847c3a11d8a9e3c58e8fc3ef2b22d3e56eb443e76752dbb15af4479027f0d04b",
+    "packaged-recovery.log": "566870f488036fc5e71f16ed0f0ba2478d79e097c7ff4d919bc70f50ca4568d3",
+    "cpu-probe.log": "ad87bd15dee117eea0951f7501427be3c39700d21c6d88bcd89433380a573ecd",
+    "signature.json": "446242c643ddbf4202e1e667c18c17f9c57919806c816706aedcb9bd9ce51174",
+    "vitest.log": "41f8e4653ebf41f129154a99e94dba78744e8187045f4ba22ab5f9853c18a103",
+    "pytest.log": "03f8ab81d7db8a72f815e02755986079062dee7d6f24635cef56aff1f436a73c",
+    "frozen_parser.py": "af5d338c70ea21de8dd0d66c06f4dca1770844dc4b48556136b8403f4b8039d4",
+    "frozen_owner_crash.py": "90838ad1ab2992488321349da368772190784b35a9edea5e21cfcfdd7ff73b73",
+    "_packaged_normalization_fixture.py": "7e46abde16eb237b61378fa1c4d3d1cb5aebb919018a1bc6bb8608c694206bd9",
+    "packaged_native_flow.py": "ff5f629e2f1cfd25929ba98a25e6910b76d1010d0d44354359b737810d0d1962",
+    "packaged_native_flow.mjs": "3cd68d9c6772c700b902ab805a45485710c837b14b2433ce3f467cddc5562a0b",
+    "_packaged_flow_fixture.py": "8cb54900ec6bb4e608ade25efa2f08187d6bb5e0983066a1f5b673e6fc1e0f2c",
+    "frozen-parser-verified/result.json": "31d822bf2c6da2f32d0c958231dd46ffc4aedd300769381108e5d091095a916a",
+    "frozen-parser-verified/http-pytest.log": "cfe0bba11c4f43b43a77b2ae6785184a5e331d6297d24a1ab220cf1af03103f8",
+    "frozen-owner-crash/result.json": "a6f1ed02738b98d527602621eb31cab821c194b8ddf7e8a6a4fee11d7975b244",
+    "packaged-native-flow-verified/result.json": "c57d1b517e8d47f646e63ed777c7783ed268f22cc1bca90de4c9ca1c1a3b5192",
+    "packaged-native-flow-verified/fixture-requests.json": "ab650367966946227139284bf7b768e75fb59a2076d5903c6ff23bc1f81787a7",
+    "frozen-parser-verified.log": "1d2317335acecc617d374882c4490b01d776fa1524ba01088724eb222a6d05e7",
+    "frozen-owner-crash.log": "a6f1ed02738b98d527602621eb31cab821c194b8ddf7e8a6a4fee11d7975b244",
+    "packaged-native-flow-verified.log": "5323894b81c6c3d442373f455b0e4e9362475a926c94c385ce2744b2433d6874",
+    "frozen-parser/result.json": "d9e045dbecc6648b5500b283e67d0a63d896978f46dd79b2e218f16a1a021875",
+    "frozen-parser-final/result.json": "ffa297a394d47b3fbd421fe1ef164d9b1d6454b20fd5c6745ab70803a44c7d3a",
+    "packaged-native-flow/result.json": "5571c1a2de4ce005abca06a88933e2b4dc5626eb53a986957abd8bd30a1c58d4",
+    "final-artifact-readback.json": "db6d861458978fb8646daeb13bd06bd4239ad87be9fcc5d495d4b3678c0e4689"
+  },
+  "remaining": [
+    "automatic production startup and installed/restarted desktop on the same artifact",
+    "representative parser workloads beyond the declared fixtures; installed XLS route and admission/output fault injection",
+    "real encoder behavior and semantic normalization/translation quality; separate authorization required"
+  ],
+  "limits": [
+    "P03 qualification phase: no installation, personal-profile changes, real-model calls, installer publication, commit or push; subsequent documentation publication is recorded separately.",
+    "Source/notice and file inventory equality does not certify component rights, native dependency build correspondence or public corresponding-source completeness.",
+    "The source archive is the clean 95752a0 snapshot; this receipt and later tracker/docs updates are post-build evidence.",
+    "Synthetic encoder/normalization/translation responses exercise actual frozen and IPC paths but cannot certify model quality; explicit Sidecar restart in isolated E2E profiles does not certify automatic installed startup."
+  ],
+  "ci": {
+    "url": "https://github.com/dennidalpos/OnlyRagV2/actions/runs/39170618618",
+    "headSha": "95752a01857707f9280ee2192c0598fa17122601",
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "finalReadback": {
+    "status": "passed",
+    "payloadFiles": 3589,
+    "installerAndSourceUnchanged": true,
+    "allPayloadHashesUnchangedAfterProbes": true
+  },
+  "finalChecks": {
+    "docs": "68 Markdown files passed",
+    "static": "851 files, 103 IPC handlers passed",
+    "tracker": "42 IDs, same schema/notes/priorities; only selected distribution and XLS tasks changed; other 40 identical",
+    "scope": "P03 qualification phase; subsequent tracker reconciliation is recorded in the accompanying Markdown."
+  }
+}

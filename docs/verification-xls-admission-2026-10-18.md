@@ -60,3 +60,7 @@ Consultate le fonti ufficiali: [xlrd on-demand](https://xlrd.readthedocs.io/en/l
 Backup SHA-256 dei file interessati precedente al lotto in `%TEMP%/onlyrag-xls-admission-skocyovy/backup`, inclusi tracker e documentazione con il lavoro CI preesistente. Le prime prove hanno corretto launcher del venv, pool BLAS, conteggio del picco, attesa della terminazione e aspettative sui residui conservati; nessuna di queste correzioni autorizza cancellazioni di dati personali.
 
 Il task resta aperto finché il worker frozen/desktop installato non ripete, in radici isolate, ammissione al Job, parsing, limiti, errori, timeout, arresto del proprietario e preservazione di sorgenti/indice. Restano distinte qualifica CI remota, semantica, installazione, migrazione e perdita di alimentazione. Nessuna nuova chiamata modello, installazione, migrazione personale, commit o push in questo lotto.
+
+## Aggiornamento frozen — 19 ottobre 2026
+
+Il [candidato corrente](./verification-current-source-2026-10-19.md) ripete con successo parsing e rifiuti HTTP, budget di memoria, caso sparso alla coordinata massima, selezione fogli/stringhe globali, timeout e recupero, arresto forzato del Sidecar proprietario e rilettura dopo riavvio. Il task conserva il confine desktop installato; iniezione di errore di ammissione al Job e overflow forzato dell’output restano sorgente-only. I limiti e i risultati del lotto precedente sopra restano storici.

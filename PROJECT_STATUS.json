@@ -7,8 +7,8 @@
     {
       "id": "DISTRIBUTION-CURRENT-SOURCE-QUALIFICATION-01",
       "p": "P2",
-      "task": "Qualify that current installer, notices and source archive match exactly, including independent readback (docs/distribution.md).",
-      "verify": "Record exact commit, installer/source/notices hashes and independent extraction/readback; account for every shipped component without substituting historical candidate evidence."
+      "task": "Complete same-artifact Windows distribution qualification beyond the verified 95752a0 local candidate: automatic production startup and installed/restarted desktop, representative parser workloads and real versioned embeddings/normalization/translation. File correspondence, frozen HTTP parsers/normalization guards, XLS containment and packaged native IPC restart/translation fixtures pass (docs/verification-current-source-2026-10-19.md).",
+      "verify": "Reuse retained candidate cpu-20261018-220641-87a891b9 and its exact source/hash evidence; rebuild only if qualifying changed runtime sources. Preserve the passed offline receipts; qualify automatic startup and recovery in the installed desktop, representative parser workloads and actual encoder/model behavior on the same artifact. Installation and real-model calls require separate explicit authorization. Keep component-rights and public-delivery gates separate; fixtures and explicit restart IPC do not certify installed startup or semantic quality."
     },
     {
       "id": "RAG-STRUCTURE-AWARE-CHUNKING-01",
@@ -31,8 +31,8 @@
     {
       "id": "XLS-PARSER-MEMORY-ADMISSION-01",
       "p": "P2",
-      "task": "Qualify the contained XLS worker in the frozen/installed Windows desktop. Source execution now applies Windows Job commit/process limits before parser admission (including full-format opt-in and global strings), a timeout and one-worker queue (docs/verification-xls-admission-2026-10-18.md).",
-      "verify": "Retain source qualification evidence; verify the packaged --xls-worker entrypoint, native job assignment, failure/timeout/owner-crash cleanup, bounded output and source/index preservation in isolated roots. Coordinate limits do not guarantee admission of dense XLS beyond the memory budget. Do not close on source-only tests."
+      "task": "Complete installed-desktop qualification of the contained XLS worker. Source Windows checks and the 95752a0 frozen candidate now verify dense/global-string refusal, sparse maximum coordinates, sheet selection, timeout/recovery, owner-crash cleanup and source/index preservation (docs/verification-current-source-2026-10-19.md).",
+      "verify": "Retain source and frozen evidence, including measured worker peaks below 512 MiB, bounded outputs and owned Sidecar restart. In an authorized isolated installed desktop, verify packaged entrypoint/native job admission, failure/timeout/owner-crash cleanup, bounded output and source/index preservation through the actual desktop route. Native admission-refusal and forced output-overflow injection remain source-only checks; repeat at the installed boundary where applicable. Coordinate limits do not guarantee admission of dense XLS beyond the memory budget. Installation requires explicit authorization."
     },
     {
       "id": "RAG-INDEX-METADATA-EFFICIENCY-01",
@@ -55,7 +55,7 @@
     {
       "id": "CHAT-DURABLE-HISTORY-01",
       "p": "P2",
-      "task": "Qualify installed-desktop chat recovery and broader interruption/power-loss windows. Main-owned checkpoints, incomplete response recovery, failed-write close refusal and controlled process-interruption restart pass in isolated development profiles (docs/verification-chat-drafts-context-2026-10-16.md).",
+      "task": "Qualify installed-desktop chat recovery and broader interruption/power-loss windows. Main checkpoints, incomplete response recovery, failed-write close refusal and controlled interruption/restart pass in development and the current packaged app with isolated profiles and simulated generation services (docs/verification-current-source-2026-10-19.md).",
       "verify": "Use explicitly isolated installed-desktop profiles; preserve acknowledged question/partial response; distinguish unacknowledged tokens and power-loss durability."
     },
     {
@@ -73,7 +73,7 @@
     {
       "id": "DOC-EDITOR-DRAFT-DURABILITY-01",
       "p": "P2",
-      "task": "Qualify installed-desktop draft durability and broader interruption/power-loss windows beyond the Main archive, original-revision recovery, failed-write retry and restart readback implemented in development (docs/verification-chat-drafts-context-2026-10-16.md).",
+      "task": "Qualify installed-desktop draft durability and broader interruption/power-loss windows beyond verified Main archives, original-revision recovery, failed-write retry and restart readback in development and the current packaged app with isolated profiles and simulated document services (docs/verification-current-source-2026-10-19.md).",
       "verify": "Exercise multiple real isolated drafts, concurrent canonical revisions, failed storage, crash and restart; never rebase stale drafts or overwrite unreadable archives."
     },
     {
@@ -121,8 +121,8 @@
     {
       "id": "RELEASE-CANDIDATE-EVIDENCE-EXTRACTION-01",
       "p": "P2",
-      "task": "Extract and verify retained release-candidate evidence without modifying protected artifacts (docs/distribution.md).",
-      "verify": "Read retained candidate artifacts without changing them; verify recorded hashes and extract a traceable evidence inventory, separating missing evidence from passed checks."
+      "task": "Complete the retained release-candidate evidence inventory beyond the current cpu-20261018-220641-87a891b9 candidate, whose independent extraction/hash readback is verified (docs/verification-current-source-2026-10-19.md). Preserve historical artifacts and failed campaigns.",
+      "verify": "Inventory the retained historical candidates and their evidence locations; verify recorded hashes and distinguish unavailable evidence from passed checks. Reuse the verified current-candidate inventory instead of repeating it; do not modify or dispose of protected artifacts."
     },
     {
       "id": "LEGACY-SESSION-COMPAT-01",

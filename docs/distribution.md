@@ -5,8 +5,8 @@ La sorgente del progetto dichiara MIT in [`LICENSE`](../LICENSE). Il candidato C
 ## Build e artefatti
 
 - `npm run package:win` usa [`scripts/build_package.ps1`](../scripts/build_package.ps1) e la configurazione `build` di [`package.json`](../package.json). Produce una nuova directory `release/cpu-*` con installer NSIS, Sidecar CPU e materiali di licenza; il comando non installa né pubblica.
-- Il candidato locale più recente al 13 ottobre 2026 è `release/cpu-20261013-120433-c9c28703`. Installer, sorgente e moduli Sidecar congelati hanno readback e hash registrati nella [ricevuta finale](./verification-history-2026-10-13.md#offline-maintenance-final-readback---2026-10-13). È **non firmato**.
-- Il probe dichiarato verifica avvio isolato, autenticazione Sidecar, OCR CPU, PDF Unicode e ricerca fallback su un fixture. Il replay della traduzione usa risposte già conservate, senza nuove chiamate al modello.
+- Il candidato locale corrente del 19 ottobre 2026 è `release/cpu-20261018-220641-87a891b9`, dai sorgenti puliti `95752a0`. Installer estratto indipendentemente, 1.111 file sorgente, 3.589 file del payload, 914 notice e 30 moduli Python più entrypoint hanno corrispondenza verificata. È **non firmato**. [Ricevuta corrente e limiti](./verification-current-source-2026-10-19.md); i candidati precedenti restano evidenze storiche.
+- Il candidato corrente passa avvio isolato, autenticazione Sidecar, OCR CPU, PDF Unicode e ricerca fallback. Passa anche recupero chat/bozze sul desktop confezionato con servizi simulati e profili isolati. Passano inoltre 29 regressioni HTTP frozen, contenimento XLS e 17 ingestioni tramite IPC reale, traduzione PDF/DOCX con fixture sintetiche e rilettura dopo riapertura. Il replay semantico storico della traduzione appartiene ai candidati precedenti e non è stato ripetuto su questo artefatto.
 
 ## Gate prima della distribuzione
 

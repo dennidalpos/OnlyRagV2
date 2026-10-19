@@ -9,6 +9,7 @@ param(
     [string[]]$DisposablePaths,
     [switch]$CleanLogs,
     [switch]$Fast,
+    [switch]$ApplicationClosed,
     [switch]$StopAppProcesses
 )
 
@@ -18,7 +19,11 @@ try {
     if ($StopAppProcesses) { throw 'Process identity is unavailable; close the application deliberately. No process was stopped.' }
     if ($CleanLogs) { throw 'Use the separate Logs mode; combined cleanup cannot establish a single disposal scope.' }
     $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-    if ($Mode -in @('Logs', 'UserData', 'InstallerCache') -and -not $DisposablePaths) {
+    if ($Mode -eq 'Logs') {
+        if (-not $DisposablePaths) { throw 'Logs requires DisposablePaths listing exact reviewed application log files; no automatic expiration or directory deletion.' }
+        if (-not $ApplicationClosed) { throw 'Close the application and pass ApplicationClosed before clearing selected logs.' }
+    }
+    if ($Mode -in @('UserData', 'InstallerCache') -and -not $DisposablePaths) {
         $DisposablePaths = @(Get-ExplicitWorkspaceCleanupRoots $repositoryRoot $Mode | Where-Object { Test-Path -LiteralPath $_ })
         if (-not $DisposablePaths) {
             Write-Output 'No existing paths in the explicit cleanup scope.'

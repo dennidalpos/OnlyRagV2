@@ -86,10 +86,17 @@ function Assert-CleanupSelection([string[]]$Paths, [string]$RepositoryRoot, [str
             if (-not ($repoOutputs | Where-Object { Test-CleanupWithin $full $_ -IncludeRoot })) {
                 throw "Cleanup target is outside generated repository outputs: $full"
             }
-        } elseif ($Mode -in @('Logs', 'UserData', 'InstallerCache')) {
+        } elseif ($Mode -eq 'Logs') {
+            $parent = [IO.Path]::GetDirectoryName($full)
+            $name = [IO.Path]::GetFileName($full)
+            if ($explicitRoots -notcontains $parent -or $name -notmatch '^(app(?:\.[12])?|coding_agent_audit(?:\.[1-4])?)\.log$') {
+                throw "Logs cleanup requires an explicitly reviewed application log file in an allowed log root: $full"
+            }
+        } elseif ($Mode -in @('UserData', 'InstallerCache')) {
             if ($explicitRoots -notcontains $full) { throw "Cleanup target is outside the explicit $Mode scope: $full" }
         }
         if (-not (Test-Path -LiteralPath $full)) { throw "Cleanup target does not exist: $full" }
+        if ($Mode -eq 'Logs' -and -not (Test-Path -LiteralPath $full -PathType Leaf)) { throw 'Logs cleanup refuses directories.' }
         Assert-NoCleanupReparseAncestors $full
         foreach ($trackedPath in $trackedAbsolute) {
             if (Test-CleanupWithin $trackedPath $full -IncludeRoot) { throw "Cleanup refuses tracked path/descendant: $full" }
@@ -100,7 +107,7 @@ function Assert-CleanupSelection([string[]]$Paths, [string]$RepositoryRoot, [str
             $entry = Get-Item -LiteralPath $pending.Pop() -Force -ErrorAction Stop
             if (($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "Cleanup refuses reparse descendant: $($entry.FullName)" }
             if ($entry.Name -in @('.git', '.onlyrag', 'userdata_dev', 'source-documents', 'checkpoints', 'sessions', 'lancedb_store', 'document-recovery.json', 'sidecar-ownership.json') -or
-                $entry.Name -match '(?i)\.(bak|orig|rej|log(?:\..*)?)$|^\.agent_state_') {
+                ($entry.Name -match '(?i)\.(bak|orig|rej|log(?:\..*)?)$|^\.agent_state_' -and $Mode -ne 'Logs')) {
                 throw "Cleanup refuses protected state/backup/evidence: $($entry.FullName)"
             }
             if ($entry.PSIsContainer) {

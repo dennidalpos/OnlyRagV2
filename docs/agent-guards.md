@@ -10,6 +10,10 @@ Schema non valido, errori ripetuti, richieste senza tool e step senza mutazioni 
 
 Gli eventi sono legati alla run. Stop, annullamento e rifiuto di una policy non ripristinano automaticamente checkpoint. Un esito di verifica richiede un comando effettivo e un risultato riconducibile al progetto corrente.
 
+## Verifica dei progetti nativi
+
+Il resolver usa manifest e configurazioni osservati per Python/pytest, Go, Cargo, Maven, Gradle e gli script test Composer. Tutti gli stack riconosciuti nella stessa directory devono avere un controllo; Node non certifica uno stack nativo privo di comando. Strumenti assenti restano `unverifiable`; errori, timeout e annullamento conservano il rispettivo esito. Le opzioni offline evitano il provisioning implicito, senza costituire una sandbox di rete degli script. [Comandi, qualifica reale e limiti](./verification-native-projects-2026-10-19.md).
+
 ## Consigli e ordini
 
 La diagnostica produce `DiagnosticAdvice`; il risultato di un tool lo presenta come consiglio. Solo [`planDirectiveArbiter.ts`](../electron/core/domain/agent/planDirectiveArbiter.ts) decide l'ordine del turno. [`orderAuthority.test.ts`](../electron/core/domain/agent/orderAuthority.test.ts) protegge questa distinzione.

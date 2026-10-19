@@ -46,7 +46,14 @@ export async function runProjectVerification(
   const verificationLabel = verifications.map((target) => `${target.projectRelativePath}: ${target.command}`).join(' && ')
   const evidenceLevel = verifications.length > 0 && verifications.every((target) => target.kind === 'test') ? ('behavioral' as const) : ('structural' as const)
   const interrupted: VerificationRunResult = { hasVerificationCommand: verifications.length > 0, status: 'unverifiable' }
-  const uncheckedProject = profile.projects.find((project) => !verifications.some((target) => target.projectId === project.id))
+  const nativeChecks: Record<string, RegExp> = { python: / -m pytest /, go: /^go /, rust: /^cargo /, java: /^(mvn|gradle) /, php: /^composer / }
+  const uncheckedProject = profile.projects.find(
+    (project) =>
+      !verifications.some((target) => target.projectId === project.id) ||
+      project.toolchain.languages.some(
+        (language) => nativeChecks[language] && !project.verificationCommands.some((command) => nativeChecks[language].test(command.command)),
+      ),
+  )
   if (uncheckedProject) {
     return {
       ...interrupted,
@@ -104,7 +111,7 @@ export async function runProjectVerification(
     }
 
     const shell = agentToolExecutorService.getOrCreateShellSession(verification.projectRootPath)
-    const command = /^(npm|pnpm|yarn) run /.test(security.sanitizedCommand) ? withVerificationEnvironment(security.sanitizedCommand) : security.sanitizedCommand
+    const command = withVerificationEnvironment(security.sanitizedCommand)
     const res = await shell.execute(command, (chunk) => onOutput?.(chunk.trim()), undefined, VERIFICATION_TIMEOUT_MS, signal)
     if (signal?.aborted) return interrupted
     if (res.code === 127 && res.stderr.includes('VERIFICATION_TOOL_UNAVAILABLE:')) {

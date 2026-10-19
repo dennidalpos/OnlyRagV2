@@ -2,14 +2,16 @@
   "important_notes": [
     "Current owner scope is offline only: no new real-model calls, app installation, personal-store migration, public release or evidence disposal without explicit authorization. Preserve frozen expectations, spent markers, original data and failed campaigns; details remain in docs/verification-current.md and dated evidence.",
     "Owner decision 2026-10-17: Windows desktop only; tablet and smartphone qualification is out of scope. The mobile-layout task was withdrawn, not completed; retain historical evidence (docs/verification-current.md).",
-    "Session handoff 2026-10-19: chat context coverage, Python critical-path gate and source archive lifecycle are complete; 39 open IDs remain (21 autonomous, 18 user-required). See docs/session-handoff-2026-10-19.md. Available offline follow-up: PROJECT-VERIFICATION-NATIVE-QUALIFICATION-01, after checking actual native manifests/toolchains; preserve the other priorities and acceptance gates. Owner explicitly authorized this session's commit/push to master; installation, new real-model campaigns, personal-store operations and installer/public-release gates remain separate."
+    "Session handoff 2026-10-19: chat context coverage, Python critical-path gate and source archive lifecycle are complete; 39 open IDs remain (21 autonomous, 18 user-required). See docs/session-handoff-2026-10-19.md. Available offline follow-up: PROJECT-VERIFICATION-NATIVE-QUALIFICATION-01, after checking actual native manifests/toolchains; preserve the other priorities and acceptance gates. Owner explicitly authorized this session's commit/push to master; installation, new real-model campaigns, personal-store operations and installer/public-release gates remain separate.",
+    "Local follow-up 2026-10-19: native verification, explicit log cleanup and retained release evidence inventory are complete; 36 open IDs remain (18 autonomous, 18 user-required). Evidence: docs/verification-native-projects-2026-10-19.md, docs/verification-log-cleanup-2026-10-19.md and docs/verification-release-inventory-2026-10-19.md. Owner authorized missing development toolchains and explicit-file log policy with no automatic expiration; no application installation, real-model calls, personal migration, evidence disposal, commit or push is authorized by this follow-up. Existing tasks retain log cleanup races, unqualified distribution boundaries and newly reviewed Monaco advisories.",
+    "Publication handoff 2026-10-19: owner explicitly requested commit on the principal branch and push for session change. Target verified: public origin dennidalpos/OnlyRagV2, default branch master. Native project verification, explicit log cleanup and retained candidate inventory are complete; all 36 open IDs (18 autonomous, 18 user-required), priorities and acceptance criteria remain unchanged. Resume from docs/session-handoff-native-2026-10-19.md and the actual checkout. Previous commit a8d0008 CI is confirmed successful; the resulting commit needs its own CI readback. No app installation, new real-model campaign, personal-store operation or installer release is implied by source publication."
   ],
   "todo_autonomous": [
     {
       "id": "DISTRIBUTION-CURRENT-SOURCE-QUALIFICATION-01",
       "p": "P2",
       "task": "Qualify a new same-artifact Windows candidate for the changed current runtime, including per-answer chat context coverage absent from the retained 95752a0 installer. Preserve the historical candidate's passed file correspondence, frozen HTTP parsers/normalization guards, XLS containment and packaged native IPC restart/translation fixtures (docs/verification-current-source-2026-10-19.md). Automatic startup, installed/restarted desktop, representative parser workloads and real versioned embeddings/normalization/translation remain open.",
-      "verify": "Retain cpu-20261018-220641-87a891b9 and its exact source/hash evidence as historical; do not relabel it as the changed current runtime. Current-source qualification now requires a newly built candidate and matching source snapshot, then same-artifact frozen OCR/parser/recovery/embedding checks, automatic startup and installed/restarted desktop, representative workloads and actual encoder/model behavior. Installation and real-model calls require separate explicit authorization. Keep component-rights and public-delivery gates separate; fixtures and explicit restart IPC do not certify installed startup or semantic quality. No installer rebuild is implied by this source commit/push handoff."
+      "verify": "Retain cpu-20261018-220641-87a891b9 and its exact source/hash evidence as historical; do not relabel it as the changed current runtime. Current-source qualification now requires a newly built candidate and matching source snapshot, then same-artifact frozen OCR/parser/recovery/embedding checks, automatic startup and installed/restarted desktop, representative workloads and actual encoder/model behavior. Installation and real-model calls require separate explicit authorization. Keep component-rights and public-delivery gates separate; fixtures and explicit restart IPC do not certify installed startup or semantic quality. No installer rebuild is implied by this source commit/push handoff. Inventory completed for all three retained candidates (docs/verification-release-inventory-2026-10-19.md); recorded hashes of October 14/19 and 29 reused October 18 receipts match. Independent installer extraction and frozen/ASAR correspondence for the October 14/19 artifacts are not established by that inventory; no retained candidate represents the changed current local runtime, including native verification."
     },
     {
       "id": "RAG-STRUCTURE-AWARE-CHUNKING-01",
@@ -78,34 +80,16 @@
       "verify": "Test interruption around replacement and directory-metadata persistence on declared Windows storage; distinguish process termination from power loss and retain exact acknowledged revisions."
     },
     {
-      "id": "PROJECT-VERIFICATION-NATIVE-QUALIFICATION-01",
-      "p": "P2",
-      "task": "Qualify native verification commands for discovered non-Node projects (docs/agent-guards.md).",
-      "verify": "Use discovered non-Node fixture projects with their native manifests/toolchains; verify successful commands and genuine failures, bounded execution and accurate reporting without Node fallback."
-    },
-    {
       "id": "DEPENDENCY-BRACES-UPSTREAM-01",
       "p": "P2",
       "task": "Replace the maintained local braces 3.0.4+onlyrag.1 fork only when an upstream release passes the same parser/AST depth, clean npm ci and native Electron/ASAR regression checks; preserve provenance and MIT notices (docs/dependency-remediation-2026-10-16.md).",
-      "verify": "An upstream candidate must pass parser/AST depth regressions, clean npm ci and native Electron/ASAR checks while preserving notices; audit disappearance alone is insufficient."
+      "verify": "An upstream candidate must pass parser/AST depth regressions, clean npm ci and native Electron/ASAR checks while preserving notices; audit disappearance alone is insufficient. Official npm registry rechecked on 2026-10-19: latest upstream remains 3.0.3; no replacement candidate selected (docs/libraries.md)."
     },
     {
       "id": "RAG-EMBEDDING-REBUILD-QUALIFICATION-01",
       "p": "P2",
       "task": "Qualify installed-desktop rebuild, larger stores, encoder quality and power-loss behavior in isolated roots; any further personal rebuild needs separate authorization (docs/rag-sidecar.md).",
       "verify": "After necessary installation/model authorization, rebuild isolated larger stores, verify encoder provenance, readback and interrupted-rebuild recovery; do not operate on personal stores without separate authorization."
-    },
-    {
-      "id": "CLEANUP-LOGS-POLICY-ALIGNMENT-01",
-      "p": "P2",
-      "task": "Align log cleanup behavior with the documented retention and privacy policy (docs/operations.md).",
-      "verify": "Compare implementation to operations.md retention/privacy rules; verify eligible and retained logs on isolated fixtures, ownership boundaries and preservation of protected evidence."
-    },
-    {
-      "id": "RELEASE-CANDIDATE-EVIDENCE-EXTRACTION-01",
-      "p": "P2",
-      "task": "Complete the retained release-candidate evidence inventory beyond the current cpu-20261018-220641-87a891b9 candidate, whose independent extraction/hash readback is verified (docs/verification-current-source-2026-10-19.md). Preserve historical artifacts and failed campaigns.",
-      "verify": "Inventory the retained historical candidates and their evidence locations; verify recorded hashes and distinguish unavailable evidence from passed checks. Reuse the verified current-candidate inventory instead of repeating it; do not modify or dispose of protected artifacts."
     },
     {
       "id": "LEGACY-SESSION-COMPAT-01",
@@ -129,7 +113,7 @@
       "id": "DEPENDENCY-MONACO-VENDORED-SANITIZER-01",
       "p": "P3",
       "task": "Track Monaco bundled sanitizer advisory and verify the embedded exposure path (docs/verification.md).",
-      "verify": "Identify the sanitizer version actually bundled in Monaco and reachable rendering paths; verify advisory applicability and any mitigation/update with relevant rendering regressions."
+      "verify": "Identify the sanitizer version actually bundled in Monaco and reachable rendering paths; verify advisory applicability and any mitigation/update with relevant rendering regressions. Recheck 2026-10-19: Monaco 0.56.0 embeds DOMPurify 3.4.8; also map the October 12 advisories GHSA-c6gr-qvv4-5v3f, GHSA-mrv2-3pqr-j5jr and GHSA-cg2g-xh64-v4q7 (upstream patch 3.4.17) to actual editor configuration and qualify any replacement. No new real-editor exposure or fix is established (docs/libraries.md)."
     }
   ],
   "todo_user_required": [
@@ -181,7 +165,7 @@
     {
       "id": "RETAINED-RESIDUE-DISPOSAL-01",
       "p": "P2",
-      "decision": "Review exact ownership, backup and retention before deleting retained evidence, profiles or scratch; qualify cleanup against races (docs/operations.md)."
+      "decision": "Review exact ownership, backup and retention before deleting retained evidence, profiles or scratch; qualify cleanup against races (docs/operations.md). Explicit application-log cleanup is qualified on isolated files (docs/verification-log-cleanup-2026-10-19.md); adversarial filesystem replacement between preflight and removal and disposal of retained evidence remain unqualified. Preserve unknown logs and protected evidence."
     },
     {
       "id": "RAG-SEMANTIC-RERANKER-QUALIFICATION-01",

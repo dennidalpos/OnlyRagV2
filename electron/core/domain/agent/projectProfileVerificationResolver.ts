@@ -43,6 +43,9 @@ export function resolveRequiredProfileVerificationTargets(profile: ProjectProfil
     const checks = [primary]
     const build = project.verificationCommands.find((command) => command.kind === 'build')
     if (project.toolchain.languages.includes('typescript') && build && build !== primary) checks.push(build)
+    for (const native of project.verificationCommands.filter((command) => command.source.startsWith('native: '))) {
+      if (!checks.includes(native)) checks.push(native)
+    }
     return checks.map((verification) => ({
       ...verification,
       projectId: project.id,

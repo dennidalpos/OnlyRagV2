@@ -101,7 +101,7 @@ exit $LASTEXITCODE
     Invoke-Case 'UserData remains an explicitly separate scope' $workspaceScript @{ Mode = 'UserData' } 0 'Remove explicitly reviewed'
     Invoke-Case 'Name-based stop refused' $workspaceScript @{ Mode = 'Logs'; StopAppProcesses = $true } 1 'identity'
     Invoke-Case 'Combined logs require separate scope' $workspaceScript @{ Mode = 'Repo'; CleanLogs = $true } 1 'separate Logs'
-    Invoke-Case 'Separately selected logs' $workspaceScript @{ Mode = 'Logs' } 0 'Remove explicitly reviewed'
+    Invoke-Case 'Logs require explicit files' $workspaceScript @{ Mode = 'Logs' } 1 'DisposablePaths'
     Invoke-Case 'Separately selected installer cache' $workspaceScript @{ Mode = 'InstallerCache' } 0 'Remove explicitly reviewed'
 
     $junction = Join-Path $repo 'test-results'

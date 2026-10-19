@@ -14,6 +14,8 @@ const PROJECT_MANIFESTS = [
   'package.json',
   'pyproject.toml',
   'requirements.txt',
+  'pytest.ini',
+  '.pytest.ini',
   'Cargo.toml',
   'go.mod',
   'pom.xml',
@@ -57,7 +59,7 @@ function detectToolchain(rootPath: string, manifestFiles: string[]): ProjectProf
       }
     }
   }
-  if (manifestFiles.includes('requirements.txt') || manifestFiles.includes('pyproject.toml')) languages.add('python')
+  if (manifestFiles.some((name) => ['requirements.txt', 'pyproject.toml', 'pytest.ini', '.pytest.ini'].includes(name))) languages.add('python')
   if (manifestFiles.includes('Cargo.toml')) {
     languages.add('rust')
     packageManagers.add('cargo')

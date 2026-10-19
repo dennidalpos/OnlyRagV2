@@ -1,8 +1,8 @@
 # Verifica corrente per ambito
 
-Allineamento del **19 ottobre 2026**. Il [`tracker`](../PROJECT_STATUS.json) è la fonte dello stato aperto: 39 attività, 21 autonome e 18 con decisione utente. Questo riepilogo distingue la verifica meccanica dalla qualità dei risultati e dall'app installata. Le ricevute, i fallimenti e gli hash storici restano in [`verification-history-2026-10-13.md`](./verification-history-2026-10-13.md); i lotti successivi sono indicizzati in [`verification.md`](./verification.md).
+Allineamento del **19 ottobre 2026**. Il [`tracker`](../PROJECT_STATUS.json) è la fonte dello stato aperto: 36 attività, 18 autonome e 18 con decisione utente. Questo riepilogo distingue la verifica meccanica dalla qualità dei risultati e dall'app installata. Le ricevute, i fallimenti e gli hash storici restano in [`verification-history-2026-10-13.md`](./verification-history-2026-10-13.md); i lotti successivi sono indicizzati in [`verification.md`](./verification.md).
 
-Consegna della sessione e prossimo lavoro: [passaggio del 19 ottobre](./session-handoff-2026-10-19.md). Il tracker riconcilia il nuovo runtime con la necessità di un nuovo candidato di distribuzione; i vecchi artefatti non sono riclassificati o rimossi.
+Il [passaggio precedente](./session-handoff-2026-10-19.md) conserva la consegna di `a8d0008`; il [nuovo passaggio di sessione](./session-handoff-native-2026-10-19.md) riunisce [verifica nativa](./verification-native-projects-2026-10-19.md), [pulizia log](./verification-log-cleanup-2026-10-19.md) e [inventario release](./verification-release-inventory-2026-10-19.md), con richiesta esplicita di commit/push dei sorgenti su `master`. Il tracker riconcilia il runtime cambiato con la necessità di un nuovo candidato: gli artefatti conservati non sono riclassificati o rimossi.
 
 | Ambito | Verificato | Ancora aperto |
 | --- | --- | --- |
@@ -20,6 +20,8 @@ Consegna della sessione e prossimo lavoro: [passaggio del 19 ottobre](./session-
 Da PowerShell nella radice del repository: `npm run docs:check` per link e comandi; `npm run typecheck` e test mirati solo dopo modifiche comportamentali; `npm run quality:python` per i percorsi critici offline; `npm run test:fast -- --silent=true` e `.venv\Scripts\python.exe -m pytest -q` per le suite complete, obbligatorie prima di ogni commit secondo `AGENTS.md`. L'elenco degli script e degli effetti è in [`operations.md`](./operations.md) e [`package.json`](../package.json). Un test passato non certifica modelli reali, semantica, interazione visiva o perdita di alimentazione.
 
 ## Prossimo lavoro offline
+
+Conclusi nel seguito locale verifica nativa, pulizia esplicita dei log e inventario dei tre candidati: rimossi soltanto i tre ID completati, restano 36 attività. La policy log non introduce scadenze automatiche; race e smaltimento delle evidenze sono nel task esistente. Le qualifiche di distribuzione non eseguite e il [riesame degli advisory Monaco](./libraries.md#residui-ricontrollati--19-ottobre-2026) restano aperti. Il registro ufficiale npm non offre ancora un successore del fork braces. L'autorizzazione alle toolchain riguarda gli strumenti di sviluppo, senza estendersi all'installazione dell'app o ai modelli. I paragrafi seguenti conservano lo storico dei conteggi precedenti.
 
 P03 conclude `SOURCE-ARCHIVE-LIFECYCLE-01` con [qualifica offline del ciclo di vita](./verification-source-archive-lifecycle-2026-10-19.md). Rispetto al lotto Python è rimossa soltanto questa voce, lasciando 39 attività; altre voci, priorità e note restano identiche. I conteggi dei lotti seguenti sono storici.
 

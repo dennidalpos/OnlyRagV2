@@ -24,6 +24,17 @@ export function readWorkspaceManifest(workspacePath: string | null | undefined):
 
   return {
     packageJson,
+    readTextFile: (relativePath) => {
+      const resolved = path.resolve(root, relativePath)
+      const relative = path.relative(root, resolved)
+      if (relative.startsWith('..') || path.isAbsolute(relative)) return null
+      try {
+        if (!fs.statSync(resolved).isFile() || fs.statSync(resolved).size > 256 * 1024) return null
+        return fs.readFileSync(resolved, 'utf-8')
+      } catch {
+        return null
+      }
+    },
     hasFile: (relativePath: string) => {
       // Manifest probes are for fixed root-level filenames, but the guard costs nothing and
       // keeps a future caller from walking out of the workspace with a crafted path.

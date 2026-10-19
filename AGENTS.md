@@ -1,6 +1,6 @@
 # Istruzioni del repository: OnlyRagV2
 
-Revisione 2.4 — 2026-10-18. Vincoli specifici del progetto; i contenuti comuni sono gestiti separatamente.
+Revisione 2.5 — 2026-10-19. Vincoli specifici del progetto; i contenuti comuni sono gestiti separatamente.
 
 ## Contesto
 
@@ -15,6 +15,14 @@ Revisione 2.4 — 2026-10-18. Vincoli specifici del progetto; i contenuti comuni
   * Interfaccia per desktop Windows 1080p; tablet e smartphone sono fuori dal target applicativo.
   * Isolamento Renderer / Main process tramite Electron Preload e IPC tipizzato (`shared/ipc/ipcContract.ts`).
   * LanceDB locale e runtime Ollama locale per elaborazione documenti in totale privacy offline.
+
+## Regole di sviluppo
+
+- Tenere aggiornati i test rispetto al comportamento supportato; rimuovere quelli legacy o obsoleti, preservando la copertura delle funzionalità ancora attive e delle regressioni pertinenti.
+- Rimuovere codice legacy, shim temporanei e dead code nel perimetro del task, verificando riferimenti e dipendenze e rispettando i vincoli di conservazione dei dati e migrazione esistenti.
+- Documentarsi sempre su fonti autorevoli, privilegiando documentazione ufficiale e fonti primarie compatibili con le versioni effettive; citare i riferimenti che sostengono le scelte tecniche.
+- Adottare best practice e direttive di sicurezza informatica pertinenti allo stack e al rischio dell'intervento, verificandone l'applicazione ai confini Electron/IPC, Sidecar REST, filesystem e dipendenze.
+- In caso di dubbi non risolvibili dai file o dalle fonti, porre domande all'utente prima delle scelte sostanziali; esplicitare le assunzioni a basso rischio e procedere.
 
 ## Comandi e verifica
 
@@ -38,8 +46,8 @@ Comandi verificati staticamente contro i file del progetto; questa revisione del
 - Preservare dati persistenti e configurazioni esterne; non estendere la manutenzione a operazioni distruttive non autorizzate.
 
 <!-- secondbrain:repository:begin -->
-Dossier SecondBrain di questo repository: repos/OnlyRagV2, relativo alla radice di SecondBrain indicata nelle istruzioni globali.
-- Leggi a inizio task: questo AGENTS.md, repos/OnlyRagV2/context.md, repos/OnlyRagV2/memory.md e PROJECT_STATUS.json (o repos/OnlyRagV2/tracker.md).
-- Nei task di scrittura aggiorna solo novità pertinenti: decisioni e gotcha in repos/OnlyRagV2/memory.md; architettura e stato in repos/OnlyRagV2/context.md; attività nel tracker preservandone schema e storico.
+Dossier SecondBrain di questo repository: 02-areas/products/OnlyRagV2, relativo alla radice di SecondBrain indicata nelle istruzioni globali.
+- Leggi a inizio task: questo AGENTS.md, 02-areas/products/OnlyRagV2/context.md, 02-areas/products/OnlyRagV2/memory.md e PROJECT_STATUS.json (o 02-areas/products/OnlyRagV2/tracker.md).
+- Nei task di scrittura aggiorna solo novità pertinenti: decisioni e gotcha in 02-areas/products/OnlyRagV2/memory.md; architettura e stato in 02-areas/products/OnlyRagV2/context.md; attività nel tracker preservandone schema e storico.
 - Nei task di scrittura pulisci temporanei del task e residui confermati, preservando dati e lavoro unico; rivedi diff e git status --ignored. Esegui secondbrain.ps1 -Sync dopo modifiche a dossier o direttive, oppure su richiesta. Nei task di sola lettura segnala i residui senza rimuoverli.
 <!-- secondbrain:repository:end -->

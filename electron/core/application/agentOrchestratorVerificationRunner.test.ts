@@ -70,13 +70,14 @@ describe('project verification dependency evidence', () => {
     expect(execute).not.toHaveBeenCalled()
   })
 
-  it('does not require a Node dependency scan for a Python project without an available command', async () => {
+  it('runs the configured Python check without a Node dependency scan', async () => {
     write('requirements.txt', 'pytest\n')
     write('pyproject.toml', '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
     const result = await runProjectVerification(root, undefined, undefined, true)
     expect(scanWorkspaceDependencies).not.toHaveBeenCalled()
-    expect(result.status).toBe('unverifiable')
-    expect(execute).not.toHaveBeenCalled()
+    expect(result.status).toBe('verified')
+    expect(result.verifiedCommands).toEqual(['python -B -m pytest -q -p no:cacheprovider'])
+    expect(execute).toHaveBeenCalledOnce()
   })
 
   it('does not start verification after cancellation while the scan settles', async () => {
@@ -116,6 +117,24 @@ describe('project verification dependency evidence', () => {
     expect(result.status).toBe('unverifiable')
     expect(result.failureDetail).toContain('server')
     expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('does not let a Node script certify an unchecked Python stack in the same directory', async () => {
+    nodeProject()
+    write('requirements.txt', 'fastapi\n')
+    const result = await runProjectVerification(root)
+    expect(result.status).toBe('unverifiable')
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('requires both native checks for a project declaring multiple native manifests', async () => {
+    write('go.mod', 'module example.com/test\n')
+    write('Cargo.toml', '[package]\nname="test"\nversion="0.1.0"')
+    execute.mockResolvedValueOnce({ code: 0, stdout: '', stderr: '' }).mockResolvedValueOnce({ code: 1, stdout: 'native failure', stderr: '' })
+    const result = await runProjectVerification(root)
+    expect(result.status).toBe('failed')
+    expect(execute).toHaveBeenCalledTimes(2)
+    expect(result.failureDetail).toContain('native failure')
   })
 
   it('does not certify a cancelled command after its successful result settles', async () => {

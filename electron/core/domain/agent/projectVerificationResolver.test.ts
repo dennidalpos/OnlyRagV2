@@ -18,6 +18,36 @@ function manifest(scripts: Record<string, string> | null, files: string[] = []):
 const primaryOf = (m: WorkspaceManifest) => pickPrimaryVerification(resolveVerificationCommands(m))
 
 describe('resolveVerificationCommands', () => {
+  it('selects native tools from observed manifests without npm fallback', () => {
+    const workspace = manifest(null, ['go.mod', 'Cargo.toml', 'Cargo.lock', 'pom.xml', 'build.gradle.kts'])
+    expect(resolveVerificationCommands(workspace).map((item) => item.command)).toEqual([
+      'go test -mod=readonly -count=1 -timeout=30s ./...',
+      'cargo test --offline --locked',
+      'mvn --offline --batch-mode -DfailIfNoTests=true verify',
+      'gradle --offline --no-daemon --console=plain check',
+    ])
+  })
+
+  it('requires Python test configuration and an explicit Composer test script', () => {
+    const workspace = manifest(null, ['pyproject.toml', 'requirements.txt', 'composer.json'])
+    workspace.readTextFile = (name) => (name === 'composer.json' ? '{"scripts":{"test":"php tests/verify.php"}}' : '[project]\nname = "demo"')
+    expect(resolveVerificationCommands(workspace).map((item) => item.command)).toEqual(['composer --no-interaction --no-plugins run-script test'])
+    workspace.readTextFile = (name) =>
+      name === 'pyproject.toml' ? '[tool.pytest.ini_options]\ntestpaths = ["tests"]' : '{"scripts":{"test":"php -S localhost:8080"}}'
+    expect(resolveVerificationCommands(workspace).map((item) => item.command)).toEqual(['python -B -m pytest -q -p no:cacheprovider'])
+  })
+
+  it('uses a project virtual environment and refuses malformed Composer configuration', () => {
+    const workspace = manifest(null, ['pytest.ini', '.venv/Scripts/python.exe', 'composer.json'])
+    workspace.readTextFile = () => '{bad json'
+    expect(resolveVerificationCommands(workspace).map((item) => item.command)).toEqual(['.\\.venv\\Scripts\\python.exe -B -m pytest -q -p no:cacheprovider'])
+  })
+
+  it.each(['pyproject.toml', 'setup.cfg', 'tox.ini'])("does not treat another format's pytest section as configuration in %s", (name) => {
+    const workspace = manifest(null, [name])
+    workspace.readTextFile = () => (name === 'pyproject.toml' ? '[pytest]\n' : '[tool.pytest.ini_options]\n')
+    expect(resolveVerificationCommands(workspace)).toEqual([])
+  })
   it.each(['npm', 'pnpm', 'yarn'])('uses an explicit %s declaration for existing scripts', (manager) => {
     const workspace = manifest({ test: 'node verify.cjs' })
     workspace.packageJson!.packageManager = `${manager}@1.2.3`

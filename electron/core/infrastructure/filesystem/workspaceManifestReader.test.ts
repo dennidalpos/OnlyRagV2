@@ -47,6 +47,17 @@ describe('readWorkspaceManifest', () => {
 
   it('refuses to probe outside the workspace', () => {
     expect(readWorkspaceManifest(tempDir).hasFile('../package.json')).toBe(false)
+    expect(readWorkspaceManifest(tempDir).readTextFile?.('../package.json')).toBeNull()
+  })
+
+  it('bounds native configuration reads and refuses missing files and directories', () => {
+    fs.writeFileSync(path.join(tempDir, 'pyproject.toml'), '[tool.pytest.ini_options]')
+    fs.writeFileSync(path.join(tempDir, 'oversized.txt'), 'x'.repeat(256 * 1024 + 1))
+    const manifest = readWorkspaceManifest(tempDir)
+    expect(manifest.readTextFile?.('pyproject.toml')).toBe('[tool.pytest.ini_options]')
+    expect(manifest.readTextFile?.('oversized.txt')).toBeNull()
+    expect(manifest.readTextFile?.('absent')).toBeNull()
+    expect(manifest.readTextFile?.('.')).toBeNull()
   })
 })
 

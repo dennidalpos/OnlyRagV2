@@ -60,6 +60,11 @@ try {
     }
 
     # 2. JSON Configuration Syntax Check
+    foreach ($cleanupTest in @('test_cleanup_policy.ps1', 'test_log_cleanup.ps1')) {
+        & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot $cleanupTest)
+        if ($LASTEXITCODE -ne 0) { throw "[FAIL] $cleanupTest failed with exit code $LASTEXITCODE." }
+    }
+
     if (-not $Fast -or $Full -or $Format) {
         Write-Host "`n[2/6] Validating JSON configurations..." -ForegroundColor Yellow
     }

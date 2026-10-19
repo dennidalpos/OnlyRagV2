@@ -50,6 +50,12 @@ Il [riesame del 16 ottobre](./dependency-remediation-2026-10-16.md) elimina tutt
 
 [Evidenza e fonti](./libraries-history-2026-10-13.md#chat-markdown-dependencies--2026-10-11).
 
+## Residui ricontrollati — 19 ottobre 2026
+
+Il registro npm ufficiale restituisce ancora `braces` 3.0.3 come ultima release: la sostituzione del fork locale resta aperta, senza modifiche al lockfile. Monaco 0.56.0 conserva DOMPurify **3.4.8** in `esm/vs/base/browser/dompurify/dompurify.js`: l'override npm non modifica quei byte. La rilettura delle fonti upstream aggiunge tre advisory del 12 ottobre, tutti con patch dichiarata in 3.4.17: [SMIL/XHTML GHSA-c6gr-qvv4-5v3f](https://github.com/cure53/DOMPurify/security/advisories/GHSA-c6gr-qvv4-5v3f), [hook IN_PLACE GHSA-mrv2-3pqr-j5jr](https://github.com/cure53/DOMPurify/security/advisories/GHSA-mrv2-3pqr-j5jr), [template/shadow root GHSA-cg2g-xh64-v4q7](https://github.com/cure53/DOMPurify/security/advisories/GHSA-cg2g-xh64-v4q7).
+
+Il percorso Monaco osservato usa frammenti DOM e hook; non è stata eseguita una nuova qualifica nell'editor reale per questi tre casi. La presenza della versione nell'intervallo interessato non dimostra da sola l'esposizione dell'app alle configurazioni specifiche descritte. `DEPENDENCY-MONACO-VENDORED-SANITIZER-01` resta aperto per mappare le condizioni, qualificare eventuale sostituzione e regressioni dell'editor; nessuna mitigazione o assenza di vulnerabilità viene dichiarata per questo riesame documentale.
+
 ## Controlli
 
 [Evidenza e fonti](./libraries-history-2026-10-13.md#controlli).

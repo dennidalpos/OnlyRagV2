@@ -11,6 +11,8 @@ export interface WorkspaceManifest {
   } | null
   /** Relative paths that exist in the workspace root. */
   hasFile: (relativePath: string) => boolean
+  /** Bounded text probe for native test configuration; absent probes cannot invent commands. */
+  readTextFile?: (relativePath: string) => string | null
 }
 
 export type VerificationKind = 'build' | 'typecheck' | 'test' | 'lint'
@@ -124,6 +126,42 @@ export function resolveVerificationCommands(manifest: WorkspaceManifest): Verifi
     })
   }
 
+  commands.push(...resolveNativeVerificationCommands(manifest))
+  return commands
+}
+
+/** Native checks use observed manifests and installed tools, never a Node fallback or bootstrap wrapper. */
+function resolveNativeVerificationCommands(manifest: WorkspaceManifest): VerificationCommand[] {
+  const commands: VerificationCommand[] = []
+  const add = (kind: VerificationKind, command: string, source: string) =>
+    commands.push({ kind, command, coverage: kind === 'test' ? 'entry-reachable' : 'whole-project', source: `native: ${source}` })
+  const text = (name: string) => manifest.readTextFile?.(name) ?? ''
+  const pythonConfig =
+    ['pytest.ini', '.pytest.ini'].find((name) => manifest.hasFile(name)) ||
+    (['pyproject.toml', 'setup.cfg', 'tox.ini'] as const).find((name) => {
+      const section = { 'pyproject.toml': 'tool\\.pytest(?:\\.ini_options)?', 'setup.cfg': 'tool:pytest', 'tox.ini': 'pytest' }[name]
+      return manifest.hasFile(name) && new RegExp(`^\\s*\\[${section}\\]\\s*(?:[#;].*)?$`, 'm').test(text(name))
+    })
+  if (pythonConfig) {
+    const python = manifest.hasFile('.venv/Scripts/python.exe') ? '.\\.venv\\Scripts\\python.exe' : 'python'
+    add('test', `${python} -B -m pytest -q -p no:cacheprovider`, pythonConfig)
+  }
+  if (manifest.hasFile('go.mod')) add('test', 'go test -mod=readonly -count=1 -timeout=30s ./...', 'go.mod')
+  if (manifest.hasFile('Cargo.toml')) add('test', `cargo test --offline${manifest.hasFile('Cargo.lock') ? ' --locked' : ''}`, 'Cargo.toml')
+  if (manifest.hasFile('pom.xml')) add('build', 'mvn --offline --batch-mode -DfailIfNoTests=true verify', 'pom.xml')
+  const gradleManifest = ['build.gradle', 'build.gradle.kts'].find((name) => manifest.hasFile(name))
+  if (gradleManifest) add('build', 'gradle --offline --no-daemon --console=plain check', gradleManifest)
+  if (manifest.hasFile('composer.json')) {
+    try {
+      const composer = JSON.parse(text('composer.json'))
+      const scripts: unknown[] = Array.isArray(composer?.scripts?.test) ? composer.scripts.test : [composer?.scripts?.test]
+      if (scripts.length > 0 && scripts.every((script) => typeof script === 'string' && isTerminatingScript(script) && !/\bphp\s+-S\b/.test(script))) {
+        add('test', 'composer --no-interaction --no-plugins run-script test', 'composer.json script "test"')
+      }
+    } catch {
+      /* An unreadable manifest is not evidence of an available command. */
+    }
+  }
   return commands
 }
 

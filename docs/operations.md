@@ -32,6 +32,14 @@ Il comando **Avvia / Installa Ollama** tenta di avviare `ollama.exe` locale. Se 
 
 [`clean_repo.ps1`](../scripts/clean_repo.ps1), [`clean_workspace.ps1`](../scripts/clean_workspace.ps1) e [`cleanup_policy.ps1`](../scripts/cleanup_policy.ps1) rifiutano percorsi non ammessi, reparse point, file tracciati e dati protetti. I modi Repo, TestResidues e Full richiedono `-DisposablePaths` con percorsi assoluti esaminati; Full esclude i profili. `-WhatIf` applica il preflight senza cancellare. `StopAppProcesses` rifiuta: chiudere l'app deliberatamente. Non classificare `.onlyrag`, `userdata_dev`, campagne live, checkpoint, backup o vecchi scratch come eliminabili dal nome. Eventuali residui hanno una decisione separata nel tracker (`RETAINED-RESIDUE-DISPOSAL-01`). Nessuna pulizia reale è stata eseguita per questa revisione.
 
+## Pulizia manuale dei log
+
+Con app chiusa e dopo revisione dei file, usare `npm run clean:logs -- -DisposablePaths "<percorso assoluto del singolo log>" -ApplicationClosed -WhatIf` per il preflight; omettere `-WhatIf` per cancellare la selezione approvata. Il comando richiede file espliciti, senza cancellazione automatica per età o di intere directory. `-ApplicationClosed` è un'attestazione dell'operatore: lo script non rileva né arresta processi. Sono eleggibili solo i nomi applicativi e le generazioni specificate nella [policy verificata](./verification-log-cleanup-2026-10-19.md); log sconosciuti, evidenze, backup, originali e dati restano protetti. `npm run test:cleanup-logs` esegue 17 casi isolati. Le race e lo smaltimento di evidenze conservate restano separati nel tracker.
+
+## Qualifica nativa dei progetti dell'agente
+
+`npm run test:verification-native` usa i manifest di sei progetti fixture e tutti i relativi strumenti già disponibili. Il [wrapper PowerShell](../scripts/test_native_verification.ps1) accetta percorsi tool aggiuntivi e JDK senza cambiare il PATH persistente; `-PrepareDependencies` consente esplicitamente la preparazione Maven con rete. La verifica applicativa successiva resta offline. [Comandi, requisiti, risultati e limiti](./verification-native-projects-2026-10-19.md).
+
 ## Disinstallazione e dati
 
 Gli archivi `source-documents` sono protetti dalla policy di cleanup. La rimozione di un documento dall'indice conserva l'originale e l'estrazione; anche gli originali di ingestioni fallite restano da valutare separatamente. L'annullamento pulisce soltanto l'archivio della nuova ingestione posseduta dopo il rollback riuscito. [Ciclo di vita e verifica](./retrieval.md#ciclo-di-vita-degli-archivi-originali).

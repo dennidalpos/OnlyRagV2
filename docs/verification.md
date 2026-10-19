@@ -4,6 +4,14 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Indice delle evidenze precedenti
 
+## Verifiche native e pulizia log — 2026-10-19
+
+[Sei ecosistemi con toolchain reali, successi/fallimenti, timeout e annullamento](./verification-native-projects-2026-10-19.md). [Pulizia esplicita dei log: 17 casi con cancellazione reale isolata e 31 regressioni WhatIf](./verification-log-cleanup-2026-10-19.md).
+
+## Inventario dei candidati conservati — 2026-10-19
+
+[Tre candidati inventariati, hash storici riletti e 29 ricevute precedenti disponibili](./verification-release-inventory-2026-10-19.md). La corrispondenza dei record non chiude i gate di distribuzione, installazione, modelli o diritti.
+
 ## Ciclo di vita degli archivi sorgente — 2026-10-19
 
 [Creazione, revisione, navigazione, cancellazione dall'indice, conservazione e rifiuti del cleanup con junction Windows reali](./verification-source-archive-lifecycle-2026-10-19.md).

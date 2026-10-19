@@ -2,7 +2,7 @@
 
 ## Current source candidate — 2026-10-19
 
-Current local candidate: `release/cpu-20261018-220641-87a891b9`, clean source commit `95752a0`, unsigned. Independent installer/source/notice/Python/ASAR readback, the CPU OCR/auth/PDF/retrieval probe and isolated packaged chat/draft recovery pass. Frozen parser/normalization HTTP regressions (29 passed), XLS budgets/timeout/owner-crash recovery and the native packaged IPC ingestion/translation/restart flow also pass with declared synthetic model responses. The broader current-source task remains open for the same-artifact gates below; installation and real-model campaigns are not authorized. [Exact evidence and residuals](./verification-current-source-2026-10-19.md). The following dated candidates describe historical qualification, not the current build.
+Retained qualified candidate: `release/cpu-20261018-220641-87a891b9`, clean source commit `95752a0`, unsigned. Independent installer/source/notice/Python/ASAR readback, the CPU OCR/auth/PDF/retrieval probe and isolated packaged chat/draft recovery pass. Frozen parser/normalization HTTP regressions (29 passed), XLS budgets/timeout/owner-crash recovery and the native packaged IPC ingestion/translation/restart flow also pass with declared synthetic model responses. The broader current-source task remains open for the same-artifact gates below; installation and real-model campaigns are not authorized. [Exact evidence and residuals](./verification-current-source-2026-10-19.md). The [inventory of all three retained candidates](./verification-release-inventory-2026-10-19.md), including the October 19 artifact, does not qualify any as the changed current runtime. Dated candidates retain their historical qualification.
 
 ## Local candidate — 2026-10-12
 

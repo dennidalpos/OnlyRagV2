@@ -1,5 +1,9 @@
 # Verifica corrente per ambito
 
+Il [passaggio di sessione dell'audit](./session-handoff-audit-2026-10-20.md) salva i 36 residui e la richiesta esplicita di commit/push su master; le verifiche pre-commit e la CI della nuova consegna restano distinte dall'audit precedente.
+
+L'[audit corrente dei residui](./repository-residue-audit-2026-10-20.md) registra **36 attivita aperte**, tre nuovi P2 e CI b470387 fallita sul worker dipendenze. Prove DOCX isolate, nessuna correzione applicativa. Il percorso TEMP della sanificazione non e disponibile e resta nel task di conservazione; conteggi/esiti delle ricevute precedenti sono storici.
+
 Il [passaggio attuale di sessione](./session-handoff-tracker-2026-10-20.md) registra la consegna dei sorgenti su `master`, i nuovi controlli pre-commit e la ripresa da 33 attività, incluso il nuovo timeout CI audit verificato. La CI deve essere riletta sul nuovo SHA; i risultati precedenti restano riferiti alla propria revisione.
 
 La [nuova campagna ledger](./verification-ledger-bounded-2026-10-20.md) ha consumato esattamente otto chiamate: estrazione 1/4 semanticamente accettata, quattro candidati di piano non qualificati nel limite disponibile, audit completo riletto per otto operazioni dopo il riavvio installato. Sette richieste ulteriori bloccate prima del modello; marker storici invariati. Il task P1 resta aperto, senza nuovi ID chiusi.

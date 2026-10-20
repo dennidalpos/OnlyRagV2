@@ -1,5 +1,9 @@
 # Documentazione OnlyRag V2
 
+Il [passaggio di sessione dell'audit](./session-handoff-audit-2026-10-20.md) salva i 36 residui e la richiesta esplicita di commit/push su master; le verifiche pre-commit e la CI della nuova consegna restano distinte dall'audit precedente.
+
+L'[audit corrente dei residui](./repository-residue-audit-2026-10-20.md) registra **36 attivita aperte**, tre nuovi P2 e CI b470387 fallita sul worker dipendenze. Prove DOCX isolate, nessuna correzione applicativa. Il percorso TEMP della sanificazione non e disponibile e resta nel task di conservazione; conteggi/esiti delle ricevute precedenti sono storici.
+
 Il [passaggio di sessione del seguito tracker](./session-handoff-tracker-2026-10-20.md) salva cinque completamenti e 33 residui, incluso il nuovo timeout CI verificato, limiti delle campagne e prossime decisioni; commit/push dei sorgenti su `master` richiesti esplicitamente.
 
 La [campagna live del 20 ottobre](./verification-live-content-2026-10-20.md) e i giudizi sono conservati: raccolta completa, accettazione fallita e qualifica P1 aperta.
@@ -26,7 +30,7 @@ Le guide descrivono il comportamento verificato nel codice al **13 ottobre 2026*
 
 Il [seguito del tracker del 20 ottobre](./verification-tracker-followup-2026-10-20.md) riunisce cinque completamenti e 32 residui. È conclusa anche la [qualifica XLS installata](./verification-installed-xls-2026-10-20.md), con 14 casi nativi e corrispondenza dei 31 moduli Python congelati. La [campagna ledger di otto chiamate](./verification-ledger-bounded-2026-10-20.md) ha esaurito il budget: audit installato riletto, qualifica semantica ancora aperta.
 
-Le [dimensioni del candidato del 20 ottobre](./verification-candidate-footprint-2026-10-20.md) sono misurate sullo stesso installer estratto e installato: CPU OCR e avvio automatico passano, qualità e altri gate rimangono separati. Il conteggio corrente è 32 attività aperte dopo cinque chiusure; le ricevute datate mantengono i propri conteggi.
+Le [dimensioni del candidato del 20 ottobre](./verification-candidate-footprint-2026-10-20.md) sono misurate sullo stesso installer estratto e installato: CPU OCR e avvio automatico passano, qualità e altri gate rimangono separati. Il conteggio storico di quel lotto è 32 attività aperte dopo cinque chiusure; le ricevute datate mantengono i propri conteggi.
 
 Il [passaggio di sessione del recupero e dello storico](./session-handoff-recovery-2026-10-20.md) documenta la pubblicazione su master, il successo CI della consegna runtime e i 37 residui. La [riconciliazione inflight](./verification-inflight-reconciliation-2026-10-20.md) è ora implementata e qualificata; sono concluse anche impostazioni installate, misure del candidato e valutazione del chunking. Candidato, installazione isolata e modelli locali su dati di prova sono autorizzati; gli esiti sono distinti nelle ricevute del seguito. Restano separati i gate installati/live e le altre decisioni non risposte.
 

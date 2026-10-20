@@ -4,10 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppLayout } from './AppLayout'
 import { I18nProvider } from '../../i18n'
 import { DEFAULT_APP_SETTINGS } from '../../../shared/domain/settings/appSettingsDefaults'
-import type { AppSettings } from '../../types'
+import type { AppSettings, DiagnosticsData } from '../../types'
+
+const diagnosticState = vi.hoisted(() => ({ value: null as DiagnosticsData | null }))
 
 vi.mock('../../hooks/useDiagnostics', () => ({
-  useDiagnostics: () => ({ diagnostics: null, refreshDiagnostics: vi.fn() }),
+  useDiagnostics: () => ({ diagnostics: diagnosticState.value, refreshDiagnostics: vi.fn() }),
 }))
 vi.mock('../../hooks/useModelDownloadProgress', () => ({
   useModelDownloadProgress: () => ({ isDownloading: false, lastCompletedModel: null }),
@@ -46,6 +48,7 @@ describe('settings save feedback', () => {
   }
 
   beforeEach(() => {
+    diagnosticState.value = null
     vi.useFakeTimers()
     localStorage.clear()
     container = document.createElement('div')
@@ -54,6 +57,37 @@ describe('settings save feedback', () => {
     load = vi.fn(async () => initial)
     vi.stubGlobal('electronAPI', { getAppSettings: load, saveAppSettings: save })
     vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  it.each([
+    [undefined, 'Checking...'],
+    ['checking', 'Checking...'],
+    ['offline', 'Offline'],
+    ['online', '3 Docs'],
+  ] as const)('shows the actual Sidecar state: %s', async (status, expected) => {
+    if (status) {
+      diagnosticState.value = {
+        sidecar: { status, documentsCount: 3 },
+        ollama: { status: 'online', url: 'http://127.0.0.1:11434', modelsCount: 0, models: [] },
+        gpu: { hasNvidiaGpu: false },
+        memory: { totalRAMGB: 16, freeRAMGB: 8, usedRAMGB: 8, ramUsagePercent: 50 },
+        system: { platform: 'win32', arch: 'x64', cpusCount: 4, cpuModel: 'fixture' },
+        requirements: {
+          isOsSupported: true,
+          hasMinRam: true,
+          hasRecRam: true,
+          isOllamaReady: true,
+          isGpuAccelerated: false,
+          isSidecarReady: status === 'online',
+          overallStatus: 'warning',
+        },
+        timestamp: '2026-10-20T00:00:00Z',
+      }
+    }
+    await mount()
+    await tick()
+    const label = Array.from(container.querySelectorAll('span')).find((element) => element.textContent === 'LanceDB Sidecar')
+    expect(label?.parentElement?.textContent).toContain(expected)
   })
   afterEach(async () => {
     await act(async () => root.unmount())

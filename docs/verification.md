@@ -4,6 +4,18 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Indice delle evidenze precedenti
 
+## Stato iniziale del Sidecar in sviluppo — 2026-10-20
+
+[Preparazione distinta da offline, 26 regressioni e avvio Python/Electron isolato reale](./verification-sidecar-dev-startup-2026-10-20.md).
+
+## Preparazione offline del confronto sulla lingua — 2026-10-20
+
+[Corpus e sorgenti verificati, 24 input congelati a zero inferenze; proprietario conferma solo offline e P1 ancora aperto](./plan-chat-language-2026-10-20.md).
+
+## Ripresa CI e diagnosi dev-server — 2026-10-20
+
+[CI dell'esatto e48c468 completata, runner nativo, 25 casi e 24 regressioni mirate; diagnosi storiche ancora aperte](./verification-tracker-resume-2026-10-20.md).
+
 ## Regressioni del verificatore — 2026-10-20
 
 [Root della verifica, discovery Python, suite vuote/saltate e requisiti comportamentali: correzioni, 16 prove native e gate completi](./verification-project-regressions-2026-10-20.md). Le qualifiche installate/live restano separate.

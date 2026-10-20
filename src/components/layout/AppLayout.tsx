@@ -118,6 +118,8 @@ export const AppLayout: React.FC = () => {
     setSettings((current) => (current.defaultModel ? current : { ...current, defaultModel: model }))
   }, [])
   const { diagnostics, refreshDiagnostics: runDiagnosticsScan } = useDiagnostics(settings, selectDefaultModelIfUnset, settingsReady)
+  const sidecarStatus = diagnostics?.sidecar?.status ?? 'checking'
+  const sidecarStatusColor = sidecarStatus === 'online' ? 'text-emerald-400' : sidecarStatus === 'checking' ? 'text-cyan-400' : 'text-rose-400'
   const {
     isDownloading: isModelDownloading,
     modelName: downloadingModelName,
@@ -312,13 +314,15 @@ export const AppLayout: React.FC = () => {
           <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2 max-[900px]:hidden">
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-slate-400 flex items-center gap-1.5">
-                <Layers className={`w-3 h-3 ${diagnostics?.sidecar?.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`} />
+                <Layers className={`w-3 h-3 ${sidecarStatusColor}`} />
                 {t('sidebar.sidecarLanceDb')}
               </span>
-              <span
-                className={`font-semibold capitalize text-[10px] font-mono ${diagnostics?.sidecar?.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`}
-              >
-                {diagnostics?.sidecar?.status === 'online' ? `${diagnostics.sidecar.documentsCount || 0} Docs` : t('common.offline')}
+              <span className={`font-semibold capitalize text-[10px] font-mono ${sidecarStatusColor}`}>
+                {sidecarStatus === 'online'
+                  ? `${diagnostics?.sidecar.documentsCount || 0} Docs`
+                  : sidecarStatus === 'checking'
+                    ? t('common.checking')
+                    : t('common.offline')}
               </span>
             </div>
 

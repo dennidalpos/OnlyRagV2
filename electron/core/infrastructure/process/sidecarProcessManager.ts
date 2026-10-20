@@ -45,6 +45,7 @@ export function classifySidecarStderr(message: string): 'INFO' | 'WARN' | 'ERROR
 
 export class SidecarProcessManager {
   private launchedOllamaHost: string | null = null
+  private startup: Promise<boolean> | null = null
   private state: {
     status: 'online' | 'offline' | 'checking'
     engine?: string
@@ -71,7 +72,7 @@ export class SidecarProcessManager {
       const finishOffline = (error: string) => {
         if (settled) return
         settled = true
-        this.state = { status: 'offline', error }
+        this.state = { status: this.startup ? 'checking' : 'offline', error }
         resolve(false)
       }
       const req = http.get(`${SIDECAR_BASE_URL}/health`, { agent: httpAgent, timeout: timeoutMs }, (res) => {
@@ -292,7 +293,19 @@ export class SidecarProcessManager {
     return Number.isSafeInteger(parent) && parent > 0 ? parent : null
   }
 
-  async startPythonSidecar(): Promise<boolean> {
+  startPythonSidecar(): Promise<boolean> {
+    if (this.startup) return this.startup
+    this.state = { status: 'checking' }
+    this.startup = this.launchPythonSidecar().finally(() => {
+      this.startup = null
+      // Startup may include environment preparation before a listener exists. Once it
+      // finishes, a failed health probe must become a real offline result again.
+      if (this.state.status === 'checking') this.state = { ...this.state, status: 'offline' }
+    })
+    return this.startup
+  }
+
+  private async launchPythonSidecar(): Promise<boolean> {
     if (await this.checkSidecarHealth()) {
       // Ours, started earlier in this same session: nothing to do.
       if (sidecarProcess) {

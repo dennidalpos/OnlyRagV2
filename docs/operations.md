@@ -1,5 +1,7 @@
 # Setup e operazioni
 
+Durante l'avvio di sviluppo il Sidecar mostra `Verifica...` finché preparazione Python e readiness non terminano. Con `.venv` assente il primo avvio può installare le dipendenze runtime; un fallimento concluso resta `Offline`. Dopo modifiche al Main process chiudere e riavviare `npm run dev`. [Diagnosi, correzione e prove native del 20 ottobre](./verification-sidecar-dev-startup-2026-10-20.md).
+
 Eseguire i comandi da PowerShell nella radice del repository. Le versioni dichiarate sono Node [`24.19.0`](../.nvmrc), npm `>=11 <12` in [`package.json`](../package.json) e Python [`3.13.15`](../.python-version). Lo sviluppo richiede Ollama; l'endpoint locale predefinito è `http://127.0.0.1:11434`. Il manifest degli script e i loro effetti sono in [`package.json`](../package.json) e [`scripts/`](../scripts/).
 
 ## Comandi

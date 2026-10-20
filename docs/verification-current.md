@@ -1,5 +1,13 @@
 # Verifica corrente per ambito
 
+Il [passaggio di sessione Sidecar e verifiche locali](./session-handoff-sidecar-2026-10-20.md) salva la correzione dell'avvio, il runner loopback e il piano lingua offline con 34 attività ancora aperte. Commit e push su `master` autorizzati per questa consegna; verifiche complete ed esito remoto restano attribuiti ai rispettivi sorgenti.
+
+La [correzione dello stato iniziale Sidecar](./verification-sidecar-dev-startup-2026-10-20.md) riproduce il falso `Offline`, passa 26 regressioni e verifica Python/LanceDB reale dentro Electron su profilo isolato. Nessuna inferenza o nuova installazione; 34 attività precedenti preservate. I candidati conservati richiedono una nuova corrispondenza con il runtime modificato.
+
+Il [seguito P1 sulla lingua delle risposte](./plan-chat-language-2026-10-20.md) completa soltanto la preparazione offline del confronto. Corpus e ricevute conservate sono verificati, così come hook chat/citazioni e preset; **zero inferenze**. Il proprietario conferma «solo offline»: il candidato non entra nel runtime, il gate live resta non eseguito e i task aperti restano **34**.
+
+La [ripresa locale del tracker](./verification-tracker-resume-2026-10-20.md) conferma CI `e48c468` completata con successo, aggiunge il runner diagnostico dev-server e passa 25 casi nativi più 24 regressioni mirate. Restano **34 task aperti**: nessuna causa storica dei tre residui CI/loopback è stata dichiarata risolta. Il nuovo runner ha verifica locale; non sono eseguite nuove campagne modello o installazioni.
+
 Il [passaggio di sessione delle correzioni locali](./session-handoff-local-fixes-2026-10-20.md) salva tre completamenti, 34 attività aperte e il residuo audit; commit e push su `master` autorizzati per questa consegna. Le sezioni successive mantengono le rispettive date ed evidenze storiche.
 
 Il [seguito locale](./verification-tracker-local-2026-10-20.md) conclude tre task e registra un nuovo residuo di recupero dell'audit di sviluppo: **34 aperti**. Il [sanitizer Monaco](./verification-monaco-sanitizer-2026-10-20.md) usa la dipendenza 3.4.17, sostituita nel grafo Vite e verificata con rendering nativo e build. La [misura RAG sotto contesa](./verification-retrieval-contention-2026-10-20.md) è locale e sintetica; i [task CI](./verification-ci-boundaries-2026-10-20.md) conservano diagnosi storica incompleta e futura qualifica remota. L'utente ha confermato il perimetro solo locale e p95 RAG di 5 secondi.

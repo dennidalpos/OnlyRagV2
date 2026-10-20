@@ -1,5 +1,7 @@
 # Qualifica dei contenuti con modelli locali — 20 ottobre 2026
 
+Seguito: [preparazione offline del confronto sulla lingua](./plan-chat-language-2026-10-20.md). La copia durevole della campagna è stata ritrovata e verificata; nessuna nuova inferenza o modifica degli esiti seguenti. Il proprietario ha confermato il perimetro solo offline e il candidato non è integrato.
+
 `QUALITY-CONTENT-LIVE-QUALIFICATION-01` **rimane aperto**. La raccolta reale sul corpus congelato è completa, ma il gate restituisce **exit 1 / passed false**. Nessuna aspettativa o soglia viene modificata.
 
 | Criterio | Risultato |

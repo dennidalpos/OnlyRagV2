@@ -1,5 +1,13 @@
 # Documentazione OnlyRag V2
 
+[Passaggio di sessione Sidecar e verifiche locali](./session-handoff-sidecar-2026-10-20.md): lavoro e 34 task salvati, commit/push su `master` richiesti esplicitamente; scelta solo offline dei modelli conservata. La CI della consegna richiede il proprio readback.
+
+Corretto lo [stato iniziale del Sidecar in sviluppo](./verification-sidecar-dev-startup-2026-10-20.md): `Verifica...` durante la preparazione, errore offline visibile a fine avvio. Prove Python/Electron isolate e regressioni passate; riavviare il dev per caricare il Main aggiornato.
+
+Il [piano offline per la lingua delle risposte](./plan-chat-language-2026-10-20.md) verifica e congela il prossimo confronto P1 senza inferenze. Il proprietario ha confermato il perimetro solo offline: nessun candidato integrato e nessun task chiuso.
+
+La [ripresa del tracker](./verification-tracker-resume-2026-10-20.md) completa il readback CI di `e48c468` e aggiunge la diagnosi nativa ripetibile del dev-server: 34 attività ancora aperte, con i motivi delle qualifiche parziali conservati.
+
 Il [passaggio di sessione delle correzioni locali](./session-handoff-local-fixes-2026-10-20.md) salva tre completamenti, 34 attività aperte e il residuo audit; commit e push su `master` autorizzati per questa consegna. Le sezioni successive mantengono le rispettive date ed evidenze storiche.
 
 Il [seguito locale del tracker](./verification-tracker-local-2026-10-20.md) conclude tre task e registra un nuovo residuo di recupero dell'audit di sviluppo: **34 aperti**. Il [sanitizer Monaco](./verification-monaco-sanitizer-2026-10-20.md) usa DOMPurify 3.4.17 verificato nativamente; le [misure RAG 768/1024D con contesa](./verification-retrieval-contention-2026-10-20.md) passano il p95 locale di 5 secondi. I [due task CI](./verification-ci-boundaries-2026-10-20.md) mantengono la qualifica remota pendente.

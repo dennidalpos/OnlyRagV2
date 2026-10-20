@@ -1,21 +1,26 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import type { ChildProcess } from 'node:child_process'
+import http from 'node:http'
+
+const profileRoot = vi.hoisted(() => `${process.env.TEMP || process.env.TMPDIR || '/tmp'}/onlyrag-sidecar-state-${crypto.randomUUID()}`)
 
 vi.mock('electron', () => ({
   app: {
     getAppPath: vi.fn(() => process.cwd()),
-    getPath: vi.fn(() => process.cwd()),
+    getPath: vi.fn(() => profileRoot),
     isPackaged: false,
   },
 }))
 
 import { classifySidecarStderr, SidecarProcessManager } from './sidecarProcessManager'
 import { logger } from '../logging/logger'
+
+afterAll(() => fs.rmSync(profileRoot, { recursive: true, force: true }))
 
 describe('Sidecar log privacy', () => {
   let logDir: string
@@ -87,6 +92,65 @@ describe('Sidecar log privacy', () => {
 })
 
 describe('SidecarProcessManager process state', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  function unavailableHealth() {
+    vi.spyOn(http, 'get').mockImplementation(() => {
+      const request = Object.assign(new EventEmitter(), { setTimeout: vi.fn(), destroy: vi.fn() }) as unknown as http.ClientRequest
+      queueMicrotask(() => request.emit('error', new Error('ECONNREFUSED')))
+      return request
+    })
+  }
+
+  it('keeps preparation checking across failed probes and shares concurrent startup', async () => {
+    unavailableHealth()
+    const manager = new SidecarProcessManager()
+    let finish!: (online: boolean) => void
+    const internals = manager as unknown as { launchPythonSidecar(): Promise<boolean> }
+    const launch = vi.spyOn(internals, 'launchPythonSidecar').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const first = manager.startPythonSidecar()
+    expect(manager.startPythonSidecar()).toBe(first)
+    expect(launch).toHaveBeenCalledOnce()
+    expect(await manager.checkSidecarHealth()).toBe(false)
+    expect(manager.getSidecarState()).toMatchObject({ status: 'checking' })
+    finish(false)
+    expect(await first).toBe(false)
+    expect(manager.getSidecarState()).toMatchObject({ status: 'offline', error: 'ECONNREFUSED' })
+  })
+
+  it('reports a failed probe offline after successful startup instead of hiding a later outage', async () => {
+    unavailableHealth()
+    const manager = new SidecarProcessManager()
+    const internals = manager as unknown as { state: { status: string }; launchPythonSidecar(): Promise<boolean> }
+    vi.spyOn(internals, 'launchPythonSidecar').mockImplementation(async () => {
+      internals.state = { status: 'online' }
+      return true
+    })
+    expect(await manager.startPythonSidecar()).toBe(true)
+    expect(manager.getSidecarState().status).toBe('online')
+    expect(await manager.checkSidecarHealth()).toBe(false)
+    expect(manager.getSidecarState()).toMatchObject({ status: 'offline', error: 'ECONNREFUSED' })
+  })
+
+  it('clears a rejected startup so an explicit retry can succeed', async () => {
+    const manager = new SidecarProcessManager()
+    const internals = manager as unknown as { state: { status: string }; launchPythonSidecar(): Promise<boolean> }
+    const launch = vi.spyOn(internals, 'launchPythonSidecar').mockRejectedValueOnce(new Error('fixture preparation failed'))
+    await expect(manager.startPythonSidecar()).rejects.toThrow('fixture preparation failed')
+    expect(manager.getSidecarState().status).toBe('offline')
+    launch.mockImplementationOnce(async () => {
+      internals.state = { status: 'online' }
+      return true
+    })
+    expect(await manager.startPythonSidecar()).toBe(true)
+    expect(launch).toHaveBeenCalledTimes(2)
+  })
+
   it('marks an online sidecar offline when its owned process exits', () => {
     const manager = new SidecarProcessManager()
     const internals = manager as unknown as { state: { status: string }; markProcessExited(code: number): void }

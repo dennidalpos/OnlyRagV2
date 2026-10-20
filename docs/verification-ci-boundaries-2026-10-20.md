@@ -1,5 +1,7 @@
 # Fixture CI: scadenze worker e retention — 20 ottobre 2026
 
+Aggiornamento alla ripresa: il [run esatto e48c468](https://github.com/dennidalpos/OnlyRagV2/actions/runs/39483553222) è `completed/success`, con 2.953 test TypeScript e 667 Python passati. Il [nuovo resoconto](./verification-tracker-resume-2026-10-20.md) completa la qualifica remota delle fixture pubblicate; entrambi i task restano parziali per le diagnosi storiche non dimostrate. I riferimenti alla CI futura nei paragrafi seguenti descrivono la fase locale precedente alla pubblicazione.
+
 I task `CI-DEPENDENCY-SCAN-WORKER-DEADLINE-01` e `CI-CAPABILITY-AUDIT-RETENTION-TIMEOUT-01` **restano aperti**. Le correzioni seguenti riguardano le fixture locali; il runtime worker e il writer durevole non cambiano. La futura revisione richiede ancora pubblicazione autorizzata ed esito remoto esatto, oltre alla diagnosi delle fasi non presenti nei log storici.
 
 ## Worker nativo

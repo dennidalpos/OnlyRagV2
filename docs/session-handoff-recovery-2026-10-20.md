@@ -1,6 +1,6 @@
 # Passaggio di sessione: recupero agente e storico — 20 ottobre 2026
 
-Richiesta esplicita: salvare il lavoro, fare commit sul branch principale e push, aggiornando il tracker per il cambio di sessione. Destinazione verificata: repository pubblico origin https://github.com/dennidalpos/OnlyRagV2, branch predefinito master; base 70341da05c56e8c152419ae83527d223d93b81f3, divergenza iniziale 0/0. Il commit che contiene questo documento identifica la consegna; la conferma del push e lo stato CI dell'esatto SHA vengono riletti dopo la pubblicazione e registrati nel dossier SecondBrain.
+Richiesta esplicita: salvare il lavoro, fare commit sul branch principale e push, aggiornando il tracker per il cambio di sessione. Destinazione verificata: repository pubblico origin https://github.com/dennidalpos/OnlyRagV2, branch predefinito master; base 70341da05c56e8c152419ae83527d223d93b81f3, divergenza iniziale 0/0. Il commit runtime 4999d569994bc507dab1bd4e8db6bcc42b96381f identifica la consegna; la conferma del push e lo stato CI dell'esatto SHA vengono riletti dopo la pubblicazione e registrati nel dossier SecondBrain.
 
 ## Lavoro consegnato
 
@@ -14,14 +14,14 @@ Conclusi e rimossi nei lotti precedenti soltanto AGENT-UNGRACEFUL-SHUTDOWN-RECOV
 
 ## Tracker e ripresa
 
-[PROJECT_STATUS.json](../PROJECT_STATUS.json): **38 aperti, 20 autonomi e 18 con decisione del proprietario; 4 P1, 29 P2, 5 P3**. ID e priorita preservati. Solo il task CI cambia categoria dopo l'autorizzazione a commit/push; gli altri 37 record sono identici alla baseline di pubblicazione. Il tracker conserva soltanto lavoro aperto; note e ricevute datate mantengono le fasi precedenti.
+[PROJECT_STATUS.json](../PROJECT_STATUS.json): **37 aperti, 19 autonomi e 18 con decisione del proprietario; 4 P1, 28 P2, 5 P3**. La consegna runtime `4999d569994bc507dab1bd4e8db6bcc42b96381f` aveva 38 attivita; il [run CI esatto 39403270258](https://github.com/dennidalpos/OnlyRagV2/actions/runs/39403270258) e ora `completed/success`, quindi `CI-CURRENT-REVISION-REMOTE-QUALIFICATION-01` e concluso e rimosso. La risposta successiva del proprietario definisce la policy del task inflight, che resta aperto per implementazione e qualifica. Gli altri 36 record sono invariati rispetto alla consegna; nessun altro ID eliminato. Le ricevute di pubblicazione conservano i conteggi storici.
 
-1. Rileggere AGENTS.md, tracker, stato Git e dossier OnlyRagV2 in SecondBrain. Verificare l'esatto commit remoto e il suo run CI, senza attribuirgli il verde locale o quello di altre revisioni. Il task CI resta aperto finche i gate richiesti non risultano riusciti.
-2. AGENT-INFLIGHT-EFFECT-RECONCILIATION-01: attendere la scelta gia richiesta su ispezione/abbandono oppure ulteriore tentativo con conferma del rischio di duplicazione. Domanda non risposta: nessuna politica scelta implicitamente e nessun replay.
+1. Rileggere AGENTS.md, tracker, stato Git e dossier OnlyRagV2 in SecondBrain. La CI della consegna runtime 4999d56 e riuscita; questo aggiornamento successivo modifica soltanto tracker/documentazione. Eventuali run successivi mantengono il proprio SHA e non sono certificati dal verde precedente.
+2. AGENT-INFLIGHT-EFFECT-RECONCILIATION-01: decisione ricevuta dal proprietario il 20 ottobre 2026: **ispezione delle prove e abbandono esplicito; nessuna ripetizione automatica**. Implementare e qualificare questo flusso preservando intento, richiesta, checkpoint ed evidenze; il recupero selezionato non riavvia l'azione dall'esito ignoto. Implementazione non avviata nel passaggio documentale.
 3. HISTORY-EMBEDDING-CORRECTNESS-01: restano encoder/scoring reali e percorso di ricostruzione dello storico con backup/readback/rollback; il rebuild dei documenti non lo sostituisce. Nessuna nuova inferenza o migrazione personale autorizzata dalla pubblicazione.
 4. DEVSERVER-LOOPBACK-PROBE-STABILITY-01: conservare la prossima riproduzione con endpoint/listener/processo; non indebolire i controlli.
 
-Il runtime modificato richiede un futuro candidato corrispondente. Installer conservati, desktop installato, modelli reali, perdita di alimentazione, migrazioni personali, smaltimento delle evidenze e diritti/pubblicazione installer mantengono i rispettivi gate. Le richieste di autorizzazione precedenti non ricevono risposta implicita da questa pubblicazione dei sorgenti.
+Il runtime modificato richiede un futuro candidato corrispondente. Installer conservati, desktop installato, modelli reali, perdita di alimentazione, migrazioni personali, smaltimento delle evidenze e diritti/pubblicazione installer mantengono i rispettivi gate. Le altre richieste di autorizzazione precedenti non ricevono risposta implicita da questa pubblicazione dei sorgenti; la decisione inflight e invece ora esplicita e registrata sopra.
 
 ## Verifiche di pubblicazione
 

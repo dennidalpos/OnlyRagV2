@@ -20,7 +20,7 @@ Le guide descrivono il comportamento verificato nel codice al **13 ottobre 2026*
 
 ## Specifiche e prove conservate
 
-Il [passaggio di sessione del recupero e dello storico](./session-handoff-recovery-2026-10-20.md) documenta la pubblicazione autorizzata su master e i 38 residui. La qualifica CI dell'esatto commit pubblicato passa ora al seguito autonomo; restano separati i gate installati/live e le decisioni non risposte.
+Il [passaggio di sessione del recupero e dello storico](./session-handoff-recovery-2026-10-20.md) documenta la pubblicazione su master, il successo CI della consegna runtime e i 37 residui. La policy inflight e approvata: ispezione delle prove e abbandono esplicito, senza ripetizione automatica; implementazione ancora aperta. Restano separati i gate installati/live e le altre decisioni non risposte.
 
 La [provenienza degli embedding dello storico](./verification-history-provenance-2026-10-20.md) corregge il difetto sorgente e distingue i residui live/migrazione. L'[indagine sulle sonde loopback](./verification-loopback-probes-2026-10-20.md) conserva 50.000 misure senza dichiarare risolta l'intermittenza.
 

@@ -6,11 +6,11 @@ Il [passaggio precedente](./session-handoff-2026-10-19.md) conserva la consegna 
 
 Il [recupero agente dopo arresto forzato](./verification-agent-crash-recovery-2026-10-20.md) e il [riallineamento del runner Electron](./verification-agent-harness-2026-10-20.md) aggiungono coda persistente, ripresa esplicita, checkpoint incrementali e otto scenari/nove guard qualificati offline. Gli esiti di azioni interrotte non confermati restano rifiutati e tracciati.
 
-La [CI precedente](https://github.com/dennidalpos/OnlyRagV2/actions/runs/39380408183) di `70341da` è terminata con due fixture fallite; le [correzioni locali](./verification-ci-fixtures-2026-10-20.md) non costituiscono una nuova qualifica remota. La richiesta corrente autorizza commit/push: resta da leggere l’esito remoto dell’esatta revisione pubblicata.
+La [CI precedente](https://github.com/dennidalpos/OnlyRagV2/actions/runs/39380408183) di `70341da` è terminata con due fixture fallite; le [correzioni locali](./verification-ci-fixtures-2026-10-20.md) non costituiscono una nuova qualifica remota. La successiva [CI di 4999d56](https://github.com/dennidalpos/OnlyRagV2/actions/runs/39403270258) e `completed/success`: il task di qualifica remota della consegna runtime e concluso e rimosso. Il nuovo seguito documentale conserva la distinzione tra gli SHA.
 
 La [correzione della provenienza dello storico](./verification-history-provenance-2026-10-20.md) registra encoder e policy, rifiuta spazi incompatibili e preserva i dati legacy; qualifica reale e ricostruzione esplicita restano aperte. Le [nuove sonde loopback](./verification-loopback-probes-2026-10-20.md) non riproducono il rifiuto intermittente: indagine e guardia restano aperte/invariata.
 
-Il [passaggio di sessione del recupero e dello storico](./session-handoff-recovery-2026-10-20.md) documenta la pubblicazione autorizzata su master e i 38 residui. La qualifica CI dell'esatto commit pubblicato passa ora al seguito autonomo; restano separati i gate installati/live e le decisioni non risposte.
+Il [passaggio di sessione del recupero e dello storico](./session-handoff-recovery-2026-10-20.md) documenta la pubblicazione autorizzata su master e i 37 residui dopo il successo CI della consegna runtime. La policy inflight approvata offre ispezione delle prove e abbandono esplicito senza ripetizione automatica; implementazione e qualifica restano aperte. Restano separati i gate installati/live e le altre decisioni non risposte.
 
 | Ambito | Verificato | Ancora aperto |
 | --- | --- | --- |

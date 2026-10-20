@@ -1,5 +1,7 @@
 # Frozen content acceptance
 
+La [campagna corrente del 20 ottobre](./verification-live-content-2026-10-20.md) raccoglie tutte le risposte ma fallisce il gate: 5/12 accettate congiuntamente, 9/11 passaggi globali. Aspettative, fallimenti e policy conservati; il task P1 resta aperto.
+
 `QUALITY-CONTENT-ACCEPTANCE-01` is complete on 2026-10-02 as a fixed corpus and independent acceptance gate, and removed from the tracker. The application fails that gate. `QUALITY-CONTENT-LIVE-QUALIFICATION-01` retains the failed cases and broader live/desktop qualification; the explicitly approved whitespace-only normalization task is also complete; broader qualification remains tracked.
 
 ## Corpus and execution boundary

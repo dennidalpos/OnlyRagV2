@@ -1,0 +1,1369 @@
+{
+  "date": "2026-10-20",
+  "root": "C:\\Users\\Utente\\OnlyRag-Live\\request-ledger-bounded-20261020-v1",
+  "captureVerified": true,
+  "qualificationPassed": false,
+  "actualCalls": 8,
+  "extractionCalls": 4,
+  "candidateCalls": 4,
+  "semanticReviewerCalls": 0,
+  "blockedRequests": 7,
+  "extractionNativePasses": 4,
+  "extractionIndependentAccepted": 1,
+  "nativeAcceptedPlans": 0,
+  "restartedInstalledAuditReadback": 8,
+  "historicalMarkersUnchanged": 11,
+  "model": {
+    "name": "qwen3.5:9b",
+    "model": "qwen3.5:9b",
+    "modified_at": "2026-10-10T08:32:22.9552584+02:00",
+    "size": 6603314868,
+    "digest": "c97eb11d70b1acdc88af01eef566c1fe4f7fbe93eb1afc06871132f293ff425a",
+    "details": {
+      "parent_model": "",
+      "format": "gguf",
+      "family": "qwen35",
+      "families": [
+        "qwen35",
+        "clip"
+      ],
+      "parameter_size": "9.7B",
+      "quantization_level": "Q4_K_M",
+      "context_length": 262144,
+      "embedding_length": 4096,
+      "runner": "llamacpp"
+    },
+    "capabilities": [
+      "completion",
+      "vision",
+      "tools",
+      "thinking"
+    ]
+  },
+  "ollama": "0.40.6",
+  "sourcePins": {
+    "electron/core/application/requestCoverageLedgerDraft.ts": "0436bf80f9186055530fa15e3be75acfaff48dcbd65de0035cb4c0c639597876",
+    "electron/core/application/planGenerationAppService.ts": "d147513d24fc6b86d8bdfd2779c18866c54e6ebfa293ff667c69b50f561a9793",
+    "electron/core/application/planRequestCoverage.ts": "957e175cab303f70a6b1697f6f92068b08c29c41743d908602d7f5a03743fc67",
+    "dist-electron/main.js": "d74ac82c2246ea4e9fc58e0fec54663d5a49889c5cf2a8d2b22f401c6d21a2cd"
+  },
+  "installerSha256": "7467194090ecd428351de480a35dba7e68cb3299f13c49a06978124d387e3706",
+  "cases": [
+    {
+      "phase": "extraction",
+      "index": 0,
+      "name": "retained-card-only-global-claim",
+      "operationId": "request-ledger-bounded-20261020-v1-extraction-0",
+      "elapsedMs": 112400,
+      "actualCalls": 1,
+      "result": {
+        "status": "scope_confirmation_required",
+        "scopeDraft": {
+          "request": "- Buttons must have a minimum touch target of 44×44 px.",
+          "obligations": [
+            {
+              "id": "OBL-001",
+              "sourceLines": [
+                1
+              ],
+              "requirement": "Buttons must have a minimum touch target of 44×44 px.",
+              "subject": "Button",
+              "scope": "global",
+              "targets": [],
+              "closedInventory": false,
+              "conditions": []
+            }
+          ]
+        },
+        "objective": "",
+        "decisions": [],
+        "retainedEvidence": [],
+        "milestones": [],
+        "supersededWork": []
+      },
+      "candidate": {
+        "request": "- Buttons must have a minimum touch target of 44×44 px.",
+        "obligations": [
+          {
+            "id": "OBL-001",
+            "sourceLines": [
+              1
+            ],
+            "requirement": "Buttons must have a minimum touch target of 44×44 px.",
+            "subject": "Button",
+            "scope": "global",
+            "targets": [],
+            "closedInventory": false,
+            "conditions": []
+          }
+        ]
+      },
+      "thinkingChars": 13619,
+      "final": {
+        "model": "qwen3.5:9b",
+        "created_at": "2026-10-20T15:03:01.7056426Z",
+        "message": {
+          "role": "assistant",
+          "content": ""
+        },
+        "done": true,
+        "done_reason": "stop",
+        "total_duration": 112052528100,
+        "load_duration": 8751648700,
+        "prompt_eval_count": 428,
+        "prompt_eval_cached_count": 0,
+        "prompt_eval_duration": 506548000,
+        "eval_count": 3270,
+        "eval_duration": 102721388000
+      },
+      "review": {
+        "phase": "extraction",
+        "index": 0,
+        "reviewer": "Codex independent of evaluated Qwen model",
+        "accepted": true,
+        "humanConfirmed": false,
+        "reason": "Complete single obligation for all Buttons, minimum 44x44 px, global/open inventory, no targets or activation conditions invented. Singular subject Button denotes the same class. Request and original source line preserved; no redundant obligation.",
+        "responseSha256": "f6f8f4b89e5abedec02b264f8f522edcb6c19e0dead87322eb90a52be5708021",
+        "inputSha256": "c9c855a54dd8df1095a6da8b8407ebeb2dbbfb9ab75b6bf9ee6322742145fddc"
+      },
+      "audit": {
+        "operationId": "request-ledger-bounded-20261020-v1-extraction-0",
+        "file": "audit-extraction-0.md",
+        "sha256": "980d09bf9a04087ca14cfddfc6cd7b5deae52107d2b5648c8141f596d5c58fd5"
+      }
+    },
+    {
+      "phase": "extraction",
+      "index": 1,
+      "name": "csv-only-global-claim",
+      "operationId": "request-ledger-bounded-20261020-v1-extraction-1",
+      "elapsedMs": 181200,
+      "actualCalls": 1,
+      "result": {
+        "status": "scope_confirmation_required",
+        "scopeDraft": {
+          "request": "CSV and JSON exports preserve the source record order.",
+          "obligations": [
+            {
+              "id": "OBL-001",
+              "sourceLines": [
+                1
+              ],
+              "requirement": "CSV and JSON exports preserve the source record order.",
+              "subject": "exports",
+              "scope": "context",
+              "targets": [],
+              "closedInventory": false,
+              "conditions": []
+            }
+          ]
+        },
+        "objective": "",
+        "decisions": [],
+        "retainedEvidence": [],
+        "milestones": [],
+        "supersededWork": []
+      },
+      "candidate": {
+        "request": "CSV and JSON exports preserve the source record order.",
+        "obligations": [
+          {
+            "id": "OBL-001",
+            "sourceLines": [
+              1
+            ],
+            "requirement": "CSV and JSON exports preserve the source record order.",
+            "subject": "exports",
+            "scope": "context",
+            "targets": [],
+            "closedInventory": false,
+            "conditions": []
+          }
+        ]
+      },
+      "thinkingChars": 25334,
+      "final": {
+        "model": "qwen3.5:9b",
+        "created_at": "2026-10-20T15:06:02.9116075Z",
+        "message": {
+          "role": "assistant",
+          "content": ""
+        },
+        "done": true,
+        "done_reason": "stop",
+        "total_duration": 180918941000,
+        "load_duration": 5409000,
+        "prompt_eval_count": 414,
+        "prompt_eval_cached_count": 0,
+        "prompt_eval_duration": 398589000,
+        "eval_count": 5717,
+        "eval_duration": 180417755000
+      },
+      "review": {
+        "phase": "extraction",
+        "index": 1,
+        "reviewer": "Codex independent of evaluated Qwen model",
+        "accepted": false,
+        "humanConfirmed": false,
+        "reason": "Native schema accepts the draft, but scope context removes the operative CSV and JSON export-order requirement. Both named targets and the closed inventory are lost. Original requirement is actionable global coverage over CSV and JSON, as explicitly human-confirmed; request text alone does not repair the wrong metadata.",
+        "responseSha256": "383525045f3bd27092cf744ff661b0b9ccd40830ebdb5b7d23647176815a2d72",
+        "inputSha256": "fa795569390c7445ce2d48046d5d4db53acae310d5b127386dcd0a33a88624f3"
+      },
+      "audit": {
+        "operationId": "request-ledger-bounded-20261020-v1-extraction-1",
+        "file": "audit-extraction-1.md",
+        "sha256": "9ae653c01a1ba798492523324bbe832f02758f247804332178de57b8bc1f0083"
+      }
+    },
+    {
+      "phase": "extraction",
+      "index": 2,
+      "name": "conditional-property-omitted",
+      "operationId": "request-ledger-bounded-20261020-v1-extraction-2",
+      "elapsedMs": 171384,
+      "actualCalls": 1,
+      "result": {
+        "status": "scope_confirmation_required",
+        "scopeDraft": {
+          "request": "If CSV is requested, retain UTF-8 encoding and quote fields containing delimiters.",
+          "obligations": [
+            {
+              "id": "OBL-001",
+              "sourceLines": [
+                1
+              ],
+              "requirement": "retain UTF-8 encoding and quote fields containing delimiters",
+              "subject": "Output Response",
+              "scope": "global",
+              "targets": [],
+              "closedInventory": false,
+              "conditions": [
+                "If CSV is requested"
+              ]
+            }
+          ]
+        },
+        "objective": "",
+        "decisions": [],
+        "retainedEvidence": [],
+        "milestones": [],
+        "supersededWork": []
+      },
+      "candidate": {
+        "request": "If CSV is requested, retain UTF-8 encoding and quote fields containing delimiters.",
+        "obligations": [
+          {
+            "id": "OBL-001",
+            "sourceLines": [
+              1
+            ],
+            "requirement": "retain UTF-8 encoding and quote fields containing delimiters",
+            "subject": "Output Response",
+            "scope": "global",
+            "targets": [],
+            "closedInventory": false,
+            "conditions": [
+              "If CSV is requested"
+            ]
+          }
+        ]
+      },
+      "thinkingChars": 23183,
+      "final": {
+        "model": "qwen3.5:9b",
+        "created_at": "2026-10-20T15:08:54.2976977Z",
+        "message": {
+          "role": "assistant",
+          "content": ""
+        },
+        "done": true,
+        "done_reason": "stop",
+        "total_duration": 171195739700,
+        "load_duration": 9417100,
+        "prompt_eval_count": 428,
+        "prompt_eval_cached_count": 0,
+        "prompt_eval_duration": 400923000,
+        "eval_count": 5432,
+        "eval_duration": 170658792000
+      },
+      "review": {
+        "phase": "extraction",
+        "index": 2,
+        "reviewer": "Codex independent of evaluated Qwen model",
+        "accepted": false,
+        "humanConfirmed": false,
+        "reason": "Both UTF-8 and delimiter quoting and the CSV-request trigger are present, but the draft merges the distinct clauses and changes the confirmed local CSV export / closed CSV target into global Output Response with no targets and open inventory. Thus the subject/scope/target contract is not preserved. The If prefix on the trigger is semantically equivalent and is not the reason for refusal.",
+        "responseSha256": "42eb04dc74bb7c1560823c19528f589117762129673b37b45fb116f68298197b",
+        "inputSha256": "d3f7cbed7755d7106e0d511663ba3474e55205fa35a46db5fa121fd4d64696c0"
+      },
+      "audit": {
+        "operationId": "request-ledger-bounded-20261020-v1-extraction-2",
+        "file": "audit-extraction-2.md",
+        "sha256": "53bd2842edb92458c11e35c5b7e140c7c0e4a901f9e9f0f64a6c9b6e297e13bd"
+      }
+    },
+    {
+      "phase": "extraction",
+      "index": 3,
+      "name": "retained-choice-complete-counterpart",
+      "operationId": "request-ledger-bounded-20261020-v1-extraction-3",
+      "elapsedMs": 248599,
+      "actualCalls": 1,
+      "result": {
+        "status": "scope_confirmation_required",
+        "scopeDraft": {
+          "request": "Keep JSON export.\nPrepare storage adapters without connecting to external services.\nUse a browser editor or a command-line editor; ask which.",
+          "obligations": [
+            {
+              "id": "OBL-001",
+              "sourceLines": [
+                1
+              ],
+              "requirement": "Maintain the existing JSON export functionality.",
+              "subject": "export_capability",
+              "scope": "global",
+              "targets": [],
+              "closedInventory": false,
+              "conditions": []
+            },
+            {
+              "id": "OBL-002",
+              "sourceLines": [
+                2
+              ],
+              "requirement": "Implement storage adapters without connecting to external services.",
+              "subject": "service",
+              "scope": "global",
+              "targets": [
+                "storage_adapter"
+              ],
+              "closedInventory": false,
+              "conditions": []
+            },
+            {
+              "id": "OBL-003",
+              "sourceLines": [
+                3
+              ],
+              "requirement": "Use a command-line editor only; do not add a browser editor.",
+              "subject": "editor_tool",
+              "scope": "local",
+              "targets": [
+                ","
+              ],
+              "closedInventory": false,
+              "conditions": []
+            }
+          ]
+        },
+        "objective": "",
+        "decisions": [],
+        "retainedEvidence": [],
+        "milestones": [],
+        "supersededWork": []
+      },
+      "candidate": {
+        "request": "Keep JSON export.\nPrepare storage adapters without connecting to external services.\nUse a browser editor or a command-line editor; ask which.",
+        "obligations": [
+          {
+            "id": "OBL-001",
+            "sourceLines": [
+              1
+            ],
+            "requirement": "Maintain the existing JSON export functionality.",
+            "subject": "export_capability",
+            "scope": "global",
+            "targets": [],
+            "closedInventory": false,
+            "conditions": []
+          },
+          {
+            "id": "OBL-002",
+            "sourceLines": [
+              2
+            ],
+            "requirement": "Implement storage adapters without connecting to external services.",
+            "subject": "service",
+            "scope": "global",
+            "targets": [
+              "storage_adapter"
+            ],
+            "closedInventory": false,
+            "conditions": []
+          },
+          {
+            "id": "OBL-003",
+            "sourceLines": [
+              3
+            ],
+            "requirement": "Use a command-line editor only; do not add a browser editor.",
+            "subject": "editor_tool",
+            "scope": "local",
+            "targets": [
+              ","
+            ],
+            "closedInventory": false,
+            "conditions": []
+          }
+        ]
+      },
+      "thinkingChars": 33570,
+      "final": {
+        "model": "qwen3.5:9b",
+        "created_at": "2026-10-20T15:13:02.8986432Z",
+        "message": {
+          "role": "assistant",
+          "content": ""
+        },
+        "done": true,
+        "done_reason": "stop",
+        "total_duration": 248350704000,
+        "load_duration": 8552700,
+        "prompt_eval_count": 480,
+        "prompt_eval_cached_count": 0,
+        "prompt_eval_duration": 441700000,
+        "eval_count": 7906,
+        "eval_duration": 247782673000
+      },
+      "review": {
+        "phase": "extraction",
+        "index": 3,
+        "reviewer": "Codex independent of evaluated Qwen model",
+        "accepted": false,
+        "humanConfirmed": false,
+        "reason": "The JSON requirement is widened to a global/open export_capability rather than the confirmed named local JSON target. Prepare storage adapters becomes Implement storage adapters and assigns service/storage_adapter at the wrong subject/target level, although the no-external-connections prohibition remains. The explicit CLI-only/no-browser decision is present in wording but its local target is a comma and inventory is open, rather than command-line/closed. The original three source lines are retained; these semantic defects are not repaired by native schema acceptance.",
+        "responseSha256": "02f8959547b012ea07c2d4366eef284dd9363da43a219570fadbc87688e1dd01",
+        "inputSha256": "4108311d0b4d283db519c9bdea22d18ca8b43f8b5c8fdcab3a38b9bda8800938"
+      },
+      "audit": {
+        "operationId": "request-ledger-bounded-20261020-v1-extraction-3",
+        "file": "audit-extraction-3.md",
+        "sha256": "c860987aee4bc7a59c97ce39191c6fb0b591fbaa5b33a88e39ef506253a517cc"
+      }
+    },
+    {
+      "phase": "planning",
+      "index": 0,
+      "name": "retained-card-only-global-claim",
+      "operationId": "request-ledger-bounded-20261020-v1-planning-0",
+      "elapsedMs": 147975,
+      "actualCalls": 1,
+      "result": {
+        "status": "error",
+        "objective": "",
+        "decisions": [],
+        "retainedEvidence": [],
+        "milestones": [],
+        "supersededWork": [],
+        "error": "Structured generation call budget exhausted after 2/2 calls. Last error: Ollama HTTP 429: {\"error\":\"Campaign scope/budget refusal: Authorized one-call-per-original budget exhausted\"}"
+      },
+      "candidate": {
+        "coverageClaims": [
+          {
+            "evidenceId": 1,
+            "obligationId": "OBL-001",
+            "subject": "Buttons",
+            "scope": "global",
+            "targets": [
+              "src/styles/main.css"
+            ],
+            "conditions": []
+          }
+        ],
+        "objective": "Implement minimum 44×44 px touch target for all buttons via CSS modifications.",
+        "assumptions": [
+          {
+            "id": "A1",
+            "statement": "Existing project structure includes a global stylesheet accessible at the specified path.",
+            "rationale": "Required to avoid inventing new files or infrastructure in an existing workspace."
+          }
+        ],
+        "interventions": [
+          {
+            "id": "label",
+            "objective": "Apply min-height and min-width constraints to all button elements.",
+            "filePaths": [
+              "src/styles/main.css"
+            ],
+            "acceptanceCriteria": [
+              "Buttons must render with a minimum hit area of 44x44 pixels."
+            ],
+            "verificationCommand": "null"
+          }
+        ],
+        "supersededWork": []
+      },
+      "thinkingChars": 19190,
+      "final": {
+        "model": "qwen3.5:9b",
+        "created_at": "2026-10-20T15:15:30.8636007Z",
+        "message": {
+          "role": "assistant",
+          "content": ""
+        },
+        "done": true,
+        "done_reason": "stop",
+        "total_duration": 147764009400,
+        "load_duration": 5749500,
+        "prompt_eval_count": 697,
+        "prompt_eval_cached_count": 0,
+        "prompt_eval_duration": 630814000,
+        "eval_count": 4671,
+        "eval_duration": 147003384000
+      },
+      "declarationError": null,
+      "review": {
+        "phase": "planning",
+        "index": 0,
+        "reviewer": "Codex independent of evaluated Qwen model",
+        "nativeAccepted": false,
+        "nativeReason": "Required coverage review and second candidate were refused before forwarding by the authorized one-call-per-original ceiling.",
+        "plannedBehaviorCovered": true,
+        "fullCandidateAccepted": false,
+        "reason": "The criterion explicitly undertakes minimum 44x44 hit area for unqualified Buttons and the objective says all buttons. However claim targets incorrectly name a stylesheet as a button member; these are not the confirmed target roles. Source assumption about an existing stylesheet is unverified, and raw verificationCommand is the literal string null, removed by native normalization. Preserve the raw candidate and distinguish supported behavior wording from a fully qualified native plan; no real semantic reviewer response or accepted effective milestones exists.",
+        "responseSha256": "5acedf1a85b35a475e8acb59e2c4bc681da283230facbd4baa4008924bd8ebb4",
+        "inputSha256": "c2c4996b8235668028c0553269576340ca290e89373c6d61babab655c8732038"
+      },
+      "audit": {
+        "operationId": "request-ledger-bounded-20261020-v1-planning-0",
+        "file": "audit-planning-0.md",
+        "sha256": "b10cc8b76d4fa2d2524e27d943d8058c22b1453e000d98ba1d1851cb3f209eaf"
+      }
+    },
+    {
+      "phase": "planning",
+      "index": 1,
+      "name": "csv-only-global-claim",
+      "operationId": "request-ledger-bounded-20261020-v1-planning-1",
+      "elapsedMs": 219201,
+      "actualCalls": 1,
+      "result": {
+        "status": "error",
+        "objective": "",
+        "decisions": [],
+        "retainedEvidence": [],
+        "milestones": [],
+        "supersededWork": [],
+        "error": "Structured generation call budget exhausted after 2/2 calls. Last error: Ollama HTTP 429: {\"error\":\"Campaign scope/budget refusal: Authorized one-call-per-original budget exhausted\"}"
+      },
+      "candidate": {
+        "coverageClaims": [
+          {
+            "evidenceId": 1,
+            "obligationId": "OBL-001",
+            "subject": "exports",
+            "scope": "global",
+            "targets": [
+              "CSV",
+              "JSON"
+            ],
+            "conditions": []
+          }
+        ],
+        "objective": "Implement ordered export logic to preserve source record order.",
+        "assumptions": [
+          {
+            "id": "A-001",
+            "statement": "Export service file src/services/exports.ts exists and is the target for modification.",
+            "rationale": "Workspace is existing with hasFiles true but relevantFiles unspecified."
+          }
+        ],
+        "interventions": [
+          {
+            "id": "INT-001",
+            "objective": "Ensure serialization preserves input array order.",
+            "filePaths": [
+              "src/services/exports.ts"
+            ],
+            "acceptanceCriteria": [
+              "Export functions serialize items using their original source index or ordered Map iteration."
+            ],
+            "verificationCommand": "],"
+          }
+        ],
+        "supersededWork": []
+      },
+      "thinkingChars": 28709,
+      "final": {
+        "model": "qwen3.5:9b",
+        "created_at": "2026-10-20T15:19:10.070873Z",
+        "message": {
+          "role": "assistant",
+          "content": ""
+        },
+        "done": true,
+        "done_reason": "stop",
+        "total_duration": 219008342800,
+        "load_duration": 6518800,
+        "prompt_eval_count": 680,
+        "prompt_eval_cached_count": 185,
+        "prompt_eval_duration": 475026000,
+        "eval_count": 6924,
+        "eval_duration": 218290930000
+      },
+      "declarationError": null,
+      "review": {
+        "phase": "planning",
+        "index": 1,
+        "reviewer": "Codex independent of evaluated Qwen model",
+        "nativeAccepted": false,
+        "nativeReason": "Coverage review and second candidate were refused before forwarding at the authorized one-call-per-original ceiling.",
+        "plannedBehaviorCovered": false,
+        "fullCandidateAccepted": false,
+        "reason": "Claim subject/targets/conditions match exports, CSV+JSON and no trigger, but assigned criterion offers original source index OR ordered Map iteration without guaranteeing source-record order for the latter branch. Map insertion order alone need not equal source order. The objective cannot supply omitted behavior in the assigned statement. Existing exports.ts is merely assumed; raw verificationCommand is the literal ], string and is removed by native normalization. No real reviewer response or accepted effective milestones exists.",
+        "responseSha256": "c4f43aeffbce2ccdb9dd1cc80feb4d50873c117b9a9c8809f50aadbce2d57ef6",
+        "inputSha256": "0171314e66584aec83552b6cf164e1df6bb099c215d8ca720c8cad6235ebedef"
+      },
+      "audit": {
+        "operationId": "request-ledger-bounded-20261020-v1-planning-1",
+        "file": "audit-planning-1.md",
+        "sha256": "730424f7a99a50494613d2ad4ce1f798676a43cab590c9003bb93bd9376cce72"
+      }
+    },
+    {
+      "phase": "planning",
+      "index": 2,
+      "name": "conditional-property-omitted",
+      "operationId": "request-ledger-bounded-20261020-v1-planning-2",
+      "elapsedMs": 238677,
+      "actualCalls": 1,
+      "result": {
+        "status": "error",
+        "objective": "",
+        "decisions": [],
+        "retainedEvidence": [],
+        "milestones": [],
+        "supersededWork": [],
+        "error": "Structured generation call budget exhausted after 2/2 calls. Last error: Ollama HTTP 429: {\"error\":\"Campaign scope/budget refusal: Authorized one-call-per-original budget exhausted\"}"
+      },
+      "candidate": {
+        "coverageClaims": [
+          {
+            "evidenceId": 1,
+            "obligationId": "OBL-001",
+            "subject": "CSV export",
+            "scope": "local",
+            "targets": [
+              "CSV"
+            ],
+            "conditions": [
+              "CSV is requested"
+            ]
+          },
+          {
+            "evidenceId": 2,
+            "obligationId": "OBL-002",
+            "subject": "CSV export",
+            "scope": "local",
+            "targets": [
+              "CSV"
+            ],
+            "conditions": [
+              "CSV is requested"
+            ]
+          }
+        ],
+        "objective": "Implement UTF-8 encoding and delimiter quoting logic within the existing CSV export service to satisfy export requirements.",
+        "assumptions": [
+          {
+            "id": "A-001",
+            "statement": "The existing workspace contains a relevant file for CSV export operations.",
+            "rationale": "hasFiles is true, avoiding re-scaffolding"
+          },
+          {
+            "id": "A-002",
+            "statement": "Existing integrations and service boundaries remain unchanged.",
+            "rationale": "For an existing workspace, change only relevant files"
+          }
+        ],
+        "interventions": [
+          {
+            "id": "I-001",
+            "objective": "Modify CSV export logic to handle encoding and quoting.",
+            "filePaths": [
+              "src/services/csvExporter.js"
+            ],
+            "acceptanceCriteria": [
+              "CSV output is encoded using UTF-8 for character consistency (evidenceId: 1).",
+              "Fields containing delimiters are quoted to preserve integrity (evidenceId: 2)."
+            ],
+            "verificationCommand": "npx eslint src/services/csvExporter.js"
+          }
+        ],
+        "supersededWork": []
+      },
+      "thinkingChars": 29970,
+      "final": {
+        "model": "qwen3.5:9b",
+        "created_at": "2026-10-20T15:23:08.7478665Z",
+        "message": {
+          "role": "assistant",
+          "content": ""
+        },
+        "done": true,
+        "done_reason": "stop",
+        "total_duration": 238475803800,
+        "load_duration": 5683100,
+        "prompt_eval_count": 740,
+        "prompt_eval_cached_count": 185,
+        "prompt_eval_duration": 563553000,
+        "eval_count": 7234,
+        "eval_duration": 237729803000
+      },
+      "declarationError": null,
+      "review": {
+        "phase": "planning",
+        "index": 2,
+        "reviewer": "Codex independent of evaluated Qwen model",
+        "nativeAccepted": false,
+        "nativeReason": "Coverage review and second candidate were refused before forwarding at the authorized one-call-per-original ceiling.",
+        "plannedBehaviorCovered": true,
+        "activationTriggerExplicitInCriteria": false,
+        "fullCandidateAccepted": false,
+        "reason": "The two criteria explicitly undertake UTF-8 CSV output and delimiter quoting, and references 1/2 and confirmed claim metadata bind to their corresponding obligations correctly. The original activation trigger appears only in claims, not in the assigned statements; existing CSV service/integrations are assumptions rather than observed fixture state. Raw evidenceId annotations remain literal text and an invented eslint command is removed by native normalization. These positive behavior findings do not establish a complete accepted conditional plan: no real semantic reviewer response or effective milestones exists.",
+        "responseSha256": "631b5c66fe4129efb22a58da05c39b22c8f4792be9736c8538f41ac6e25a8587",
+        "inputSha256": "479fbc0d6ecb7af89316fe301faeac1f58fba81e6fc95e579fc962bc3a702a0d"
+      },
+      "audit": {
+        "operationId": "request-ledger-bounded-20261020-v1-planning-2",
+        "file": "audit-planning-2.md",
+        "sha256": "f0cf6d302c0337229e7c9db65013c4a84a8594ca2f1ce5cae6c34a7528aaad46"
+      }
+    },
+    {
+      "phase": "planning",
+      "index": 3,
+      "name": "retained-choice-complete-counterpart",
+      "operationId": "request-ledger-bounded-20261020-v1-planning-3",
+      "elapsedMs": 174200,
+      "actualCalls": 1,
+      "result": {
+        "status": "error",
+        "objective": "",
+        "decisions": [
+          {
+            "id": "confirmed-0",
+            "statement": "Explicit original decision: Keep the editor command-line only; do not add a browser editor.",
+            "source": "explicit_user"
+          }
+        ],
+        "retainedEvidence": [],
+        "milestones": [],
+        "supersededWork": [],
+        "error": "Structured generation call budget exhausted after 2/2 calls. Last error: Ollama HTTP 429: {\"error\":\"Campaign scope/budget refusal: Authorized one-call-per-original budget exhausted\"}"
+      },
+      "candidate": {
+        "coverageClaims": [
+          {
+            "evidenceId": 1,
+            "obligationId": "OBL-001",
+            "subject": "JSON export",
+            "scope": "local",
+            "targets": [
+              "config/export.json"
+            ],
+            "conditions": []
+          },
+          {
+            "evidenceId": 2,
+            "obligationId": "OBL-002",
+            "subject": "storage adapters",
+            "scope": "global",
+            "targets": [
+              "src/storage/adapter-offline.js"
+            ],
+            "conditions": []
+          },
+          {
+            "evidenceId": 3,
+            "obligationId": "OBL-003",
+            "subject": "editor",
+            "scope": "local",
+            "targets": [
+              "README.md"
+            ],
+            "conditions": []
+          }
+        ],
+        "objective": "Configure JSON export, implement offline storage adapters, and enforce CLI-only editor policy.",
+        "assumptions": [
+          {
+            "id": "A-001",
+            "statement": "Existing workspace supports new file creation for config and logic.",
+            "rationale": "Workspace hasFiles: true, stack empty but existing state allows modification."
+          }
+        ],
+        "interventions": [
+          {
+            "id": "T-001",
+            "objective": "Enable JSON export configuration within project settings.",
+            "filePaths": [
+              "config/export.json"
+            ],
+            "acceptanceCriteria": [
+              "File exists and contains valid JSON export configuration enabling output generation."
+            ],
+            "verificationCommand": "null"
+          },
+          {
+            "id": "T-002",
+            "objective": "Implement offline storage adapter logic without network dependencies.",
+            "filePaths": [
+              "src/storage/adapter-offline.js"
+            ],
+            "acceptanceCriteria": [
+              "Adapter initializes successfully using local mock storage; no network requests observed."
+            ],
+            "verificationCommand": "null"
+          },
+          {
+            "id": "T-003",
+            "objective": "Document and enforce command-line only editor policy.",
+            "filePaths": [
+              "README.md"
+            ],
+            "acceptanceCriteria": [
+              "Section 'Environment Policy' lists command-line editor requirement and prohibits browser-based IDEs."
+            ],
+            "verificationCommand": "null"
+          }
+        ],
+        "supersededWork": []
+      },
+      "thinkingChars": 20363,
+      "final": {
+        "model": "qwen3.5:9b",
+        "created_at": "2026-10-20T15:26:02.9541555Z",
+        "message": {
+          "role": "assistant",
+          "content": ""
+        },
+        "done": true,
+        "done_reason": "stop",
+        "total_duration": 173875059100,
+        "load_duration": 6345700,
+        "prompt_eval_count": 836,
+        "prompt_eval_cached_count": 228,
+        "prompt_eval_duration": 587700000,
+        "eval_count": 5369,
+        "eval_duration": 173080873000
+      },
+      "declarationError": "Plan request coverage failed: incomplete target set for OBL-001",
+      "review": {
+        "phase": "planning",
+        "index": 3,
+        "reviewer": "Codex independent of evaluated Qwen model",
+        "nativeAccepted": false,
+        "nativeReason": "First candidate fails native target coverage for OBL-001; second candidate is refused before forwarding at the authorized one-call-per-original ceiling. No semantic review is reached.",
+        "plannedBehaviorCovered": false,
+        "fullCandidateAccepted": false,
+        "reason": "JSON output is replaced by configuration-file existence, and CLI editor behavior by a README policy section; neither criterion establishes the requested behavior. Adapter preparation is changed to implementation of one mock adapter and does not explicitly cover all storage adapters. No-network observation is present for that one adapter but does not repair the changed preparation/global scope. Claims substitute config/export.json, adapter-offline.js and README.md for confirmed JSON/editor member targets. Native validation correctly rejects the missing JSON target. Literal null verification commands are normalization residues, not executable verification.",
+        "responseSha256": "48bd8d6aed77e1a0ddb2e7b756ef6017899c70fc3643a3b7079f0f85f9f93cb4",
+        "inputSha256": "d8c996ef1d49ec000f6d98ea03c0ca72e39fc739621d2171fe8586c4fd76db17"
+      },
+      "audit": {
+        "operationId": "request-ledger-bounded-20261020-v1-planning-3",
+        "file": "audit-planning-3.md",
+        "sha256": "336a183fb5fe7597d63bf9d6be115aaf2af283e2ff6f83f074d01861b52933f9"
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "audit-extraction-0.md",
+      "bytes": 8808,
+      "sha256": "980d09bf9a04087ca14cfddfc6cd7b5deae52107d2b5648c8141f596d5c58fd5"
+    },
+    {
+      "file": "audit-extraction-1.md",
+      "bytes": 8802,
+      "sha256": "9ae653c01a1ba798492523324bbe832f02758f247804332178de57b8bc1f0083"
+    },
+    {
+      "file": "audit-extraction-2.md",
+      "bytes": 8994,
+      "sha256": "53bd2842edb92458c11e35c5b7e140c7c0e4a901f9e9f0f64a6c9b6e297e13bd"
+    },
+    {
+      "file": "audit-extraction-3.md",
+      "bytes": 10288,
+      "sha256": "c860987aee4bc7a59c97ce39191c6fb0b591fbaa5b33a88e39ef506253a517cc"
+    },
+    {
+      "file": "audit-planning-0.md",
+      "bytes": 20951,
+      "sha256": "b10cc8b76d4fa2d2524e27d943d8058c22b1453e000d98ba1d1851cb3f209eaf"
+    },
+    {
+      "file": "audit-planning-1.md",
+      "bytes": 21312,
+      "sha256": "730424f7a99a50494613d2ad4ce1f798676a43cab590c9003bb93bd9376cce72"
+    },
+    {
+      "file": "audit-planning-2.md",
+      "bytes": 23756,
+      "sha256": "f0cf6d302c0337229e7c9db65013c4a84a8594ca2f1ce5cae6c34a7528aaad46"
+    },
+    {
+      "file": "audit-planning-3.md",
+      "bytes": 22081,
+      "sha256": "336a183fb5fe7597d63bf9d6be115aaf2af283e2ff6f83f074d01861b52933f9"
+    },
+    {
+      "file": "budget-owner.json",
+      "bytes": 42,
+      "sha256": "240b4effd128c3c19d88f1ffb10f37eb31f66e614a0dbfd4c4fc8c95d185f126"
+    },
+    {
+      "file": "confirmed-ledgers.json",
+      "bytes": 2886,
+      "sha256": "d200558e87961afe17bd7421b2a7d3a73a80dedfc3761b9e1f255e1d069eb104"
+    },
+    {
+      "file": "dispatch-1.json",
+      "bytes": 12052,
+      "sha256": "ab7dcc05e8dde773415ef2108cbe907d4e0504c76b1925872693a6085f80b45c"
+    },
+    {
+      "file": "dispatch-2.json",
+      "bytes": 12048,
+      "sha256": "7197166086fb34dc4fb10d6545150e33360a8eb0feb3b5ed91bdff549584e431"
+    },
+    {
+      "file": "dispatch-3.json",
+      "bytes": 12104,
+      "sha256": "f0528b99bf8ab3484f18ab8a800df64339cb3249a7e7e91e4168e63eea9ef9de"
+    },
+    {
+      "file": "dispatch-4.json",
+      "bytes": 12373,
+      "sha256": "3f1c50113ce37f1162f26852e143b8292710f4443f4cf091b5e0161f96d9c4d7"
+    },
+    {
+      "file": "dispatch-5.json",
+      "bytes": 9252,
+      "sha256": "30f8474a5a2410f6ba2c69c6eb880635adb1a150c9485f07915724684d27b4a7"
+    },
+    {
+      "file": "dispatch-6.json",
+      "bytes": 9263,
+      "sha256": "23ea34257f348d5babb2bea68c80e555da4d1343ae104a89b6b9d0e45e3ceb04"
+    },
+    {
+      "file": "dispatch-7.json",
+      "bytes": 11151,
+      "sha256": "fdaa3d248c350a2674c1bf38bb6f89a85d35361f0210111cb525a5b8e93be2e2"
+    },
+    {
+      "file": "dispatch-8.json",
+      "bytes": 13392,
+      "sha256": "d962cd2387aa76a4afcd20878254042da4b9f4981209433b893fcfcc5eb4e563"
+    },
+    {
+      "file": "frozen-cases.json",
+      "bytes": 12292,
+      "sha256": "690a8d86c3070ba8ac2387a6289fef1780d04b1ec70f0cf3257c6f92e4f259e6"
+    },
+    {
+      "file": "gpu-query.csv",
+      "bytes": 39,
+      "sha256": "60ad5c064a841c06be04e7df04e9b77818d1903b776b6b9d58925ba779cd3a2a"
+    },
+    {
+      "file": "hardware-running-observation.json",
+      "bytes": 807,
+      "sha256": "f2f6a5b113fa7db746c409deb2f09054a0fab26afa489fd73b7a76f415466373"
+    },
+    {
+      "file": "input-extraction-0.json",
+      "bytes": 1308,
+      "sha256": "c9c855a54dd8df1095a6da8b8407ebeb2dbbfb9ab75b6bf9ee6322742145fddc"
+    },
+    {
+      "file": "input-extraction-1.json",
+      "bytes": 1306,
+      "sha256": "fa795569390c7445ce2d48046d5d4db53acae310d5b127386dcd0a33a88624f3"
+    },
+    {
+      "file": "input-extraction-2.json",
+      "bytes": 1334,
+      "sha256": "d3f7cbed7755d7106e0d511663ba3474e55205fa35a46db5fa121fd4d64696c0"
+    },
+    {
+      "file": "input-extraction-3.json",
+      "bytes": 1619,
+      "sha256": "4108311d0b4d283db519c9bdea22d18ca8b43f8b5c8fdcab3a38b9bda8800938"
+    },
+    {
+      "file": "input-planning-0.json",
+      "bytes": 1747,
+      "sha256": "c2c4996b8235668028c0553269576340ca290e89373c6d61babab655c8732038"
+    },
+    {
+      "file": "input-planning-1.json",
+      "bytes": 1785,
+      "sha256": "0171314e66584aec83552b6cf164e1df6bb099c215d8ca720c8cad6235ebedef"
+    },
+    {
+      "file": "input-planning-2.json",
+      "bytes": 2184,
+      "sha256": "479fbc0d6ecb7af89316fe301faeac1f58fba81e6fc95e579fc962bc3a702a0d"
+    },
+    {
+      "file": "input-planning-3.json",
+      "bytes": 2811,
+      "sha256": "d8c996ef1d49ec000f6d98ea03c0ca72e39fc739621d2171fe8586c4fd76db17"
+    },
+    {
+      "file": "invocation-extraction-0.json",
+      "bytes": 101,
+      "sha256": "ad1b92a8c714e6783c6a4505770775ff96f7e922130f76c6a96043b547070e4b"
+    },
+    {
+      "file": "invocation-extraction-1.json",
+      "bytes": 99,
+      "sha256": "dfbfbe6e45da8374b46ade0317166101c7884ccbc350a944ca8c8840698c1c02"
+    },
+    {
+      "file": "invocation-extraction-2.json",
+      "bytes": 127,
+      "sha256": "2d96eeeebb4a2471a9ab62d4475176d178f53e50729e4687b4a8f7c54ba9b34b"
+    },
+    {
+      "file": "invocation-extraction-3.json",
+      "bytes": 188,
+      "sha256": "cd83b1b3be99ca3137128f337becada9e563a9921ba17879aec8923ba38697f4"
+    },
+    {
+      "file": "invocation-planning-0.json",
+      "bytes": 99,
+      "sha256": "0f73fddf74bcfa2e5306439cbd899702b4cbfae220ca94fd06d696fccf388d20"
+    },
+    {
+      "file": "invocation-planning-1.json",
+      "bytes": 97,
+      "sha256": "4b80a1f4b3ec7988ab6611605406da9806c6f317d743b659360969a90dd26129"
+    },
+    {
+      "file": "invocation-planning-2.json",
+      "bytes": 125,
+      "sha256": "614ff424c7cddda42c64ae269ac9c97354c7c975672406bf13f1194ba0e4834d"
+    },
+    {
+      "file": "invocation-planning-3.json",
+      "bytes": 186,
+      "sha256": "965065b21aad4d193fede894b82a8fd002aa5b0407a6b11948338590840d51d2"
+    },
+    {
+      "file": "preflight/old-markers/request-first-ledger-conditional-reference-v1-replay.json",
+      "bytes": 192,
+      "sha256": "3907a6f877f858348bef219b2916e1572324524527aa1605f31b40bf4ee16f9a"
+    },
+    {
+      "file": "preflight/old-markers/request-first-ledger-remaining-reference-v1-replay.json",
+      "bytes": 327,
+      "sha256": "ec8f8bf9f8e31b8e18200ad613fa416c2d126e02863e81be0e2f558bdc48e410"
+    },
+    {
+      "file": "preflight/old-markers/request-first-ledger-v1-replay.json",
+      "bytes": 393,
+      "sha256": "76938d2da3603c14de073e7e27064d33706755ef6628815e74a8b6e924795cfc"
+    },
+    {
+      "file": "preflight/old-markers/request-ledger-bounded-20261020-v1-replay.json",
+      "bytes": 800,
+      "sha256": "ba9be801020c31df88ca1043742c115c7ea8e430ef073df84f3e5d7792c2cc96"
+    },
+    {
+      "file": "preflight/old-markers/request-ledger-extraction-field-roles-v1-replay.json",
+      "bytes": 254,
+      "sha256": "b47fb87557b8852cd859d9390f46dd65866d159c55ede9e0b03c7d9b843f5842"
+    },
+    {
+      "file": "preflight/old-markers/request-ledger-extraction-target-invariants-v1-replay.json",
+      "bytes": 254,
+      "sha256": "3177d609186176a63a12ffea99e118cb846c38f4a57a22f1e1916cbb889e47be"
+    },
+    {
+      "file": "preflight/old-markers/request-ledger-extraction-v1-replay.json",
+      "bytes": 254,
+      "sha256": "56bae8b1725b82bd9fdcc4bd163bcb7edb4e5173967b951fb9f0533f25d8b2d6"
+    },
+    {
+      "file": "preflight/old-markers/request-ledger-planning-confirmed-four-v1-replay.json",
+      "bytes": 202,
+      "sha256": "5705c61540c43a6c3315d834142b77146bd29440294ebc1206802197060e233e"
+    },
+    {
+      "file": "preflight/old-markers/request-ledger-planning-confirmed-remaining-v1-replay.json",
+      "bytes": 189,
+      "sha256": "b1e06015ff89f9783943837b94a3254876e01944ffc66c50abea3cfe41914045"
+    },
+    {
+      "file": "preflight/old-markers/request-ledger-planning-evidence-inventory-v1-replay.json",
+      "bytes": 223,
+      "sha256": "1e6c7574f8ed673e5305e58e6c6ed184a3e918c888a976a501a3e769c02b21d2"
+    },
+    {
+      "file": "preflight/old-markers/request-ledger-planning-private-claims-v1-replay.json",
+      "bytes": 223,
+      "sha256": "7b2b1bdd539e0188b21eedc3e3680dd75fd9ae985e7dc549a9416a7862aa7e12"
+    },
+    {
+      "file": "preflight/old-markers/request-ledger-reviewer-proxy-v1-replay.json",
+      "bytes": 639,
+      "sha256": "4ab9a50895906824e8762f46e53e8d3b6b1925574119fc56896f8b605e5d2941"
+    },
+    {
+      "file": "preflight/onlyrag-ledger-bounded-20261020-v1-capture.log",
+      "bytes": 527,
+      "sha256": "7feb6b6e04531c393ad08965f6da1b99c995c6f0ec399cffb3124f54c3d8d941"
+    },
+    {
+      "file": "preflight/onlyrag-ledger-bounded-20261020-v1-runtime-drift.log",
+      "bytes": 956,
+      "sha256": "499f23b254936b913b6a13ed116e218a39e7d0906359e6dd4041079d14a828f8"
+    },
+    {
+      "file": "preflight/onlyrag-ledger-install-20261020-v1-registration.json",
+      "bytes": 355,
+      "sha256": "0887d1b09b7a1d5469499e8e2cfd4319bd0a7e47aded418f553fd6d3840c233c"
+    },
+    {
+      "file": "preflight/tracker-before-campaign.json",
+      "bytes": 56259,
+      "sha256": "fa3bdc0229fad486aa0082defc07b9a6f9e0baa8fb7f9314977086f4a8bb4ac6"
+    },
+    {
+      "file": "report.json",
+      "bytes": 28442,
+      "sha256": "52abc80f0817c1c654381b2fb81d9d981a745e9a93c21a245765d227a415837d"
+    },
+    {
+      "file": "request-1.json",
+      "bytes": 5977,
+      "sha256": "73c7342caee022f8de3fe04e61caae07ae431c524cdf2dec64bfbb49ec0fd587"
+    },
+    {
+      "file": "request-2.json",
+      "bytes": 5973,
+      "sha256": "0ae0e2b8f577515fd54261e58350302362c9cf6b56f7f35089348591baa5fd93"
+    },
+    {
+      "file": "request-3.json",
+      "bytes": 6029,
+      "sha256": "994d16e8398cf787d1382d78c6cca34e71258df438da88b618e64895f5b95c9c"
+    },
+    {
+      "file": "request-4.json",
+      "bytes": 6298,
+      "sha256": "f38efc978f08c0a975de2c45ecc0f64a338e1c7858ce41952df662de74cd3f81"
+    },
+    {
+      "file": "request-5.json",
+      "bytes": 6083,
+      "sha256": "7ae1e0df32021576defcff1367c05809906cf0c0280b23f9f12c31d569227872"
+    },
+    {
+      "file": "request-6.json",
+      "bytes": 6094,
+      "sha256": "7c2cf6b2e791ecdc6fe8e47f02058caa448e99906c0f1e65347180f027d568f6"
+    },
+    {
+      "file": "request-7.json",
+      "bytes": 6941,
+      "sha256": "7177abe43e1de0d3e341deb39c51c16297243ca805f51b9e7187e2b4174f48c1"
+    },
+    {
+      "file": "request-8.json",
+      "bytes": 8045,
+      "sha256": "58dac705430f7c6df1d84e67c54cb8eda63e80ff4e02c292e6779ca14662a7ec"
+    },
+    {
+      "file": "response-1.ndjson",
+      "bytes": 410064,
+      "sha256": "f6f8f4b89e5abedec02b264f8f522edcb6c19e0dead87322eb90a52be5708021"
+    },
+    {
+      "file": "response-2.ndjson",
+      "bytes": 745482,
+      "sha256": "383525045f3bd27092cf744ff661b0b9ccd40830ebdb5b7d23647176815a2d72"
+    },
+    {
+      "file": "response-3.ndjson",
+      "bytes": 693273,
+      "sha256": "42eb04dc74bb7c1560823c19528f589117762129673b37b45fb116f68298197b"
+    },
+    {
+      "file": "response-4.ndjson",
+      "bytes": 1014169,
+      "sha256": "02f8959547b012ea07c2d4366eef284dd9363da43a219570fadbc87688e1dd01"
+    },
+    {
+      "file": "response-5.ndjson",
+      "bytes": 591180,
+      "sha256": "5acedf1a85b35a475e8acb59e2c4bc681da283230facbd4baa4008924bd8ebb4"
+    },
+    {
+      "file": "response-6.ndjson",
+      "bytes": 863054,
+      "sha256": "c4f43aeffbce2ccdb9dd1cc80feb4d50873c117b9a9c8809f50aadbce2d57ef6"
+    },
+    {
+      "file": "response-7.ndjson",
+      "bytes": 940156,
+      "sha256": "631b5c66fe4129efb22a58da05c39b22c8f4792be9736c8538f41ac6e25a8587"
+    },
+    {
+      "file": "response-8.ndjson",
+      "bytes": 667429,
+      "sha256": "48bd8d6aed77e1a0ddb2e7b756ef6017899c70fc3643a3b7079f0f85f9f93cb4"
+    },
+    {
+      "file": "review-extraction-0.json",
+      "bytes": 593,
+      "sha256": "6eedde3af70b8dd8f166abb64d11a8fb5809a36a35e98807dd93a91ea92ec312"
+    },
+    {
+      "file": "review-extraction-1.json",
+      "bytes": 668,
+      "sha256": "0446d254ce2a2588a8ecc1f85fb4738e34ac5ced4af9a8f8088e2eb69a4a0370"
+    },
+    {
+      "file": "review-extraction-2.json",
+      "bytes": 737,
+      "sha256": "a2a007b74f8c0324b8c02b3f2de9fbea0b0c674d0dfe72bcb3c7e14b1ff35056"
+    },
+    {
+      "file": "review-extraction-3.json",
+      "bytes": 920,
+      "sha256": "42d95f11a95399b5734e6f7ee3d365a1d1a987aa9e781aa6078128d09c119c95"
+    },
+    {
+      "file": "review-planning-0.json",
+      "bytes": 1106,
+      "sha256": "a9ca8469a68524040b1bf874b170c293eb733383817945d4caf077ab35e57ed4"
+    },
+    {
+      "file": "review-planning-1.json",
+      "bytes": 1068,
+      "sha256": "6def55d926c50e3b98a00e007e81bcabdd2b22761feaafb225ec032e27290c9a"
+    },
+    {
+      "file": "review-planning-2.json",
+      "bytes": 1200,
+      "sha256": "ada9f78ce0e5b67b0ffd396e9f00f6e95898b39d2dc49a765f958dd033afb528"
+    },
+    {
+      "file": "review-planning-3.json",
+      "bytes": 1262,
+      "sha256": "0444b5b7911daa2cc9f1a2b6376b1d95a830b6397abc1d3a2f4930ec4c3e51de"
+    },
+    {
+      "file": "sources/continuation/ledgerCallBudget.ts",
+      "bytes": 3931,
+      "sha256": "9c6be796d09992126f716a7b8016d67bde04a48713464d76200122bb6d60681f"
+    },
+    {
+      "file": "sources/continuation/main.js",
+      "bytes": 4973800,
+      "sha256": "d74ac82c2246ea4e9fc58e0fec54663d5a49889c5cf2a8d2b22f401c6d21a2cd"
+    },
+    {
+      "file": "sources/continuation/planGenerationAppService.ts",
+      "bytes": 23167,
+      "sha256": "d147513d24fc6b86d8bdfd2779c18866c54e6ebfa293ff667c69b50f561a9793"
+    },
+    {
+      "file": "sources/continuation/planRequestCoverage.ts",
+      "bytes": 7809,
+      "sha256": "957e175cab303f70a6b1697f6f92068b08c29c41743d908602d7f5a03743fc67"
+    },
+    {
+      "file": "sources/continuation/request-ledger-human-review-2026-10-10.md",
+      "bytes": 5869,
+      "sha256": "aa4624931069ad67ead930296ac1fa4f2d34951677bef790295eb96fca4ceb4e"
+    },
+    {
+      "file": "sources/continuation/requestCoverageLedger.ts",
+      "bytes": 4863,
+      "sha256": "8af8f002387d17c57fa80d8e43422399313a4d7aba4b9d91d877a65f08bedbfd"
+    },
+    {
+      "file": "sources/continuation/requestCoverageLedgerDraft.ts",
+      "bytes": 5737,
+      "sha256": "0436bf80f9186055530fa15e3be75acfaff48dcbd65de0035cb4c0c639597876"
+    },
+    {
+      "file": "sources/continuation/requestLedgerBounded.mjs",
+      "bytes": 15533,
+      "sha256": "ecc36103df7d43450515ec40d41f2d3fab81519a11977f0d471e94f0e6bdebd0"
+    },
+    {
+      "file": "sources/continuation/structuredGenerationRecovery.ts",
+      "bytes": 8304,
+      "sha256": "bcef4549eedfe3a97381f347f26ced8031779f47122c8a0bfd195dd8c778c45d"
+    },
+    {
+      "file": "sources/ledgerCallBudget.ts",
+      "bytes": 3178,
+      "sha256": "1055153d4ad015eb1df04e1aa575dfa0524d7cbba19ea9064f14d910e7cd6013"
+    },
+    {
+      "file": "sources/main.js",
+      "bytes": 4973800,
+      "sha256": "d74ac82c2246ea4e9fc58e0fec54663d5a49889c5cf2a8d2b22f401c6d21a2cd"
+    },
+    {
+      "file": "sources/planGenerationAppService.ts",
+      "bytes": 23167,
+      "sha256": "d147513d24fc6b86d8bdfd2779c18866c54e6ebfa293ff667c69b50f561a9793"
+    },
+    {
+      "file": "sources/planRequestCoverage.ts",
+      "bytes": 7809,
+      "sha256": "957e175cab303f70a6b1697f6f92068b08c29c41743d908602d7f5a03743fc67"
+    },
+    {
+      "file": "sources/request-ledger-human-review-2026-10-10.md",
+      "bytes": 5869,
+      "sha256": "aa4624931069ad67ead930296ac1fa4f2d34951677bef790295eb96fca4ceb4e"
+    },
+    {
+      "file": "sources/requestCoverageLedger.ts",
+      "bytes": 4863,
+      "sha256": "8af8f002387d17c57fa80d8e43422399313a4d7aba4b9d91d877a65f08bedbfd"
+    },
+    {
+      "file": "sources/requestCoverageLedgerDraft.ts",
+      "bytes": 5737,
+      "sha256": "0436bf80f9186055530fa15e3be75acfaff48dcbd65de0035cb4c0c639597876"
+    },
+    {
+      "file": "sources/requestLedgerBounded.mjs",
+      "bytes": 14221,
+      "sha256": "2e36e2873f28232afaae1b1a98aed1f2e9e0d4e454b8020e3367ddcca04a67ed"
+    },
+    {
+      "file": "sources/structuredGenerationRecovery.ts",
+      "bytes": 8304,
+      "sha256": "bcef4549eedfe3a97381f347f26ced8031779f47122c8a0bfd195dd8c778c45d"
+    },
+    {
+      "file": "spent-marker.json",
+      "bytes": 800,
+      "sha256": "ba9be801020c31df88ca1043742c115c7ea8e430ef073df84f3e5d7792c2cc96"
+    },
+    {
+      "file": "verify-capture.mjs",
+      "bytes": 6895,
+      "sha256": "a9912e0e16045ea076b575693a43bb35e46d62f9830c8cc3e0e2778589c975be"
+    },
+    {
+      "file": "zero-inference-ipc-failure.json",
+      "bytes": 8417,
+      "sha256": "4e108e30069ee8ae9c978d8393d7fee11a250732e08347a9c282c3c4a4961e50"
+    }
+  ],
+  "limits": "Extraction semantic acceptance fails. Each plan received one native candidate call; required native semantic reviews and recovery were denied at the transport ceiling. Do not classify these censored flows as four fully observed model-plan failures or accepted plans. No plan was approved/executed and no draft automatically confirmed. E2E disables automatic Sidecar startup. Future inference requires a new scoped authorization; old markers and failures remain protected."
+}

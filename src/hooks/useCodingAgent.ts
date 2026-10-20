@@ -150,6 +150,8 @@ export function useCodingAgent(settings?: AppSettings) {
     recoverableTasks: execution.recoverableTasks,
     recoveryError: execution.recoveryError,
     resumeRecoveredTask: execution.resumeRecoveredTask,
+    inspectRecoveredTask: execution.inspectRecoveredTask,
+    abandonRecoveredTask: execution.abandonRecoveredTask,
     activeRunIdentity: execution.activeRunIdentity,
     currentLiveModel: execution.currentLiveModel,
     currentStep: execution.currentStep,

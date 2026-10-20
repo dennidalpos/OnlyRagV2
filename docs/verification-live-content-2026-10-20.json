@@ -1,0 +1,214 @@
+{
+  "campaign": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-next-tasks-c9663097cc8849fea2f65670b710293e\\live\\content-acceptance-2026-10-20T12-43-56-907Z-f747a4f1",
+  "acceptance": {
+    "passed": false,
+    "counts": {
+      "content_pass": 10,
+      "language_pass": 5,
+      "citations_pass": 10,
+      "cases": 12,
+      "fully_accepted": 5,
+      "live_normalization_unassessed": 0,
+      "live_normalization_false_acceptance": 0,
+      "live_normalization_false_rejection": 2
+    },
+    "artifact_sha256": {
+      "corpus.json": "f5cbfc6f22c86724583bdd2408dd379e16cc677e79f193e83856c2b2019301dc",
+      "preparation.json": "ddce310281c11a826e7e478ebccad5fc1d684cdf9bd847a723d7299cfb10bb91",
+      "answers.json": "e04eed116fb219d8cc224ed76574314757d9c3b9fabfd928287cd967802d2b91"
+    },
+    "retrieval": {
+      "expected_passages": 11,
+      "dense_recall_at_1": 0.6363636363636364,
+      "dense_recall_at_3": 0.8181818181818182,
+      "dense_mrr": 0.7547846889952153,
+      "pipeline_recall_at_3": 0.8181818181818182,
+      "filtered_recall_at_3": 1.0,
+      "normalization_false_acceptance": 0,
+      "normalization_false_rejection": 2
+    },
+    "reviewer": "Codex root source/output review, independent of evaluated local Qwen model; frozen source/expectation comparison",
+    "normalization_policy": "whitespace-only-v1",
+    "limits": "Frozen synthetic corpus only; no restarted desktop, native OCR/Vision, broad semantics or hardware certification."
+  },
+  "review": {
+    "reviewer": "Codex root source/output review, independent of evaluated local Qwen model; frozen source/expectation comparison",
+    "artifact_sha256": {
+      "corpus.json": "f5cbfc6f22c86724583bdd2408dd379e16cc677e79f193e83856c2b2019301dc",
+      "preparation.json": "ddce310281c11a826e7e478ebccad5fc1d684cdf9bd847a723d7299cfb10bb91",
+      "answers.json": "e04eed116fb219d8cc224ed76574314757d9c3b9fabfd928287cd967802d2b91"
+    },
+    "cases": [
+      {
+        "id": "exact-code",
+        "content_pass": true,
+        "language_pass": false,
+        "citations_pass": true,
+        "notes": "Quantity 7 and EUR 12.50 match Warehouse and S1; English question receives Italian."
+      },
+      {
+        "id": "later-sheet",
+        "content_pass": true,
+        "language_pass": true,
+        "citations_pass": true,
+        "notes": "RET-009 quantity 3 and inspection disposition match Returns S1; Italian requested and delivered."
+      },
+      {
+        "id": "literal-csv",
+        "content_pass": true,
+        "language_pass": false,
+        "citations_pass": false,
+        "notes": "0007/North/literal NA preserved, but answer is Italian for English and supplies no passage citation."
+      },
+      {
+        "id": "paraphrase-cross-language",
+        "content_pass": true,
+        "language_pass": true,
+        "citations_pass": true,
+        "notes": "English answer preserves 48-hour discovery trigger and cites the actual supply-it clause S1."
+      },
+      {
+        "id": "cross-language-notice",
+        "content_pass": true,
+        "language_pass": false,
+        "citations_pass": true,
+        "notes": "60 days and registered mail with receipt retained and cited; answer is Italian for English."
+      },
+      {
+        "id": "late-page",
+        "content_pass": false,
+        "language_pass": false,
+        "citations_pass": true,
+        "notes": "Page 6 S1 supports temperature, quarantine and Ada Neri, but no explicit do-not-freeze instruction; do-not-install is narrowed to a frozen pump rather than the source frost condition. Main response is Italian for English."
+      },
+      {
+        "id": "contradiction",
+        "content_pass": false,
+        "language_pass": false,
+        "citations_pass": true,
+        "notes": "Both deadlines and unresolved precedence are correctly identified and sourced; invoice-receipt trigger is stated for A but omitted for B. Italian response to English question."
+      },
+      {
+        "id": "absent-penalty",
+        "content_pass": true,
+        "language_pass": true,
+        "citations_pass": true,
+        "notes": "Italian refusal of an unspecified daily penalty is explicit, grounded in supply-it S1 and invents no amount."
+      },
+      {
+        "id": "conditional-refund",
+        "content_pass": true,
+        "language_pass": true,
+        "citations_pass": true,
+        "notes": "Written-notice receipt condition and no-refund-without-notice retained in Italian with S1."
+      },
+      {
+        "id": "alternatives",
+        "content_pass": true,
+        "language_pass": true,
+        "citations_pass": true,
+        "notes": "Both PEC and registered mail with acknowledgement retained in Italian and cited S1."
+      },
+      {
+        "id": "exact-code-block",
+        "content_pass": true,
+        "language_pass": false,
+        "citations_pass": false,
+        "notes": "ConnectionError and exact Local service unavailable string plus no-empty-success preserved; Italian response to English and no passage citation."
+      },
+      {
+        "id": "unrelated-absent",
+        "content_pass": true,
+        "language_pass": false,
+        "citations_pass": true,
+        "notes": "Correctly refuses invented payment deadline and explains monthly watering is unrelated, cites S1; Italian for English."
+      }
+    ],
+    "normalization_live": [
+      {
+        "id": "live-it",
+        "content_safe": true,
+        "notes": "Complete comparison preserves alternatives, acknowledgement, Ada Neri, 14 days and written-notice/no-refund condition; merges pre sente and changes e to accented Ã¨. Semantic meaning safe, exact whitespace-only policy correctly refuses."
+      },
+      {
+        "id": "live-en",
+        "content_safe": true,
+        "notes": "Complete comparison retains AB123, 48 hours after discovery, written-notice/refund condition and final instruction. Removes line-wrap hyphen; semantically safe but outside exact whitespace-only policy, correctly refused."
+      }
+    ]
+  },
+  "modelRuntime": {
+    "version": {
+      "version": "0.40.6"
+    },
+    "tags": [
+      {
+        "name": "qwen3.5:9b",
+        "model": "qwen3.5:9b",
+        "modified_at": "2026-10-10T08:32:22.9552584+02:00",
+        "size": 6603314868,
+        "digest": "c97eb11d70b1acdc88af01eef566c1fe4f7fbe93eb1afc06871132f293ff425a",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "qwen35",
+          "families": [
+            "qwen35",
+            "clip"
+          ],
+          "parameter_size": "9.7B",
+          "quantization_level": "Q4_K_M",
+          "context_length": 262144,
+          "embedding_length": 4096,
+          "runner": "llamacpp"
+        },
+        "capabilities": [
+          "completion",
+          "vision",
+          "tools",
+          "thinking"
+        ]
+      },
+      {
+        "name": "nomic-embed-text:latest",
+        "model": "nomic-embed-text:latest",
+        "modified_at": "2026-09-10T20:29:13.0147314+02:00",
+        "size": 274302450,
+        "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "nomic-bert",
+          "families": [
+            "nomic-bert"
+          ],
+          "parameter_size": "137M",
+          "quantization_level": "F16",
+          "context_length": 2048,
+          "embedding_length": 768,
+          "runner": "ggml"
+        },
+        "capabilities": [
+          "embedding"
+        ]
+      }
+    ],
+    "space": {
+      "embedding_dimension": 768,
+      "embedding_model": "nomic-embed-text:latest",
+      "embedding_model_digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+      "embedding_policy_version": "native-v1",
+      "embedding_normalization": "l2-v1",
+      "embedding_preparation": "nomic-search-v1",
+      "embedding_space_id": "1352c7e6b0ba535eea29d0ae27a7104c7e4d9aad9f8b6cd9ec9ba2518b0ad56b"
+    }
+  },
+  "hashes": {
+    "corpus.json": "f5cbfc6f22c86724583bdd2408dd379e16cc677e79f193e83856c2b2019301dc",
+    "preparation.json": "ddce310281c11a826e7e478ebccad5fc1d684cdf9bd847a723d7299cfb10bb91",
+    "answers.json": "e04eed116fb219d8cc224ed76574314757d9c3b9fabfd928287cd967802d2b91",
+    "review.json": "0413cf3a2ee5ddf1f27b006640a5ed19cad569b069e7b72d5f8368fb402f4a55",
+    "acceptance.json": "bbeb11017c042c00d590dc8650859b32921a40daa061518c2b735515bfd6d688"
+  },
+  "failedAttempt": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-next-tasks-c9663097cc8849fea2f65670b710293e\\live\\content-acceptance-2026-10-20T12-40-46-438Z-3b0a5622"
+}

@@ -18,6 +18,8 @@ Eventi `agent:*`, `ingest:*`, `ollama:*` e `workspace:*` sono tipizzati nel cont
 
 ## Native upload bridge — 2026-10-06
 
+Il payload `ingest:file` richiede `taskId` anche nel contratto TypeScript, coerentemente con lo schema runtime. Non viene creato implicitamente dal Preload.
+
 `resolveNativeFilePath({ file })` è un metodo **locale del Preload**, non un canale IPC. Usa `webUtils.getPathForFile`; un `File` senza percorso su disco viene rifiutato dalla UI, senza fallback a `File.path` o al nome base. Main continua a validare il percorso nel payload `ingest:file`.
 
 ## Model/workload memory facts — 2026-10-02
@@ -35,3 +37,7 @@ La superficie REST separata è in [`api-rest.md`](./api-rest.md); i residui di p
 `ingest:load-drafts` restituisce `{ revision, drafts }`; `ingest:save-drafts` richiede lo snapshot e la revisione attesa. Schemi condivisi in [`documentDraft.ts`](../shared/domain/documentDraft.ts): identità uniche, massimo 100 bozze, 10 milioni di caratteri per testo e 20 milioni complessivi includendo le basi originali. I limiti rifiutano la scrittura senza troncare la bozza in memoria; l’export resta separato. Main rifiuta chiamanti estranei e archivi illeggibili, conserva la copia precedente e verifica il readback. [Prove](./verification-chat-drafts-context-2026-10-16.md).
 
 `chat:load-recovery` e `chat:save-recovery` usano lo snapshot validato di [`chatHistory.ts`](../shared/domain/chatHistory.ts), con identità di conversazione uniche e selezione esistente. Il Main conserva `chat-history-recovery.json` e copia precedente; gli schemi della cronologia localStorage vengono riusati. Il bootstrap precede le modifiche e un checkpoint rifiutato impedisce nuova generazione e chiusura normale.
+
+## Riconciliazione delle run interrotte — 2026-10-20
+
+`agent:inspect-task` riceve l’identità completa e restituisce prove come testo semplice, digest SHA-256 e disponibilità dell’abbandono. `agent:abandon-task` richiede la stessa identità e `evidenceDigest`: il Main rilegge lo stato e conserva richiesta/prove prima del successo. Sender, frame e payload passano per `secureIpcMain`; nessun percorso di archivio viene scelto dal Renderer. Archiviazione fallita o prove mutate non autorizzano il replay. [Qualifica](./verification-inflight-reconciliation-2026-10-20.md).

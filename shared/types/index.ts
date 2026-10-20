@@ -397,6 +397,14 @@ export interface AgentTaskRecovery {
   capabilityProfile: AgentCapabilityProfile
 }
 
+export interface AgentTaskInspection {
+  identity: AgentRunIdentity
+  evidenceDigest: string
+  /** Plain text evidence; never interpreted as markup or executable instructions. */
+  evidence: string
+  canAbandon: boolean
+}
+
 export interface TaskQueueStatus {
   maxConcurrency: number
   runningCount: number

@@ -19,6 +19,7 @@ import type {
   AgentRunIdentity,
   AgentTaskRequest,
   AgentTaskRecovery,
+  AgentTaskInspection,
   AppSettings,
   ArtifactRecord,
   ArtifactSaveInput,
@@ -143,7 +144,7 @@ export interface IpcInvokeContract {
       normalizationModel?: string
       /** Common context for Vision OCR and optional normalization; required for normalization calls. */
       numCtx?: number
-      taskId?: string
+      taskId: string
       normalizationThink?: boolean
       allowFullExcelFormat?: boolean
     }
@@ -221,6 +222,8 @@ export interface IpcInvokeContract {
   }
   'agent:get-queue-status': { payload: void; result: TaskQueueStatus }
   'agent:list-recoverable-tasks': { payload: void; result: AgentTaskRecovery[] }
+  'agent:inspect-task': { payload: AgentRunIdentity; result: AgentTaskInspection }
+  'agent:abandon-task': { payload: { identity: AgentRunIdentity; evidenceDigest: string }; result: { success: boolean; error?: string } }
   'agent:resume-task': { payload: AgentRunIdentity; result: AgentDoneResult & { error?: string; runId?: string; queuePosition?: number } }
   /** Pre-flight Clarification Interview before the plan is drafted. */
   'agent:plan-interview': {
@@ -419,6 +422,8 @@ export const IPC_INVOKE_METHODS = {
   updateActiveAgentRun: 'agent:update-active-run',
   getAgentQueueStatus: 'agent:get-queue-status',
   listRecoverableAgentTasks: 'agent:list-recoverable-tasks',
+  inspectAgentTask: 'agent:inspect-task',
+  abandonAgentTask: 'agent:abandon-task',
   resumeAgentTask: 'agent:resume-task',
   agentPlanInterview: 'agent:plan-interview',
   agentPlanEnrichPrompt: 'agent:plan-enrich-prompt',

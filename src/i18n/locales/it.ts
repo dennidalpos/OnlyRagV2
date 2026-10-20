@@ -7,6 +7,9 @@ export const it = {
     fullAccess: 'Accesso completo',
     notice: 'I task interrotti e in attesa sono conservati. Riprendi ogni task esplicitamente con modello e permessi originali.',
     resume: 'Riprendi task',
+    inspect: 'Ispeziona prove',
+    abandon: 'Abbandona esecuzione',
+    abandonConsent: 'Confermo l’abbandono: l’azione non verrà ripetuta né annullata. Richiesta e prove saranno conservate.',
     failure: 'Recupero non disponibile; i task salvati sono conservati',
   },
   requestScope: {

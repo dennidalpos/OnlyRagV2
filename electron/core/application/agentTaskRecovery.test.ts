@@ -9,6 +9,7 @@ import { runAgentOrchestratorLoop } from './agentOrchestratorAppService'
 import { TaskQueueAppService } from './taskQueueAppService'
 import { AgentTaskRecoveryRepository } from '../infrastructure/filesystem/agentTaskRecoveryRepository'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
+import { safeAtomicWrite } from '../infrastructure/filesystem/safeAtomicFileWriter'
 
 describe('durable accepted agent tasks', () => {
   let root: string
@@ -118,5 +119,137 @@ describe('durable accepted agent tasks', () => {
     expect((await service.resumeTask(later.identity, events)).success).toBe(true)
     await vi.waitFor(() => expect(service.getQueueStatus().runningCount).toBe(0))
     expect(vi.mocked(runAgentOrchestratorLoop).mock.calls.map((call) => call[2])).toEqual(['one', 'two'])
+  })
+
+  it.each(['before-effect', 'during-effect', 'after-effect'])(
+    'inspects and abandons %s without replay or rollback, retaining original state across restart',
+    async (cut) => {
+      const accepted = request('one')
+      await repository.accept(accepted)
+      const witness = path.join(root, 'external-effect.txt')
+      if (cut !== 'before-effect') fs.writeFileSync(witness, cut === 'during-effect' ? 'started\n' : 'started\ncompleted\n')
+      const state = {
+        sessionId: accepted.identity.conversationId,
+        runIdentity: accepted.identity,
+        workspacePath: root,
+        agentMode: 'ask' as const,
+        stepCount: 1,
+        maxSteps: 10,
+        episodes: [],
+        recentFullLogs: [],
+        planMilestones: [],
+        userTask: accepted.userTask,
+        updatedAt: new Date().toISOString(),
+        status: 'IN_PROGRESS' as const,
+        executionPhase: 'apply_action' as const,
+        chatMessages: [{ role: 'assistant' as const, content: 'Execute the witnessed operation.' }],
+      }
+      expect(await agentSessionStateRepository.saveSessionState(state)).toBe(true)
+      const before = fs.existsSync(witness) ? fs.readFileSync(witness, 'utf8') : null
+      const service = new TaskQueueAppService(() => root, repository)
+      expect((await service.abandonTask(accepted.identity, 'a'.repeat(64))).success).toBe(false)
+      const inspected = await service.inspectTask(accepted.identity)
+      expect(inspected.canAbandon).toBe(true)
+      expect(JSON.parse(inspected.evidence)).toEqual({ request: accepted, state })
+      expect((await service.resumeTask(accepted.identity, events)).success).toBe(false)
+      expect(await service.abandonTask(accepted.identity, inspected.evidenceDigest)).toEqual({ success: true })
+      const restarted = new AgentTaskRecoveryRepository(() => file)
+      expect(restarted.list()).toEqual([])
+      expect(restarted.isAbandoned(accepted.identity)).toBe(true)
+      const archive = JSON.parse(fs.readFileSync(file, 'utf8')).entries[0]
+      expect(archive.request).toEqual(accepted)
+      expect(archive.abandonment).toMatchObject({ evidence: inspected.evidence, evidenceDigest: inspected.evidenceDigest })
+      expect(await agentSessionStateRepository.loadSessionState(accepted.identity.conversationId, root)).toEqual(state)
+      expect(fs.existsSync(witness) ? fs.readFileSync(witness, 'utf8') : null).toBe(before)
+      expect((await new TaskQueueAppService(() => root, restarted).resumeTask(accepted.identity, events)).success).toBe(false)
+      await expect(restarted.accept(accepted)).rejects.toThrow('already accepted')
+      await expect(restarted.finish(accepted.identity)).rejects.toThrow('Abandoned evidence')
+      expect(runAgentOrchestratorLoop).not.toHaveBeenCalled()
+      const successor = { ...request('two'), identity: { ...request('two').identity, conversationId: accepted.identity.conversationId } }
+      await restarted.accept(successor)
+      const successorService = new TaskQueueAppService(() => root, restarted)
+      expect((await successorService.resumeTask(successor.identity, events)).success).toBe(true)
+      await vi.waitFor(() => expect(successorService.getQueueStatus().runningCount).toBe(0))
+      expect(runAgentOrchestratorLoop).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it('refuses stale evidence, a foreign identity, active work and failed archive persistence', async () => {
+    await repository.accept(request('one'))
+    const state = { runIdentity: request('one').identity, status: 'IN_PROGRESS', executionPhase: 'apply_action', updatedAt: 'first' }
+    vi.spyOn(agentSessionStateRepository, 'loadSessionState').mockImplementation(async () => ({ ...state }) as never)
+    const service = new TaskQueueAppService(() => root, repository)
+    const inspected = await service.inspectTask(request('one').identity)
+    state.updatedAt = 'changed'
+    expect((await service.abandonTask(request('one').identity, inspected.evidenceDigest)).success).toBe(false)
+    expect((await service.abandonTask({ ...request('one').identity, workspaceId: 'foreign' }, inspected.evidenceDigest)).success).toBe(false)
+    const current = await service.inspectTask(request('one').identity)
+    const before = fs.readFileSync(file, 'utf8')
+    const nativeRename = fs.promises.rename.bind(fs.promises)
+    vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
+      if (destination === path.resolve(file)) throw new Error('Injected archive write failure')
+      return nativeRename(source, destination)
+    })
+    expect((await service.abandonTask(request('one').identity, current.evidenceDigest)).success).toBe(false)
+    expect(fs.readFileSync(file, 'utf8')).toBe(before)
+    expect(repository.list()).toHaveLength(1)
+    expect(runAgentOrchestratorLoop).not.toHaveBeenCalled()
+    expect(await safeAtomicWrite(path.join(root, 'unrelated.json'), '{}')).toBe(true)
+  })
+
+  it('serializes competing abandonment and refuses inspection of running work', async () => {
+    await repository.accept(request('one'))
+    vi.spyOn(agentSessionStateRepository, 'loadSessionState').mockResolvedValue({
+      runIdentity: request('one').identity,
+      status: 'IN_PROGRESS',
+      executionPhase: 'apply_action',
+    } as never)
+    const service = new TaskQueueAppService(() => root, repository)
+    const inspected = await service.inspectTask(request('one').identity)
+    const results = await Promise.all([
+      service.abandonTask(request('one').identity, inspected.evidenceDigest),
+      service.abandonTask(request('one').identity, inspected.evidenceDigest),
+    ])
+    expect(results.map((result) => result.success).sort()).toEqual([false, true])
+    let finish!: () => void
+    vi.mocked(runAgentOrchestratorLoop).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ success: true, summary: 'done' })
+        }),
+    )
+    expect((await service.scheduleAgentTask(request('two'), events)).success).toBe(true)
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
+    await expect(service.inspectTask(request('two').identity)).rejects.toThrow('inactive')
+    finish()
+    await vi.waitFor(() => expect(service.getQueueStatus().runningCount).toBe(0))
+  })
+
+  it('keeps the conversation blocked until abandonment is durably archived', async () => {
+    await repository.accept(request('one'))
+    vi.spyOn(agentSessionStateRepository, 'loadSessionState').mockResolvedValue({
+      runIdentity: request('one').identity,
+      status: 'IN_PROGRESS',
+      executionPhase: 'apply_action',
+    } as never)
+    const service = new TaskQueueAppService(() => root, repository)
+    const inspected = await service.inspectTask(request('one').identity)
+    const archive = repository.abandon.bind(repository)
+    let release!: () => void
+    vi.spyOn(repository, 'abandon').mockImplementation(async (...args) => {
+      await new Promise<void>((resolve) => {
+        release = resolve
+      })
+      await archive(...args)
+    })
+    const abandonment = service.abandonTask(request('one').identity, inspected.evidenceDigest)
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    const fresh = { ...request('two'), identity: { ...request('two').identity, conversationId: request('one').identity.conversationId } }
+    expect((await service.scheduleAgentTask(fresh, events)).success).toBe(false)
+    expect(runAgentOrchestratorLoop).not.toHaveBeenCalled()
+    release()
+    expect(await abandonment).toEqual({ success: true })
+    expect((await service.scheduleAgentTask(fresh, events)).success).toBe(true)
+    await vi.waitFor(() => expect(service.getQueueStatus().runningCount).toBe(0))
   })
 })

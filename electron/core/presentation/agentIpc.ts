@@ -64,6 +64,8 @@ export function registerAgentIpcHandlers(getRendererEvents: () => RendererEventS
   })
 
   ipcMain.handle('agent:list-recoverable-tasks', async () => taskQueueAppService.listRecoverableTasks())
+  ipcMain.handle('agent:inspect-task', async (_, identity) => taskQueueAppService.inspectTask(identity))
+  ipcMain.handle('agent:abandon-task', async (_, payload) => taskQueueAppService.abandonTask(payload.identity, payload.evidenceDigest))
   ipcMain.handle('agent:resume-task', async (_, identity) => {
     const rendererEvents = getRendererEvents()
     if (!rendererEvents) return { success: false, summary: 'Agent renderer is unavailable.', completionStatus: 'cancelled' }

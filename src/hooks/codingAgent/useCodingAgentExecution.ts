@@ -155,6 +155,25 @@ export function useCodingAgentExecution({
     }
   }
 
+  const assertRecoveryScope = (task: AgentTaskRecovery) => {
+    if (isExecuting || activeRunIdentityRef.current || task.identity.conversationId !== session.activeSessionId || task.workspacePath !== workspacePath) {
+      throw new Error('Select the inactive original conversation and workspace before inspecting or abandoning its run.')
+    }
+  }
+
+  const inspectRecoveredTask = async (task: AgentTaskRecovery) => {
+    assertRecoveryScope(task)
+    return window.electronAPI!.inspectAgentTask(task.identity)
+  }
+
+  const abandonRecoveredTask = async (task: AgentTaskRecovery, evidenceDigest: string) => {
+    assertRecoveryScope(task)
+    const result = await window.electronAPI!.abandonAgentTask({ identity: task.identity, evidenceDigest })
+    if (!result.success) throw new Error(result.error || 'Abandonment could not be saved; retained work is preserved.')
+    setRecoverableTasks((tasks) => tasks.filter((candidate) => candidate.identity.runId !== task.identity.runId))
+    setRecoveryError('')
+  }
+
   const changeAgentMode = useCallback(
     (mode: AgentMode) => {
       setAgentMode(mode)
@@ -639,6 +658,8 @@ export function useCodingAgentExecution({
     recoverableTasks,
     recoveryError,
     resumeRecoveredTask,
+    inspectRecoveredTask,
+    abandonRecoveredTask,
     activeRunIdentity,
     currentLiveModel,
     currentStep,

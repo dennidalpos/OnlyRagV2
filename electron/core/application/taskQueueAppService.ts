@@ -14,6 +14,8 @@ import { documentIoRepository } from '../infrastructure/filesystem/documentIoRep
 import { ensureWorkspaceMetadataDirectory } from '../infrastructure/filesystem/workspaceMetadataDirectory'
 import path from 'node:path'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { createHash } from 'node:crypto'
+import type { AgentTaskInspection } from '../../../shared/types'
 
 export interface QueuedAgentTask {
   id: string
@@ -30,6 +32,7 @@ export class TaskQueueAppService {
   private shuttingDown = false
   private executions = new Map<string, Promise<void>>()
   private admissions = new Set<string>()
+  private inspections = new Map<string, string>()
 
   constructor(
     private readonly resolveStandaloneWorkspacePath: () => string = () => standaloneScratchWorkspace.getPath(),
@@ -40,8 +43,58 @@ export class TaskQueueAppService {
     return this.recovery.list().filter((task) => !this.queue.findTask(task.identity.runId) && !this.admissions.has(task.identity.runId))
   }
 
+  private assertInactive(identity: AgentRunIdentity): void {
+    if (this.shuttingDown || this.queue.findTask(identity.runId) || this.admissions.has(identity.runId)) {
+      throw new Error('Recovery requires an inactive retained run.')
+    }
+  }
+
+  private async readInspection(identity: AgentRunIdentity): Promise<AgentTaskInspection> {
+    const request = this.recovery.load(identity)
+    const state = await agentSessionStateRepository.loadSessionState(identity.conversationId, request.workspacePath)
+    const canAbandon = !!(
+      matchesAgentRunIdentity(state?.runIdentity, identity) &&
+      state?.status === 'IN_PROGRESS' &&
+      state.executionPhase === 'apply_action' &&
+      !state.completionStatus &&
+      !state.terminationReason
+    )
+    // Bind the inspection and archive to the complete accepted request and retained checkpoint.
+    const evidence = JSON.stringify({ request, state }, null, 2)
+    return { identity, evidence, evidenceDigest: createHash('sha256').update(evidence).digest('hex'), canAbandon }
+  }
+
+  public async inspectTask(identity: AgentRunIdentity): Promise<AgentTaskInspection> {
+    this.assertInactive(identity)
+    const inspection = await this.readInspection(identity)
+    this.assertInactive(identity)
+    this.inspections.set(identity.runId, inspection.evidenceDigest)
+    return inspection
+  }
+
+  public async abandonTask(identity: AgentRunIdentity, evidenceDigest: string): Promise<{ success: boolean; error?: string }> {
+    let claimed = false
+    try {
+      this.assertInactive(identity)
+      if (this.inspections.get(identity.runId) !== evidenceDigest) throw new Error('Inspect the retained evidence before abandoning this run.')
+      this.admissions.add(identity.runId)
+      claimed = true
+      const current = await this.readInspection(identity)
+      if (!current.canAbandon || current.evidenceDigest !== evidenceDigest)
+        throw new Error('Recovery evidence changed or the action is not unresolved; inspect it again.')
+      await this.recovery.abandon(identity, evidenceDigest, current.evidence)
+      this.inspections.delete(identity.runId)
+      return { success: true }
+    } catch (error: unknown) {
+      return { success: false, error: errorMessage(error) }
+    } finally {
+      if (claimed) this.admissions.delete(identity.runId)
+    }
+  }
+
   public async resumeTask(identity: AgentRunIdentity, rendererEvents: RendererEventSink): Promise<AgentTaskResult> {
     try {
+      this.assertInactive(identity)
       const request = this.recovery.load(identity)
       const firstPending = this.recovery.list().find((task) => task.identity.conversationId === identity.conversationId)
       if (firstPending?.identity.runId !== identity.runId) {
@@ -58,10 +111,15 @@ export class TaskQueueAppService {
       if (matchesAgentRunIdentity(saved?.runIdentity, identity) && saved?.executionPhase === 'apply_action') {
         return {
           success: false,
-          summary: 'The interrupted action has no acknowledged outcome. Inspect the workspace before repeating it; retained work is preserved.',
+          summary: 'The interrupted action has no acknowledged outcome. Inspect the retained evidence and explicitly abandon the run; repetition is refused.',
         }
       }
-      if (saved?.runIdentity && saved.status === 'IN_PROGRESS' && !matchesAgentRunIdentity(saved.runIdentity, identity)) {
+      if (
+        saved?.runIdentity &&
+        saved.status === 'IN_PROGRESS' &&
+        !matchesAgentRunIdentity(saved.runIdentity, identity) &&
+        !this.recovery.isAbandoned(saved.runIdentity)
+      ) {
         return { success: false, summary: 'Another interrupted run owns this conversation; recover it before starting pending work.' }
       }
       return await this.scheduleAgentTask(request, rendererEvents, true)
@@ -140,11 +198,7 @@ export class TaskQueueAppService {
     try {
       if (recovering) this.recovery.load(identity)
       else {
-        const interrupted = this.recovery
-          .list()
-          .find(
-            (task) => task.identity.conversationId === conversationId && !this.queue.findTask(task.identity.runId) && !this.admissions.has(task.identity.runId),
-          )
+        const interrupted = this.recovery.list().find((task) => task.identity.conversationId === conversationId && !this.queue.findTask(task.identity.runId))
         if (interrupted) throw new Error('This conversation has retained work; recover it explicitly before starting a new run.')
         await this.recovery.accept(taskPayload as AgentTaskRequest)
       }

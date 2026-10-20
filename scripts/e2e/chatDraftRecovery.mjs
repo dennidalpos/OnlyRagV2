@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const qualifiedExe = process.env.ONLYRAG_QUALIFICATION_EXE
 async function verifyRecovery(width, height) {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-chat-drafts-'))
   const userData = path.join(scratch, 'user-data')
@@ -26,8 +27,8 @@ async function verifyRecovery(width, height) {
   let page
   async function launch(revision = 't1') {
     application = await electron.launch({
-      executablePath: path.join(root, 'node_modules/electron/dist/electron.exe'),
-      args: [path.join(root, 'dist-electron/main.js'), '--disable-gpu'],
+      executablePath: qualifiedExe || path.join(root, 'node_modules/electron/dist/electron.exe'),
+      args: qualifiedExe ? ['--disable-gpu'] : [path.join(root, 'dist-electron/main.js'), '--disable-gpu'],
       cwd: root,
       env: environment,
       timeout: 30_000,

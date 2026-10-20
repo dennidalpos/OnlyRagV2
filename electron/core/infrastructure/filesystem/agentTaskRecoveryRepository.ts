@@ -13,13 +13,20 @@ const entrySchema = z
   .object({
     identity: agentTaskRequestSchema.shape.identity,
     request: agentTaskRequestSchema.optional(),
-    status: z.enum(['pending', 'terminal']),
+    status: z.enum(['pending', 'terminal', 'abandoned']),
     acceptedAt: z.string().datetime(),
+    abandonment: z
+      .object({ at: z.string().datetime(), evidenceDigest: z.string().regex(/^[a-f0-9]{64}$/), evidence: z.string() })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {
     if (entry.status === 'pending' && (!entry.request || !matchesAgentRunIdentity(entry.identity, entry.request.identity))) {
       ctx.addIssue({ code: 'custom', message: 'Pending task identity/request mismatch' })
+    }
+    if (entry.status === 'abandoned' && (!entry.request || !entry.abandonment)) {
+      ctx.addIssue({ code: 'custom', message: 'Abandoned task must retain its intent and evidence' })
     }
     if (
       entry.request &&
@@ -107,9 +114,27 @@ export class AgentTaskRecoveryRepository {
     await this.update((ledger) => {
       const entry = ledger.entries.find((candidate) => matchesAgentRunIdentity(candidate.identity, identity))
       if (!entry) throw new Error('Accepted agent task is missing from recovery ledger.')
+      if (entry.status === 'abandoned') throw new Error('Abandoned evidence cannot be retired as ordinary completion.')
       entry.status = 'terminal'
       delete entry.request
     })
+  }
+
+  isAbandoned(identity: AgentRunIdentity): boolean {
+    return this.read().entries.some((entry) => matchesAgentRunIdentity(entry.identity, identity) && entry.status === 'abandoned')
+  }
+
+  async abandon(identity: AgentRunIdentity, evidenceDigest: string, evidence: string): Promise<void> {
+    await this.update((ledger) => {
+      const entry = ledger.entries.find((candidate) => matchesAgentRunIdentity(candidate.identity, identity))
+      if (!entry || entry.status !== 'pending') throw new Error('No pending task matches this abandonment.')
+      entry.status = 'abandoned'
+      entry.abandonment = { at: new Date().toISOString(), evidenceDigest, evidence }
+    })
+    const retained = this.read().entries.find((entry) => matchesAgentRunIdentity(entry.identity, identity))
+    if (retained?.status !== 'abandoned' || retained.abandonment?.evidenceDigest !== evidenceDigest || retained.abandonment.evidence !== evidence) {
+      throw new Error('Abandonment archive readback failed; do not repeat the interrupted action.')
+    }
   }
 }
 

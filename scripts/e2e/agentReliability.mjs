@@ -10,7 +10,8 @@ import { _electron as electron } from 'playwright'
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const mainBundle = path.join(rootDir, 'dist-electron', 'main.js')
-const electronExe = path.join(rootDir, 'node_modules', 'electron', 'dist', 'electron.exe')
+const qualifiedExe = process.env.ONLYRAG_QUALIFICATION_EXE
+const electronExe = qualifiedExe || path.join(rootDir, 'node_modules', 'electron', 'dist', 'electron.exe')
 const model = 'qwen2.5-coder:7b'
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-electron-e2e-'))
 const evidenceRoot = process.env.ONLYRAG_RECOVERY_EVIDENCE || path.join(os.tmpdir(), `onlyrag-agent-evidence-${randomUUID()}`)
@@ -217,7 +218,7 @@ function identity(label, workspacePath = workspaceRoot) {
 async function launchApplication() {
   const application = await electron.launch({
     executablePath: electronExe,
-    args: [mainBundle, '--disable-gpu'],
+    args: qualifiedExe ? ['--disable-gpu'] : [mainBundle, '--disable-gpu'],
     cwd: rootDir,
     env: {
       ...process.env,
@@ -480,6 +481,66 @@ async function qualifyCrashRecovery() {
   }
 }
 
+async function qualifyInflightReconciliation() {
+  const receipts = []
+  for (const cut of ['before-effect', 'during-effect', 'after-effect']) {
+    const workspace = path.join(tempRoot, cut)
+    fs.mkdirSync(workspace)
+    fs.writeFileSync(path.join(workspace, 'README.md'), '# Isolated inflight witness\n')
+    const script = `const fs=require('node:fs');fs.writeFileSync('entered.txt','entered');${cut === 'before-effect' ? '' : "fs.appendFileSync('effect.txt','started\\n');"}${cut === 'after-effect' ? "fs.appendFileSync('effect.txt','completed\\n');" : ''}setTimeout(()=>{},120000)`
+    fs.writeFileSync(path.join(workspace, 'witness.cjs'), script)
+    const runIdentity = identity(cut, workspace)
+    const statePath = path.join(workspace, '.onlyrag', 'sessions', createHash('sha256').update(runIdentity.conversationId).digest('hex'), 'state.json')
+    serverState.chatBehaviors.push({ type: 'tool', name: 'run_command', arguments: { command: 'node witness.cjs' } })
+    assert.equal((await startTask(page, runIdentity, { workspacePath: workspace, agentMode: 'auto', userTask: 'Run node witness.cjs once.' })).success, true)
+    const deadline = Date.now() + 30000
+    while (!fs.existsSync(path.join(workspace, 'entered.txt')) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50))
+    assert(fs.existsSync(path.join(workspace, 'entered.txt')), 'Owned child command did not reach the frozen interruption point')
+    const stateBefore = fs.readFileSync(statePath, 'utf8')
+    assert.equal(JSON.parse(stateBefore).executionPhase, 'apply_action')
+    const witness = path.join(workspace, 'effect.txt')
+    const effectBefore = fs.existsSync(witness) ? fs.readFileSync(witness, 'utf8') : null
+    const requestCount = serverState.requestCount
+    const owned = application.process()
+    const exited = new Promise((resolve) => owned.once('exit', resolve))
+    execFileSync('taskkill', ['/PID', String(owned.pid), '/T', '/F'], { stdio: 'ignore' })
+    await exited
+    await application.close().catch(() => {})
+    ;({ application, page } = await launchApplication())
+    assert.equal(serverState.requestCount, requestCount)
+    assert.equal((await api(page, 'resumeAgentTask', runIdentity)).success, false)
+    assert.equal((await api(page, 'abandonAgentTask', { identity: runIdentity, evidenceDigest: 'a'.repeat(64) })).success, false)
+    const inspection = await api(page, 'inspectAgentTask', runIdentity)
+    assert.equal(inspection.canAbandon, true)
+    assert.deepEqual(JSON.parse(inspection.evidence).state, JSON.parse(stateBefore))
+    assert.equal((await api(page, 'abandonAgentTask', { identity: runIdentity, evidenceDigest: inspection.evidenceDigest })).success, true)
+    await application.close()
+    ;({ application, page } = await launchApplication())
+    assert.equal((await api(page, 'resumeAgentTask', runIdentity)).success, false)
+    assert.equal(serverState.requestCount, requestCount)
+    assert.equal(fs.readFileSync(statePath, 'utf8'), stateBefore)
+    assert.equal(fs.existsSync(witness) ? fs.readFileSync(witness, 'utf8') : null, effectBefore)
+    const ledger = JSON.parse(fs.readFileSync(path.join(userData, 'agent-task-recovery.json'), 'utf8'))
+    const archived = ledger.entries.find((entry) => entry.identity.runId === runIdentity.runId)
+    assert.equal(archived.status, 'abandoned')
+    assert.equal(archived.abandonment.evidence, inspection.evidence)
+    receipts.push({ cut, identity: runIdentity, effectBefore, requestCount, inspection, archived })
+  }
+  fs.mkdirSync(evidenceRoot, { recursive: true })
+  fs.writeFileSync(
+    path.join(evidenceRoot, 'reconciliation.json'),
+    JSON.stringify(
+      {
+        scope: 'Owned Windows Electron Main/Preload and real child commands with deterministic generation. No power-loss assertion.',
+        bundleSha256: createHash('sha256').update(fs.readFileSync(mainBundle)).digest('hex'),
+        receipts,
+      },
+      null,
+      2,
+    ),
+  )
+}
+
 async function runQualification() {
   assert(fs.existsSync(mainBundle), `Missing Electron bundle: ${mainBundle}`)
   assert(fs.existsSync(electronExe), `Missing Electron executable: ${electronExe}`)
@@ -488,6 +549,11 @@ async function runQualification() {
   if (process.argv.includes('--crash-only')) {
     await qualifyCrashRecovery()
     console.log('[PASS] Owned-process crash, explicit queue recovery and terminal readback passed.')
+    return
+  }
+  if (process.argv.includes('--reconciliation-only')) {
+    await qualifyInflightReconciliation()
+    console.log('[PASS] Inflight evidence inspection and explicit abandonment without replay or rollback.')
     return
   }
   console.log('[1/8] project and session switching, layout migration and removal')

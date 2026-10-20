@@ -4,8 +4,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright'
+import { execFileSync } from 'node:child_process'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const qualifiedExe = process.env.ONLYRAG_QUALIFICATION_EXE
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-settings-close-'))
 const userData = path.join(scratch, 'user-data')
 const settingsPath = path.join(userData, 'settings.json')
@@ -18,8 +20,8 @@ let application
 let complete = false
 async function launch() {
   application = await electron.launch({
-    executablePath: path.join(root, 'node_modules/electron/dist/electron.exe'),
-    args: [path.join(root, 'dist-electron/main.js'), '--disable-gpu'],
+    executablePath: qualifiedExe || path.join(root, 'node_modules/electron/dist/electron.exe'),
+    args: qualifiedExe ? ['--disable-gpu'] : [path.join(root, 'dist-electron/main.js'), '--disable-gpu'],
     cwd: root,
     env: environment,
     timeout: 30_000,
@@ -62,9 +64,42 @@ try {
 
   const restarted = await launch()
   assert.equal(await restarted.locator('aside button:has(svg.lucide-globe)').textContent(), 'IT')
+  const acknowledged = fs.readFileSync(settingsPath, 'utf8')
+  const owned = application.process()
+  const exited = new Promise((resolve) => owned.once('exit', resolve))
+  execFileSync('taskkill', ['/PID', String(owned.pid), '/T', '/F'], { stdio: 'ignore' })
+  await exited
+  await application.close().catch(() => {})
+  application = undefined
+  const afterKill = await launch()
+  assert.equal(await afterKill.locator('aside button:has(svg.lucide-globe)').textContent(), 'IT')
+  assert.deepEqual(JSON.parse(fs.readFileSync(settingsPath, 'utf8')).settings, JSON.parse(acknowledged).settings)
   await application.close()
   application = undefined
   complete = true
+  if (process.env.ONLYRAG_QUALIFICATION_EVIDENCE) {
+    fs.mkdirSync(process.env.ONLYRAG_QUALIFICATION_EVIDENCE, { recursive: true })
+    fs.writeFileSync(
+      path.join(process.env.ONLYRAG_QUALIFICATION_EVIDENCE, 'settings-close.json'),
+      JSON.stringify(
+        {
+          executablePath: qualifiedExe || 'development',
+          settings: JSON.parse(acknowledged),
+          assertions: [
+            'pending close flush',
+            'failed write preserves obstruction',
+            'retry and close',
+            'restart language',
+            'owned force kill',
+            'acknowledged revision after second restart',
+          ],
+          limits: 'Isolated E2E profile, automatic Sidecar disabled; no model or power-loss qualification.',
+        },
+        null,
+        2,
+      ),
+    )
+  }
   console.log(
     '[PASS] Real Main/Preload close waits for pending settings, refuses a failed write, retries and reloads the saved language after restart. No model calls.',
   )

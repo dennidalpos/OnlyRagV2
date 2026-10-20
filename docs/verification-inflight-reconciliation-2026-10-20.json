@@ -1,0 +1,823 @@
+{
+  "scope": "Owned Windows Electron Main/Preload and real child commands with deterministic generation. No power-loss assertion.",
+  "bundleSha256": "e4bce8117d85cfa83fd104181969a0b85ff1e483feed9da67f5c93c7ffcbeb16",
+  "receipts": [
+    {
+      "cut": "before-effect",
+      "identity": {
+        "runId": "e2e-before-effect-1a0c0f70-829e-4618-ad73-94e7c7a4d43e",
+        "conversationId": "conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538",
+        "planRevisionId": "plan-before-effect:v1",
+        "workspaceId": "010aee4783c7d402dd9ebe0c24f05602b7319a7ed6926be2449daead421fcb41"
+      },
+      "effectBefore": null,
+      "requestCount": 1,
+      "inspection": {
+        "identity": {
+          "runId": "e2e-before-effect-1a0c0f70-829e-4618-ad73-94e7c7a4d43e",
+          "conversationId": "conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538",
+          "planRevisionId": "plan-before-effect:v1",
+          "workspaceId": "010aee4783c7d402dd9ebe0c24f05602b7319a7ed6926be2449daead421fcb41"
+        },
+        "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-before-effect-1a0c0f70-829e-4618-ad73-94e7c7a4d43e\",\n      \"conversationId\": \"conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538\",\n      \"planRevisionId\": \"plan-before-effect:v1\",\n      \"workspaceId\": \"010aee4783c7d402dd9ebe0c24f05602b7319a7ed6926be2449daead421fcb41\"\n    },\n    \"sessionId\": \"conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\before-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:63409\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-before-effect-1a0c0f70-829e-4618-ad73-94e7c7a4d43e\",\n      \"conversationId\": \"conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538\",\n      \"planRevisionId\": \"plan-before-effect:v1\",\n      \"workspaceId\": \"010aee4783c7d402dd9ebe0c24f05602b7319a7ed6926be2449daead421fcb41\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\before-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T11:44:14.634Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:58842ea7a6231d6ec251fa4c1e108f8e4129a4b5af6f2ea399c6b299ddf80da6\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:63409\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T11:44:14.624Z\",\n        \"wallDurationMs\": 4,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\before-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}",
+        "evidenceDigest": "a7880b4079361b6829cca37e97affa77a1b42ee53e2051986d8102ffb796521d",
+        "canAbandon": true
+      },
+      "archived": {
+        "identity": {
+          "runId": "e2e-before-effect-1a0c0f70-829e-4618-ad73-94e7c7a4d43e",
+          "conversationId": "conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538",
+          "planRevisionId": "plan-before-effect:v1",
+          "workspaceId": "010aee4783c7d402dd9ebe0c24f05602b7319a7ed6926be2449daead421fcb41"
+        },
+        "request": {
+          "identity": {
+            "runId": "e2e-before-effect-1a0c0f70-829e-4618-ad73-94e7c7a4d43e",
+            "conversationId": "conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538",
+            "planRevisionId": "plan-before-effect:v1",
+            "workspaceId": "010aee4783c7d402dd9ebe0c24f05602b7319a7ed6926be2449daead421fcb41"
+          },
+          "sessionId": "conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538",
+          "userTask": "Run node witness.cjs once.",
+          "initialUserTask": "Inspect README.md and answer briefly.",
+          "agentMode": "auto",
+          "workspacePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-electron-e2e-tS8xKy\\before-effect",
+          "isStandaloneMode": false,
+          "activeModel": "qwen2.5-coder:7b",
+          "activeFile": null,
+          "capabilityProfile": {
+            "allowFileModifications": true,
+            "allowTerminalExecution": true,
+            "capabilityPolicyMode": "network-approved",
+            "maxToolCallSteps": 10
+          },
+          "settings": {
+            "defaultModel": "qwen2.5-coder:7b",
+            "ocrEngine": "native_cuda",
+            "ollamaHost": "http://127.0.0.1:63409",
+            "ollamaMode": "local",
+            "capabilityPolicyMode": "network-approved",
+            "fullAccess": false,
+            "allowFullExcelFormat": false,
+            "language": "it",
+            "autoInstallHubSkills": "disabled",
+            "autoInstallMinScore": 8,
+            "enableSkillRouter": false,
+            "maxToolCallSteps": 10,
+            "enableCodingAgentDebugLog": false,
+            "codingAgentDebugRetentionFiles": 2,
+            "modelThinkingPreferences": {},
+            "hasCompletedInitialSetup": false,
+            "modelSamplingOverrides": {},
+            "translationModel": "qwen2.5-coder:7b",
+            "codingModel": "qwen2.5-coder:7b",
+            "visionModel": "qwen2.5-coder:7b",
+            "embeddingModel": "qwen2.5-coder:7b",
+            "allowTerminalExecution": true,
+            "allowFileModifications": true,
+            "customPromptOverrides": {}
+          }
+        },
+        "status": "abandoned",
+        "acceptedAt": "2026-10-20T11:44:13.872Z",
+        "abandonment": {
+          "at": "2026-10-20T11:44:16.797Z",
+          "evidenceDigest": "a7880b4079361b6829cca37e97affa77a1b42ee53e2051986d8102ffb796521d",
+          "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-before-effect-1a0c0f70-829e-4618-ad73-94e7c7a4d43e\",\n      \"conversationId\": \"conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538\",\n      \"planRevisionId\": \"plan-before-effect:v1\",\n      \"workspaceId\": \"010aee4783c7d402dd9ebe0c24f05602b7319a7ed6926be2449daead421fcb41\"\n    },\n    \"sessionId\": \"conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\before-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:63409\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-before-effect-1a0c0f70-829e-4618-ad73-94e7c7a4d43e\",\n      \"conversationId\": \"conversation-before-effect-d572ef14-4b67-47fd-a027-c56f8bfd9538\",\n      \"planRevisionId\": \"plan-before-effect:v1\",\n      \"workspaceId\": \"010aee4783c7d402dd9ebe0c24f05602b7319a7ed6926be2449daead421fcb41\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\before-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T11:44:14.634Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:58842ea7a6231d6ec251fa4c1e108f8e4129a4b5af6f2ea399c6b299ddf80da6\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:63409\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T11:44:14.624Z\",\n        \"wallDurationMs\": 4,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\before-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}"
+        }
+      }
+    },
+    {
+      "cut": "during-effect",
+      "identity": {
+        "runId": "e2e-during-effect-817031f7-a2a8-4058-9352-1403972b5d12",
+        "conversationId": "conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b",
+        "planRevisionId": "plan-during-effect:v1",
+        "workspaceId": "e58edaf35e010cb22f40de567be42c574e3bb4c2b2d05af3e033a748f4bbd1f3"
+      },
+      "effectBefore": "started\n",
+      "requestCount": 2,
+      "inspection": {
+        "identity": {
+          "runId": "e2e-during-effect-817031f7-a2a8-4058-9352-1403972b5d12",
+          "conversationId": "conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b",
+          "planRevisionId": "plan-during-effect:v1",
+          "workspaceId": "e58edaf35e010cb22f40de567be42c574e3bb4c2b2d05af3e033a748f4bbd1f3"
+        },
+        "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-during-effect-817031f7-a2a8-4058-9352-1403972b5d12\",\n      \"conversationId\": \"conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b\",\n      \"planRevisionId\": \"plan-during-effect:v1\",\n      \"workspaceId\": \"e58edaf35e010cb22f40de567be42c574e3bb4c2b2d05af3e033a748f4bbd1f3\"\n    },\n    \"sessionId\": \"conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\during-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:63409\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-during-effect-817031f7-a2a8-4058-9352-1403972b5d12\",\n      \"conversationId\": \"conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b\",\n      \"planRevisionId\": \"plan-during-effect:v1\",\n      \"workspaceId\": \"e58edaf35e010cb22f40de567be42c574e3bb4c2b2d05af3e033a748f4bbd1f3\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\during-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T11:44:18.588Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:b98b99e4305f9204e134305509ccf356328b926a9082554817ec1fdc6aee61e8\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:63409\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T11:44:18.580Z\",\n        \"wallDurationMs\": 2,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\during-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}",
+        "evidenceDigest": "d98e1b7d04ee7e9fbbf75ee6c2e15071c11cf12de3ce09776bcbd30c4ec94db0",
+        "canAbandon": true
+      },
+      "archived": {
+        "identity": {
+          "runId": "e2e-during-effect-817031f7-a2a8-4058-9352-1403972b5d12",
+          "conversationId": "conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b",
+          "planRevisionId": "plan-during-effect:v1",
+          "workspaceId": "e58edaf35e010cb22f40de567be42c574e3bb4c2b2d05af3e033a748f4bbd1f3"
+        },
+        "request": {
+          "identity": {
+            "runId": "e2e-during-effect-817031f7-a2a8-4058-9352-1403972b5d12",
+            "conversationId": "conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b",
+            "planRevisionId": "plan-during-effect:v1",
+            "workspaceId": "e58edaf35e010cb22f40de567be42c574e3bb4c2b2d05af3e033a748f4bbd1f3"
+          },
+          "sessionId": "conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b",
+          "userTask": "Run node witness.cjs once.",
+          "initialUserTask": "Inspect README.md and answer briefly.",
+          "agentMode": "auto",
+          "workspacePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-electron-e2e-tS8xKy\\during-effect",
+          "isStandaloneMode": false,
+          "activeModel": "qwen2.5-coder:7b",
+          "activeFile": null,
+          "capabilityProfile": {
+            "allowFileModifications": true,
+            "allowTerminalExecution": true,
+            "capabilityPolicyMode": "network-approved",
+            "maxToolCallSteps": 10
+          },
+          "settings": {
+            "defaultModel": "qwen2.5-coder:7b",
+            "ocrEngine": "native_cuda",
+            "ollamaHost": "http://127.0.0.1:63409",
+            "ollamaMode": "local",
+            "capabilityPolicyMode": "network-approved",
+            "fullAccess": false,
+            "allowFullExcelFormat": false,
+            "language": "it",
+            "autoInstallHubSkills": "disabled",
+            "autoInstallMinScore": 8,
+            "enableSkillRouter": false,
+            "maxToolCallSteps": 10,
+            "enableCodingAgentDebugLog": false,
+            "codingAgentDebugRetentionFiles": 2,
+            "modelThinkingPreferences": {},
+            "hasCompletedInitialSetup": false,
+            "modelSamplingOverrides": {},
+            "translationModel": "qwen2.5-coder:7b",
+            "codingModel": "qwen2.5-coder:7b",
+            "visionModel": "qwen2.5-coder:7b",
+            "embeddingModel": "qwen2.5-coder:7b",
+            "allowTerminalExecution": true,
+            "allowFileModifications": true,
+            "customPromptOverrides": {}
+          }
+        },
+        "status": "abandoned",
+        "acceptedAt": "2026-10-20T11:44:18.013Z",
+        "abandonment": {
+          "at": "2026-10-20T11:44:20.391Z",
+          "evidenceDigest": "d98e1b7d04ee7e9fbbf75ee6c2e15071c11cf12de3ce09776bcbd30c4ec94db0",
+          "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-during-effect-817031f7-a2a8-4058-9352-1403972b5d12\",\n      \"conversationId\": \"conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b\",\n      \"planRevisionId\": \"plan-during-effect:v1\",\n      \"workspaceId\": \"e58edaf35e010cb22f40de567be42c574e3bb4c2b2d05af3e033a748f4bbd1f3\"\n    },\n    \"sessionId\": \"conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\during-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:63409\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-during-effect-817031f7-a2a8-4058-9352-1403972b5d12\",\n      \"conversationId\": \"conversation-during-effect-698d0083-e372-41bd-b60f-740001ec8e1b\",\n      \"planRevisionId\": \"plan-during-effect:v1\",\n      \"workspaceId\": \"e58edaf35e010cb22f40de567be42c574e3bb4c2b2d05af3e033a748f4bbd1f3\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\during-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T11:44:18.588Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:b98b99e4305f9204e134305509ccf356328b926a9082554817ec1fdc6aee61e8\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:63409\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T11:44:18.580Z\",\n        \"wallDurationMs\": 2,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\during-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}"
+        }
+      }
+    },
+    {
+      "cut": "after-effect",
+      "identity": {
+        "runId": "e2e-after-effect-a59dd2c0-5fcb-4db6-ad68-225ff1d3f461",
+        "conversationId": "conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf",
+        "planRevisionId": "plan-after-effect:v1",
+        "workspaceId": "177e4fa6f18bdfb84bbf6c988fa8aaa071fa9359da4f4f08db2b3fb4b4ada0cb"
+      },
+      "effectBefore": "started\ncompleted\n",
+      "requestCount": 3,
+      "inspection": {
+        "identity": {
+          "runId": "e2e-after-effect-a59dd2c0-5fcb-4db6-ad68-225ff1d3f461",
+          "conversationId": "conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf",
+          "planRevisionId": "plan-after-effect:v1",
+          "workspaceId": "177e4fa6f18bdfb84bbf6c988fa8aaa071fa9359da4f4f08db2b3fb4b4ada0cb"
+        },
+        "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-after-effect-a59dd2c0-5fcb-4db6-ad68-225ff1d3f461\",\n      \"conversationId\": \"conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf\",\n      \"planRevisionId\": \"plan-after-effect:v1\",\n      \"workspaceId\": \"177e4fa6f18bdfb84bbf6c988fa8aaa071fa9359da4f4f08db2b3fb4b4ada0cb\"\n    },\n    \"sessionId\": \"conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\after-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:63409\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-after-effect-a59dd2c0-5fcb-4db6-ad68-225ff1d3f461\",\n      \"conversationId\": \"conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf\",\n      \"planRevisionId\": \"plan-after-effect:v1\",\n      \"workspaceId\": \"177e4fa6f18bdfb84bbf6c988fa8aaa071fa9359da4f4f08db2b3fb4b4ada0cb\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\after-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T11:44:22.206Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:928812e96f458fe0bba1000caa318eafe60242ab2ab260c45862f978a8ae493d\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:63409\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T11:44:22.199Z\",\n        \"wallDurationMs\": 2,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\after-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}",
+        "evidenceDigest": "f969e19ebea96a2a006650abecc13466363809286378fd34959b17e9286d6de2",
+        "canAbandon": true
+      },
+      "archived": {
+        "identity": {
+          "runId": "e2e-after-effect-a59dd2c0-5fcb-4db6-ad68-225ff1d3f461",
+          "conversationId": "conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf",
+          "planRevisionId": "plan-after-effect:v1",
+          "workspaceId": "177e4fa6f18bdfb84bbf6c988fa8aaa071fa9359da4f4f08db2b3fb4b4ada0cb"
+        },
+        "request": {
+          "identity": {
+            "runId": "e2e-after-effect-a59dd2c0-5fcb-4db6-ad68-225ff1d3f461",
+            "conversationId": "conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf",
+            "planRevisionId": "plan-after-effect:v1",
+            "workspaceId": "177e4fa6f18bdfb84bbf6c988fa8aaa071fa9359da4f4f08db2b3fb4b4ada0cb"
+          },
+          "sessionId": "conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf",
+          "userTask": "Run node witness.cjs once.",
+          "initialUserTask": "Inspect README.md and answer briefly.",
+          "agentMode": "auto",
+          "workspacePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-electron-e2e-tS8xKy\\after-effect",
+          "isStandaloneMode": false,
+          "activeModel": "qwen2.5-coder:7b",
+          "activeFile": null,
+          "capabilityProfile": {
+            "allowFileModifications": true,
+            "allowTerminalExecution": true,
+            "capabilityPolicyMode": "network-approved",
+            "maxToolCallSteps": 10
+          },
+          "settings": {
+            "defaultModel": "qwen2.5-coder:7b",
+            "ocrEngine": "native_cuda",
+            "ollamaHost": "http://127.0.0.1:63409",
+            "ollamaMode": "local",
+            "capabilityPolicyMode": "network-approved",
+            "fullAccess": false,
+            "allowFullExcelFormat": false,
+            "language": "it",
+            "autoInstallHubSkills": "disabled",
+            "autoInstallMinScore": 8,
+            "enableSkillRouter": false,
+            "maxToolCallSteps": 10,
+            "enableCodingAgentDebugLog": false,
+            "codingAgentDebugRetentionFiles": 2,
+            "modelThinkingPreferences": {},
+            "hasCompletedInitialSetup": false,
+            "modelSamplingOverrides": {},
+            "translationModel": "qwen2.5-coder:7b",
+            "codingModel": "qwen2.5-coder:7b",
+            "visionModel": "qwen2.5-coder:7b",
+            "embeddingModel": "qwen2.5-coder:7b",
+            "allowTerminalExecution": true,
+            "allowFileModifications": true,
+            "customPromptOverrides": {}
+          }
+        },
+        "status": "abandoned",
+        "acceptedAt": "2026-10-20T11:44:21.604Z",
+        "abandonment": {
+          "at": "2026-10-20T11:44:23.950Z",
+          "evidenceDigest": "f969e19ebea96a2a006650abecc13466363809286378fd34959b17e9286d6de2",
+          "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-after-effect-a59dd2c0-5fcb-4db6-ad68-225ff1d3f461\",\n      \"conversationId\": \"conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf\",\n      \"planRevisionId\": \"plan-after-effect:v1\",\n      \"workspaceId\": \"177e4fa6f18bdfb84bbf6c988fa8aaa071fa9359da4f4f08db2b3fb4b4ada0cb\"\n    },\n    \"sessionId\": \"conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\after-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:63409\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-after-effect-a59dd2c0-5fcb-4db6-ad68-225ff1d3f461\",\n      \"conversationId\": \"conversation-after-effect-11b63f8b-4338-44a9-9e1f-cf88d666d1bf\",\n      \"planRevisionId\": \"plan-after-effect:v1\",\n      \"workspaceId\": \"177e4fa6f18bdfb84bbf6c988fa8aaa071fa9359da4f4f08db2b3fb4b4ada0cb\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\after-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T11:44:22.206Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:928812e96f458fe0bba1000caa318eafe60242ab2ab260c45862f978a8ae493d\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:63409\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T11:44:22.199Z\",\n        \"wallDurationMs\": 2,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-tS8xKy\\\\after-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}"
+        }
+      }
+    }
+  ],
+  "completedTask": {
+    "id": "AGENT-INFLIGHT-EFFECT-RECONCILIATION-01",
+    "p": "P2",
+    "task": "Define and qualify explicit reconciliation of agent actions interrupted before a durable result. Evidence: agentOrchestratorAppService.ts persists apply_action before execution; taskQueueAppService.ts refuses recovery of an unknown action outcome. Confirmed completed actions and queued requests recover offline; arbitrary command/network effects in that window are not certified exactly-once. Scope: Owned isolated workspaces and deterministic external-effect witnesses; no blind replay or implicit rollback. Owner decision 2026-10-20: offer evidence inspection and explicit abandonment for an action with unknown outcome; no automatic repetition. Implement the selected inspection/abandonment recovery flow, preserving its original intent and evidence.",
+    "verify": "Owner-approved recovery policy: inspect evidence and explicitly abandon the interrupted run; the selected recovery flow must not restart the unknown action. Freeze effect-specific acceptance, interrupt before/during/after execution and before result acknowledgement, preserve intent/original state and prove inspection and explicit abandonment without duplicate external effects. Retain failed attempts; real-model/network/hardware campaigns require their separate authorizations."
+  },
+  "targetedTests": {
+    "passed": 46,
+    "files": 4
+  },
+  "sha256": {
+    "electron/core/application/taskQueueAppService.ts": "cc46ccdb96a081d898b87b263dde8556c68377746bf3b97315aadcbc3cba5a33",
+    "electron/core/application/agentTaskRecovery.test.ts": "0e10ba73db49a46d6296cd046e831f2a9da60c68f186b83f0b572164f8dce83d",
+    "electron/core/infrastructure/filesystem/agentTaskRecoveryRepository.ts": "b1f50320eca8605fd8315f34ae92beb5688ccb3b74e85f1107e990bc0bfcb990",
+    "shared/ipc/ipcContract.ts": "c6c86c5d3226e33596a51fe8cc2b2f305d38fafda6fbfe7b5accdf728f2d6d60",
+    "electron/core/presentation/secureIpcMain.ts": "ee1053a6db00f651b7a5f54d13c52d6546d9740dabb9af8945a2e5065b35ad70",
+    "src/components/coding/AgentTaskRecoveryBanner.tsx": "bb9253d94a9a4c48754e1efa8c9482b652ce3786469bcd55736cf532229dc455",
+    "src/components/coding/AgentTaskRecoveryBanner.test.tsx": "e0d596c21e14a6e63ea31a5ff4c310c603876f77d2710fa3f84497955673104c",
+    "scripts/e2e/agentReliability.mjs": "b7bddf5b29bf303b4fdb3ed5c52e47083ff8617ba9b0b5169a12bda442447b79"
+  },
+  "finalQualification": {
+    "candidate": "cpu-20261020-130728-0e85c502",
+    "asar": {
+      "candidate": "cpu-20261020-130728-0e85c502",
+      "matchedGeneratedFiles": 54,
+      "mainSha256": "d74ac82c2246ea4e9fc58e0fec54663d5a49889c5cf2a8d2b22f401c6d21a2cd",
+      "note": "Package filters deliberately exclude dist/icon.png; the first broad-directory check refused it. Final check uses declared build.files."
+    },
+    "nativeRecovery": {
+      "scope": "Owned Windows Electron Main/Preload and real child commands with deterministic generation. No power-loss assertion.",
+      "bundleSha256": "d74ac82c2246ea4e9fc58e0fec54663d5a49889c5cf2a8d2b22f401c6d21a2cd",
+      "receipts": [
+        {
+          "cut": "before-effect",
+          "identity": {
+            "runId": "e2e-before-effect-fbf2d288-629b-469d-a1f6-2bb2cd0b2e09",
+            "conversationId": "conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d",
+            "planRevisionId": "plan-before-effect:v1",
+            "workspaceId": "1c49b6366bbdc4ea19613d5f5af9c4bb29ae27ef0414b0410c2c6397a0e7ada1"
+          },
+          "effectBefore": null,
+          "requestCount": 1,
+          "inspection": {
+            "identity": {
+              "runId": "e2e-before-effect-fbf2d288-629b-469d-a1f6-2bb2cd0b2e09",
+              "conversationId": "conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d",
+              "planRevisionId": "plan-before-effect:v1",
+              "workspaceId": "1c49b6366bbdc4ea19613d5f5af9c4bb29ae27ef0414b0410c2c6397a0e7ada1"
+            },
+            "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-before-effect-fbf2d288-629b-469d-a1f6-2bb2cd0b2e09\",\n      \"conversationId\": \"conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d\",\n      \"planRevisionId\": \"plan-before-effect:v1\",\n      \"workspaceId\": \"1c49b6366bbdc4ea19613d5f5af9c4bb29ae27ef0414b0410c2c6397a0e7ada1\"\n    },\n    \"sessionId\": \"conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\before-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:62968\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-before-effect-fbf2d288-629b-469d-a1f6-2bb2cd0b2e09\",\n      \"conversationId\": \"conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d\",\n      \"planRevisionId\": \"plan-before-effect:v1\",\n      \"workspaceId\": \"1c49b6366bbdc4ea19613d5f5af9c4bb29ae27ef0414b0410c2c6397a0e7ada1\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\before-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T13:11:37.597Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:58842ea7a6231d6ec251fa4c1e108f8e4129a4b5af6f2ea399c6b299ddf80da6\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:62968\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T13:11:37.585Z\",\n        \"wallDurationMs\": 4,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\before-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}",
+            "evidenceDigest": "ff9f234697bedf71934d34f5dd1f4bde9a85fa0d19110279c20dfc77f3909507",
+            "canAbandon": true
+          },
+          "archived": {
+            "identity": {
+              "runId": "e2e-before-effect-fbf2d288-629b-469d-a1f6-2bb2cd0b2e09",
+              "conversationId": "conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d",
+              "planRevisionId": "plan-before-effect:v1",
+              "workspaceId": "1c49b6366bbdc4ea19613d5f5af9c4bb29ae27ef0414b0410c2c6397a0e7ada1"
+            },
+            "request": {
+              "identity": {
+                "runId": "e2e-before-effect-fbf2d288-629b-469d-a1f6-2bb2cd0b2e09",
+                "conversationId": "conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d",
+                "planRevisionId": "plan-before-effect:v1",
+                "workspaceId": "1c49b6366bbdc4ea19613d5f5af9c4bb29ae27ef0414b0410c2c6397a0e7ada1"
+              },
+              "sessionId": "conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d",
+              "userTask": "Run node witness.cjs once.",
+              "initialUserTask": "Inspect README.md and answer briefly.",
+              "agentMode": "auto",
+              "workspacePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-electron-e2e-NNhvoa\\before-effect",
+              "isStandaloneMode": false,
+              "activeModel": "qwen2.5-coder:7b",
+              "activeFile": null,
+              "capabilityProfile": {
+                "allowFileModifications": true,
+                "allowTerminalExecution": true,
+                "capabilityPolicyMode": "network-approved",
+                "maxToolCallSteps": 10
+              },
+              "settings": {
+                "defaultModel": "qwen2.5-coder:7b",
+                "ocrEngine": "native_cuda",
+                "ollamaHost": "http://127.0.0.1:62968",
+                "ollamaMode": "local",
+                "capabilityPolicyMode": "network-approved",
+                "fullAccess": false,
+                "allowFullExcelFormat": false,
+                "language": "it",
+                "autoInstallHubSkills": "disabled",
+                "autoInstallMinScore": 8,
+                "enableSkillRouter": false,
+                "maxToolCallSteps": 10,
+                "enableCodingAgentDebugLog": false,
+                "codingAgentDebugRetentionFiles": 2,
+                "modelThinkingPreferences": {},
+                "hasCompletedInitialSetup": false,
+                "modelSamplingOverrides": {},
+                "translationModel": "qwen2.5-coder:7b",
+                "codingModel": "qwen2.5-coder:7b",
+                "visionModel": "qwen2.5-coder:7b",
+                "embeddingModel": "qwen2.5-coder:7b",
+                "allowTerminalExecution": true,
+                "allowFileModifications": true,
+                "customPromptOverrides": {}
+              }
+            },
+            "status": "abandoned",
+            "acceptedAt": "2026-10-20T13:11:36.665Z",
+            "abandonment": {
+              "at": "2026-10-20T13:11:40.005Z",
+              "evidenceDigest": "ff9f234697bedf71934d34f5dd1f4bde9a85fa0d19110279c20dfc77f3909507",
+              "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-before-effect-fbf2d288-629b-469d-a1f6-2bb2cd0b2e09\",\n      \"conversationId\": \"conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d\",\n      \"planRevisionId\": \"plan-before-effect:v1\",\n      \"workspaceId\": \"1c49b6366bbdc4ea19613d5f5af9c4bb29ae27ef0414b0410c2c6397a0e7ada1\"\n    },\n    \"sessionId\": \"conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\before-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:62968\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-before-effect-fbf2d288-629b-469d-a1f6-2bb2cd0b2e09\",\n      \"conversationId\": \"conversation-before-effect-45740f8f-653d-41c6-bf71-962738217d0d\",\n      \"planRevisionId\": \"plan-before-effect:v1\",\n      \"workspaceId\": \"1c49b6366bbdc4ea19613d5f5af9c4bb29ae27ef0414b0410c2c6397a0e7ada1\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\before-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T13:11:37.597Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:58842ea7a6231d6ec251fa4c1e108f8e4129a4b5af6f2ea399c6b299ddf80da6\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:62968\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T13:11:37.585Z\",\n        \"wallDurationMs\": 4,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\before-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}"
+            }
+          }
+        },
+        {
+          "cut": "during-effect",
+          "identity": {
+            "runId": "e2e-during-effect-1243e9d6-c8f1-4e81-9485-eb854f891724",
+            "conversationId": "conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c",
+            "planRevisionId": "plan-during-effect:v1",
+            "workspaceId": "533550284f7ad4bdd953138767da9dfc9788bb970e540a8a8b570684bca67ab1"
+          },
+          "effectBefore": "started\n",
+          "requestCount": 2,
+          "inspection": {
+            "identity": {
+              "runId": "e2e-during-effect-1243e9d6-c8f1-4e81-9485-eb854f891724",
+              "conversationId": "conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c",
+              "planRevisionId": "plan-during-effect:v1",
+              "workspaceId": "533550284f7ad4bdd953138767da9dfc9788bb970e540a8a8b570684bca67ab1"
+            },
+            "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-during-effect-1243e9d6-c8f1-4e81-9485-eb854f891724\",\n      \"conversationId\": \"conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c\",\n      \"planRevisionId\": \"plan-during-effect:v1\",\n      \"workspaceId\": \"533550284f7ad4bdd953138767da9dfc9788bb970e540a8a8b570684bca67ab1\"\n    },\n    \"sessionId\": \"conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\during-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:62968\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-during-effect-1243e9d6-c8f1-4e81-9485-eb854f891724\",\n      \"conversationId\": \"conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c\",\n      \"planRevisionId\": \"plan-during-effect:v1\",\n      \"workspaceId\": \"533550284f7ad4bdd953138767da9dfc9788bb970e540a8a8b570684bca67ab1\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\during-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T13:11:42.287Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:b98b99e4305f9204e134305509ccf356328b926a9082554817ec1fdc6aee61e8\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:62968\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T13:11:42.275Z\",\n        \"wallDurationMs\": 4,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\during-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}",
+            "evidenceDigest": "21e3c63f027d726bc7e44163ff49195e8099702171d90a202afd47c5e03b044e",
+            "canAbandon": true
+          },
+          "archived": {
+            "identity": {
+              "runId": "e2e-during-effect-1243e9d6-c8f1-4e81-9485-eb854f891724",
+              "conversationId": "conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c",
+              "planRevisionId": "plan-during-effect:v1",
+              "workspaceId": "533550284f7ad4bdd953138767da9dfc9788bb970e540a8a8b570684bca67ab1"
+            },
+            "request": {
+              "identity": {
+                "runId": "e2e-during-effect-1243e9d6-c8f1-4e81-9485-eb854f891724",
+                "conversationId": "conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c",
+                "planRevisionId": "plan-during-effect:v1",
+                "workspaceId": "533550284f7ad4bdd953138767da9dfc9788bb970e540a8a8b570684bca67ab1"
+              },
+              "sessionId": "conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c",
+              "userTask": "Run node witness.cjs once.",
+              "initialUserTask": "Inspect README.md and answer briefly.",
+              "agentMode": "auto",
+              "workspacePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-electron-e2e-NNhvoa\\during-effect",
+              "isStandaloneMode": false,
+              "activeModel": "qwen2.5-coder:7b",
+              "activeFile": null,
+              "capabilityProfile": {
+                "allowFileModifications": true,
+                "allowTerminalExecution": true,
+                "capabilityPolicyMode": "network-approved",
+                "maxToolCallSteps": 10
+              },
+              "settings": {
+                "defaultModel": "qwen2.5-coder:7b",
+                "ocrEngine": "native_cuda",
+                "ollamaHost": "http://127.0.0.1:62968",
+                "ollamaMode": "local",
+                "capabilityPolicyMode": "network-approved",
+                "fullAccess": false,
+                "allowFullExcelFormat": false,
+                "language": "it",
+                "autoInstallHubSkills": "disabled",
+                "autoInstallMinScore": 8,
+                "enableSkillRouter": false,
+                "maxToolCallSteps": 10,
+                "enableCodingAgentDebugLog": false,
+                "codingAgentDebugRetentionFiles": 2,
+                "modelThinkingPreferences": {},
+                "hasCompletedInitialSetup": false,
+                "modelSamplingOverrides": {},
+                "translationModel": "qwen2.5-coder:7b",
+                "codingModel": "qwen2.5-coder:7b",
+                "visionModel": "qwen2.5-coder:7b",
+                "embeddingModel": "qwen2.5-coder:7b",
+                "allowTerminalExecution": true,
+                "allowFileModifications": true,
+                "customPromptOverrides": {}
+              }
+            },
+            "status": "abandoned",
+            "acceptedAt": "2026-10-20T13:11:41.464Z",
+            "abandonment": {
+              "at": "2026-10-20T13:11:44.612Z",
+              "evidenceDigest": "21e3c63f027d726bc7e44163ff49195e8099702171d90a202afd47c5e03b044e",
+              "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-during-effect-1243e9d6-c8f1-4e81-9485-eb854f891724\",\n      \"conversationId\": \"conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c\",\n      \"planRevisionId\": \"plan-during-effect:v1\",\n      \"workspaceId\": \"533550284f7ad4bdd953138767da9dfc9788bb970e540a8a8b570684bca67ab1\"\n    },\n    \"sessionId\": \"conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\during-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:62968\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-during-effect-1243e9d6-c8f1-4e81-9485-eb854f891724\",\n      \"conversationId\": \"conversation-during-effect-67fb1d7f-c780-4bdd-acd7-8215d4f2723c\",\n      \"planRevisionId\": \"plan-during-effect:v1\",\n      \"workspaceId\": \"533550284f7ad4bdd953138767da9dfc9788bb970e540a8a8b570684bca67ab1\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\during-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T13:11:42.287Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:b98b99e4305f9204e134305509ccf356328b926a9082554817ec1fdc6aee61e8\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:62968\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T13:11:42.275Z\",\n        \"wallDurationMs\": 4,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\during-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}"
+            }
+          }
+        },
+        {
+          "cut": "after-effect",
+          "identity": {
+            "runId": "e2e-after-effect-94c553db-212e-43ab-a5c0-8941b0706ac9",
+            "conversationId": "conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f",
+            "planRevisionId": "plan-after-effect:v1",
+            "workspaceId": "4a79ebf1e27305623adb3b127358e366491b75c7e22e39f3ec60cdce4e22107c"
+          },
+          "effectBefore": "started\ncompleted\n",
+          "requestCount": 3,
+          "inspection": {
+            "identity": {
+              "runId": "e2e-after-effect-94c553db-212e-43ab-a5c0-8941b0706ac9",
+              "conversationId": "conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f",
+              "planRevisionId": "plan-after-effect:v1",
+              "workspaceId": "4a79ebf1e27305623adb3b127358e366491b75c7e22e39f3ec60cdce4e22107c"
+            },
+            "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-after-effect-94c553db-212e-43ab-a5c0-8941b0706ac9\",\n      \"conversationId\": \"conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f\",\n      \"planRevisionId\": \"plan-after-effect:v1\",\n      \"workspaceId\": \"4a79ebf1e27305623adb3b127358e366491b75c7e22e39f3ec60cdce4e22107c\"\n    },\n    \"sessionId\": \"conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\after-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:62968\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-after-effect-94c553db-212e-43ab-a5c0-8941b0706ac9\",\n      \"conversationId\": \"conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f\",\n      \"planRevisionId\": \"plan-after-effect:v1\",\n      \"workspaceId\": \"4a79ebf1e27305623adb3b127358e366491b75c7e22e39f3ec60cdce4e22107c\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\after-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T13:11:47.033Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:928812e96f458fe0bba1000caa318eafe60242ab2ab260c45862f978a8ae493d\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:62968\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T13:11:47.024Z\",\n        \"wallDurationMs\": 3,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\after-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}",
+            "evidenceDigest": "a5b95a90bea2af7675aed1012235812e7e70ead3ae967a19ec9edc5562b2d9f6",
+            "canAbandon": true
+          },
+          "archived": {
+            "identity": {
+              "runId": "e2e-after-effect-94c553db-212e-43ab-a5c0-8941b0706ac9",
+              "conversationId": "conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f",
+              "planRevisionId": "plan-after-effect:v1",
+              "workspaceId": "4a79ebf1e27305623adb3b127358e366491b75c7e22e39f3ec60cdce4e22107c"
+            },
+            "request": {
+              "identity": {
+                "runId": "e2e-after-effect-94c553db-212e-43ab-a5c0-8941b0706ac9",
+                "conversationId": "conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f",
+                "planRevisionId": "plan-after-effect:v1",
+                "workspaceId": "4a79ebf1e27305623adb3b127358e366491b75c7e22e39f3ec60cdce4e22107c"
+              },
+              "sessionId": "conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f",
+              "userTask": "Run node witness.cjs once.",
+              "initialUserTask": "Inspect README.md and answer briefly.",
+              "agentMode": "auto",
+              "workspacePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-electron-e2e-NNhvoa\\after-effect",
+              "isStandaloneMode": false,
+              "activeModel": "qwen2.5-coder:7b",
+              "activeFile": null,
+              "capabilityProfile": {
+                "allowFileModifications": true,
+                "allowTerminalExecution": true,
+                "capabilityPolicyMode": "network-approved",
+                "maxToolCallSteps": 10
+              },
+              "settings": {
+                "defaultModel": "qwen2.5-coder:7b",
+                "ocrEngine": "native_cuda",
+                "ollamaHost": "http://127.0.0.1:62968",
+                "ollamaMode": "local",
+                "capabilityPolicyMode": "network-approved",
+                "fullAccess": false,
+                "allowFullExcelFormat": false,
+                "language": "it",
+                "autoInstallHubSkills": "disabled",
+                "autoInstallMinScore": 8,
+                "enableSkillRouter": false,
+                "maxToolCallSteps": 10,
+                "enableCodingAgentDebugLog": false,
+                "codingAgentDebugRetentionFiles": 2,
+                "modelThinkingPreferences": {},
+                "hasCompletedInitialSetup": false,
+                "modelSamplingOverrides": {},
+                "translationModel": "qwen2.5-coder:7b",
+                "codingModel": "qwen2.5-coder:7b",
+                "visionModel": "qwen2.5-coder:7b",
+                "embeddingModel": "qwen2.5-coder:7b",
+                "allowTerminalExecution": true,
+                "allowFileModifications": true,
+                "customPromptOverrides": {}
+              }
+            },
+            "status": "abandoned",
+            "acceptedAt": "2026-10-20T13:11:46.167Z",
+            "abandonment": {
+              "at": "2026-10-20T13:11:49.222Z",
+              "evidenceDigest": "a5b95a90bea2af7675aed1012235812e7e70ead3ae967a19ec9edc5562b2d9f6",
+              "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-after-effect-94c553db-212e-43ab-a5c0-8941b0706ac9\",\n      \"conversationId\": \"conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f\",\n      \"planRevisionId\": \"plan-after-effect:v1\",\n      \"workspaceId\": \"4a79ebf1e27305623adb3b127358e366491b75c7e22e39f3ec60cdce4e22107c\"\n    },\n    \"sessionId\": \"conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\after-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:62968\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-after-effect-94c553db-212e-43ab-a5c0-8941b0706ac9\",\n      \"conversationId\": \"conversation-after-effect-9a7d92cd-5b13-483c-8d90-26b24b224a9f\",\n      \"planRevisionId\": \"plan-after-effect:v1\",\n      \"workspaceId\": \"4a79ebf1e27305623adb3b127358e366491b75c7e22e39f3ec60cdce4e22107c\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\after-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T13:11:47.033Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:928812e96f458fe0bba1000caa318eafe60242ab2ab260c45862f978a8ae493d\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:62968\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T13:11:47.024Z\",\n        \"wallDurationMs\": 3,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-NNhvoa\\\\after-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}"
+            }
+          }
+        }
+      ]
+    },
+    "tests": {
+      "typescript": 2948,
+      "typescriptFiles": 322,
+      "typescriptSeconds": 201.21,
+      "python": 622,
+      "pythonSkipped": 1,
+      "pythonSeconds": 200.69,
+      "focused": 64,
+      "focusedFiles": 5
+    },
+    "installedNativeRecovery": {
+      "scope": "Owned Windows Electron Main/Preload and real child commands with deterministic generation. No power-loss assertion.",
+      "bundleSha256": "d74ac82c2246ea4e9fc58e0fec54663d5a49889c5cf2a8d2b22f401c6d21a2cd",
+      "receipts": [
+        {
+          "cut": "before-effect",
+          "identity": {
+            "runId": "e2e-before-effect-a29c8ce1-0fdd-47f0-8e21-387414a33599",
+            "conversationId": "conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5",
+            "planRevisionId": "plan-before-effect:v1",
+            "workspaceId": "e4c9d15a3df9e876f02f3da92840f3003bbf515d0c247f7dbf0692919684370c"
+          },
+          "effectBefore": null,
+          "requestCount": 1,
+          "inspection": {
+            "identity": {
+              "runId": "e2e-before-effect-a29c8ce1-0fdd-47f0-8e21-387414a33599",
+              "conversationId": "conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5",
+              "planRevisionId": "plan-before-effect:v1",
+              "workspaceId": "e4c9d15a3df9e876f02f3da92840f3003bbf515d0c247f7dbf0692919684370c"
+            },
+            "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-before-effect-a29c8ce1-0fdd-47f0-8e21-387414a33599\",\n      \"conversationId\": \"conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5\",\n      \"planRevisionId\": \"plan-before-effect:v1\",\n      \"workspaceId\": \"e4c9d15a3df9e876f02f3da92840f3003bbf515d0c247f7dbf0692919684370c\"\n    },\n    \"sessionId\": \"conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\before-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:56385\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-before-effect-a29c8ce1-0fdd-47f0-8e21-387414a33599\",\n      \"conversationId\": \"conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5\",\n      \"planRevisionId\": \"plan-before-effect:v1\",\n      \"workspaceId\": \"e4c9d15a3df9e876f02f3da92840f3003bbf515d0c247f7dbf0692919684370c\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\before-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T13:16:49.615Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:58842ea7a6231d6ec251fa4c1e108f8e4129a4b5af6f2ea399c6b299ddf80da6\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:56385\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T13:16:49.609Z\",\n        \"wallDurationMs\": 2,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\before-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}",
+            "evidenceDigest": "d48f1d60c720d513c7421ce2232d398fec8e12bdd02946fec0d7ced4c627a707",
+            "canAbandon": true
+          },
+          "archived": {
+            "identity": {
+              "runId": "e2e-before-effect-a29c8ce1-0fdd-47f0-8e21-387414a33599",
+              "conversationId": "conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5",
+              "planRevisionId": "plan-before-effect:v1",
+              "workspaceId": "e4c9d15a3df9e876f02f3da92840f3003bbf515d0c247f7dbf0692919684370c"
+            },
+            "request": {
+              "identity": {
+                "runId": "e2e-before-effect-a29c8ce1-0fdd-47f0-8e21-387414a33599",
+                "conversationId": "conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5",
+                "planRevisionId": "plan-before-effect:v1",
+                "workspaceId": "e4c9d15a3df9e876f02f3da92840f3003bbf515d0c247f7dbf0692919684370c"
+              },
+              "sessionId": "conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5",
+              "userTask": "Run node witness.cjs once.",
+              "initialUserTask": "Inspect README.md and answer briefly.",
+              "agentMode": "auto",
+              "workspacePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-electron-e2e-1CGkxR\\before-effect",
+              "isStandaloneMode": false,
+              "activeModel": "qwen2.5-coder:7b",
+              "activeFile": null,
+              "capabilityProfile": {
+                "allowFileModifications": true,
+                "allowTerminalExecution": true,
+                "capabilityPolicyMode": "network-approved",
+                "maxToolCallSteps": 10
+              },
+              "settings": {
+                "defaultModel": "qwen2.5-coder:7b",
+                "ocrEngine": "native_cuda",
+                "ollamaHost": "http://127.0.0.1:56385",
+                "ollamaMode": "local",
+                "capabilityPolicyMode": "network-approved",
+                "fullAccess": false,
+                "allowFullExcelFormat": false,
+                "language": "it",
+                "autoInstallHubSkills": "disabled",
+                "autoInstallMinScore": 8,
+                "enableSkillRouter": false,
+                "maxToolCallSteps": 10,
+                "enableCodingAgentDebugLog": false,
+                "codingAgentDebugRetentionFiles": 2,
+                "modelThinkingPreferences": {},
+                "hasCompletedInitialSetup": false,
+                "modelSamplingOverrides": {},
+                "translationModel": "qwen2.5-coder:7b",
+                "codingModel": "qwen2.5-coder:7b",
+                "visionModel": "qwen2.5-coder:7b",
+                "embeddingModel": "qwen2.5-coder:7b",
+                "allowTerminalExecution": true,
+                "allowFileModifications": true,
+                "customPromptOverrides": {}
+              }
+            },
+            "status": "abandoned",
+            "acceptedAt": "2026-10-20T13:16:49.091Z",
+            "abandonment": {
+              "at": "2026-10-20T13:16:51.148Z",
+              "evidenceDigest": "d48f1d60c720d513c7421ce2232d398fec8e12bdd02946fec0d7ced4c627a707",
+              "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-before-effect-a29c8ce1-0fdd-47f0-8e21-387414a33599\",\n      \"conversationId\": \"conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5\",\n      \"planRevisionId\": \"plan-before-effect:v1\",\n      \"workspaceId\": \"e4c9d15a3df9e876f02f3da92840f3003bbf515d0c247f7dbf0692919684370c\"\n    },\n    \"sessionId\": \"conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\before-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:56385\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-before-effect-a29c8ce1-0fdd-47f0-8e21-387414a33599\",\n      \"conversationId\": \"conversation-before-effect-41f18ec0-fc42-4f9e-8f83-fbd0da307ac5\",\n      \"planRevisionId\": \"plan-before-effect:v1\",\n      \"workspaceId\": \"e4c9d15a3df9e876f02f3da92840f3003bbf515d0c247f7dbf0692919684370c\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\before-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T13:16:49.615Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:58842ea7a6231d6ec251fa4c1e108f8e4129a4b5af6f2ea399c6b299ddf80da6\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:56385\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T13:16:49.609Z\",\n        \"wallDurationMs\": 2,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\before-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}"
+            }
+          }
+        },
+        {
+          "cut": "during-effect",
+          "identity": {
+            "runId": "e2e-during-effect-2d12d2c1-38e9-47e6-93ba-931e33d72b6c",
+            "conversationId": "conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01",
+            "planRevisionId": "plan-during-effect:v1",
+            "workspaceId": "e420245968828ec7ec08be571912b0168ddef529431931cf3048b5279d29561d"
+          },
+          "effectBefore": "started\n",
+          "requestCount": 2,
+          "inspection": {
+            "identity": {
+              "runId": "e2e-during-effect-2d12d2c1-38e9-47e6-93ba-931e33d72b6c",
+              "conversationId": "conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01",
+              "planRevisionId": "plan-during-effect:v1",
+              "workspaceId": "e420245968828ec7ec08be571912b0168ddef529431931cf3048b5279d29561d"
+            },
+            "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-during-effect-2d12d2c1-38e9-47e6-93ba-931e33d72b6c\",\n      \"conversationId\": \"conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01\",\n      \"planRevisionId\": \"plan-during-effect:v1\",\n      \"workspaceId\": \"e420245968828ec7ec08be571912b0168ddef529431931cf3048b5279d29561d\"\n    },\n    \"sessionId\": \"conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\during-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:56385\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-during-effect-2d12d2c1-38e9-47e6-93ba-931e33d72b6c\",\n      \"conversationId\": \"conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01\",\n      \"planRevisionId\": \"plan-during-effect:v1\",\n      \"workspaceId\": \"e420245968828ec7ec08be571912b0168ddef529431931cf3048b5279d29561d\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\during-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T13:16:52.598Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:b98b99e4305f9204e134305509ccf356328b926a9082554817ec1fdc6aee61e8\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:56385\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T13:16:52.593Z\",\n        \"wallDurationMs\": 2,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\during-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}",
+            "evidenceDigest": "bb5ae1d0a011928525c742c8f7f39601637fc62010fa66fc42237040940c6904",
+            "canAbandon": true
+          },
+          "archived": {
+            "identity": {
+              "runId": "e2e-during-effect-2d12d2c1-38e9-47e6-93ba-931e33d72b6c",
+              "conversationId": "conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01",
+              "planRevisionId": "plan-during-effect:v1",
+              "workspaceId": "e420245968828ec7ec08be571912b0168ddef529431931cf3048b5279d29561d"
+            },
+            "request": {
+              "identity": {
+                "runId": "e2e-during-effect-2d12d2c1-38e9-47e6-93ba-931e33d72b6c",
+                "conversationId": "conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01",
+                "planRevisionId": "plan-during-effect:v1",
+                "workspaceId": "e420245968828ec7ec08be571912b0168ddef529431931cf3048b5279d29561d"
+              },
+              "sessionId": "conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01",
+              "userTask": "Run node witness.cjs once.",
+              "initialUserTask": "Inspect README.md and answer briefly.",
+              "agentMode": "auto",
+              "workspacePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-electron-e2e-1CGkxR\\during-effect",
+              "isStandaloneMode": false,
+              "activeModel": "qwen2.5-coder:7b",
+              "activeFile": null,
+              "capabilityProfile": {
+                "allowFileModifications": true,
+                "allowTerminalExecution": true,
+                "capabilityPolicyMode": "network-approved",
+                "maxToolCallSteps": 10
+              },
+              "settings": {
+                "defaultModel": "qwen2.5-coder:7b",
+                "ocrEngine": "native_cuda",
+                "ollamaHost": "http://127.0.0.1:56385",
+                "ollamaMode": "local",
+                "capabilityPolicyMode": "network-approved",
+                "fullAccess": false,
+                "allowFullExcelFormat": false,
+                "language": "it",
+                "autoInstallHubSkills": "disabled",
+                "autoInstallMinScore": 8,
+                "enableSkillRouter": false,
+                "maxToolCallSteps": 10,
+                "enableCodingAgentDebugLog": false,
+                "codingAgentDebugRetentionFiles": 2,
+                "modelThinkingPreferences": {},
+                "hasCompletedInitialSetup": false,
+                "modelSamplingOverrides": {},
+                "translationModel": "qwen2.5-coder:7b",
+                "codingModel": "qwen2.5-coder:7b",
+                "visionModel": "qwen2.5-coder:7b",
+                "embeddingModel": "qwen2.5-coder:7b",
+                "allowTerminalExecution": true,
+                "allowFileModifications": true,
+                "customPromptOverrides": {}
+              }
+            },
+            "status": "abandoned",
+            "acceptedAt": "2026-10-20T13:16:52.143Z",
+            "abandonment": {
+              "at": "2026-10-20T13:16:54.109Z",
+              "evidenceDigest": "bb5ae1d0a011928525c742c8f7f39601637fc62010fa66fc42237040940c6904",
+              "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-during-effect-2d12d2c1-38e9-47e6-93ba-931e33d72b6c\",\n      \"conversationId\": \"conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01\",\n      \"planRevisionId\": \"plan-during-effect:v1\",\n      \"workspaceId\": \"e420245968828ec7ec08be571912b0168ddef529431931cf3048b5279d29561d\"\n    },\n    \"sessionId\": \"conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\during-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:56385\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-during-effect-2d12d2c1-38e9-47e6-93ba-931e33d72b6c\",\n      \"conversationId\": \"conversation-during-effect-1cc46bfc-37f1-4df0-8add-14dc8ebe0b01\",\n      \"planRevisionId\": \"plan-during-effect:v1\",\n      \"workspaceId\": \"e420245968828ec7ec08be571912b0168ddef529431931cf3048b5279d29561d\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\during-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T13:16:52.598Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:b98b99e4305f9204e134305509ccf356328b926a9082554817ec1fdc6aee61e8\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:56385\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T13:16:52.593Z\",\n        \"wallDurationMs\": 2,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\during-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}"
+            }
+          }
+        },
+        {
+          "cut": "after-effect",
+          "identity": {
+            "runId": "e2e-after-effect-6a14f9a4-ae8e-42c4-82ed-46d7ba5ba1a8",
+            "conversationId": "conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717",
+            "planRevisionId": "plan-after-effect:v1",
+            "workspaceId": "075ac135808ad87816afb748ce0754db85d4dd6249b0a367f974e7cc3d98c52e"
+          },
+          "effectBefore": "started\ncompleted\n",
+          "requestCount": 3,
+          "inspection": {
+            "identity": {
+              "runId": "e2e-after-effect-6a14f9a4-ae8e-42c4-82ed-46d7ba5ba1a8",
+              "conversationId": "conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717",
+              "planRevisionId": "plan-after-effect:v1",
+              "workspaceId": "075ac135808ad87816afb748ce0754db85d4dd6249b0a367f974e7cc3d98c52e"
+            },
+            "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-after-effect-6a14f9a4-ae8e-42c4-82ed-46d7ba5ba1a8\",\n      \"conversationId\": \"conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717\",\n      \"planRevisionId\": \"plan-after-effect:v1\",\n      \"workspaceId\": \"075ac135808ad87816afb748ce0754db85d4dd6249b0a367f974e7cc3d98c52e\"\n    },\n    \"sessionId\": \"conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\after-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:56385\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-after-effect-6a14f9a4-ae8e-42c4-82ed-46d7ba5ba1a8\",\n      \"conversationId\": \"conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717\",\n      \"planRevisionId\": \"plan-after-effect:v1\",\n      \"workspaceId\": \"075ac135808ad87816afb748ce0754db85d4dd6249b0a367f974e7cc3d98c52e\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\after-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T13:16:55.516Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:928812e96f458fe0bba1000caa318eafe60242ab2ab260c45862f978a8ae493d\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:56385\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T13:16:55.511Z\",\n        \"wallDurationMs\": 2,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\after-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}",
+            "evidenceDigest": "795eed8050b1d68e19d6741e112cea88c52c968f1c48a9ac6a5e5d23e528602f",
+            "canAbandon": true
+          },
+          "archived": {
+            "identity": {
+              "runId": "e2e-after-effect-6a14f9a4-ae8e-42c4-82ed-46d7ba5ba1a8",
+              "conversationId": "conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717",
+              "planRevisionId": "plan-after-effect:v1",
+              "workspaceId": "075ac135808ad87816afb748ce0754db85d4dd6249b0a367f974e7cc3d98c52e"
+            },
+            "request": {
+              "identity": {
+                "runId": "e2e-after-effect-6a14f9a4-ae8e-42c4-82ed-46d7ba5ba1a8",
+                "conversationId": "conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717",
+                "planRevisionId": "plan-after-effect:v1",
+                "workspaceId": "075ac135808ad87816afb748ce0754db85d4dd6249b0a367f974e7cc3d98c52e"
+              },
+              "sessionId": "conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717",
+              "userTask": "Run node witness.cjs once.",
+              "initialUserTask": "Inspect README.md and answer briefly.",
+              "agentMode": "auto",
+              "workspacePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-electron-e2e-1CGkxR\\after-effect",
+              "isStandaloneMode": false,
+              "activeModel": "qwen2.5-coder:7b",
+              "activeFile": null,
+              "capabilityProfile": {
+                "allowFileModifications": true,
+                "allowTerminalExecution": true,
+                "capabilityPolicyMode": "network-approved",
+                "maxToolCallSteps": 10
+              },
+              "settings": {
+                "defaultModel": "qwen2.5-coder:7b",
+                "ocrEngine": "native_cuda",
+                "ollamaHost": "http://127.0.0.1:56385",
+                "ollamaMode": "local",
+                "capabilityPolicyMode": "network-approved",
+                "fullAccess": false,
+                "allowFullExcelFormat": false,
+                "language": "it",
+                "autoInstallHubSkills": "disabled",
+                "autoInstallMinScore": 8,
+                "enableSkillRouter": false,
+                "maxToolCallSteps": 10,
+                "enableCodingAgentDebugLog": false,
+                "codingAgentDebugRetentionFiles": 2,
+                "modelThinkingPreferences": {},
+                "hasCompletedInitialSetup": false,
+                "modelSamplingOverrides": {},
+                "translationModel": "qwen2.5-coder:7b",
+                "codingModel": "qwen2.5-coder:7b",
+                "visionModel": "qwen2.5-coder:7b",
+                "embeddingModel": "qwen2.5-coder:7b",
+                "allowTerminalExecution": true,
+                "allowFileModifications": true,
+                "customPromptOverrides": {}
+              }
+            },
+            "status": "abandoned",
+            "acceptedAt": "2026-10-20T13:16:55.073Z",
+            "abandonment": {
+              "at": "2026-10-20T13:16:57.002Z",
+              "evidenceDigest": "795eed8050b1d68e19d6741e112cea88c52c968f1c48a9ac6a5e5d23e528602f",
+              "evidence": "{\n  \"request\": {\n    \"identity\": {\n      \"runId\": \"e2e-after-effect-6a14f9a4-ae8e-42c4-82ed-46d7ba5ba1a8\",\n      \"conversationId\": \"conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717\",\n      \"planRevisionId\": \"plan-after-effect:v1\",\n      \"workspaceId\": \"075ac135808ad87816afb748ce0754db85d4dd6249b0a367f974e7cc3d98c52e\"\n    },\n    \"sessionId\": \"conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717\",\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"agentMode\": \"auto\",\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\after-effect\",\n    \"isStandaloneMode\": false,\n    \"activeModel\": \"qwen2.5-coder:7b\",\n    \"activeFile\": null,\n    \"capabilityProfile\": {\n      \"allowFileModifications\": true,\n      \"allowTerminalExecution\": true,\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"maxToolCallSteps\": 10\n    },\n    \"settings\": {\n      \"defaultModel\": \"qwen2.5-coder:7b\",\n      \"ocrEngine\": \"native_cuda\",\n      \"ollamaHost\": \"http://127.0.0.1:56385\",\n      \"ollamaMode\": \"local\",\n      \"capabilityPolicyMode\": \"network-approved\",\n      \"fullAccess\": false,\n      \"allowFullExcelFormat\": false,\n      \"language\": \"it\",\n      \"autoInstallHubSkills\": \"disabled\",\n      \"autoInstallMinScore\": 8,\n      \"enableSkillRouter\": false,\n      \"maxToolCallSteps\": 10,\n      \"enableCodingAgentDebugLog\": false,\n      \"codingAgentDebugRetentionFiles\": 2,\n      \"modelThinkingPreferences\": {},\n      \"hasCompletedInitialSetup\": false,\n      \"modelSamplingOverrides\": {},\n      \"translationModel\": \"qwen2.5-coder:7b\",\n      \"codingModel\": \"qwen2.5-coder:7b\",\n      \"visionModel\": \"qwen2.5-coder:7b\",\n      \"embeddingModel\": \"qwen2.5-coder:7b\",\n      \"allowTerminalExecution\": true,\n      \"allowFileModifications\": true,\n      \"customPromptOverrides\": {}\n    }\n  },\n  \"state\": {\n    \"sessionId\": \"conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717\",\n    \"runIdentity\": {\n      \"runId\": \"e2e-after-effect-6a14f9a4-ae8e-42c4-82ed-46d7ba5ba1a8\",\n      \"conversationId\": \"conversation-after-effect-22e47263-e5d5-4ca4-b144-577f4aecb717\",\n      \"planRevisionId\": \"plan-after-effect:v1\",\n      \"workspaceId\": \"075ac135808ad87816afb748ce0754db85d4dd6249b0a367f974e7cc3d98c52e\"\n    },\n    \"workspacePath\": \"C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\after-effect\",\n    \"agentMode\": \"auto\",\n    \"stepCount\": 1,\n    \"maxSteps\": 10,\n    \"episodes\": [],\n    \"recentFullLogs\": [],\n    \"planMilestones\": [],\n    \"userTask\": \"Run node witness.cjs once.\",\n    \"initialUserTask\": \"Inspect README.md and answer briefly.\",\n    \"updatedAt\": \"2026-10-20T13:16:55.516Z\",\n    \"status\": \"IN_PROGRESS\",\n    \"executionPhase\": \"apply_action\",\n    \"recoveryFailures\": {\n      \"verificationFixCycles\": 0\n    },\n    \"versionEvidence\": {\n      \"witness.cjs\": \"sha256:928812e96f458fe0bba1000caa318eafe60242ab2ab260c45862f978a8ae493d\"\n    },\n    \"guardEvents\": [],\n    \"ollamaRuntimeProfile\": {\n      \"model\": \"qwen2.5-coder:7b\",\n      \"host\": \"http://127.0.0.1:56385\",\n      \"digest\": \"e2e-digest\",\n      \"options\": {\n        \"num_ctx\": 32768,\n        \"num_predict\": 11468,\n        \"maxContextChars\": 74550\n      }\n    },\n    \"ollamaGenerationTelemetry\": [\n      {\n        \"model\": \"qwen2.5-coder:7b\",\n        \"numCtx\": 32768,\n        \"startedAt\": \"2026-10-20T13:16:55.511Z\",\n        \"wallDurationMs\": 2,\n        \"promptEvalDurationMs\": 1,\n        \"evalDurationMs\": 1,\n        \"promptTokens\": 24,\n        \"completionTokens\": 12,\n        \"step\": 1\n      }\n    ],\n    \"chatMessages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Run node witness.cjs once.\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"CURRENT OPERATION CONTEXT:\\n- Objective: Run node witness.cjs once.\\n- Directive: focus\\n- Accepted constraints: mode=AUTO; workspace=C:\\\\Users\\\\Utente\\\\AppData\\\\Local\\\\Temp\\\\onlyrag-electron-e2e-1CGkxR\\\\after-effect; allowed tools=read_file, get_file_info, extract_code_symbols, list_dir, list_files_recursive, grep_search, git_status, git_diff, inspect_os_env, web_search, fetch_web_content, probe_local_http, browser_navigate, browser_snapshot, browser_screenshot, write_file, replace_file_content, multi_replace_file_content, create_directory, copy_file, move_file, delete_file, download_file, run_command, run_tests, start_dev_server, stop_dev_server, ensure_tool, rollback_last_step, open_in_browser, validate_visual_artifact, browser_click, browser_fill, update_plan, ask, finish\\n- Relevant paths: witness.cjs\\n- Last useful error: none\\n\\n\\nCURRENT TURN STATUS: Step 1/10.\"\n      },\n      {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"tool_calls\": [\n          {\n            \"type\": \"function\",\n            \"function\": {\n              \"index\": 0,\n              \"name\": \"run_command\",\n              \"arguments\": {\n                \"command\": \"node witness.cjs\"\n              }\n            }\n          }\n        ]\n      }\n    ],\n    \"changedFiles\": {}\n  }\n}"
+            }
+          }
+        }
+      ],
+      "qualifiedExecutable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-next-tasks-c9663097cc8849fea2f65670b710293e\\installed-app\\OnlyRag V2.exe"
+    }
+  }
+}

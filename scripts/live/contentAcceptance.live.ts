@@ -22,6 +22,7 @@ vi.mock('../../electron/core/infrastructure/logging/logger', () => ({ logger: { 
 import { useChatEngine } from '../../src/hooks/useChatEngine'
 import { OllamaHttpClient } from '../../electron/core/infrastructure/http/ollamaHttpClient'
 import { sourceLocationRequest } from '../../src/services/chatSourceReferences'
+import { ChatHistoryRepository } from '../../electron/core/infrastructure/filesystem/chatHistoryRepository'
 
 interface CorpusCase {
   case: { id: string; language: 'en' | 'it'; text: string; expected: string; selected: string[] }
@@ -102,7 +103,13 @@ it('collects frozen content outcomes using actual Nomic retrieval and production
         status: 'indexed',
       }))
       let request: OllamaStreamRequest | undefined
-      const api: Pick<NonNullable<Window['electronAPI']>, 'getIngestedDocuments' | 'getIngestedDocument' | 'searchVectorDb' | 'generateOllamaStream'> = {
+      const history = new ChatHistoryRepository(path.join(evidence, 'chat-checkpoints', item.case.id))
+      const api: Pick<
+        NonNullable<Window['electronAPI']>,
+        'getIngestedDocuments' | 'getIngestedDocument' | 'searchVectorDb' | 'generateOllamaStream' | 'loadChatRecovery' | 'saveChatRecovery'
+      > = {
+        loadChatRecovery: () => history.load(),
+        saveChatRecovery: (snapshot) => history.save(snapshot),
         getIngestedDocuments: async () => fixture.documents,
         getIngestedDocument: async ({ docId }) => fixture.documents.find((document) => document.id === docId) || null,
         searchVectorDb: async ({ topK, docIds, query }) => {
@@ -120,6 +127,7 @@ it('collects frozen content outcomes using actual Nomic retrieval and production
       const root = createRoot(document.createElement('div'))
       try {
         await act(async () => root.render(createElement(I18nProvider, { initialLanguage: fixture.language, children: createElement(Harness) })))
+        await vi.waitFor(() => expect(chat.historyReady).toBe(true))
         await act(async () => {
           for (const document of item.documents) chat.toggleDocSelection(document.id)
           chat.setInput(item.case.text)

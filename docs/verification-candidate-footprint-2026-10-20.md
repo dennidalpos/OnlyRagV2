@@ -1,0 +1,16 @@
+# Dimensioni del candidato Windows — 20 ottobre 2026
+
+Il candidato conclusivo è **cpu-20261020-130728-0e85c502**, rigenerato dopo il fix della race di ammissione: installer **416.384.924 byte**, SHA-256 `7467194090ecd428351de480a35dba7e68cb3299f13c49a06978124d387e3706`, payload **1.240.921.256 byte**. Nuova installazione e confronto indipendente dei 3.589 file passano; 54 file generati ASAR uguali al build locale, 1.162 file nell’archivio sorgente verificati. La successiva sola formattazione di `taskQueueAppService.ts` ha sintassi TypeScript identica; lo ZIP di build resta immutato. OCR CPU, avvio automatico/otto ingestioni Nomic/riavvio, impostazioni e chat/bozze isolate sono ripetuti sul nuovo candidato. Il candidato iniziale sotto resta intermedio.
+
+`DISTRIBUTION-PACKAGE-SIZE-01` concluso sul candidato `cpu-20261020-114718-c7ebd99c`.
+
+- Installer NSIS: **416.383.893 byte** (397,09 MiB), SHA-256 `3323260e985417415ce7bc041190079e76c75130c0f60d53859abe5291c57d7b`.
+- Payload: **1.240.921.299 byte** (1.183,43 MiB), **3.589 file**. Insieme dei percorsi e SHA-256 coincidono fra manifesto, estrazione indipendente di NSIS/`app-64.7z` e directory realmente installata.
+- Sorgenti: archivio `OnlyRag-1.0.0-source.zip`, SHA-256 `ad2d79cacf6b676bf56d4e815402bd06db6bf858bae4819904fb1322fb302991`; 521 file runtime confrontati con i sorgenti locali, oltre alla verifica interna dell'archivio. I runner e i documenti aggiornati dopo la build restano esterni a quello snapshot.
+- Accelerazione opzionale: **non inclusa**, zero byte attribuiti a quel componente. Il lock CPU non contiene `onnxruntime-gpu`, Torch, TensorRT o CUDA NVIDIA. Non è una qualifica di un futuro pacchetto accelerato; il rilevamento della GPU della postazione non cambia il provider OCR confezionato.
+
+La [ricevuta JSON](./verification-candidate-footprint-2026-10-20.json) conserva il conteggio per componenti e i risultati dello stesso candidato. `cpuReleaseProbe.py` nell'ambiente release CPU passa OCR sorgente/congelato con testo esatto, provider `CPUExecutionProvider`, avvio e autenticazione, export PDF Unicode, ingestione e ricerca fallback con Ollama indisponibile. Il primo tentativo nel venv di sviluppo CUDA è conservato come errore di ambiente; non è attribuito al pacchetto CPU.
+
+L'EXE installato passa anche avvio Sidecar automatico e riavvio, senza flag E2E: `--user-data-dir` seleziona un nuovo profilo, verificato tramite `app.getPath('userData')` e marker del processo confezionato. Otto documenti congelati vengono ingeriti attraverso IPC reale con encoder Nomic reale e rifiuto dei fallback, preservando gli originali. Questa prova passa dopo correzioni del solo runner: attesa della readiness e del marker, quindi `taskId` obbligatorio. I tentativi incompleti sono conservati, non promossi a successi.
+
+Riferimenti per Electron 43.7.4: [override prima del sandbox](https://github.com/electron/electron/blob/v43.7.4/shell/app/electron_main_delegate.cc), [mappatura userData](https://github.com/electron/electron/blob/v43.7.4/shell/browser/api/electron_api_app.cc). L'autorizzazione all'installazione non implica pubblicazione; restano separati qualità semantica, flussi di traduzione, diritti e sorgenti terzi, aggiornamento e perdita di alimentazione.

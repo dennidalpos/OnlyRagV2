@@ -216,6 +216,8 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
   }),
   'agent:get-queue-status': null,
   'agent:list-recoverable-tasks': null,
+  'agent:inspect-task': identity,
+  'agent:abandon-task': obj({ identity, evidenceDigest: z.string().regex(/^[a-f0-9]{64}$/) }),
   'agent:resume-task': identity,
   'agent:plan-interview': obj({
     prompt: string,

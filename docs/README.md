@@ -1,5 +1,9 @@
 # Documentazione OnlyRag V2
 
+Il [passaggio di sessione del seguito tracker](./session-handoff-tracker-2026-10-20.md) salva cinque completamenti e 33 residui, incluso il nuovo timeout CI verificato, limiti delle campagne e prossime decisioni; commit/push dei sorgenti su `master` richiesti esplicitamente.
+
+La [campagna live del 20 ottobre](./verification-live-content-2026-10-20.md) e i giudizi sono conservati: raccolta completa, accettazione fallita e qualifica P1 aperta.
+
 Le guide descrivono il comportamento verificato nel codice al **13 ottobre 2026**. Per API e comandi prevalgono [`shared/ipc/ipcContract.ts`](../shared/ipc/ipcContract.ts), [`sidecar/main.py`](../sidecar/main.py), [`sidecar/schemas.py`](../sidecar/schemas.py) e [`package.json`](../package.json). Il lavoro aperto è nel [`tracker`](../PROJECT_STATUS.json).
 
 ## Guide per ambito
@@ -20,11 +24,15 @@ Le guide descrivono il comportamento verificato nel codice al **13 ottobre 2026*
 
 ## Specifiche e prove conservate
 
-Il [passaggio di sessione del recupero e dello storico](./session-handoff-recovery-2026-10-20.md) documenta la pubblicazione su master, il successo CI della consegna runtime e i 37 residui. La policy inflight e approvata: ispezione delle prove e abbandono esplicito, senza ripetizione automatica; implementazione ancora aperta. Restano separati i gate installati/live e le altre decisioni non risposte.
+Il [seguito del tracker del 20 ottobre](./verification-tracker-followup-2026-10-20.md) riunisce cinque completamenti e 32 residui. È conclusa anche la [qualifica XLS installata](./verification-installed-xls-2026-10-20.md), con 14 casi nativi e corrispondenza dei 31 moduli Python congelati. La [campagna ledger di otto chiamate](./verification-ledger-bounded-2026-10-20.md) ha esaurito il budget: audit installato riletto, qualifica semantica ancora aperta.
+
+Le [dimensioni del candidato del 20 ottobre](./verification-candidate-footprint-2026-10-20.md) sono misurate sullo stesso installer estratto e installato: CPU OCR e avvio automatico passano, qualità e altri gate rimangono separati. Il conteggio corrente è 32 attività aperte dopo cinque chiusure; le ricevute datate mantengono i propri conteggi.
+
+Il [passaggio di sessione del recupero e dello storico](./session-handoff-recovery-2026-10-20.md) documenta la pubblicazione su master, il successo CI della consegna runtime e i 37 residui. La [riconciliazione inflight](./verification-inflight-reconciliation-2026-10-20.md) è ora implementata e qualificata; sono concluse anche impostazioni installate, misure del candidato e valutazione del chunking. Candidato, installazione isolata e modelli locali su dati di prova sono autorizzati; gli esiti sono distinti nelle ricevute del seguito. Restano separati i gate installati/live e le altre decisioni non risposte.
 
 La [provenienza degli embedding dello storico](./verification-history-provenance-2026-10-20.md) corregge il difetto sorgente e distingue i residui live/migrazione. L'[indagine sulle sonde loopback](./verification-loopback-probes-2026-10-20.md) conserva 50.000 misure senza dichiarare risolta l'intermittenza.
 
-Il [recupero agente del 20 ottobre](./verification-agent-crash-recovery-2026-10-20.md) qualifica arresto forzato del processo posseduto, conservazione della coda, ripresa esplicita, trascrizione e checkpoint dei file. Distingue gli esiti confermati dagli effetti interrotti ancora da riconciliare.
+Il [recupero agente del 20 ottobre](./verification-agent-crash-recovery-2026-10-20.md) qualifica arresto forzato del processo posseduto, conservazione della coda, ripresa esplicita, trascrizione e checkpoint dei file. Distingue gli esiti confermati dagli effetti ignoti, ora gestiti dal successivo flusso di ispezione e abbandono.
 
 Il [riallineamento della suite Electron](./verification-agent-harness-2026-10-20.md) completa il residuo delle fixture di cancellazione e riesegue otto scenari di affidabilità e nove guard con HTTP e generazione isolati.
 
@@ -51,3 +59,5 @@ Le regressioni del 16 ottobre su UTF-8, aggiornamenti concorrenti, export, puliz
 `npm run docs:check` controlla link locali, ancoraggi Markdown e comandi `npm run`. Una prova offline, un PDF esportato o un build riuscito non equivalgono a qualifica semantica o dell'app installata.
 
 Le vecchie panoramiche `agent.md` e `decisions.md`, duplicate rispetto alle guide per ambito, sono state ritirate; l'audit datato conserva il riferimento alla seconda.
+
+Le [impostazioni installate](./verification-installed-settings-2026-10-20.md) passano chiusura, retry e interruzione con readback completo. Avvio automatico Sidecar e perdita di alimentazione mantengono i rispettivi task.

@@ -1,0 +1,1334 @@
+{
+  "decision": "reject; no production integration",
+  "completedTask": {
+    "id": "RAG-STRUCTURE-AWARE-CHUNKING-01",
+    "p": "P2",
+    "task": "Evaluate structure-aware chunking against the frozen retrieval corpus (docs/retrieval.md). Audit 2026-10-19: Status: Evaluation/owner decision pending; no new runtime defect asserted by this item. Evidence: sidecar/services/ingest_service.py; docs/retrieval.md; docs/content-acceptance.md. Impact: Changing chunk boundaries can regress retrieval, late-section coverage and citations. Scope: Baseline/candidate evaluation on the existing frozen corpus; no integration before a recorded decision.",
+    "verify": "Compare baseline and candidate on the same frozen corpus, queries and expectations; record retrieval/citation regressions and an explicit accept/reject decision before integration. Dependencies: Frozen expectations and baseline; separately authorized real encoders/models if required by the campaign."
+  },
+  "baseline": {
+    "variant": "baseline",
+    "corpusSha256": "f5cbfc6f22c86724583bdd2408dd379e16cc677e79f193e83856c2b2019301dc",
+    "policy": "Same 800-char prose bound; complete lines, atomic fenced/table blocks, no overlap. Oversized atomic blocks reject integration.",
+    "sourceHashes": {
+      "supply-it": "8f0344d43c5821a09ace6e768bc56b0f5a5de6fdb270f77c9ca1c155183a7384",
+      "policy-a": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+      "policy-b": "e120a91a09bc88f8d4f69a8c9d3d52ea98ca08ba6b20d07a7dd8a980ec165c28",
+      "inventory": "3373b43e93afe89bdcf237c827f1b951c8551dedb53d7830b409ca36e40a9bea",
+      "shipping": "1f4be2937b11cf845d8a20c462f92cff3770660bf33a2ea80591f4fef2f5ee26",
+      "code-guide": "f06e7955dd5307820a249e14d51dd190d852246ef89b3e8f06ef5f373924a931",
+      "pump-handbook": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+      "unrelated": "7ec62770b808e33202a7dcb23b5df56a8e0b06d36121ab6229e9a47844a78c3b"
+    },
+    "queries": [
+      {
+        "id": "exact-code",
+        "evidence": [
+          {
+            "expected": {
+              "document": "inventory",
+              "contains": [
+                "TX-417",
+                "12.5"
+              ]
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "3373b43e93afe89bdcf237c827f1b951c8551dedb53d7830b409ca36e40a9bea",
+            "extraction_revision": "ebfae0022628d2184ef92d11ce625c386366774fdfadf3e12f92244fdb645166",
+            "index_revision": "ebfae0022628d2184ef92d11ce625c386366774fdfadf3e12f92244fdb645166",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "inventory.xlsx > Page 1 > Foglio: Warehouse",
+            "span_start": 52,
+            "span_end": 251,
+            "exact_quote": "| Col 1   | Col 2    | Col 3          |\n|:--------|:---------|:---------------|\n| Code    | Quantity | Unit price EUR |\n| TX-417  | 7        | 12.5           |\n| GX-008  | 0        | 4.25           |"
+          },
+          {
+            "version": 1,
+            "source_revision": "8f0344d43c5821a09ace6e768bc56b0f5a5de6fdb270f77c9ca1c155183a7384",
+            "extraction_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "index_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "supply-it.txt > Page 1",
+            "span_start": 28,
+            "span_end": 453,
+            "exact_quote": "Il fornitore Ada Neri deve consegnare il componente TX-417 entro 14 giorni lavorativi dalla conferma dell'ordine. Il difetto deve essere segnalato entro 48 ore dalla scoperta. Il rimborso e dovuto solo dopo la ricezione di una diffida scritta; senza diffida non e dovuto alcun rimborso. La disdetta puo essere inviata tramite PEC oppure raccomandata con ricevuta di ritorno. Il contratto non specifica una penale giornaliera."
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 3",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          }
+        ]
+      },
+      {
+        "id": "later-sheet",
+        "evidence": [
+          {
+            "expected": {
+              "document": "inventory",
+              "contains": [
+                "RET-009",
+                "Inspection required"
+              ]
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "3373b43e93afe89bdcf237c827f1b951c8551dedb53d7830b409ca36e40a9bea",
+            "extraction_revision": "ebfae0022628d2184ef92d11ce625c386366774fdfadf3e12f92244fdb645166",
+            "index_revision": "ebfae0022628d2184ef92d11ce625c386366774fdfadf3e12f92244fdb645166",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "inventory.xlsx > Page 1 > Foglio: Returns",
+            "span_start": 274,
+            "span_end": 453,
+            "exact_quote": "| Col 1   | Col 2    | Col 3               |\n|:--------|:---------|:--------------------|\n| Code    | Quantity | Disposition         |\n| RET-009 | 3        | Inspection required |"
+          },
+          {
+            "version": 1,
+            "source_revision": "8f0344d43c5821a09ace6e768bc56b0f5a5de6fdb270f77c9ca1c155183a7384",
+            "extraction_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "index_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "supply-it.txt > Page 1",
+            "span_start": 28,
+            "span_end": 453,
+            "exact_quote": "Il fornitore Ada Neri deve consegnare il componente TX-417 entro 14 giorni lavorativi dalla conferma dell'ordine. Il difetto deve essere segnalato entro 48 ore dalla scoperta. Il rimborso e dovuto solo dopo la ricezione di una diffida scritta; senza diffida non e dovuto alcun rimborso. La disdetta puo essere inviata tramite PEC oppure raccomandata con ricevuta di ritorno. Il contratto non specifica una penale giornaliera."
+          },
+          {
+            "version": 1,
+            "source_revision": "3373b43e93afe89bdcf237c827f1b951c8551dedb53d7830b409ca36e40a9bea",
+            "extraction_revision": "ebfae0022628d2184ef92d11ce625c386366774fdfadf3e12f92244fdb645166",
+            "index_revision": "ebfae0022628d2184ef92d11ce625c386366774fdfadf3e12f92244fdb645166",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "inventory.xlsx > Page 1 > Foglio: Warehouse",
+            "span_start": 52,
+            "span_end": 251,
+            "exact_quote": "| Col 1   | Col 2    | Col 3          |\n|:--------|:---------|:---------------|\n| Code    | Quantity | Unit price EUR |\n| TX-417  | 7        | 12.5           |\n| GX-008  | 0        | 4.25           |"
+          }
+        ]
+      },
+      {
+        "id": "literal-csv",
+        "evidence": [
+          {
+            "expected": {
+              "document": "shipping",
+              "contains": [
+                "0007",
+                "North",
+                "NA"
+              ]
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "1f4be2937b11cf845d8a20c462f92cff3770660bf33a2ea80591f4fef2f5ee26",
+            "extraction_revision": "3a34b1a910a8f58890bc9089067c53f1b23349200837dad47a791cdd561b853b",
+            "index_revision": "3a34b1a910a8f58890bc9089067c53f1b23349200837dad47a791cdd561b853b",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "shipping.csv > Page 1",
+            "span_start": 27,
+            "span_end": 158,
+            "exact_quote": "| Order   | Route   | Status   |\n|:--------|:--------|:---------|\n| 0007    | North   | NA       |\n| 0008    | South   | Ready    |"
+          },
+          {
+            "version": 1,
+            "source_revision": "f06e7955dd5307820a249e14d51dd190d852246ef89b3e8f06ef5f373924a931",
+            "extraction_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "index_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "Exact error handling",
+            "span_start": 52,
+            "span_end": 324,
+            "exact_quote": "Error E_CONN_42 means the connection was refused. Retry only after the operator confirms the local service is running.\n\n```python\nif status == 'E_CONN_42':\n    raise ConnectionError('Local service unavailable')\n```\n\nNever replace this error with a successful empty result."
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 3",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          }
+        ]
+      },
+      {
+        "id": "paraphrase-cross-language",
+        "evidence": [
+          {
+            "expected": {
+              "document": "supply-it",
+              "contains": [
+                "48 ore",
+                "scoperta"
+              ]
+            },
+            "denseRank": 19,
+            "pipelineRank": null
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 5",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 5",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 2,
+            "section_header": "policy-a.pdf > Page 2",
+            "span_start": 113,
+            "span_end": 212,
+            "exact_quote": "Policy A: payment is due within 21 days after invoice receipt. No policy precedence is established."
+          }
+        ]
+      },
+      {
+        "id": "cross-language-notice",
+        "evidence": [
+          {
+            "expected": {
+              "document": "policy-a",
+              "contains": [
+                "60 giorni",
+                "ricevuta di ritorno"
+              ],
+              "page": 3
+            },
+            "denseRank": 4,
+            "pipelineRank": null
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "original",
+            "page_number": 6,
+            "section_header": "pump-handbook.pdf > Page 6",
+            "span_start": 5868,
+            "span_end": 6048,
+            "exact_quote": "Page 6: EXCEPTION PX-900. Store the spare pump between 2 and 8 degrees Celsius. Do not freeze it. If frost\nis observed, quarantine the pump and contact Ada Neri; do not install it."
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 3",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 1",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          }
+        ]
+      },
+      {
+        "id": "late-page",
+        "evidence": [
+          {
+            "expected": {
+              "document": "pump-handbook",
+              "contains": [
+                "PX-900",
+                "quarantine",
+                "do not install"
+              ],
+              "page": 6
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "original",
+            "page_number": 6,
+            "section_header": "pump-handbook.pdf > Page 6",
+            "span_start": 5868,
+            "span_end": 6048,
+            "exact_quote": "Page 6: EXCEPTION PX-900. Store the spare pump between 2 and 8 degrees Celsius. Do not freeze it. If frost\nis observed, quarantine the pump and contact Ada Neri; do not install it."
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 2",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 1",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          }
+        ]
+      },
+      {
+        "id": "contradiction",
+        "evidence": [
+          {
+            "expected": {
+              "document": "policy-a",
+              "contains": [
+                "21 days"
+              ],
+              "page": 2
+            },
+            "denseRank": 2,
+            "pipelineRank": 3
+          },
+          {
+            "expected": {
+              "document": "policy-b",
+              "contains": [
+                "45 days",
+                "precedence"
+              ]
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "e120a91a09bc88f8d4f69a8c9d3d52ea98ca08ba6b20d07a7dd8a980ec165c28",
+            "extraction_revision": "0e8b88ec40ce07ac8180012cd2d1a1324243fe59fa32e0cec077d8dcdd74dd86",
+            "index_revision": "0e8b88ec40ce07ac8180012cd2d1a1324243fe59fa32e0cec077d8dcdd74dd86",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "policy-b.txt > Page 1",
+            "span_start": 27,
+            "span_end": 143,
+            "exact_quote": "Policy B: payment is due within 45 days after invoice receipt. Neither Policy A nor Policy B establishes precedence."
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 1,
+            "section_header": "policy-a.pdf > Page 1",
+            "span_start": 27,
+            "span_end": 100,
+            "exact_quote": "Invoice handling policy A. The introduction contains no payment deadline."
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 2,
+            "section_header": "policy-a.pdf > Page 2",
+            "span_start": 113,
+            "span_end": 212,
+            "exact_quote": "Policy A: payment is due within 21 days after invoice receipt. No policy precedence is established."
+          }
+        ]
+      },
+      {
+        "id": "absent-penalty",
+        "evidence": [],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "8f0344d43c5821a09ace6e768bc56b0f5a5de6fdb270f77c9ca1c155183a7384",
+            "extraction_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "index_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "supply-it.txt > Page 1",
+            "span_start": 28,
+            "span_end": 453,
+            "exact_quote": "Il fornitore Ada Neri deve consegnare il componente TX-417 entro 14 giorni lavorativi dalla conferma dell'ordine. Il difetto deve essere segnalato entro 48 ore dalla scoperta. Il rimborso e dovuto solo dopo la ricezione di una diffida scritta; senza diffida non e dovuto alcun rimborso. La disdetta puo essere inviata tramite PEC oppure raccomandata con ricevuta di ritorno. Il contratto non specifica una penale giornaliera."
+          },
+          {
+            "version": 1,
+            "source_revision": "f06e7955dd5307820a249e14d51dd190d852246ef89b3e8f06ef5f373924a931",
+            "extraction_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "index_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "Exact error handling",
+            "span_start": 52,
+            "span_end": 324,
+            "exact_quote": "Error E_CONN_42 means the connection was refused. Retry only after the operator confirms the local service is running.\n\n```python\nif status == 'E_CONN_42':\n    raise ConnectionError('Local service unavailable')\n```\n\nNever replace this error with a successful empty result."
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 3,
+            "section_header": "policy-a.pdf > Page 3",
+            "span_start": 225,
+            "span_end": 325,
+            "exact_quote": "La disdetta annuale richiede un preavviso di 60 giorni tramite raccomandata con ricevuta di ritorno."
+          }
+        ]
+      },
+      {
+        "id": "conditional-refund",
+        "evidence": [
+          {
+            "expected": {
+              "document": "supply-it",
+              "contains": [
+                "senza diffida",
+                "non e dovuto"
+              ]
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "8f0344d43c5821a09ace6e768bc56b0f5a5de6fdb270f77c9ca1c155183a7384",
+            "extraction_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "index_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "supply-it.txt > Page 1",
+            "span_start": 28,
+            "span_end": 453,
+            "exact_quote": "Il fornitore Ada Neri deve consegnare il componente TX-417 entro 14 giorni lavorativi dalla conferma dell'ordine. Il difetto deve essere segnalato entro 48 ore dalla scoperta. Il rimborso e dovuto solo dopo la ricezione di una diffida scritta; senza diffida non e dovuto alcun rimborso. La disdetta puo essere inviata tramite PEC oppure raccomandata con ricevuta di ritorno. Il contratto non specifica una penale giornaliera."
+          },
+          {
+            "version": 1,
+            "source_revision": "f06e7955dd5307820a249e14d51dd190d852246ef89b3e8f06ef5f373924a931",
+            "extraction_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "index_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "Exact error handling",
+            "span_start": 52,
+            "span_end": 324,
+            "exact_quote": "Error E_CONN_42 means the connection was refused. Retry only after the operator confirms the local service is running.\n\n```python\nif status == 'E_CONN_42':\n    raise ConnectionError('Local service unavailable')\n```\n\nNever replace this error with a successful empty result."
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 3,
+            "section_header": "policy-a.pdf > Page 3",
+            "span_start": 225,
+            "span_end": 325,
+            "exact_quote": "La disdetta annuale richiede un preavviso di 60 giorni tramite raccomandata con ricevuta di ritorno."
+          }
+        ]
+      },
+      {
+        "id": "alternatives",
+        "evidence": [
+          {
+            "expected": {
+              "document": "supply-it",
+              "contains": [
+                "PEC oppure raccomandata",
+                "ricevuta di ritorno"
+              ]
+            },
+            "denseRank": 2,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "8f0344d43c5821a09ace6e768bc56b0f5a5de6fdb270f77c9ca1c155183a7384",
+            "extraction_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "index_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "supply-it.txt > Page 1",
+            "span_start": 28,
+            "span_end": 453,
+            "exact_quote": "Il fornitore Ada Neri deve consegnare il componente TX-417 entro 14 giorni lavorativi dalla conferma dell'ordine. Il difetto deve essere segnalato entro 48 ore dalla scoperta. Il rimborso e dovuto solo dopo la ricezione di una diffida scritta; senza diffida non e dovuto alcun rimborso. La disdetta puo essere inviata tramite PEC oppure raccomandata con ricevuta di ritorno. Il contratto non specifica una penale giornaliera."
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 3,
+            "section_header": "policy-a.pdf > Page 3",
+            "span_start": 225,
+            "span_end": 325,
+            "exact_quote": "La disdetta annuale richiede un preavviso di 60 giorni tramite raccomandata con ricevuta di ritorno."
+          },
+          {
+            "version": 1,
+            "source_revision": "f06e7955dd5307820a249e14d51dd190d852246ef89b3e8f06ef5f373924a931",
+            "extraction_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "index_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "Exact error handling",
+            "span_start": 52,
+            "span_end": 324,
+            "exact_quote": "Error E_CONN_42 means the connection was refused. Retry only after the operator confirms the local service is running.\n\n```python\nif status == 'E_CONN_42':\n    raise ConnectionError('Local service unavailable')\n```\n\nNever replace this error with a successful empty result."
+          }
+        ]
+      },
+      {
+        "id": "exact-code-block",
+        "evidence": [
+          {
+            "expected": {
+              "document": "code-guide",
+              "contains": [
+                "raise ConnectionError",
+                "Never replace"
+              ]
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "f06e7955dd5307820a249e14d51dd190d852246ef89b3e8f06ef5f373924a931",
+            "extraction_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "index_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "Exact error handling",
+            "span_start": 52,
+            "span_end": 324,
+            "exact_quote": "Error E_CONN_42 means the connection was refused. Retry only after the operator confirms the local service is running.\n\n```python\nif status == 'E_CONN_42':\n    raise ConnectionError('Local service unavailable')\n```\n\nNever replace this error with a successful empty result."
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 1",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "original",
+            "page_number": 6,
+            "section_header": "pump-handbook.pdf > Page 6",
+            "span_start": 5868,
+            "span_end": 6048,
+            "exact_quote": "Page 6: EXCEPTION PX-900. Store the spare pump between 2 and 8 degrees Celsius. Do not freeze it. If frost\nis observed, quarantine the pump and contact Ada Neri; do not install it."
+          }
+        ]
+      },
+      {
+        "id": "unrelated-absent",
+        "evidence": [],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "7ec62770b808e33202a7dcb23b5df56a8e0b06d36121ab6229e9a47844a78c3b",
+            "extraction_revision": "0d6150c3d6c3e3e422cd42945ca44583050bbd5df2d0a0a5cf22043e483ce2a4",
+            "index_revision": "0d6150c3d6c3e3e422cd42945ca44583050bbd5df2d0a0a5cf22043e483ce2a4",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "unrelated.txt > Page 1",
+            "span_start": 28,
+            "span_end": 161,
+            "exact_quote": "Water the cactus once a month. Keep the pot in sunlight. This gardening note contains no invoice, contract, penalty or payment terms."
+          },
+          {
+            "version": 1,
+            "source_revision": "e120a91a09bc88f8d4f69a8c9d3d52ea98ca08ba6b20d07a7dd8a980ec165c28",
+            "extraction_revision": "0e8b88ec40ce07ac8180012cd2d1a1324243fe59fa32e0cec077d8dcdd74dd86",
+            "index_revision": "0e8b88ec40ce07ac8180012cd2d1a1324243fe59fa32e0cec077d8dcdd74dd86",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "policy-b.txt > Page 1",
+            "span_start": 27,
+            "span_end": 143,
+            "exact_quote": "Policy B: payment is due within 45 days after invoice receipt. Neither Policy A nor Policy B establishes precedence."
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 1,
+            "section_header": "policy-a.pdf > Page 1",
+            "span_start": 27,
+            "span_end": 100,
+            "exact_quote": "Invoice handling policy A. The introduction contains no payment deadline."
+          }
+        ]
+      }
+    ],
+    "complete": true,
+    "chunks": 21,
+    "spaces": [
+      "1352c7e6b0ba535eea29d0ae27a7104c7e4d9aad9f8b6cd9ec9ba2518b0ad56b"
+    ],
+    "maxBodyChars": 797
+  },
+  "candidate": {
+    "variant": "blocks",
+    "corpusSha256": "f5cbfc6f22c86724583bdd2408dd379e16cc677e79f193e83856c2b2019301dc",
+    "policy": "Same 800-char prose bound; complete lines, atomic fenced/table blocks, no overlap. Oversized atomic blocks reject integration.",
+    "sourceHashes": {
+      "supply-it": "8f0344d43c5821a09ace6e768bc56b0f5a5de6fdb270f77c9ca1c155183a7384",
+      "policy-a": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+      "policy-b": "e120a91a09bc88f8d4f69a8c9d3d52ea98ca08ba6b20d07a7dd8a980ec165c28",
+      "inventory": "3373b43e93afe89bdcf237c827f1b951c8551dedb53d7830b409ca36e40a9bea",
+      "shipping": "1f4be2937b11cf845d8a20c462f92cff3770660bf33a2ea80591f4fef2f5ee26",
+      "code-guide": "f06e7955dd5307820a249e14d51dd190d852246ef89b3e8f06ef5f373924a931",
+      "pump-handbook": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+      "unrelated": "7ec62770b808e33202a7dcb23b5df56a8e0b06d36121ab6229e9a47844a78c3b"
+    },
+    "queries": [
+      {
+        "id": "exact-code",
+        "evidence": [
+          {
+            "expected": {
+              "document": "inventory",
+              "contains": [
+                "TX-417",
+                "12.5"
+              ]
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "3373b43e93afe89bdcf237c827f1b951c8551dedb53d7830b409ca36e40a9bea",
+            "extraction_revision": "ebfae0022628d2184ef92d11ce625c386366774fdfadf3e12f92244fdb645166",
+            "index_revision": "ebfae0022628d2184ef92d11ce625c386366774fdfadf3e12f92244fdb645166",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "inventory.xlsx > Page 1 > Foglio: Warehouse",
+            "span_start": 52,
+            "span_end": 251,
+            "exact_quote": "| Col 1   | Col 2    | Col 3          |\n|:--------|:---------|:---------------|\n| Code    | Quantity | Unit price EUR |\n| TX-417  | 7        | 12.5           |\n| GX-008  | 0        | 4.25           |"
+          },
+          {
+            "version": 1,
+            "source_revision": "8f0344d43c5821a09ace6e768bc56b0f5a5de6fdb270f77c9ca1c155183a7384",
+            "extraction_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "index_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "supply-it.txt > Page 1",
+            "span_start": 28,
+            "span_end": 453,
+            "exact_quote": "Il fornitore Ada Neri deve consegnare il componente TX-417 entro 14 giorni lavorativi dalla conferma dell'ordine. Il difetto deve essere segnalato entro 48 ore dalla scoperta. Il rimborso e dovuto solo dopo la ricezione di una diffida scritta; senza diffida non e dovuto alcun rimborso. La disdetta puo essere inviata tramite PEC oppure raccomandata con ricevuta di ritorno. Il contratto non specifica una penale giornaliera."
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 3",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          }
+        ]
+      },
+      {
+        "id": "later-sheet",
+        "evidence": [
+          {
+            "expected": {
+              "document": "inventory",
+              "contains": [
+                "RET-009",
+                "Inspection required"
+              ]
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "3373b43e93afe89bdcf237c827f1b951c8551dedb53d7830b409ca36e40a9bea",
+            "extraction_revision": "ebfae0022628d2184ef92d11ce625c386366774fdfadf3e12f92244fdb645166",
+            "index_revision": "ebfae0022628d2184ef92d11ce625c386366774fdfadf3e12f92244fdb645166",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "inventory.xlsx > Page 1 > Foglio: Returns",
+            "span_start": 274,
+            "span_end": 453,
+            "exact_quote": "| Col 1   | Col 2    | Col 3               |\n|:--------|:---------|:--------------------|\n| Code    | Quantity | Disposition         |\n| RET-009 | 3        | Inspection required |"
+          },
+          {
+            "version": 1,
+            "source_revision": "8f0344d43c5821a09ace6e768bc56b0f5a5de6fdb270f77c9ca1c155183a7384",
+            "extraction_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "index_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "supply-it.txt > Page 1",
+            "span_start": 28,
+            "span_end": 453,
+            "exact_quote": "Il fornitore Ada Neri deve consegnare il componente TX-417 entro 14 giorni lavorativi dalla conferma dell'ordine. Il difetto deve essere segnalato entro 48 ore dalla scoperta. Il rimborso e dovuto solo dopo la ricezione di una diffida scritta; senza diffida non e dovuto alcun rimborso. La disdetta puo essere inviata tramite PEC oppure raccomandata con ricevuta di ritorno. Il contratto non specifica una penale giornaliera."
+          },
+          {
+            "version": 1,
+            "source_revision": "3373b43e93afe89bdcf237c827f1b951c8551dedb53d7830b409ca36e40a9bea",
+            "extraction_revision": "ebfae0022628d2184ef92d11ce625c386366774fdfadf3e12f92244fdb645166",
+            "index_revision": "ebfae0022628d2184ef92d11ce625c386366774fdfadf3e12f92244fdb645166",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "inventory.xlsx > Page 1 > Foglio: Warehouse",
+            "span_start": 52,
+            "span_end": 251,
+            "exact_quote": "| Col 1   | Col 2    | Col 3          |\n|:--------|:---------|:---------------|\n| Code    | Quantity | Unit price EUR |\n| TX-417  | 7        | 12.5           |\n| GX-008  | 0        | 4.25           |"
+          }
+        ]
+      },
+      {
+        "id": "literal-csv",
+        "evidence": [
+          {
+            "expected": {
+              "document": "shipping",
+              "contains": [
+                "0007",
+                "North",
+                "NA"
+              ]
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "1f4be2937b11cf845d8a20c462f92cff3770660bf33a2ea80591f4fef2f5ee26",
+            "extraction_revision": "3a34b1a910a8f58890bc9089067c53f1b23349200837dad47a791cdd561b853b",
+            "index_revision": "3a34b1a910a8f58890bc9089067c53f1b23349200837dad47a791cdd561b853b",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "shipping.csv > Page 1",
+            "span_start": 27,
+            "span_end": 158,
+            "exact_quote": "| Order   | Route   | Status   |\n|:--------|:--------|:---------|\n| 0007    | North   | NA       |\n| 0008    | South   | Ready    |"
+          },
+          {
+            "version": 1,
+            "source_revision": "f06e7955dd5307820a249e14d51dd190d852246ef89b3e8f06ef5f373924a931",
+            "extraction_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "index_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "Exact error handling",
+            "span_start": 52,
+            "span_end": 324,
+            "exact_quote": "Error E_CONN_42 means the connection was refused. Retry only after the operator confirms the local service is running.\n\n```python\nif status == 'E_CONN_42':\n    raise ConnectionError('Local service unavailable')\n```\n\nNever replace this error with a successful empty result."
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 3",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          }
+        ]
+      },
+      {
+        "id": "paraphrase-cross-language",
+        "evidence": [
+          {
+            "expected": {
+              "document": "supply-it",
+              "contains": [
+                "48 ore",
+                "scoperta"
+              ]
+            },
+            "denseRank": 19,
+            "pipelineRank": null
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 5",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 5",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 2,
+            "section_header": "policy-a.pdf > Page 2",
+            "span_start": 113,
+            "span_end": 212,
+            "exact_quote": "Policy A: payment is due within 21 days after invoice receipt. No policy precedence is established."
+          }
+        ]
+      },
+      {
+        "id": "cross-language-notice",
+        "evidence": [
+          {
+            "expected": {
+              "document": "policy-a",
+              "contains": [
+                "60 giorni",
+                "ricevuta di ritorno"
+              ],
+              "page": 3
+            },
+            "denseRank": 4,
+            "pipelineRank": null
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "original",
+            "page_number": 6,
+            "section_header": "pump-handbook.pdf > Page 6",
+            "span_start": 5868,
+            "span_end": 6048,
+            "exact_quote": "Page 6: EXCEPTION PX-900. Store the spare pump between 2 and 8 degrees Celsius. Do not freeze it. If frost\nis observed, quarantine the pump and contact Ada Neri; do not install it."
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 1",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 3",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          }
+        ]
+      },
+      {
+        "id": "late-page",
+        "evidence": [
+          {
+            "expected": {
+              "document": "pump-handbook",
+              "contains": [
+                "PX-900",
+                "quarantine",
+                "do not install"
+              ],
+              "page": 6
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "original",
+            "page_number": 6,
+            "section_header": "pump-handbook.pdf > Page 6",
+            "span_start": 5868,
+            "span_end": 6048,
+            "exact_quote": "Page 6: EXCEPTION PX-900. Store the spare pump between 2 and 8 degrees Celsius. Do not freeze it. If frost\nis observed, quarantine the pump and contact Ada Neri; do not install it."
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 2",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 2",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          }
+        ]
+      },
+      {
+        "id": "contradiction",
+        "evidence": [
+          {
+            "expected": {
+              "document": "policy-a",
+              "contains": [
+                "21 days"
+              ],
+              "page": 2
+            },
+            "denseRank": 2,
+            "pipelineRank": 3
+          },
+          {
+            "expected": {
+              "document": "policy-b",
+              "contains": [
+                "45 days",
+                "precedence"
+              ]
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "e120a91a09bc88f8d4f69a8c9d3d52ea98ca08ba6b20d07a7dd8a980ec165c28",
+            "extraction_revision": "0e8b88ec40ce07ac8180012cd2d1a1324243fe59fa32e0cec077d8dcdd74dd86",
+            "index_revision": "0e8b88ec40ce07ac8180012cd2d1a1324243fe59fa32e0cec077d8dcdd74dd86",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "policy-b.txt > Page 1",
+            "span_start": 27,
+            "span_end": 143,
+            "exact_quote": "Policy B: payment is due within 45 days after invoice receipt. Neither Policy A nor Policy B establishes precedence."
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 1,
+            "section_header": "policy-a.pdf > Page 1",
+            "span_start": 27,
+            "span_end": 100,
+            "exact_quote": "Invoice handling policy A. The introduction contains no payment deadline."
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 2,
+            "section_header": "policy-a.pdf > Page 2",
+            "span_start": 113,
+            "span_end": 212,
+            "exact_quote": "Policy A: payment is due within 21 days after invoice receipt. No policy precedence is established."
+          }
+        ]
+      },
+      {
+        "id": "absent-penalty",
+        "evidence": [],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "8f0344d43c5821a09ace6e768bc56b0f5a5de6fdb270f77c9ca1c155183a7384",
+            "extraction_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "index_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "supply-it.txt > Page 1",
+            "span_start": 28,
+            "span_end": 453,
+            "exact_quote": "Il fornitore Ada Neri deve consegnare il componente TX-417 entro 14 giorni lavorativi dalla conferma dell'ordine. Il difetto deve essere segnalato entro 48 ore dalla scoperta. Il rimborso e dovuto solo dopo la ricezione di una diffida scritta; senza diffida non e dovuto alcun rimborso. La disdetta puo essere inviata tramite PEC oppure raccomandata con ricevuta di ritorno. Il contratto non specifica una penale giornaliera."
+          },
+          {
+            "version": 1,
+            "source_revision": "f06e7955dd5307820a249e14d51dd190d852246ef89b3e8f06ef5f373924a931",
+            "extraction_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "index_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "Exact error handling",
+            "span_start": 52,
+            "span_end": 324,
+            "exact_quote": "Error E_CONN_42 means the connection was refused. Retry only after the operator confirms the local service is running.\n\n```python\nif status == 'E_CONN_42':\n    raise ConnectionError('Local service unavailable')\n```\n\nNever replace this error with a successful empty result."
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 3,
+            "section_header": "policy-a.pdf > Page 3",
+            "span_start": 225,
+            "span_end": 325,
+            "exact_quote": "La disdetta annuale richiede un preavviso di 60 giorni tramite raccomandata con ricevuta di ritorno."
+          }
+        ]
+      },
+      {
+        "id": "conditional-refund",
+        "evidence": [
+          {
+            "expected": {
+              "document": "supply-it",
+              "contains": [
+                "senza diffida",
+                "non e dovuto"
+              ]
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "8f0344d43c5821a09ace6e768bc56b0f5a5de6fdb270f77c9ca1c155183a7384",
+            "extraction_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "index_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "supply-it.txt > Page 1",
+            "span_start": 28,
+            "span_end": 453,
+            "exact_quote": "Il fornitore Ada Neri deve consegnare il componente TX-417 entro 14 giorni lavorativi dalla conferma dell'ordine. Il difetto deve essere segnalato entro 48 ore dalla scoperta. Il rimborso e dovuto solo dopo la ricezione di una diffida scritta; senza diffida non e dovuto alcun rimborso. La disdetta puo essere inviata tramite PEC oppure raccomandata con ricevuta di ritorno. Il contratto non specifica una penale giornaliera."
+          },
+          {
+            "version": 1,
+            "source_revision": "f06e7955dd5307820a249e14d51dd190d852246ef89b3e8f06ef5f373924a931",
+            "extraction_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "index_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "Exact error handling",
+            "span_start": 52,
+            "span_end": 324,
+            "exact_quote": "Error E_CONN_42 means the connection was refused. Retry only after the operator confirms the local service is running.\n\n```python\nif status == 'E_CONN_42':\n    raise ConnectionError('Local service unavailable')\n```\n\nNever replace this error with a successful empty result."
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 3,
+            "section_header": "policy-a.pdf > Page 3",
+            "span_start": 225,
+            "span_end": 325,
+            "exact_quote": "La disdetta annuale richiede un preavviso di 60 giorni tramite raccomandata con ricevuta di ritorno."
+          }
+        ]
+      },
+      {
+        "id": "alternatives",
+        "evidence": [
+          {
+            "expected": {
+              "document": "supply-it",
+              "contains": [
+                "PEC oppure raccomandata",
+                "ricevuta di ritorno"
+              ]
+            },
+            "denseRank": 2,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "8f0344d43c5821a09ace6e768bc56b0f5a5de6fdb270f77c9ca1c155183a7384",
+            "extraction_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "index_revision": "cfe69c3715a09a4c2b6cfafdc0498b3f54e9e9d0a874407a8283db4bb1bbb44e",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "supply-it.txt > Page 1",
+            "span_start": 28,
+            "span_end": 453,
+            "exact_quote": "Il fornitore Ada Neri deve consegnare il componente TX-417 entro 14 giorni lavorativi dalla conferma dell'ordine. Il difetto deve essere segnalato entro 48 ore dalla scoperta. Il rimborso e dovuto solo dopo la ricezione di una diffida scritta; senza diffida non e dovuto alcun rimborso. La disdetta puo essere inviata tramite PEC oppure raccomandata con ricevuta di ritorno. Il contratto non specifica una penale giornaliera."
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 3,
+            "section_header": "policy-a.pdf > Page 3",
+            "span_start": 225,
+            "span_end": 325,
+            "exact_quote": "La disdetta annuale richiede un preavviso di 60 giorni tramite raccomandata con ricevuta di ritorno."
+          },
+          {
+            "version": 1,
+            "source_revision": "f06e7955dd5307820a249e14d51dd190d852246ef89b3e8f06ef5f373924a931",
+            "extraction_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "index_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "Exact error handling",
+            "span_start": 52,
+            "span_end": 324,
+            "exact_quote": "Error E_CONN_42 means the connection was refused. Retry only after the operator confirms the local service is running.\n\n```python\nif status == 'E_CONN_42':\n    raise ConnectionError('Local service unavailable')\n```\n\nNever replace this error with a successful empty result."
+          }
+        ]
+      },
+      {
+        "id": "exact-code-block",
+        "evidence": [
+          {
+            "expected": {
+              "document": "code-guide",
+              "contains": [
+                "raise ConnectionError",
+                "Never replace"
+              ]
+            },
+            "denseRank": 1,
+            "pipelineRank": 1
+          }
+        ],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "f06e7955dd5307820a249e14d51dd190d852246ef89b3e8f06ef5f373924a931",
+            "extraction_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "index_revision": "0caf0f1ee5dd9a2e8ee80e960ff8fe25bd2d92ba14d8b911638d1149a572e006",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "Exact error handling",
+            "span_start": 52,
+            "span_end": 324,
+            "exact_quote": "Error E_CONN_42 means the connection was refused. Retry only after the operator confirms the local service is running.\n\n```python\nif status == 'E_CONN_42':\n    raise ConnectionError('Local service unavailable')\n```\n\nNever replace this error with a successful empty result."
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "derived",
+            "page_number": null,
+            "section_header": "pump-handbook.pdf > Page 1",
+            "span_start": null,
+            "span_end": null,
+            "exact_quote": null
+          },
+          {
+            "version": 1,
+            "source_revision": "2aca40cd88b8fe82b1fe418a8d0b051570e3e7fe148936f323c7263835a45107",
+            "extraction_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "index_revision": "d0f52c3cdd1fab8461f210eb50dc0cc53798d2f377ef1741c83e954c051b74b6",
+            "location_kind": "original",
+            "page_number": 6,
+            "section_header": "pump-handbook.pdf > Page 6",
+            "span_start": 5868,
+            "span_end": 6048,
+            "exact_quote": "Page 6: EXCEPTION PX-900. Store the spare pump between 2 and 8 degrees Celsius. Do not freeze it. If frost\nis observed, quarantine the pump and contact Ada Neri; do not install it."
+          }
+        ]
+      },
+      {
+        "id": "unrelated-absent",
+        "evidence": [],
+        "provenance": [
+          {
+            "version": 1,
+            "source_revision": "7ec62770b808e33202a7dcb23b5df56a8e0b06d36121ab6229e9a47844a78c3b",
+            "extraction_revision": "0d6150c3d6c3e3e422cd42945ca44583050bbd5df2d0a0a5cf22043e483ce2a4",
+            "index_revision": "0d6150c3d6c3e3e422cd42945ca44583050bbd5df2d0a0a5cf22043e483ce2a4",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "unrelated.txt > Page 1",
+            "span_start": 28,
+            "span_end": 161,
+            "exact_quote": "Water the cactus once a month. Keep the pot in sunlight. This gardening note contains no invoice, contract, penalty or payment terms."
+          },
+          {
+            "version": 1,
+            "source_revision": "e120a91a09bc88f8d4f69a8c9d3d52ea98ca08ba6b20d07a7dd8a980ec165c28",
+            "extraction_revision": "0e8b88ec40ce07ac8180012cd2d1a1324243fe59fa32e0cec077d8dcdd74dd86",
+            "index_revision": "0e8b88ec40ce07ac8180012cd2d1a1324243fe59fa32e0cec077d8dcdd74dd86",
+            "location_kind": "original",
+            "page_number": null,
+            "section_header": "policy-b.txt > Page 1",
+            "span_start": 27,
+            "span_end": 143,
+            "exact_quote": "Policy B: payment is due within 45 days after invoice receipt. Neither Policy A nor Policy B establishes precedence."
+          },
+          {
+            "version": 1,
+            "source_revision": "ff281499157ef2dbe76f0a40b8505efdb1379989e8e1318d5a4f441784520cae",
+            "extraction_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "index_revision": "4ecd9fe4f8961a8f9a64d17c82207eda5b0643623ede273005e7c1ba78890c3e",
+            "location_kind": "original",
+            "page_number": 1,
+            "section_header": "policy-a.pdf > Page 1",
+            "span_start": 27,
+            "span_end": 100,
+            "exact_quote": "Invoice handling policy A. The introduction contains no payment deadline."
+          }
+        ]
+      }
+    ],
+    "complete": true,
+    "chunks": 21,
+    "spaces": [
+      "1352c7e6b0ba535eea29d0ae27a7104c7e4d9aad9f8b6cd9ec9ba2518b0ad56b"
+    ],
+    "maxBodyChars": 779
+  },
+  "runnerSha256": "f7f334f0a96e201bd12fc394f8a9f049926bf1e64c786e75fc7535641c394aa0"
+}

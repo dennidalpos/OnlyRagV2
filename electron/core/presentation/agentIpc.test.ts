@@ -23,6 +23,8 @@ vi.mock('../application/taskQueueAppService', () => ({
     getQueueStatus: vi.fn(),
     listRecoverableTasks: vi.fn(() => []),
     resumeTask: vi.fn(),
+    inspectTask: vi.fn(),
+    abandonTask: vi.fn(),
   },
 }))
 vi.mock('../application/agentOrchestratorAppService', () => ({ respondToApproval: vi.fn(), updateActiveAgentRun: vi.fn() }))
@@ -63,6 +65,20 @@ describe('agent IPC session-state facade', () => {
     vi.clearAllMocks()
     setTrustedIpcWindowProvider(() => ({ webContents: trustedContents }) as never)
     registerAgentIpcHandlers(() => ({ isAvailable: () => false, send: () => {} }))
+  })
+
+  it('validates inspection and abandonment identities, digest and trusted frame before dispatch', async () => {
+    const inspect = handlers.get('agent:inspect-task')!
+    const abandon = handlers.get('agent:abandon-task')!
+    await inspect(trustedEvent, runIdentity)
+    await abandon(trustedEvent, { identity: runIdentity, evidenceDigest: 'a'.repeat(64) })
+    expect(taskQueueAppService.inspectTask).toHaveBeenCalledExactlyOnceWith(runIdentity)
+    expect(taskQueueAppService.abandonTask).toHaveBeenCalledExactlyOnceWith(runIdentity, 'a'.repeat(64))
+    expect(() => abandon(trustedEvent, { identity: runIdentity, evidenceDigest: 'bad' })).toThrow('Invalid IPC payload')
+    expect(() => inspect({ sender: {}, senderFrame: trustedContents.mainFrame }, runIdentity)).toThrow('Untrusted IPC sender')
+    expect(() => abandon({ sender: trustedContents, senderFrame: {} }, { identity: runIdentity, evidenceDigest: 'a'.repeat(64) })).toThrow(
+      'Untrusted IPC sender',
+    )
   })
 
   it('projects persisted session state for the renderer', async () => {

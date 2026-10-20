@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
+import type { IpcInvokeContract } from '../../../shared/ipc/ipcContract'
 import { MAX_DOCUMENT_TEXT_UNITS } from '../../../shared/domain/documentLimits'
 import { documentDraftsSchema } from '../../../shared/domain/documentDraft'
 import {
@@ -75,6 +76,7 @@ describe('normalization review contract', () => {
 
 describe('sidecar IPC contract', () => {
   it('accepts bounded ingestion and translation payloads', () => {
+    expectTypeOf<Pick<IpcInvokeContract['ingest:file']['payload'], 'taskId'>>().toEqualTypeOf<{ taskId: string }>()
     expect(sidecarIngestFilePayloadSchema.parse({ filePath: 'D:/docs/a.pdf', numCtx: 8192, taskId: 'ingest-1' })).toMatchObject({
       numCtx: 8192,
       taskId: 'ingest-1',

@@ -259,6 +259,8 @@ I diagrammi SVG sono incorporati sotto ogni percorso e restano apribili singolar
 
 **Da sapere.** Non considerare avviato un piano se salvataggio o preparazione sono falliti. Durante una run, nuove richieste possono andare in coda: controlla la coda e rimuovi quelle non più necessarie prima che vengano eseguite.
 
+Dopo un arresto imprevisto, apri la conversazione e il workspace originali e scegli **Riprendi task** per il lavoro conservato. Se l'esito di un'azione interrotta è ignoto, la ripresa viene rifiutata: usa **Ispeziona prove** per leggere richiesta e stato. Se vuoi chiudere quella run, seleziona la conferma e premi **Abbandona esecuzione**. L'azione non viene ripetuta né annullata; richiesta e prove restano archiviate. Con prove cambiate o salvataggio fallito, ispeziona di nuovo o ripristina lo storage prima di riprovare. Nessun task riparte automaticamente all'avvio.
+
 ### 16 Approvare un’azione dell’agente
 
 **Prerequisiti.** Una richiesta avviata oppure una finestra Approvazione Richiesta visibile.

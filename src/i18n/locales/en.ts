@@ -7,6 +7,9 @@ export const en: TranslationSchema = {
     fullAccess: 'Full access',
     notice: 'Interrupted and waiting tasks are retained. Resume each task explicitly with its original model and permissions.',
     resume: 'Resume task',
+    inspect: 'Inspect evidence',
+    abandon: 'Abandon run',
+    abandonConsent: 'I confirm abandonment: the action will neither repeat nor be undone. The request and evidence will be retained.',
     failure: 'Recovery unavailable; saved tasks are preserved',
   },
   requestScope: {

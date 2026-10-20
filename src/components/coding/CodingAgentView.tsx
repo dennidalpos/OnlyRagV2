@@ -176,7 +176,14 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
         {c.storageFailed && <CodingStorageFailureBanner onRetry={c.retryStorage} onExport={c.exportUnsavedSessions} />}
         <SessionDeletionRecoveryBanner storageFailed={c.storageFailed} onResolved={c.refreshAfterDeletionRecovery} />
         <CodingHistoryRecoveryBanner storageFailed={c.storageFailed} onRecovered={c.refreshRecoveredHistory} />
-        <AgentTaskRecoveryBanner tasks={c.recoverableTasks} error={c.recoveryError} busy={c.isExecuting || c.storageFailed} onResume={c.resumeRecoveredTask} />
+        <AgentTaskRecoveryBanner
+          tasks={c.recoverableTasks}
+          error={c.recoveryError}
+          busy={c.isExecuting || c.storageFailed}
+          onResume={c.resumeRecoveredTask}
+          onInspect={c.inspectRecoveredTask}
+          onAbandon={c.abandonRecoveredTask}
+        />
         {/* Main Workspace Split Layout */}
         <div className="flex-1 flex overflow-hidden">
           {/* Full Workspace Explorer Sidebar */}

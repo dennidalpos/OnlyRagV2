@@ -216,7 +216,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
         redaction: { applied: false, fields: [] },
       }),
     }
-    const executor = new AgentToolExecutorService(undefined, runner as never)
+    const executor = new AgentToolExecutorService(new CapabilityPolicyAuditRepository(path.join(tempDir, 'policy-audit.json')), runner as never)
 
     const result = await executor.executeTool(
       { tool: 'validate_visual_artifact', parameters: { artifactPath: 'dist/index.html' } },

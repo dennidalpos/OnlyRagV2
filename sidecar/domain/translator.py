@@ -9,10 +9,15 @@ from typing import Any, Dict, Generator, Iterator, List, Tuple, Optional, Union
 import docx
 import httpx
 import pymupdf
+from docx.oxml.ns import qn
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.text.paragraph import Paragraph
+from docx.text.run import Run
 from sidecar.config import DOCS_TABLE_NAME, OLLAMA_BASE_URL, logger, httpx_client
 from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, database_operation
 from sidecar.services.task_cancellation import TaskCancelled, raise_if_cancelled, register_task, unregister_task
 from sidecar.domain.translation_terms import FORM_LABELS, FORM_CLAUSES, TERMS, term_translation
+from sidecar.infrastructure.translation_output import TranslationCleanupError, TranslationOutput
 
 # Preserved/removed during cleanup of legacy batch responses.
 _RUN_SEPARATOR = "<<<RUN_SEP>>>"
@@ -136,20 +141,51 @@ def _load_doc_record(doc_id: str) -> Dict[str, Any]:
 
 
 def _collect_docx_runs(doc: "docx.Document") -> List["docx.text.run.Run"]:
-    """Collects every non-empty run, in document order: body paragraphs first, then every table
-    cell's paragraphs (matching the coverage of the DOCX branch of extract_document_markdown)."""
+    """Visit each body/header/footer XML run once, including nested tables and hyperlinks.
+
+    Read existing related story parts rather than materializing missing headers through
+    section properties. Shared/linked parts and merged cells are visited only once.
+    Refuse known unsupported visible containers before any model call or publication.
+    """
+    stories = [(doc.element.body, doc)]
+    seen_parts = {doc.part.partname}
+    for relation in doc.part.rels.values():
+        if relation.reltype in (RT.HEADER, RT.FOOTER) and not relation.is_external:
+            part = relation.target_part
+            if part.partname not in seen_parts:
+                stories.append((part.element, part))
+                seen_parts.add(part.partname)
+
+    unsupported = {qn(f"w:{tag}") for tag in (
+        "txbxContent", "altChunk", "subDoc", "fldSimple", "fldChar", "instrText",
+        "footnoteReference", "endnoteReference", "commentReference", "sdt", "sym",
+        "del", "ins", "moveFrom", "moveTo",
+    )}
+    unsupported.update({qn("m:oMath"), qn("m:oMathPara"), qn("c:chart"), qn("dgm:relIds")})
+    for root, _ in stories:
+        for element in root.iter():
+            if element.tag in unsupported or element.tag == qn("a:t") or element.get("string"):
+                raise ValueError(f"Unsupported DOCX content: {element.tag.split('}')[-1]}; no document was exported")
+
+    # Footnotes/comments/other textual parts must not silently retain source text.
+    # Images and other binary parts are preserved, with no OCR claim.
+    for part in doc.part.package.parts:
+        if part.partname in seen_parts or not str(part.partname).startswith("/word/") or not part.content_type.endswith("xml"):
+            continue
+        root = ET.fromstring(part.blob)
+        if any(element.tag in (qn("w:t"), qn("a:t")) and (element.text or "").strip() for element in root.iter()):
+            raise ValueError(f"Unsupported DOCX text part: {part.partname}; no document was exported")
+
     runs: List["docx.text.run.Run"] = []
-    for para in doc.paragraphs:
-        for run in para.runs:
-            if run.text and run.text.strip():
-                runs.append(run)
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for para in cell.paragraphs:
-                    for run in para.runs:
-                        if run.text and run.text.strip():
-                            runs.append(run)
+    for root, parent in stories:
+        for element in root.iter(qn("w:p")):
+            paragraph = Paragraph(element, parent)
+            for run_element in element.iter(qn("w:r")):
+                run = Run(run_element, paragraph)
+                if run.text and run.text.strip():
+                    if any(child.tag not in {qn(f"w:{tag}") for tag in ("rPr", "t", "tab", "br", "cr", "lastRenderedPageBreak")} for child in run_element):
+                        raise ValueError("Unsupported DOCX mixed text/graphic run; no document was exported")
+                    runs.append(run)
     return runs
 
 
@@ -979,14 +1015,18 @@ def _resolve_autofit_font_size(rect: "pymupdf.Rect", text: str, original_size: f
 def _resolve_output_filepath(file_path: str, filename: str, target_lang: str, target_dir: Optional[str] = None) -> str:
     """Resolves output file path in target_dir if provided, otherwise in the original file directory as a new distinct file.
     Guarantees the original source file is never overwritten or modified."""
-    dest_dir = target_dir.strip() if target_dir and target_dir.strip() else os.path.dirname(os.path.abspath(file_path))
+    if not filename or filename != os.path.basename(filename) or re.search(r'[<>:"/\\|?*\x00-\x1f]', filename):
+        raise ValueError("Invalid translation source filename")
+    lang_suffix = (target_lang or "translated").lower().replace(" ", "_")
+    if not re.fullmatch(r"[\w-]+", lang_suffix):
+        raise ValueError("Invalid translation target language for output filename")
+    dest_dir = os.path.abspath(target_dir.strip()) if target_dir and target_dir.strip() else os.path.dirname(os.path.abspath(file_path))
     os.makedirs(dest_dir, exist_ok=True)
     base_name, ext = os.path.splitext(filename)
-    lang_suffix = (target_lang or "translated").lower().replace(" ", "_")
     out_filename = f"{base_name}_{lang_suffix}{ext}"
     out_path = os.path.join(dest_dir, out_filename)
 
-    if os.path.abspath(out_path) == os.path.abspath(file_path) or os.path.exists(out_path):
+    if os.path.normcase(os.path.abspath(out_path)) == os.path.normcase(os.path.abspath(file_path)) or os.path.lexists(out_path):
         out_filename = f"{base_name}_{lang_suffix}_{uuid.uuid4().hex}{ext}"
         out_path = os.path.join(dest_dir, out_filename)
     return out_path
@@ -1185,7 +1225,9 @@ def _translate_docx_events(
         yield _event({"type": "progress", "page": 1, "total_pages": 1, "phase": "translating_runs", "percent": int((i / len(batches)) * 90)})
         _translate_batch(batch, source_lang, target_lang, model, num_ctx, think, companies, personal_form)
     raise_if_cancelled(task_id)
-    docx_doc.save(out_file_path)
+    # Own the stream even when python-docx's ZIP writer fails before closing it.
+    with open(out_file_path, "wb") as output_stream:
+        docx_doc.save(output_stream)
     return 1
 
 
@@ -1251,16 +1293,23 @@ def translate_document_stream(
     file_path = str(record.get("file_path", ""))
     filename = str(record.get("filename", ""))
     file_type = str(record.get("file_type", ""))
-    out_file_path = _resolve_output_filepath(file_path, filename, target_lang, target_dir)
     translate_events = _translate_docx_events if file_type == "docx" else _translate_pdf_events
 
     if task_id:
         register_task(task_id)
     try:
         try:
-            num_pages = yield from translate_events(
-                doc_id, file_path, filename, out_file_path, source_lang, target_lang, model, num_ctx, think, task_id
-            )
+            raise_if_cancelled(task_id)
+            if file_type not in ("docx", "pdf"):
+                raise UnsupportedDocumentTypeError("Only DOCX and PDF translation outputs are supported")
+            out_file_path = _resolve_output_filepath(file_path, filename, target_lang, target_dir)
+            with TranslationOutput(out_file_path, file_type) as output:
+                num_pages = yield from translate_events(
+                    doc_id, file_path, filename, output.path, source_lang, target_lang, model, num_ctx, think, task_id
+                )
+                file_size = output.validate(num_pages)
+                raise_if_cancelled(task_id)
+                output.publish()
         except ValueError:
             raise_if_cancelled(task_id)
             raise
@@ -1270,6 +1319,10 @@ def translate_document_stream(
         return
     except Exception as err:
         logger.error(f"Translation of document {doc_id} failed: {err}")
+        if isinstance(err, TranslationCleanupError) and err.stream_closed:
+            # The consumer has closed the generator: yielding an error would ignore
+            # GeneratorExit and delay task unregistration. Propagate the cleanup error.
+            raise
         yield _event({"type": "error", "error": str(err)})
         return
     finally:
@@ -1281,7 +1334,7 @@ def translate_document_stream(
             "id": doc_id,
             "filename": os.path.basename(out_file_path),
             "filePath": out_file_path,
-            "file_size": os.path.getsize(out_file_path),
+            "file_size": file_size,
             "num_pages": num_pages,
             "num_chunks": int(record.get("num_chunks", 1)),
             "extracted_markdown": str(record.get("extracted_markdown", "")),

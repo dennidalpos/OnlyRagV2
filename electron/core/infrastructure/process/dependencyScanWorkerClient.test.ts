@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
+import { setTimeout as nativeDelay } from 'node:timers/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DependencyScanWorkerClient } from './dependencyScanWorkerClient'
 
@@ -31,12 +32,18 @@ parentPort.close()
   })
   afterEach(async () => {
     await client.shutdown()
+    vi.useRealTimers()
     vi.restoreAllMocks()
     fs.rmSync(root, { recursive: true, force: true })
   })
 
   function request(name: string, deadline = 2000, signal?: AbortSignal) {
-    return client.scan(path.join(root, name), deadline, signal)
+    const start = performance.now()
+    return client.scan(path.join(root, name), deadline, signal).catch((error: unknown) => {
+      throw new Error(`${name}: ${String(error)}; elapsed=${performance.now() - start}ms; nativeStarted=${fs.existsSync(path.join(root, `${name}.started`))}`, {
+        cause: error,
+      })
+    })
   }
 
   it('accepts a valid result only after worker termination and clears the timer', async () => {
@@ -78,14 +85,40 @@ parentPort.close()
   })
 
   it('includes queue waiting in the deadline and admits no overlapping parser', async () => {
+    // Control deadline time independently of native startup/coverage/host scheduling.
+    // The real worker still starts, loops and must exit before the next admission.
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const terminate = vi.spyOn(Worker.prototype, 'terminate')
     const controller = new AbortController()
     const active = expect(request('loop', 2000, controller.signal)).rejects.toThrow('cancelled')
-    await vi.waitFor(() => expect(fs.existsSync(path.join(root, 'loop.started'))).toBe(true))
-    await expect(request('expired', 30)).rejects.toThrow('timed out')
+    const start = performance.now()
+    while (!fs.existsSync(path.join(root, 'loop.started'))) {
+      if (performance.now() - start > 4000) throw new Error('Native loop worker did not start')
+      await nativeDelay(10)
+    }
+    const expired = expect(request('expired', 30)).rejects.toThrow('timed out')
+    await vi.advanceTimersByTimeAsync(29)
+    expect(terminate).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    await expired
     expect(fs.existsSync(path.join(root, 'expired.started'))).toBe(false)
+    expect(terminate).not.toHaveBeenCalled()
     controller.abort()
     await active
+    expect((terminate.mock.contexts[0] as Worker).threadId).toBe(-1)
     expect((await request('next')).scanned).toBe(true)
+  })
+
+  it('expires an active worker as well as queued work when host scheduling consumes both deadlines', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const terminate = vi.spyOn(Worker.prototype, 'terminate')
+    const active = expect(request('loop', 2000)).rejects.toThrow('timed out')
+    const queued = expect(request('expired', 30)).rejects.toThrow('timed out')
+    await vi.advanceTimersByTimeAsync(2000)
+    await Promise.all([active, queued])
+    expect((terminate.mock.contexts[0] as Worker).threadId).toBe(-1)
+    expect(fs.existsSync(path.join(root, 'expired.started'))).toBe(false)
+    expect((await request('fresh')).scanned).toBe(true)
   })
 
   it.each(['crash', 'empty', 'bad'])('refuses %s worker evidence and permits a fresh retry', async (name) => {

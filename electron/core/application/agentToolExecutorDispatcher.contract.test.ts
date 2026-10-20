@@ -5,20 +5,24 @@ import path from 'node:path'
 import { AgentToolExecutorService } from './agentToolExecutorService'
 import type { AppSettings } from '../../../shared/types'
 import { toolExecutionResultSchema } from '../domain/agent/tools/toolExecutionContracts'
+import { CapabilityPolicyAuditRepository } from '../infrastructure/logging/capabilityPolicyAuditRepository'
 
 describe('AgentToolExecutorService dispatcher contract', () => {
   let workspacePath: string
+  let fixtureRoot: string
   let executor: AgentToolExecutorService
   const settings = { allowTerminalExecution: true, allowFileModifications: true } as AppSettings
 
   beforeEach(() => {
-    workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-dispatcher-contract-'))
-    executor = new AgentToolExecutorService()
+    fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-dispatcher-contract-'))
+    workspacePath = path.join(fixtureRoot, 'workspace')
+    fs.mkdirSync(workspacePath)
+    executor = new AgentToolExecutorService(new CapabilityPolicyAuditRepository(path.join(fixtureRoot, 'policy-audit.json')))
   })
 
   afterEach(() => {
     executor.disposeShellSessions()
-    fs.rmSync(workspacePath, { recursive: true, force: true })
+    fs.rmSync(fixtureRoot, { recursive: true, force: true })
   })
 
   it('routes representative filesystem, diagnostic, and git tools through one result contract', async () => {

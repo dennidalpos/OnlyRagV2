@@ -1,5 +1,11 @@
 # Verifica corrente per ambito
 
+Il [passaggio di sessione delle correzioni locali](./session-handoff-local-fixes-2026-10-20.md) salva tre completamenti, 34 attività aperte e il residuo audit; commit e push su `master` autorizzati per questa consegna. Le sezioni successive mantengono le rispettive date ed evidenze storiche.
+
+Il [seguito locale](./verification-tracker-local-2026-10-20.md) conclude tre task e registra un nuovo residuo di recupero dell'audit di sviluppo: **34 aperti**. Il [sanitizer Monaco](./verification-monaco-sanitizer-2026-10-20.md) usa la dipendenza 3.4.17, sostituita nel grafo Vite e verificata con rendering nativo e build. La [misura RAG sotto contesa](./verification-retrieval-contention-2026-10-20.md) è locale e sintetica; i [task CI](./verification-ci-boundaries-2026-10-20.md) conservano diagnosi storica incompleta e futura qualifica remota. L'utente ha confermato il perimetro solo locale e p95 RAG di 5 secondi.
+
+Il [seguito delle correzioni di traduzione](./verification-translation-fixes-2026-10-20.md) conclude pubblicazione esclusiva PDF/DOCX e copertura DOCX dichiarata, con 197 regressioni offline passate. Conteggi e limiti degli audit precedenti descrivono le rispettive fasi. App installata, modelli reali e resa Word non sono qualificati da queste fixture.
+
 Il [passaggio di sessione dell'audit](./session-handoff-audit-2026-10-20.md) salva i 36 residui e la richiesta esplicita di commit/push su master; le verifiche pre-commit e la CI della nuova consegna restano distinte dall'audit precedente.
 
 L'[audit corrente dei residui](./repository-residue-audit-2026-10-20.md) registra **36 attivita aperte**, tre nuovi P2 e CI b470387 fallita sul worker dipendenze. Prove DOCX isolate, nessuna correzione applicativa. Il percorso TEMP della sanificazione non e disponibile e resta nel task di conservazione; conteggi/esiti delle ricevute precedenti sono storici.

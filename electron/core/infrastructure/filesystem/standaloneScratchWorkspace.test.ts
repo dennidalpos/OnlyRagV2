@@ -1,8 +1,11 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StandaloneScratchWorkspace } from './standaloneScratchWorkspace'
+
+// This file exercises the actual fallback resolver, with cwd confined to its fixture.
+vi.unmock('./userDataRoot')
 
 describe('StandaloneScratchWorkspace', () => {
   let basePath: string
@@ -14,6 +17,7 @@ describe('StandaloneScratchWorkspace', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     fs.rmSync(basePath, { recursive: true, force: true })
     fs.rmSync(exportRoot, { recursive: true, force: true })
   })
@@ -55,6 +59,7 @@ describe('StandaloneScratchWorkspace', () => {
   })
 
   it('falls back to the headless userdata_dev store instead of the home folder', () => {
-    expect(new StandaloneScratchWorkspace().getPath()).toBe(path.join(process.cwd(), 'userdata_dev', 'agent-scratch'))
+    vi.spyOn(process, 'cwd').mockReturnValue(basePath)
+    expect(new StandaloneScratchWorkspace().getPath()).toBe(path.join(basePath, 'userdata_dev', 'agent-scratch'))
   })
 })

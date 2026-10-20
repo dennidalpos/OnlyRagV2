@@ -43,14 +43,23 @@ describe('CapabilityPolicyAuditRepository', () => {
     expect(await repository.append({ invalid: true } as never)).toBe(false)
   })
 
-  // 1005 appends each rewrite the bounded file: about 2 s idle, over the 5 s default while a live
-  // model run holds the CPU (2026-09-26).
-  it('retains only the latest 1000 events', { timeout: 30_000 }, async () => {
-    for (let index = 0; index < 1005; index += 1) await repository.append(event(index))
+  it('retains only the latest 1000 events', async () => {
+    // Seed just below the bound, then cross it through real durable appends. Rewriting
+    // every growing prefix 1005 times measures quadratic fixture setup, not retention.
+    const seed = Array.from({ length: 995 }, (_, index) => ({ ...event(index), target: '[url]', reason: 'Rejected [url]' }))
+    fs.writeFileSync(path.join(tempDir, 'audit.json'), JSON.stringify(seed), 'utf-8')
+    for (let index = 995; index < 1005; index += 1) {
+      expect(await repository.append(event(index))).toBe(true)
+      const current = await repository.load()
+      expect(current.map((item) => item.auditId)).toEqual(
+        Array.from({ length: Math.min(1000, index + 1) }, (_, offset) => `audit-${Math.max(0, index - 999) + offset}`),
+      )
+    }
+    // Read through a fresh repository to prove persistence, not an in-memory view.
+    repository = new CapabilityPolicyAuditRepository(path.join(tempDir, 'audit.json'))
     const loaded = await repository.load()
-    expect(loaded).toHaveLength(1000)
-    expect(loaded[0].auditId).toBe('audit-5')
-    expect(loaded.at(-1)?.auditId).toBe('audit-1004')
+    expect(loaded.map((item) => item.auditId)).toEqual(Array.from({ length: 1000 }, (_, index) => `audit-${index + 5}`))
+    expect(loaded.every((item) => item.target === '[url]' && !item.reason.includes('secret-value'))).toBe(true)
   })
 
   it('does not lose events during concurrent appends', async () => {

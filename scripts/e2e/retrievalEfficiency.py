@@ -83,8 +83,12 @@ def main():
     parser.add_argument("--label", required=True, choices=("baseline", "after"))
     parser.add_argument("--chunks", type=int, default=100_000, choices=(10_000, 100_000))
     parser.add_argument("--samples", type=int, default=20)
+    parser.add_argument("--dimension", type=int, default=128, choices=(128, 768, 1024))
+    parser.add_argument("--varied", action="store_true", help="Use deterministic dense synthetic vectors and unequal multilingual text lengths")
+    parser.add_argument("--contention", action="store_true", help="Four search threads during twenty native unrelated-document metadata updates")
+    parser.add_argument("--p95-limit-ms", type=float, default=5000)
     args = parser.parse_args()
-    if sys.platform != "win32" or not 5 <= args.samples <= 100:
+    if sys.platform != "win32" or not 5 <= args.samples <= 100 or not 0 < args.p95_limit_ms <= 60_000:
         parser.error("Windows and 5..100 samples are required.")
     scratch = Path(tempfile.mkdtemp(prefix=f"onlyrag-retrieval-{args.label}-"))
     print(f"Retained fixture: {scratch}", flush=True)
@@ -105,27 +109,35 @@ def main():
         raise AssertionError("The fixture must not access a model or any network service.")
     httpx.Client.send = forbidden
     httpx.AsyncClient.send = forbidden
-    space = EmbeddingSpace("fixture", "a" * 64, 128)
-    search.generate_embedding_batch = lambda *a, **k: EmbeddingBatch([[1.0] + [0.0] * 127], space)
+    space = EmbeddingSpace("synthetic-fixture", "a" * 64, args.dimension)
+    search.generate_embedding_batch = lambda *a, **k: EmbeddingBatch([[1.0] + [0.0] * (args.dimension - 1)], space)
     width = args.chunks // 100
 
-    def row(i, tail=False):
+    def row(i, tail=False, include_vector=True):
         doc = "tail" if tail else f"doc_{i // width:03}"
         evidence = not tail and i < 5
         text = f"NEEDLE42 unique clause {i}: payment within twenty one days." if evidence else f"Ordinary unrelated clause {i}."
-        return {"vector": ([0.0, 1.0] if evidence else [1.0, 0.0]) + [0.0] * 126,
+        if args.varied and not evidence:
+            text += (" Clausola ordinaria. Allgemeine Bedingungen. 条件の説明。" * (1 + i % 9))
+        if args.varied and include_vector and not evidence:
+            # Dense and varied, with reproducible bounded L2 norm. These are explicitly
+            # synthetic vectors, never labelled as measured Nomic/BGE encoder output.
+            vector = [math.sin((i + 1) * (j + 1) * 0.731) / math.sqrt(args.dimension) for j in range(args.dimension)]
+        else:
+            vector = ([0.0, 1.0] if evidence else [1.0, 0.0]) + [0.0] * (args.dimension - 2)
+        return {"vector": vector,
                 "chunk_id": f"c_{i:06}" if not tail else f"tail_{i:06}", "doc_id": doc,
                 "doc_name": f"{doc}.md", "text": text, "section_header": "Terms",
                 "chunk_index": i, "file_type": "md", "ingested_at": "2026-10-18", **space.metadata()}
 
-    schema = chunk_schema(128)
+    schema = chunk_schema(args.dimension)
     batches = (pa.RecordBatch.from_pylist([row(i) for i in range(start, min(start + 1000, args.chunks))], schema=schema)
                for start in range(0, args.chunks, 1000))
     table = db.lance_db.create_table("chunks", pa.RecordBatchReader.from_batches(schema, batches))
     documents = []
     for d in range(100):
         doc = f"doc_{d:03}"
-        body = "\n\n".join(row(i)["text"] for i in range(d * width, (d + 1) * width))
+        body = "\n\n".join(row(i, include_vector=False)["text"] for i in range(d * width, (d + 1) * width))
         if d == 0:
             body += "\n" + "Archived padding without query terms.\n" * 60_000
         original = scratch / f"{doc}.md"
@@ -139,7 +151,10 @@ def main():
     def records_hash():
         values = {}
         for name in ("documents", "chunks"):
-            data = db.lance_db.open_table(name).to_arrow().combine_chunks()
+            # Native updates can reorder physical fragments; compare every field in
+            # canonical identity order instead of treating physical row order as data.
+            identity = "id" if name == "documents" else "chunk_id"
+            data = db.lance_db.open_table(name).to_arrow().sort_by([(identity, "ascending")]).combine_chunks()
             sink = pa.BufferOutputStream()
             with pa.ipc.new_stream(sink, data.schema) as writer:
                 writer.write_table(data)
@@ -150,7 +165,8 @@ def main():
         return {str(p.relative_to(source.SOURCE_ROOT)): digest(p) for p in source.SOURCE_ROOT.rglob("*") if p.is_file()}
 
     before_rows, before_files = records_hash(), files_hash()
-    report = {"label": args.label, "chunks": args.chunks, "dimension": 128, "documents": 100,
+    report = {"label": args.label, "chunks": args.chunks, "dimension": args.dimension, "documents": 100,
+              "syntheticVectors": True, "variedDistribution": args.varied, "p95LimitMs": args.p95_limit_ms,
               "samples": args.samples, "root": str(scratch), "python": sys.version, "platform": platform.platform(),
               "versions": {name: importlib.metadata.version(name) for name in ("lancedb", "pyarrow", "pydantic")},
               "sourceHashes": {str(p.relative_to(ROOT)): digest(p) for p in (
@@ -232,7 +248,7 @@ def main():
         # Append a declared 10% tail, including a lexical-only exact identifier.
         tail = [row(i, tail=True) for i in range(args.chunks // 10)]
         tail[-1]["text"] = "TAILCODE789 newly appended evidence"
-        tail[-1]["vector"] = [0.0, 1.0] + [0.0] * 126
+        tail[-1]["vector"] = [0.0, 1.0] + [0.0] * (args.dimension - 2)
         table.add(pa.Table.from_pylist(tail, schema=schema))
         tail_rows = records_hash()
         run("unindexed_tail_full")
@@ -244,6 +260,60 @@ def main():
             for index in table.list_indices()}
         assert records_hash() == tail_rows and files_hash() == before_files
         report["tailEvidenceFoundAndRowsPreserved"] = True
+        if args.contention:
+            from concurrent.futures import ThreadPoolExecutor
+            from sidecar.infrastructure.db import DatabaseConflictError
+            gate = threading.Barrier(5)
+            outcomes, writes = [], []
+            reference = [item.model_dump() for item in search.perform_vector_search(SearchRequest(query="NEEDLE42", top_k=5))]
+
+            def reader():
+                gate.wait(timeout=10)
+                local = []
+                for _ in range(args.samples):
+                    start = time.perf_counter()
+                    try:
+                        found = search.perform_vector_search(SearchRequest(query="NEEDLE42", top_k=5))
+                        assert [item.model_dump() for item in found] == reference
+                        outcome = "success"
+                    except DatabaseConflictError:
+                        outcome = "revision_conflict"
+                    local.append({"outcome": outcome, "ms": (time.perf_counter() - start) * 1000})
+                return local
+
+            def writer():
+                gate.wait(timeout=10)
+                for index in range(20):
+                    start = time.perf_counter()
+                    # A declared native metadata-writer fixture, using the production lock.
+                    # This is not a full ingestion/encoder or canonical-document mutation.
+                    with db._database_lock:
+                        table.update(where="doc_id = 'doc_099'", values={"section_header": f"Updated {index}"})
+                    writes.append((time.perf_counter() - start) * 1000)
+                    time.sleep(.01)
+
+            with ThreadPoolExecutor(max_workers=5) as pool:
+                readers = [pool.submit(reader) for _ in range(4)]
+                writing = pool.submit(writer)
+                for future in readers:
+                    outcomes.extend(future.result(timeout=180))
+                writing.result(timeout=180)
+            with db._database_lock:
+                table.update(where="doc_id = 'doc_099'", values={"section_header": "Terms"})
+            successful = [item["ms"] for item in outcomes if item["outcome"] == "success"]
+            assert successful, "At least one search must succeed while exercising contention"
+            report["contention"] = {"readers": 4, "writes": len(writes), "outcomes": outcomes,
+                                    "allTerminals": distribution([item["ms"] for item in outcomes]),
+                                    "successfulReads": distribution(successful), "writerLatency": distribution(writes),
+                                    "conflicts": sum(item["outcome"] == "revision_conflict" for item in outcomes),
+                                    "rowsAndArchivesRestoredExactly": records_hash() == tail_rows and files_hash() == before_files}
+            (scratch / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+            assert report["contention"]["rowsAndArchivesRestoredExactly"]
+            assert report["contention"]["allTerminals"]["p95Ms"] <= args.p95_limit_ms
+            assert report["contention"]["writerLatency"]["p95Ms"] <= args.p95_limit_ms
+        report["withinDeclaredOfflineLatency"] = all(scenario["search"]["p95Ms"] <= args.p95_limit_ms for scenario in report["scenarios"])
+        (scratch / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+        assert report["withinDeclaredOfflineLatency"]
     report["complete"] = True
     (scratch / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"PASS: {scratch / 'report.json'}", flush=True)

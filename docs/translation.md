@@ -6,6 +6,8 @@ Il Renderer gestisce Markdown e traduzione PDF/DOCX con selezioni separate e un 
 
 - La richiesta richiede un modello esplicito e usa contesto e `think` selezionati. Lo stream segnala progresso, errore o annullamento; una traduzione parziale o rifiutata non è esportabile.
 - Per PDF e DOCX l'originale resta invariato. La traduzione protegge contatti completi, valori letterali, identificatori e asterischi con marker verificati; marker mancanti, duplicati o aggiunti causano rifiuto.
+- Gli output PDF/DOCX sono salvati e riletti in uno staging separato, poi pubblicati senza sostituzione. Una collisione tardiva fallisce preservando il file esistente; un errore di pulizia indica il percorso recuperabile. Le destinazioni devono supportare hard link. [Regressioni native e limiti](./verification-translation-fixes-2026-10-20.md).
+- DOCX include corpo, tabelle annidate, hyperlink e intestazioni/piè di pagina condivisi o distinti, tradotti una sola volta. Campi, textbox, note/commenti, revisioni e altri contenitori testuali non supportati causano rifiuto esplicito prima della traduzione; le immagini sono conservate senza OCR. La resa visiva Word resta da qualificare.
 - Il reinserimento PDF controlla glyph, font, modalità e limiti geometrici prima della redazione, poi verifica il testo Unicode dopo il salvataggio. Gli alias CJK usano `ActualText` solo dove necessari.
 - Un glossario chiuso copre etichette e clausole complete di moduli italiani riconosciuti; termini diversi tornano al modello e ai controlli ordinari. I contributi del glossario non sono prova della qualità generale del modello.
 

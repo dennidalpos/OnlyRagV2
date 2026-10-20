@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { monacoSanitizerPlugin } from './scripts/monacoSanitizerPlugin.mts'
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -53,6 +54,7 @@ function monacoLanguageSubset(): Plugin {
 export default defineConfig({
   define: appDefines,
   plugins: [
+    monacoSanitizerPlugin(),
     monacoLanguageSubset(),
     react(),
     tailwindcss(),

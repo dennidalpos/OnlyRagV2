@@ -9,20 +9,24 @@ import { discoverProjectProfile } from '../infrastructure/filesystem/projectProf
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { TaskRunner } from '../infrastructure/process/taskRunner'
 import type { AppSettings } from '../../../shared/types'
+import { CapabilityPolicyAuditRepository } from '../infrastructure/logging/capabilityPolicyAuditRepository'
 
 describe('Wave 6 deterministic safety fixtures', () => {
   let workspacePath: string
+  let fixtureRoot: string
   let executor: AgentToolExecutorService
   const settings = { allowTerminalExecution: true, allowFileModifications: true } as AppSettings
 
   beforeEach(() => {
-    workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-wave6-fixtures-'))
-    executor = new AgentToolExecutorService()
+    fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-wave6-fixtures-'))
+    workspacePath = path.join(fixtureRoot, 'workspace')
+    fs.mkdirSync(workspacePath)
+    executor = new AgentToolExecutorService(new CapabilityPolicyAuditRepository(path.join(fixtureRoot, 'policy-audit.json')))
   })
 
   afterEach(() => {
     executor.disposeShellSessions()
-    fs.rmSync(workspacePath, { recursive: true, force: true })
+    fs.rmSync(fixtureRoot, { recursive: true, force: true })
   })
 
   it('blocks a filesystem target outside the workspace deterministically', async () => {

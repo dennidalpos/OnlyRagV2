@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -27,11 +27,17 @@ import { ollamaAppService } from './ollamaAppService'
 import { sessionDeletionRunGate } from './sessionDeletionRunGate'
 import { sessionDeletionJournal } from '../infrastructure/filesystem/sessionDeletionJournal'
 
-const fallbackProfile = vi.hoisted(() => ({ sessions: '' }))
-vi.mock('../infrastructure/filesystem/userDataRoot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../infrastructure/filesystem/userDataRoot')>()),
+const fallbackProfile = await vi.hoisted(async () => {
+  const fs = await import('node:fs')
+  const os = await import('node:os')
+  const path = await import('node:path')
+  return { root: fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-orchestrator-profile-')), sessions: '' }
+})
+vi.mock('../infrastructure/filesystem/userDataRoot', () => ({
+  userDataRoot: () => fallbackProfile.root,
   userDataSessionsDir: () => fallbackProfile.sessions,
 }))
+afterAll(() => fs.rmSync(fallbackProfile.root, { recursive: true, force: true }))
 
 // The production fallback is fail-closed; these loop tests exercise tool execution, so they opt in.
 const TOOL_ENABLED_SETTINGS: AppSettings = {

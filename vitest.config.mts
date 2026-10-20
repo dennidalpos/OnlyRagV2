@@ -33,7 +33,7 @@ export default defineConfig({
     // Main-process, shared and pure-service tests run in Node; only renderer UI tests get a DOM.
     // (environmentMatchGlobs was removed in Vitest 4 and silently ignored, putting everything in happy-dom.)
     projects: [
-      { extends: true, test: { name: 'node', environment: 'node', include: nodeTestGlobs } },
+      { extends: true, test: { name: 'node', environment: 'node', include: nodeTestGlobs, setupFiles: ['scripts/test/nodeSetup.ts'] } },
       {
         extends: true,
         test: { name: 'dom', environment: 'happy-dom', include: ['src/**/*.test.{ts,tsx}'], exclude: nodeTestGlobs, setupFiles: ['src/test/domSetup.ts'] },

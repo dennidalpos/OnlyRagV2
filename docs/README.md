@@ -1,5 +1,11 @@
 # Documentazione OnlyRag V2
 
+Il [passaggio di sessione delle correzioni locali](./session-handoff-local-fixes-2026-10-20.md) salva tre completamenti, 34 attività aperte e il residuo audit; commit e push su `master` autorizzati per questa consegna. Le sezioni successive mantengono le rispettive date ed evidenze storiche.
+
+Il [seguito locale del tracker](./verification-tracker-local-2026-10-20.md) conclude tre task e registra un nuovo residuo di recupero dell'audit di sviluppo: **34 aperti**. Il [sanitizer Monaco](./verification-monaco-sanitizer-2026-10-20.md) usa DOMPurify 3.4.17 verificato nativamente; le [misure RAG 768/1024D con contesa](./verification-retrieval-contention-2026-10-20.md) passano il p95 locale di 5 secondi. I [due task CI](./verification-ci-boundaries-2026-10-20.md) mantengono la qualifica remota pendente.
+
+Il [seguito delle correzioni di traduzione](./verification-translation-fixes-2026-10-20.md) conclude pubblicazione esclusiva PDF/DOCX e copertura DOCX dichiarata. I conteggi degli audit precedenti sono storici; le qualifiche con modelli reali e app installata rimangono distinte.
+
 Il [passaggio di sessione dell'audit](./session-handoff-audit-2026-10-20.md) salva i 36 residui e la richiesta esplicita di commit/push su master; le verifiche pre-commit e la CI della nuova consegna restano distinte dall'audit precedente.
 
 L'[audit corrente dei residui](./repository-residue-audit-2026-10-20.md) registra **36 attivita aperte**, tre nuovi P2 e CI b470387 fallita sul worker dipendenze. Prove DOCX isolate, nessuna correzione applicativa. Il percorso TEMP della sanificazione non e disponibile e resta nel task di conservazione; conteggi/esiti delle ricevute precedenti sono storici.

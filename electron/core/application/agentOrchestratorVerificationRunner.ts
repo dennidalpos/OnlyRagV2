@@ -3,11 +3,12 @@ import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
 import { scanWorkspaceDependencies } from '../infrastructure/filesystem/dependencyScanner'
 import { evaluateDependencyIntegrity } from '../domain/agent/dependencyIntegrityGate'
-import { resolveRequiredProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
+import { resolveProfileVerificationTargets, resolveRequiredProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { classifyProjectVerification, type ProjectVerificationStatus } from '../domain/agent/projectVerificationStatus'
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
-import { WEB_UI_SMOKE_VERIFICATION } from '../domain/agent/milestoneVerificationPromotion'
+import { requiresBehaviorEvidence, WEB_UI_SMOKE_VERIFICATION } from '../domain/agent/milestoneVerificationPromotion'
+import { parseTestRunOutput } from '../domain/agent/testResultParser'
 import { verifyWebUi } from '../infrastructure/process/webUiSmokeVerifier'
 import { withVerificationEnvironment } from '../infrastructure/process/powerShellCommand'
 
@@ -43,8 +44,22 @@ export async function runProjectVerification(
 
   const profile = discoverProjectProfile(workspacePath)
   const verifications = resolveRequiredProfileVerificationTargets(profile)
+  const requiredBehaviorCommands = new Set(
+    milestones
+      .filter((milestone) => milestone.status !== 'failed' && requiresBehaviorEvidence(milestone))
+      .map((milestone) => (milestone.verificationCommand || milestone.proposedVerificationCommand)!.trim().toLowerCase()),
+  )
+  for (const target of resolveProfileVerificationTargets(profile)) {
+    if (
+      target.kind === 'test' &&
+      requiredBehaviorCommands.has(target.command.trim().toLowerCase()) &&
+      !verifications.some((current) => current.projectId === target.projectId && current.command === target.command)
+    )
+      verifications.push(target)
+  }
   const verificationLabel = verifications.map((target) => `${target.projectRelativePath}: ${target.command}`).join(' && ')
-  const evidenceLevel = verifications.length > 0 && verifications.every((target) => target.kind === 'test') ? ('behavioral' as const) : ('structural' as const)
+  let evidenceLevel: 'structural' | 'behavioral' = 'structural'
+  const behavioralTargets = new Set<string>()
   const interrupted: VerificationRunResult = { hasVerificationCommand: verifications.length > 0, status: 'unverifiable' }
   const nativeChecks: Record<string, RegExp> = { python: / -m pytest /, go: /^go /, rust: /^cargo /, java: /^(mvn|gradle) /, php: /^composer / }
   const uncheckedProject = profile.projects.find(
@@ -111,7 +126,7 @@ export async function runProjectVerification(
     }
 
     const shell = agentToolExecutorService.getOrCreateShellSession(verification.projectRootPath)
-    const command = withVerificationEnvironment(security.sanitizedCommand)
+    const command = withVerificationEnvironment(security.sanitizedCommand, verification.projectRootPath)
     const res = await shell.execute(command, (chunk) => onOutput?.(chunk.trim()), undefined, VERIFICATION_TIMEOUT_MS, signal)
     if (signal?.aborted) return interrupted
     if (res.code === 127 && res.stderr.includes('VERIFICATION_TOOL_UNAVAILABLE:')) {
@@ -139,6 +154,30 @@ export async function runProjectVerification(
         evidenceLevel,
       }
       return { ...result, status: classifyProjectVerification(result) }
+    }
+    if (verification.kind === 'test') {
+      const tests = parseTestRunOutput(`${res.stdout}\n${res.stderr}`, res.code)
+      const nativeFrameworkMatches = verification.command.startsWith('go ')
+        ? tests.framework === 'go'
+        : verification.command.startsWith('cargo ')
+          ? tests.framework === 'rust'
+          : / -m pytest /.test(verification.command)
+            ? tests.framework === 'pytest'
+            : true
+      if (nativeFrameworkMatches && tests.success && (tests.passed ?? 0) > 0) behavioralTargets.add(`${verification.projectId}\0${verification.command}`)
+    }
+  }
+
+  evidenceLevel = verifications.every((target) => behavioralTargets.has(`${target.projectId}\0${target.command}`)) ? 'behavioral' : 'structural'
+  for (const required of requiredBehaviorCommands) {
+    const matching = verifications.filter((target) => target.command.trim().toLowerCase() === required)
+    if (!matching.length || matching.some((target) => !behavioralTargets.has(`${target.projectId}\0${target.command}`))) {
+      return {
+        ...interrupted,
+        command: verificationLabel,
+        failureDetail: `No successful executed tests were observed for the required behavioral check: ${required}. Empty, skipped or unrecognized output cannot certify this milestone.`,
+        evidenceLevel,
+      }
     }
   }
 

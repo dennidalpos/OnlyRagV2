@@ -1,0 +1,271 @@
+{
+  "audit_date": "2026-10-19",
+  "source_commit": "ceef495a5efc52bfb100fd6600a542a3a789f060",
+  "kind": "offline repository audit; probes assert reproduced defects, not corrected behavior",
+  "inventory": {
+    "tracked_files_before_audit": 1131,
+    "static_files_checked": 854,
+    "ipc_handlers_checked": 103,
+    "dependency_graph_modules": 465
+  },
+  "versions": {
+    "node": "24.20.0",
+    "npm": "11.19.0",
+    "python": "3.13.15",
+    "vitest": "4.1.11",
+    "go": "1.27.0 windows/amd64",
+    "pytest": "9.1.1"
+  },
+  "checks": [
+    {
+      "command": "npm run quality:static",
+      "exit_code": 0,
+      "result": "854 files, 103 IPC handlers; lint/format/layering pass; no fixes"
+    },
+    {
+      "command": "npm run typecheck",
+      "exit_code": 0
+    },
+    {
+      "command": "npm run audit:deadcode",
+      "exit_code": 0,
+      "result": "knip and knip --production pass; not a Python dead-code proof"
+    },
+    {
+      "command": "npm run audit:cycles",
+      "exit_code": 0,
+      "result": "465 modules analyzed; no cycle in the two declared entrypoint graphs"
+    },
+    {
+      "command": "npm run test -- --reporter=dot --silent=true",
+      "exit_code": 0,
+      "files": 320,
+      "passed": 2911,
+      "duration_seconds": 202.46
+    },
+    {
+      "command": ".venv\\Scripts\\python.exe -B -m pytest -q -rs --tb=short -p no:cacheprovider",
+      "exit_code": 0,
+      "passed": 598,
+      "skipped": 1,
+      "duration_seconds": 176.72,
+      "skip": "test_source_provenance.py:223: directory symlinks unavailable; other Windows junction cases executed"
+    },
+    {
+      "command": "npm run quality:python",
+      "exit_code": 0,
+      "passed": 15,
+      "required_checks": 8,
+      "duration_seconds": 4.09
+    },
+    {
+      "command": "npm audit --json",
+      "exit_code": 0,
+      "advisory_findings": 0,
+      "limit": "Does not inspect vendored DOMPurify implementation, all native libraries or prove no vulnerabilities"
+    },
+    {
+      "command": "npm view braces version --json",
+      "exit_code": 0,
+      "result": "3.0.3"
+    },
+    {
+      "command": "isolated Vitest audit config with production discovery/runner and real PersistentPowerShellSession",
+      "exit_code": 0,
+      "passed": 6,
+      "duration_seconds": 8.77
+    },
+    {
+      "command": "pwsh -NoProfile -File scripts/test_cleanup_policy.ps1",
+      "exit_code": 0,
+      "passed": 31,
+      "mode": "isolated WhatIf"
+    },
+    {
+      "command": "pwsh -NoProfile -File scripts/test_log_cleanup.ps1",
+      "exit_code": 0,
+      "passed": 17,
+      "mode": "actual selected-file deletion only in isolated fixtures; retained hashes identical"
+    },
+    {
+      "command": "npm run docs:check (after audit documentation)",
+      "exit_code": 0,
+      "markdown_files": 77
+    },
+    {
+      "command": "npm run quality:static (after tracker formatting)",
+      "exit_code": 0,
+      "result": "854 files, 103 IPC handlers; tracker normalized with the project formatter"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    {
+      "command": "tracker schema/IDs/priorities/original text/source hashes and fixture teardown assertions",
+      "exit_code": 0
+    }
+  ],
+  "probe_source_sha256": "5c6c2f0bb57da13627a2174ab6eeb1bfa655fa144b6e1d7491927a240801e955",
+  "probe_source_retained_outside_checkout": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-audit-d8004231b059486db7cb540f7e186a68\\audit.probe.test.ts",
+  "probe_isolation": "Temporary workspace only; mock singleton maps real persistent shells, mock unused Node dependency scan and non-applicable web UI; logger mocked. Native command output and production runner/discovery are real. No application source copied or modified. Go/Python fixtures removed by teardown.",
+  "probe_results": [
+    {
+      "case": "standalone-setup.cfg",
+      "direct_commands": [
+        "python -B -m pytest -q -p no:cacheprovider"
+      ],
+      "discovered_projects": []
+    },
+    {
+      "case": "mixed-setup.cfg",
+      "discovered_projects": [
+        "."
+      ],
+      "actual_result": {
+        "hasVerificationCommand": true,
+        "passed": true,
+        "status": "verified",
+        "command": ".: go test -mod=readonly -count=1 -timeout=30s ./...",
+        "verifiedCommands": [
+          "go test -mod=readonly -count=1 -timeout=30s ./..."
+        ],
+        "evidenceLevel": "behavioral"
+      },
+      "native_output": [
+        "ok  \texample.com/fixture\t0.020s"
+      ],
+      "independent_python_control": {
+        "exit_code": 1,
+        "observed": "1 failed: AUDIT_PYTHON_FAIL"
+      }
+    },
+    {
+      "case": "standalone-tox.ini",
+      "direct_commands": [
+        "python -B -m pytest -q -p no:cacheprovider"
+      ],
+      "discovered_projects": []
+    },
+    {
+      "case": "mixed-tox.ini",
+      "discovered_projects": [
+        "."
+      ],
+      "actual_result": {
+        "hasVerificationCommand": true,
+        "passed": true,
+        "status": "verified",
+        "command": ".: go test -mod=readonly -count=1 -timeout=30s ./...",
+        "verifiedCommands": [
+          "go test -mod=readonly -count=1 -timeout=30s ./..."
+        ],
+        "evidenceLevel": "behavioral"
+      },
+      "native_output": [
+        "ok  \texample.com/fixture\t0.015s"
+      ],
+      "independent_python_control": {
+        "exit_code": 1,
+        "observed": "1 failed: AUDIT_PYTHON_FAIL"
+      }
+    },
+    {
+      "case": "go-no-tests",
+      "actual_result": {
+        "hasVerificationCommand": true,
+        "passed": true,
+        "status": "verified",
+        "command": ".: go test -mod=readonly -count=1 -timeout=30s ./...",
+        "verifiedCommands": [
+          "go test -mod=readonly -count=1 -timeout=30s ./..."
+        ],
+        "evidenceLevel": "behavioral"
+      },
+      "native_output": [
+        "?   \texample.com/fixture\t[no test files]"
+      ]
+    },
+    {
+      "case": "wrong-cwd",
+      "actual_result": {
+        "hasVerificationCommand": true,
+        "passed": true,
+        "status": "verified",
+        "command": ".: go test -mod=readonly -count=1 -timeout=30s ./... && child: go test -mod=readonly -count=1 -timeout=30s ./...",
+        "verifiedCommands": [
+          "go test -mod=readonly -count=1 -timeout=30s ./...",
+          "go test -mod=readonly -count=1 -timeout=30s ./..."
+        ],
+        "evidenceLevel": "behavioral"
+      },
+      "native_output": [
+        "ok  \texample.com/fixture\t0.016s",
+        "ok  \texample.com/fixture\t0.015s"
+      ],
+      "root_control": {
+        "exit_code": 1,
+        "stdout": "--- FAIL: TestAdd (0.00s)\n    math_test.go:3: AUDIT_ROOT_FAIL\nFAIL\nFAIL\texample.com/fixture\t0.016s\nFAIL"
+      },
+      "actual_directory_for_both_commands": "<isolated-root>/child"
+    }
+  ],
+  "source_sha256": {
+    "electron/core/application/agentOrchestratorVerificationRunner.ts": "9b0fc5df6a6232476bf03447d25e3ba0a1d89223932a0eca2dbbba67484f070a",
+    "electron/core/application/agentToolExecutorService.ts": "75b10acd493982c325e914d66ff13e195d0156ba89804dc6ffae7cddf3df2dc4",
+    "electron/core/infrastructure/process/persistentPowerShellSession.ts": "0481fd5eead5b5d9143779e70431b64c1fa5601cd088b4f226e5752ee4507a0c",
+    "electron/core/infrastructure/process/powerShellCommand.ts": "790407913ae8325293a8fe3b562cec9b1650afb320beed4694f8e548baaabc42",
+    "electron/core/infrastructure/filesystem/projectProfileDiscovery.ts": "391097e6cd6b2a89f1c37df1dfe3fa02caf2b3dbd8f6f898e98e9a16418d73f2",
+    "electron/core/domain/agent/projectVerificationResolver.ts": "6ac82ee5910ecd9e5ccbc486020d6dc6924b89e397a81be485b0d37dc285bfac",
+    "electron/core/domain/agent/projectProfileVerificationResolver.ts": "16c442a029d4bd7a2bf6b552736739f8962882ace87bae4bbe3b0bf694a117bd",
+    "sidecar/services/prompt_history_service.py": "ce43172f80d26e531cf61e6870be66e1fb64f4d0fbf926346daa16a7a2adab11",
+    "sidecar/infrastructure/embeddings.py": "9a5f18841f83db6e48a95d925395d328c7a285a28af8b599cc8758a91a8bbf96"
+  },
+  "tracker": {
+    "before": 36,
+    "after": 40,
+    "autonomous": 22,
+    "user_required": 18,
+    "P1": 5,
+    "P2": 29,
+    "P3": 6,
+    "removed_ids": [],
+    "added_ids": [
+      "AGENT-VERIFICATION-CWD-BINDING-01",
+      "AGENT-PYTHON-PROJECT-DISCOVERY-01",
+      "AGENT-VERIFICATION-EMPTY-TEST-EVIDENCE-01",
+      "DOCS-CURRENT-STATE-RECONCILIATION-01"
+    ]
+  },
+  "remote_ci": {
+    "sha": "ceef495a5efc52bfb100fd6600a542a3a789f060",
+    "run_id": 39328778562,
+    "status_at_readback": "in_progress",
+    "conclusion_at_readback": null,
+    "url": "https://github.com/dennidalpos/OnlyRagV2/actions/runs/39328778562"
+  },
+  "not_executed": [
+    "build/package/install",
+    "new real-model generation or embeddings",
+    "personal migration or rebuild",
+    "power loss",
+    "screen reader/zoom acceptance",
+    "public release",
+    "retained evidence cleanup",
+    "full fresh Python/native advisory scan",
+    "fresh extraction/hash verification of retained release payloads"
+  ],
+  "secondbrain": {
+    "status": "pending",
+    "reason": "another active Write session holds writer.lock; no force/lock deletion",
+    "private_or_technical_memory_modified": false
+  },
+  "hygiene": {
+    "fixture_workspaces_removed": true,
+    "probe_shells_disposed": true,
+    "audit_vite_cache_removed": true,
+    "authoring_script_template_removed": true,
+    "retained_artifacts_outside_checkout": "probe source/config, receipt, log and verified baseline backups",
+    "preexisting_ignored_residues": "preserved"
+  }
+}

@@ -1,4 +1,6 @@
-export type TestFramework = 'vitest' | 'jest' | 'pytest' | 'mocha' | 'unknown'
+import stripAnsi from 'strip-ansi'
+
+export type TestFramework = 'vitest' | 'jest' | 'pytest' | 'mocha' | 'go' | 'rust' | 'node' | 'unknown'
 
 export interface TestRunResult {
   success: boolean
@@ -35,7 +37,7 @@ function matchJest(output: string): TestRunResult | null {
 }
 
 function matchPytest(output: string): TestRunResult | null {
-  const summaryLine = output.match(/={3,}[^\n]*?\bin\s+[\d.]+s\b[^\n]*={3,}/i)
+  const summaryLine = output.match(/^(?:=+\s*)?\d+\s+(?:passed|failed|errors?|skipped|deselected|xfailed|xpassed)\b[^\n]*?\bin\s+[\d.]+s\b[^\n]*$/im)
   if (!summaryLine) return null
   const line = summaryLine[0]
   const failedMatch = line.match(/(\d+)\s+failed/i)
@@ -56,9 +58,45 @@ function matchMocha(output: string): TestRunResult | null {
   return buildResult('mocha', passed, failed, passed + failed)
 }
 
+function matchGo(output: string): TestRunResult | null {
+  const tests = new Map<string, string>()
+  for (const line of output.split(/\r?\n/)) {
+    try {
+      const event = JSON.parse(line)
+      // Package-level pass/skip also occurs when no tests exist; it is not behavioral proof.
+      if (typeof event?.Package === 'string' && typeof event.Test === 'string' && event.Test && ['pass', 'fail', 'skip'].includes(event.Action)) {
+        tests.set(`${event.Package}\0${event.Test}`, event.Action)
+      }
+    } catch {
+      // Other tools and test output are not Go test events.
+    }
+  }
+  if (!tests.size) return null
+  const outcomes = [...tests.values()]
+  return buildResult('go', outcomes.filter((action) => action === 'pass').length, outcomes.filter((action) => action === 'fail').length, tests.size)
+}
+
+function matchRust(output: string): TestRunResult | null {
+  const summaries = [...output.matchAll(/^test result: (?:ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;/gm)]
+  if (!summaries.length) return null
+  const passed = summaries.reduce((sum, match) => sum + Number(match[1]), 0)
+  const failed = summaries.reduce((sum, match) => sum + Number(match[2]), 0)
+  const ignored = summaries.reduce((sum, match) => sum + Number(match[3]), 0)
+  return buildResult('rust', passed, failed, passed + failed + ignored)
+}
+
+function matchNode(output: string): TestRunResult | null {
+  const total = output.match(/^[#ℹ]\s+tests\s+(\d+)\s*$/m)
+  const passed = output.match(/^[#ℹ]\s+pass\s+(\d+)\s*$/m)
+  const failed = output.match(/^[#ℹ]\s+fail\s+(\d+)\s*$/m)
+  return total && passed && failed ? buildResult('node', Number(passed[1]), Number(failed[1]), Number(total[1])) : null
+}
+
 /** Parses combined stdout/stderr from a test command into a structured result. */
 export function parseTestRunOutput(rawOutput: string, exitCode: number): TestRunResult {
-  const matched = matchVitest(rawOutput) || matchJest(rawOutput) || matchPytest(rawOutput) || matchMocha(rawOutput)
+  const output = stripAnsi(rawOutput)
+  const matched =
+    matchGo(output) || matchVitest(output) || matchJest(output) || matchPytest(output) || matchMocha(output) || matchRust(output) || matchNode(output)
   if (matched) return matched
 
   return {

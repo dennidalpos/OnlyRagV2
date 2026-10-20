@@ -16,6 +16,34 @@ describe('project profile discovery', () => {
     expect(discoverProjectProfile(root)).toMatchObject({ classification: 'empty', projects: [] })
   })
 
+  it.each([
+    ['setup.cfg', '[tool:pytest]'],
+    ['tox.ini', '[pytest]'],
+  ])('discovers standalone and nested Python projects configured only through %s', (name, section) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-python-'))
+    roots.push(root)
+    fs.writeFileSync(path.join(root, name), `${section}\ntestpaths = tests\n`)
+    const standalone = discoverProjectProfile(root)
+    expect(standalone.classification).toBe('existing')
+    expect(standalone.projects[0]).toMatchObject({
+      manifestFiles: [name],
+      toolchain: { languages: ['python'] },
+      verificationCommands: [{ kind: 'test', command: 'python -B -m pytest -q -p no:cacheprovider' }],
+    })
+    fs.mkdirSync(path.join(root, 'child'))
+    fs.writeFileSync(path.join(root, 'child', name), `${section}\ntestpaths = tests\n`)
+    expect(discoverProjectProfile(root).projects.map((project) => project.relativePath)).toEqual(['.', 'child'])
+  })
+
+  it.each(['setup.cfg', 'tox.ini'])('ignores unrelated configuration in %s', (name) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-unrelated-'))
+    roots.push(root)
+    fs.writeFileSync(path.join(root, name), '[metadata]\nname = unrelated\n')
+    expect(discoverProjectProfile(root)).toMatchObject({ classification: 'empty', projects: [] })
+    fs.writeFileSync(path.join(root, 'package.json'), '{"scripts":{"test":"node --test"}}')
+    expect(discoverProjectProfile(root).projects[0].toolchain.languages).toEqual(['javascript'])
+  })
+
   it.each(['npm', 'pnpm', 'yarn'])('keeps declared %s discovery and commands consistent', (manager) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-manager-'))
     roots.push(root)

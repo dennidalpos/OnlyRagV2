@@ -20,7 +20,13 @@ Le guide descrivono il comportamento verificato nel codice al **13 ottobre 2026*
 
 ## Specifiche e prove conservate
 
+La [consegna del 20 ottobre](./session-handoff-verifier-2026-10-20.md) riunisce audit, quattro rilievi conclusi, 36 attività residue e verifiche per la pubblicazione dei sorgenti su `master`.
+
 Checkpoint chat, archivio delle bozze e budget complessivo del prompt del 16 ottobre sono descritti in [recupero e contesto](./verification-chat-drafts-context-2026-10-16.md).
+
+Le [correzioni del verificatore del 20 ottobre 2026](./verification-project-regressions-2026-10-20.md) qualificano le quattro attività emerse nell’audit, con 16 casi nativi e distinzione fra successo strutturale e test eseguiti.
+
+L’[audit dei residui del 19 ottobre 2026](./repository-residue-audit-2026-10-19.md) confronta codice, guide, test e tracker; conserva quattro nuovi rilievi confermati e i limiti della ricognizione offline, con [ricevuta JSON](./repository-residue-audit-2026-10-19.json).
 
 La verifica del repository del 14 ottobre 2026 è in [`repository-audit-2026-10-14.md`](./repository-audit-2026-10-14.md).
 

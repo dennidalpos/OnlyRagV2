@@ -38,7 +38,7 @@ Con app chiusa e dopo revisione dei file, usare `npm run clean:logs -- -Disposab
 
 ## Qualifica nativa dei progetti dell'agente
 
-`npm run test:verification-native` usa i manifest di sei progetti fixture e tutti i relativi strumenti già disponibili. Il [wrapper PowerShell](../scripts/test_native_verification.ps1) accetta percorsi tool aggiuntivi e JDK senza cambiare il PATH persistente; `-PrepareDependencies` consente esplicitamente la preparazione Maven con rete. La verifica applicativa successiva resta offline. [Comandi, requisiti, risultati e limiti](./verification-native-projects-2026-10-19.md).
+`npm run test:verification-native` usa i manifest di sei progetti fixture e tutti i relativi strumenti già disponibili. Il [wrapper PowerShell](../scripts/test_native_verification.ps1) accetta percorsi tool aggiuntivi e JDK senza cambiare il PATH persistente; `-PrepareDependencies` consente esplicitamente la preparazione Maven con rete. La verifica applicativa successiva resta offline. La [qualifica iniziale](./verification-native-projects-2026-10-19.md) conserva i dieci casi originari; le [regressioni del 20 ottobre](./verification-project-regressions-2026-10-20.md) portano il gruppo a sedici casi, includendo directory modificata, configurazioni Python sole e suite vuote/saltate. Nessun provisioning è richiesto dalla suite ordinaria.
 
 ## Disinstallazione e dati
 

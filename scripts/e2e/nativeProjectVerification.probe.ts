@@ -104,6 +104,87 @@ const fixtures = [
 ]
 
 describe('native project verification through the application runner and real PowerShell', () => {
+  it('checks a failing root after an interactive cd and preserves the interactive directory', async () => {
+    const fixture = fixtures.find((entry) => entry.name === 'go')!
+    write('cwd-root/go.mod', fixture.body)
+    write('cwd-root/math_test.go', fixture.bad)
+    write('cwd-root/child/go.mod', fixture.body)
+    write('cwd-root/child/math_test.go', fixture.good)
+    const cwd = path.join(root, 'cwd-root')
+    const shell = shellFor(cwd)
+    expect((await shell.execute("Set-Location -LiteralPath 'child'")).code).toBe(0)
+    const failed = await runProjectVerification(cwd)
+    expect(failed.status).toBe('failed')
+    expect(failed.failureDetail).toContain('Project: .\n')
+    expect(failed.failureDetail).toContain('native assertion failed')
+    expect(shell.currentDirectory).toBe(path.join(cwd, 'child'))
+    write('cwd-root/math_test.go', fixture.good)
+    const passed = await runProjectVerification(cwd)
+    expect(passed).toMatchObject({ status: 'verified', evidenceLevel: 'behavioral' })
+    expect(passed.verifiedCommands).toHaveLength(2)
+    expect(shell.currentDirectory).toBe(path.join(cwd, 'child'))
+  })
+
+  for (const [filename, section] of [
+    ['setup.cfg', '[tool:pytest]'],
+    ['tox.ini', '[pytest]'],
+  ]) {
+    it(`checks standalone and nested Python assertions configured only by ${filename}`, async () => {
+      const relative = `python-${filename}`
+      write(`${relative}/${filename}`, `${section}\ntestpaths = tests\n`)
+      write(`${relative}/tests/test_math.py`, 'def test_math():\n    assert False, "CONFIG_ONLY_ASSERTION"\n')
+      const cwd = path.join(root, relative)
+      expect(discoverProjectProfile(cwd).projects[0].toolchain.languages).toContain('python')
+      expect((await runProjectVerification(cwd)).status).toBe('failed')
+      write(`${relative}/tests/test_math.py`, 'def test_math():\n    assert 2 + 2 == 4\n')
+      expect(await runProjectVerification(cwd)).toMatchObject({ status: 'verified', evidenceLevel: 'behavioral' })
+      const go = fixtures.find((entry) => entry.name === 'go')!
+      write(`${relative}-mixed/go.mod`, go.body)
+      write(`${relative}-mixed/math_test.go`, go.good)
+      write(`${relative}-mixed/child/${filename}`, `${section}\ntestpaths = tests\n`)
+      write(`${relative}-mixed/child/tests/test_math.py`, 'def test_math():\n    assert False, "CONFIG_ONLY_ASSERTION"\n')
+      const failed = await runProjectVerification(path.join(root, `${relative}-mixed`))
+      expect(failed.status).toBe('failed')
+      expect(failed.failureDetail).toContain('Project: child')
+      expect(failed.failureDetail).toContain('CONFIG_ONLY_ASSERTION')
+    })
+  }
+
+  it('separates empty/skipped Go success from executed behavioral tests and enforces an explicit behavioral gate', async () => {
+    const fixture = fixtures.find((entry) => entry.name === 'go')!
+    write('go-evidence/go.mod', fixture.body)
+    write('go-evidence/math.go', 'package fixture\nfunc Value() int { return 42 }\n')
+    const cwd = path.join(root, 'go-evidence')
+    expect(await runProjectVerification(cwd)).toMatchObject({ status: 'verified', evidenceLevel: 'structural' })
+    const command = discoverProjectProfile(cwd).projects[0].verificationCommands[0].command
+    const required = await runProjectVerification(cwd, undefined, undefined, false, [
+      { id: 'test', title: 'Behavioral test', status: 'pending', verificationCommand: command },
+    ])
+    expect(required.status).toBe('unverifiable')
+    expect(required.verifiedCommands).toBeUndefined()
+    write('go-evidence/math_test.go', 'package fixture\nimport "testing"\nfunc TestSkipped(t *testing.T) { t.Skip("deliberately skipped") }\n')
+    expect(await runProjectVerification(cwd)).toMatchObject({ status: 'verified', evidenceLevel: 'structural' })
+    write('go-evidence/math_test.go', fixture.good)
+    expect(await runProjectVerification(cwd)).toMatchObject({ status: 'verified', evidenceLevel: 'behavioral' })
+    write('go-evidence/math_test.go', fixture.bad)
+    expect((await runProjectVerification(cwd)).status).toBe('failed')
+  })
+
+  it('keeps empty and ignored Rust suites structural', async () => {
+    const fixture = fixtures.find((entry) => entry.name === 'rust')!
+    write('rust-empty/Cargo.toml', fixture.body)
+    write('rust-empty/src/lib.rs', 'pub fn value() -> i32 { 42 }\n')
+    const cwd = path.join(root, 'rust-empty')
+    expect(await runProjectVerification(cwd)).toMatchObject({ status: 'verified', evidenceLevel: 'structural' })
+    write('rust-empty/src/lib.rs', '#[test]\n#[ignore]\nfn ignored() { assert!(false); }\n')
+    expect(await runProjectVerification(cwd)).toMatchObject({ status: 'verified', evidenceLevel: 'structural' })
+  })
+
+  it('does not classify a Gradle check with no sources as behavioral tests', async () => {
+    write('gradle-empty/build.gradle', "plugins { id 'java' }\n")
+    expect(await runProjectVerification(path.join(root, 'gradle-empty'))).toMatchObject({ status: 'verified', evidenceLevel: 'structural' })
+  })
+
   for (const fixture of fixtures) {
     it(`${fixture.name}: discovers its manifest, passes a native check and reports a genuine assertion failure`, async () => {
       write(`${fixture.name}/${fixture.manifest}`, fixture.body)
@@ -121,6 +202,14 @@ describe('native project verification through the application runner and real Po
       const passed = await runProjectVerification(cwd, (chunk) => output.push(chunk))
       expect(passed.status, JSON.stringify(passed) + output.join('\n')).toBe('verified')
       expect(passed.verifiedCommands).toEqual(profile.projects[0].verificationCommands.map((item) => item.command))
+      expect(passed.evidenceLevel).toBe(['python', 'go', 'rust'].includes(fixture.name) ? 'behavioral' : 'structural')
+      if (fixture.name === 'composer') {
+        const required = await runProjectVerification(cwd, undefined, undefined, false, [
+          { id: 'custom-test', title: 'Custom behavioral check', status: 'pending', verificationCommand: profile.projects[0].verificationCommands[0].command },
+        ])
+        expect(required.status).toBe('unverifiable')
+        expect(required.failureDetail).toContain('executed tests')
+      }
       write(`${fixture.name}/${fixture.file}`, fixture.bad)
       const failed = await runProjectVerification(cwd)
       expect(failed.status, JSON.stringify(failed)).toBe('failed')

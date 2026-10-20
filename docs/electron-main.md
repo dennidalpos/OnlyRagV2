@@ -12,7 +12,7 @@ Impostazioni, registro progetti, sessioni e stato agente usano scritture seriali
 
 ## Session deletion recovery — 2026-10-12
 
-Eliminazione e Clear hanno stati `refused`, `pending` e `complete`. Main conserva il journal delle operazioni incomplete, la cronologia e i checkpoint; il Renderer offre retry, ripristino o export secondo il contratto IPC. Una fase `.preparing-<operationId>` rimasta dopo crash o rifiuto non viene promossa né rimossa automaticamente: richiede verifica di proprietà e completezza (`SESSION-DELETION-STAGING-RESOLUTION-01`).
+Eliminazione e Clear hanno stati `refused`, `pending` e `complete`. Main conserva il journal delle operazioni incomplete, la cronologia e i checkpoint; il Renderer offre retry, ripristino o export secondo il contratto IPC. Al riavvio una fase `.preparing-<operationId>` viene pubblicata soltanto dopo verifica del manifest completo e rilettura di tutti gli asset conservati. Le preparazioni incomplete o in conflitto restano esportabili senza autorizzare cancellazione/ripristino né bloccare sessioni estranee. La [qualifica dello staging](./verification.md#session-deletion-staging-and-cleanup-recovery---2026-10-15) conserva il lavoro concluso; non è una voce ancora aperta del tracker e non certifica perdita di alimentazione.
 
 ### Sidecar indexing fence extension — implemented 2026-10-11
 

@@ -16,4 +16,4 @@ Il runtime riduce gli output lunghi, classifica fallimenti di parser, test, comp
 
 ## Gestione dipendenze e package.json
 
-Manifest e lockfile sono verificati prima delle installazioni. Il manager dichiarato e il lockfile univoco governano i comandi Node; tool mancanti o prove incomplete restano `unverifiable`, senza acquisizione automatica. La copertura di altri ecosistemi è nel task `PROJECT-VERIFICATION-NATIVE-QUALIFICATION-01` del [`tracker`](../PROJECT_STATUS.json).
+Manifest e lockfile sono verificati prima delle installazioni. Il manager dichiarato e il lockfile univoco governano i comandi Node; tool mancanti o prove incomplete restano `unverifiable`, senza acquisizione automatica. La [qualifica nativa](./verification-native-projects-2026-10-19.md) copre sei ecosistemi nei fixture dichiarati; le [regressioni del verificatore](./verification-project-regressions-2026-10-20.md) verificano root, discovery Python e distinzione fra successo strutturale e test effettivamente eseguiti. Restano nel [`tracker`](../PROJECT_STATUS.json) le qualifiche installate e con modelli reali.

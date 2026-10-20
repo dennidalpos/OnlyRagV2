@@ -7,7 +7,7 @@ import {
   type ProjectProfileProject,
   type ProjectProfileToolchain,
 } from '../../domain/agent/projectProfileContract'
-import { resolvePackageManager, resolveVerificationCommands } from '../../domain/agent/projectVerificationResolver'
+import { resolvePackageManager, resolvePythonTestConfiguration, resolveVerificationCommands } from '../../domain/agent/projectVerificationResolver'
 import { readWorkspaceManifest } from './workspaceManifestReader'
 
 const PROJECT_MANIFESTS = [
@@ -59,7 +59,8 @@ function detectToolchain(rootPath: string, manifestFiles: string[]): ProjectProf
       }
     }
   }
-  if (manifestFiles.some((name) => ['requirements.txt', 'pyproject.toml', 'pytest.ini', '.pytest.ini'].includes(name))) languages.add('python')
+  if (manifestFiles.some((name) => ['requirements.txt', 'pyproject.toml', 'pytest.ini', '.pytest.ini', 'setup.cfg', 'tox.ini'].includes(name)))
+    languages.add('python')
   if (manifestFiles.includes('Cargo.toml')) {
     languages.add('rust')
     packageManagers.add('cargo')
@@ -91,7 +92,10 @@ function detectToolchain(rootPath: string, manifestFiles: string[]): ProjectProf
 }
 
 function projectAt(rootPath: string, relativePath: string): ProjectProfileProject | null {
-  const manifestFiles = PROJECT_MANIFESTS.filter((name) => fs.existsSync(path.join(rootPath, name)))
+  const manifest = readWorkspaceManifest(rootPath)
+  const manifestFiles = PROJECT_MANIFESTS.filter((name) => manifest.hasFile(name))
+  const pythonConfig = resolvePythonTestConfiguration(manifest)
+  if (pythonConfig && !manifestFiles.includes(pythonConfig)) manifestFiles.push(pythonConfig)
   if (manifestFiles.length === 0) return null
   const lockfiles = LOCKFILES.filter((name) => fs.existsSync(path.join(rootPath, name)))
   const id = relativePath === '.' ? 'root' : relativePath.replace(/[\\/]+/g, ':')
@@ -102,7 +106,7 @@ function projectAt(rootPath: string, relativePath: string): ProjectProfileProjec
     manifestFiles,
     lockfiles,
     toolchain: detectToolchain(rootPath, manifestFiles),
-    verificationCommands: resolveVerificationCommands(readWorkspaceManifest(rootPath)),
+    verificationCommands: resolveVerificationCommands(manifest),
   }
 }
 

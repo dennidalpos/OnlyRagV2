@@ -21,7 +21,7 @@ describe('resolveVerificationCommands', () => {
   it('selects native tools from observed manifests without npm fallback', () => {
     const workspace = manifest(null, ['go.mod', 'Cargo.toml', 'Cargo.lock', 'pom.xml', 'build.gradle.kts'])
     expect(resolveVerificationCommands(workspace).map((item) => item.command)).toEqual([
-      'go test -mod=readonly -count=1 -timeout=30s ./...',
+      'go test -json -mod=readonly -count=1 -timeout=30s ./...',
       'cargo test --offline --locked',
       'mvn --offline --batch-mode -DfailIfNoTests=true verify',
       'gradle --offline --no-daemon --console=plain check',

@@ -4,6 +4,10 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Indice delle evidenze precedenti
 
+## Regressioni del verificatore — 2026-10-20
+
+[Root della verifica, discovery Python, suite vuote/saltate e requisiti comportamentali: correzioni, 16 prove native e gate completi](./verification-project-regressions-2026-10-20.md). Le qualifiche installate/live restano separate.
+
 ## Verifiche native e pulizia log — 2026-10-19
 
 [Sei ecosistemi con toolchain reali, successi/fallimenti, timeout e annullamento](./verification-native-projects-2026-10-19.md). [Pulizia esplicita dei log: 17 casi con cancellazione reale isolata e 31 regressioni WhatIf](./verification-log-cleanup-2026-10-19.md).

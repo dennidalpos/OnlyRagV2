@@ -1,0 +1,160 @@
+{
+  "date": "2026-10-20",
+  "source_base_commit": "ceef495a5efc52bfb100fd6600a542a3a789f060",
+  "scope": "Four audit findings; source offline fixtures only; no commit/push/install/model/personal-store/release operation",
+  "closed_ids": [
+    "AGENT-PYTHON-PROJECT-DISCOVERY-01",
+    "AGENT-VERIFICATION-CWD-BINDING-01",
+    "AGENT-VERIFICATION-EMPTY-TEST-EVIDENCE-01",
+    "DOCS-CURRENT-STATE-RECONCILIATION-01"
+  ],
+  "source_and_test_sha256": {
+    "electron/core/application/agentOrchestratorVerificationRunner.test.ts": "6095cfdb843c383b58413807ad2fdc7d584b380aba9cdf6aa4ec3d7b10f043aa",
+    "electron/core/application/agentOrchestratorVerificationRunner.ts": "63af75489bc4a0c61cc4bb013c544bf63169ab357201ba3f40bdf700eed5f4d7",
+    "electron/core/domain/agent/projectVerificationResolver.test.ts": "99d2949b51a15cbfec821d324cc06947dedcac15257962552f318ae18e1dca48",
+    "electron/core/domain/agent/projectVerificationResolver.ts": "bf6669703cc7019930e3e4c3e64cb9b41315be8f21a54b068b5640b4e069c74c",
+    "electron/core/domain/agent/testResultParser.test.ts": "f5f4fbf2cb2693cb1d7395a2269e15f57977d22c250c67a255329901d40a659d",
+    "electron/core/domain/agent/testResultParser.ts": "057a02858d63ee9f7098e3c4d42981bf643e4402897441683d519eee2f1229f8",
+    "electron/core/infrastructure/filesystem/projectProfileDiscovery.test.ts": "aebd7d46cdfa3661090f7e30ac2199776e45ba42e2489b0f67099eed1a6ac3a3",
+    "electron/core/infrastructure/filesystem/projectProfileDiscovery.ts": "59e07a11a08ed815f9ca636f7679e4188a67b1c9bc3dfdcf00f8ddfeebf2beec",
+    "electron/core/infrastructure/process/persistentPowerShellSession.test.ts": "0f20bba18ea4d57cf9010b74a8ff8638db6161b5d3bb154c03dc4c6881d67394",
+    "electron/core/infrastructure/process/powerShellCommand.ts": "102793baecc24fbbb6a64c680338d2cc24eaaca607eadfdb1ff53fa1bba32edb",
+    "scripts/e2e/nativeProjectVerification.probe.ts": "0e3f591d2d2cc4fd62f9bb29d9b2b46862df91f4fb97c2cff55a865cbbb2540a"
+  },
+  "backup_root": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-verification-fix-9de78496ddcd46a9877030c9bce742b7",
+  "checks": [
+    {
+      "command": "initial regression subset against pre-fix production code",
+      "result": "11 expected assertion failures / 35 passes; no collection failure",
+      "log_sha256": "89ca76326f4436662014015b3f590544ef4fb09396a9b9a4aa671247de20b095"
+    },
+    {
+      "command": "targeted Vitest: profile discovery, parser, runner, resolver, persistent shell",
+      "exit_code": 0,
+      "passed": 102,
+      "files": 5,
+      "duration_seconds": 17.48,
+      "log_sha256": "9bcc3df7750779f518bd494f6aed9459f529e5816546a5b194b19517f4809113"
+    },
+    {
+      "command": "scripts/test_native_verification.ps1 with installed ToolPaths and JavaHome; PrepareDependencies absent",
+      "exit_code": 0,
+      "passed": 16,
+      "skipped": 0,
+      "duration_seconds": 70.99,
+      "log_sha256": "1c6cc0e7e41ed48165149c0add2417647b9a3a38c70284803eac106bb262b017"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "log_sha256": "fe87a9bddf198e9f35be60ec3d29f840651f7b34c6e7b7b2803737aa0e021b49"
+    },
+    {
+      "command": "pwsh -NoProfile -File scripts/test_bundle_smoke.ps1 -Fast -SkipBuild",
+      "exit_code": 0,
+      "result": "isolated Electron Main/Preload smoke marker confirmed",
+      "log_sha256": "da4e7c4d615754df41e3ab3cef4d0af2cff61180c24f2c9687bcbd22eab48d79"
+    },
+    {
+      "command": "npm run test -- --reporter=dot --silent=true",
+      "exit_code": 0,
+      "passed": 2926,
+      "files": 320,
+      "duration_seconds": 212.18,
+      "log_sha256": "41658a89b24a3d93725dd71522db60efdbde8963b29a9fc16c8ea3bc6bdf3673"
+    },
+    {
+      "command": ".venv\\Scripts\\python.exe -B -m pytest -q -rs --tb=short -p no:cacheprovider",
+      "exit_code": 0,
+      "passed": 598,
+      "skipped": 1,
+      "duration_seconds": 191.56,
+      "skip": "test_source_provenance.py:223 directory symlinks unavailable; Windows junction cases executed",
+      "log_sha256": "9d159ce435aa05713a3d20c7963e61221cf9de230aba1fa513b83724d6c2f770"
+    },
+    {
+      "command": "pwsh -NoProfile -File scripts/lint_format.ps1 -Fast -SkipTests -Format",
+      "exit_code": 0,
+      "result": "typecheck, JSON, Python compile with external cache, 15 critical checks, 31 WhatIf/17 actual isolated log cases, 78-page docs check",
+      "log_sha256": "9fa78ea88de77398ab20b2fd01e7abe3689b6f44fa65b6acc6e044e9b6502e68"
+    },
+    {
+      "command": "npm run audit:deadcode",
+      "exit_code": 0,
+      "result": "knip and knip --production pass"
+    },
+    {
+      "command": "npm run audit:cycles",
+      "exit_code": 0,
+      "result": "no cycle in declared entrypoint graph",
+      "log_sha256": "f06998cd1d2ce832d9f515786620aedccc7e00e01e1c1d0b5110f0be1158bf39"
+    },
+    {
+      "command": "npm run docs:check after tracker/document reconciliation",
+      "exit_code": 0,
+      "markdown_files": 78
+    },
+    {
+      "command": "npm run quality:static after tracker/document reconciliation",
+      "exit_code": 0,
+      "files": 854,
+      "ipc_handlers": 103
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "native_cases": {
+    "cwd": "failing root is refused after cd child; root/child success after actual assertion fix; prior cwd restored",
+    "python_configuration": "setup.cfg/tox.ini standalone failing and passing suites, mixed Go/Python nested failure",
+    "go": "no test files and all skipped are structural; required behavioral milestone unverifiable; real passing and failing assertions distinguished",
+    "rust": "empty/ignored suites structural; genuine executed assertions behavioral",
+    "gradle": "no sources check structural; JavaExec check positive/negative preserved",
+    "composer": "opaque declared check structural; explicit behavioral requirement refused without executed-test summary",
+    "other_regressions": "six installed ecosystems, missing tool, timeout/recreated shell, environment restoration, cancellation before/during command"
+  },
+  "behavior_policy": "Exit 0 alone remains structural; recognized positive test counts are required for behavioral evidence. Explicit behavioral milestones require the offered matching test and observed tests; no command invented. Aggregate evidence stays structural when structural checks are included. Text/JSON test reports are execution evidence, not semantic application qualification.",
+  "not_qualified": [
+    "installed app",
+    "real model or encoder quality",
+    "power loss",
+    "public installer or corresponding-source delivery"
+  ],
+  "secondbrain": {
+    "status": "complete",
+    "context_and_technical_memory_updated": true,
+    "backup_sha256_verified": true,
+    "sync_exit_code": 0,
+    "repositories": 23,
+    "directive_changes": 0,
+    "warnings": 0,
+    "write_session_closed": true,
+    "initial_contention": "waited for the other writer; no lock forced or deleted",
+    "context_sha256": "8e49f4a45b03a86929f3353b5cc25088883e26103d430972cce3bd9c94587d96",
+    "technical_memory_sha256": "f0952d43a88128c924613bcd96297ff69f01299647b7a232dba925e17cefe2b5",
+    "sync_log_sha256": "69162d0b81f867713207725ba3914430f9d7071d8a8cdc154a6d888d5d2c08ca"
+  },
+  "tracker": {
+    "before": 40,
+    "after": 36,
+    "autonomous": 18,
+    "user_required": 18,
+    "P1": 4,
+    "P2": 27,
+    "P3": 5,
+    "unchanged_remaining_records": 36
+  },
+  "closed_task_original_completion_criteria": {
+    "AGENT-VERIFICATION-CWD-BINDING-01": "Run the failing-root/passing-child regression with the real PersistentPowerShellSession and production runner. Prior cd and scripts that change location must not redirect the next project check; root must fail and evidence must identify the executed root. Cover multi-project checks, cancellation/timeout and safe path quoting; preserve the intended persistent interactive-shell behavior. Dependencies: no installation or real-model call needed; use isolated fixtures and required project gates before any later authorized commit.",
+    "AGENT-PYTHON-PROJECT-DISCOVERY-01": "Cover standalone and mixed-root/nested setup.cfg [tool:pytest] and tox.ini [pytest] fixtures with actual discovery and runner. Their deliberately failing pytest tests must prevent verified; valid suites must execute. Irrelevant sections must not invent Python commands/projects. Dependencies: isolated Python/native fixtures, no live model or app installation; coordinate AGENT-VERIFICATION-CWD-BINDING-01 without conflating the two root causes.",
+    "AGENT-VERIFICATION-EMPTY-TEST-EVIDENCE-01": "A zero-test Go run must never produce behavioral evidence; keep compilation success separately and honor any explicit requirement for behavioral tests. Qualify an actual executed passing test and an executed failing assertion, empty/skipped suites and declared custom verification contracts without inventing framework tests. Dependencies: declared evidence policy for generic scripts; offline Go fixture available; coordinate the other verification regressions.",
+    "DOCS-CURRENT-STATE-RECONCILIATION-01": "Reconcile current guide claims with executable contracts and the open-only tracker; link the retained completed-task receipts, keep explicit remaining qualification limits and preserve historical text as dated evidence. Check all current-guide open-task references, run docs:check and review the semantic claims manually. Dependencies: final behavior/limits from the three verification regression tasks; documentation linking can proceed independently."
+  },
+  "hygiene": {
+    "native_fixture_teardown": "passed; owned fixture root removed and shells disposed",
+    "preexisting_ignored_residues": "preserved",
+    "user_reloaded_agents_sha256": "d665a6b8d1419cef83ff8fe73d02157544b2237213332bddb0338d47c9d40143",
+    "external_python_cache": "retained in backup root after automatic review rejected recursive deletion: blocked by policy"
+  }
+}

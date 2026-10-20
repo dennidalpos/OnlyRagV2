@@ -100,6 +100,44 @@ describe('project verification dependency evidence', () => {
     expect(result).toMatchObject({ status: 'verified', passed: true, verifiedCommands: ['npm run test'] })
   })
 
+  it('treats an unrecognized custom check as structural and requires observed tests for behavioral milestones', async () => {
+    nodeProject()
+    execute.mockResolvedValue({ code: 0, stdout: 'custom check complete', stderr: '' })
+    expect(await runProjectVerification(root)).toMatchObject({ status: 'verified', evidenceLevel: 'structural' })
+    const result = await runProjectVerification(root, undefined, undefined, false, [
+      { id: 'behavior', title: 'Behavioral test', status: 'pending', verificationCommand: 'npm run test' },
+    ])
+    expect(result.status).toBe('unverifiable')
+    expect(result.passed).toBeUndefined()
+    expect(result.failureDetail).toContain('executed tests')
+    expect(result.verifiedCommands).toBeUndefined()
+  })
+
+  it.each([
+    ['', 'structural'],
+    ['? fixture [no test files]', 'structural'],
+    [JSON.stringify({ Action: 'pass', Package: 'fixture' }), 'structural'],
+    [JSON.stringify({ Action: 'skip', Package: 'fixture', Test: 'TestSkip' }), 'structural'],
+    [JSON.stringify({ Action: 'pass', Package: 'fixture', Test: 'TestReal' }), 'behavioral'],
+  ])('classifies observed Go test evidence for %s', async (stdout, evidenceLevel) => {
+    write('go.mod', 'module example.com/fixture\n')
+    execute.mockResolvedValue({ code: 0, stdout, stderr: '' })
+    expect(await runProjectVerification(root)).toMatchObject({ status: 'verified', evidenceLevel })
+  })
+
+  it('runs the offered test as well as a primary build when a milestone requires its behavioral proof', async () => {
+    write('package.json', JSON.stringify({ scripts: { build: 'node build.cjs', test: 'node --test' } }))
+    execute
+      .mockResolvedValueOnce({ code: 0, stdout: 'build complete', stderr: '' })
+      .mockResolvedValueOnce({ code: 0, stdout: '# tests 1\n# pass 1\n# fail 0', stderr: '' })
+    const result = await runProjectVerification(root, undefined, undefined, false, [
+      { id: 'behavior', title: 'Behavioral test', status: 'pending', verificationCommand: 'npm run test' },
+    ])
+    expect(result).toMatchObject({ status: 'verified', verifiedCommands: ['npm run build', 'npm run test'] })
+    expect(execute).toHaveBeenCalledTimes(2)
+    expect(execute.mock.calls[0][0]).toContain(root.replace(/'/g, "''"))
+  })
+
   it('does not certify an absent declared package manager or fall back to npm', async () => {
     write('package.json', JSON.stringify({ name: 'fixture', packageManager: 'yarn@4.0.0', scripts: { test: 'node verify.cjs' } }))
     execute.mockResolvedValue({ code: 127, stdout: '', stderr: 'VERIFICATION_TOOL_UNAVAILABLE:yarn' })

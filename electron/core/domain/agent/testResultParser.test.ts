@@ -41,6 +41,30 @@ describe('parseTestRunOutput (AGT8: structured run_tests pass/fail parsing)', ()
     expect(res).toEqual({ success: true, passed: 42, failed: 0, total: 42, framework: 'pytest', summary: '42/42 tests passed (pytest).' })
   })
 
+  it('recognizes quiet pytest and Rust summaries while retaining a zero executed count', () => {
+    expect(parseTestRunOutput('2 passed, 1 skipped in 0.12s', 0)).toMatchObject({ framework: 'pytest', passed: 2, failed: 0 })
+    expect(parseTestRunOutput('test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out', 0)).toMatchObject({ framework: 'rust', passed: 0 })
+    expect(parseTestRunOutput('test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out', 0)).toMatchObject({ framework: 'rust', passed: 2 })
+  })
+
+  it('counts Go test events, excluding package success and skipped tests', () => {
+    const events = [
+      { Action: 'pass', Package: 'fixture' },
+      { Action: 'skip', Package: 'fixture', Test: 'TestSkipped' },
+      { Action: 'pass', Package: 'fixture', Test: 'TestReal' },
+    ]
+      .map((event) => JSON.stringify(event))
+      .join('\n')
+    expect(parseTestRunOutput(events, 0)).toMatchObject({ framework: 'go', passed: 1, failed: 0, total: 2 })
+    expect(parseTestRunOutput(JSON.stringify({ Action: 'pass', Package: 'fixture' }), 0).passed).toBeNull()
+    expect(parseTestRunOutput(JSON.stringify({ Action: 'skip', Package: 'fixture', Test: 'TestSkipped' }), 0)).toMatchObject({ passed: 0 })
+  })
+
+  it('recognizes Node TAP/spec totals without treating skips as passes', () => {
+    expect(parseTestRunOutput('# tests 2\n# pass 1\n# fail 0\n# skipped 1', 0)).toMatchObject({ framework: 'node', passed: 1, total: 2 })
+    expect(parseTestRunOutput('ℹ tests 1\nℹ pass 0\nℹ fail 0\nℹ skipped 1', 0)).toMatchObject({ framework: 'node', passed: 0 })
+  })
+
   it('should parse a failing pytest summary including errors', () => {
     const output = 'FAILED tests/test_x.py::test_y\n===== 2 failed, 1 error, 40 passed in 3.45s =====\n'
     const res = parseTestRunOutput(output, 1)

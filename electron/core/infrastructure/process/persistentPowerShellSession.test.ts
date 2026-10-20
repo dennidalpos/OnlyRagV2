@@ -54,6 +54,31 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     expect(absentManager.stderr).toContain('VERIFICATION_TOOL_UNAVAILABLE:yarn')
   })
 
+  itWithPowerShell('binds verification to its root and restores cwd after failure or a script cd', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "onlyrag-verify root's-"))
+    fs.mkdirSync(path.join(root, 'child'))
+    try {
+      session = new PersistentPowerShellSession(root)
+      await session.execute("Set-Location -LiteralPath 'child'")
+      const failed = await session.execute(withVerificationEnvironment("Write-Output (Get-Location).ProviderPath; node -e 'process.exit(7)'", root))
+      expect(failed.code).toBe(7)
+      expect(failed.stdout).toBe(root)
+      expect(session.currentDirectory).toBe(path.join(root, 'child'))
+      const changed = await session.execute(withVerificationEnvironment("Set-Location -LiteralPath 'child'; Write-Output (Get-Location).ProviderPath", root))
+      expect(changed.code).toBe(0)
+      expect(changed.stdout).toBe(path.join(root, 'child'))
+      expect(session.currentDirectory).toBe(path.join(root, 'child'))
+      const unavailable = await session.execute(withVerificationEnvironment("Write-Output 'MUST_NOT_EXECUTE'", path.join(root, 'absent')))
+      expect(unavailable.code).not.toBe(0)
+      expect(unavailable.stdout).not.toContain('MUST_NOT_EXECUTE')
+      expect(session.currentDirectory).toBe(path.join(root, 'child'))
+    } finally {
+      session?.dispose()
+      session = null
+      await removeWhenReleased(root)
+    }
+  })
+
   itWithPowerShell(
     'runs available native npm/pnpm scripts or refuses absent tools without acquisition',
     async () => {

@@ -130,23 +130,29 @@ export function resolveVerificationCommands(manifest: WorkspaceManifest): Verifi
   return commands
 }
 
+/** Shared by project discovery and command resolution; unrelated INI sections are not Python projects. */
+export function resolvePythonTestConfiguration(manifest: WorkspaceManifest): string | undefined {
+  return (
+    ['pytest.ini', '.pytest.ini'].find((name) => manifest.hasFile(name)) ||
+    (['pyproject.toml', 'setup.cfg', 'tox.ini'] as const).find((name) => {
+      const section = { 'pyproject.toml': 'tool\\.pytest(?:\\.ini_options)?', 'setup.cfg': 'tool:pytest', 'tox.ini': 'pytest' }[name]
+      return manifest.hasFile(name) && new RegExp(`^\\s*\\[${section}\\]\\s*(?:[#;].*)?$`, 'm').test(manifest.readTextFile?.(name) ?? '')
+    })
+  )
+}
+
 /** Native checks use observed manifests and installed tools, never a Node fallback or bootstrap wrapper. */
 function resolveNativeVerificationCommands(manifest: WorkspaceManifest): VerificationCommand[] {
   const commands: VerificationCommand[] = []
   const add = (kind: VerificationKind, command: string, source: string) =>
     commands.push({ kind, command, coverage: kind === 'test' ? 'entry-reachable' : 'whole-project', source: `native: ${source}` })
   const text = (name: string) => manifest.readTextFile?.(name) ?? ''
-  const pythonConfig =
-    ['pytest.ini', '.pytest.ini'].find((name) => manifest.hasFile(name)) ||
-    (['pyproject.toml', 'setup.cfg', 'tox.ini'] as const).find((name) => {
-      const section = { 'pyproject.toml': 'tool\\.pytest(?:\\.ini_options)?', 'setup.cfg': 'tool:pytest', 'tox.ini': 'pytest' }[name]
-      return manifest.hasFile(name) && new RegExp(`^\\s*\\[${section}\\]\\s*(?:[#;].*)?$`, 'm').test(text(name))
-    })
+  const pythonConfig = resolvePythonTestConfiguration(manifest)
   if (pythonConfig) {
     const python = manifest.hasFile('.venv/Scripts/python.exe') ? '.\\.venv\\Scripts\\python.exe' : 'python'
     add('test', `${python} -B -m pytest -q -p no:cacheprovider`, pythonConfig)
   }
-  if (manifest.hasFile('go.mod')) add('test', 'go test -mod=readonly -count=1 -timeout=30s ./...', 'go.mod')
+  if (manifest.hasFile('go.mod')) add('test', 'go test -json -mod=readonly -count=1 -timeout=30s ./...', 'go.mod')
   if (manifest.hasFile('Cargo.toml')) add('test', `cargo test --offline${manifest.hasFile('Cargo.lock') ? ' --locked' : ''}`, 'Cargo.toml')
   if (manifest.hasFile('pom.xml')) add('build', 'mvn --offline --batch-mode -DfailIfNoTests=true verify', 'pom.xml')
   const gradleManifest = ['build.gradle', 'build.gradle.kts'].find((name) => manifest.hasFile(name))

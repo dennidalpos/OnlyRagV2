@@ -1,5 +1,5 @@
 /** Called only after command security accepts the original declared verification. */
-export function withVerificationEnvironment(command: string): string {
+export function withVerificationEnvironment(command: string, projectRootPath?: string): string {
   const manager = /^(npm|pnpm|yarn) run /.exec(command)?.[1]
   const nativeTool = /^(python|go|cargo|mvn|gradle|composer|\.\\\.venv\\Scripts\\python\.exe)\s/.exec(command)?.[1]
   const tool = manager || nativeTool
@@ -26,7 +26,17 @@ export function withVerificationEnvironment(command: string): string {
   const execute = tool
     ? `if (-not (Get-Command '${tool}' -CommandType Application -ErrorAction SilentlyContinue)) { Write-Error 'VERIFICATION_TOOL_UNAVAILABLE:${tool}'; $global:LASTEXITCODE = 127 } else { ${guardedCommand}; if (-not $? -and $LASTEXITCODE -eq 0) { $global:LASTEXITCODE = 1 } }`
     : `${command}; if (-not $? -and $LASTEXITCODE -eq 0) { $global:LASTEXITCODE = 1 }`
-  return `${save}; try { ${apply}; ${execute} } finally { ${restore} }`
+  const scopedEnvironment = `${save}; try { ${apply}; ${execute} } finally { ${restore} }`
+  if (projectRootPath === undefined) return scopedEnvironment
+  const root = projectRootPath.replace(/'/g, "''")
+  // A workspace shell intentionally keeps cd between interactive commands. Verification must
+  // instead run at the observed project's root, even if a previous command or test script moved it.
+  return (
+    `$__onlyrag_verificationLocation = (Get-Location).Path; try { Set-Location -LiteralPath '${root}' -ErrorAction Stop; ${scopedEnvironment} } ` +
+    `catch { if ($LASTEXITCODE -eq 0) { $global:LASTEXITCODE = 1 }; Write-Error -Message $_ -ErrorAction Continue } ` +
+    `finally { try { Set-Location -LiteralPath $__onlyrag_verificationLocation -ErrorAction Stop } ` +
+    `catch { $global:LASTEXITCODE = 1; Write-Error -Message $_ -ErrorAction Continue } }`
+  )
 }
 
 export function normalizePowerShellCommand(command: string): string {

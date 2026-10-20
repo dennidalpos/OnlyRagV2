@@ -672,4 +672,28 @@ describe('chat document grounding', () => {
     expect(chat.conversations[0].messages).toEqual(stopped)
     expect(JSON.parse(localStorage.getItem('onlyrag_chat_conversations')!)[0].messages).toEqual(stopped)
   })
+  it('acknowledges clipboard success only after completion and propagates a refusal', async () => {
+    const pending = deferred<void>()
+    const writeText = vi.fn(() => pending.promise)
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    try {
+      let copying!: Promise<void>
+      await act(async () => {
+        copying = chat.handleCopyMessage('copy-1', 'Synthetic message')
+      })
+      expect(chat.copiedMsgId).not.toBe('copy-1')
+      await act(async () => {
+        pending.resolve()
+        await copying
+      })
+      expect(chat.copiedMsgId).toBe('copy-1')
+      writeText.mockRejectedValueOnce(new Error('Clipboard denied'))
+      await expect(chat.handleCopyMessage('copy-2', 'Retryable message')).rejects.toThrow('Clipboard denied')
+      expect(chat.copiedMsgId).toBe('copy-1')
+    } finally {
+      if (descriptor) Object.defineProperty(navigator, 'clipboard', descriptor)
+      else Reflect.deleteProperty(navigator, 'clipboard')
+    }
+  })
 })

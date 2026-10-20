@@ -52,6 +52,7 @@
     "audit:graph": "skott --displayMode=webapp",
     "audit:all": "powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast",
     "test:models:smoke": "node scripts/e2e/configuredModelSmoke.mjs",
+    "test:ux": "npm run build && node scripts/e2e/uxFlows.mjs",
     "test:tooltips": "node scripts/e2e/tooltips.mjs",
     "test:live": "node scripts/retiredModelCampaign.mjs"
   },

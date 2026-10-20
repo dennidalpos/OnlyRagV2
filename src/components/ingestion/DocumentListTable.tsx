@@ -5,13 +5,14 @@ import { IngestedDocument } from '../../types'
 import { useTranslation } from '../../i18n'
 
 interface DocumentListTableProps {
+  showEmpty: boolean
   documents: IngestedDocument[]
   selectedDoc: IngestedDocument | null
   onSelectDoc: (doc: IngestedDocument) => void
   onDeleteDoc: (docId: string, filename: string) => void
 }
 
-export const DocumentListTable: React.FC<DocumentListTableProps> = ({ documents, selectedDoc, onSelectDoc, onDeleteDoc }) => {
+export const DocumentListTable: React.FC<DocumentListTableProps> = ({ documents, showEmpty, selectedDoc, onSelectDoc, onDeleteDoc }) => {
   const { t } = useTranslation()
   const [searchFilter, setSearchFilter] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -50,7 +51,7 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({ documents,
       )}
 
       <div className="space-y-1.5 flex-1 overflow-y-auto pr-1" role="list" aria-label={t('ingestion.indexedDocuments')}>
-        {documents.length === 0 ? (
+        {documents.length === 0 && !showEmpty ? null : documents.length === 0 ? (
           <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-xs text-slate-400 italic">{t('ingestion.noDocuments')}</div>
         ) : filteredDocs.length === 0 ? (
           <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-xs text-slate-400 italic">{t('common.none')}</div>

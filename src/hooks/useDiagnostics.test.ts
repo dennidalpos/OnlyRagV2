@@ -32,14 +32,15 @@ describe('diagnostics after a document change', () => {
 
   it('rescans when documents change elsewhere, but not for the change it reports itself', async () => {
     let documentsCount = 0
-    const runDiagnostics = vi.fn(async () => ({ sidecar: { status: 'online', documentsCount }, ollama: { models: [] } }) as unknown as DiagnosticsData)
+    const runDiagnostics = vi.fn(
+      async () => ({ sidecar: { status: 'online', documentsCount }, ollama: { models: ['embedding-only', 'chat-model'] } }) as unknown as DiagnosticsData,
+    )
     Object.assign(window, { electronAPI: { runDiagnostics } })
     let latest: DiagnosticsData | null = null
     // Stable across renders, as in AppLayout: a new callback per render restarts the polling effect.
     const settings = { ollamaHost: 'http://127.0.0.1:11434' } as AppSettings
-    const selectDefaultModel = () => {}
     function Harness() {
-      latest = useDiagnostics(settings, selectDefaultModel, true, 60_000).diagnostics
+      latest = useDiagnostics(settings, true, 60_000).diagnostics
       return null
     }
 
@@ -53,5 +54,6 @@ describe('diagnostics after a document change', () => {
     // One rescan for the ingestion; the count change it reads is announced, again without a rescan.
     expect(runDiagnostics).toHaveBeenCalledTimes(2)
     expect(latest).toMatchObject({ sidecar: { documentsCount: 1 } })
+    expect(settings).toEqual({ ollamaHost: 'http://127.0.0.1:11434' })
   })
 })

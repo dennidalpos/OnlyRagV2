@@ -1,5 +1,10 @@
 # Documentazione OnlyRag V2
 
+Il [passaggio di sessione UX del 21 ottobre](./session-handoff-ux-2026-10-21.md) salva le correzioni verificate, dieci task autonomi residui e l’autorizzazione al commit/push sul principale.
+
+Le [correzioni UX/UI mirate del 21 ottobre](./verification-ux-targeted-2026-10-21.md) distinguono osservazioni e rilievi statici, riportano prove Electron isolate, tastiera/zoom, scelta esplicita dei modelli e limiti dei servizi controllati.
+
+
 **Stato operativo corrente:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md), 11 task autonomi e 24 ritirati per decisione del proprietario. Nessuna CI o qualifica dei modelli; [implementazione e verifiche](./verification-local-ui-2026-10-20.md). I resoconti precedenti sotto sono storici.
 
 [Consegna per il cambio sessione del 21 ottobre](./session-handoff-local-ui-2026-10-21.md): tracker aggiornato, verifiche locali e riferimenti per riprendere gli 11 task; commit e push su `master` autorizzati dal proprietario.

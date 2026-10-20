@@ -1,3 +1,4 @@
+import { handleTabKeyDown } from '../../lib/tabKeyboard'
 import React from 'react'
 import { FileCode2, X, Split, Save, Terminal, FileText, GitBranch, Eye } from 'lucide-react'
 import { WorkspaceFile } from '../../types'
@@ -41,12 +42,29 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
   return (
     <div className="h-11 bg-slate-900/60 border-b border-slate-800 px-3 flex items-center justify-between text-xs shrink-0 select-none overflow-x-auto font-sans">
       {/* Left side: Open File Tabs & Tool View Switchers */}
-      <div className="flex items-center gap-1.5 overflow-x-auto py-0.5" role="tablist" aria-label="Aree di lavoro e file">
+      <div className="flex items-center gap-1.5 overflow-x-auto py-0.5" role="tablist" onKeyDown={handleTabKeyDown} aria-label={t('ux.workspaceTabs')}>
         {/* Tool Views Tabs */}
         <div className="flex items-center gap-1 pr-2 mr-1 border-r border-slate-800 shrink-0">
+          {!selectedFile && (
+            <button
+              type="button"
+              role="tab"
+              id="coding-empty-editor-tab"
+              aria-controls="coding-workspace-panel"
+              aria-selected={activeTab === 'editor'}
+              tabIndex={activeTab === 'editor' ? 0 : -1}
+              onClick={() => onSelectTab('editor')}
+              className="px-2.5 py-1 rounded-lg text-slate-300 focus-ring"
+            >
+              Editor
+            </button>
+          )}
           <button
             type="button"
             role="tab"
+            id="coding-tab-artifacts"
+            aria-controls="coding-workspace-panel"
+            tabIndex={activeTab === 'artifacts' ? 0 : -1}
             aria-selected={activeTab === 'artifacts'}
             onClick={() => onSelectTab('artifacts')}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer shadow-sm ${activeTab === 'artifacts' ? 'bg-slate-900 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'}`}
@@ -59,6 +77,9 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
           <button
             type="button"
             role="tab"
+            id="coding-tab-git_diff"
+            aria-controls="coding-workspace-panel"
+            tabIndex={activeTab === 'git_diff' ? 0 : -1}
             aria-selected={activeTab === 'git_diff'}
             onClick={() => onSelectTab('git_diff')}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer shadow-sm ${
@@ -80,6 +101,9 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
           <button
             type="button"
             role="tab"
+            id="coding-tab-plan"
+            aria-controls="coding-workspace-panel"
+            tabIndex={activeTab === 'plan' ? 0 : -1}
             aria-selected={activeTab === 'plan'}
             onClick={() => onSelectTab('plan')}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer relative shadow-sm ${
@@ -98,6 +122,9 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
           <button
             type="button"
             role="tab"
+            id="coding-tab-terminal"
+            aria-controls="coding-workspace-panel"
+            tabIndex={activeTab === 'terminal' ? 0 : -1}
             aria-selected={activeTab === 'terminal'}
             onClick={() => onSelectTab('terminal')}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer border ${
@@ -121,13 +148,16 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
             <div
               key={file.path}
               role="tab"
+              id={`coding-file-tab-${encodeURIComponent(file.path)}`}
+              aria-controls="coding-workspace-panel"
               aria-selected={isActive}
-              tabIndex={0}
+              tabIndex={isActive ? 0 : -1}
               onClick={() => {
                 onOpenFile(file)
                 onSelectTab('editor')
               }}
               onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
                   onOpenFile(file)
@@ -145,6 +175,7 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
               {isDirty && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title={t('coding.dirtyBadge')} />}
               <button
                 type="button"
+                tabIndex={isActive ? 0 : -1}
                 onClick={(e) => {
                   e.stopPropagation()
                   onCloseFile(file, e)

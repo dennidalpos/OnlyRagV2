@@ -52,3 +52,7 @@ Con app chiusa e dopo revisione dei file, usare `npm run clean:logs -- -Disposab
 Gli archivi `source-documents` sono protetti dalla policy di cleanup. La rimozione di un documento dall'indice conserva l'originale e l'estrazione; anche gli originali di ingestioni fallite restano da valutare separatamente. L'annullamento pulisce soltanto l'archivio della nuova ingestione posseduta dopo il rollback riuscito. [Ciclo di vita e verifica](./retrieval.md#ciclo-di-vita-degli-archivi-originali).
 
 La configurazione NSIS ha `deleteAppDataOnUninstall: false` in [`package.json`](../package.json). L'installer locale è non firmato per default; `-RequireSignature` richiede una firma valida, mentre `-SkipSidecar` è rifiutato. Stato di licenze, sorgenti e aggiornamento in [`distribution.md`](./distribution.md).
+
+## Verifiche UX locali
+
+`npm run test:ux` costruisce la versione corrente ed esegue i [flussi UX deterministici](./verification-ux-targeted-2026-10-21.md) con profilo isolato e risposte IPC controllate. `npm run test:tooltips` verifica focus, modali e aiuti; le variabili `ONLYRAG_TOOLTIP_WIDTH` e `ONLYRAG_TOOLTIP_HEIGHT` selezionano dimensioni desktop da 1024×700 a 1920×1080. Nessuno dei due comandi richiede modelli reali o cambia le impostazioni personali.

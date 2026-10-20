@@ -5,6 +5,8 @@ import { I18nProvider } from '../../i18n'
 
 const state = vi.hoisted(() => ({
   documents: [],
+  documentCollection: { isLoaded: true, isLoading: false, loadError: false },
+  fetchDocuments: vi.fn(),
   selectedDoc: null,
   markdownContent: '',
   isDirty: true,

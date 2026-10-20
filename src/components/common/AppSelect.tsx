@@ -5,10 +5,10 @@ type AppSelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & { compact?
 
 /** Shared native select: one visual treatment with the browser's keyboard and screen reader behavior. */
 export const AppSelect: React.FC<AppSelectProps> = ({ compact = false, className = '', children, ...props }) => (
-  <span className="relative block w-full">
+  <span className="relative block min-w-0 w-full">
     <select
       {...props}
-      className={`w-full appearance-none rounded-xl border border-slate-700 bg-slate-950 text-slate-100 focus-ring cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${compact ? 'px-2 py-1 pr-7 text-xs' : 'px-3 py-2 pr-9 text-xs'} ${className}`}
+      className={`w-full min-w-0 appearance-none rounded-xl border border-slate-700 bg-slate-950 text-slate-100 focus-ring cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${compact ? 'px-2 py-1 pr-7 text-xs' : 'px-3 py-2 pr-9 text-xs'} ${className}`}
     >
       {children}
     </select>

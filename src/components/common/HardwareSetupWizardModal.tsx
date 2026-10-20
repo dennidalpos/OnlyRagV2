@@ -399,7 +399,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   return (
     <Modal
       isOpen={isOpen}
-      onClose={handleCloseWithSave}
+      onClose={onClose}
       dismissible={!isPullingModels}
       labelledById="wizard-modal-title"
       panelClassName="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-3xl max-h-[92vh] flex flex-col overflow-hidden"
@@ -425,9 +425,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={handleCloseWithSave}
-            aria-label={pendingOneClick ? t('common.cancel') : t('hardwareWizard.saveAndExit')}
-            title={pendingOneClick ? t('common.cancel') : t('hardwareWizard.saveAndExitTooltip')}
+            onClick={onClose}
+            aria-label={t('common.close')}
+            title={t('common.close')}
             disabled={isPullingModels}
             className="p-2 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-colors focus-ring active:scale-95 cursor-pointer"
           >

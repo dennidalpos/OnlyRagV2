@@ -1,6 +1,26 @@
 import { TranslationSchema } from '../types'
 
 export const en: TranslationSchema = {
+  ux: {
+    documentsLoading: 'Loading documents…',
+    documentsUnavailable: 'Document list unavailable. Check the Sidecar service and retry.',
+    documentsStale: 'Unable to refresh documents. Showing the last available data.',
+    retry: 'Retry',
+    modelRequired: 'No model is configured for this module. Choose one from the selector; if none are installed, open Settings.',
+    chooseModel: 'Choose model',
+    copyFailed: 'Copy failed. Retry using the Copy button.',
+    greeting: 'Hello! I am your local RAG assistant. Mention `@document_name` or select documents in the Context panel to chat with them.',
+    documentOne: '{count} PDF/DOCX document',
+    documentMany: '{count} PDF/DOCX documents',
+    chatTabs: 'Chat sidebar tabs',
+    context: 'Context',
+    history: 'History',
+    indexedDocuments: 'Indexed documents',
+    workspaceTabs: 'Workspace and file tabs',
+    translationMode: 'Translation mode',
+    translationView: 'Translation view',
+  },
+
   agentRecovery: {
     files: 'Files',
     terminal: 'Terminal',
@@ -705,11 +725,11 @@ export const en: TranslationSchema = {
 
     translationSection: '3. Document Translation Engine',
 
-    verticalDomainsSection: '4. Specialized Vertical Models',
+    verticalDomainsSection: '5. Specialized Vertical Models',
 
     medicalModel: 'Medical & Healthcare Model',
     legalModel: 'Legal & Compliance Model',
-    ingestionOcrSection: '5. Document Ingestion, OCR & LanceDB',
+    ingestionOcrSection: '4. Document Ingestion, OCR & LanceDB',
 
     visionOcrLabel: 'Multimodal Vision OCR',
     vectorStoreLabel: 'Vector Embedding',

@@ -1,6 +1,26 @@
 import { AGENT_MAIN_TEXT_IT } from '../../../shared/domain/agent/agentMainText'
 
 export const it = {
+  ux: {
+    documentsLoading: 'Caricamento documenti…',
+    documentsUnavailable: 'Elenco documenti non disponibile. Verifica il servizio Sidecar e riprova.',
+    documentsStale: 'Impossibile aggiornare i documenti. Sono mostrati gli ultimi dati disponibili.',
+    retry: 'Riprova',
+    modelRequired: 'Nessun modello configurato per questo modulo. Scegli un modello dal selettore; se non ne sono installati, apri Impostazioni.',
+    chooseModel: 'Scegli modello',
+    copyFailed: 'Copia non riuscita. Riprova dal pulsante Copia.',
+    greeting: 'Ciao! Sono il tuo assistente RAG locale. Menziona `@nome_documento` o seleziona i documenti nel pannello Contesto per interrogarli.',
+    documentOne: '{count} documento PDF/DOCX',
+    documentMany: '{count} documenti PDF/DOCX',
+    chatTabs: 'Schede pannello laterale chat',
+    context: 'Contesto',
+    history: 'Storico',
+    indexedDocuments: 'Documenti vettorizzati',
+    workspaceTabs: 'Aree di lavoro e file',
+    translationMode: 'Modalità traduzione',
+    translationView: 'Vista traduzione',
+  },
+
   agentRecovery: {
     files: 'File',
     terminal: 'Terminale',
@@ -710,11 +730,11 @@ export const it = {
 
     translationSection: '3. Motore Traduzione Documenti',
 
-    verticalDomainsSection: '4. Modelli Specialistici di Settore',
+    verticalDomainsSection: '5. Modelli Specialistici di Settore',
 
     medicalModel: 'Modello Medico & Sanitario',
     legalModel: 'Modello Legale & Normativo',
-    ingestionOcrSection: '5. Ingestione Documenti, OCR & LanceDB',
+    ingestionOcrSection: '4. Ingestione Documenti, OCR & LanceDB',
 
     visionOcrLabel: 'Vision OCR Multimodale',
     vectorStoreLabel: 'Vector Embedding',

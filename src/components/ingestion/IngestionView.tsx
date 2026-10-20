@@ -1,3 +1,4 @@
+import { DocumentCollectionStatus } from '../common/DocumentCollectionStatus'
 import { Tooltip } from '../common/Tooltip'
 import { AppSelect } from '../common/AppSelect'
 import React, { useRef, useMemo, useEffect, useState, Suspense, lazy } from 'react'
@@ -229,7 +230,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className="flex-1 h-full flex flex-col bg-slate-950 overflow-hidden select-text relative"
+        className="flex-1 min-w-0 min-h-0 h-full flex flex-col bg-slate-950 overflow-y-auto select-text relative"
       >
         {/* Drag & Drop Visual Overlay */}
         {isDraggingOver && (
@@ -248,7 +249,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
         )}
 
         {/* Header Bar */}
-        <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between z-10 shrink-0">
+        <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex flex-wrap gap-2 items-center justify-between z-10 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
               <FileText className="w-5 h-5 text-cyan-400" />
@@ -496,11 +497,11 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
         )}
 
         {/* Main Dual-Pane Content */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden max-[900px]:flex-col max-[900px]:overflow-visible max-[900px]:shrink-0">
           {/* Left Sidebar: Document List & LanceDB Vector Search */}
           <div
             style={{ width: `${sidebarWidth}px` }}
-            className="border-r border-slate-800 bg-slate-900/40 p-4 space-y-4 flex flex-col shrink-0 overflow-hidden select-text"
+            className="border-r border-slate-800 bg-slate-900/40 p-4 space-y-4 flex flex-col shrink-0 overflow-hidden select-text max-[900px]:w-full! max-[900px]:min-h-64"
           >
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
@@ -520,7 +521,9 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
               </button>
             </div>
 
+            <DocumentCollectionStatus state={ing.documentCollection} onRetry={ing.fetchDocuments} />
             <DocumentListTable
+              showEmpty={ing.documentCollection.isLoaded && !ing.documentCollection.loadError}
               documents={ing.documents}
               selectedDoc={ing.selectedDoc}
               onSelectDoc={ing.handleSelectDoc}
@@ -541,7 +544,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
             aria-label={t('coding.resizePanels')}
             onMouseDown={handleSidebarMouseDown}
             onKeyDown={handleSidebarKeyDown}
-            className={`w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring ${
+            className={`max-[900px]:hidden w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring ${
               isSidebarResizing ? 'bg-cyan-500 ring-2 ring-cyan-500/50' : ''
             }`}
             title={t('coding.resizePanels')}
@@ -552,7 +555,9 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(
           </div>
 
           {/* Center: Dual-Pane Comparison Viewer */}
-          <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarResizing ? 'pointer-events-none select-none' : ''}`}>
+          <div
+            className={`flex-1 min-w-0 flex flex-col overflow-hidden max-[900px]:min-h-[600px] ${isSidebarResizing ? 'pointer-events-none select-none' : ''}`}
+          >
             {/* Dual-Pane Header & Pagination Toolbar */}
             <div className="bg-slate-900/90 border-b border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
               {/* Left: Selected Document Name & Dirty State Status */}

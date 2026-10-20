@@ -5,6 +5,7 @@ import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
 import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
 
 export interface QuickModelSelectorProps {
+  id?: string
   /** Currently active model name for this functional feature */
   currentModel: string
   /** List of all installed model tags in local Ollama instance */
@@ -22,6 +23,7 @@ export interface QuickModelSelectorProps {
 }
 
 export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
+  id,
   currentModel,
   installedModels = [],
   onSelectModel,
@@ -66,6 +68,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
     <div className={`relative inline-block text-left ${className}`} ref={dropdownRef}>
       {/* Trigger Button */}
       <button
+        id={id}
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}

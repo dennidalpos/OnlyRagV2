@@ -16,7 +16,12 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
   const { t } = useTranslation()
 
   const isFormValid =
-    Boolean(inp.selectedDoc) && Boolean(inp.targetDir.trim()) && inp.sourceLang !== inp.targetLang && !inp.isTranslating && !inp.otherJobRunning
+    Boolean(inp.configuredModel) &&
+    Boolean(inp.selectedDoc) &&
+    Boolean(inp.targetDir.trim()) &&
+    inp.sourceLang !== inp.targetLang &&
+    !inp.isTranslating &&
+    !inp.otherJobRunning
 
   const progressPercent = inp.translateProgress?.percent ?? 0
   const currentPhase = inp.translateProgress?.phase
@@ -64,15 +69,18 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
                 <span>{t('translation.inplaceSelectDoc')}</span>
               </label>
               <span className="text-[11px] text-slate-400 font-mono">
-                {inp.documents.length} {t('common.document')}
-                {inp.documents.length === 1 ? '' : 's'} PDF/DOCX
+                {t(inp.documents.length === 1 ? 'ux.documentOne' : 'ux.documentMany', { count: inp.documents.length })}
               </span>
             </div>
 
             {inp.documents.length === 0 ? (
               <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-800/40 text-amber-300 text-xs flex items-start gap-2.5">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
-                <p className="leading-relaxed">{t('translation.inplaceNoCompatibleDocs')}</p>
+                <p className="leading-relaxed">
+                  {inp.documentCollection.isLoaded && !inp.documentCollection.loadError
+                    ? t('translation.inplaceNoCompatibleDocs')
+                    : t(inp.documentCollection.loadError ? 'ux.documentsUnavailable' : 'ux.documentsLoading')}
+                </p>
               </div>
             ) : (
               <AppSelect

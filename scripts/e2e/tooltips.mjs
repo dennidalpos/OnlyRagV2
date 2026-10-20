@@ -12,6 +12,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const require = createRequire(import.meta.url)
 const evidence = process.env.ONLYRAG_TOOLTIP_EVIDENCE || fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-tooltip-'))
 fs.mkdirSync(evidence, { recursive: true })
+const fixtureWidth = Number(process.env.ONLYRAG_TOOLTIP_WIDTH || 1920)
+const fixtureHeight = Number(process.env.ONLYRAG_TOOLTIP_HEIGHT || 1080)
+assert(Number.isInteger(fixtureWidth) && fixtureWidth >= 1024 && fixtureWidth <= 1920)
+assert(Number.isInteger(fixtureHeight) && fixtureHeight >= 700 && fixtureHeight <= 1080)
 const modulePath = (relative) => JSON.stringify(path.join(root, relative).replaceAll('\\', '/'))
 const entry = `
 import React, {useState} from ${modulePath('node_modules/react/index.js')};
@@ -70,7 +74,7 @@ fs.writeFileSync(
   main,
   `const {app,BrowserWindow}=require('electron');
 app.setPath('userData',${JSON.stringify(path.join(evidence, 'profile'))});
-app.whenReady().then(async()=>{const window=new BrowserWindow({show:false,width:1920,height:1080,webPreferences:{backgroundThrottling:false,sandbox:true,contextIsolation:true,nodeIntegration:false}});
+app.whenReady().then(async()=>{const window=new BrowserWindow({show:false,width:${fixtureWidth},height:${fixtureHeight},webPreferences:{backgroundThrottling:false,sandbox:true,contextIsolation:true,nodeIntegration:false}});
 window.webContents.session.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_,cb)=>cb({cancel:true}));
 await window.loadURL('data:text/html,<html><body><div id="root"></div></body></html>');});`,
 )
@@ -137,29 +141,35 @@ try {
     await page.locator('#italian').focus()
   }
   record('Italian help, clipping and viewport bounds at 100/150/200 percent zoom')
-  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1))
-  await page.locator('#open').click()
-  await page.locator('#base-help').focus()
-  await tooltip.waitFor()
-  assert.equal(await tooltip.evaluate((element) => !!element.closest('[data-tooltip-layer]') && !element.closest('[inert]')), true)
-  await page.keyboard.press('Escape')
-  assert.equal(await page.getByRole('dialog').count(), 1)
-  await page.locator('#nested').click()
-  await page.locator('#nested-help').focus()
-  await tooltip.waitFor()
-  assert.equal(await tooltip.evaluate((element) => !element.closest('[inert]')), true)
-  await page.keyboard.press('Escape')
-  assert.equal(await page.getByRole('dialog').count(), 2)
-  await page.locator('#last').focus()
-  await page.keyboard.press('Tab')
-  assert.equal(await page.locator('#nested-help').evaluate((element) => element === document.activeElement), true)
-  await page.keyboard.press('Escape') // closes the help reopened by keyboard focus
-  await page.keyboard.press('Escape') // closes the nested modal
-  assert.equal(await page.getByRole('dialog').count(), 1)
-  await page.keyboard.press('Escape')
-  assert.equal(await page.getByRole('dialog').count(), 0)
-  assert.equal(await page.locator('#open').evaluate((element) => element === document.activeElement), true)
-  record('Nested modal isolation, Tab containment, tooltip-first Escape and focus restoration')
+  for (const factor of [1, 1.5, 2]) {
+    await application.evaluate(({ BrowserWindow }, factor) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(factor), factor)
+    await page.locator('#open').click()
+    await page.locator('#base-help').focus()
+    await tooltip.waitFor()
+    assert.equal(await tooltip.evaluate((element) => !!element.closest('[data-tooltip-layer]') && !element.closest('[inert]')), true)
+    await page.keyboard.press('Escape')
+    assert.equal(await page.getByRole('dialog').count(), 1)
+    await page.locator('#nested').click()
+    await page.locator('#nested-help').focus()
+    await tooltip.waitFor()
+    assert.equal(await tooltip.evaluate((element) => !element.closest('[inert]')), true)
+    await page.keyboard.press('Escape')
+    assert.equal(await page.getByRole('dialog').count(), 2)
+    await page.locator('#nested-help').focus()
+    await page.keyboard.press('Shift+Tab')
+    assert.equal(await page.locator('#last').evaluate((element) => element === document.activeElement), true)
+    await page.locator('#last').focus()
+    await page.keyboard.press('Tab')
+    assert.equal(await page.locator('#nested-help').evaluate((element) => element === document.activeElement), true)
+    await page.keyboard.press('Escape') // closes the help reopened by keyboard focus
+    await page.keyboard.press('Escape') // closes the nested modal
+    assert.equal(await page.getByRole('dialog').count(), 1)
+    await page.keyboard.press('Escape')
+    assert.equal(await page.getByRole('dialog').count(), 0)
+    assert.equal(await page.locator('#open').evaluate((element) => element === document.activeElement), true)
+    record('Nested modal isolation, Tab containment, tooltip-first Escape and focus restoration')
+  }
+  assert.deepEqual(report.errors, [])
   report.complete = true
   console.log(`PASS: ${report.checks.length} native tooltip checks. Evidence: ${evidence}`)
 } finally {

@@ -40,11 +40,18 @@ export interface UseIngestedDocumentsOptions {
   retryBaseDelayMs?: number
 }
 
+export interface DocumentCollectionState {
+  isLoading: boolean
+  isLoaded: boolean
+  loadError: boolean
+}
+
 export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) {
   const { onDocsUpdated, retryBaseDelayMs = DEFAULT_RETRY_POLICY.baseDelayMs } = options
   const [documents, setDocuments] = useState<IngestedDocument[]>([])
-  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [isLoading, setIsLoading] = useState<boolean>(true)
   const [isLoaded, setIsLoaded] = useState<boolean>(false)
+  const [loadError, setLoadError] = useState(false)
 
   const onDocsUpdatedRef = useRef(onDocsUpdated)
   useEffect(() => {
@@ -69,6 +76,7 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
 
   const reportFailure = useCallback(
     (reason: string) => {
+      setLoadError(true)
       consecutiveFailuresRef.current += 1
       const failures = consecutiveFailuresRef.current
       if (shouldReportFailure(failures)) {
@@ -105,6 +113,7 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
         consecutiveFailuresRef.current = 0
       }
       setDocuments(docs)
+      setLoadError(false)
       isLoadedRef.current = true
       setIsLoaded(true)
       if (onDocsUpdatedRef.current) {
@@ -173,6 +182,7 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
     documents,
     isLoading,
     isLoaded,
+    documentCollection: { isLoading, isLoaded, loadError },
     refetchDocuments: fetchDocuments,
     setDocuments,
   }

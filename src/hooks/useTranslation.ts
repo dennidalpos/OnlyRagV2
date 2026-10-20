@@ -166,7 +166,7 @@ function useTranslationBase(
     setSelectedDoc((prev) => (prev && accepted.find((d) => d.id === prev.id)) || accepted[0] || null)
   }, [])
 
-  const { documents: allDocuments, refetchDocuments: fetchDocuments } = useIngestedDocuments({ onDocsUpdated: handleDocsUpdated })
+  const { documents: allDocuments, documentCollection, refetchDocuments: fetchDocuments } = useIngestedDocuments({ onDocsUpdated: handleDocsUpdated })
   const documents = acceptsDocument ? allDocuments.filter(acceptsDocument) : allDocuments
 
   const handleSwapLanguages = () => {
@@ -197,6 +197,7 @@ function useTranslationBase(
   return {
     t,
     documents,
+    documentCollection,
     fetchDocuments,
     selectedDoc,
     setSelectedDoc,
@@ -207,6 +208,7 @@ function useTranslationBase(
     handleSwapLanguages,
     isTranslating,
     setIsTranslating,
+    configuredModel: resolveConfiguredModel('translation', settings),
     crossModuleBlockMessage,
     otherJobRunning,
     resolveGenerationOptions,
@@ -487,7 +489,9 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
   return {
     isPromptModalOpen,
     setIsPromptModalOpen,
+    configuredModel: base.configuredModel,
     documents: base.documents,
+    documentCollection: base.documentCollection,
     selectedDoc,
     selectedDocMarkdown,
     setSelectedDoc,
@@ -663,7 +667,10 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
   }
 
   return {
+    configuredModel: base.configuredModel,
     documents: base.documents,
+    documentCollection: base.documentCollection,
+    fetchDocuments: base.fetchDocuments,
     selectedDoc,
     setSelectedDoc: base.setSelectedDoc,
     sourceLang,

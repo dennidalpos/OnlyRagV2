@@ -114,10 +114,7 @@ export const AppLayout: React.FC = () => {
     [language, setLanguage],
   )
 
-  const selectDefaultModelIfUnset = useCallback((model: string) => {
-    setSettings((current) => (current.defaultModel ? current : { ...current, defaultModel: model }))
-  }, [])
-  const { diagnostics, refreshDiagnostics: runDiagnosticsScan } = useDiagnostics(settings, selectDefaultModelIfUnset, settingsReady)
+  const { diagnostics, refreshDiagnostics: runDiagnosticsScan } = useDiagnostics(settings, settingsReady)
   const sidecarStatus = diagnostics?.sidecar?.status ?? 'checking'
   const sidecarStatusColor = sidecarStatus === 'online' ? 'text-emerald-400' : sidecarStatus === 'checking' ? 'text-cyan-400' : 'text-rose-400'
   const {
@@ -168,7 +165,7 @@ export const AppLayout: React.FC = () => {
   return (
     <div className="flex h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden select-text">
       {/* Navigation Sidebar */}
-      <aside className="w-64 max-[900px]:w-16 glass-panel border-r border-slate-800 flex flex-col justify-between p-4 max-[900px]:p-2 z-10 shrink-0">
+      <aside className="w-64 max-[900px]:w-16 glass-panel border-r border-slate-800 flex flex-col justify-between p-4 max-[900px]:p-2 z-10 shrink-0 overflow-y-auto gap-4 [&>div]:shrink-0">
         <div>
           {/* App Branding */}
           <div className="flex items-center justify-between max-[900px]:flex-col max-[900px]:gap-2 px-2 max-[900px]:px-0 py-3 mb-6 border-b border-slate-800/80">
@@ -201,10 +198,16 @@ export const AppLayout: React.FC = () => {
             className="space-y-1.5"
             role="tablist"
             aria-label="Main application navigation"
+            aria-orientation="vertical"
             onKeyDown={(e) => {
               const tabs: NavTab[] = ['ingestion', 'chat', 'translation', 'coding', 'settings']
               const currentIndex = tabs.indexOf(activeTab)
-              if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+              if (e.key === 'Home' || e.key === 'End') {
+                e.preventDefault()
+                const target = e.key === 'Home' ? tabs[0] : tabs[tabs.length - 1]
+                handleSelectTab(target)
+                document.getElementById(`tab-${target}`)?.focus()
+              } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
                 e.preventDefault()
                 const nextIndex = (currentIndex + 1) % tabs.length
                 handleSelectTab(tabs[nextIndex])
@@ -500,7 +503,7 @@ export const AppLayout: React.FC = () => {
           id="panel-ingestion"
           role="tabpanel"
           aria-labelledby="tab-ingestion"
-          className={`h-full w-full flex flex-col ${activeTab === 'ingestion' ? '' : 'hidden'}`}
+          className={`flex-1 min-h-0 w-full flex flex-col ${activeTab === 'ingestion' ? '' : 'hidden'}`}
         >
           {visitedTabs.has('ingestion') && (
             <Suspense fallback={<ViewChunkFallback />}>
@@ -508,7 +511,12 @@ export const AppLayout: React.FC = () => {
             </Suspense>
           )}
         </div>
-        <div id="panel-chat" role="tabpanel" aria-labelledby="tab-chat" className={`h-full w-full flex flex-col ${activeTab === 'chat' ? '' : 'hidden'}`}>
+        <div
+          id="panel-chat"
+          role="tabpanel"
+          aria-labelledby="tab-chat"
+          className={`flex-1 min-h-0 w-full flex flex-col ${activeTab === 'chat' ? '' : 'hidden'}`}
+        >
           {visitedTabs.has('chat') && (
             <Suspense fallback={<ViewChunkFallback />}>
               <ChatView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} isActive={activeTab === 'chat'} />
@@ -519,7 +527,7 @@ export const AppLayout: React.FC = () => {
           id="panel-translation"
           role="tabpanel"
           aria-labelledby="tab-translation"
-          className={`h-full w-full flex flex-col ${activeTab === 'translation' ? '' : 'hidden'}`}
+          className={`flex-1 min-h-0 w-full flex flex-col ${activeTab === 'translation' ? '' : 'hidden'}`}
         >
           {visitedTabs.has('translation') && (
             <Suspense fallback={<ViewChunkFallback />}>
@@ -527,7 +535,12 @@ export const AppLayout: React.FC = () => {
             </Suspense>
           )}
         </div>
-        <div id="panel-coding" role="tabpanel" aria-labelledby="tab-coding" className={`h-full w-full flex flex-col ${activeTab === 'coding' ? '' : 'hidden'}`}>
+        <div
+          id="panel-coding"
+          role="tabpanel"
+          aria-labelledby="tab-coding"
+          className={`flex-1 min-h-0 w-full flex flex-col ${activeTab === 'coding' ? '' : 'hidden'}`}
+        >
           {visitedTabs.has('coding') && (
             <Suspense fallback={<ViewChunkFallback />}>
               <CodingAgentView settings={settings} onUpdateSettings={handleUpdateSettings} diagnostics={diagnostics} isActive={activeTab === 'coding'} />
@@ -538,7 +551,7 @@ export const AppLayout: React.FC = () => {
           id="panel-settings"
           role="tabpanel"
           aria-labelledby="tab-settings"
-          className={`h-full w-full flex flex-col ${activeTab === 'settings' ? '' : 'hidden'}`}
+          className={`flex-1 min-h-0 w-full flex flex-col ${activeTab === 'settings' ? '' : 'hidden'}`}
         >
           {visitedTabs.has('settings') && (
             <Suspense fallback={<ViewChunkFallback />}>

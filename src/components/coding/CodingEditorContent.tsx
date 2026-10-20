@@ -1,5 +1,6 @@
 import React from 'react'
-import Editor, { DiffEditor } from '@monaco-editor/react'
+import Editor from '@monaco-editor/react'
+import { DiffEditor } from '../common/DiffEditor'
 import { FileCode2, ChevronRight, Copy, Check } from 'lucide-react'
 import { AppSettings } from '../../types'
 import type { CodingAgentState } from '../../hooks/useCodingAgent'

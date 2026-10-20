@@ -170,6 +170,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
       />
 
       <PromptComposer
+        modelConfigured={Boolean(activeModelName)}
         agentPrompt={agentPrompt}
         setAgentPrompt={setAgentPrompt}
         onExecute={onExecute}

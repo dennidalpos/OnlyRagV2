@@ -87,4 +87,32 @@ describe('useIngestedDocuments refresh ownership', () => {
 
     expect(getIngestedDocuments).toHaveBeenCalledTimes(3)
   })
+  it('distinguishes a failed initial read from a successfully empty collection', async () => {
+    await act(async () => root.unmount())
+    getIngestedDocuments.mockResolvedValue(null)
+    root = createRoot(document.createElement('div'))
+    await act(async () => root.render(createElement(Harness)))
+    expect(documents.documentCollection).toEqual({ isLoading: false, isLoaded: false, loadError: true })
+    getIngestedDocuments.mockResolvedValue([])
+    await act(async () => documents.refetchDocuments())
+    expect(documents.documentCollection).toEqual({ isLoading: false, isLoaded: true, loadError: false })
+  })
+
+  it('keeps documents during a slow refresh and failed read, then recovers', async () => {
+    const doc = { id: 'retained', filename: 'Synthetic.pdf' }
+    getIngestedDocuments.mockResolvedValue([doc])
+    await act(async () => documents.refetchDocuments())
+    const slow = deferred<null>()
+    getIngestedDocuments.mockReturnValueOnce(slow.promise)
+    await act(async () => void documents.refetchDocuments())
+    expect(documents.documentCollection).toEqual({ isLoading: true, isLoaded: true, loadError: false })
+    expect(documents.documents).toEqual([doc])
+    await act(async () => slow.resolve(null))
+    expect(documents.documentCollection).toEqual({ isLoading: false, isLoaded: true, loadError: true })
+    expect(documents.documents).toEqual([doc])
+    getIngestedDocuments.mockResolvedValue([])
+    await act(async () => documents.refetchDocuments())
+    expect(documents.documents).toEqual([])
+    expect(documents.documentCollection.loadError).toBe(false)
+  })
 })

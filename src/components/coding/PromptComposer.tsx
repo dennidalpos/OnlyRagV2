@@ -8,6 +8,7 @@ import { PromptComposerToolsMenu } from './PromptComposerToolsMenu'
 import { AgentModeSelector } from './AgentModeSelector'
 
 interface PromptComposerProps {
+  modelConfigured?: boolean
   agentPrompt: string
   setAgentPrompt: (prompt: string) => void
   onExecute: () => void
@@ -41,6 +42,7 @@ interface PromptComposerProps {
 }
 
 export const PromptComposer: React.FC<PromptComposerProps> = ({
+  modelConfigured = true,
   agentPrompt,
   setAgentPrompt,
   onExecute,
@@ -112,7 +114,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      if (agentPrompt.trim() && !isModelUpdating) {
+      if (agentPrompt.trim() && modelConfigured && !isModelUpdating) {
         onExecute()
       }
     }
@@ -317,7 +319,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               <button
                 type="button"
                 onClick={onPlanTask}
-                disabled={!agentPrompt.trim() || isModelUpdating}
+                disabled={!modelConfigured || !agentPrompt.trim() || isModelUpdating}
                 aria-label={t('coding.planTask')}
                 title={t('coding.planTask')}
                 className="px-2 py-1 rounded-lg border border-amber-700/60 bg-amber-950/50 text-amber-200 text-[11px] font-semibold hover:bg-amber-900/50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer focus-ring flex items-center gap-1"
@@ -332,7 +334,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               <button
                 type="button"
                 onClick={() => onExecute()}
-                disabled={!agentPrompt.trim() || isModelUpdating}
+                disabled={!modelConfigured || !agentPrompt.trim() || isModelUpdating}
                 aria-label={t('coding.queuedPrompts', { count: queueLength })}
                 title={isModelUpdating ? t('settings.modelUpdatingBlocked') : t('coding.queuedPrompts', { count: queueLength })}
                 className="px-2.5 py-1 bg-gradient-to-r from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-md active:scale-95 shrink-0 cursor-pointer focus-ring"
@@ -344,7 +346,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               <button
                 type="button"
                 onClick={() => onExecute()}
-                disabled={!agentPrompt.trim() || isModelUpdating}
+                disabled={!modelConfigured || !agentPrompt.trim() || isModelUpdating}
                 aria-label={t('coding.runTask')}
                 title={isModelUpdating ? t('settings.modelUpdatingBlocked') : t('coding.runTask')}
                 className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95 shrink-0 cursor-pointer focus-ring"

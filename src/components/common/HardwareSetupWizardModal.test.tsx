@@ -14,6 +14,38 @@ const readyDiagnostics = {
 } as DiagnosticsData
 
 describe('one-click hardware setup', () => {
+  it('dismisses with Escape or X without assigning the recommended models', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const update = vi.fn()
+    const close = vi.fn()
+    try {
+      await act(async () =>
+        root.render(
+          <HardwareSetupWizardModal
+            isOpen
+            onClose={close}
+            diagnostics={readyDiagnostics}
+            settings={DEFAULT_APP_SETTINGS}
+            onUpdateSettings={update}
+            onRefreshDiagnostics={vi.fn()}
+          />,
+        ),
+      )
+      await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
+      expect(close).toHaveBeenCalledOnce()
+      expect(update).not.toHaveBeenCalled()
+      const dismiss = document.querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Chiudi"]')!
+      await act(async () => dismiss.click())
+      expect(close).toHaveBeenCalledTimes(2)
+      expect(update).not.toHaveBeenCalled()
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
   it('prepares the starter suite for review without saving or downloading', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)

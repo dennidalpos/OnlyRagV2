@@ -81,7 +81,7 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
   return (
     <div
       style={{ width: `min(${leftPanelWidth}px, calc(100% - 354px))` }}
-      className="flex flex-col border-r border-slate-800 bg-slate-950 shrink-0 overflow-hidden"
+      className="flex flex-col border-r border-slate-800 bg-slate-950 shrink-0 overflow-hidden max-[900px]:w-full! max-[900px]:h-[400px]"
     >
       <div className="flex-1 overflow-hidden">
         <AgentActionLogPanel

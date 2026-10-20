@@ -5,7 +5,7 @@ import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../constants/promptConfig'
 import { evaluateDomainIntent } from '../services/domainRouter'
 import { useIngestedDocuments } from './useIngestedDocuments'
-import { useTranslation } from '../i18n'
+import { useTranslation, translate } from '../i18n'
 import {
   resolveChatContextBudget,
   resolveChatThreadCount,
@@ -39,7 +39,7 @@ interface ChatRun {
 const createDefaultGreetingMessage = (): ChatMessage => ({
   id: '1',
   sender: 'bot',
-  text: 'Hello! I am your local AI RAG Assistant powered by Ollama and LanceDB. Mention `@document_name` or select active context files on the left to chat with your documents.',
+  text: translate('ux.greeting'),
   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
 })
 
@@ -93,7 +93,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const messagesRef = useRef(messages)
   messagesRef.current = messages
 
-  const { documents, refetchDocuments: fetchDocuments } = useIngestedDocuments()
+  const { documents, documentCollection, refetchDocuments: fetchDocuments } = useIngestedDocuments()
 
   const [input, setInput] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
@@ -271,7 +271,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     })
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value
     setInput(val)
 
@@ -295,9 +295,9 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
   const filteredMentions = documents.filter((d) => (d.filename || '').toLowerCase().includes(mentionFilter))
 
-  const handleCopyMessage = (msgId: string, text: string) => {
+  const handleCopyMessage = async (msgId: string, text: string) => {
     if (!text) return
-    navigator.clipboard.writeText(text)
+    await navigator.clipboard.writeText(text)
     setCopiedMsgId(msgId)
     setTimeout(() => setCopiedMsgId(null), 2000)
   }
@@ -764,6 +764,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     isPromptModalOpen,
     setIsPromptModalOpen,
     documents,
+    documentCollection,
     selectedDocIds,
     messages,
     setMessages,

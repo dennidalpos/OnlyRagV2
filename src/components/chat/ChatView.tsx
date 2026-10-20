@@ -1,3 +1,6 @@
+import { handleTabKeyDown } from '../../lib/tabKeyboard'
+import { ModelRequiredNotice } from '../common/ModelRequiredNotice'
+import { DocumentCollectionStatus } from '../common/DocumentCollectionStatus'
 import { Tooltip } from '../common/Tooltip'
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
@@ -44,7 +47,10 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
   ({ settings, diagnostics, onUpdateSettings, isActive = true }) => {
     const { t } = useTranslation()
     const c = useChatEngine(settings, diagnostics)
-    const unavailableSelections = Array.from(c.selectedDocIds).filter((id) => !c.documents.some((doc) => doc.id === id))
+    const unavailableSelections =
+      c.documentCollection.isLoaded && !c.documentCollection.loadError
+        ? Array.from(c.selectedDocIds).filter((id) => !c.documents.some((doc) => doc.id === id))
+        : []
     const toast = useToast()
     const downloadProgress = useModelDownloadProgress()
     const activeChatModel = resolveConfiguredModel('chat', settings)
@@ -57,24 +63,32 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
     } = useResizablePanel(288, 200, 480, 'onlyrag_chat_sidebar_width')
     const toolsMenuRef = useRef<HTMLDivElement>(null)
     const resetConfirmRef = useRef<HTMLDivElement>(null)
-    const inputRef = useRef<HTMLInputElement>(null)
+    const inputRef = useRef<HTMLTextAreaElement>(null)
     const [showToolsMenu, setShowToolsMenu] = useState(false)
     const [showResetConfirm, setShowResetConfirm] = useState(false)
     const [copiedCitation, setCopiedCitation] = useState<{ msgId: string; index: number } | null>(null)
     // Stable handlers keep the memoized ChatMessageItem rows from re-rendering on every stream flush.
     const copyContextRef = useRef({ c, toast, t })
     copyContextRef.current = { c, toast, t }
-    const handleCopyMessage = useCallback((msgId: string, text: string) => {
+    const handleCopyMessage = useCallback(async (msgId: string, text: string) => {
       const { c: engine, toast: notify, t: translate } = copyContextRef.current
-      engine.handleCopyMessage(msgId, text)
-      notify.info(translate('chat.msgCopied'))
+      try {
+        await engine.handleCopyMessage(msgId, text)
+        notify.info(translate('chat.msgCopied'))
+      } catch {
+        notify.error(translate('ux.copyFailed'))
+      }
     }, [])
-    const handleCopyCitation = useCallback((msgId: string, index: number, snippet: string) => {
+    const handleCopyCitation = useCallback(async (msgId: string, index: number, snippet: string) => {
       const { toast: notify, t: translate } = copyContextRef.current
-      navigator.clipboard.writeText(snippet)
-      setCopiedCitation({ msgId, index })
-      notify.info(translate('chat.citationCopied'))
-      setTimeout(() => setCopiedCitation(null), 2000)
+      try {
+        await navigator.clipboard.writeText(snippet)
+        setCopiedCitation({ msgId, index })
+        notify.info(translate('chat.citationCopied'))
+        setTimeout(() => setCopiedCitation(null), 2000)
+      } catch {
+        notify.error(translate('ux.copyFailed'))
+      }
     }, [])
     const [sidebarTab, setSidebarTab] = useState<'context' | 'history'>('context')
     const [showCompactSidebar, setShowCompactSidebar] = useState(false)
@@ -94,15 +108,15 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
       return () => document.removeEventListener('keydown', closeOnEscape)
     }, [showCompactSidebar])
 
-    // Automatically maintain and restore focus on the prompt input field
+    // Restore an unfocused composer after generation without stealing keyboard navigation.
     useEffect(() => {
-      if (!c.isGenerating) {
+      if (!c.isGenerating && isActive) {
         const timer = setTimeout(() => {
-          inputRef.current?.focus()
+          if (document.activeElement === document.body || document.activeElement === inputRef.current) inputRef.current?.focus()
         }, 50)
         return () => clearTimeout(timer)
       }
-    }, [c.isGenerating, c.activeConversationId])
+    }, [c.isGenerating, c.activeConversationId, isActive])
 
     // Close tools and reset popovers on click outside or Escape
     useEffect(() => {
@@ -148,7 +162,8 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
     }
 
     return (
-      <div className="flex-1 min-w-0 h-full flex flex-col bg-slate-950 overflow-hidden select-text">
+      <div className="flex-1 min-w-0 min-h-0 h-full flex flex-col bg-slate-950 overflow-y-auto select-text">
+        <ModelRequiredNotice model={activeChatModel} selectorId="model-selector-chat" />
         {/* Header */}
         <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex flex-wrap items-center justify-between gap-2 z-10 shrink-0">
           <div className="flex items-center gap-3">
@@ -174,6 +189,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
           <div className="flex min-w-0 flex-wrap items-center gap-2.5">
             {/* Quick Chat Model Selector */}
             <QuickModelSelector
+              id="model-selector-chat"
               currentModel={settings.chatModel || settings.defaultModel || ''}
               installedModels={diagnostics?.ollama?.models || []}
               onSelectModel={(newModel) => {
@@ -245,7 +261,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
           </div>
         )}
         {/* Main Split Layout */}
-        <div className="relative flex-1 flex min-w-0 overflow-hidden">
+        <div className="relative flex-1 flex min-w-0 overflow-hidden max-[900px]:min-h-[420px] max-[900px]:shrink-0">
           {/* Left Sidebar: Context Documents & History */}
           <div
             id="chat-context-sidebar"
@@ -261,10 +277,18 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
               <X className="h-4 w-4" />
             </button>
             {/* Sidebar Tab Switcher */}
-            <div className="flex items-center p-1 bg-slate-950/80 rounded-xl border border-slate-800" role="tablist" aria-label="Schede pannello laterale chat">
+            <div
+              className="flex items-center p-1 bg-slate-950/80 rounded-xl border border-slate-800"
+              role="tablist"
+              onKeyDown={handleTabKeyDown}
+              aria-label={t('ux.chatTabs')}
+            >
               <button
                 type="button"
                 role="tab"
+                id="chat-sidebar-context"
+                aria-controls="chat-sidebar-panel"
+                tabIndex={sidebarTab === 'context' ? 0 : -1}
                 aria-selected={sidebarTab === 'context'}
                 onClick={() => setSidebarTab('context')}
                 className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all focus-ring cursor-pointer ${
@@ -273,12 +297,15 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
               >
                 <FileText className="w-3.5 h-3.5" />
                 <span>
-                  Contesto ({c.selectedDocIds.size}/{c.documents.length})
+                  {t('ux.context')} ({c.selectedDocIds.size}/{c.documents.length})
                 </span>
               </button>
               <button
                 type="button"
                 role="tab"
+                id="chat-sidebar-history"
+                aria-controls="chat-sidebar-panel"
+                tabIndex={sidebarTab === 'history' ? 0 : -1}
                 aria-selected={sidebarTab === 'history'}
                 onClick={() => setSidebarTab('history')}
                 className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all focus-ring cursor-pointer ${
@@ -286,206 +313,217 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                 }`}
               >
                 <History className="w-3.5 h-3.5" />
-                <span>Storico ({c.conversations.length})</span>
+                <span>
+                  {t('ux.history')} ({c.conversations.length})
+                </span>
               </button>
             </div>
 
-            {/* Context Tab Content */}
-            {sidebarTab === 'context' ? (
-              <>
-                <div className="flex items-center justify-between pb-1 border-b border-slate-800/80">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Documenti Vettorizzati</span>
-                  <button
-                    type="button"
-                    onClick={c.fetchDocuments}
-                    aria-label={t('chat.refreshList')}
-                    title={t('chat.refreshList')}
-                    className="p-1 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg focus-ring active:scale-95"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto space-y-1.5 pr-1" role="group" aria-label={t('chat.toolsTitle')}>
-                  {unavailableSelections.map((id) => (
+            <div
+              id="chat-sidebar-panel"
+              role="tabpanel"
+              aria-labelledby={`chat-sidebar-${sidebarTab}`}
+              tabIndex={0}
+              className="flex flex-col flex-1 min-h-0 gap-3 focus-ring"
+            >
+              {/* Context Tab Content */}
+              {sidebarTab === 'context' ? (
+                <>
+                  <div className="flex items-center justify-between pb-1 border-b border-slate-800/80">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('ux.indexedDocuments')}</span>
                     <button
                       type="button"
-                      key={id}
-                      onClick={() => c.toggleDocSelection(id)}
-                      className="w-full text-left p-2.5 rounded-xl border border-amber-800 text-xs text-amber-200 focus-ring"
+                      onClick={c.fetchDocuments}
+                      aria-label={t('chat.refreshList')}
+                      title={t('chat.refreshList')}
+                      className="p-1 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg focus-ring active:scale-95"
                     >
-                      {t('chat.removeUnavailableSelection', { id })}
+                      <RefreshCw className="w-3.5 h-3.5" />
                     </button>
-                  ))}
-                  {c.documents.length === 0 ? (
-                    <div className="text-center py-8 text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl p-4 leading-relaxed">
-                      {t('chat.noDocsIndexed')} {t('chat.noDocsHint')}
-                    </div>
-                  ) : (
-                    c.documents.map((doc) => {
-                      const isSelected = c.selectedDocIds.has(doc.id)
-                      return (
-                        <button
-                          type="button"
-                          key={doc.id}
-                          onClick={() => c.toggleDocSelection(doc.id)}
-                          aria-pressed={isSelected}
-                          aria-label={`${doc.filename} (${isSelected ? t('common.active') : t('common.none')})`}
-                          className={`w-full text-left p-2.5 rounded-xl border text-xs transition-all focus-ring active:scale-95 flex items-center justify-between ${
-                            isSelected
-                              ? 'bg-cyan-950/80 border-cyan-600/80 text-cyan-200 shadow-md shadow-cyan-950/40'
-                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 truncate">
-                            <FileText className={`w-4 h-4 shrink-0 ${isSelected ? 'text-cyan-400' : 'text-slate-400'}`} />
-                            <span className="truncate font-medium" title={doc.filename}>
-                              {doc.filename}
-                            </span>
-                          </div>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />}
-                        </button>
-                      )
-                    })
-                  )}
-                </div>
-              </>
-            ) : (
-              /* History Tab Content */
-              <>
-                <div className="flex items-center justify-between pb-1 border-b border-slate-800/80">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('chat.historyTitle')}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      c.handleNewChat()
-                      toast.info(t('chat.newChatStarted'))
-                    }}
-                    className="px-2 py-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-[11px] rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-sm"
-                    title={t('chat.newChat')}
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>{t('uiShell.newShort')}</span>
-                  </button>
-                </div>
+                  </div>
 
-                <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-                  {c.conversations.length === 0 ? (
-                    <div className="text-center py-8 text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl p-4 leading-relaxed">
-                      {t('chat.noConversations')}
-                    </div>
-                  ) : (
-                    c.conversations.map((conv) => {
-                      const isActive = conv.id === c.activeConversationId
-                      const isEditing = editingConvId === conv.id
-                      return (
-                        <div
-                          key={conv.id}
-                          role={isEditing ? undefined : 'button'}
-                          tabIndex={isEditing ? undefined : 0}
-                          aria-pressed={isEditing ? undefined : isActive}
-                          aria-label={isEditing ? undefined : `${conv.title || t('chat.newChat')} (${conv.messages?.length || 0} messaggi)`}
-                          onKeyDown={(e) => {
-                            if (!isEditing && (e.key === 'Enter' || e.key === ' ')) {
-                              e.preventDefault()
-                              c.loadConversation(conv.id)
-                              toast.info(t('chat.conversationLoaded'))
-                            }
-                          }}
-                          onClick={() => {
-                            if (!isEditing) {
-                              c.loadConversation(conv.id)
-                              toast.info(t('chat.conversationLoaded'))
-                            }
-                          }}
-                          className={`group relative p-2.5 rounded-xl border text-xs cursor-pointer transition-all focus-ring ${
-                            isActive
-                              ? 'bg-cyan-950/80 border-cyan-600/80 text-cyan-200 shadow-md shadow-cyan-950/40'
-                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                          }`}
-                        >
-                          {isEditing ? (
-                            <form onSubmit={(e) => handleSaveRename(conv.id, e)} className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="text"
-                                value={editingTitle}
-                                onChange={(e) => setEditingTitle(e.target.value)}
-                                autoFocus
-                                aria-label={t('chat.renameConversation')}
-                                className="flex-1 px-2 py-1 bg-slate-950 border border-cyan-500 rounded-lg text-xs text-slate-100 focus:outline-none focus-ring"
-                              />
-                              <button
-                                type="submit"
-                                className="p-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-md focus-ring"
-                                title={t('chat.saveTitle')}
-                                aria-label={t('chat.saveTitle')}
-                              >
-                                <Check className="w-3 h-3" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditingConvId(null)}
-                                className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md focus-ring"
-                                title={t('common.cancel')}
-                                aria-label={t('common.cancel')}
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </form>
-                          ) : (
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <div className="font-semibold text-slate-200 truncate flex items-center gap-1.5" title={conv.title || t('chat.newChat')}>
-                                  <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
-                                  <span className="truncate">{conv.title || t('chat.newChat')}</span>
-                                </div>
-                                <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
-                                  <span className="flex items-center gap-1">
-                                    <Clock className="w-2.5 h-2.5" />
-                                    {new Date(conv.updatedAt || conv.createdAt).toLocaleDateString([], {
-                                      month: 'short',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })}
-                                  </span>
-                                  <span>• {conv.messages?.length || 0} msg</span>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleStartRename(conv.id, conv.title, e)}
-                                  className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition-colors focus-ring"
-                                  title={t('chat.renameConversation')}
-                                  aria-label={t('chat.renameConversation')}
-                                >
-                                  <Edit2 className="w-3 h-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    c.deleteConversation(conv.id)
-                                    toast.info(t('chat.conversationDeleted'))
-                                  }}
-                                  className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors focus-ring"
-                                  title={t('chat.deleteConversation')}
-                                  aria-label={t('chat.deleteConversation')}
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
+                  <div className="flex-1 overflow-y-auto space-y-1.5 pr-1" role="group" aria-label={t('chat.toolsTitle')}>
+                    {unavailableSelections.map((id) => (
+                      <button
+                        type="button"
+                        key={id}
+                        onClick={() => c.toggleDocSelection(id)}
+                        className="w-full text-left p-2.5 rounded-xl border border-amber-800 text-xs text-amber-200 focus-ring"
+                      >
+                        {t('chat.removeUnavailableSelection', { id })}
+                      </button>
+                    ))}
+                    <DocumentCollectionStatus state={c.documentCollection} onRetry={c.fetchDocuments} />
+                    {c.documents.length === 0 && (!c.documentCollection.isLoaded || c.documentCollection.loadError) ? null : c.documents.length === 0 ? (
+                      <div className="text-center py-8 text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl p-4 leading-relaxed">
+                        {t('chat.noDocsIndexed')} {t('chat.noDocsHint')}
+                      </div>
+                    ) : (
+                      c.documents.map((doc) => {
+                        const isSelected = c.selectedDocIds.has(doc.id)
+                        return (
+                          <button
+                            type="button"
+                            key={doc.id}
+                            onClick={() => c.toggleDocSelection(doc.id)}
+                            aria-pressed={isSelected}
+                            aria-label={`${doc.filename} (${isSelected ? t('common.active') : t('common.none')})`}
+                            className={`w-full text-left p-2.5 rounded-xl border text-xs transition-all focus-ring active:scale-95 flex items-center justify-between ${
+                              isSelected
+                                ? 'bg-cyan-950/80 border-cyan-600/80 text-cyan-200 shadow-md shadow-cyan-950/40'
+                                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <FileText className={`w-4 h-4 shrink-0 ${isSelected ? 'text-cyan-400' : 'text-slate-400'}`} />
+                              <span className="truncate font-medium" title={doc.filename}>
+                                {doc.filename}
+                              </span>
                             </div>
-                          )}
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-              </>
-            )}
+                            {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />}
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                </>
+              ) : (
+                /* History Tab Content */
+                <>
+                  <div className="flex items-center justify-between pb-1 border-b border-slate-800/80">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('chat.historyTitle')}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        c.handleNewChat()
+                        toast.info(t('chat.newChatStarted'))
+                      }}
+                      className="px-2 py-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-[11px] rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-sm"
+                      title={t('chat.newChat')}
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>{t('uiShell.newShort')}</span>
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+                    {c.conversations.length === 0 ? (
+                      <div className="text-center py-8 text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl p-4 leading-relaxed">
+                        {t('chat.noConversations')}
+                      </div>
+                    ) : (
+                      c.conversations.map((conv) => {
+                        const isActive = conv.id === c.activeConversationId
+                        const isEditing = editingConvId === conv.id
+                        return (
+                          <div
+                            key={conv.id}
+                            role={isEditing ? undefined : 'button'}
+                            tabIndex={isEditing ? undefined : 0}
+                            aria-pressed={isEditing ? undefined : isActive}
+                            aria-label={isEditing ? undefined : `${conv.title || t('chat.newChat')} (${conv.messages?.length || 0} messaggi)`}
+                            onKeyDown={(e) => {
+                              if (!isEditing && (e.key === 'Enter' || e.key === ' ')) {
+                                e.preventDefault()
+                                c.loadConversation(conv.id)
+                                toast.info(t('chat.conversationLoaded'))
+                              }
+                            }}
+                            onClick={() => {
+                              if (!isEditing) {
+                                c.loadConversation(conv.id)
+                                toast.info(t('chat.conversationLoaded'))
+                              }
+                            }}
+                            className={`group relative p-2.5 rounded-xl border text-xs cursor-pointer transition-all focus-ring ${
+                              isActive
+                                ? 'bg-cyan-950/80 border-cyan-600/80 text-cyan-200 shadow-md shadow-cyan-950/40'
+                                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                            }`}
+                          >
+                            {isEditing ? (
+                              <form onSubmit={(e) => handleSaveRename(conv.id, e)} className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="text"
+                                  value={editingTitle}
+                                  onChange={(e) => setEditingTitle(e.target.value)}
+                                  autoFocus
+                                  aria-label={t('chat.renameConversation')}
+                                  className="flex-1 px-2 py-1 bg-slate-950 border border-cyan-500 rounded-lg text-xs text-slate-100 focus:outline-none focus-ring"
+                                />
+                                <button
+                                  type="submit"
+                                  className="p-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-md focus-ring"
+                                  title={t('chat.saveTitle')}
+                                  aria-label={t('chat.saveTitle')}
+                                >
+                                  <Check className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingConvId(null)}
+                                  className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md focus-ring"
+                                  title={t('common.cancel')}
+                                  aria-label={t('common.cancel')}
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </form>
+                            ) : (
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-semibold text-slate-200 truncate flex items-center gap-1.5" title={conv.title || t('chat.newChat')}>
+                                    <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
+                                    <span className="truncate">{conv.title || t('chat.newChat')}</span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="w-2.5 h-2.5" />
+                                      {new Date(conv.updatedAt || conv.createdAt).toLocaleDateString([], {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })}
+                                    </span>
+                                    <span>• {conv.messages?.length || 0} msg</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleStartRename(conv.id, conv.title, e)}
+                                    className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition-colors focus-ring"
+                                    title={t('chat.renameConversation')}
+                                    aria-label={t('chat.renameConversation')}
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      c.deleteConversation(conv.id)
+                                      toast.info(t('chat.conversationDeleted'))
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors focus-ring"
+                                    title={t('chat.deleteConversation')}
+                                    aria-label={t('chat.deleteConversation')}
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Resizable Divider Handle */}
@@ -611,18 +649,33 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                     </span>
                   </div>
                 )}
-                <form onSubmit={c.handleSendMessage} className="space-y-2">
+                <form
+                  onSubmit={(event) => {
+                    if (!activeChatModel) {
+                      event.preventDefault()
+                      return
+                    }
+                    void c.handleSendMessage(event)
+                  }}
+                  className="space-y-2"
+                >
                   {/* Main Input Text Field */}
                   <div className="relative flex items-center">
-                    <input
+                    <textarea
                       ref={inputRef}
-                      type="text"
+                      rows={2}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
+                          event.preventDefault()
+                          event.currentTarget.form?.requestSubmit()
+                        }
+                      }}
                       value={c.input}
                       onChange={c.handleInputChange}
                       placeholder={t('chat.inputPlaceholder')}
                       aria-label={t('chat.inputPlaceholder')}
                       disabled={!c.historyReady || c.isGenerating || isCurrentChatModelUpdating}
-                      className="w-full pl-4 pr-10 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/80 transition-all font-sans disabled:opacity-50"
+                      className="w-full resize-y min-h-16 max-h-40 pl-4 pr-10 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/80 transition-all font-sans disabled:opacity-50"
                     />
                   </div>
 
@@ -676,7 +729,9 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                           <div className="text-[11px] text-slate-400">
                             {c.documents.length > 0
                               ? t('chat.contextTitle', { selected: c.selectedDocIds.size, total: c.documents.length })
-                              : t('chat.noDocsHint')}
+                              : c.documentCollection.isLoaded && !c.documentCollection.loadError
+                                ? t('chat.noDocsHint')
+                                : t('ux.documentsUnavailable')}
                           </div>
 
                           {/* Section 2: Actions & System Prompt */}
@@ -800,7 +855,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                       ) : (
                         <button
                           type="submit"
-                          disabled={!c.input.trim() || isCurrentChatModelUpdating}
+                          disabled={!c.historyReady || !activeChatModel || !c.input.trim() || isCurrentChatModelUpdating}
                           aria-label={t('chat.send')}
                           title={isCurrentChatModelUpdating ? t('settings.modelUpdatingBlocked') : t('chat.send')}
                           className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95"

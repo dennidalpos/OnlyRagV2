@@ -1,3 +1,4 @@
+import { ModelRequiredNotice } from '../common/ModelRequiredNotice'
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { GripVertical } from 'lucide-react'
 import { AppSettings, DiagnosticsData, type AgentCapabilityProfile } from '../../types'
@@ -135,13 +136,13 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
 
     const handleInitiateTaskExecution = () => {
       const prompt = c.agentPrompt.trim()
-      if (!prompt) return
+      if (!prompt || !activeModelName) return
       void c.handleAgentExecute()
     }
 
     const handlePlanTask = () => {
       const prompt = c.agentPrompt.trim()
-      if (!prompt || c.agentMode === 'ask' || c.isExecuting) return
+      if (!prompt || !activeModelName || c.agentMode === 'ask' || c.isExecuting) return
       void handleGeneratePlanFromPrompt(prompt, c.agentMode)
     }
 
@@ -158,8 +159,9 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
     }
 
     return (
-      <div className="flex-1 h-full flex flex-col bg-slate-950 overflow-hidden select-text">
+      <div className="flex-1 min-w-0 min-h-0 h-full flex flex-col bg-slate-950 overflow-y-auto select-text">
         {/* Top Header Bar */}
+        <ModelRequiredNotice model={activeModelName} selectorId="model-selector-coding" />
         <CodingHeader
           guestOsInfo={c.guestOsInfo}
           settings={settings}
@@ -185,7 +187,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
           onAbandon={c.abandonRecoveredTask}
         />
         {/* Main Workspace Split Layout */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden max-[900px]:flex-col max-[900px]:overflow-visible max-[900px]:min-h-[740px] max-[900px]:shrink-0">
           {/* Full Workspace Explorer Sidebar */}
           {showWorkspaceSidebar && (
             <>
@@ -228,7 +230,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
                 aria-label={t('coding.resizePanels')}
                 onMouseDown={handleExplorerMouseDown}
                 onKeyDown={handleExplorerKeyDown}
-                className={`w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring z-20 ${
+                className={`max-[900px]:hidden w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring z-20 ${
                   isExplorerResizing ? 'bg-cyan-500 ring-2 ring-cyan-500/50' : ''
                 }`}
                 title={t('coding.resizePanels')}
@@ -282,7 +284,9 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
           </div>
 
           {/* Right Column: Unified Full-Height Workspace Area */}
-          <div className={`flex-1 flex flex-col overflow-hidden bg-slate-950 min-w-[350px] ${isResizing ? 'pointer-events-none select-none' : ''}`}>
+          <div
+            className={`flex-1 flex flex-col overflow-hidden bg-slate-950 min-w-[350px] max-[900px]:min-w-0 max-[900px]:min-h-[320px] ${isResizing ? 'pointer-events-none select-none' : ''}`}
+          >
             <CodingEditorTabBar
               openFiles={c.openFiles}
               selectedFile={c.selectedFile}
@@ -317,7 +321,19 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
             )}
 
             {/* Active View Container */}
-            <div className="flex-1 w-full h-full overflow-hidden relative flex flex-col">
+            <div
+              id="coding-workspace-panel"
+              role="tabpanel"
+              aria-labelledby={
+                activeRightTab === 'editor'
+                  ? c.selectedFile
+                    ? `coding-file-tab-${encodeURIComponent(c.selectedFile.path)}`
+                    : 'coding-empty-editor-tab'
+                  : `coding-tab-${activeRightTab}`
+              }
+              tabIndex={0}
+              className="flex-1 w-full h-full overflow-hidden relative flex flex-col focus-ring"
+            >
               {activeRightTab === 'editor' && (
                 <CodingEditorContent
                   c={c}

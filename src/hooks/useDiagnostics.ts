@@ -11,12 +11,7 @@ export function getDiagnosticsPollDelay(sidecarStatus: DiagnosticsData['sidecar'
   return sidecarStatus === 'online' ? intervalMs : Math.min(intervalMs, DIAGNOSTICS_STARTUP_RETRY_MS)
 }
 
-export function useDiagnostics(
-  settings: AppSettings,
-  onSelectDefaultModelIfUnset: (model: string) => void,
-  settingsReady: boolean,
-  intervalMs: number = 10000,
-) {
+export function useDiagnostics(settings: AppSettings, settingsReady: boolean, intervalMs: number = 10000) {
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null)
   const [isScanning, setIsScanning] = useState<boolean>(false)
   const prevSidecarStatusRef = useRef<string | null>(null)
@@ -49,10 +44,6 @@ export function useDiagnostics(
 
         prevSidecarStatusRef.current = currentStatus
         prevDocsCountRef.current = currentCount
-
-        if (data.ollama.models.length > 0) {
-          onSelectDefaultModelIfUnset(data.ollama.models[0])
-        }
       }
       return data
     } catch (err: unknown) {
@@ -61,7 +52,7 @@ export function useDiagnostics(
     } finally {
       setIsScanning(false)
     }
-  }, [settings.ollamaHost, onSelectDefaultModelIfUnset])
+  }, [settings.ollamaHost])
 
   useEffect(() => {
     if (!settingsReady) return

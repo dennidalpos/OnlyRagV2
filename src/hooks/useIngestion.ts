@@ -206,7 +206,11 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     [showDocument],
   )
 
-  const { documents, refetchDocuments: fetchDocuments } = useIngestedDocuments({
+  const {
+    documents,
+    documentCollection,
+    refetchDocuments: fetchDocuments,
+  } = useIngestedDocuments({
     onDocsUpdated: handleDocUpdateCallback,
   })
 
@@ -700,6 +704,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     isPromptModalOpen,
     setIsPromptModalOpen,
     documents,
+    documentCollection,
     selectedDoc,
     markdownContent,
     setMarkdownContent,

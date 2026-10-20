@@ -40,7 +40,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
   const allCoreToolsAvailable = hasGit === true && hasNode === true && hasOllama === true
 
   return (
-    <header className="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between z-10 shrink-0 select-text font-sans">
+    <header className="p-4 border-b border-slate-800 bg-slate-900/80 flex flex-wrap gap-2 items-center justify-between z-10 shrink-0 select-text font-sans">
       {/* Left: Module Branding */}
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shadow-sm">
@@ -52,7 +52,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
       </div>
 
       {/* Right: Quick Model Selector, System Prompt, Skills & Toolchain Popover */}
-      <div className="flex items-center gap-2.5 text-xs">
+      <div className="flex flex-wrap min-w-0 items-center gap-2.5 text-xs">
         <button
           type="button"
           onClick={onOpenPermissionsModal}
@@ -64,6 +64,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         </button>
         {/* Quick Coding Model Selector */}
         <QuickModelSelector
+          id="model-selector-coding"
           currentModel={activeModel || settings?.codingModel || ''}
           installedModels={installedModels}
           onSelectModel={(newModel) => {

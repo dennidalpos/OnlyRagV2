@@ -2,8 +2,15 @@ import type { Monaco } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import * as monaco from 'monaco-editor'
 import { loader } from '@monaco-editor/react'
+import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
+import JsonWorker from 'monaco-editor/languages/features/json/json.worker.js?worker'
 
 if (typeof window !== 'undefined') {
+  // Explicit Vite workers also work from Electron's file:// bundle; a data-URL bootstrap
+  // cannot resolve Monaco's relative imports there.
+  window.MonacoEnvironment = {
+    getWorker: (_moduleId, label) => (label === 'json' ? new JsonWorker() : new EditorWorker()),
+  }
   loader.config({ monaco })
 }
 

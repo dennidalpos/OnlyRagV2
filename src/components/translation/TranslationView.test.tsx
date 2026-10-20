@@ -12,7 +12,7 @@ vi.mock('../../hooks/useOllamaModelMetrics', () => ({ useOllamaModelMetrics: () 
 vi.mock('../../hooks/useIngestedDocuments', () => ({
   useIngestedDocuments: ({ onDocsUpdated }: { onDocsUpdated: (docs: IngestedDocument[]) => void }) => {
     queueMicrotask(() => onDocsUpdated([pdfDoc]))
-    return { documents: [pdfDoc], refetchDocuments: vi.fn(async () => {}) }
+    return { documents: [pdfDoc], documentCollection: { isLoaded: true, isLoading: false, loadError: false }, refetchDocuments: vi.fn(async () => {}) }
   },
 }))
 

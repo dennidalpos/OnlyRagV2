@@ -1,3 +1,4 @@
+import './retiredCampaign'
 import { describe, expect, it } from 'vitest'
 import { verifyWebUi } from '../../electron/core/infrastructure/process/webUiSmokeVerifier'
 

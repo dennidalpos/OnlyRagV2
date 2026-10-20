@@ -61,7 +61,7 @@ export const AgentSessionHeaderBar: React.FC<AgentSessionHeaderBarProps> = ({
           <button
             type="button"
             onClick={onSelectWorkspaceFolder}
-            title={isStandaloneMode ? t('workspaceExplorer.scratchSubtitle') : t('codingWorkspace.workspaceFolder', { path: workspacePath || '' })}
+            title={isStandaloneMode ? t('help.workspaceExplorer_scratchSubtitle') : t('codingWorkspace.workspaceFolder', { path: workspacePath || '' })}
             aria-label={isStandaloneMode ? t('workspaceExplorer.scratchTitle') : t('codingWorkspace.workspaceFolder', { path: workspacePath || '' })}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/40 text-slate-200 hover:text-cyan-300 transition-all text-xs font-medium truncate focus-ring cursor-pointer shadow-sm"
           >

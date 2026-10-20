@@ -21,7 +21,7 @@ Eseguire i comandi da PowerShell nella radice del repository. Le versioni dichia
 | OpenAPI | `npm run generate:openapi` | Rigenera il contratto dopo modifiche REST. Non rieseguito qui. |
 | Installer | `npm run package:win` | Crea un nuovo candidato CPU in `release/cpu-*`; non installa né pubblica. Non rieseguito qui. |
 
-La CI Windows in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) installa il runtime Electron anche con `node node_modules/electron/install.js`. Test e build non qualificano modelli, semantica, profili personali o perdita di alimentazione.
+Il workflow storico Windows in [`.github/workflows/ci.yml`](https://github.com/dennidalpos/OnlyRagV2/blob/683fa1dae0a4f0b5f1856707fb29cea869395276/.github/workflows/ci.yml) è ritirato: i controlli si eseguono localmente. Il runtime Electron può essere preparato con `node node_modules/electron/install.js`. Modelli e profili personali non sono gate di qualifica.
 
 ## Installazione manuale di Ollama
 
@@ -37,11 +37,11 @@ Le ricevute dei task agente sono in `agent-task-recovery.json` sotto il `userDat
 
 ## Cleanup safety policy — 2026-10-10
 
-[`clean_repo.ps1`](../scripts/clean_repo.ps1), [`clean_workspace.ps1`](../scripts/clean_workspace.ps1) e [`cleanup_policy.ps1`](../scripts/cleanup_policy.ps1) rifiutano percorsi non ammessi, reparse point, file tracciati e dati protetti. I modi Repo, TestResidues e Full richiedono `-DisposablePaths` con percorsi assoluti esaminati; Full esclude i profili. `-WhatIf` applica il preflight senza cancellare. `StopAppProcesses` rifiuta: chiudere l'app deliberatamente. Non classificare `.onlyrag`, `userdata_dev`, campagne live, checkpoint, backup o vecchi scratch come eliminabili dal nome. Eventuali residui hanno una decisione separata nel tracker (`RETAINED-RESIDUE-DISPOSAL-01`). Nessuna pulizia reale è stata eseguita per questa revisione.
+[`clean_repo.ps1`](../scripts/clean_repo.ps1), [`clean_workspace.ps1`](../scripts/clean_workspace.ps1) e [`cleanup_policy.ps1`](../scripts/cleanup_policy.ps1) rifiutano percorsi non ammessi, reparse point, file tracciati e dati protetti. I modi Repo, TestResidues e Full richiedono `-DisposablePaths` con percorsi assoluti esaminati; Full esclude i profili. `-WhatIf` applica il preflight senza cancellare. `StopAppProcesses` rifiuta: chiudere l'app deliberatamente. Non classificare `.onlyrag`, `userdata_dev`, campagne live, checkpoint, backup o vecchi scratch come eliminabili dal nome. Il precedente task di smaltimento è ritirato; questo non autorizza a cancellare i file conservati. Nessuna pulizia reale è stata eseguita per questa revisione.
 
 ## Pulizia manuale dei log
 
-Con app chiusa e dopo revisione dei file, usare `npm run clean:logs -- -DisposablePaths "<percorso assoluto del singolo log>" -ApplicationClosed -WhatIf` per il preflight; omettere `-WhatIf` per cancellare la selezione approvata. Il comando richiede file espliciti, senza cancellazione automatica per età o di intere directory. `-ApplicationClosed` è un'attestazione dell'operatore: lo script non rileva né arresta processi. Sono eleggibili solo i nomi applicativi e le generazioni specificate nella [policy verificata](./verification-log-cleanup-2026-10-19.md); log sconosciuti, evidenze, backup, originali e dati restano protetti. `npm run test:cleanup-logs` esegue 17 casi isolati. Le race e lo smaltimento di evidenze conservate restano separati nel tracker.
+Con app chiusa e dopo revisione dei file, usare `npm run clean:logs -- -DisposablePaths "<percorso assoluto del singolo log>" -ApplicationClosed -WhatIf` per il preflight; omettere `-WhatIf` per cancellare la selezione approvata. Il comando richiede file espliciti, senza cancellazione automatica per età o di intere directory. `-ApplicationClosed` è un'attestazione dell'operatore: lo script non rileva né arresta processi. Sono eleggibili solo i nomi applicativi e le generazioni specificate nella [policy verificata](./verification-log-cleanup-2026-10-19.md); log sconosciuti, evidenze, backup, originali e dati restano protetti. `npm run test:cleanup-logs` esegue 17 casi isolati. Le evidenze conservate restano protette; non esiste un obbligo aperto di smaltimento storico.
 
 ## Qualifica nativa dei progetti dell'agente
 

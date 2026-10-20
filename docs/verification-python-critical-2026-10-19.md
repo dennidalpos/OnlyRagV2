@@ -4,7 +4,7 @@
 
 `QUALITY-PYTHON-CRITICAL-PATHS-01` aggiunge un gate comportamentale offline ai controlli sintattici esistenti. Le voci precedenti del tracker conservano gate di installazione o modelli reali non autorizzati. Il lotto non cambia il codice applicativo Python o TypeScript e preserva le modifiche del precedente dettaglio del contesto chat.
 
-`npm run quality:python` usa il Python della venv e [check_python_critical.py](../scripts/check_python_critical.py). La stessa verifica è obbligatoria in [lint_format.ps1](../scripts/lint_format.ps1), dopo `compileall` e prima di Vitest, anche con `-SkipTests`. La [CI Windows](../.github/workflows/ci.yml) invoca già quel gate seriale: il collegamento è nel codice locale; nessuna esecuzione remota di queste modifiche è attestata.
+`npm run quality:python` usa il Python della venv e [check_python_critical.py](../scripts/check_python_critical.py). La stessa verifica è obbligatoria in [lint_format.ps1](../scripts/lint_format.ps1), dopo `compileall` e prima di Vitest, anche con `-SkipTests`. La [CI Windows](https://github.com/dennidalpos/OnlyRagV2/blob/683fa1dae0a4f0b5f1856707fb29cea869395276/.github/workflows/ci.yml) invoca già quel gate seriale: il collegamento è nel codice locale; nessuna esecuzione remota di queste modifiche è attestata.
 
 ## Controlli selezionati
 

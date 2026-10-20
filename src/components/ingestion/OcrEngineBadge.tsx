@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React from 'react'
 import { Eye, Cpu, Zap, AlertTriangle } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
@@ -41,28 +42,25 @@ export const OcrEngineBadge: React.FC<OcrEngineBadgeProps> = ({ settings, diagno
       </div>
 
       {isCudaActive ? (
-        <div
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium"
-          title={t('ingestion.ocrGpuActiveTooltip')}
-        >
-          <Zap className="w-3 h-3 text-emerald-400 shrink-0" />
-          <span>{t('ingestion.ocrGpuActive')}</span>
-        </div>
+        <Tooltip helpKey="ingestion_ocrGpuActiveTooltip">
+          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium">
+            <Zap className="w-3 h-3 text-emerald-400 shrink-0" />
+            <span>{t('ingestion.ocrGpuActive')}</span>
+          </div>
+        </Tooltip>
       ) : hostHasGpu ? (
-        <div
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] font-medium cursor-help"
-          title={t('ingestion.ocrGpuPresentUnusedTooltip')}
-        >
-          <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
-          <span>{t('ingestion.ocrGpuPresentUnused')}</span>
-        </div>
+        <Tooltip helpKey="ingestion_ocrGpuPresentUnusedTooltip">
+          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] font-medium cursor-help">
+            <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+            <span>{t('ingestion.ocrGpuPresentUnused')}</span>
+          </div>
+        </Tooltip>
       ) : (
-        <div
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-400 text-[11px] font-medium"
-          title={t('ingestion.ocrCpuOnlyTooltip')}
-        >
-          <span>{t('ingestion.ocrCpuOnly')}</span>
-        </div>
+        <Tooltip helpKey="ingestion_ocrCpuOnlyTooltip">
+          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-400 text-[11px] font-medium">
+            <span>{t('ingestion.ocrCpuOnly')}</span>
+          </div>
+        </Tooltip>
       )}
     </div>
   )

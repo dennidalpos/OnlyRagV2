@@ -21,13 +21,12 @@ function runPreflight(workspacePath: string, overrides: Partial<Parameters<typeo
 }
 
 describe('Agent Coding preflight', () => {
-  it('accepts a runtime-compatible model while retaining unqualified full-task status', () => {
+  it('accepts a runtime-compatible model without historical qualification checks', () => {
     const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-preflight-'))
     try {
       const result = runPreflight(workspacePath)
       expect(result).toMatchObject({ ready: true })
-      expect(result.checks.find((check) => check.id === 'qualification')).toMatchObject({ passed: false, blocking: false })
-      expect(result.checks.find((check) => check.id === 'probes')?.detail).toContain('does not finish the plan')
+      expect(result.checks.map((check) => check.id)).not.toEqual(expect.arrayContaining(['probes', 'qualification']))
       expect(result.checks.find((check) => check.id === 'memory')).toMatchObject({
         passed: false,
         blocking: false,

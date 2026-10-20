@@ -1,4 +1,8 @@
 """Collect actual extraction/retrieval and normalization evidence on frozen synthetic data."""
+
+if __name__ == '__main__':
+    raise SystemExit('Historical model campaign retired; use the bounded configured-model smoke runner.')
+
 import csv
 import datetime
 import hashlib

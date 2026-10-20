@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React, { useMemo } from 'react'
 import { GitBranch, RefreshCw, CheckCircle2, FileCode } from 'lucide-react'
 import stripAnsi from 'strip-ansi'
@@ -120,7 +121,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({ gitStatusLines, gitD
             <GitBranch className="w-8 h-8 opacity-80" />
           </div>
           <div className="font-bold text-slate-200 text-sm">{t('codingWorkspace.notGitRepo')}</div>
-          <p className="text-xs text-slate-400 max-w-sm leading-relaxed">{t('codingWorkspace.notGitRepoDescription')}</p>
+          <Tooltip helpKey="codingWorkspace_notGitRepoDescription" />
           {onInitGit && (
             <button
               type="button"
@@ -181,7 +182,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({ gitStatusLines, gitD
               <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2 text-slate-400">
                 <FileCode className="w-8 h-8 text-cyan-500/30" />
                 <div className="font-semibold text-slate-400 text-xs">{t('codingWorkspace.noActiveDiff')}</div>
-                <p className="text-[11px] max-w-xs text-slate-400">{t('codingWorkspace.noActiveDiffDescription')}</p>
+                <Tooltip helpKey="codingWorkspace_noActiveDiffDescription" />
               </div>
             ) : parsedFiles.length > 0 ? (
               <div tabIndex={0} aria-label={t('codingWorkspace.diffAriaLabel')} className="h-full overflow-auto space-y-3 focus-ring rounded-xl">

@@ -1,3 +1,4 @@
+import { Tooltip } from '../../common/Tooltip'
 import React, { useState, useRef, useEffect } from 'react'
 import { Globe, Plus, HelpCircle, RefreshCw, ChevronDown, CheckCircle2, Shield, FolderGit2, Layers } from 'lucide-react'
 import { InlineDestructiveConfirm } from '../../common/InlineDestructiveConfirm'
@@ -80,7 +81,7 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
           </div>
           <div>
             <span className="text-xs font-bold text-slate-200">{t('skills.hubTitle')}:</span>
-            <p className="text-[11px] text-slate-400">{t('skills.hubSubtitle')}</p>
+            <Tooltip helpKey="skills_hubSubtitle" />
           </div>
         </div>
 

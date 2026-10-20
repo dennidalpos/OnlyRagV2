@@ -1,4 +1,8 @@
 """Evaluate the installed Nomic encoder on frozen synthetic IT/EN passages."""
+
+if __name__ == '__main__':
+    raise SystemExit('Historical model campaign retired; use the bounded configured-model smoke runner.')
+
 import datetime
 import hashlib
 import json

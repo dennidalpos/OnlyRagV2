@@ -1,3 +1,4 @@
+import { Tooltip, type HelpKey } from '../common/Tooltip'
 import React from 'react'
 import { Scan, Check } from 'lucide-react'
 import { AppSettings } from '../../types'
@@ -11,9 +12,9 @@ interface OcrEngineSelectorProps {
 /** Settings-page OCR engine picker. */
 export const OcrEngineSelector: React.FC<OcrEngineSelectorProps> = ({ settings, onUpdateSettings }) => {
   const { t } = useTranslation()
-  const engines: { id: AppSettings['ocrEngine']; icon: string; name: string; desc: string }[] = [
-    { id: 'native_cuda', icon: '⚡', name: t('hardwareWizard.nativeCudaOcr'), desc: t('hardwareWizard.nativeCudaOcrDesc') },
-    { id: 'vision_model', icon: '👁️', name: t('hardwareWizard.visionModelOcr'), desc: t('hardwareWizard.visionModelOcrDesc') },
+  const engines: { id: AppSettings['ocrEngine']; icon: string; name: string; helpKey: HelpKey }[] = [
+    { id: 'native_cuda', icon: '⚡', name: t('hardwareWizard.nativeCudaOcr'), helpKey: 'hardwareWizard_nativeCudaOcrDesc' },
+    { id: 'vision_model', icon: '👁️', name: t('hardwareWizard.visionModelOcr'), helpKey: 'hardwareWizard_visionModelOcrDesc' },
   ]
 
   return (
@@ -29,36 +30,36 @@ export const OcrEngineSelector: React.FC<OcrEngineSelectorProps> = ({ settings, 
         {engines.map((engine) => {
           const isSelected = settings.ocrEngine === engine.id
           return (
-            <button
-              type="button"
-              key={engine.id}
-              role="radio"
-              tabIndex={isSelected ? 0 : -1}
-              aria-checked={isSelected}
-              onClick={() => onUpdateSettings({ ocrEngine: engine.id })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  onUpdateSettings({ ocrEngine: engine.id })
-                }
-              }}
-              className={`p-3.5 rounded-xl border cursor-pointer flex flex-col justify-between transition-all select-none text-left focus-ring active:scale-[0.98] ${
-                isSelected ? 'bg-amber-950/50 border-amber-400 shadow-md shadow-amber-950/30' : 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
-              }`}
-            >
-              <div className="flex items-center justify-between font-semibold text-slate-100 text-xs">
-                <span>
-                  {engine.icon} {engine.name}
-                </span>
-                {isSelected && <Check className="w-4 h-4 text-amber-400" />}
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">{engine.desc}</p>
-            </button>
+            <Tooltip key={engine.id} helpKey={engine.helpKey}>
+              <button
+                type="button"
+                role="radio"
+                tabIndex={isSelected ? 0 : -1}
+                aria-checked={isSelected}
+                onClick={() => onUpdateSettings({ ocrEngine: engine.id })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onUpdateSettings({ ocrEngine: engine.id })
+                  }
+                }}
+                className={`p-3.5 rounded-xl border cursor-pointer flex flex-col justify-between transition-all select-none text-left focus-ring active:scale-[0.98] ${
+                  isSelected ? 'bg-amber-950/50 border-amber-400 shadow-md shadow-amber-950/30' : 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between font-semibold text-slate-100 text-xs">
+                  <span>
+                    {engine.icon} {engine.name}
+                  </span>
+                  {isSelected && <Check className="w-4 h-4 text-amber-400" />}
+                </div>
+              </button>
+            </Tooltip>
           )
         })}
       </div>
 
-      <p className="text-[11px] text-slate-400/90 leading-relaxed border-t border-slate-800/80 pt-3">ℹ️ {t('hardwareWizard.ocrEngineInplaceNotice')}</p>
+      <Tooltip helpKey="hardwareWizard_ocrEngineInplaceNotice" />
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React, { useState } from 'react'
 import {
   ChevronDown,
@@ -211,7 +212,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                   <div className={`font-bold text-[11px] truncate ${isStandalone ? 'text-indigo-200' : 'text-slate-300'}`}>
                     {t('workspaceExplorer.scratchTitle')}
                   </div>
-                  <div className="text-[9px] text-slate-400 truncate">{t('workspaceExplorer.scratchSubtitle')}</div>
+                  <Tooltip helpKey="workspaceExplorer_scratchSubtitle" />
                 </div>
               </div>
               {isStandalone && (

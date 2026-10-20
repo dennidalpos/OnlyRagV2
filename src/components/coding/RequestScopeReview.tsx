@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import { useState } from 'react'
 import { validateRequestLedger, type RequestCoverageLedger } from '../../../shared/domain/agent/requestCoverageLedger'
 import { useTranslation } from '../../i18n'
@@ -23,8 +24,9 @@ export function RequestScopeReview({
   const fieldClass = 'w-full rounded bg-slate-950 border border-slate-700 p-2 text-xs text-slate-200'
   return (
     <section className="space-y-3" aria-label={t('requestScope.title')}>
-      <h2 className="font-semibold text-cyan-300">{t('requestScope.title')}</h2>
-      <p className="text-xs text-slate-400">{t('requestScope.description')}</p>
+      <h2 className="font-semibold text-cyan-300 inline-flex items-center gap-1.5">
+        {t('requestScope.title')} <Tooltip helpKey="requestScope_description" />
+      </h2>
       {ledger.obligations.map((item, index) => (
         <fieldset key={item.id} className="space-y-2 rounded border border-slate-700 p-3">
           <legend className="text-xs text-slate-400">{index + 1}</legend>

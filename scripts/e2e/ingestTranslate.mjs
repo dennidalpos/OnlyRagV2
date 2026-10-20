@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { loadConfiguredModelSmoke } from './loadConfiguredModelSmoke.mjs'
 import { _electron as electron } from 'playwright'
 
 /**
@@ -13,61 +14,65 @@ import { _electron as electron } from 'playwright'
  * Models and host come from the real settings.json, like the live runs.
  */
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-ingest-translate-'))
-const userData = path.join(tempRoot, 'user-data')
-const outputDir = path.join(tempRoot, 'translated')
-const screenshotDir = process.env.ONLYRAG_E2E_SCREENSHOT_DIR || path.join(tempRoot, 'screenshots')
-fs.mkdirSync(userData)
-fs.mkdirSync(outputDir)
-fs.mkdirSync(screenshotDir, { recursive: true })
-
+const args = process.argv.slice(2)
+if (args.length !== 2 || args[0] !== '--session-dir' || !path.isAbsolute(args[1]))
+  throw new Error('Pass --session-dir <absolute shared work-session directory>')
+const { startConfiguredSmokeProxy } = await loadConfiguredModelSmoke()
 const realSettingsPath = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'onlyrag-v2', 'settings.json')
-const realSettings = fs.existsSync(realSettingsPath) ? JSON.parse(fs.readFileSync(realSettingsPath, 'utf8')) : {}
-const real = realSettings.settings ?? realSettings
-fs.writeFileSync(
-  path.join(userData, 'settings.json'),
-  JSON.stringify({
-    version: 2,
-    settings: {
-      ollamaHost: real.ollamaHost || 'http://127.0.0.1:11434',
-      language: 'it',
-      ocrEngine: real.ocrEngine || 'native_cuda',
-      embeddingModel: real.embeddingModel || 'nomic-embed-text:latest',
-      visionModel: real.visionModel || 'moondream:latest',
-      translationModel: real.translationModel || 'qwen2.5:3b',
-      defaultModel: real.defaultModel || real.translationModel || 'qwen2.5:3b',
-      translationOutputFolder: outputDir,
-      hasCompletedInitialSetup: true,
-    },
-  }),
-)
-
-const PAGES = 8
-const pdfPath = path.join(tempRoot, 'e2e-doc.pdf')
-execFileSync(path.join(root, '.venv', 'Scripts', 'python.exe'), [
-  '-c',
-  [
-    'import pymupdf, sys',
-    'd = pymupdf.open()',
-    `for i in range(${PAGES}):`,
-    '    p = d.new_page()',
-    '    for j in range(12):',
-    '        p.insert_text((72, 72 + j * 24), f"Pagina {i + 1}, paragrafo {j + 1}: questo documento verifica il progresso di ingestione e traduzione.", fontsize=11)',
-    'd.save(sys.argv[1])',
-  ].join('\n'),
-  pdfPath,
-])
-
-/** Widths of the determinate progress bars, as the user sees them. */
-const readBarWidths = (page) =>
-  page.evaluate(() =>
-    [...document.querySelectorAll('[style*="width"]')]
-      .map((element) => element.style.width)
-      .filter((width) => /^\d+(\.\d+)?%$/.test(width) && width !== '100%'),
+const proxy = await startConfiguredSmokeProxy({ sessionDirectory: args[1], settingsFile: realSettingsPath, roles: ['embedding', 'translation'] })
+let application
+let tempRoot
+try {
+  tempRoot = fs.mkdtempSync(path.join(args[1], 'desktop-'))
+  const userData = path.join(tempRoot, 'user-data')
+  const outputDir = path.join(tempRoot, 'translated')
+  const screenshotDir = path.join(tempRoot, 'screenshots')
+  const workspaceDir = path.join(tempRoot, 'workspace')
+  fs.mkdirSync(userData)
+  fs.mkdirSync(outputDir)
+  fs.mkdirSync(screenshotDir)
+  fs.mkdirSync(workspaceDir)
+  fs.writeFileSync(
+    path.join(userData, 'settings.json'),
+    JSON.stringify({
+      version: 2,
+      settings: {
+        ...proxy.settings,
+        customWorkspacePath: workspaceDir,
+        autoInstallHubSkills: 'disabled',
+        ollamaHost: proxy.host,
+        language: 'it',
+        translationOutputFolder: outputDir,
+        hasCompletedInitialSetup: true,
+      },
+    }),
+    { flag: 'wx', flush: true },
   )
 
-let application
-try {
+  const PAGES = 2
+  const pdfPath = path.join(tempRoot, 'e2e-doc.pdf')
+  execFileSync(path.join(root, '.venv', 'Scripts', 'python.exe'), [
+    '-c',
+    [
+      'import pymupdf, sys',
+      'd = pymupdf.open()',
+      `for i in range(${PAGES}):`,
+      '    p = d.new_page()',
+      '    for j in range(2):',
+      '        p.insert_text((72, 72 + j * 24), f"Pagina {i + 1}, paragrafo {j + 1}: questo documento verifica il progresso di ingestione e traduzione.", fontsize=11)',
+      'd.save(sys.argv[1])',
+    ].join('\n'),
+    pdfPath,
+  ])
+
+  /** Widths of the determinate progress bars, as the user sees them. */
+  const readBarWidths = (page) =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('[style*="width"]')]
+        .map((element) => element.style.width)
+        .filter((width) => /^\d+(\.\d+)?%$/.test(width) && width !== '100%'),
+    )
+
   application = await electron.launch({
     executablePath: path.join(root, 'node_modules', 'electron', 'dist', 'electron.exe'),
     args: [path.join(root, 'dist-electron', 'main.js'), '--disable-gpu'],
@@ -124,7 +129,7 @@ try {
   await page.selectOption('#inplace-doc-select', document.id)
   await page.getByRole('button', { name: /Avvia Traduzione/ }).click()
   const seenWidths = new Set()
-  const deadline = Date.now() + 600_000
+  const deadline = Date.now() + 180_000
   while (Date.now() < deadline) {
     for (const width of await readBarWidths(page)) seenWidths.add(width)
     if (await page.getByText(/Documento tradotto con successo/).count()) break
@@ -151,6 +156,10 @@ try {
     `[PASS] Dev Sidecar start, ingestion (${ingest.length} events) and layout translation (${translate.length} events, bar ${[...seenWidths].join(' ')}) of a ${PAGES}-page PDF.`,
   )
 } finally {
-  if (application) await application.close()
-  fs.rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
+  try {
+    if (application) await application.close()
+  } finally {
+    await proxy.close()
+  }
+  console.log(`Isolated profile and evidence retained: ${tempRoot}`)
 }

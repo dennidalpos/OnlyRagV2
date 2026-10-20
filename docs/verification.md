@@ -1,5 +1,7 @@
 # Verifica e limiti noti
 
+**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+
 Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [tracker](../PROJECT_STATUS.json) contiene solo i residui aperti. Le voci seguenti mantengono gli ancoraggi usati dai riferimenti esistenti e rinviano alle prove datate, che non diventano qualificazione generale.
 
 ## Indice delle evidenze precedenti

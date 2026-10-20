@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React from 'react'
 import { Code, Sparkles, CheckCircle2, AlertCircle, Wrench, Sliders, Shield } from 'lucide-react'
 import { AppSettings, type GuestOsInfo } from '../../types'
@@ -47,9 +48,6 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         </div>
         <div>
           <h1 className="font-bold text-slate-100 text-sm tracking-wide">{t('coding.headerTitle')}</h1>
-          <p className="text-[11px] text-amber-300" title={t('modelBadges.experimentalTooltip')}>
-            {t('modelBadges.experimental')}
-          </p>
         </div>
       </div>
 
@@ -114,21 +112,22 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
 
         {/* System & Toolchain Status Trigger */}
         <div>
-          <button
-            type="button"
-            onClick={onOpenDiagnosticsModal}
-            aria-label={t('uiShell.toolchainStatus')}
-            title={t('uiShell.toolchainStatusHint')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-colors focus-ring ${
-              allCoreToolsAvailable
-                ? 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-100/10 hover:border-slate-700'
-                : 'bg-amber-950/40 border-amber-800/60 text-amber-300 hover:bg-amber-900/50'
-            }`}
-          >
-            <Wrench className={`w-3 h-3 ${allCoreToolsAvailable ? 'text-cyan-400' : 'text-amber-400'}`} />
-            <span className="font-mono text-[10px]">OS Tools</span>
-            {allCoreToolsAvailable ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <AlertCircle className="w-3 h-3 text-amber-400 animate-pulse" />}
-          </button>
+          <Tooltip helpKey="uiShell_toolchainStatusHint">
+            <button
+              type="button"
+              onClick={onOpenDiagnosticsModal}
+              aria-label={t('uiShell.toolchainStatus')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-colors focus-ring ${
+                allCoreToolsAvailable
+                  ? 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-100/10 hover:border-slate-700'
+                  : 'bg-amber-950/40 border-amber-800/60 text-amber-300 hover:bg-amber-900/50'
+              }`}
+            >
+              <Wrench className={`w-3 h-3 ${allCoreToolsAvailable ? 'text-cyan-400' : 'text-amber-400'}`} />
+              <span className="font-mono text-[10px]">OS Tools</span>
+              {allCoreToolsAvailable ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <AlertCircle className="w-3 h-3 text-amber-400 animate-pulse" />}
+            </button>
+          </Tooltip>
         </div>
       </div>
     </header>

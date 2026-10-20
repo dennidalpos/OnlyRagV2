@@ -14,8 +14,7 @@ export const en: TranslationSchema = {
   },
   requestScope: {
     title: 'Confirm the request scope',
-    description:
-      'Review each obligation before generating a plan. Global properties apply to every current and additional target. Mark only headings and background as context. Edit ambiguous interpretations, or split a source line into distinct obligations.',
+
     requirement: 'Required behavior',
     subject: 'Subject class',
     scope: 'Scope',
@@ -153,7 +152,7 @@ export const en: TranslationSchema = {
     noDocsIndexed: 'No indexed documents.',
     noDocsHint: 'Upload PDFs or docs in the Ingestion tab.',
     emptyTitle: 'Ask anything about your documents',
-    emptySubtitle: 'Private local retrieval: no data sent outside.',
+
     quickStartTitle: 'Quick Prompts',
     quickStart1: 'Summarize key points from uploaded documents',
     quickStart2: 'What are the main technical requirements?',
@@ -166,14 +165,13 @@ export const en: TranslationSchema = {
     openingOriginal: 'Verifying the original source…',
     originalUnavailable: 'Original location unavailable or unverifiable.',
     locationVerified: 'Original location verified.',
-    locationSupportHint: 'The location is verified; compare the passage with the answer to assess support.',
+
     sourcePage: 'Page {page}',
     modelCitedPassage: 'Model-cited passage; support needs assessment.',
     uncitedCandidate: 'Retrieved candidate, not cited in the answer.',
     invalidSourceReferences: 'Unresolved references: {references}. They are not verified support.',
     coverageTitle: 'Document context sent for this answer',
-    coverageHint:
-      'This turn’s document text only. Inclusion does not prove answer support, full-document understanding or exact model-token use. Earlier conversation context is separate.',
+
     coverageRetrieved: 'Returned retrieval candidates are listed below; passages outside the requested shortlist were not evaluated.',
     coverageSkipped: 'Retrieval skipped for this question.',
     coveragePreview: 'Document preview',
@@ -186,7 +184,7 @@ export const en: TranslationSchema = {
     coverageEmpty: 'No readable text',
     coverageBudget: 'Context limit',
     coverageText: 'Text sent',
-    rankingScoreHint: 'Retrieved passages are candidates. The ranking score is a heuristic, not confidence that a passage supports the answer.',
+
     copyCitation: 'Copy Citation',
     citationCopied: 'Citation copied!',
     copyMsg: 'Copy Message',
@@ -354,7 +352,7 @@ export const en: TranslationSchema = {
   },
   skills: {
     hubTitle: 'Skill Hub & Marketplace',
-    hubSubtitle: 'Modular capabilities and instructions for the Agent.',
+
     installedTab: 'Installed Skills',
     marketplaceTab: 'Marketplace & Hubs',
     searchPlaceholder: 'Search skills by name, tag or category...',
@@ -418,7 +416,7 @@ export const en: TranslationSchema = {
     },
     guide: {
       title: 'Skill Hub & Repository Guide',
-      subtitle: 'How to integrate Skills.sh, Anthropic, LobeHub, and custom Hubs',
+
       closeAria: 'Close guide',
       closeBtn: 'Close Guide',
       overviewTitle: 'Official Sources & Supported Formats',
@@ -445,7 +443,7 @@ export const en: TranslationSchema = {
   },
   translation: {
     title: 'Document Translation Studio',
-    subtitle: 'Text extraction and fast multilingual translation across all formats.',
+
     tabTextMarkdown: 'Text & Markdown Translation',
     tabInplaceLayout: 'Layout-Preserving Translation (PDF / DOCX)',
     tabTextMarkdownDesc: 'Dual bilingual editor with adaptive chunking, live token streaming, and side-by-side diff.',
@@ -484,7 +482,7 @@ export const en: TranslationSchema = {
     exportCancelled: 'Export cancelled.',
     exportError: 'Export error: {message}',
     inplaceTitle: 'Layout-Preserving Document Translation',
-    inplaceSubtitle: 'Translate PDF or DOCX files directly while keeping formatting, tables, typography, and images intact.',
+
     inplaceSelectDoc: 'Select Document to Translate',
     inplaceSelectDocPrompt: 'Choose a PDF or DOCX file from the ingested documents database:',
     inplaceSupportedNotice: 'The geometric engine supports PDF files (via PyMuPDF) and Microsoft Word DOCX documents (via python-docx).',
@@ -508,7 +506,7 @@ export const en: TranslationSchema = {
     inplaceCancelled: 'Translation cancelled. No output file was written.',
     otherJobRunning: 'Another translation is running in this view. Wait for it to finish or cancel it.',
     inplaceNoCompatibleDocs: 'No PDF or DOCX documents available. Upload a PDF or DOCX file in Ingestion to use this tool.',
-    inplacePreserveNotice: 'This tool produces a new document with the exact visual layout preserved, unlike text translation which extracts plain Markdown.',
+
     inplaceResetDir: 'Reset folder',
   },
   ingestion: {
@@ -525,7 +523,7 @@ export const en: TranslationSchema = {
     searchPlaceholder: 'Filter by document name...',
     noDocuments: 'No documents ingested yet. Upload a file to begin.',
     vectorSearch: 'Vector Search Test',
-    vectorSearchDescription: 'Inspect extracted chunks and indexed vectors.',
+
     openVectorInspector: 'Open Vector Inspector',
     pageViewMode: 'Page View Mode',
     pageNavigation: 'Page Navigation',
@@ -577,11 +575,11 @@ export const en: TranslationSchema = {
     ocrNativeBadge: 'Native OCR',
     ocrVisionBadge: 'Vision OCR',
     ocrGpuActive: 'GPU ON',
-    ocrGpuActiveTooltip: 'CUDA acceleration active for RapidOCR / ONNX Runtime',
+
     ocrCpuOnly: 'CPU',
-    ocrCpuOnlyTooltip: 'RapidOCR running on CPU',
+
     ocrGpuPresentUnused: 'GPU Present (ONNX CPU)',
-    ocrGpuPresentUnusedTooltip: 'GPU detected on host system, but ONNX Runtime is running in CPU mode',
+
     stepCompleted: 'Ingestion and indexing completed successfully!',
     pipelineCompleted: 'Completed',
     stepPreprocessing: 'Preprocessing, fast routing and file classification...',
@@ -647,8 +645,9 @@ export const en: TranslationSchema = {
     openLogsFolder: 'Open Logs Folder',
   },
   settings: {
+    agentPermissionsDefaults: 'Defaults for new runs',
     title: 'Settings & Configuration',
-    description: 'Management of Ollama models, routing tiers, and resources.',
+
     hardwareWizard: 'Hardware & Model Setup Wizard',
     hardwareScan: 'Hardware Scan',
     chatModel: 'RAG Chat Model',
@@ -657,7 +656,7 @@ export const en: TranslationSchema = {
     executionLimitsSection: 'Agent Execution Limits',
     ollamaManagement: 'Ollama Model Management',
     downloadModel: 'Download Model',
-    ollamaLibraryHint: 'To choose other models, browse the Ollama library and run',
+
     ollamaLibrary: 'Ollama library',
     modelNamePlaceholder: 'model-name',
     downloading: 'Downloading...',
@@ -674,52 +673,52 @@ export const en: TranslationSchema = {
     deleteModel: 'Delete Model',
     confirmDelete: 'Confirm',
     languagePreference: 'Interface Language',
-    languageDescription: 'Language for menus, notifications, and panels.',
+
     aboutSectionTitle: 'About & Credits',
-    aboutSectionDescription: 'Version details, MIT license, and contributors.',
+
     viewAboutButton: 'Credits',
     maxConcurrentTasks: 'Execution Concurrency (Serial)',
     codingAgentDebugLog: 'Coding Agent Debug Logging',
-    codingAgentDebugLogDesc: 'Record every step, prompt, source, and response. Credentials are redacted.',
+
     codingAgentDebugRetention: 'Retained files',
     thinkingLabel: 'Thinking',
     thinkingEnabled: 'Enabled for this model',
     thinkingDisabled: 'Disabled by default',
     thinkingModelDefault: 'Model default',
     thinkingOff: 'Off',
-    thinkingLevelHint: 'The Coding Agent uses this level; with Model default Ollama applies the level the model ships with.',
+
     samplingLabel: 'Sampling',
     samplingModelDefault: '(Modelfile defaults)',
     samplingOverridden: '({count} overridden)',
     samplingDefaultPlaceholder: 'default',
-    samplingHint: 'Coding Agent only. Empty fields keep the Modelfile value; out-of-range values are not saved.',
+
     samplingReset: 'Reset',
     clearCodingAgentDebugLog: 'Clear agent log',
     openLogsFolder: 'Open Logs Folder',
     translationOutputFolderTitle: 'Translation Output Folder',
-    translationOutputFolderDesc: 'Default folder for exported translations (skips prompt each time).',
+
     translationOutputFolderNotSet: 'Not set — you will be prompted for each export.',
     translationOutputFolderBrowse: 'Browse…',
     translationOutputFolderClear: 'Clear',
     embeddingTier: 'Vector Embedding (LanceDB)',
     ragChatSection: '2. Multi-Document RAG & Chat',
-    ragChatSubtitle: 'Semantic retrieval with LanceDB citations.',
+
     translationSection: '3. Document Translation Engine',
-    translationSubtitle: 'Sequential translation preserving visual layout.',
+
     verticalDomainsSection: '4. Specialized Vertical Models',
-    verticalDomainsSubtitle: 'Domain-specific models for healthcare, legal, and compliance.',
+
     medicalModel: 'Medical & Healthcare Model',
     legalModel: 'Legal & Compliance Model',
     ingestionOcrSection: '5. Document Ingestion, OCR & LanceDB',
-    ingestionOcrSubtitle: 'PyMuPDF parsing, hardware/Vision OCR, and LanceDB.',
+
     visionOcrLabel: 'Multimodal Vision OCR',
     vectorStoreLabel: 'Vector Embedding',
     pullModelPlaceholder: 'e.g. llama3.2, mistral, nomic-embed-text, qwen2.5-coder...',
     pullModelAria: 'Ollama model name to download',
-    executionLimitsDesc: 'Serial execution with FIFO queue to prevent file conflicts.',
+
     autoScaleDesc: 'Dynamic scaling based on system resources.',
     toolCallStepsTitle: 'Tool Call Step Limit',
-    toolCallStepsDesc: 'Maximum consecutive tool steps before requiring confirmation.',
+
     toolCallStepsUnlimited: '∞ Unlimited',
     toolCallStepsValue: '{steps} steps',
     heavyTierDisabledOption: '— Disabled —',
@@ -729,29 +728,26 @@ export const en: TranslationSchema = {
     perfProfilerNotTested: 'Not tested',
     perfProfilerTestBtn: 'Test',
     perfProfilerBenchmarkAria: 'Benchmark {model}',
-    queueProtectionTitle: 'Serial Execution:',
-    queueProtectionDesc: 'One agent task runs at a time to prevent file conflicts.',
     queueLiveStatusRunning: 'Running',
     queueLiveStatusQueued: 'Queued',
     wordWrap: 'Word wrap',
-    wordWrapDesc: 'Automatic line wrapping in Monaco editors and previews.',
+
     fullExcelFormat: 'Excel: format dimensions',
-    fullExcelFormatDesc:
-      'Allow .xls coordinates up to 65,536 × 256 and .xlsx up to 1,048,576 × 16,384, within resource limits. RAG uses a declared sample. If XLS exceeds its memory or time limits, export it as CSV/XLSX.',
+
     soundEffects: 'Sound Effects',
-    soundEffectsDesc: 'Audio cues for errors, confirmations, and completed tasks.',
+
     generalPreferencesSection: 'Preferences & User Interface',
     systemDirectoriesTitle: 'Output Directories & Paths',
-    systemDirectoriesDesc: 'Manage export paths for translated docs and logs.',
+
     appLogsFolderTitle: 'Application Logs & Diagnostics',
-    appLogsFolderDesc: 'Inspect runtime logs, debug traces, and diagnostics.',
+
     hardwareRuntimeSection: 'Hardware, GPU & AI Runtime',
     modelsWeightsSection: 'AI Models & Per-Module Assignment',
-    ollamaManagementDesc: 'Download or delete models locally from Ollama.',
+
     agentLimitsSection: 'Coding Agent Limits & Debugging',
     agentPermissionsSection: 'Agent Coding permissions',
     agentPermissionsOpen: 'Agent permissions',
-    agentPermissionsDefaults: 'Defaults for new runs',
+
     agentPermissionsPlan: 'Current plan',
     agentPermissionsPlanUnavailable: 'Open a ready plan to edit its permissions.',
     agentPermissionsSave: 'Save plan permissions',
@@ -762,7 +758,7 @@ export const en: TranslationSchema = {
   },
   about: {
     title: 'About OnlyRag V2',
-    subtitle: 'Local AI development studio and document vector RAG for Windows.',
+
     authorTitle: 'Creator & Maintainer',
     authorRole: 'Lead Architect & Developer',
     repositoryTitle: 'Source Code & Repository',
@@ -776,7 +772,7 @@ export const en: TranslationSchema = {
     openLicenses: 'Open licenses and source delivery details',
     licenseOpenError: 'The license folder could not be opened.',
     creditsTitle: 'Core Dependencies & Components',
-    creditsSubtitle: 'Foundational technologies powering OnlyRag V2:',
+
     categories: {
       core: 'Core & Desktop Runtime',
       aiAndVector: 'Local AI & Vector Store',
@@ -790,14 +786,14 @@ export const en: TranslationSchema = {
     tabUiAndEditor: 'UI & Monaco',
     tabSkills: 'Skills',
     acknowledgmentsTitle: 'Special Acknowledgments & Open Standards',
-    acknowledgmentsSubtitle: 'Special gratitude to the open-source projects and communities driving the local AI ecosystem:',
+
     acknowledgmentsOllama: 'Ollama — Local inference runtime enabling private and sovereign execution of open-weight models on GPU & CPU.',
     acknowledgmentsLanceDb: 'LanceDB Team — High-performance serverless embedded vector database powered by Apache Arrow columnar storage.',
     acknowledgmentsAnthropic: 'Anthropic — Open agentskills.io standard for autonomous agent skills and Contextual Retrieval methodology.',
     acknowledgmentsMicrosoft: 'Microsoft Monaco & TypeScript — VS Code editor engine, Windows ConPTY terminal, and native AST compiler APIs.',
     acknowledgmentsOpenWeights: 'Open-Weights Community (Qwen, Llama, DeepSeek, Mistral, BGE, Nomic) — Frontier SLM/LLM models operating 100% locally.',
     contactsTitle: 'Issues & Contributions',
-    contactsSubtitle: 'Found an issue or want to propose an enhancement?',
+
     githubIssues: 'Open an Issue on GitHub',
     searchPlaceholder: 'Search libraries or tools...',
     technologiesCount: '{count} open-source technologies',
@@ -806,22 +802,22 @@ export const en: TranslationSchema = {
   },
   promptConfig: {
     title: 'System Prompt Configuration',
-    subtitle: 'One prompt per module, adapted to the active model’s capabilities.',
+
     searchPlaceholder: 'Search a prompt...',
     categoryCoding: 'Coding Agent',
     categoryChat: 'RAG Chat',
     categoryTranslation: 'Translation',
     categoryImages: 'Images',
     nodeCodingMaster: 'Master Template',
-    nodeCodingMasterDesc: 'Role, workspace, task, and the splice points for the child blocks.',
+
     nodeCodingDirectives: 'Core Directives',
-    nodeCodingDirectivesDesc: 'Execution rules, anti-loop guards, and verification gates.',
+
     nodeChat: 'RAG Chat',
-    nodeChatDesc: 'Source grounding, citations, and the language directive.',
+
     nodeTranslation: 'Document Translation',
-    nodeTranslationDesc: 'Markdown preservation and terminology consistency.',
+
     nodeImageAnalysis: 'Visual Analysis & OCR',
-    nodeImageAnalysisDesc: 'Faithful transcription, diagrams, and tables. Sent only when the OCR engine is set to the Vision LLM.',
+
     customBadge: 'Modified',
     defaultBadge: 'Default',
     editTab: 'Editor',
@@ -843,25 +839,25 @@ export const en: TranslationSchema = {
   },
   vectorSearch: {
     modalTitle: 'LanceDB Vector Inspector',
-    modalSubtitle: 'Semantic similarity queries directly against indexed chunks.',
+
     queryPlaceholder: 'Enter a query to test semantic retrieval...',
     searchBtn: 'Search Chunks',
     topKResults: 'Results (Top-K)',
     searching: 'Searching vector index...',
     noResults: 'No matching chunks found.',
-    noResultsHint: 'Try rephrasing the query or loosening filters.',
+
     resultsFound: '{count} relevant chunks retrieved:',
     docName: 'Document',
     score: 'Score',
   },
   promptHistorySearch: {
     modalTitle: 'Search Prompt History',
-    modalSubtitle: 'Semantic search across all opened projects.',
+
     queryPlaceholder: 'Describe what you were looking for...',
     searchBtn: 'Search',
     searching: 'Searching prompt history...',
     noResults: 'No matching prompts found.',
-    noResultsHint: 'Try other keywords.',
+
     resultsFound: '{count} matching prompts:',
     jumpBtn: 'Jump to session',
     score: 'Match',
@@ -869,11 +865,11 @@ export const en: TranslationSchema = {
   hardwareWizard: {
     title: 'Hardware & Model Setup Wizard',
     modalTitle: 'Guided Hardware & Model Setup',
-    modalSubtitle: 'Check your hardware, choose installed models, or prepare the starter setup.',
+
     detectedProfile: 'Detected Profile',
     ollamaStatus: 'Ollama Server Status',
     autoApplyRecommended: '1-click starter setup',
-    starterSetupHint: 'Four lightweight models to get started. Confirm any downloads in the summary.',
+
     summaryTitle: 'Model summary',
     summaryCoding: '💻 Coding:',
     summaryChat: '💬 RAG Chat:',
@@ -916,8 +912,7 @@ export const en: TranslationSchema = {
     ocrEngineSection: 'OCR Engine',
     nativeCudaOcr: 'Native OCR (RapidOCR / ONNX)',
     visionModelOcr: 'Multimodal Vision LLM (Ollama Vision)',
-    ocrEngineInplaceNotice:
-      'The selected OCR engine governs document ingestion. In-place translation (PDF/DOCX) always utilizes RapidOCR to preserve exact bounding box coordinates.',
+
     initialWelcomeBadge: 'Initial Setup',
     localInstalledBadge: 'INSTALLED',
     step1Subtitle: 'Scan CPU, GPU VRAM and Ollama server status',
@@ -972,8 +967,7 @@ export const en: TranslationSchema = {
     legalTabLabel: '4. Legal',
     runtimePrefsTitle: 'Runtime Preferences',
     runtimePrefsDesc: 'Configure hardware memory, concurrency limits, and OCR parsing.',
-    nativeCudaOcrDesc: 'PyMuPDF extraction and RapidOCR (ONNX Runtime, CUDA acceleration if available).',
-    visionModelOcrDesc: 'Visual analysis via Ollama Vision model for tables, charts, and notes.',
+
     modelRecommendedBadge: 'RECOMMENDED',
     modelInstalledBadge: 'INSTALLED',
     modelExceedsVramBadge: 'OOM RISK',
@@ -984,7 +978,7 @@ export const en: TranslationSchema = {
     scratchTitle: 'Free work',
     projectMode: 'Project folder',
     activeMode: 'Active',
-    scratchSubtitle: 'Persistent, no project folder',
+
     activeChats: 'Active Chats',
     renameChat: 'Rename chat',
     deleteSessionHint: 'Deletes the app session',
@@ -1255,11 +1249,11 @@ export const en: TranslationSchema = {
     schedulerCancelling: 'Cancelling in the Ollama scheduler',
     schedulerFailed: 'Ollama scheduler error',
     analyzingTitle: 'Analyzing the Prompt & Technical Choices...',
-    analyzingDescription: 'The AI is checking whether architectural trade-offs need confirmation before generating the checklist.',
+
     generatingTitle: 'Generating Plan (v{version})...',
-    generatingDescription: 'The AI Agent is analyzing the prompt to outline a step-by-step execution strategy.',
+
     noPlanTitle: 'No Plan Generated',
-    noPlanDescription: 'Send a prompt from the editor to generate an action plan and approve it before execution.',
+
     interviewIncomplete: 'Interview not completed',
     planningIncomplete: 'Planning not completed',
     retryKeepingRequest: 'Retry keeping the request and decisions',
@@ -1272,8 +1266,7 @@ export const en: TranslationSchema = {
   },
   systemDiagnostics: {
     title: 'System Diagnostics & Telemetry',
-    subtitle: 'Local hardware state, dev toolchain and runtime diagnostics',
-    copyBundleHint: 'Builds and exports the complete diagnostics bundle formatted for an AI assistant',
+
     bundleCopied: 'Bundle Copied!',
     copyForAgent: '📋 Copy for AI Agent',
     tabToolchain: 'Toolchain & Hardware',
@@ -1283,11 +1276,11 @@ export const en: TranslationSchema = {
     activeModel: 'Active Model',
     devToolchain: 'Dev Toolchain & Executables',
     fileOperations: 'File Operations',
-    fileOperationsHint: 'Applied writes / edits',
+
     shellCommands: 'Shell Commands',
-    shellCommandsHint: 'Run in the PTY terminal',
+
     reads: 'Reads / Search',
-    readsHint: 'Workspace explorations',
+
     totalSteps: 'Total Steps',
     running: 'Running...',
     lastActivity: 'Last: {time}',
@@ -1300,11 +1293,11 @@ export const en: TranslationSchema = {
     binaryFile: 'Binary file — diff not shown.',
     refreshGit: 'Refresh Git status and diff view',
     notGitRepo: 'Not a Git repository',
-    notGitRepoDescription: 'The current project folder has no Git repository (.git not found). Initialize Git to track changes.',
+
     initGit: 'Initialize Git Repository',
     noUncommittedChanges: 'No uncommitted changes detected in the workspace.',
     noActiveDiff: 'No Active Diff',
-    noActiveDiffDescription: 'Files changed by the AI Coding Agent or the editor appear here as a unified diff.',
+
     diffAriaLabel: 'Per-file colored diff, added lines in green and removed lines in red',
     rawGitOutput: 'Git output not recognized as a unified diff',
     hideExplorer: 'Hide Workspace Explorer',
@@ -1350,23 +1343,8 @@ export const en: TranslationSchema = {
     compatible: 'Tool runtime compatible',
     unsupported: 'Tool runtime unsupported',
     unknown: 'Runtime unknown',
-    compatibleTooltip: 'Ollama reports native tool calling. Installation, context, memory and task quality require separate checks.',
-    unsupportedTooltip: 'The native Agent Coding path cannot use this model because tool calling is absent or the model is an encoder.',
-    unknownTooltip: 'Ollama has not reported this model’s capabilities yet.',
-    focusedProbes: 'Focused probes passed',
-    noProbes: 'No probe evidence',
-    probeEvidence: 'Historical runs on {date}: {probes}. Results apply to the recorded configuration only.',
-    noProbeEvidence: 'No focused live probe evidence is recorded for this model.',
-    unqualified: 'Full task unqualified',
-    experimental: 'Experimental autonomous coding',
-    experimentalTooltip:
-      'Autonomous coding remains experimental: complete independent full-task acceptance is missing. Review plans, changes and actual test results.',
+
     contextCapacity: 'Max {context}',
-    trainedContext: 'Model capacity: {tokens} tokens. The effective run window depends on the selected context and runtime configuration.',
-    parameters: 'Parameters declared by the model',
-    quantization: 'Level of quantization',
-    nativeTools: "Native tool calling: the agent uses Ollama's structured path.",
-    noNativeTools: 'No native tool calling: Agent Coding preflight blocks this model.',
   },
   planReview: {
     emptyFields: 'Outcome and interventions cannot be empty.',
@@ -1392,14 +1370,14 @@ export const en: TranslationSchema = {
     connected: 'Connected to the Ollama server ({count} models found)',
     unreachable: 'Could not reach the specified Ollama server',
     title: 'Ollama Server (Local or Network)',
-    subtitle: 'Choose whether to run AI models on this computer or connect to a local/remote network server.',
+
     localTitle: 'On this PC (Local)',
-    localDescription: "Uses the local Ollama installation ({host}). Ideal for working fully offline with this computer's GPU/CPU.",
+
     remoteTitle: 'Remote Network Server',
-    remoteDescription: 'Sends prompts, tools and indexing to a shared Ollama server or a dedicated workstation on the LAN/WiFi.',
+
     hostLabel: 'Ollama Server IP Address or Host Name:',
     hostPlaceholder: 'e.g. http://192.168.1.50:11434 or http://ai-server:11434',
-    remoteHint: 'Make sure Ollama on the remote server runs with {env} and that the port is reachable.',
+
     testing: 'Checking...',
     testConnection: 'Test Server Connection',
   },
@@ -1442,16 +1420,16 @@ export const en: TranslationSchema = {
     confirmAndGenerate: 'Confirm and Generate Plan',
     runPermissions: 'Run permissions',
     fileChanges: 'File changes',
-    fileChangesHint: 'Allows the agent to edit files in the workspace. Safety checks and checkpoints still apply.',
+
     terminalCommands: 'Terminal commands',
-    terminalCommandsHint: 'Allows commands in the workspace terminal, subject to run safety checks.',
+
     network: 'Network',
-    networkHint: 'Network actions require approval; you can restrict them to local access or block them.',
+
     networkBlocked: 'Blocked',
     networkLocal: 'Local only',
     networkApproved: 'With approval',
     stepBudget: 'Step budget',
-    stepBudgetHint: 'Maximum tool calls in a run; prevents overly long loops.',
+
     unlimited: 'Unlimited',
     noFiles: 'No open files or no folder selected.',
     selectProjectFolder: 'Select Project Folder',
@@ -1474,7 +1452,7 @@ export const en: TranslationSchema = {
     noOllamaModels: '-- No model available in Ollama --',
     selectCodingModel: 'Select the main Coding model',
     translationFeature: 'Document Translation',
-    fallbackVectorsHint: 'Fallback vectors (embedding model unavailable or request failed)',
+
     skillsDiscoveryOn: 'Suggests useful skills during tasks and asks for confirmation before installing them.',
     skillsDiscoveryOff: 'Skill auto-discovery is off.',
     previewTab: 'Live artifact preview',
@@ -1485,12 +1463,12 @@ export const en: TranslationSchema = {
     terminalTabTitle: 'PowerShell Terminal',
     terminalTab: 'Terminal',
     toolchainStatus: 'Host toolchain status',
-    toolchainStatusHint: 'Host toolchain status (Git, Node, Python, Ollama)',
+
     details: 'Details',
     modelNotInstalled: 'Not installed',
     modelInUse: 'In use',
     modelOnDisk: 'On Disk',
-    unloadModelHint: 'Unload the model from VRAM/RAM',
+
     unloadModel: 'Unload RAM',
     modelReady: 'Model ready',
     uploadingSequentially: 'Uploading {count} files one after another...',
@@ -1524,7 +1502,7 @@ export const en: TranslationSchema = {
     attachFolder: 'Attach a working folder...',
     newSession: 'New Session',
     modelLabel: 'Model:',
-    codingModelDescription: 'Configuration of the main development model.',
+
     codingModelTitle: 'Main Development Model (Workhorse)',
     refreshModels: 'Refresh Model Status',
     cancelDownload: 'Cancel download',
@@ -1624,5 +1602,98 @@ export const en: TranslationSchema = {
     chunking: 'Creating header-aware semantic chunks...',
     embedding: 'Embedding {chunks} chunks ({model})...',
     done: 'Ingestion and indexing completed successfully!',
+  },
+  help: {
+    settings_ollamaLibraryHint: 'To choose other models, browse the Ollama library and run ollama pull <model>.',
+    modelBadges_compatibleTooltip: 'Ollama reports native tool calling. Capabilities are reported by the runtime.',
+    modelBadges_unsupportedTooltip: 'The native Agent Coding path cannot use this model because tool calling is absent or the model is an encoder.',
+    modelBadges_unknownTooltip: 'Ollama has not reported this model’s capabilities yet.',
+    modelBadges_trainedContext: 'Model capacity: {tokens} tokens. The effective run window depends on the selected context and runtime configuration.',
+    modelBadges_parameters: 'Parameters declared by the model',
+    modelBadges_quantization: 'Level of quantization',
+    modelBadges_nativeTools: "Native tool calling: the agent uses Ollama's structured path.",
+    modelBadges_noNativeTools: 'No native tool calling: Agent Coding preflight blocks this model.',
+    translation_inplacePreserveNotice:
+      'This tool produces a new document with the exact visual layout preserved, unlike text translation which extracts plain Markdown.',
+
+    promptConfig_nodeCodingMasterDesc: 'Role, workspace, task, and the splice points for the child blocks.',
+    promptConfig_nodeCodingDirectivesDesc: 'Execution rules, anti-loop guards, and verification gates.',
+    promptConfig_nodeChatDesc: 'Source grounding, citations, and the language directive.',
+    promptConfig_nodeTranslationDesc: 'Markdown preservation and terminology consistency.',
+    promptConfig_nodeImageAnalysisDesc: 'Faithful transcription, diagrams, and tables. Sent only when the OCR engine is set to the Vision LLM.',
+    hardwareWizard_ocrEngineInplaceNotice:
+      'The selected OCR engine governs document ingestion. In-place translation (PDF/DOCX) always utilizes RapidOCR to preserve exact bounding box coordinates.',
+    hardwareWizard_nativeCudaOcrDesc: 'PyMuPDF extraction and RapidOCR (ONNX Runtime, CUDA acceleration if available).',
+    hardwareWizard_visionModelOcrDesc: 'Visual analysis via Ollama Vision model for tables, charts, and notes.',
+    planPanel_analyzingDescription: 'The AI is checking whether architectural trade-offs need confirmation before generating the checklist.',
+    planPanel_generatingDescription: 'The AI Agent is analyzing the prompt to outline a step-by-step execution strategy.',
+    label: 'Information',
+    about_acknowledgmentsSubtitle: 'Special gratitude to the open-source projects and communities driving the local AI ecosystem:',
+    about_contactsSubtitle: 'Found an issue or want to propose an enhancement?',
+    about_creditsSubtitle: 'Foundational technologies powering OnlyRag V2:',
+    about_subtitle: 'Local AI development studio and document vector RAG for Windows.',
+    chat_coverageHint:
+      'This turn’s document text only. Inclusion does not prove answer support, full-document understanding or exact model-token use. Earlier conversation context is separate.',
+    chat_emptySubtitle: 'Private local retrieval: no data sent outside.',
+    chat_locationSupportHint: 'The location is verified; compare the passage with the answer to assess support.',
+    chat_rankingScoreHint: 'Retrieved passages are candidates. The ranking score is a heuristic, not confidence that a passage supports the answer.',
+    codingWorkspace_noActiveDiffDescription: 'Files changed by the AI Coding Agent or the editor appear here as a unified diff.',
+    codingWorkspace_notGitRepoDescription: 'The current project folder has no Git repository (.git not found). Initialize Git to track changes.',
+    hardwareWizard_modalSubtitle: 'Check your hardware, choose installed models, or prepare the starter setup.',
+    hardwareWizard_starterSetupHint: 'Four lightweight models to get started. Confirm any downloads in the summary.',
+    ingestion_ocrCpuOnlyTooltip: 'RapidOCR running on CPU',
+    ingestion_ocrGpuActiveTooltip: 'CUDA acceleration active for RapidOCR / ONNX Runtime',
+    ingestion_ocrGpuPresentUnusedTooltip: 'GPU detected on host system, but ONNX Runtime is running in CPU mode',
+    ingestion_vectorSearchDescription: 'Inspect extracted chunks and indexed vectors.',
+    ollamaServer_localDescription: "Uses the local Ollama installation ({host}). Ideal for working fully offline with this computer's GPU/CPU.",
+    ollamaServer_remoteDescription: 'Sends prompts, tools and indexing to a shared Ollama server or a dedicated workstation on the LAN/WiFi.',
+    ollamaServer_remoteHint: 'Make sure Ollama on the remote server runs with {env} and that the port is reachable.',
+    ollamaServer_subtitle: 'Choose whether to run AI models on this computer or connect to a local/remote network server.',
+    planInterview_fileChangesHint: 'Allows the agent to edit files in the workspace. Safety checks and checkpoints still apply.',
+    planInterview_networkHint: 'Network actions require approval; you can restrict them to local access or block them.',
+    planInterview_stepBudgetHint: 'Maximum tool calls in a run; prevents overly long loops.',
+    planInterview_terminalCommandsHint: 'Allows commands in the workspace terminal, subject to run safety checks.',
+    planPanel_noPlanDescription: 'Send a prompt from the editor to generate an action plan and approve it before execution.',
+    promptConfig_subtitle: 'One prompt per module, adapted to the active model’s capabilities.',
+    promptHistorySearch_modalSubtitle: 'Semantic search across all opened projects.',
+    promptHistorySearch_noResultsHint: 'Try other keywords.',
+    requestScope_description:
+      'Review each obligation before generating a plan. Global properties apply to every current and additional target. Mark only headings and background as context. Edit ambiguous interpretations, or split a source line into distinct obligations.',
+    settings_aboutSectionDescription: 'Version details, MIT license, and contributors.',
+    settings_appLogsFolderDesc: 'Inspect runtime logs, debug traces, and diagnostics.',
+    settings_codingAgentDebugLogDesc: 'Record every step, prompt, source, and response. Credentials are redacted.',
+    settings_description: 'Management of Ollama models, routing tiers, and resources.',
+    settings_executionLimitsDesc: 'Serial execution with a FIFO queue: one agent task at a time to prevent file conflicts.',
+    settings_fullExcelFormatDesc:
+      'Allow .xls coordinates up to 65,536 × 256 and .xlsx up to 1,048,576 × 16,384, within resource limits. RAG uses a declared sample. If XLS exceeds its memory or time limits, export it as CSV/XLSX.',
+    settings_ingestionOcrSubtitle: 'PyMuPDF parsing, hardware/Vision OCR, and LanceDB.',
+    settings_languageDescription: 'Language for menus, notifications, and panels.',
+    settings_ollamaManagementDesc: 'Download or delete models locally from Ollama.',
+    settings_ragChatSubtitle: 'Semantic retrieval with LanceDB citations.',
+    settings_samplingHint: 'Coding Agent only. Empty fields keep the Modelfile value; out-of-range values are not saved.',
+    settings_soundEffectsDesc: 'Audio cues for errors, confirmations, and completed tasks.',
+    settings_systemDirectoriesDesc: 'Manage export paths for translated docs and logs.',
+    settings_thinkingLevelHint: 'The Coding Agent uses this level; with Model default Ollama applies the level the model ships with.',
+    settings_toolCallStepsDesc: 'Maximum consecutive tool steps before requiring confirmation.',
+    settings_translationOutputFolderDesc: 'Default folder for exported translations (skips prompt each time).',
+    settings_translationSubtitle: 'Sequential translation preserving visual layout.',
+    settings_verticalDomainsSubtitle: 'Domain-specific models for healthcare, legal, and compliance.',
+    settings_wordWrapDesc: 'Automatic line wrapping in Monaco editors and previews.',
+    skills_guide_subtitle: 'How to integrate Skills.sh, Anthropic, LobeHub, and custom Hubs',
+    skills_hubSubtitle: 'Modular capabilities and instructions for the Agent.',
+    systemDiagnostics_copyBundleHint: 'Builds and exports the complete diagnostics bundle formatted for an AI assistant',
+    systemDiagnostics_fileOperationsHint: 'Applied writes / edits',
+    systemDiagnostics_readsHint: 'Workspace explorations',
+    systemDiagnostics_shellCommandsHint: 'Run in the PTY terminal',
+    systemDiagnostics_subtitle: 'Local hardware state, dev toolchain and runtime diagnostics',
+    translation_inplaceSubtitle: 'Translate PDF or DOCX files directly while keeping formatting, tables, typography, and images intact.',
+    translation_subtitle: 'Text extraction and fast multilingual translation across all formats.',
+    uiShell_codingModelDescription: 'Configuration of the main development model.',
+    uiShell_fallbackVectorsHint: 'Fallback vectors (embedding model unavailable or request failed)',
+    uiShell_toolchainStatusHint: 'Host toolchain status (Git, Node, Python, Ollama)',
+    uiShell_unloadModelHint: 'Unload the model from VRAM/RAM',
+    vectorSearch_modalSubtitle: 'Semantic similarity queries directly against indexed chunks.',
+    vectorSearch_noResultsHint: 'Try rephrasing the query or loosening filters.',
+    workspaceExplorer_scratchSubtitle: 'Persistent, no project folder',
   },
 }

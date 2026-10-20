@@ -1,5 +1,7 @@
 # Local model task baselines
 
+**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+
 `MODEL-TASK-QUALITY-BASELINES-01` is complete as a profile definition on 2026-10-02. These are candidates for qualification, independent of the development computer. No profile is certified by its parameter count, upstream benchmark, download size or memory-fit badge. Actual role/hardware qualification remains in `LOCAL-MODEL-ROLE-QUALIFICATION-01`.
 
 ## Product profiles

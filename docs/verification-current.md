@@ -1,5 +1,9 @@
 # Verifica corrente per ambito
 
+La [consegna locale UI e strumenti](./verification-local-ui-2026-10-20.md) implementa il ritiro di 24 task, mantiene 11 attività autonome e centralizza gli aiuti in tooltip. Le ricevute precedenti restano storiche.
+
+**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+
 Il [passaggio di sessione Sidecar e verifiche locali](./session-handoff-sidecar-2026-10-20.md) salva la correzione dell'avvio, il runner loopback e il piano lingua offline con 34 attività ancora aperte. Commit e push su `master` autorizzati per questa consegna; verifiche complete ed esito remoto restano attribuiti ai rispettivi sorgenti.
 
 La [correzione dello stato iniziale Sidecar](./verification-sidecar-dev-startup-2026-10-20.md) riproduce il falso `Offline`, passa 26 regressioni e verifica Python/LanceDB reale dentro Electron su profilo isolato. Nessuna inferenza o nuova installazione; 34 attività precedenti preservate. I candidati conservati richiedono una nuova corrispondenza con il runtime modificato.

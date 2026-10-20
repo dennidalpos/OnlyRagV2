@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   MessageSquare,
@@ -534,8 +535,9 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                     <MessageSquare className="w-6 h-6" />
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-slate-100">{t('chat.emptyTitle')}</h2>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">{t('chat.emptySubtitle')}</p>
+                    <h2 className="text-base font-bold text-slate-100 inline-flex items-center gap-1.5">
+                      {t('chat.emptyTitle')} <Tooltip helpKey="chat_emptySubtitle" />
+                    </h2>
                   </div>
 
                   <div className="w-full pt-2 space-y-2 text-left">

@@ -1,3 +1,4 @@
+import { Tooltip } from '../../common/Tooltip'
 import React, { useState, useEffect } from 'react'
 import { Modal } from '../../common/Modal'
 import { X, Save, Sparkles, FileText, AlertCircle } from 'lucide-react'
@@ -98,10 +99,10 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({ isOpen, onCl
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <h2 id="skill-editor-modal-title" className="text-base font-bold text-slate-100">
+            <h2 id="skill-editor-modal-title" className="text-base font-bold text-slate-100 inline-flex items-center gap-1.5">
               {initialSkill ? `${t('common.edit')} Skill: ${initialSkill.name}` : t('skills.createSkillBtn')}
+              <Tooltip helpKey="skills_hubSubtitle" />
             </h2>
-            <p className="text-xs text-slate-400">{t('skills.hubSubtitle')}</p>
           </div>
         </div>
         <button

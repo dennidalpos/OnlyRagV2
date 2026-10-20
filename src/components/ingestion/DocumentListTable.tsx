@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React, { useState, useMemo } from 'react'
 import { FileText, Trash2, Check, X, Search, AlertTriangle } from 'lucide-react'
 import { IngestedDocument } from '../../types'
@@ -78,13 +79,12 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({ documents,
                     <div className="flex items-center gap-1.5 truncate">
                       <span className="font-semibold text-slate-200 truncate">{doc.filename}</span>
                       {(doc.status === 'indexed_fallback' || doc.usedFallbackEmbeddings) && (
-                        <span
-                          className="px-1.5 py-0.5 rounded bg-amber-950/80 border border-amber-800/80 text-[9px] text-amber-300 font-semibold flex items-center gap-1 shrink-0"
-                          title={t('uiShell.fallbackVectorsHint')}
-                        >
-                          <AlertTriangle className="w-2.5 h-2.5 text-amber-400" />
-                          Fallback
-                        </span>
+                        <Tooltip helpKey="uiShell_fallbackVectorsHint">
+                          <span className="px-1.5 py-0.5 rounded bg-amber-950/80 border border-amber-800/80 text-[9px] text-amber-300 font-semibold flex items-center gap-1 shrink-0">
+                            <AlertTriangle className="w-2.5 h-2.5 text-amber-400" />
+                            Fallback
+                          </span>
+                        </Tooltip>
                       )}
                     </div>
                     <div className="text-[10px] text-slate-400 font-mono">

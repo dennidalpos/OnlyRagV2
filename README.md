@@ -1,5 +1,7 @@
 # OnlyRag V2
 
+Development currently targets a working local Windows app. [Local policy and autonomous tests](./docs/local-development-policy-2026-10-20.md): no model qualification campaigns or automatic CI; optional smoke tests use only models manually configured in the app. Public installer delivery is outside this phase.
+
 Local Windows desktop workspace for document ingestion, RAG chat, translation and coding-agent workflows. The LLM runtime is Ollama; document storage is local LanceDB; ingestion/OCR runs in a local Python Sidecar.
 
 ## Features

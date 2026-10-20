@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React from 'react'
 import { Code, MessageSquare, Languages, FileText, Database, Eye, Activity, Scale } from 'lucide-react'
 import { DiagnosticsData, AppSettings } from '../../types'
@@ -36,7 +37,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
       modelName,
       capabilities: metrics[modelName]?.capabilities,
     })
-    return <ModelBadgeStrip modelName={modelName} status={status} metrics={metrics[modelName]} className="pt-0.5" />
+    return <ModelBadgeStrip status={status} metrics={metrics[modelName]} className="pt-0.5" />
   }
 
   const buildModelOptions = () => [...new Set(models)]
@@ -66,8 +67,9 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
               <Code className="w-4.5 h-4.5 text-cyan-400" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">1. AI Coding Agent Studio</h2>
-              <p className="text-[11px] text-slate-400">{t('uiShell.codingModelDescription')}</p>
+              <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                1. AI Coding Agent Studio <Tooltip helpKey="uiShell_codingModelDescription" />
+              </h2>
             </div>
           </div>
         </div>
@@ -105,7 +107,6 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
                 onUpdateSettings={onUpdateSettings}
               />
             )}
-            <p className="text-[11px] text-amber-300 leading-snug">{t('modelBadges.experimentalTooltip')}</p>
           </div>
         </div>
       </div>
@@ -119,8 +120,9 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
               <MessageSquare className="w-4 h-4 text-purple-400" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-100">{t('settings.ragChatSection')}</h2>
-              <p className="text-[11px] text-slate-400">{t('settings.ragChatSubtitle')}</p>
+              <h2 className="text-sm font-bold text-slate-100 inline-flex items-center gap-1.5">
+                {t('settings.ragChatSection')} <Tooltip helpKey="settings_ragChatSubtitle" />
+              </h2>
             </div>
           </div>
 
@@ -155,8 +157,9 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
               <Languages className="w-4 h-4 text-sky-400" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-100">{t('settings.translationSection')}</h2>
-              <p className="text-[11px] text-slate-400">{t('settings.translationSubtitle')}</p>
+              <h2 className="text-sm font-bold text-slate-100 inline-flex items-center gap-1.5">
+                {t('settings.translationSection')} <Tooltip helpKey="settings_translationSubtitle" />
+              </h2>
             </div>
           </div>
 
@@ -192,8 +195,9 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
             <FileText className="w-4 h-4 text-amber-400" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-100">{t('settings.ingestionOcrSection')}</h2>
-            <p className="text-[11px] text-slate-400">{t('settings.ingestionOcrSubtitle')}</p>
+            <h2 className="text-sm font-bold text-slate-100 inline-flex items-center gap-1.5">
+              {t('settings.ingestionOcrSection')} <Tooltip helpKey="settings_ingestionOcrSubtitle" />
+            </h2>
           </div>
         </div>
 
@@ -256,8 +260,9 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
             <Activity className="w-4 h-4 text-rose-400" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-100">{t('settings.verticalDomainsSection')}</h2>
-            <p className="text-[11px] text-slate-400">{t('settings.verticalDomainsSubtitle')}</p>
+            <h2 className="text-sm font-bold text-slate-100 inline-flex items-center gap-1.5">
+              {t('settings.verticalDomainsSection')} <Tooltip helpKey="settings_verticalDomainsSubtitle" />
+            </h2>
           </div>
         </div>
 

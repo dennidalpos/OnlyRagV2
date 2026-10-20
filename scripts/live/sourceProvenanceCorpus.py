@@ -1,4 +1,8 @@
 """Freeze actual local retrieval and retained-original locations for the citation campaign."""
+
+if __name__ == '__main__':
+    raise SystemExit('Historical model campaign retired; use the bounded configured-model smoke runner.')
+
 import json
 import os
 from pathlib import Path

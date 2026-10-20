@@ -1,5 +1,7 @@
 # Runtime e orchestrazione Agent
 
+**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+
 La guida breve è [Coding Agent](./coding-agent.md). Il codice di orchestrazione vive in [Application](../electron/core/application/) e le regole di piano/guard in [Domain](../electron/core/domain/agent/). Questo indice conserva gli ancoraggi delle proposte e campagne datate; per lo stato aperto prevale il [tracker](../PROJECT_STATUS.json).
 
 ## Funzionamento corrente

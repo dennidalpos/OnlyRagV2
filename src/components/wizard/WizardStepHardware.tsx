@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React from 'react'
 import { Sparkles, Zap, Download, Cpu, RefreshCw, Settings } from 'lucide-react'
 import { DiagnosticsData } from '../../types'
@@ -43,7 +44,7 @@ export const WizardStepHardware: React.FC<WizardStepHardwareProps> = ({
             <Sparkles className="w-4 h-4 text-cyan-400" />
             <h3 className="text-xs font-bold text-cyan-200 uppercase tracking-wider">{t('hardwareWizard.initialWelcomeBadge')}</h3>
           </div>
-          <p className="text-xs text-slate-300">{t('hardwareWizard.modalSubtitle')}</p>
+          <Tooltip helpKey="hardwareWizard_modalSubtitle" />
         </div>
       )}
 
@@ -153,7 +154,7 @@ export const WizardStepHardware: React.FC<WizardStepHardwareProps> = ({
           <span className="font-bold text-xs text-cyan-300 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> {t('hardwareWizard.autoApplyRecommended')}
           </span>
-          <p className="text-[11px] text-slate-400">{t('hardwareWizard.starterSetupHint')}</p>
+          <Tooltip helpKey="hardwareWizard_starterSetupHint" />
         </div>
         <button
           type="button"

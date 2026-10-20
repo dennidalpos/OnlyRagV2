@@ -3,7 +3,6 @@ import type { GuestOsInfo, OllamaModelMetrics } from '../../../shared/types'
 import { supportsNativeToolCalling } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 import { noConfiguredModelMessage } from '../../../shared/domain/settings/configuredModel'
 import { validateWorkspaceRealpath } from '../infrastructure/filesystem/workspaceRealpathGuard'
-import { findCodingModelEvidence } from '../../../shared/domain/agent/codingModelQualification'
 import { assessModelRuntimeFit } from '../../../shared/domain/hardware/modelRuntimeFit'
 import type { HardwareFacts } from '../../../shared/domain/hardware/hardwareProfileTiers'
 
@@ -24,7 +23,7 @@ export interface AgentCodingPreflightInput {
 }
 
 export interface AgentCodingPreflightCheck {
-  id: 'ollama' | 'model' | 'tools' | 'probes' | 'qualification' | 'context' | 'memory' | 'workspace' | 'trust' | 'toolchain'
+  id: 'ollama' | 'model' | 'tools' | 'context' | 'memory' | 'workspace' | 'trust' | 'toolchain'
   passed: boolean
   blocking: boolean
   detail: string
@@ -54,7 +53,6 @@ export function evaluateAgentCodingPreflight(input: AgentCodingPreflightInput): 
   const metric = input.modelMetrics[input.codingModel]
   const modelInstalled = input.availableModels.includes(input.codingModel)
   const nativeTools = modelInstalled && supportsNativeToolCalling(input.codingModel, { [input.codingModel]: metric?.capabilities || [] })
-  const evidence = findCodingModelEvidence(input.codingModel)
   const contextValid =
     Number.isInteger(input.effectiveContextTokens) &&
     input.effectiveContextTokens >= MIN_AGENT_CONTEXT_TOKENS &&
@@ -87,27 +85,13 @@ export function evaluateAgentCodingPreflight(input: AgentCodingPreflightInput): 
       id: 'tools',
       passed: nativeTools,
       blocking: true,
-      detail: nativeTools ? 'Native tool calling is available; task quality is evaluated separately.' : 'Native tool calling is unavailable.',
-    },
-    {
-      id: 'probes',
-      passed: Boolean(evidence),
-      blocking: false,
-      detail: evidence
-        ? `Historical focused probes (${evidence.date}; ${evidence.probes.join(', ')}): ${evidence.outcome}`
-        : 'No focused live probe evidence is recorded for this model.',
-    },
-    {
-      id: 'qualification',
-      passed: false,
-      blocking: false,
-      detail: 'Autonomous coding is experimental and unqualified: complete independent full-task acceptance is missing.',
+      detail: nativeTools ? 'Native tool calling is available.' : 'Native tool calling is unavailable.',
     },
     {
       id: 'context',
       passed: contextValid,
       blocking: true,
-      detail: `Effective run context: ${input.effectiveContextTokens} tokens; model capacity: ${metric?.contextLength ?? 'unknown'}; minimum runtime requirement: ${MIN_AGENT_CONTEXT_TOKENS}. This is not a full-task quality threshold.`,
+      detail: `Effective run context: ${input.effectiveContextTokens} tokens; model capacity: ${metric?.contextLength ?? 'unknown'}; minimum runtime requirement: ${MIN_AGENT_CONTEXT_TOKENS}.`,
     },
     {
       id: 'memory',

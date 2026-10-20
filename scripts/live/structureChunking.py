@@ -1,4 +1,8 @@
 """Evaluate one declared block-preserving splitter without changing production or frozen expectations."""
+
+if __name__ == '__main__':
+    raise SystemExit('Historical model campaign retired; use the bounded configured-model smoke runner.')
+
 import argparse
 import hashlib
 import json

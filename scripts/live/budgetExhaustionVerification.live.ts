@@ -1,3 +1,4 @@
+import './retiredCampaign'
 /** Live scenario — the terminal budget exit performs the final project verification. */
 import fs from 'node:fs'
 import path from 'node:path'

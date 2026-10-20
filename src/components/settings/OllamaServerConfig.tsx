@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React, { useState } from 'react'
 import { Server, CheckCircle2, XCircle, Loader2, HardDrive, Wifi, Radio } from 'lucide-react'
 import { AppSettings } from '../../types'
@@ -85,8 +86,9 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
             <Server className="w-4.5 h-4.5 text-cyan-400" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">{t('ollamaServer.title')}</h2>
-            <p className="text-[11px] text-slate-400">{t('ollamaServer.subtitle')}</p>
+            <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              {t('ollamaServer.title')} <Tooltip helpKey="ollamaServer_subtitle" />
+            </h2>
           </div>
         </div>
       </div>
@@ -114,7 +116,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
               {currentMode === 'local' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed">{t('ollamaServer.localDescription', { host: 'http://127.0.0.1:11434' })}</p>
+          <Tooltip helpKey="ollamaServer_localDescription" params={{ host: 'http://127.0.0.1:11434' }} />
           <div className="text-[10px] font-mono text-cyan-400/80 pt-1">Endpoint: http://127.0.0.1:11434</div>
         </button>
 
@@ -140,7 +142,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
               {currentMode === 'remote' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed">{t('ollamaServer.remoteDescription')}</p>
+          <Tooltip helpKey="ollamaServer_remoteDescription" />
           <div className="text-[10px] font-mono text-sky-400/80 pt-1">
             Endpoint: {settings.ollamaHost && settings.ollamaHost !== DEFAULT_OLLAMA_HOST ? settings.ollamaHost : remoteUrl}
           </div>
@@ -160,7 +162,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({ settings
               className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus-ring"
             />
           </div>
-          <p className="text-[10px] text-slate-400">{t('ollamaServer.remoteHint', { env: 'OLLAMA_HOST=0.0.0.0' })}</p>
+          <Tooltip helpKey="ollamaServer_remoteHint" params={{ env: 'OLLAMA_HOST=0.0.0.0' }} />
         </div>
       )}
 

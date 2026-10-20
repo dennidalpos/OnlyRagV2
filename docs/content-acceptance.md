@@ -1,5 +1,7 @@
 # Frozen content acceptance
 
+**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+
 Il [seguito offline sulla lingua delle risposte](./plan-chat-language-2026-10-20.md) verifica la campagna conservata e prepara un confronto senza cambiare il corpus o il runtime. Il proprietario mantiene il perimetro solo offline; nessuna nuova qualifica semantica.
 
 La [campagna corrente del 20 ottobre](./verification-live-content-2026-10-20.md) raccoglie tutte le risposte ma fallisce il gate: 5/12 accettate congiuntamente, 9/11 passaggi globali. Aspettative, fallimenti e policy conservati; il task P1 resta aperto.

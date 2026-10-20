@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { Search, X, AlertTriangle, Sparkles, Copy, Check, SlidersHorizontal, Database } from 'lucide-react'
@@ -62,8 +63,8 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({ isOpen, on
           <div>
             <h2 id="vector-search-modal-title" className="text-base font-bold text-slate-100 flex items-center gap-2">
               {t('vectorSearch.modalTitle')}
+              <Tooltip helpKey="vectorSearch_modalSubtitle" />
             </h2>
-            <p className="text-xs text-slate-400">{t('vectorSearch.modalSubtitle')}</p>
           </div>
         </div>
 
@@ -174,7 +175,7 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({ isOpen, on
           <div className="h-full flex flex-col items-center justify-center text-center p-12 space-y-3 text-slate-400">
             <Database className="w-12 h-12 text-cyan-500/30" />
             <div className="font-semibold text-slate-400 text-sm">{t('vectorSearch.modalTitle')}</div>
-            <p className="text-xs max-w-md text-slate-400 leading-relaxed">{t('vectorSearch.modalSubtitle')}</p>
+            <Tooltip helpKey="vectorSearch_modalSubtitle" />
           </div>
         )}
 
@@ -182,7 +183,7 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({ isOpen, on
           <div className="h-full flex flex-col items-center justify-center text-center p-12 space-y-2 text-slate-400">
             <Search className="w-10 h-10 text-slate-600" />
             <div className="font-semibold text-slate-400 text-sm">{t('vectorSearch.noResults')}</div>
-            <p className="text-xs max-w-md text-slate-400">{t('vectorSearch.noResultsHint')}</p>
+            <Tooltip helpKey="vectorSearch_noResultsHint" />
           </div>
         )}
 

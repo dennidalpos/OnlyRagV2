@@ -1,6 +1,7 @@
+import { Tooltip } from '../common/Tooltip'
 import { AppSelect } from '../common/AppSelect'
 import React from 'react'
-import { FileCheck2, Folder, ArrowLeftRight, Play, Loader2, AlertCircle, CheckCircle2, AlertTriangle, Info, X, FileText } from 'lucide-react'
+import { FileCheck2, Folder, ArrowLeftRight, Play, Loader2, AlertCircle, CheckCircle2, AlertTriangle, X, FileText } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { LANGUAGES, type InplaceTranslationState } from '../../hooks/useTranslation'
 import { useTranslation } from '../../i18n'
@@ -46,12 +47,9 @@ export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = (
                 <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-md bg-sky-900/60 text-sky-300 border border-sky-700/60">
                   PDF &bull; DOCX
                 </span>
+                <Tooltip helpKey="translation_inplaceSubtitle" />
               </h2>
-              <p className="text-xs text-slate-300 leading-relaxed">{t('translation.inplaceSubtitle')}</p>
-              <div className="flex items-center gap-2 text-[11px] text-sky-300/80 pt-1 font-sans">
-                <Info className="w-3.5 h-3.5 shrink-0" />
-                <span>{t('translation.inplacePreserveNotice')}</span>
-              </div>
+              <Tooltip helpKey="translation_inplacePreserveNotice" />
             </div>
           </div>
         </div>

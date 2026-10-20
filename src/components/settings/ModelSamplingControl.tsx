@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React from 'react'
 import type { AppSettings, OllamaSamplingOverrides } from '../../types'
 import { SAMPLING_LIMITS, pickSamplingOverrides } from '../../../shared/domain/agent/ollamaSamplingOptions'
@@ -84,7 +85,7 @@ export const ModelSamplingControl: React.FC<ModelSamplingControlProps> = ({ mode
         })}
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="text-[9px] text-slate-500">{t('settings.samplingHint')}</span>
+        <Tooltip helpKey="settings_samplingHint" />
         {overriddenCount > 0 && (
           <button type="button" onClick={() => save({})} className="shrink-0 rounded px-1.5 py-0.5 bg-slate-700 text-slate-200">
             {t('settings.samplingReset')}

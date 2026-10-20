@@ -1,5 +1,7 @@
 # AGPL distribution proposal — 2026-10-10
 
+**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+
 Status: the owner selected **evaluation of an AGPL-compliant distribution**. CPU implementation was explicitly approved and is recorded in [distribution-cpu-release.md](./distribution-cpu-release.md); complete release qualification remains open under `DISTRIBUTION-LICENSE-POLICY-01`. This proposal does not change the repository MIT license or authorize publication. [Artifact review](./distribution-licenses.md), [byte and text evidence](./licenses/agpl-route-2026-10-10/evidence.json).
 
 ## Proposed release scope

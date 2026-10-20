@@ -1,3 +1,4 @@
+import { Tooltip, type HelpKey } from '../common/Tooltip'
 import type { editor } from 'monaco-editor'
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import Editor from '@monaco-editor/react'
@@ -242,10 +243,10 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
             <Sliders className="w-5 h-5" />
           </div>
           <div>
-            <h2 id="prompt-config-modal-title" className="text-base font-bold text-slate-100">
+            <h2 id="prompt-config-modal-title" className="text-base font-bold text-slate-100 inline-flex items-center gap-1.5">
               {t('promptConfig.title')}
+              <Tooltip helpKey="promptConfig_subtitle" />
             </h2>
-            <p className="text-xs text-slate-400">{t('promptConfig.subtitle')}</p>
           </div>
         </div>
         <button
@@ -332,8 +333,9 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
             <>
               <div className="px-5 py-3 border-b border-slate-800 flex items-start justify-between gap-4 shrink-0">
                 <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-slate-100 truncate">{t(selectedNode.labelKey as TranslationKey) || selectedNode.label}</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">{t(selectedNode.descriptionKey as TranslationKey)}</p>
+                  <h3 className="text-sm font-semibold text-slate-100 truncate inline-flex items-center gap-1.5">
+                    {t(selectedNode.labelKey as TranslationKey) || selectedNode.label} <Tooltip helpKey={selectedNode.descriptionKey.slice(5) as HelpKey} />
+                  </h3>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-[11px] text-slate-500 font-mono">{tokenLabel}</span>

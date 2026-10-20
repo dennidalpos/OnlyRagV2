@@ -11,7 +11,7 @@ Il Renderer usa solo `window.electronAPI` esposta da [`electron/preload.ts`](../
 
 ## Interfaccia e accessibilità
 
-I testi sono in [`src/i18n/locales/`](../src/i18n/locales/) per italiano e inglese. I modali condividono uno stack di focus e richiedono pulsanti espliciti per approvazioni non dismissibili. I messaggi chat completati rendono Markdown/GFM senza HTML grezzo o caricamento di immagini remote; lo streaming rimane testo letterale. La verifica con screen reader reale e desktop riavviato è ancora nel tracker.
+I testi sono in [`src/i18n/locales/`](../src/i18n/locales/) per italiano e inglese. I modali condividono uno stack di focus e richiedono pulsanti espliciti per approvazioni non dismissibili. I messaggi chat completati rendono Markdown/GFM senza HTML grezzo o caricamento di immagini remote; lo streaming rimane testo letterale. La verifica autonoma copre tastiera, albero accessibile, zoom e riavvio su profili sintetici.
 
 ## Excel format option — 2026-10-11
 
@@ -37,9 +37,9 @@ Il punteggio mostrato ordina i passaggi recuperati e non è una probabilità o u
 
 Monaco e tokenizer sono caricati quando servono; le chiamate privilegiate restano nel Preload/Main. L'upload risolve il `File` nativo tramite il bridge locale, senza fallback al nome.
 
-## Segnali di qualificazione dei modelli — 2026-10-02
+## Aiuti e capacità runtime — 2026-10-20
 
-La UI separa capacità rilevate, risultati storici e qualifica del task. Gli otto scenari isolati del 9B non qualificano TaskLab; nessun badge generico promette autonomia affidabile.
+Gli aiuti condividono `Tooltip` e il catalogo tipizzato `help` nelle traduzioni IT/EN. Testi descrittivi e sottotitoli sono disponibili su hover/focus; etichette, errori, progressi e decisioni restano visibili. I tooltip sono ospitati nel layer del modale attivo, fuori dal pannello scorrevole. Escape chiude prima l'aiuto e poi il dialogo. La UI e il preflight non mostrano qualifiche o prove storiche di modelli specifici; mantengono le capacità rilevate e i vincoli runtime.
 
 ## Model/workload fit — 2026-10-02
 
@@ -47,7 +47,7 @@ La stima espone contesto effettivo, base della misura e incertezza di memoria/of
 
 ## Modal focus and accessibility — 2026-10-02
 
-Lo stack di modali isola il livello attivo; i test Chrome tastiera/tree passano nei casi dichiarati. Screen reader, zoom e Monaco nel desktop riavviato restano da qualificare.
+Lo stack di modali isola il livello attivo; i test Chrome tastiera/tree passano nei casi dichiarati. Il task autonomo conserva tastiera, zoom, albero accessibile e Monaco nel desktop locale riavviato; la campagna screen reader è ritirata.
 
 ## Chat readable output — 2026-10-11
 

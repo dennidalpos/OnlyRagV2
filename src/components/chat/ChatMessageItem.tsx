@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React, { useEffect, useRef, useState } from 'react'
 import { Bot, Check, Copy, Loader2, Sparkles, User } from 'lucide-react'
 import Markdown from 'react-markdown'
@@ -262,7 +263,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               <p>
                 {t('chat.locationVerified')} {location.page_number ? t('chat.sourcePage', { page: location.page_number }) : location.section_header}
               </p>
-              <p className="text-sm text-slate-400">{t('chat.locationSupportHint')}</p>
+              <Tooltip helpKey="chat_locationSupportHint" />
               <pre className="whitespace-pre-wrap text-sm">{location.exact_quote}</pre>
               {location.image_base64 && (
                 <img src={`data:image/png;base64,${location.image_base64}`} alt={t('chat.sourcePage', { page: location.page_number || 1 })} />
@@ -297,7 +298,7 @@ function ChatMessageSources({
           <span>{t('chat.sourcesTitle', { label: headerLabel })}</span>
         </div>
       </div>
-      <p className="text-xs text-slate-400">{t('chat.rankingScoreHint')}</p>
+      <Tooltip helpKey="chat_rankingScoreHint" />
       <div className="grid grid-cols-1 gap-1.5">
         {sources.map((src, idx) => (
           <div key={idx} className="p-2 bg-slate-950/70 border border-slate-800/80 rounded-xl space-y-1">

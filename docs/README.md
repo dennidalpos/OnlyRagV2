@@ -1,5 +1,9 @@
 # Documentazione OnlyRag V2
 
+**Stato operativo corrente:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md), 11 task autonomi e 24 ritirati per decisione del proprietario. Nessuna CI o qualifica dei modelli; [implementazione e verifiche](./verification-local-ui-2026-10-20.md). I resoconti precedenti sotto sono storici.
+
+[Consegna per il cambio sessione del 21 ottobre](./session-handoff-local-ui-2026-10-21.md): tracker aggiornato, verifiche locali e riferimenti per riprendere gli 11 task; commit e push su `master` autorizzati dal proprietario.
+
 [Passaggio di sessione Sidecar e verifiche locali](./session-handoff-sidecar-2026-10-20.md): lavoro e 34 task salvati, commit/push su `master` richiesti esplicitamente; scelta solo offline dei modelli conservata. La CI della consegna richiede il proprio readback.
 
 Corretto lo [stato iniziale del Sidecar in sviluppo](./verification-sidecar-dev-startup-2026-10-20.md): `Verifica...` durante la preparazione, errore offline visibile a fine avvio. Prove Python/Electron isolate e regressioni passate; riavviare il dev per caricare il Main aggiornato.

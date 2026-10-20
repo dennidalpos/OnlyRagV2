@@ -1,4 +1,8 @@
 """Capture real local normalization options; keep budget refusals separate from model quality."""
+
+if __name__ == '__main__':
+    raise SystemExit('Historical model campaign retired; use the bounded configured-model smoke runner.')
+
 from contextlib import contextmanager
 import datetime
 import hashlib

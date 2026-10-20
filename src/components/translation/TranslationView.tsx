@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import { AppSelect } from '../common/AppSelect'
 import React, { useState } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
@@ -377,21 +378,22 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                     </button>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={() => onUpdateSettings?.({ editorWordWrap: settings?.editorWordWrap === false ? true : false })}
-                    aria-pressed={settings?.editorWordWrap !== false}
-                    aria-label={t('settings.wordWrap')}
-                    title={t('settings.wordWrapDesc')}
-                    className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all focus-ring active:scale-95 ${
-                      settings?.editorWordWrap !== false
-                        ? 'bg-sky-950 text-sky-300 border border-sky-800/80 shadow-sm'
-                        : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <WrapText className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">{t('settings.wordWrap')}</span>
-                  </button>
+                  <Tooltip helpKey="settings_wordWrapDesc">
+                    <button
+                      type="button"
+                      onClick={() => onUpdateSettings?.({ editorWordWrap: settings?.editorWordWrap === false ? true : false })}
+                      aria-pressed={settings?.editorWordWrap !== false}
+                      aria-label={t('settings.wordWrap')}
+                      className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all focus-ring active:scale-95 ${
+                        settings?.editorWordWrap !== false
+                          ? 'bg-sky-950 text-sky-300 border border-sky-800/80 shadow-sm'
+                          : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <WrapText className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">{t('settings.wordWrap')}</span>
+                    </button>
+                  </Tooltip>
                 </div>
 
                 {tr.isTranslationComplete && tr.translatedMarkdown && (
@@ -505,7 +507,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                     ) : (
                       <>
                         <div className="font-semibold text-slate-400 text-sm">{t('translation.selectDocPrompt')}</div>
-                        <p className="text-xs max-w-sm text-slate-400">{t('translation.subtitle')}</p>
+                        <Tooltip helpKey="translation_subtitle" />
                       </>
                     )}
                   </div>

@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React, { useState } from 'react'
 import { Database, Sparkles, ExternalLink } from 'lucide-react'
 import { VectorSearchModal } from './VectorSearchModal'
@@ -21,7 +22,7 @@ export const VectorSearchPanel: React.FC<VectorSearchPanelProps> = ({ embeddingM
           <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-1.5 py-0.5 rounded font-semibold">LanceDB</span>
         </div>
 
-        <p className="text-[11px] text-slate-400 leading-relaxed">{t('ingestion.vectorSearchDescription')}</p>
+        <Tooltip helpKey="ingestion_vectorSearchDescription" />
 
         <button
           type="button"

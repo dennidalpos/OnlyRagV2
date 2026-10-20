@@ -103,6 +103,7 @@ describe('retrieved candidate scores', () => {
     'shows saved coverage, literal supplied text and exclusions without inventing citations (%s)',
     async (language, title, truncated, excluded, scope, budget, hint) => {
       const container = document.createElement('div')
+      document.body.appendChild(container)
       const root = createRoot(container)
       const message: ChatMessage = {
         id: 'coverage',
@@ -141,12 +142,17 @@ describe('retrieved candidate scores', () => {
         expect(details.textContent).toContain(excluded)
         expect(details.textContent).toContain(scope)
         expect(details.textContent).toContain(budget)
-        expect(details.textContent).toContain(hint)
+        expect(details.textContent).not.toContain(hint)
+        details.open = true
+        const help = details.querySelector<HTMLButtonElement>('button')!
+        await act(async () => help.focus())
+        expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(hint)
         expect(details.textContent).toContain('0/1000')
         expect(details.textContent).toContain('[S1]')
         expect(details.querySelector('pre')?.textContent).toBe(message.contextCoverage!.items[0].text)
         expect(details.querySelector('script')).toBeNull()
-        expect(details.querySelector('button')).toBeNull()
+        expect(details.querySelectorAll('button')).toHaveLength(1)
+        expect(details.querySelector('button[title="Open original location"]')).toBeNull()
       } finally {
         await act(async () => root.unmount())
         container.remove()
@@ -218,6 +224,7 @@ describe('retrieved candidate scores', () => {
       }
     })
     Object.assign(window, { electronAPI: { getSourceLocation } })
+    document.body.appendChild(container)
     const message: ChatMessage = {
       id: 'answer',
       sender: 'bot',
@@ -266,7 +273,9 @@ describe('retrieved candidate scores', () => {
         expect(document.body.textContent).not.toContain('Original location verified')
       } else {
         expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Original location verified. Page 2')
-        expect(document.querySelector('[role="dialog"]')?.textContent).toContain('compare the passage with the answer')
+        expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain('compare the passage with the answer')
+        await act(async () => document.querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Information"]')!.focus())
+        expect(document.querySelector('[role="tooltip"]')?.textContent).toContain('compare the passage with the answer')
         expect(document.querySelector('[role="dialog"] img')?.getAttribute('src')).toBe('data:image/png;base64,iVBOR')
       }
       await act(async () => document.querySelector<HTMLButtonElement>('[role="dialog"] button')?.click())
@@ -301,6 +310,7 @@ describe('retrieved candidate scores', () => {
   ] as const)('does not present an unrelated ranking score as evidence confidence (%s)', async (language, heading, score, meaning) => {
     const container = document.createElement('div')
     const root = createRoot(container)
+    document.body.appendChild(container)
     const message: ChatMessage = {
       id: 'answer',
       sender: 'bot',
@@ -318,11 +328,14 @@ describe('retrieved candidate scores', () => {
       )
       expect(container.textContent).toContain(heading)
       expect(container.textContent).toContain(score)
-      expect(container.textContent).toContain(meaning)
+      expect(container.textContent).not.toContain(meaning)
+      await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Information"],button[aria-label="Informazioni"]')!.focus())
+      expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(meaning)
       expect(container.textContent).not.toContain('%')
       expect(container.textContent).toContain('Unrelated passage.')
     } finally {
       await act(async () => root.unmount())
+      container.remove()
     }
   })
 })

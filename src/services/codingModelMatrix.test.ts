@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { declaresToolCalling, findCodingModelEvidence, resolveModelRuntimeStatus } from '../../shared/domain/agent/codingModelQualification'
+import { declaresToolCalling, resolveModelRuntimeStatus } from '../../shared/domain/agent/codingModelQualification'
 
 describe('resolveModelRuntimeStatus', () => {
   it('does not promote a tested tag beyond runtime compatibility', () => {
@@ -38,29 +38,6 @@ describe('resolveModelRuntimeStatus', () => {
 
   it('answers unknown for an empty name instead of throwing', () => {
     expect(resolveModelRuntimeStatus({ modelName: '' })).toBe('unknown')
-  })
-})
-
-describe('historical probe evidence', () => {
-  /** The rule this file exists to enforce. */
-  it('records evidence for every entry: a date, the probes, and what the run showed', () => {
-    for (const name of ['qwen2.5-coder:7b', 'qwen3.5:9b']) {
-      const evidence = findCodingModelEvidence(name)!
-      expect(evidence.date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-      expect(evidence.probes.length).toBeGreaterThan(0)
-      expect(evidence.outcome.length).toBeGreaterThan(40)
-    }
-  })
-
-  it('exposes that evidence for the badge tooltip', () => {
-    const evidence = findCodingModelEvidence('qwen2.5-coder:7b')!
-    expect(evidence.probes).toContain('fullTaskRun.live.ts')
-  })
-
-  it('has no evidence to offer for anything else', () => {
-    expect(findCodingModelEvidence('deepseek-coder:6.7b')).toBeNull()
-    expect(findCodingModelEvidence('__proto__')).toBeNull()
-    expect(findCodingModelEvidence('qwen3.5:9b')?.outcome).toContain('zero complete sequences')
   })
 })
 

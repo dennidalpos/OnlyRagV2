@@ -1,3 +1,4 @@
+import { Tooltip } from './Tooltip'
 import React, { useState } from 'react'
 import { Modal } from './Modal'
 import { X, Award, Code2, ExternalLink, Copy, Check, Heart, ShieldCheck, Package } from 'lucide-react'
@@ -397,7 +398,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 {t('about.licenseType')}
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1 font-medium max-w-xl">{t('about.subtitle')}</p>
+            <Tooltip helpKey="about_subtitle" />
           </div>
         </div>
 
@@ -492,8 +493,8 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 <span className="text-[11px] font-normal text-cyan-400/80 bg-cyan-950/40 px-2 py-0.5 rounded-full border border-cyan-800/40 font-mono">
                   {t('about.technologiesCount', { count: UPSTREAM_MODULES.length })}
                 </span>
+                <Tooltip helpKey="about_creditsSubtitle" />
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">{t('about.creditsSubtitle')}</p>
             </div>
           </div>
 
@@ -541,8 +542,9 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
               <Award className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="text-xs font-bold text-slate-100">{t('about.acknowledgmentsTitle')}</h4>
-              <p className="text-[11px] text-slate-400">{t('about.acknowledgmentsSubtitle')}</p>
+              <h4 className="text-xs font-bold text-slate-100 inline-flex items-center gap-1.5">
+                {t('about.acknowledgmentsTitle')} <Tooltip helpKey="about_acknowledgmentsSubtitle" />
+              </h4>
             </div>
           </div>
 
@@ -577,8 +579,9 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
               <Heart className="w-5 h-5 fill-cyan-500/20 text-cyan-400" />
             </div>
             <div>
-              <h4 className="text-xs font-bold text-slate-100">{t('about.contactsTitle')}</h4>
-              <p className="text-[11px] text-slate-400">{t('about.contactsSubtitle')}</p>
+              <h4 className="text-xs font-bold text-slate-100 inline-flex items-center gap-1.5">
+                {t('about.contactsTitle')} <Tooltip helpKey="about_contactsSubtitle" />
+              </h4>
             </div>
           </div>
 

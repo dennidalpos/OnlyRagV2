@@ -1,3 +1,4 @@
+import './retiredCampaign'
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'

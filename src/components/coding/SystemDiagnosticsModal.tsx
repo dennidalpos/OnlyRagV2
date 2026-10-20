@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { X, Cpu, Wrench, Activity, CheckCircle2, AlertCircle, Terminal, FileCode, Folder, Layers, Check, Loader2, Sparkles } from 'lucide-react'
@@ -101,32 +102,33 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
           <div>
             <h2 id="diagnostics-modal-title" className="text-sm font-bold text-slate-100 flex items-center gap-2">
               {t('systemDiagnostics.title')}
+              <Tooltip helpKey="systemDiagnostics_subtitle" />
             </h2>
-            <p className="text-[11px] text-slate-400">{t('systemDiagnostics.subtitle')}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleCopyAiDebugBundle}
-            disabled={isCopyingDebugBundle}
-            title={t('systemDiagnostics.copyBundleHint')}
-            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all cursor-pointer shadow-sm ${
-              isCopied
-                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
-                : 'bg-indigo-950/70 hover:bg-indigo-900/90 text-indigo-200 border-indigo-700/70 hover:border-indigo-500'
-            }`}
-          >
-            {isCopyingDebugBundle ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : isCopied ? (
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-            ) : (
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            )}
-            <span>{isCopied ? t('systemDiagnostics.bundleCopied') : t('systemDiagnostics.copyForAgent')}</span>
-          </button>
+          <Tooltip helpKey="systemDiagnostics_copyBundleHint">
+            <button
+              type="button"
+              onClick={handleCopyAiDebugBundle}
+              disabled={isCopyingDebugBundle}
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all cursor-pointer shadow-sm ${
+                isCopied
+                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                  : 'bg-indigo-950/70 hover:bg-indigo-900/90 text-indigo-200 border-indigo-700/70 hover:border-indigo-500'
+              }`}
+            >
+              {isCopyingDebugBundle ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : isCopied ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              )}
+              <span>{isCopied ? t('systemDiagnostics.bundleCopied') : t('systemDiagnostics.copyForAgent')}</span>
+            </button>
+          </Tooltip>
 
           <button
             type="button"
@@ -250,7 +252,7 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                   </span>
                   <span className="font-mono text-cyan-400 font-bold">{fileOperationsCount}</span>
                 </div>
-                <div className="text-[10px] text-slate-400 font-mono">{t('systemDiagnostics.fileOperationsHint')}</div>
+                <Tooltip helpKey="systemDiagnostics_fileOperationsHint" />
               </div>
 
               <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">
@@ -260,7 +262,7 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                   </span>
                   <span className="font-mono text-amber-400 font-bold">{terminalCommandsCount}</span>
                 </div>
-                <div className="text-[10px] text-slate-400 font-mono">{t('systemDiagnostics.shellCommandsHint')}</div>
+                <Tooltip helpKey="systemDiagnostics_shellCommandsHint" />
               </div>
 
               <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">
@@ -270,7 +272,7 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                   </span>
                   <span className="font-mono text-indigo-300 font-bold">{readOperationsCount}</span>
                 </div>
-                <div className="text-[10px] text-slate-400 font-mono">{t('systemDiagnostics.readsHint')}</div>
+                <Tooltip helpKey="systemDiagnostics_readsHint" />
               </div>
 
               <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">

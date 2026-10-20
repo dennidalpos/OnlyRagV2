@@ -1,5 +1,7 @@
 # Distribuzione locale
 
+**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+
 La sorgente del progetto dichiara MIT in [`LICENSE`](../LICENSE). Il candidato CPU combinato include componenti con licenze ulteriori; la politica locale selezionata per quel candidato e il testo da includere sono in [`DISTRIBUTION-LICENSE.md`](../DISTRIBUTION-LICENSE.md). Questa pagina descrive lo stato tecnico, non sostituisce i testi di licenza o la verifica dei diritti dei componenti.
 
 ## Build e artefatti

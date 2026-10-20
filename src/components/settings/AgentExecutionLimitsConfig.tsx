@@ -1,6 +1,7 @@
+import { Tooltip } from '../common/Tooltip'
 import React, { useEffect, useState } from 'react'
 import { AppSettings, TaskQueueStatus } from '../../types'
-import { Layers, ShieldCheck, Activity } from 'lucide-react'
+import { Layers, Activity } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 
 interface AgentExecutionLimitsConfigProps {
@@ -39,8 +40,8 @@ export const AgentExecutionLimitsConfig: React.FC<AgentExecutionLimitsConfigProp
         <div>
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2.5">
             <Layers className="w-5 h-5 text-cyan-400" /> {t('settings.executionLimitsSection')}
+            <Tooltip helpKey="settings_executionLimitsDesc" />
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">{t('settings.executionLimitsDesc')}</p>
         </div>
 
         {queueStatus && (
@@ -58,18 +59,11 @@ export const AgentExecutionLimitsConfig: React.FC<AgentExecutionLimitsConfigProp
         )}
       </div>
 
-      <div className="flex items-center gap-2 p-2.5 bg-slate-900/60 border border-slate-800/80 rounded-xl text-xs text-slate-400">
-        <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-        <span>
-          <strong>{t('settings.queueProtectionTitle')}</strong> {t('settings.queueProtectionDesc')}
-        </span>
-      </div>
-
       {/* Max Tool Call Steps Slider / Selector */}
       <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="space-y-0.5">
           <span className="text-xs font-bold text-slate-200">{t('settings.toolCallStepsTitle')}</span>
-          <p className="text-[11px] text-slate-400 leading-relaxed">{t('settings.toolCallStepsDesc')}</p>
+          <Tooltip helpKey="settings_toolCallStepsDesc" />
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto shrink-0">
           <input

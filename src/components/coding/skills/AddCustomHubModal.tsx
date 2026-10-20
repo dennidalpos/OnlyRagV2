@@ -1,3 +1,4 @@
+import { Tooltip } from '../../common/Tooltip'
 import { AppSelect } from '../../common/AppSelect'
 import React, { useState } from 'react'
 import { Modal } from '../../common/Modal'
@@ -60,10 +61,10 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({ isOpen, on
             <Globe className="w-5 h-5" />
           </div>
           <div>
-            <h2 id="add-custom-hub-title" className="text-base font-bold text-slate-100">
+            <h2 id="add-custom-hub-title" className="text-base font-bold text-slate-100 inline-flex items-center gap-1.5">
               {t('skills.addCustomHubTitle')}
+              <Tooltip helpKey="skills_hubSubtitle" />
             </h2>
-            <p className="text-xs text-slate-400">{t('skills.hubSubtitle')}</p>
           </div>
         </div>
         <button

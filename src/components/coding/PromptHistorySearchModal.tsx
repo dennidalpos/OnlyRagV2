@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React, { useEffect } from 'react'
 import { Modal } from '../common/Modal'
 import { Search, X, AlertTriangle, Sparkles, FolderGit2, ArrowRight, Loader2, CheckCircle2, XCircle, Ban, CircleDashed } from 'lucide-react'
@@ -56,10 +57,10 @@ export const PromptHistorySearchModal: React.FC<PromptHistorySearchModalProps> =
             <FolderGit2 className="w-5 h-5 text-indigo-400" />
           </div>
           <div>
-            <h2 id="prompt-history-search-modal-title" className="text-base font-bold text-slate-100">
+            <h2 id="prompt-history-search-modal-title" className="text-base font-bold text-slate-100 inline-flex items-center gap-1.5">
               {t('promptHistorySearch.modalTitle')}
+              <Tooltip helpKey="promptHistorySearch_modalSubtitle" />
             </h2>
-            <p className="text-xs text-slate-400">{t('promptHistorySearch.modalSubtitle')}</p>
           </div>
         </div>
 
@@ -134,7 +135,7 @@ export const PromptHistorySearchModal: React.FC<PromptHistorySearchModalProps> =
           <div className="h-full flex flex-col items-center justify-center text-center p-12 space-y-3 text-slate-400">
             <FolderGit2 className="w-12 h-12 text-indigo-500/30" />
             <div className="font-semibold text-slate-400 text-sm">{t('promptHistorySearch.modalTitle')}</div>
-            <p className="text-xs max-w-md text-slate-400 leading-relaxed">{t('promptHistorySearch.modalSubtitle')}</p>
+            <Tooltip helpKey="promptHistorySearch_modalSubtitle" />
           </div>
         )}
 
@@ -142,7 +143,7 @@ export const PromptHistorySearchModal: React.FC<PromptHistorySearchModalProps> =
           <div className="h-full flex flex-col items-center justify-center text-center p-12 space-y-2 text-slate-400">
             <Search className="w-10 h-10 text-slate-600" />
             <div className="font-semibold text-slate-400 text-sm">{t('promptHistorySearch.noResults')}</div>
-            <p className="text-xs max-w-md text-slate-400">{t('promptHistorySearch.noResultsHint')}</p>
+            <Tooltip helpKey="promptHistorySearch_noResultsHint" />
           </div>
         )}
 

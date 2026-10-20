@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React from 'react'
 import type { AgentCapabilityProfile } from '../../types'
 import { useTranslation } from '../../i18n'
@@ -23,57 +24,65 @@ export const AgentCapabilityProfileControls: React.FC<AgentCapabilityProfileCont
         {t('settings.agentFullAccessWarning')}
       </p>
       <div className="grid gap-2 sm:grid-cols-2 text-xs">
-        <label className="flex items-center gap-2 text-slate-200" title={t('planInterview.fileChangesHint')}>
-          <input
-            type="checkbox"
-            disabled={profile.fullAccess}
-            checked={profile.allowFileModifications}
-            onChange={(event) => onChange({ ...profile, allowFileModifications: event.target.checked })}
-          />
-          {t('planInterview.fileChanges')}
-        </label>
-        <label className="flex items-center gap-2 text-slate-200" title={t('planInterview.terminalCommandsHint')}>
-          <input
-            type="checkbox"
-            disabled={profile.fullAccess}
-            checked={profile.allowTerminalExecution}
-            onChange={(event) => onChange({ ...profile, allowTerminalExecution: event.target.checked })}
-          />
-          {t('planInterview.terminalCommands')}
-        </label>
-        <label className="grid gap-1 text-slate-300" title={t('planInterview.networkHint')}>
-          {t('planInterview.network')}
-          <AppSelect
-            disabled={profile.fullAccess}
-            value={profile.capabilityPolicyMode}
-            onChange={(event) => onChange({ ...profile, capabilityPolicyMode: event.target.value as AgentCapabilityProfile['capabilityPolicyMode'] })}
-            compact
-          >
-            <option value="offline-strict">{t('planInterview.networkBlocked')}</option>
-            <option value="local-only">{t('planInterview.networkLocal')}</option>
-            <option value="network-approved">{t('planInterview.networkApproved')}</option>
-          </AppSelect>
-        </label>
-        <label className="grid gap-1 text-slate-300" title={t('planInterview.stepBudgetHint')}>
-          {t('planInterview.stepBudget')}
-          <input
-            type="number"
-            min="10"
-            max="200"
-            disabled={profile.maxToolCallSteps === 0}
-            value={profile.maxToolCallSteps === 0 ? 25 : profile.maxToolCallSteps}
-            onChange={(event) => onChange({ ...profile, maxToolCallSteps: Number(event.target.value) || 10 })}
-            className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
-          />
-          <span className="flex items-center gap-2">
+        <Tooltip helpKey="planInterview_fileChangesHint">
+          <label className="flex items-center gap-2 text-slate-200">
             <input
               type="checkbox"
-              checked={profile.maxToolCallSteps === 0}
-              onChange={(event) => onChange({ ...profile, maxToolCallSteps: event.target.checked ? 0 : 25 })}
+              disabled={profile.fullAccess}
+              checked={profile.allowFileModifications}
+              onChange={(event) => onChange({ ...profile, allowFileModifications: event.target.checked })}
             />
-            {t('planInterview.unlimited')}
-          </span>
-        </label>
+            {t('planInterview.fileChanges')}
+          </label>
+        </Tooltip>
+        <Tooltip helpKey="planInterview_terminalCommandsHint">
+          <label className="flex items-center gap-2 text-slate-200">
+            <input
+              type="checkbox"
+              disabled={profile.fullAccess}
+              checked={profile.allowTerminalExecution}
+              onChange={(event) => onChange({ ...profile, allowTerminalExecution: event.target.checked })}
+            />
+            {t('planInterview.terminalCommands')}
+          </label>
+        </Tooltip>
+        <Tooltip helpKey="planInterview_networkHint">
+          <label className="grid gap-1 text-slate-300">
+            {t('planInterview.network')}
+            <AppSelect
+              disabled={profile.fullAccess}
+              value={profile.capabilityPolicyMode}
+              onChange={(event) => onChange({ ...profile, capabilityPolicyMode: event.target.value as AgentCapabilityProfile['capabilityPolicyMode'] })}
+              compact
+            >
+              <option value="offline-strict">{t('planInterview.networkBlocked')}</option>
+              <option value="local-only">{t('planInterview.networkLocal')}</option>
+              <option value="network-approved">{t('planInterview.networkApproved')}</option>
+            </AppSelect>
+          </label>
+        </Tooltip>
+        <Tooltip helpKey="planInterview_stepBudgetHint">
+          <label className="grid gap-1 text-slate-300">
+            {t('planInterview.stepBudget')}
+            <input
+              type="number"
+              min="10"
+              max="200"
+              disabled={profile.maxToolCallSteps === 0}
+              value={profile.maxToolCallSteps === 0 ? 25 : profile.maxToolCallSteps}
+              onChange={(event) => onChange({ ...profile, maxToolCallSteps: Number(event.target.value) || 10 })}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+            />
+            <span className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={profile.maxToolCallSteps === 0}
+                onChange={(event) => onChange({ ...profile, maxToolCallSteps: event.target.checked ? 0 : 25 })}
+              />
+              {t('planInterview.unlimited')}
+            </span>
+          </label>
+        </Tooltip>
       </div>
     </fieldset>
   )

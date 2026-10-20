@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React, { useState, useMemo } from 'react'
 import { CheckCircle2, XCircle, Loader2, Sparkles, Copy, Check, RotateCcw, TriangleAlert } from 'lucide-react'
 import { AgentPlan } from '../../hooks/usePlanApproval'
@@ -127,7 +128,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
             <div className="font-bold text-slate-200 text-xs">{t('planPanel.analyzingTitle')}</div>
-            <p className="text-[11px] text-slate-400 max-w-xs">{t('planPanel.analyzingDescription')}</p>
+            <Tooltip helpKey="planPanel_analyzingDescription" />
             {schedulerState && (
               <span className="text-[10px] text-amber-300" role="status">
                 {schedulerState}
@@ -154,7 +155,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
                 version: planHistory.length + 1,
               })}
             </div>
-            <p className="text-[11px] text-slate-400 max-w-xs">{t('planPanel.generatingDescription')}</p>
+            <Tooltip helpKey="planPanel_generatingDescription" />
             {schedulerState && (
               <span className="text-[10px] text-amber-300" role="status">
                 {schedulerState}
@@ -168,7 +169,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
             <Sparkles className="w-8 h-8 text-cyan-500/30" />
             <div className="font-semibold text-slate-400 text-xs">{t('planPanel.noPlanTitle')}</div>
-            <p className="text-[11px] text-slate-400 max-w-xs">{t('planPanel.noPlanDescription')}</p>
+            <Tooltip helpKey="planPanel_noPlanDescription" />
           </div>
         ) : plan.status === 'error' ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">

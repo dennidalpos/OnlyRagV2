@@ -1,11 +1,11 @@
+import { Tooltip, type HelpKey } from '../common/Tooltip'
 import React from 'react'
-import { FlaskConical, CircleDashed, HelpCircle, Ban, Wrench, Gauge, Layers, Boxes } from 'lucide-react'
+import { CircleDashed, HelpCircle, Ban, Wrench, Gauge, Layers, Boxes } from 'lucide-react'
 import type { OllamaModelMetrics } from '../../types'
-import { findCodingModelEvidence, type ModelRuntimeStatus } from '../../../shared/domain/agent/codingModelQualification'
+import { type ModelRuntimeStatus } from '../../../shared/domain/agent/codingModelQualification'
 import { useTranslation, type TranslationKey } from '../../i18n'
 
 interface ModelBadgeStripProps {
-  modelName: string
   status: ModelRuntimeStatus
   /** Undefined for a model that is not installed: capability badges are then omitted. */
   metrics?: OllamaModelMetrics
@@ -30,62 +30,55 @@ const STATUS_STYLE: Record<ModelRuntimeStatus, { label: TranslationKey; classNam
   },
 }
 
-const STATUS_TOOLTIP: Record<ModelRuntimeStatus, TranslationKey> = {
-  compatible: 'modelBadges.compatibleTooltip',
-  unsupported: 'modelBadges.unsupportedTooltip',
-  unknown: 'modelBadges.unknownTooltip',
+const STATUS_TOOLTIP: Record<ModelRuntimeStatus, HelpKey> = {
+  compatible: 'modelBadges_compatibleTooltip',
+  unsupported: 'modelBadges_unsupportedTooltip',
+  unknown: 'modelBadges_unknownTooltip',
 }
 
 function formatContext(tokens: number): string {
   return tokens >= 1024 ? `${Math.round(tokens / 1024)}k ctx` : `${tokens} ctx`
 }
 
-const Badge: React.FC<{ title?: string; className: string; children: React.ReactNode }> = ({ title, className, children }) => (
-  <span title={title} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold leading-none ${className}`}>
-    {children}
-  </span>
+const Badge: React.FC<{ helpKey: HelpKey; params?: Record<string, string | number>; className: string; children: React.ReactNode }> = ({
+  helpKey,
+  params,
+  className,
+  children,
+}) => (
+  <Tooltip helpKey={helpKey} params={params}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold leading-none ${className}`}>{children}</span>
+  </Tooltip>
 )
 
-export const ModelBadgeStrip: React.FC<ModelBadgeStripProps> = ({ modelName, status, metrics, className }) => {
+export const ModelBadgeStrip: React.FC<ModelBadgeStripProps> = ({ status, metrics, className }) => {
   const { t } = useTranslation()
   const style = STATUS_STYLE[status]
-  const evidence = findCodingModelEvidence(modelName)
-  const evidenceTooltip = evidence
-    ? `${t('modelBadges.probeEvidence', { date: evidence.date, probes: evidence.probes.join(', ') })}\n\n${evidence.outcome}`
-    : t('modelBadges.noProbeEvidence')
   const supportsTools = metrics?.capabilities?.includes('tools')
 
   return (
     <div className={`flex flex-wrap items-center gap-1.5 ${className || ''}`}>
-      <Badge title={t(STATUS_TOOLTIP[status])} className={style.className}>
+      <Badge helpKey={STATUS_TOOLTIP[status]} className={style.className}>
         <style.Icon className="w-3 h-3" />
         {t(style.label)}
       </Badge>
 
-      <Badge title={evidenceTooltip} className="bg-slate-800/60 text-slate-300 border-slate-700">
-        {t(evidence ? 'modelBadges.focusedProbes' : 'modelBadges.noProbes')}
-      </Badge>
-      <Badge title={t('modelBadges.experimentalTooltip')} className="bg-amber-500/10 text-amber-300 border-amber-500/30">
-        <FlaskConical className="w-3 h-3" />
-        {t('modelBadges.unqualified')}
-      </Badge>
-
       {metrics?.contextLength !== undefined && (
-        <Badge title={t('modelBadges.trainedContext', { tokens: metrics.contextLength })} className="bg-slate-800/60 text-slate-300 border-slate-700">
+        <Badge helpKey="modelBadges_trainedContext" params={{ tokens: metrics.contextLength }} className="bg-slate-800/60 text-slate-300 border-slate-700">
           <Layers className="w-3 h-3" />
           {t('modelBadges.contextCapacity', { context: formatContext(metrics.contextLength) })}
         </Badge>
       )}
 
       {metrics?.parameterSize && (
-        <Badge title={t('modelBadges.parameters')} className="bg-slate-800/60 text-slate-300 border-slate-700">
+        <Badge helpKey="modelBadges_parameters" className="bg-slate-800/60 text-slate-300 border-slate-700">
           <Boxes className="w-3 h-3" />
           {metrics.parameterSize}
         </Badge>
       )}
 
       {metrics?.quantizationLevel && (
-        <Badge title={t('modelBadges.quantization')} className="bg-slate-800/60 text-slate-300 border-slate-700">
+        <Badge helpKey="modelBadges_quantization" className="bg-slate-800/60 text-slate-300 border-slate-700">
           <Gauge className="w-3 h-3" />
           {metrics.quantizationLevel}
         </Badge>
@@ -93,7 +86,7 @@ export const ModelBadgeStrip: React.FC<ModelBadgeStripProps> = ({ modelName, sta
 
       {metrics?.capabilities !== undefined && (
         <Badge
-          title={supportsTools ? t('modelBadges.nativeTools') : t('modelBadges.noNativeTools')}
+          helpKey={supportsTools ? 'modelBadges_nativeTools' : 'modelBadges_noNativeTools'}
           className={supportsTools ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}
         >
           <Wrench className="w-3 h-3" />

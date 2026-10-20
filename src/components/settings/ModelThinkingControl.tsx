@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React from 'react'
 import type { AppSettings, OllamaModelMetrics, OllamaThinkValue } from '../../types'
 import { resolveOllamaThinkingPreference, updateModelThinkingPreference } from '../../../shared/domain/agent/ollamaThinkingPolicy'
@@ -49,7 +50,7 @@ export const ModelThinkingControl: React.FC<ModelThinkingControlProps> = ({ mode
             )
           })}
         </div>
-        <div className="text-[9px] text-slate-500">{t('settings.thinkingLevelHint')}</div>
+        <Tooltip helpKey="settings_thinkingLevelHint" />
       </div>
     )
   }

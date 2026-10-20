@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import React from 'react'
 import { Modal } from '../common/Modal'
 import { X, Sparkles, Download, CheckCircle } from 'lucide-react'
@@ -66,8 +67,8 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
             <div>
               <h2 id="skill-hub-modal-title" className="text-base font-bold text-slate-100 flex items-center gap-2">
                 {t('skills.hubTitle')}
+                <Tooltip helpKey="skills_hubSubtitle" />
               </h2>
-              <p className="text-xs text-slate-400">{t('skills.hubSubtitle')}</p>
             </div>
           </div>
           <button

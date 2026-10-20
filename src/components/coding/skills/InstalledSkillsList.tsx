@@ -1,3 +1,4 @@
+import { Tooltip } from '../../common/Tooltip'
 import React, { useState } from 'react'
 import { CheckCircle, Edit3, RotateCcw, Plus, Layers, AlertTriangle, Globe, User, Search, PowerOff } from 'lucide-react'
 import { InlineDestructiveConfirm } from '../../common/InlineDestructiveConfirm'
@@ -47,7 +48,7 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
         <Layers className="w-10 h-10 mx-auto text-slate-600" />
         <div>
           <p className="text-sm font-medium text-slate-300">{t('skills.noSkills')}</p>
-          <p className="text-xs text-slate-400">{t('skills.hubSubtitle')}</p>
+          <Tooltip helpKey="skills_hubSubtitle" />
         </div>
         <div className="flex items-center justify-center gap-3">
           <button

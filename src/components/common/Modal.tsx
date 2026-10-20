@@ -61,6 +61,7 @@ export const Modal: React.FC<ModalProps> = ({
   return createPortal(
     <div
       ref={rootRef}
+      data-tooltip-scope=""
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelledById}
@@ -75,6 +76,7 @@ export const Modal: React.FC<ModalProps> = ({
       <div ref={panelRef} tabIndex={-1} className={`w-full outline-none ${panelClassName}`}>
         {children}
       </div>
+      <div data-tooltip-layer="" />
     </div>,
     document.body,
   )

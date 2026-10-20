@@ -1,5 +1,7 @@
 # Distribution license review — 2026-10-10
 
+**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+
 ## Local CPU candidate — 2026-10-12
 
 `DISTRIBUTION-LICENSE-POLICY-01` is complete at the owner's chosen **local candidate** boundary. `release/cpu-20261012-125713-47bab216` was built by `npm run package:win` with exit code 0, retains an installer, a matching source archive and installed notice bundle, and passes independent hash and frozen-runtime checks. The installer is 417,396,738 bytes, SHA-256 `16f3f48dcd6bc02e0f1acabbe5f4d6672c68eebbcef9866fdd7fcd4b8df0bbd4`; the source ZIP has SHA-256 `d1837645c1cf84f9966752040c6cc6fd9356f76ccba796cc425ddc32deb217b3`. All 992 archived project-source records, six native archive hashes and 3,598 installed file hashes passed readback. The owned probe passed source CPU OCR and frozen startup, authentication and Unicode PDF export. An independent Authenticode check reports `NotSigned`, consistent with the accepted unsigned candidate policy. [Detailed verification](./verification.md#local-cpu-candidate--2026-10-12).

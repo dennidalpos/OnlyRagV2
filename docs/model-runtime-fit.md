@@ -1,5 +1,7 @@
 # Model/runtime fit
 
+**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+
 ## Boundary proposal — 2026-10-02
 
 Status: approved by the user and implemented on 2026-10-02; `MODEL-RUNTIME-FIT-01` is complete. The six-file baseline passes 62 tests in 1.78s. The replaced estimator assumed 32 layers, 8 KV heads, 128-dimensional heads and Q8 cache for every model; wizard options used 4096 tokens even when setup chose a larger window. GPU-only rejection also omitted possible CPU offload. Historical tests verified that implementation, not actual memory fit.

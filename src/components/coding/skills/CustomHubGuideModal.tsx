@@ -1,3 +1,4 @@
+import { Tooltip } from '../../common/Tooltip'
 import React, { useState } from 'react'
 import { Modal } from '../../common/Modal'
 import { X, BookOpen, Copy, Check, Code, FileText, Globe, Sparkles, Cpu, Layers } from 'lucide-react'
@@ -72,10 +73,10 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
             <BookOpen className="w-5 h-5" />
           </div>
           <div>
-            <h2 id="custom-hub-guide-title" className="text-base font-bold text-slate-100">
+            <h2 id="custom-hub-guide-title" className="text-base font-bold text-slate-100 inline-flex items-center gap-1.5">
               {t('skills.guide.title')}
+              <Tooltip helpKey="skills_guide_subtitle" />
             </h2>
-            <p className="text-xs text-slate-400">{t('skills.guide.subtitle')}</p>
           </div>
         </div>
         <button

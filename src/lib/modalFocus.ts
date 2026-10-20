@@ -1,3 +1,5 @@
+import { dismissTooltip } from './tooltipLifecycle'
+
 interface ModalEntry {
   root: HTMLElement
   panel: HTMLElement
@@ -70,6 +72,7 @@ function handleKeyDown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
     event.preventDefault()
     event.stopImmediatePropagation()
+    if (dismissTooltip()) return
     if (top.dismissible()) top.close()
   } else if (event.key === 'Tab') {
     const controls = tabbable(top.panel)

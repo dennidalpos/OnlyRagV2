@@ -32,7 +32,6 @@
     "test:e2e:monaco-sanitizer": "node ./scripts/e2e/monacoSanitizer.mjs",
     "test:e2e:ingest-translate": "npm run build && node ./scripts/e2e/ingestTranslate.mjs",
     "test:e2e:sidecar-ownership": "vitest run --config vitest.sidecar.config.mts",
-    "test:live": "vitest run --config vitest.live.config.mts",
     "test:skills": "vitest run --reporter=dot electron/core/domain/skills",
     "test:sidecar": "powershell -ExecutionPolicy Bypass -File ./scripts/test_sidecar_health.ps1 -Fast",
     "generate:openapi": "powershell -ExecutionPolicy Bypass -File ./scripts/generate_openapi.ps1",
@@ -51,7 +50,10 @@
     "audit:cycles": "dpdm --circular --warning=false --exit-code circular:1 src/main.tsx electron/main.ts",
     "audit:deadcode": "knip && knip --production",
     "audit:graph": "skott --displayMode=webapp",
-    "audit:all": "powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast"
+    "audit:all": "powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast",
+    "test:models:smoke": "node scripts/e2e/configuredModelSmoke.mjs",
+    "test:tooltips": "node scripts/e2e/tooltips.mjs",
+    "test:live": "node scripts/retiredModelCampaign.mjs"
   },
   "keywords": [],
   "author": "Danny Perondi <https://github.com/dennidalpos>",

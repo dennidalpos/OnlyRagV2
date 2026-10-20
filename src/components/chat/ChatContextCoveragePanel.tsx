@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import type { ChatContextCoverage } from '../../../shared/domain/chatContextCoverage'
 import { useTranslation } from '../../i18n'
 
@@ -6,7 +7,7 @@ export function ChatContextCoveragePanel({ coverage }: { coverage: ChatContextCo
   return (
     <details className="mt-3 rounded-lg border border-slate-700 p-3 text-xs text-slate-300">
       <summary className="cursor-pointer focus-ring">{t('chat.coverageTitle')}</summary>
-      <p className="my-2">{t('chat.coverageHint')}</p>
+      <Tooltip helpKey="chat_coverageHint" />
       <p>{t(coverage.retrieval === 'completed' ? 'chat.coverageRetrieved' : 'chat.coverageSkipped')}</p>
       <ul className="mt-2 space-y-2">
         {coverage.items.map((item, index) => (

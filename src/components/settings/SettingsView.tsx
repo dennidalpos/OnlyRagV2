@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import { AppSelect } from '../common/AppSelect'
 import React, { useState, useEffect } from 'react'
 import { DiagnosticsData, AppSettings, RunningModelInfo } from '../../types'
@@ -150,8 +151,9 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
               <Settings className="w-5 h-5 text-cyan-400" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-100">{t('settings.title')}</h1>
-              <p className="text-sm text-slate-400 mt-0.5">{t('settings.description')}</p>
+              <h1 className="text-2xl font-bold text-slate-100 inline-flex items-center gap-1.5">
+                {t('settings.title')} <Tooltip helpKey="settings_description" />
+              </h1>
             </div>
           </div>
         </div>
@@ -173,7 +175,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                   <Globe className="w-4.5 h-4.5 text-cyan-400" />
                   <span>{t('settings.languagePreference')}</span>
                 </div>
-                <p className="text-xs text-slate-400">{t('settings.languageDescription')}</p>
+                <Tooltip helpKey="settings_languageDescription" />
               </div>
               <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
                 <button
@@ -211,7 +213,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                     ariaLabel={t('settings.wordWrap')}
                   />
                 </div>
-                <p className="text-xs text-slate-400">{t('settings.wordWrapDesc')}</p>
+                <Tooltip helpKey="settings_wordWrapDesc" />
               </div>
               <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
                 <span className="w-2 h-2 rounded-full bg-cyan-400/80" />
@@ -233,7 +235,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                     ariaLabel={t('settings.fullExcelFormat')}
                   />
                 </div>
-                <p className="text-xs text-slate-400">{t('settings.fullExcelFormatDesc')}</p>
+                <Tooltip helpKey="settings_fullExcelFormatDesc" />
               </div>
             </div>
 
@@ -251,7 +253,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                     ariaLabel={t('settings.soundEffects')}
                   />
                 </div>
-                <p className="text-xs text-slate-400">{t('settings.soundEffectsDesc')}</p>
+                <Tooltip helpKey="settings_soundEffectsDesc" />
               </div>
               <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
                 <span className="w-2 h-2 rounded-full bg-cyan-400/80" />
@@ -265,8 +267,9 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
             <div className="flex items-center gap-2 border-b border-slate-800/80 pb-3">
               <FolderOpen className="w-5 h-5 text-cyan-400" />
               <div>
-                <h3 className="text-sm font-bold text-slate-100">{t('settings.systemDirectoriesTitle')}</h3>
-                <p className="text-xs text-slate-400">{t('settings.systemDirectoriesDesc')}</p>
+                <h3 className="text-sm font-bold text-slate-100 inline-flex items-center gap-1.5">
+                  {t('settings.systemDirectoriesTitle')} <Tooltip helpKey="settings_systemDirectoriesDesc" />
+                </h3>
               </div>
             </div>
 
@@ -289,7 +292,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                     </button>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-400 leading-tight">{t('settings.translationOutputFolderDesc')}</p>
+                <Tooltip helpKey="settings_translationOutputFolderDesc" />
                 <div className="text-[11px] font-mono text-slate-300 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 break-all">
                   {settings.translationOutputFolder || t('settings.translationOutputFolderNotSet')}
                 </div>
@@ -319,7 +322,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                   </span>
                   <span className="text-[10px] font-mono text-slate-400">logs/</span>
                 </div>
-                <p className="text-[11px] text-slate-400 leading-tight">{t('settings.appLogsFolderDesc')}</p>
+                <Tooltip helpKey="settings_appLogsFolderDesc" />
                 <div className="text-[11px] font-mono text-slate-300 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 break-all">
                   AppData/Roaming/onlyrag-v2/logs
                 </div>
@@ -386,9 +389,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
           {/* Ollama Model Management Panel */}
           <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
-              <span>
-                {t('settings.ollamaLibraryHint')} <code className="font-mono text-cyan-300">ollama pull &lt;{t('settings.modelNamePlaceholder')}&gt;</code>
-              </span>
+              <Tooltip helpKey="settings_ollamaLibraryHint" />
               <button
                 type="button"
                 onClick={() => void window.electronAPI?.openExternalUrl({ url: 'https://ollama.com/library' })}
@@ -401,8 +402,9 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
               <div className="flex items-center gap-2.5">
                 <Download className="w-5 h-5 text-cyan-400" />
                 <div>
-                  <h3 className="text-sm font-bold text-slate-100">{t('settings.ollamaManagement')}</h3>
-                  <p className="text-xs text-slate-400">{t('settings.ollamaManagementDesc')}</p>
+                  <h3 className="text-sm font-bold text-slate-100 inline-flex items-center gap-1.5">
+                    {t('settings.ollamaManagement')} <Tooltip helpKey="settings_ollamaManagementDesc" />
+                  </h3>
                 </div>
               </div>
             </div>
@@ -646,14 +648,15 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
                         {/* Action buttons */}
                         <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
                           {isRunning ? (
-                            <button
-                              type="button"
-                              onClick={() => s.handleUnloadModel(modelName)}
-                              title={t('uiShell.unloadModelHint')}
-                              className="px-2.5 py-1 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/50 text-amber-300 text-[10px] font-semibold rounded-lg transition-all focus-ring flex items-center gap-1 cursor-pointer"
-                            >
-                              <PowerOff className="w-3 h-3" /> {t('uiShell.unloadModel')}
-                            </button>
+                            <Tooltip helpKey="uiShell_unloadModelHint">
+                              <button
+                                type="button"
+                                onClick={() => s.handleUnloadModel(modelName)}
+                                className="px-2.5 py-1 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/50 text-amber-300 text-[10px] font-semibold rounded-lg transition-all focus-ring flex items-center gap-1 cursor-pointer"
+                              >
+                                <PowerOff className="w-3 h-3" /> {t('uiShell.unloadModel')}
+                              </button>
+                            </Tooltip>
                           ) : isInstalled ? (
                             <span className="text-[10px] text-slate-400 font-mono">{t('uiShell.modelReady')}</span>
                           ) : (
@@ -747,8 +750,8 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(
           <div className="space-y-1">
             <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
               <Heart className="w-4.5 h-4.5 text-rose-400 fill-rose-400/20" /> {t('settings.aboutSectionTitle')}
+              <Tooltip helpKey="settings_aboutSectionDescription" />
             </h3>
-            <p className="text-xs text-slate-400 max-w-xl">{t('settings.aboutSectionDescription')}</p>
           </div>
 
           <button

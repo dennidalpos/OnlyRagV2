@@ -1,3 +1,4 @@
+import { Tooltip } from '../common/Tooltip'
 import type { AppSettings } from '../../types'
 import { useTranslation } from '../../i18n'
 import { ToggleSwitch } from '../common/ToggleSwitch'
@@ -13,8 +14,9 @@ export function CodingAgentDebugToggle({ settings, onUpdateSettings }: CodingAge
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div className="space-y-1">
-        <h3 className="text-sm font-bold text-slate-100">{t('settings.codingAgentDebugLog')}</h3>
-        <p className="text-xs text-slate-400 max-w-2xl">{t('settings.codingAgentDebugLogDesc')}</p>
+        <h3 className="text-sm font-bold text-slate-100 inline-flex items-center gap-1.5">
+          {t('settings.codingAgentDebugLog')} <Tooltip helpKey="settings_codingAgentDebugLogDesc" />
+        </h3>
       </div>
       <ToggleSwitch
         checked={settings.enableCodingAgentDebugLog === true}

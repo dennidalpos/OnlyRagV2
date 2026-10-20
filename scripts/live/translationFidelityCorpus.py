@@ -1,4 +1,8 @@
 """Prepare and read back retained synthetic translation files without opening app data."""
+
+if __name__ == '__main__':
+    raise SystemExit('Historical model campaign retired; use the bounded configured-model smoke runner.')
+
 import hashlib
 import json
 import os

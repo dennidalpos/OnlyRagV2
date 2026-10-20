@@ -20,6 +20,16 @@ Le guide descrivono il comportamento verificato nel codice al **13 ottobre 2026*
 
 ## Specifiche e prove conservate
 
+Il [passaggio di sessione del recupero e dello storico](./session-handoff-recovery-2026-10-20.md) documenta la pubblicazione autorizzata su master e i 38 residui. La qualifica CI dell'esatto commit pubblicato passa ora al seguito autonomo; restano separati i gate installati/live e le decisioni non risposte.
+
+La [provenienza degli embedding dello storico](./verification-history-provenance-2026-10-20.md) corregge il difetto sorgente e distingue i residui live/migrazione. L'[indagine sulle sonde loopback](./verification-loopback-probes-2026-10-20.md) conserva 50.000 misure senza dichiarare risolta l'intermittenza.
+
+Il [recupero agente del 20 ottobre](./verification-agent-crash-recovery-2026-10-20.md) qualifica arresto forzato del processo posseduto, conservazione della coda, ripresa esplicita, trascrizione e checkpoint dei file. Distingue gli esiti confermati dagli effetti interrotti ancora da riconciliare.
+
+Il [riallineamento della suite Electron](./verification-agent-harness-2026-10-20.md) completa il residuo delle fixture di cancellazione e riesegue otto scenari di affidabilità e nove guard con HTTP e generazione isolati.
+
+La [verifica delle fixture CI Windows](./verification-ci-fixtures-2026-10-20.md) distingue il run remoto fallito, le due correzioni locali e la futura qualifica remota dell'esatto commit autorizzato.
+
 La [consegna del 20 ottobre](./session-handoff-verifier-2026-10-20.md) riunisce audit, quattro rilievi conclusi, 36 attività residue e verifiche per la pubblicazione dei sorgenti su `master`.
 
 Checkpoint chat, archivio delle bozze e budget complessivo del prompt del 16 ottobre sono descritti in [recupero e contesto](./verification-chat-drafts-context-2026-10-16.md).

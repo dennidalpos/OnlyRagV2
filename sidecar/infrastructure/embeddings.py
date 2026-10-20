@@ -3,7 +3,7 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from numbers import Real
-from typing import List, Literal, Sequence, Tuple
+from typing import List, Literal, Sequence
 
 import numpy as np
 from httpx import Timeout, TransportError
@@ -185,20 +185,3 @@ def generate_embedding_batch(
             raise EmbeddingSpaceMismatchError("The stored encoder is unavailable; hash vectors cannot query its space.") from None
         logger.warning("Local encoder transport unavailable; using a separate versioned word-hash space.")
         return EmbeddingBatch([get_fallback_embedding(text) for text in requested], FALLBACK_SPACE)
-
-
-def generate_embeddings_with_status(texts: Sequence[str], model: str = DEFAULT_EMBEDDING_MODEL, ollama_url: str = OLLAMA_BASE_URL) -> Tuple[List[List[float]], bool]:
-    if not texts:
-        return [], False
-    # Legacy prompt history has no space provenance; keep it raw until its explicit rebuild.
-    batch = generate_embedding_batch(texts, model, ollama_url, role="raw")
-    return batch.vectors, batch.used_fallback
-
-
-def generate_embedding_with_status(text: str, model: str = DEFAULT_EMBEDDING_MODEL, ollama_url: str = OLLAMA_BASE_URL) -> Tuple[List[float], bool]:
-    vectors, fallback = generate_embeddings_with_status([text], model, ollama_url)
-    return vectors[0], fallback
-
-
-def generate_embedding(text: str, model: str = DEFAULT_EMBEDDING_MODEL, ollama_url: str = OLLAMA_BASE_URL) -> List[float]:
-    return generate_embedding_with_status(text, model, ollama_url)[0]

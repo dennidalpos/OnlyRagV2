@@ -1,5 +1,6 @@
 import hashlib
-import numpy as np
+import math
+import pyarrow as pa
 from typing import Dict, List
 from sidecar.config import PROMPT_HISTORY_TABLE_NAME, logger
 from sidecar.schemas import (
@@ -8,8 +9,8 @@ from sidecar.schemas import (
     PromptHistorySearchResult,
     PromptHistoryRemoveRequest,
 )
-from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, append_records, database_operation
-from sidecar.infrastructure.embeddings import generate_embedding
+from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, append_records, database_operation, DatabaseConflictError
+from sidecar.infrastructure.embeddings import generate_embedding_batch, EmbeddingSpace, EmbeddingSpaceMismatchError, validate_embedding_vectors
 
 SESSION_LIFECYCLE_TABLE = "prompt_session_lifecycle"
 
@@ -82,13 +83,48 @@ def compute_project_id(project_path: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8", errors="ignore")).hexdigest()[:16]
 
 
-def _normalized_embedding(text: str) -> List[float]:
-    """Normalize legacy prompt vectors; encoder-space provenance is tracked separately."""
-    vec = np.array(generate_embedding(text), dtype=np.float64)
-    norm = np.linalg.norm(vec)
-    if norm > 0:
-        vec = vec / norm
-    return vec.tolist()
+@database_operation
+def _history_snapshot():
+    if PROMPT_HISTORY_TABLE_NAME not in get_existing_tables():
+        return None, None
+    table = lance_db.open_table(PROMPT_HISTORY_TABLE_NAME)
+    fields = (*EmbeddingSpace.__dataclass_fields__, "embedding_space_id")
+    if not set(fields).issubset(table.schema.names):
+        raise EmbeddingSpaceMismatchError("History has no verified encoder provenance; preserve it and explicitly rebuild with verified backup/readback/rollback.")
+    vector_type = table.schema.field("vector").type
+    if not pa.types.is_fixed_size_list(vector_type) or not pa.types.is_float32(vector_type.value_type):
+        raise EmbeddingSpaceMismatchError("History vector schema requires an explicit backed-up rebuild.")
+    rows = table.search().select(list(fields)).limit(None).to_arrow().group_by(list(fields)).aggregate([]).to_pylist()
+    spaces = []
+    for row in rows:
+        try:
+            space = EmbeddingSpace(**{key: row[key] for key in EmbeddingSpace.__dataclass_fields__})
+            if (type(space.embedding_dimension) is not int or space.embedding_dimension != vector_type.list_size
+                    or any(not isinstance(row[key], str) or not row[key] for key in fields if key != "embedding_dimension")
+                    or space.metadata()["embedding_space_id"] != row["embedding_space_id"]):
+                raise ValueError("Invalid history provenance")
+            spaces.append(space)
+        except (KeyError, TypeError, ValueError) as error:
+            raise EmbeddingSpaceMismatchError("Malformed history encoder provenance; preserve the original records.") from error
+    if len(spaces) > 1:
+        raise EmbeddingSpaceMismatchError("History contains incompatible encoder spaces; an explicit backed-up rebuild is required.")
+    return table.version, spaces[0] if spaces else None
+
+
+def _history_embedding(text: str, space: EmbeddingSpace | None, role: str):
+    batch = generate_embedding_batch([text], **({"model": space.embedding_model, "expected_space": space} if space else {}), role=role)
+    if space is not None and batch.space != space:
+        raise EmbeddingSpaceMismatchError("History query and stored encoder spaces differ.")
+    vector = validate_embedding_vectors(batch.vectors, 1, batch.space.embedding_dimension)[0]
+    return vector, batch.space
+
+
+@database_operation
+def _write_history_record(session_id, generation, version, record):
+    current_version, _ = _history_snapshot()
+    if current_version != version:
+        raise DatabaseConflictError("History changed during encoding; retry explicitly.")
+    _index_if_current(session_id, generation, record)
 
 
 def index_prompt_history(req: IndexPromptHistoryRequest) -> None:
@@ -106,7 +142,8 @@ def index_prompt_history(req: IndexPromptHistoryRequest) -> None:
     generation = lifecycle["generation"] if lifecycle else 0
 
     embed_text = f"{prompt_text}\n\n{(req.summary or '').strip()}".strip()
-    vector = _normalized_embedding(embed_text)
+    version, stored_space = _history_snapshot()
+    vector, space = _history_embedding(embed_text, stored_space, "document")
 
     record = [{
         "id": safe_id,
@@ -119,32 +156,37 @@ def index_prompt_history(req: IndexPromptHistoryRequest) -> None:
         "started_at": req.started_at,
         "completed_at": req.completed_at or "",
         "vector": vector,
+        **space.metadata(),
     }]
 
-    _index_if_current(safe_session_id, generation, record)
+    _write_history_record(safe_session_id, generation, version, record)
 
 
 def search_prompt_history(req: PromptHistorySearchRequest) -> List[PromptHistorySearchResult]:
-    """Search legacy prompt vectors, optionally scoped to selected projects."""
+    """Search only a verified, unchanged encoder space; never relabel legacy vectors."""
     query_raw = (req.query or "").strip()
     if not query_raw:
         return []
     if PROMPT_HISTORY_TABLE_NAME not in get_existing_tables():
         return []
 
-    query_vec = _normalized_embedding(query_raw)
-    return _search_prompt_index(req, query_vec)
+    version, space = _history_snapshot()
+    if space is None:
+        return []
+    query_vec, _ = _history_embedding(query_raw, space, "query")
+    return _search_prompt_index(req, query_vec, version)
 
 
 @database_operation
-def _search_prompt_index(req: PromptHistorySearchRequest, query_vec: List[float]) -> List[PromptHistorySearchResult]:
+def _search_prompt_index(req: PromptHistorySearchRequest, query_vec: List[float], version: int) -> List[PromptHistorySearchResult]:
     # Recheck recovery after encoding without holding the database lock during model work.
-    if PROMPT_HISTORY_TABLE_NAME not in get_existing_tables():
-        return []
+    current_version, _ = _history_snapshot()
+    if current_version != version:
+        raise DatabaseConflictError("History changed during query encoding; retry explicitly.")
     tbl = lance_db.open_table(PROMPT_HISTORY_TABLE_NAME)
     top_k = req.top_k or 10
     fetch_limit = max(top_k * 5, 50)
-    search_builder = tbl.search(query_vec)
+    search_builder = tbl.search(query_vec).distance_type("l2").bypass_vector_index()
 
     if req.project_paths:
         allowed_project_ids = {compute_project_id(p) for p in req.project_paths if p}
@@ -160,7 +202,9 @@ def _search_prompt_index(req: PromptHistorySearchRequest, query_vec: List[float]
         lifecycle = _session_lifecycle(validate_doc_id(session_id)) if session_id else None
         if lifecycle and lifecycle["state"] == "deleted":
             continue
-        distance = max(float(item.get("_distance", 0.0)), 0.0)
+        distance = float(item["_distance"])
+        if not math.isfinite(distance) or distance < 0:
+            raise ValueError("Invalid history search distance")
         # LanceDB L2 is already squared; unit vectors give cosine = 1 - distance / 2.
         score = max(0.0, 1.0 - distance / 2.0)
         scored.append((score, item))

@@ -215,6 +215,8 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
     numCtx: z.number().int().min(2048).max(1_000_000).optional(),
   }),
   'agent:get-queue-status': null,
+  'agent:list-recoverable-tasks': null,
+  'agent:resume-task': identity,
   'agent:plan-interview': obj({
     prompt: string,
     model: optionalString,

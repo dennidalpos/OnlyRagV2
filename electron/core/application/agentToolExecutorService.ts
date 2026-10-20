@@ -1,5 +1,5 @@
 import { allWindowsEventSink } from '../infrastructure/electron/rendererEventSinks'
-import { saveAgentCheckpoint } from '../infrastructure/filesystem/agentCheckpointStore'
+import { saveAgentCheckpoint, hasAgentCheckpointBaseline } from '../infrastructure/filesystem/agentCheckpointStore'
 import { FsToolService } from './fsToolService'
 import { ProcessToolService } from './processToolService'
 import { WebToolService } from './webToolService'
@@ -248,9 +248,18 @@ export class AgentToolExecutorService {
    * run changed no file (or there is no workspace to hold it).
    */
   public checkpointJournal(workspacePath: string | null | undefined, runId: string, conversationId = runId): string | null {
-    const checkpointId = workspacePath ? saveAgentCheckpoint(workspacePath, agentCheckpointId(runId), this.journal.sessionBaseline, conversationId) : null
+    const checkpointId = this.persistJournalCheckpoint(workspacePath, runId, conversationId)
     this.journal.commit()
     return checkpointId
+  }
+
+  /** Saves acknowledged changes for crash recovery without discarding the in-memory rollback baseline. */
+  public persistJournalCheckpoint(workspacePath: string | null | undefined, runId: string, conversationId = runId): string | null {
+    if (!workspacePath) return null
+    const checkpoint = saveAgentCheckpoint(workspacePath, agentCheckpointId(runId), this.journal.sessionBaseline, conversationId)
+    if (!checkpoint && hasAgentCheckpointBaseline(workspacePath, this.journal.sessionBaseline))
+      throw new Error('Agent file checkpoint could not be saved; retained recovery data is preserved.')
+    return checkpoint
   }
 
   /** Stages and commits all changes in `cwd` via execFileSync (argv array, no shell) -- safe against injection via the commit message without needing to escape it for a shell string. */

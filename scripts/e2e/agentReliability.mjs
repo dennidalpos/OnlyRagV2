@@ -13,6 +13,7 @@ const mainBundle = path.join(rootDir, 'dist-electron', 'main.js')
 const electronExe = path.join(rootDir, 'node_modules', 'electron', 'dist', 'electron.exe')
 const model = 'qwen2.5-coder:7b'
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-electron-e2e-'))
+const evidenceRoot = process.env.ONLYRAG_RECOVERY_EVIDENCE || path.join(os.tmpdir(), `onlyrag-agent-evidence-${randomUUID()}`)
 const userData = path.join(tempRoot, 'user-data')
 const workspaceRoot = path.join(tempRoot, 'workspace with spaces')
 const secondWorkspace = path.join(tempRoot, 'second-workspace')
@@ -26,7 +27,22 @@ fs.writeFileSync(path.join(workspaceRoot, 'README.md'), '# Electron E2E\n', 'utf
 fs.writeFileSync(path.join(secondWorkspace, 'README.md'), '# Second project\n', 'utf8')
 const legacySessionId = 'legacy-chat'
 const legacyHistory = JSON.stringify({ version: 1, sessions: [{ id: legacySessionId, workspacePath: legacyWorkspace, title: 'Legacy chat' }] })
-const legacyState = JSON.stringify({ sessionId: legacySessionId, agentMode: 'guided' })
+function fixtureState(sessionId, workspacePath) {
+  return {
+    sessionId,
+    workspacePath,
+    agentMode: 'guided',
+    stepCount: 0,
+    maxSteps: 10,
+    episodes: [],
+    recentFullLogs: [],
+    planMilestones: [],
+    userTask: 'Isolated fixture',
+    updatedAt: '2026-10-20T00:00:00.000Z',
+    status: 'IN_PROGRESS',
+  }
+}
+const legacyState = JSON.stringify(fixtureState(legacySessionId, legacyWorkspace))
 const legacyTracker = '# SESSION_TRACKER\n## completed_tasks\n- [x] Legacy work'
 fs.writeFileSync(path.join(legacyWorkspace, '.onlyrag', 'sessions', 'session_history.json'), legacyHistory, 'utf8')
 fs.writeFileSync(path.join(legacyWorkspace, '.onlyrag', 'sessions', '.agent_state_legacy-chat.json'), legacyState, 'utf8')
@@ -38,6 +54,7 @@ const serverState = {
   pendingResponses: new Set(),
   requestCount: 0,
   chatRequests: [],
+  historyRemovals: [],
 }
 
 function readJsonBody(request) {
@@ -97,6 +114,10 @@ async function waitForHeldResponse() {
 
 const ollamaServer = http.createServer(async (request, response) => {
   const url = new URL(request.url || '/', 'http://127.0.0.1')
+  if (request.method === 'GET' && url.pathname === '/documents') {
+    sendJson(response, 200, [])
+    return
+  }
   if (request.method === 'GET' && url.pathname === '/api/tags') {
     sendJson(response, 200, {
       models: serverState.installedModels.map((name) => ({
@@ -116,6 +137,11 @@ const ollamaServer = http.createServer(async (request, response) => {
   }
 
   const body = await readJsonBody(request)
+  if (request.method === 'POST' && url.pathname === '/history/remove') {
+    serverState.historyRemovals.push(body)
+    sendJson(response, 200, { success: true })
+    return
+  }
   if (request.method === 'POST' && url.pathname === '/api/show') {
     sendJson(response, 200, { details: { context_length: 32768 }, model_info: { 'qwen2.context_length': 32768 } })
     return
@@ -201,16 +227,33 @@ async function launchApplication() {
     },
     timeout: 30_000,
   })
-  const page = await application.firstWindow()
-  await page.waitForFunction(() => Boolean(window.electronAPI), undefined, { timeout: 20_000 })
-  await page.evaluate(() => {
-    window.__onlyragE2E = { logs: [], steps: [], done: [], approvals: [] }
-    window.electronAPI.onAgentLog((event) => window.__onlyragE2E.logs.push(event))
-    window.electronAPI.onAgentStepUpdate?.((event) => window.__onlyragE2E.steps.push(event))
-    window.electronAPI.onAgentDone((event) => window.__onlyragE2E.done.push(event))
-    window.electronAPI.onAgentApprovalRequest((event) => window.__onlyragE2E.approvals.push(event))
-  })
-  return { application, page }
+  try {
+    const page = await application.firstWindow()
+    // Sidecar remains stopped. Route this owned Main's Sidecar HTTP to the isolated fixture server,
+    // including when another desktop session owns the ordinary port 8000.
+    await application.evaluate(async (_electron, fixturePort) => {
+      const http = process.getBuiltinModule('node:http')
+      const request = http.request
+      http.request = function (options, ...rest) {
+        if (options?.hostname === '127.0.0.1' && Number(options.port) === 8000) {
+          return request.call(this, { ...options, port: fixturePort }, ...rest)
+        }
+        return request.call(this, options, ...rest)
+      }
+    }, address.port)
+    await page.waitForFunction(() => Boolean(window.electronAPI), undefined, { timeout: 20_000 })
+    await page.evaluate(() => {
+      window.__onlyragE2E = { logs: [], steps: [], done: [], approvals: [] }
+      window.electronAPI.onAgentLog((event) => window.__onlyragE2E.logs.push(event))
+      window.electronAPI.onAgentStepUpdate?.((event) => window.__onlyragE2E.steps.push(event))
+      window.electronAPI.onAgentDone((event) => window.__onlyragE2E.done.push(event))
+      window.electronAPI.onAgentApprovalRequest((event) => window.__onlyragE2E.approvals.push(event))
+    })
+    return { application, page }
+  } catch (error) {
+    await application.close().catch(() => {})
+    throw error
+  }
 }
 
 /** Calls one `window.electronAPI` method with its single object payload (or none). */
@@ -286,11 +329,167 @@ function assertSafeTempRoot() {
 
 let application
 let page
-try {
+let qualificationError
+async function qualifyCrashRecovery() {
+  console.log('[8/8] forced process loss: durable transcript, file checkpoint and explicit queued recovery')
+  const crashWorkspace = path.join(tempRoot, 'crash workspace')
+  fs.mkdirSync(crashWorkspace)
+  fs.writeFileSync(path.join(crashWorkspace, 'README.md'), '# Recovery fixture\n')
+  fs.writeFileSync(path.join(crashWorkspace, 'note.txt'), 'original\n')
+  const recoveryContent = 'This file was written once before the controlled process interruption.\n'
+  fs.writeFileSync(
+    path.join(crashWorkspace, 'package.json'),
+    JSON.stringify({ name: 'crash-fixture', private: true, scripts: { test: 'node --test smoke.test.cjs' } }),
+  )
+  fs.writeFileSync(
+    path.join(crashWorkspace, 'smoke.test.cjs'),
+    `require('node:test')('acknowledged file survives', () => require('node:assert/strict').equal(require('node:fs').readFileSync('created.txt', 'utf8'), ${JSON.stringify(recoveryContent)}))\n`,
+  )
+  serverState.chatBehaviors.push(
+    { type: 'tool', name: 'read_file', arguments: { filePath: 'note.txt' } },
+    { type: 'tool', name: 'write_file', arguments: { filePath: 'created.txt', content: recoveryContent } },
+    { type: 'hold' },
+  )
+  const crashIdentity = identity('crash-resume', crashWorkspace)
+  const queuedIdentity = identity('crash-queued', secondWorkspace)
+  const statePath = path.join(crashWorkspace, '.onlyrag', 'sessions', createHash('sha256').update(crashIdentity.conversationId).digest('hex'), 'state.json')
+  assert.equal(
+    await api(page, 'agentPlanSeed', {
+      sessionId: crashIdentity.conversationId,
+      workspacePath: crashWorkspace,
+      planRevisionId: crashIdentity.planRevisionId,
+      userTask: 'Create created.txt containing once, verify the project and finish.',
+      planMilestones: [
+        { id: 'recovery-file', title: 'Create and test created.txt', status: 'pending', filePaths: ['created.txt'], verificationCommand: 'npm run test' },
+      ],
+    }),
+    true,
+  )
+  await startTask(page, crashIdentity, {
+    workspacePath: crashWorkspace,
+    agentMode: 'auto',
+    userTask: 'Create created.txt containing once, verify the project and finish.',
+  })
+  await waitForHeldResponse()
+  const beforeCrash = JSON.parse(fs.readFileSync(statePath, 'utf8'))
+  assert.equal(beforeCrash.status, 'IN_PROGRESS')
+  assert.equal(beforeCrash.chatMessages.filter((message) => message.role === 'tool' && message.tool_name === 'write_file').length, 1)
+  const checkpoints = path.join(crashWorkspace, '.onlyrag', 'checkpoints')
+  const checkpointId = fs.readdirSync(checkpoints)[0]
+  const checkpointBefore = fs.readFileSync(path.join(checkpoints, checkpointId, 'manifest.json'), 'utf8')
+  assert(JSON.parse(checkpointBefore).files.some((file) => file.path === 'created.txt' && file.blob === null))
+  const acceptedQueued = await startTask(page, queuedIdentity, { workspacePath: secondWorkspace })
+  assert.equal(acceptedQueued.success, true)
+  assert.equal(acceptedQueued.queuePosition, 1)
+  const requestsAtCrash = serverState.requestCount
+  const mainProcess = application.process()
+  const exited = new Promise((resolve) => mainProcess.once('exit', resolve))
+  if (process.platform === 'win32') {
+    execFileSync('taskkill', ['/PID', String(mainProcess.pid), '/T', '/F'], { stdio: 'ignore' })
+  } else {
+    mainProcess.kill('SIGKILL')
+  }
+  await exited
+  await application.close().catch(() => {})
+  application = undefined
+  page = undefined
+  releasePendingResponses()
+  ;({ application, page } = await launchApplication())
+  const persisted = await api(page, 'agentGetPlanState', {
+    sessionId: crashIdentity.conversationId,
+    workspacePath: crashWorkspace,
+    planRevisionId: crashIdentity.planRevisionId,
+  })
+  assert(persisted)
+  assert.equal(persisted.status, 'IN_PROGRESS')
+  assert.equal(persisted.stepCount, beforeCrash.stepCount)
+  assert.deepEqual(JSON.parse(fs.readFileSync(statePath, 'utf8')), beforeCrash)
+  assert.equal(fs.readFileSync(path.join(checkpoints, checkpointId, 'manifest.json'), 'utf8'), checkpointBefore)
+  assert.equal(fs.readFileSync(path.join(crashWorkspace, 'created.txt'), 'utf8'), recoveryContent)
+  assert.equal(serverState.requestCount, requestsAtCrash, 'Restart must not automatically dispatch retained work')
+  const recoverable = await api(page, 'listRecoverableAgentTasks')
+  assert(recoverable.some((task) => task.identity.runId === crashIdentity.runId))
+  assert(recoverable.some((task) => task.identity.runId === queuedIdentity.runId))
+  assert.equal((await startTask(page, crashIdentity, { workspacePath: crashWorkspace })).success, false, 'Ordinary dispatch cannot replay an accepted identity')
+  serverState.chatBehaviors.push({ type: 'tool', name: 'finish', arguments: { summary: 'Resumed after crash.' } })
+  assert.equal((await api(page, 'resumeAgentTask', crashIdentity)).success, true)
+  const resumedDone = await waitForDone(page, crashIdentity.runId)
+  assert.equal(resumedDone.success, true)
+  await waitForQueueIdle(page)
+  const terminal = JSON.parse(fs.readFileSync(statePath, 'utf8'))
+  assert.equal(terminal.status, 'COMPLETED')
+  assert.equal(terminal.completionStatus, 'verified')
+  assert.equal(terminal.chatMessages.filter((message) => message.role === 'tool' && message.tool_name === 'write_file').length, 1)
+  const resumedRequest = serverState.chatRequests[requestsAtCrash]
+  assert.equal(resumedRequest.messages.filter((message) => message.role === 'tool' && message.tool_name === 'write_file').length, 1)
+  assert.equal(fs.readFileSync(path.join(crashWorkspace, 'note.txt'), 'utf8'), 'original\n')
+  const restoredLog = await page.evaluate(
+    (runId) => window.__onlyragE2E.logs.find((event) => event.runId === runId && event.message.includes('Restored Session State')),
+    crashIdentity.runId,
+  )
+  assert(restoredLog)
+  assert.equal((await api(page, 'resumeAgentTask', crashIdentity)).success, false)
+  assert.equal(
+    (await api(page, 'listRecoverableAgentTasks')).some((task) => task.identity.runId === queuedIdentity.runId),
+    true,
+  )
+  serverState.chatBehaviors.push({ type: 'prose', content: 'Queued work resumed explicitly.' })
+  assert.equal((await api(page, 'resumeAgentTask', queuedIdentity)).success, true)
+  assert.equal((await waitForDone(page, queuedIdentity.runId)).success, true)
+  await waitForQueueIdle(page)
+  await application.close()
+  ;({ application, page } = await launchApplication())
+  assert.deepEqual(JSON.parse(fs.readFileSync(statePath, 'utf8')), terminal)
+  assert.equal(
+    (await api(page, 'listRecoverableAgentTasks')).some((task) => [crashIdentity.runId, queuedIdentity.runId].includes(task.identity.runId)),
+    false,
+  )
+  assert.equal((await api(page, 'resumeAgentTask', queuedIdentity)).success, false)
+  assert.equal((await api(page, 'restoreAgentCheckpoint', { workspacePath: crashWorkspace, checkpointId })).success, true)
+  assert.equal(fs.existsSync(path.join(crashWorkspace, 'created.txt')), false)
+  assert.equal(fs.readFileSync(path.join(crashWorkspace, 'note.txt'), 'utf8'), 'original\n')
+  if (evidenceRoot) {
+    fs.mkdirSync(evidenceRoot, { recursive: true })
+    fs.writeFileSync(
+      path.join(evidenceRoot, 'result.json'),
+      JSON.stringify(
+        {
+          scope: 'Development Main/Preload; deterministic loopback generation, native owned-process force kill; no installed/model/power-loss qualification.',
+          platform: process.platform,
+          node: process.version,
+          pid: mainProcess.pid,
+          bundleSha256: createHash('sha256').update(fs.readFileSync(mainBundle)).digest('hex'),
+          beforeCrash,
+          terminal,
+          recoverable,
+          checkpoint: JSON.parse(checkpointBefore),
+          assertions: [
+            'no automatic dispatch',
+            'accepted queued request retained',
+            'transcript exactly retained after kill',
+            'acknowledged write not replayed',
+            'terminal readback after second restart',
+            'completed identities refused',
+            'explicit file checkpoint restoration',
+          ],
+        },
+        null,
+        2,
+      ),
+    )
+  }
+}
+
+async function runQualification() {
   assert(fs.existsSync(mainBundle), `Missing Electron bundle: ${mainBundle}`)
   assert(fs.existsSync(electronExe), `Missing Electron executable: ${electronExe}`)
   ;({ application, page } = await launchApplication())
 
+  if (process.argv.includes('--crash-only')) {
+    await qualifyCrashRecovery()
+    console.log('[PASS] Owned-process crash, explicit queue recovery and terminal readback passed.')
+    return
+  }
   console.log('[1/8] project and session switching, layout migration and removal')
   await api(page, 'registerProject', { projectPath: workspaceRoot, name: 'Workspace One' })
   await api(page, 'registerProject', { projectPath: secondWorkspace, name: 'Workspace Two' })
@@ -339,10 +538,12 @@ try {
   })
   for (const sessionId of ['session-one', 'session-kept']) {
     fs.mkdirSync(sessionDir(sessionId), { recursive: true })
-    fs.writeFileSync(path.join(sessionDir(sessionId), 'state.json'), JSON.stringify({ sessionId }), 'utf8')
+    fs.writeFileSync(path.join(sessionDir(sessionId), 'state.json'), JSON.stringify(fixtureState(sessionId, workspaceRoot)), 'utf8')
     fs.writeFileSync(path.join(sessionDir(sessionId), 'SESSION_TRACKER.md'), `# ${sessionId}`, 'utf8')
   }
-  assert.equal(await api(page, 'deleteCodingSession', { sessionId: 'session-one', workspacePath: workspaceRoot }), true)
+  const deletion = await api(page, 'deleteCodingSession', { sessionId: 'session-one', workspacePath: workspaceRoot })
+  assert.equal(deletion.status, 'complete', JSON.stringify(deletion))
+  assert(serverState.historyRemovals.some((removal) => removal.session_ids?.includes('session-one')))
   assert.equal(fs.existsSync(sessionDir('session-one')), false)
   assert.equal(fs.readFileSync(path.join(sessionDir('session-kept'), 'SESSION_TRACKER.md'), 'utf8'), '# session-kept')
   assert.deepEqual(
@@ -673,41 +874,7 @@ try {
   assert.deepEqual(afterStatus.statusLines, beforeStatus.statusLines)
   assert.equal(fs.readFileSync(path.join(gitWorkspace, 'tracked.txt'), 'utf8'), 'user dirty change\n')
 
-  console.log('[8/8] crash resume with the same immutable run identity')
-  serverState.chatBehaviors.push({ type: 'hold' })
-  const crashIdentity = identity('crash-resume', scratchPath)
-  await startTask(page, crashIdentity, { workspacePath: scratchPath, isStandaloneMode: true })
-  await waitForStep(page, crashIdentity.runId, 'Proposta corrente')
-  const mainProcess = application.process()
-  const exited = new Promise((resolve) => mainProcess.once('exit', resolve))
-  if (process.platform === 'win32') {
-    execFileSync('taskkill', ['/PID', String(mainProcess.pid), '/T', '/F'], { stdio: 'ignore' })
-  } else {
-    mainProcess.kill('SIGKILL')
-  }
-  await exited
-  await application.close().catch(() => {})
-  application = undefined
-  page = undefined
-  releasePendingResponses()
-  ;({ application, page } = await launchApplication())
-  const persisted = await api(page, 'agentGetPlanState', {
-    sessionId: crashIdentity.conversationId,
-    workspacePath: scratchPath,
-    planRevisionId: crashIdentity.planRevisionId,
-  })
-  assert(persisted)
-  assert.equal(persisted.status, 'IN_PROGRESS')
-  assert(persisted.stepCount >= 1)
-  serverState.chatBehaviors.push({ type: 'prose', content: 'Resumed after crash.' })
-  await startTask(page, crashIdentity, { workspacePath: scratchPath, isStandaloneMode: true })
-  const resumedDone = await waitForDone(page, crashIdentity.runId)
-  assert.equal(resumedDone.success, true)
-  const restoredLog = await page.evaluate(
-    (runId) => window.__onlyragE2E.logs.find((event) => event.runId === runId && event.message.includes('Restored Session State')),
-    crashIdentity.runId,
-  )
-  assert(restoredLog)
+  await qualifyCrashRecovery()
 
   console.log('[milestones] restored overlap advances only the first open milestone')
   const overlapIdentity = identity('overlapping-milestones')
@@ -969,11 +1136,55 @@ try {
   assert.equal(fixCycles.done.completionStatus, 'blocked')
 
   console.log('[PASS] 8 Electron Agent Coding reliability scenarios and 9 guard scenarios passed.')
+}
+
+try {
+  await runQualification()
+  fs.mkdirSync(evidenceRoot, { recursive: true })
+  fs.writeFileSync(
+    path.join(evidenceRoot, 'harness.json'),
+    JSON.stringify(
+      {
+        status: 'passed',
+        mode: process.argv.includes('--crash-only') ? 'crash-only' : 'full',
+        reliabilityScenarios: process.argv.includes('--crash-only') ? 1 : 8,
+        guardScenarios: process.argv.includes('--crash-only') ? 0 : 9,
+        scriptSha256: createHash('sha256')
+          .update(fs.readFileSync(fileURLToPath(import.meta.url)))
+          .digest('hex'),
+      },
+      null,
+      2,
+    ),
+  )
+  console.log(`Retained evidence: ${evidenceRoot}`)
+} catch (error) {
+  qualificationError = error
+  if (evidenceRoot) {
+    fs.mkdirSync(evidenceRoot, { recursive: true })
+    fs.writeFileSync(path.join(evidenceRoot, 'failure.txt'), String(error?.stack || error))
+    if (application) await application.close().catch(() => {})
+    application = undefined
+    try {
+      fs.cpSync(tempRoot, path.join(evidenceRoot, 'failed-fixtures'), { recursive: true })
+    } catch (copyError) {
+      fs.writeFileSync(path.join(evidenceRoot, 'fixture-copy-error.txt'), String(copyError))
+    }
+  }
 } finally {
   releasePendingResponses()
   if (application) await application.close().catch(() => {})
   await new Promise((resolve) => ollamaServer.close(resolve))
   await new Promise((resolve) => setTimeout(resolve, 500))
   assertSafeTempRoot()
-  fs.rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
+  try {
+    fs.rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
+    fs.mkdirSync(evidenceRoot, { recursive: true })
+    fs.writeFileSync(path.join(evidenceRoot, 'cleanup.json'), JSON.stringify({ ownedRoot: tempRoot, cleaned: !fs.existsSync(tempRoot) }, null, 2))
+  } catch (cleanupError) {
+    qualificationError = qualificationError
+      ? new AggregateError([qualificationError, cleanupError], `Qualification and owned-fixture cleanup failed; inspect ${tempRoot}`)
+      : cleanupError
+  }
 }
+if (qualificationError) throw qualificationError

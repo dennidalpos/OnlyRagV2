@@ -401,7 +401,7 @@ export async function runAgentOrchestratorLoop(
         return { success: false, summary: errorMsg, completionStatus: 'blocked' }
       }
 
-      session.changedFiles ||= []
+      session.changedFiles = [...sessionChangedFiles.keys()]
       session.nonRollbackEffects ||= []
 
       const closeApplicationRun = (request: Parameters<typeof closeAgentRunFromEvidence>[1]) =>
@@ -411,6 +411,7 @@ export async function runAgentOrchestratorLoop(
             settings,
             sessionId,
             stepCount: stepCountBox.value,
+            runId,
             flags: mutableFlags,
             state: responseInterpreterState,
             goalPlanner,
@@ -524,8 +525,6 @@ export async function runAgentOrchestratorLoop(
       }
 
       // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
-      const PERSIST_EVERY_N_STEPS = 5
-
       const pendingNativeCalls: Array<{ call: AgentChatToolCall; prepared: PreparedAgentTurn; data: TurnDispatchData }> = []
       while (isSessionActive()) {
         const operationalMilestones = goalPlanner.getMilestones().filter((milestone) => !isCompletionMilestoneTitle(milestone))
@@ -542,10 +541,9 @@ export async function runAgentOrchestratorLoop(
         setExecutionPhase('collect_context')
         // Re-fitted every turn: the manifest the skills must agree with is usually written during the run.
         const skillsBlock = skillAppService.skillsBlockForWorkspace(matchedSkills, workspacePath)
-        // Periodic checkpoint: persisting on every single step is unnecessary I/O churn.
-        if (stepCountBox.value === 1 || stepCountBox.value % PERSIST_EVERY_N_STEPS === 0) {
-          await persistCurrentState()
-        }
+        // A new model turn must never outrun the durable transcript of completed actions.
+        agentToolExecutorService.persistJournalCheckpoint(workspacePath, runId, sessionId)
+        await persistCurrentState()
 
         // Routes the turn to a model, assembles/compacts the prompt, freezes/grows num_ctx, decides Ollama context-cache reuse, and dispatches to the LLM with resilient fallback.
         const turnContext = { ...run, stepCount: stepCountBox.value, skillsBlock }
@@ -668,6 +666,8 @@ export async function runAgentOrchestratorLoop(
         }
 
         // Execute tool through tool executor service
+        // A crash during an external effect must be distinguishable from a completed action.
+        await persistCurrentState()
         const toolStartedAtMs = Date.now()
         const toolRes = await agentToolExecutorService.executeTool(
           toolCallForExecution,
@@ -693,6 +693,7 @@ export async function runAgentOrchestratorLoop(
         )
         recordNativeResult(toolRes.outputForHistory)
         agentToolExecutorService.endJournalStep()
+        agentToolExecutorService.persistJournalCheckpoint(workspacePath, runId, sessionId)
 
         if (!isSessionActive()) {
           setExecutionPhase('outcome')

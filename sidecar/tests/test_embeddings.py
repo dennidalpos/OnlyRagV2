@@ -6,7 +6,6 @@ from sidecar.infrastructure import embeddings as module
 
 # Capture the production entry point before the mechanics fixture replaces it.
 generate = module.generate_embedding_batch
-generate_legacy = module.generate_embeddings_with_status
 DIGEST = "a" * 64
 
 class Response:
@@ -142,12 +141,11 @@ def test_raw_index_refusal_happens_before_any_encoder_request(monkeypatch, model
     assert raw_space.metadata() == before
 
 
-def test_legacy_prompt_history_keeps_raw_requests(monkeypatch):
+def test_explicit_raw_role_keeps_raw_requests(monkeypatch):
     calls = wire(monkeypatch)
-    monkeypatch.setattr(module, "generate_embedding_batch", generate)
-    vectors, fallback = generate_legacy(["unchanged history"])
-    assert [body["input"] for url, body, _ in calls if url.endswith("/api/embed")] == [["unchanged history"]]
-    assert len(vectors[0]) == 768 and not fallback
+    batch = generate(["raw input"], role="raw")
+    assert [body["input"] for url, body, _ in calls if url.endswith("/api/embed")] == [["raw input"]]
+    assert len(batch.vectors[0]) == 768 and not batch.used_fallback
 
 
 def test_invalid_role_is_rejected_without_network(monkeypatch):

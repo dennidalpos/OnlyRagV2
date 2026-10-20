@@ -13,8 +13,9 @@ Eseguire i comandi da PowerShell nella radice del repository. Le versioni dichia
 | Percorsi Python critici | `npm run quality:python` | 15 casi offline su ammissione, ricerca e persistenza. Esegue regressioni native esistenti in un subprocess isolato; errori, casi mancanti o saltati fanno fallire il gate. Incluso nel lint seriale anche con `-SkipTests`. [Qualifica e limiti](./verification-python-critical-2026-10-19.md). |
 | Test mirati | `npx vitest run <percorso>`; `.venv\Scripts\python.exe -m pytest -q <percorso>` | Usare per problemi concreti, con fixture isolate. |
 | Suite complete | `npm run test:fast -- --silent=true`; `.venv\Scripts\python.exe -m pytest -q` | Solo quando un problema o un gate di rilascio lo richiede; le ultime ricevute sono in [`verification-current.md`](./verification-current.md). |
-| Build | `npm run build` | Genera bundle locali. Non rieseguito qui. |
+| Build | `npm run build` | Genera bundle locali. L'ultima qualifica con recupero agente è nella [ricevuta del 20 ottobre](./verification-agent-crash-recovery-2026-10-20.md). |
 | Recupero chat e bozze | `npm run test:e2e:chat-drafts` | Build e prova Electron isolata di interruzione, riavvio, revisione obsoleta e rifiuto della chiusura; nessuna generazione reale. |
+| Recupero agente | `npm run test:e2e:agent-crash` | Build e arresto forzato dell'Electron posseduto, coda persistente e ripresa esplicita; servizi deterministici e profilo isolato. [Prova e limiti](./verification-agent-crash-recovery-2026-10-20.md). |
 | OpenAPI | `npm run generate:openapi` | Rigenera il contratto dopo modifiche REST. Non rieseguito qui. |
 | Installer | `npm run package:win` | Crea un nuovo candidato CPU in `release/cpu-*`; non installa né pubblica. Non rieseguito qui. |
 
@@ -23,6 +24,10 @@ La CI Windows in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) insta
 ## Installazione manuale di Ollama
 
 Il comando **Avvia / Installa Ollama** tenta di avviare `ollama.exe` locale. Se non parte, apre nel browser la [pagina ufficiale per Windows](https://ollama.com/download/windows). L'app non scarica né esegue l'installer: il browser gestisce redirect e download, e l'utente completa l'installazione. L'esito IPC distingue l'avvio del processo dall'apertura della pagina; nessuno dei due certifica che il server sia online. Ripetere la diagnostica dopo l'installazione. L'apertura usa l'[API `shell.openExternal` di Electron](https://www.electronjs.org/docs/latest/api/shell/) con URL costante, secondo le [indicazioni di sicurezza di Electron](https://www.electronjs.org/docs/latest/tutorial/security/#15-do-not-use-shellexternal-with-untrusted-content).
+
+## Recupero agente e ricevute
+
+Le ricevute dei task agente sono in `agent-task-recovery.json` sotto il `userData` effettivo. Non modificare l'archivio per forzare una ripresa: una ricevuta terminale impedisce il replay e un esito di azione ignoto richiede riconciliazione. Le richieste pendenti mantengono il contesto originale; le ricevute concluse conservano solo identità e data di accettazione. Archivi oltre 10.000 identità o 64 MiB rifiutano nuove ammissioni, senza scarti automatici. Le evidenze della suite Electron sono esterne al checkout, nel percorso stampato dalla prova; `ONLYRAG_RECOVERY_EVIDENCE` può sceglierlo esplicitamente. Lo scenario completo simula anche l'HTTP Sidecar, senza usare un eventuale servizio personale sulla porta ordinaria.
 
 ## Offline embedding store maintenance — 2026-10-10
 

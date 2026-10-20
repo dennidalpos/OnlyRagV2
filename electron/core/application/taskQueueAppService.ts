@@ -6,7 +6,9 @@ import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTyp
 import { logger } from '../infrastructure/logging/logger'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
-import type { AgentRunIdentity } from '../../../shared/types'
+import type { AgentRunIdentity, AgentTaskRequest } from '../../../shared/types'
+import { agentTaskRecoveryRepository, type AgentTaskRecoveryRepository } from '../infrastructure/filesystem/agentTaskRecoveryRepository'
+import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { standaloneScratchWorkspace } from '../infrastructure/filesystem/standaloneScratchWorkspace'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import { ensureWorkspaceMetadataDirectory } from '../infrastructure/filesystem/workspaceMetadataDirectory'
@@ -27,8 +29,46 @@ export class TaskQueueAppService {
   private pQueue = new PQueue({ concurrency: AGENT_TASK_CONCURRENCY })
   private shuttingDown = false
   private executions = new Map<string, Promise<void>>()
+  private admissions = new Set<string>()
 
-  constructor(private readonly resolveStandaloneWorkspacePath: () => string = () => standaloneScratchWorkspace.getPath()) {}
+  constructor(
+    private readonly resolveStandaloneWorkspacePath: () => string = () => standaloneScratchWorkspace.getPath(),
+    private readonly recovery: AgentTaskRecoveryRepository = agentTaskRecoveryRepository,
+  ) {}
+
+  public listRecoverableTasks() {
+    return this.recovery.list().filter((task) => !this.queue.findTask(task.identity.runId) && !this.admissions.has(task.identity.runId))
+  }
+
+  public async resumeTask(identity: AgentRunIdentity, rendererEvents: RendererEventSink): Promise<AgentTaskResult> {
+    try {
+      const request = this.recovery.load(identity)
+      const firstPending = this.recovery.list().find((task) => task.identity.conversationId === identity.conversationId)
+      if (firstPending?.identity.runId !== identity.runId) {
+        return { success: false, summary: 'Recover the earlier accepted task in this conversation before its pending successors.' }
+      }
+      const saved = await agentSessionStateRepository.loadSessionState(identity.conversationId, request.workspacePath)
+      if (
+        matchesAgentRunIdentity(saved?.runIdentity, identity) &&
+        (saved?.completionStatus || saved?.terminationReason || saved?.status === 'COMPLETED' || saved?.status === 'FAILED')
+      ) {
+        await this.recovery.finish(identity)
+        return { success: false, summary: 'This agent run already has a terminal checkpoint; replay refused.' }
+      }
+      if (matchesAgentRunIdentity(saved?.runIdentity, identity) && saved?.executionPhase === 'apply_action') {
+        return {
+          success: false,
+          summary: 'The interrupted action has no acknowledged outcome. Inspect the workspace before repeating it; retained work is preserved.',
+        }
+      }
+      if (saved?.runIdentity && saved.status === 'IN_PROGRESS' && !matchesAgentRunIdentity(saved.runIdentity, identity)) {
+        return { success: false, summary: 'Another interrupted run owns this conversation; recover it before starting pending work.' }
+      }
+      return await this.scheduleAgentTask(request, rendererEvents, true)
+    } catch (error: unknown) {
+      return { success: false, summary: 'Agent recovery refused; existing data is preserved.', error: errorMessage(error) }
+    }
+  }
 
   public getMaxConcurrency(): number {
     return this.queue.getMaxConcurrency()
@@ -44,7 +84,7 @@ export class TaskQueueAppService {
     }
   }
 
-  public async scheduleAgentTask(payload: AgentTaskPayload, rendererEvents: RendererEventSink): Promise<AgentTaskResult> {
+  public async scheduleAgentTask(payload: AgentTaskPayload, rendererEvents: RendererEventSink, recovering = false): Promise<AgentTaskResult> {
     if (this.shuttingDown || !rendererEvents.isAvailable()) {
       return { success: false, summary: 'Agent renderer is unavailable or the application is shutting down.', completionStatus: 'cancelled' }
     }
@@ -75,6 +115,9 @@ export class TaskQueueAppService {
         }
       }
       ensureWorkspaceMetadataDirectory(boundWorkspacePath)
+      if (recovering && path.resolve(payload.workspacePath || '') !== boundWorkspacePath) {
+        return { success: false, summary: 'The retained workspace differs from the current workspace; recovery refused.' }
+      }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       return { success: false, summary: 'Agent workspace is unavailable', error: message }
@@ -89,8 +132,29 @@ export class TaskQueueAppService {
     const taskId = identity.runId
     const taskPayload: AgentTaskPayload = { ...payload, workspacePath: boundWorkspacePath, sessionId: conversationId, identity }
 
-    if (this.queue.findTask(taskId)) {
+    if (this.queue.findTask(taskId) || this.admissions.has(taskId)) {
       return { success: false, summary: 'Agent run already exists', error: `Duplicate runId: ${taskId}` }
+    }
+
+    this.admissions.add(taskId)
+    try {
+      if (recovering) this.recovery.load(identity)
+      else {
+        const interrupted = this.recovery
+          .list()
+          .find(
+            (task) => task.identity.conversationId === conversationId && !this.queue.findTask(task.identity.runId) && !this.admissions.has(task.identity.runId),
+          )
+        if (interrupted) throw new Error('This conversation has retained work; recover it explicitly before starting a new run.')
+        await this.recovery.accept(taskPayload as AgentTaskRequest)
+      }
+    } catch (error: unknown) {
+      return { success: false, summary: 'Agent task could not be durably accepted.', error: errorMessage(error) }
+    } finally {
+      this.admissions.delete(taskId)
+    }
+    if (this.shuttingDown || !rendererEvents.isAvailable()) {
+      return { success: false, summary: 'Agent task retained for explicit recovery; renderer unavailable.', completionStatus: 'cancelled' }
     }
 
     const taskData: QueuedAgentTask = {
@@ -151,14 +215,15 @@ export class TaskQueueAppService {
     }
   }
 
-  public cancelTask(target: AgentRunIdentity | string): { success: boolean; message: string } {
+  public async cancelTask(target: AgentRunIdentity | string): Promise<{ success: boolean; message: string }> {
     const taskId = typeof target === 'string' ? target : target.runId
     const queued = this.queue.findTask(taskId)
     if (typeof target !== 'string' && queued && !matchesAgentRunIdentity(queued.payload.payload.identity, target)) {
       return { success: false, message: `Task ${taskId} identity mismatch.` }
     }
+    if (queued?.payload.payload.identity) await this.recovery.finish(queued.payload.payload.identity)
     const res = this.queue.cancel(taskId)
-    cancelActiveAgentTask(taskId)
+    await cancelActiveAgentTask(taskId)
     return {
       success: res.cancelled,
       message: res.cancelled ? `Task ${taskId} cancelled.` : `Task ${taskId} not found.`,
@@ -215,6 +280,7 @@ export class TaskQueueAppService {
       // former per-run copy left out node_modules and .onlyrag, so each run reinstalled dependencies
       // and could not see the approved plan.
       await runAgentOrchestratorLoop(taskPayload, rendererEvents, id)
+      await this.recovery.finish(taskPayload.identity!)
       this.queue.markCompleted(id)
     } catch (err: unknown) {
       this.queue.markFailed(id, errorMessage(err))

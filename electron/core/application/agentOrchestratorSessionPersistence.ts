@@ -108,6 +108,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
       ollamaGenerationTelemetry: session.ollamaGenerationTelemetry,
       lastVerification: session.lastVerification,
       chatMessages: session.chatMessages,
+      changedFiles: Object.fromEntries(sessionChangedFiles),
     })
     if (!saved) throw new Error('Failed to persist agent session snapshot; existing recovery data is preserved.')
 

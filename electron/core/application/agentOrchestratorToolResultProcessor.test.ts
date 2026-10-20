@@ -25,6 +25,47 @@ import { verifyWebUi } from '../infrastructure/process/webUiSmokeVerifier'
 vi.mock('../infrastructure/process/webUiSmokeVerifier', () => ({ verifyWebUi: vi.fn() }))
 
 describe('structured tool outcomes', () => {
+  it.each([false, true])('acknowledges a tool result only after its durable snapshot (write failure: %s)', async (failWrite) => {
+    let release!: () => void
+    const persisted = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const emitLog = vi.fn()
+    const result = runToolResultProcessing({
+      parsedTool: { tool: 'read_file', parameters: { filePath: 'known.txt' } },
+      toolRes: { outcome: 'success', outputForHistory: 'retained content', logMessage: 'Read completed' },
+      toolStartedAtMs: Date.now(),
+      stepCount: 1,
+      workspacePath: null,
+      flags: { hasFileMutations: false, hasVerifiedBuild: false },
+      sessionChangedFiles: new Map(),
+      goalPlanner: new GoalDecompositionPlanner(),
+      episodicCompactor: { recordStep: () => {} },
+      executionGuard: new TransactionalExecutionGuard(process.cwd()),
+      loopDetector: new AgentActionLoopDetector(2),
+      state: { guardEvents: [], progress: new AgentProgressPolicy(), versionEvidence: {} },
+      sessionId: 'durable-result',
+      isSessionActive: () => false,
+      rendererEvents: null,
+      persistCurrentState: async () => {
+        await persisted
+        if (failWrite) throw new Error('snapshot unavailable')
+      },
+      emitLog,
+      settings: { enableCodingAgentDebugLog: false },
+    } as unknown as ToolResultProcessingContext)
+    const hasAcknowledgement = () => emitLog.mock.calls.some((call) => call[3]?.status === 'success')
+    expect(hasAcknowledgement()).toBe(false)
+    release()
+    if (failWrite) {
+      await expect(result).rejects.toThrow('snapshot unavailable')
+      expect(hasAcknowledgement()).toBe(false)
+    } else {
+      await result
+      expect(hasAcknowledgement()).toBe(true)
+    }
+  })
+
   it.each([
     { outcome: 'success' as const, stopped: false },
     { outcome: 'failure' as const, stopped: true },
@@ -431,7 +472,7 @@ describe('plan follows a successful move_file', () => {
       const planner = new GoalDecompositionPlanner()
       planner.initializePlan([{ id: 'm-6', title: 'Render the list', status: 'pending', filePaths: ['src/App.js'] }])
 
-      expect(await processMove(workspace, planner, 'failure')).toBe(0)
+      expect(await processMove(workspace, planner, 'failure')).toBeGreaterThan(0)
       expect(planner.getMilestones()[0].filePaths).toEqual(['src/App.js'])
 
       expect(await processMove(workspace, planner, 'success')).toBeGreaterThan(0)

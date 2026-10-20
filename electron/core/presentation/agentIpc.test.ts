@@ -21,6 +21,8 @@ vi.mock('../application/taskQueueAppService', () => ({
     scheduleAgentTask: vi.fn(),
     cancelTask: vi.fn(),
     getQueueStatus: vi.fn(),
+    listRecoverableTasks: vi.fn(() => []),
+    resumeTask: vi.fn(),
   },
 }))
 vi.mock('../application/agentOrchestratorAppService', () => ({ respondToApproval: vi.fn(), updateActiveAgentRun: vi.fn() }))

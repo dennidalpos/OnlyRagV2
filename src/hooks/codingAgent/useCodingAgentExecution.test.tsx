@@ -1,7 +1,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentRunIdentity, AgentTaskRequest, AppSettings, WorkspaceFile } from '../../types'
+import type { AgentRunIdentity, AgentTaskRequest, AgentTaskRecovery, AppSettings, WorkspaceFile } from '../../types'
 import { DEFAULT_APP_SETTINGS } from '../../../shared/domain/settings/appSettingsDefaults'
 import { useAgentActionLog } from './useAgentActionLog'
 import { useCodingAgentExecution, type UseCodingAgentExecutionOptions } from './useCodingAgentExecution'
@@ -97,6 +97,32 @@ describe('useCodingAgentExecution', () => {
     const dequeued = startAgentTask.mock.calls[1][0]
     expect(dequeued).toMatchObject({ userTask: 'Queued task', agentMode: 'auto', sessionId: 'session-2', activeFile: { path: 'C:/w/b.ts' } })
     expect(laterSession.beginExecutedPrompt).toHaveBeenCalledWith('session-2', 'Queued task', 'auto')
+  })
+
+  it('keeps recovered tasks idle, binds explicit recovery to the retained identity and does not auto-dequeue after recovery', async () => {
+    const task: AgentTaskRecovery = {
+      identity: { runId: 'interrupted', conversationId: 'session-1', planRevisionId: 'original', workspaceId: 'C:/w' },
+      userTask: 'Recovered work',
+      workspacePath: 'C:/w',
+      agentMode: 'auto',
+      acceptedAt: new Date().toISOString(),
+      capabilityProfile: { allowFileModifications: true, allowTerminalExecution: false, capabilityPolicyMode: 'offline-strict', maxToolCallSteps: 10 },
+    }
+    const resume = vi.fn(async () => ({ success: true, runId: task.identity.runId, summary: 'accepted' }))
+    Object.assign(window.electronAPI!, { listRecoverableAgentTasks: vi.fn(async () => [task]), resumeAgentTask: resume })
+    await act(async () => root.render(<Harness {...props()} />))
+    expect(resume).not.toHaveBeenCalled()
+    expect(execution.recoverableTasks).toHaveLength(1)
+    await act(async () => execution.resumeRecoveredTask({ ...task, identity: { ...task.identity, conversationId: 'foreign' } }))
+    expect(resume).not.toHaveBeenCalled()
+    await act(async () => execution.hydrateFromSession({ promptQueue: [{ id: 'queued', prompt: 'Unstarted prompt' }] } as never))
+    await act(async () => execution.resumeRecoveredTask(task))
+    expect(resume).toHaveBeenCalledExactlyOnceWith(task.identity)
+    expect(execution.activeRunIdentity).toEqual(task.identity)
+    await act(async () => doneListener?.({ ...task.identity, success: true, summary: 'done' }))
+    await act(async () => vi.advanceTimersByTimeAsync(350))
+    expect(startAgentTask).not.toHaveBeenCalled()
+    expect(execution.promptQueue).toHaveLength(1)
   })
 
   it('sends mode and context changes to the active run', async () => {

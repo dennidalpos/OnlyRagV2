@@ -33,6 +33,18 @@ function safeCheckpointId(checkpointId: string): string | null {
   return /^[A-Za-z0-9_-]{1,80}$/.test(checkpointId) ? checkpointId : null
 }
 
+function checkpointRelativePath(workspacePath: string, absolute: string): string | null {
+  const root = path.resolve(workspacePath)
+  const resolved = path.resolve(absolute)
+  if (!isPathWithinRoot(root, resolved)) return null
+  const relative = path.relative(root, resolved).replace(/\\/g, '/')
+  return relative.toLowerCase().startsWith('.onlyrag/') ? null : relative
+}
+
+export function hasAgentCheckpointBaseline(workspacePath: string, baseline: ReadonlyMap<string, FileBackupEntry>): boolean {
+  return [...baseline.keys()].some((absolute) => checkpointRelativePath(workspacePath, absolute) !== null)
+}
+
 function pruneOldCheckpoints(root: string): void {
   try {
     const entries = fs
@@ -59,33 +71,60 @@ export function saveAgentCheckpoint(
   conversationId?: string,
 ): string | null {
   const id = safeCheckpointId(checkpointId)
-  if (!id || baseline.size === 0) return null
+  if (!id) return null
   const root = path.resolve(workspacePath)
   const directory = path.join(checkpointsRoot(root), id)
+  if (baseline.size === 0 && !fs.existsSync(path.join(directory, 'manifest.json'))) return null
   try {
-    if (fs.existsSync(directory) && !fs.lstatSync(directory).isDirectory()) throw new Error('Unsafe checkpoint directory')
+    if (fs.existsSync(directory) && (!fs.lstatSync(directory).isDirectory() || fs.lstatSync(directory).isSymbolicLink()))
+      throw new Error('Unsafe checkpoint directory')
     fs.mkdirSync(directory, { recursive: true })
-    const files: CheckpointManifest['files'] = []
-    let blobIndex = 0
+    const manifestPath = path.join(directory, 'manifest.json')
+    const previous: CheckpointManifest | null = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, 'utf8')) : null
+    if (previous && (previous.version !== 2 || previous.checkpointId !== id || previous.conversationId !== conversationId || !Array.isArray(previous.files))) {
+      throw new Error('Retained checkpoint has a different or invalid owner')
+    }
+    const files: CheckpointManifest['files'] = previous ? [...previous.files] : []
+    for (const file of files) {
+      if (typeof file?.path !== 'string' || (file.blob !== null && !/^\d+\.bin$/.test(file.blob))) throw new Error('Invalid retained checkpoint entry')
+      if (file.blob !== null) fs.readFileSync(path.join(directory, file.blob))
+    }
+    const retainedPaths = new Set(files.map((file) => file.path.toLowerCase()))
+    let blobIndex =
+      1 +
+      Math.max(
+        -1,
+        ...fs
+          .readdirSync(directory)
+          .filter((name) => /^\d+\.bin$/.test(name))
+          .map((name) => Number.parseInt(name)),
+      )
     for (const [absolute, entry] of baseline) {
-      const resolved = path.resolve(absolute)
-      if (!isPathWithinRoot(root, resolved)) continue
-      const relative = path.relative(root, resolved).replace(/\\/g, '/')
-      if (relative.startsWith('.onlyrag/')) continue
+      const relative = checkpointRelativePath(root, absolute)
+      if (relative === null) continue
+      // A resumed run keeps the first pre-change bytes, including files it created before the crash.
+      if (retainedPaths.has(relative.toLowerCase())) continue
       if (entry.originalContent === null) {
         files.push({ path: relative, blob: null })
         continue
       }
       const blob = `${blobIndex++}.bin`
-      fs.writeFileSync(path.join(directory, blob), entry.originalContent)
+      fs.writeFileSync(path.join(directory, blob), entry.originalContent, { flag: 'wx', flush: true })
       files.push({ path: relative, blob })
     }
     if (files.length === 0) {
       fs.rmSync(directory, { recursive: true, force: true })
       return null
     }
-    const manifest: CheckpointManifest = { version: 2, checkpointId: id, conversationId, createdAt: new Date().toISOString(), files }
-    fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8')
+    if (previous && files.length === previous.files.length) return id
+    const manifest: CheckpointManifest = { version: 2, checkpointId: id, conversationId, createdAt: previous?.createdAt || new Date().toISOString(), files }
+    const staging = path.join(directory, `manifest-${process.pid}.tmp`)
+    try {
+      fs.writeFileSync(staging, JSON.stringify(manifest, null, 2), { encoding: 'utf8', flush: true })
+      fs.renameSync(staging, manifestPath)
+    } finally {
+      if (fs.existsSync(staging)) fs.unlinkSync(staging)
+    }
     pruneOldCheckpoints(checkpointsRoot(root))
     return id
   } catch (error: unknown) {

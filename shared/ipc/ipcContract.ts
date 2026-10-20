@@ -18,6 +18,7 @@ import type {
   AgentPlanState,
   AgentRunIdentity,
   AgentTaskRequest,
+  AgentTaskRecovery,
   AppSettings,
   ArtifactRecord,
   ArtifactSaveInput,
@@ -219,6 +220,8 @@ export interface IpcInvokeContract {
     result: { updated: boolean; approvalResolved: boolean; numCtx?: number }
   }
   'agent:get-queue-status': { payload: void; result: TaskQueueStatus }
+  'agent:list-recoverable-tasks': { payload: void; result: AgentTaskRecovery[] }
+  'agent:resume-task': { payload: AgentRunIdentity; result: AgentDoneResult & { error?: string; runId?: string; queuePosition?: number } }
   /** Pre-flight Clarification Interview before the plan is drafted. */
   'agent:plan-interview': {
     payload: {
@@ -415,6 +418,8 @@ export const IPC_INVOKE_METHODS = {
   compactAgentContext: 'agent:compact-context',
   updateActiveAgentRun: 'agent:update-active-run',
   getAgentQueueStatus: 'agent:get-queue-status',
+  listRecoverableAgentTasks: 'agent:list-recoverable-tasks',
+  resumeAgentTask: 'agent:resume-task',
   agentPlanInterview: 'agent:plan-interview',
   agentPlanEnrichPrompt: 'agent:plan-enrich-prompt',
   agentPlanGenerate: 'agent:plan-generate',

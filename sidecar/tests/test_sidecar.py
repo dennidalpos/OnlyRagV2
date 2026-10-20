@@ -591,13 +591,6 @@ def test_extract_tabular_document_truncation_note():
     assert "Row3" in text and "Val3" in text
     assert "Row4" not in text
 
-def test_generate_embedding_with_status_tracks_fallback():
-    from sidecar.infrastructure.embeddings import generate_embedding_with_status
-    vec, is_fallback = generate_embedding_with_status("Test sentence for embedding vector")
-    assert isinstance(vec, list)
-    assert len(vec) in (384, 768)
-    assert isinstance(is_fallback, bool)
-
 def test_docx_image_extraction_ocr(tmp_path, monkeypatch):
     import docx
     from PIL import Image, ImageDraw

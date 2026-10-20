@@ -8,6 +8,9 @@ vi.mock('./agentOrchestratorAppService', () => ({
   runAgentOrchestratorLoop: vi.fn().mockResolvedValue({ success: true, summary: 'ok' }),
   cancelActiveAgentTask: vi.fn(),
 }))
+vi.mock('../infrastructure/filesystem/agentTaskRecoveryRepository', () => ({
+  agentTaskRecoveryRepository: { accept: vi.fn(async () => {}), finish: vi.fn(async () => {}), list: vi.fn(() => []), load: vi.fn() },
+}))
 
 import { cancelActiveAgentTask, runAgentOrchestratorLoop } from './agentOrchestratorAppService'
 import { TaskQueueAppService, taskQueueAppService } from './taskQueueAppService'
@@ -194,7 +197,7 @@ describe('TaskQueueAppService serial execution invariant', () => {
     )
 
     expect(accepted).toMatchObject({ success: true, runId: 'run-second', queuePosition: 1 })
-    expect(service.cancelTask(second)).toEqual({ success: true, message: 'Task run-second cancelled.' })
+    expect(await service.cancelTask(second)).toEqual({ success: true, message: 'Task run-second cancelled.' })
     expect(cancelActiveAgentTask).toHaveBeenLastCalledWith('run-second')
     releaseFirst?.()
   })

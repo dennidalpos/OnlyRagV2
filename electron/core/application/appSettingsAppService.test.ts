@@ -17,6 +17,8 @@ describe('AppSettingsAppService Unit Tests', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true })
     } catch {}
@@ -43,19 +45,23 @@ describe('AppSettingsAppService Unit Tests', () => {
   })
 
   it('restarts a running sidecar once the edited Ollama host settles, and only if it changed', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const sidecar = { getLaunchedOllamaHost: () => 'http://127.0.0.1:11434', restartPythonSidecar: vi.fn(async () => true) }
-    const withSidecar = new AppSettingsAppService(new AppSettingsRepository(tmpDir), sidecar, 20)
-    const settle = () => new Promise((resolve) => setTimeout(resolve, 40))
+    const repo = new AppSettingsRepository(tmpDir)
+    vi.spyOn(repo, 'saveSettings').mockResolvedValue(true)
+    const withSidecar = new AppSettingsAppService(repo, sidecar)
 
     await withSidecar.saveSettings({ ...getDefaultAppSettings(), ollamaHost: '127.0.0.1:11434/' })
-    await settle()
+    await vi.advanceTimersByTimeAsync(1500)
     expect(sidecar.restartPythonSidecar).not.toHaveBeenCalled()
 
     // Keystroke-by-keystroke saves collapse into a single restart.
     for (const host of ['http://192.168.1.2', 'http://192.168.1.20', 'http://192.168.1.20:11434']) {
       await withSidecar.saveSettings({ ...getDefaultAppSettings(), ollamaHost: host })
     }
-    await settle()
+    await vi.advanceTimersByTimeAsync(1499)
+    expect(sidecar.restartPythonSidecar).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
     expect(sidecar.restartPythonSidecar).toHaveBeenCalledTimes(1)
   })
 

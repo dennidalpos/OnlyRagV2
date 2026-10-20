@@ -12,6 +12,8 @@ I prefissi attivi comprendono `agent`, `artifacts`, `diagnostics`, `dialog`, `hi
 
 ## Eventi Renderer
 
+`agent:list-recoverable-tasks` espone solo riepiloghi delle richieste accettate e inattive; `agent:resume-task` richiede l'identità completa e carica in Main il payload originale validato. Il Renderer non può sostituire workspace, modello o permessi nel recupero. Identità concluse, archivi illeggibili ed esiti di azioni interrotte non confermati vengono rifiutati. [Qualifica offline](./verification-agent-crash-recovery-2026-10-20.md).
+
 Eventi `agent:*`, `ingest:*`, `ollama:*` e `workspace:*` sono tipizzati nel contratto. Gli eventi agente portano l'identità della run; gli stream Ollama usano `operationId`; eventi Sidecar fuori schema vengono scartati. Un listener restituisce la funzione di unsubscribe. La traduzione e l'ingestion accettano solo risultati completi e confermati.
 
 ## Native upload bridge — 2026-10-06

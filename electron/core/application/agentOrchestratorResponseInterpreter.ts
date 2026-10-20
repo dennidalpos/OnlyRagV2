@@ -91,10 +91,10 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections
 
   // In CHAT mode a prose answer with no tool call IS the deliverable: the turn is done.
   if (ctx.agentMode === 'ask') {
-    agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.sessionId)
+    agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.session.id, ctx.session.identity.conversationId)
     ctx.emitLog('info', `Task Finished: ${summary.slice(0, 300)}`)
-    await ctx.persistCurrentState()
-    ctx.emitDone(true, summary)
+    await ctx.persistCurrentState('finish', 'verified')
+    ctx.emitDone(true, summary, 'verified')
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, true, summary)
     }

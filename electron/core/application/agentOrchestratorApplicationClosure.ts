@@ -36,6 +36,7 @@ export interface ApplicationClosureContext {
   workspacePath: string | null
   settings: AppSettings
   sessionId: string
+  runId: string
   stepCount: number
   flags: ToolResultMutableFlags
   state: ResponseInterpreterState
@@ -389,7 +390,7 @@ export async function closeAgentRunFromEvidence(ctx: ApplicationClosureContext, 
     ...(ctx.state.guardEvents.length > 0 ? { guardEvents: [...ctx.state.guardEvents] } : {}),
   }
   ctx.setExecutionPhase('outcome')
-  const checkpointId = agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.sessionId)
+  const checkpointId = agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.runId, ctx.sessionId)
   if (checkpointId) completionEvidence.checkpointId = checkpointId
   const success = status === 'verified'
   const closureMessage: AgentLocalizedText = { key: 'closureMessage', params: { status } }

@@ -10,17 +10,20 @@ from fastapi.testclient import TestClient
 from sidecar import main
 from sidecar.config import PROMPT_HISTORY_TABLE_NAME
 from sidecar.infrastructure import db
+from sidecar.infrastructure.embeddings import EmbeddingSpace
 from sidecar.schemas import IndexPromptHistoryRequest, PromptHistoryRemoveRequest, PromptHistorySearchRequest
 from sidecar.services import prompt_history_service as service
+
+SPACE = EmbeddingSpace("synthetic-history", "f" * 64, 2)
 
 
 @pytest.mark.parametrize("failure", ["encoder", "open", "search", "catalog"])
 def test_search_failure_is_unavailable_over_http(monkeypatch, failure):
-    db.append_records(PROMPT_HISTORY_TABLE_NAME, [{"id": "retained", "vector": [1.0, 0.0]}])
-    monkeypatch.setattr(service, "_normalized_embedding", lambda _: [1.0, 0.0])
+    db.append_records(PROMPT_HISTORY_TABLE_NAME, [{"id": "retained", "vector": [1.0, 0.0], **SPACE.metadata()}])
+    monkeypatch.setattr(service, "_history_embedding", lambda *_: ([1.0, 0.0], SPACE))
     broken = Mock(side_effect=RuntimeError("Storage unavailable"))
     if failure == "encoder":
-        monkeypatch.setattr(service, "_normalized_embedding", broken)
+        monkeypatch.setattr(service, "_history_embedding", broken)
     elif failure == "open":
         monkeypatch.setattr(service.lance_db, "open_table", broken)
     elif failure == "search":
@@ -83,12 +86,12 @@ def test_deleted_session_refuses_late_index_and_explicit_restore_changes_generat
     started = Event()
     release = Event()
 
-    def paused_embedding(_text):
+    def paused_embedding(*_):
         started.set()
         assert release.wait(5)
-        return [1.0, 0.0]
+        return [1.0, 0.0], SPACE
 
-    monkeypatch.setattr(service, "_normalized_embedding", paused_embedding)
+    monkeypatch.setattr(service, "_history_embedding", paused_embedding)
     request = IndexPromptHistoryRequest(
         id="prompt", session_id="session", project_path="C:/synthetic/project",
         prompt="retained", outcome="success", started_at="2026-10-11T00:00:00Z",
@@ -104,7 +107,7 @@ def test_deleted_session_refuses_late_index_and_explicit_restore_changes_generat
         with pytest.raises(ValueError, match="deleted or changed"):
             late_index.result(timeout=5)
     assert PROMPT_HISTORY_TABLE_NAME not in db.get_existing_tables()
-    monkeypatch.setattr(service, "_normalized_embedding", lambda _text: [1.0, 0.0])
+    monkeypatch.setattr(service, "_history_embedding", lambda *_: ([1.0, 0.0], SPACE))
     service.index_prompt_history(request)
     with TestClient(main.app) as client:
         assert client.post("/history/remove", json={"session_ids": ["session"], "operation_id": "delete1", "restore": True}).json() == {"success": True}
@@ -117,7 +120,7 @@ def test_corrupt_lifecycle_blocks_index_and_delete(monkeypatch):
     db.append_records(service.SESSION_LIFECYCLE_TABLE, [{
         "session_id": "session", "version": 2, "operation_id": "delete1", "generation": 1, "state": "deleted",
     }])
-    monkeypatch.setattr(service, "_normalized_embedding", lambda _text: [1.0, 0.0])
+    monkeypatch.setattr(service, "_history_embedding", lambda *_: ([1.0, 0.0], SPACE))
     request = IndexPromptHistoryRequest(
         id="prompt", session_id="session", project_path="C:/synthetic/project",
         prompt="retained", outcome="success", started_at="2026-10-11T00:00:00Z",
@@ -129,7 +132,7 @@ def test_corrupt_lifecycle_blocks_index_and_delete(monkeypatch):
 
 
 def test_fenced_delete_is_scoped_and_rejects_wrong_restore_operation(monkeypatch):
-    monkeypatch.setattr(service, "_normalized_embedding", lambda _text: [1.0, 0.0])
+    monkeypatch.setattr(service, "_history_embedding", lambda *_: ([1.0, 0.0], SPACE))
     for session_id in ("owned", "other"):
         service.index_prompt_history(IndexPromptHistoryRequest(
             id=f"prompt_{session_id}", session_id=session_id, project_path="C:/synthetic/project",
@@ -150,7 +153,7 @@ def test_fenced_delete_is_scoped_and_rejects_wrong_restore_operation(monkeypatch
 def test_failed_row_removal_keeps_persisted_fence_for_explicit_retry(monkeypatch):
     import lancedb
 
-    db.append_records(PROMPT_HISTORY_TABLE_NAME, [{"id": "prompt", "session_id": "session", "vector": [1.0, 0.0]}])
+    db.append_records(PROMPT_HISTORY_TABLE_NAME, [{"id": "prompt", "session_id": "session", "vector": [1.0, 0.0], **SPACE.metadata()}])
     open_table = service.lance_db.open_table
 
     def failing_open(name):
@@ -164,7 +167,7 @@ def test_failed_row_removal_keeps_persisted_fence_for_explicit_retry(monkeypatch
         assert service.remove_prompt_history(PromptHistoryRemoveRequest(session_ids=["session"], operation_id="delete1")) == {"success": False}
     db.lance_db.__init__(db.LANCEDB_DIR, session=lancedb.Session())
     assert service._session_lifecycle("session")["state"] == "deleted"
-    monkeypatch.setattr(service, "_normalized_embedding", lambda _text: [1.0, 0.0])
+    monkeypatch.setattr(service, "_history_embedding", lambda *_: ([1.0, 0.0], SPACE))
     assert service.search_prompt_history(PromptHistorySearchRequest(query="retained")) == []
     request = IndexPromptHistoryRequest(
         id="late", session_id="session", project_path="C:/synthetic/project",
@@ -177,12 +180,12 @@ def test_failed_row_removal_keeps_persisted_fence_for_explicit_retry(monkeypatch
 
 
 def test_recovery_started_during_embedding_blocks_search_readback(monkeypatch):
-    db.append_records(PROMPT_HISTORY_TABLE_NAME, [{"id": "retained", "vector": [1.0, 0.0]}])
+    db.append_records(PROMPT_HISTORY_TABLE_NAME, [{"id": "retained", "vector": [1.0, 0.0], **SPACE.metadata()}])
     with monkeypatch.context() as patch:
-        def embed(_text):
+        def embed(*_):
             patch.setattr(db, "_recovery_error", "Synthetic pending recovery")
-            return [1.0, 0.0]
-        patch.setattr(service, "_normalized_embedding", embed)
+            return [1.0, 0.0], SPACE
+        patch.setattr(service, "_history_embedding", embed)
         with TestClient(main.app, raise_server_exceptions=False) as client:
             response = client.post("/history/search", json={"query": "retained"})
         assert response.status_code == 500
@@ -193,14 +196,14 @@ def test_history_score_uses_native_squared_l2(monkeypatch, cosine, expected_scor
     project = "C:/synthetic/selected"
     db.append_records(PROMPT_HISTORY_TABLE_NAME, [
         {"id": "selected", "project_id": service.compute_project_id(project),
-         "vector": [cosine, math.sqrt(1.0 - cosine * cosine)]},
+         "vector": [cosine, math.sqrt(1.0 - cosine * cosine)], **SPACE.metadata()},
         {"id": "unrelated", "project_id": service.compute_project_id("C:/synthetic/other"),
-         "vector": [1.0, 0.0]},
+         "vector": [1.0, 0.0], **SPACE.metadata()},
     ])
     table = db.lance_db.open_table(PROMPT_HISTORY_TABLE_NAME)
     rows = table.search([1.0, 0.0]).where('id = "selected"', prefilter=True).to_list()
     assert rows[0]["_distance"] == pytest.approx(2.0 * (1.0 - cosine))
-    monkeypatch.setattr(service, "_normalized_embedding", lambda _: [1.0, 0.0])
+    monkeypatch.setattr(service, "_history_embedding", lambda *_: ([1.0, 0.0], SPACE))
     with TestClient(main.app) as client:
         response = client.post("/history/search", json={"query": "selected", "project_paths": [project], "top_k": 1})
     assert response.status_code == 200

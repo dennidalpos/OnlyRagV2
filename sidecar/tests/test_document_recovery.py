@@ -84,14 +84,16 @@ def test_chunk_schema_failure_returns_server_error_and_preserves_data(monkeypatc
 
 def test_prompt_embedding_does_not_block_document_reads(monkeypatch):
     seed()
-    db.append_records(PROMPT_HISTORY_TABLE_NAME, [{"id": "prompt", "vector": [0.1, 0.2, 0.3]}])
+    from sidecar.infrastructure.embeddings import EmbeddingSpace
+    space = EmbeddingSpace("synthetic-history", "f" * 64, 3)
+    db.append_records(PROMPT_HISTORY_TABLE_NAME, [{"id": "prompt", "vector": [0.1, 0.2, 0.3], **space.metadata()}])
     started = Event()
     release = Event()
-    def embed(query):
+    def embed(*_):
         started.set()
         assert release.wait(3)
-        return [0.1, 0.2, 0.3]
-    monkeypatch.setattr(prompt_history_service, "_normalized_embedding", embed)
+        return [0.1, 0.2, 0.3], space
+    monkeypatch.setattr(prompt_history_service, "_history_embedding", embed)
     with ThreadPoolExecutor(max_workers=2) as pool:
         pending = pool.submit(prompt_history_service.search_prompt_history, PromptHistorySearchRequest(query="notes"))
         try:

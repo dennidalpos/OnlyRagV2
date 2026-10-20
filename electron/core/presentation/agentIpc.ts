@@ -63,6 +63,13 @@ export function registerAgentIpcHandlers(getRendererEvents: () => RendererEventS
     return taskQueueAppService.getQueueStatus()
   })
 
+  ipcMain.handle('agent:list-recoverable-tasks', async () => taskQueueAppService.listRecoverableTasks())
+  ipcMain.handle('agent:resume-task', async (_, identity) => {
+    const rendererEvents = getRendererEvents()
+    if (!rendererEvents) return { success: false, summary: 'Agent renderer is unavailable.', completionStatus: 'cancelled' }
+    return taskQueueAppService.resumeTask(identity, rendererEvents)
+  })
+
   /**
    * Pre-flight Clarification Interview: analyze user prompt for key architectural
    * and implementation trade-offs before drafting a plan.

@@ -456,6 +456,8 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     ...(toolRes.localized ? { localized: toolRes.localized } : {}),
   }
 
+  // The renderer must not observe an acknowledged tool result before its transcript and mutations are durable.
+  await ctx.persistCurrentState()
   if (toolRes.isTerminal) {
     ctx.emitLog('terminal', toolRes.logMessage, toolRes.logDetail, structuredMeta)
   } else {

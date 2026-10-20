@@ -3,7 +3,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AtomicWorkspaceJournal } from './atomicWorkspaceJournal'
-import { deleteConversationCheckpoints, listConversationCheckpointPaths, restoreAgentCheckpoint, saveAgentCheckpoint } from './agentCheckpointStore'
+import {
+  deleteConversationCheckpoints,
+  listConversationCheckpointPaths,
+  restoreAgentCheckpoint,
+  saveAgentCheckpoint,
+  hasAgentCheckpointBaseline,
+} from './agentCheckpointStore'
 import { ensureWorkspaceMetadataDirectory } from './workspaceMetadataDirectory'
 
 describe('agent checkpoints', () => {
@@ -47,6 +53,51 @@ describe('agent checkpoints', () => {
   it('saves nothing for a run that changed no file', () => {
     expect(saveAgentCheckpoint(workspace, 'run-empty', new AtomicWorkspaceJournal().sessionBaseline)).toBeNull()
     expect(fs.existsSync(path.join(workspace, '.onlyrag', 'checkpoints', 'run-empty'))).toBe(false)
+  })
+
+  it('does not treat Full access changes outside the workspace as failed workspace checkpoints', () => {
+    const journal = new AtomicWorkspaceJournal()
+    journal.recordOriginalState(path.join(path.dirname(workspace), 'external-probe.txt'), null)
+    expect(hasAgentCheckpointBaseline(workspace, journal.sessionBaseline)).toBe(false)
+    expect(saveAgentCheckpoint(workspace, 'external-only', journal.sessionBaseline)).toBeNull()
+  })
+
+  it('retains the original baseline across incremental snapshots and resumed changes to the same files', () => {
+    const original = path.join(workspace, 'original.txt')
+    const created = path.join(workspace, 'created.txt')
+    fs.writeFileSync(original, 'before')
+    const first = new AtomicWorkspaceJournal()
+    first.recordBeforeModification(original)
+    first.recordBeforeModification(created)
+    fs.writeFileSync(original, 'first run')
+    fs.writeFileSync(created, 'first creation')
+    expect(saveAgentCheckpoint(workspace, 'interrupted', first.sessionBaseline, 'conversation')).toBe('interrupted')
+    const restarted = new AtomicWorkspaceJournal()
+    restarted.recordBeforeModification(created)
+    restarted.recordBeforeModification(original)
+    restarted.recordBeforeModification(path.join(workspace, 'later.txt'))
+    fs.writeFileSync(original, 'resumed edit')
+    fs.writeFileSync(created, 'resumed creation')
+    fs.writeFileSync(path.join(workspace, 'later.txt'), 'new after restart')
+    expect(saveAgentCheckpoint(workspace, 'interrupted', restarted.sessionBaseline, 'conversation')).toBe('interrupted')
+    expect(saveAgentCheckpoint(workspace, 'interrupted', new Map(), 'conversation')).toBe('interrupted')
+    expect(restoreAgentCheckpoint(workspace, 'interrupted').success).toBe(true)
+    expect(fs.readFileSync(original, 'utf8')).toBe('before')
+    expect(fs.existsSync(created)).toBe(false)
+    expect(fs.existsSync(path.join(workspace, 'later.txt'))).toBe(false)
+  })
+
+  it('preserves unreadable checkpoints and refuses a different owner when extending the baseline', () => {
+    const journal = new AtomicWorkspaceJournal()
+    journal.recordBeforeModification(path.join(workspace, 'created.txt'))
+    saveAgentCheckpoint(workspace, 'retained', journal.sessionBaseline, 'owner')
+    const manifest = path.join(workspace, '.onlyrag', 'checkpoints', 'retained', 'manifest.json')
+    const before = fs.readFileSync(manifest, 'utf8')
+    expect(saveAgentCheckpoint(workspace, 'retained', journal.sessionBaseline, 'foreign')).toBeNull()
+    expect(fs.readFileSync(manifest, 'utf8')).toBe(before)
+    fs.writeFileSync(manifest, '{invalid')
+    expect(saveAgentCheckpoint(workspace, 'retained', journal.sessionBaseline, 'owner')).toBeNull()
+    expect(fs.readFileSync(manifest, 'utf8')).toBe('{invalid')
   })
 
   it('lists exactly the checkpoint directories a deletion would remove', () => {

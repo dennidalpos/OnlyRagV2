@@ -77,6 +77,7 @@ export interface SavedAgentSessionState {
   ollamaGenerationTelemetry?: OllamaGenerationTelemetry[]
   lastVerification?: AgentVerificationEvidence
   chatMessages?: AgentChatMessage[]
+  changedFiles?: Record<string, { additions: number; deletions: number }>
 }
 
 const counter = z.number().int().nonnegative()
@@ -187,6 +188,7 @@ const savedStateSchema = z
           .loose(),
       )
       .optional(),
+    changedFiles: z.record(z.string(), z.object({ additions: counter, deletions: counter }).strict()).optional(),
   })
   .loose()
 

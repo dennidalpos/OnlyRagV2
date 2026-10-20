@@ -186,7 +186,8 @@ export async function initializeSessionState(params: SessionStateParams): Promis
   }
 
   const sessionNumCtxBox: { value: number | null } = { value: null }
-  const sessionChangedFiles = new Map<string, { additions: number; deletions: number }>()
+  const sessionChangedFiles = new Map<string, { additions: number; deletions: number }>(Object.entries(executionState?.changedFiles || {}))
+  mutableFlags.hasFileMutations = sessionChangedFiles.size > 0
 
   return {
     phaseController,

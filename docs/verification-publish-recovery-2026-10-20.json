@@ -1,0 +1,232 @@
+{
+  "date": "2026-10-20",
+  "scope": "Owner-authorized source commit on master and push to origin; no installer/live/personal-store operations",
+  "base_sha": "70341da05c56e8c152419ae83527d223d93b81f3",
+  "repository": "https://github.com/dennidalpos/OnlyRagV2",
+  "handoff": "docs/session-handoff-recovery-2026-10-20.md",
+  "evidence_root": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-publish-recovery-c461609878cd43c3a85ca82e25b065a3",
+  "tracker": {
+    "total": 38,
+    "autonomous": 20,
+    "user_required": 18,
+    "removed_ids": [],
+    "reclassified": [
+      "CI-CURRENT-REVISION-REMOTE-QUALIFICATION-01"
+    ]
+  },
+  "precommit_tests": {
+    "typescript": {
+      "passed": 2940,
+      "files": 322,
+      "seconds": 182.92
+    },
+    "python": {
+      "passed": 622,
+      "skipped": 1,
+      "seconds": 161.47,
+      "skip": "Directory symlinks unavailable; real junction tests run"
+    }
+  },
+  "qualified_receipts": [
+    "docs/verification-agent-crash-recovery-2026-10-20.json",
+    "docs/verification-history-provenance-2026-10-20.json"
+  ],
+  "line_endings": "Qualified working bytes remain preserved in earlier snapshots; git_lf_sha256 identifies the LF-normalized source blobs required by .gitattributes and checked in the index before commit.",
+  "sources": {
+    "electron/core/application/agentOrchestratorAppService.ts": {
+      "qualified_working_sha256": "0b6c5c79581ed0567f5deed98f8c2692c69f3b1eecb3539577a9ce76435ceb6c",
+      "git_lf_sha256": "0b6c5c79581ed0567f5deed98f8c2692c69f3b1eecb3539577a9ce76435ceb6c"
+    },
+    "electron/core/application/agentOrchestratorApplicationClosure.test.ts": {
+      "qualified_working_sha256": "98a96c428db100814b7d1812090dddf0f2fd2fca36c630e5f9cb904aff177099",
+      "git_lf_sha256": "98a96c428db100814b7d1812090dddf0f2fd2fca36c630e5f9cb904aff177099"
+    },
+    "electron/core/application/agentOrchestratorApplicationClosure.ts": {
+      "qualified_working_sha256": "e12c38dd7f0b23bd4ff0192027d4cb9d1a9dbca9ad0cac37e19500d8dae7a261",
+      "git_lf_sha256": "e12c38dd7f0b23bd4ff0192027d4cb9d1a9dbca9ad0cac37e19500d8dae7a261"
+    },
+    "electron/core/application/agentOrchestratorFinishAndLoopGuards.ts": {
+      "qualified_working_sha256": "a832ed86804430905d04563b3884ef0aef815961f157e9860c385b155322373a",
+      "git_lf_sha256": "a832ed86804430905d04563b3884ef0aef815961f157e9860c385b155322373a"
+    },
+    "electron/core/application/agentOrchestratorResponseInterpreter.ts": {
+      "qualified_working_sha256": "cf2f9ae1330790516a7c8e62d9bef70d1b684bb637f506720f22229554d40f92",
+      "git_lf_sha256": "cf2f9ae1330790516a7c8e62d9bef70d1b684bb637f506720f22229554d40f92"
+    },
+    "electron/core/application/agentOrchestratorSessionPersistence.ts": {
+      "qualified_working_sha256": "f112ad19318268c8a468bba7b38ec2d91092483727f8792716a757bcf0d38233",
+      "git_lf_sha256": "f112ad19318268c8a468bba7b38ec2d91092483727f8792716a757bcf0d38233"
+    },
+    "electron/core/application/agentOrchestratorSessionState.ts": {
+      "qualified_working_sha256": "544c805e94cde172037b1f19a42ca1744918b851ce82bc67be8613c8f1dda4ac",
+      "git_lf_sha256": "544c805e94cde172037b1f19a42ca1744918b851ce82bc67be8613c8f1dda4ac"
+    },
+    "electron/core/application/agentOrchestratorToolResultProcessor.test.ts": {
+      "qualified_working_sha256": "13976b172e0b4b7403087c3e85e970665760516def558b13f550576024c1e8c0",
+      "git_lf_sha256": "13976b172e0b4b7403087c3e85e970665760516def558b13f550576024c1e8c0"
+    },
+    "electron/core/application/agentOrchestratorToolResultProcessor.ts": {
+      "qualified_working_sha256": "6d6bb7107130342e8b26c5dbc462ba042d22ccec4a90e9642d09de61fa01c91c",
+      "git_lf_sha256": "6d6bb7107130342e8b26c5dbc462ba042d22ccec4a90e9642d09de61fa01c91c"
+    },
+    "electron/core/application/agentOrchestratorTurnDispatch.ts": {
+      "qualified_working_sha256": "9f76d5a48037094e22baeb7195004a6e0d54957615a20c621ec97a28ebe45363",
+      "git_lf_sha256": "9f76d5a48037094e22baeb7195004a6e0d54957615a20c621ec97a28ebe45363"
+    },
+    "electron/core/application/agentTaskRecovery.test.ts": {
+      "qualified_working_sha256": "15d851f8da59361f149edf02d0aafd8d5d3b047f0e686ec09cb14b1c29e74f12",
+      "git_lf_sha256": "15d851f8da59361f149edf02d0aafd8d5d3b047f0e686ec09cb14b1c29e74f12"
+    },
+    "electron/core/application/agentToolExecutorService.ts": {
+      "qualified_working_sha256": "1a4a5eb5bb85a1c36f6f42dce819c2aecd1b0e36c1c21b48f43c9e9980d28110",
+      "git_lf_sha256": "1a4a5eb5bb85a1c36f6f42dce819c2aecd1b0e36c1c21b48f43c9e9980d28110"
+    },
+    "electron/core/application/appSettingsAppService.test.ts": {
+      "qualified_working_sha256": "64020617b0409b4653dda0ea67050750ca693ab72e55204cd91c0c675b9d9150",
+      "git_lf_sha256": "64020617b0409b4653dda0ea67050750ca693ab72e55204cd91c0c675b9d9150"
+    },
+    "electron/core/application/taskQueueAppService.test.ts": {
+      "qualified_working_sha256": "4b90222d10c47c42d4d7d2c112a94c98cbfab49f1b8e92ea16ce6dc254b11a35",
+      "git_lf_sha256": "4b90222d10c47c42d4d7d2c112a94c98cbfab49f1b8e92ea16ce6dc254b11a35"
+    },
+    "electron/core/application/taskQueueAppService.ts": {
+      "qualified_working_sha256": "6c6fa104e907d3f7e6bec6d8be870b0243d8ebeb6366f1baaacca0ec4dd76ebe",
+      "git_lf_sha256": "6c6fa104e907d3f7e6bec6d8be870b0243d8ebeb6366f1baaacca0ec4dd76ebe"
+    },
+    "electron/core/infrastructure/filesystem/agentCheckpointStore.test.ts": {
+      "qualified_working_sha256": "7f6d10240fae1ef19ed9e68f139ad0622a5e5f3ee7b6d4b275a50a9b1b49c52a",
+      "git_lf_sha256": "7f6d10240fae1ef19ed9e68f139ad0622a5e5f3ee7b6d4b275a50a9b1b49c52a"
+    },
+    "electron/core/infrastructure/filesystem/agentCheckpointStore.ts": {
+      "qualified_working_sha256": "48fcbc447ea0bd4d1a1a07de800b25735dc705db4105070ad92d58395f104448",
+      "git_lf_sha256": "48fcbc447ea0bd4d1a1a07de800b25735dc705db4105070ad92d58395f104448"
+    },
+    "electron/core/infrastructure/filesystem/agentSessionStateRepository.ts": {
+      "qualified_working_sha256": "5ee695022f49d9fde7693dc66ce204edaf8457a7004f0e919ba5170e7a52268b",
+      "git_lf_sha256": "5ee695022f49d9fde7693dc66ce204edaf8457a7004f0e919ba5170e7a52268b"
+    },
+    "electron/core/infrastructure/filesystem/agentTaskRecoveryRepository.ts": {
+      "qualified_working_sha256": "d7f26d24b3565e1ae807bcb6aab66980d31808aac955e15e8e2cb1329c191fac",
+      "git_lf_sha256": "d7f26d24b3565e1ae807bcb6aab66980d31808aac955e15e8e2cb1329c191fac"
+    },
+    "electron/core/infrastructure/process/persistentPowerShellSession.test.ts": {
+      "qualified_working_sha256": "db8c84eab8d38e7f67a9726dd648c343ed76481397d28133213357d2ea55dc4a",
+      "git_lf_sha256": "db8c84eab8d38e7f67a9726dd648c343ed76481397d28133213357d2ea55dc4a"
+    },
+    "electron/core/presentation/agentIpc.test.ts": {
+      "qualified_working_sha256": "ccf0101e996a512a0925a37aa0ddaecaeb3ab8ced41347d0bd3c092d157ef93b",
+      "git_lf_sha256": "ccf0101e996a512a0925a37aa0ddaecaeb3ab8ced41347d0bd3c092d157ef93b"
+    },
+    "electron/core/presentation/agentIpc.ts": {
+      "qualified_working_sha256": "8162d23ee9c201518b4bb5fbf7052057b209161ea1bcca121300fd7f7f65fdbe",
+      "git_lf_sha256": "8162d23ee9c201518b4bb5fbf7052057b209161ea1bcca121300fd7f7f65fdbe"
+    },
+    "electron/core/presentation/secureIpcMain.ts": {
+      "qualified_working_sha256": "23e6186ad4e6f014ffee850a944f9e5bacd966cc8e02f164ef3f716b4982c67f",
+      "git_lf_sha256": "23e6186ad4e6f014ffee850a944f9e5bacd966cc8e02f164ef3f716b4982c67f"
+    },
+    "package.json": {
+      "qualified_working_sha256": "5c2093320dd527ae388f8fc3269efd4a213a15210f2e9878066f9b4fa2f7a61d",
+      "git_lf_sha256": "5c2093320dd527ae388f8fc3269efd4a213a15210f2e9878066f9b4fa2f7a61d"
+    },
+    "scripts/e2e/agentReliability.mjs": {
+      "qualified_working_sha256": "4e4c6f2c4bcfcf73bc19446d6f39f213c96f2791119bbc930d1cacadc278db74",
+      "git_lf_sha256": "4e4c6f2c4bcfcf73bc19446d6f39f213c96f2791119bbc930d1cacadc278db74"
+    },
+    "shared/ipc/ipcContract.ts": {
+      "qualified_working_sha256": "616dadd803b08ac0b433cb158d91aa97dddaae6eb750c188a9a88cb6a2541fa2",
+      "git_lf_sha256": "616dadd803b08ac0b433cb158d91aa97dddaae6eb750c188a9a88cb6a2541fa2"
+    },
+    "shared/types/index.ts": {
+      "qualified_working_sha256": "d9a294c2fafad4f691302206869bf34b3bab528433113626842dbf935e11b357",
+      "git_lf_sha256": "d9a294c2fafad4f691302206869bf34b3bab528433113626842dbf935e11b357"
+    },
+    "src/components/coding/AgentTaskRecoveryBanner.test.tsx": {
+      "qualified_working_sha256": "2460935f6964fb6b85860b0ab0d26d4708519e17aa93a69b3594b27373225ba3",
+      "git_lf_sha256": "2460935f6964fb6b85860b0ab0d26d4708519e17aa93a69b3594b27373225ba3"
+    },
+    "src/components/coding/AgentTaskRecoveryBanner.tsx": {
+      "qualified_working_sha256": "72d18d325b176c9ea611de6c795f4ed16f923a3dc4dbe7acaa33cb7c6ea0d641",
+      "git_lf_sha256": "72d18d325b176c9ea611de6c795f4ed16f923a3dc4dbe7acaa33cb7c6ea0d641"
+    },
+    "src/components/coding/CodingAgentView.tsx": {
+      "qualified_working_sha256": "ace17a5b564abd240f3acfc93d14ce91579a8cb13a9e4ebdc67342d0b1876231",
+      "git_lf_sha256": "ace17a5b564abd240f3acfc93d14ce91579a8cb13a9e4ebdc67342d0b1876231"
+    },
+    "src/hooks/codingAgent/useCodingAgentExecution.test.tsx": {
+      "qualified_working_sha256": "7c1ca11124d2daf753640a0948ab812fdbf3e6f35fce5276467e14dde56edede",
+      "git_lf_sha256": "7c1ca11124d2daf753640a0948ab812fdbf3e6f35fce5276467e14dde56edede"
+    },
+    "src/hooks/codingAgent/useCodingAgentExecution.ts": {
+      "qualified_working_sha256": "e0775f6088be764dd816947dd55d9b879a1fd3a3d3fb5279b894f9fdeda40595",
+      "git_lf_sha256": "e0775f6088be764dd816947dd55d9b879a1fd3a3d3fb5279b894f9fdeda40595"
+    },
+    "src/hooks/useCodingAgent.ts": {
+      "qualified_working_sha256": "a1e44decd01b14fbd4ca4e5b5959d2e8697b9f05d4e6843cfb724b0ee28afb7c",
+      "git_lf_sha256": "a1e44decd01b14fbd4ca4e5b5959d2e8697b9f05d4e6843cfb724b0ee28afb7c"
+    },
+    "src/i18n/locales/en.ts": {
+      "qualified_working_sha256": "75807bb3a121b48963a462fad193f406c23ab7ead55658379cc93ecc9ea291a8",
+      "git_lf_sha256": "75807bb3a121b48963a462fad193f406c23ab7ead55658379cc93ecc9ea291a8"
+    },
+    "src/i18n/locales/it.ts": {
+      "qualified_working_sha256": "c24e4697336846a1bc3cae11d314ede395fcdcd86da1df165cedc4e352371811",
+      "git_lf_sha256": "c24e4697336846a1bc3cae11d314ede395fcdcd86da1df165cedc4e352371811"
+    },
+    "sidecar/services/prompt_history_service.py": {
+      "qualified_working_sha256": "9832157b914d6a442fae5965c25b35f33598df239375a6587ecf01c8dc2efb54",
+      "git_lf_sha256": "078919fd710a2837080c929e1a61941a2385b3112e0ab5ba77bffa522dff3428"
+    },
+    "sidecar/infrastructure/embeddings.py": {
+      "qualified_working_sha256": "76f5922042fc52b99c0375c7db770e13a0e417fb49caceeee206989abec343f1",
+      "git_lf_sha256": "76f5922042fc52b99c0375c7db770e13a0e417fb49caceeee206989abec343f1"
+    },
+    "sidecar/tests/conftest.py": {
+      "qualified_working_sha256": "0daa20567ec1532440c14c0d3eb90ed78ccb901864042c7219f922d19b6e61d5",
+      "git_lf_sha256": "0daa20567ec1532440c14c0d3eb90ed78ccb901864042c7219f922d19b6e61d5"
+    },
+    "sidecar/tests/test_history_encoder_provenance.py": {
+      "qualified_working_sha256": "3dad7088bb517a0762ebd3021890817f76b504b01c1aad0192c3f770cdee631a",
+      "git_lf_sha256": "3dad7088bb517a0762ebd3021890817f76b504b01c1aad0192c3f770cdee631a"
+    },
+    "sidecar/tests/test_prompt_history_failures.py": {
+      "qualified_working_sha256": "43980c515a3466d27ad9f99773fabe2094bc5d81728e6973f6e4cb71971c7219",
+      "git_lf_sha256": "63cf9a3056cd5233e31137afd805fec9f9055f1a3a05ba341cfd6ea2adb0b382"
+    },
+    "sidecar/tests/test_document_recovery.py": {
+      "qualified_working_sha256": "379110d3201d62d975a28ae21b0a68a67c3f745aeddfe9cd5c801e07db2945df",
+      "git_lf_sha256": "2e41766b0c3cc7946ed39dc224301ac219e6e5496d3b922252c48ec92ad65038"
+    },
+    "sidecar/tests/test_embeddings.py": {
+      "qualified_working_sha256": "e0bbe1a9cb6821c0dee8e070538414bef3f32609496a38b7adc6581d83254d15",
+      "git_lf_sha256": "e0bbe1a9cb6821c0dee8e070538414bef3f32609496a38b7adc6581d83254d15"
+    },
+    "sidecar/tests/test_sidecar.py": {
+      "qualified_working_sha256": "d6c797deb873dd0f399bf87b120ade487c135e2ece9b2acfe79b29b475737492",
+      "git_lf_sha256": "d6c797deb873dd0f399bf87b120ade487c135e2ece9b2acfe79b29b475737492"
+    }
+  },
+  "remote_ci": "Read the exact published SHA after push; pending runs do not close the autonomous CI qualification task.",
+  "precommit_gates": {
+    "serial": {
+      "passed": true,
+      "critical_python": 15,
+      "cleanup_whatif": 31,
+      "cleanup_actual": 17,
+      "build": true,
+      "electron_isolated_smoke": true,
+      "log": "serial-precommit.log"
+    },
+    "static": {
+      "passed": true,
+      "files": 858,
+      "secure_ipc_handlers": 105,
+      "log": "static-precommit-final.log"
+    },
+    "docs": {
+      "passed": true,
+      "markdown_pages": 85
+    },
+    "initial_static_failure": "CRLF in the updated tracker; normalized to LF without content changes; static-precommit.log retained"
+  }
+}

@@ -22,6 +22,12 @@ L'annullamento tenta prima il rollback dei dati della nuova ingestione, poi rimu
 
 [Qualifica del ciclo completo, citazioni superstiti e confini della pulizia](./verification-source-archive-lifecycle-2026-10-19.md).
 
+## Storico dei prompt
+
+I nuovi record conservano lo spazio encoder completo. Indicizzazione e query usano rispettivamente i ruoli `document` e `query`; digest, dimensione e preparazione devono coincidere con lo spazio conservato. Un fallback hash registrato rimane nel proprio spazio. La ricerca usa distanze L2 sui vettori completi e rifiuta modifiche concorrenti dello storico durante la codifica.
+
+Gli archivi legacy privi di provenienza restano conservati, ma ricerca e indicizzazione vengono rifiutate fino a ricostruzione esplicita con backup/readback/rollback verificati. Nessuna migrazione automatica o attribuzione retroattiva dell'encoder. Quel percorso per lo storico e la qualifica con encoder reali restano aperti in `HISTORY-EMBEDDING-CORRECTNESS-01`; il rebuild dei documenti non li sostituisce. [Correzione sorgente, prove isolate e limiti](./verification-history-provenance-2026-10-20.md).
+
 ## Stato della verifica
 
 La chat espone per ogni nuovo turno con documenti il **Contesto documentale inviato per questa risposta**: anteprime e candidati restituiti dalla ricerca, testo esatto incluso, troncamenti ed esclusioni per budget, testo vuoto o documenti fuori selezione. Il dettaglio viene associato al messaggio al dispatch e conservato nel checkpoint; non ricostruisce i turni storici privi del campo. I riferimenti dei passaggi inclusi corrispondono alle schede delle fonti; l'inclusione non certifica il supporto alle affermazioni. I conteggi UTF-16 riguardano il Markdown estratto o il singolo candidato, senza sommare testo duplicato come copertura del documento. Storico precedente, parti fuori shortlist e token effettivi restano distinti. [Verifica offline, persistenza e limiti](./verification-chat-coverage-2026-10-19.md).

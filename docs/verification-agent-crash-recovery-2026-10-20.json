@@ -1,0 +1,249 @@
+{
+  "date": "2026-10-20",
+  "task": "AGENT-UNGRACEFUL-SHUTDOWN-RECOVERY-01",
+  "scope": "Offline Windows development Main/Preload; deterministic generation; explicit recovery. No installed/real-model/power-loss acceptance.",
+  "ownerDecision": "Retain pending/interrupted tasks; resume explicitly.",
+  "originalCompletion": "Interrupt an owned isolated agent process and restart; read back checkpoints, pending work and terminal state without duplicate execution or loss of acknowledged history. Dependencies: Isolated deterministic services can cover the offline phase; AGENT-SESSION-LIVE-01 remains the separate real-run qualification.",
+  "sources": {
+    "electron/core/application/agentOrchestratorAppService.ts": "0b6c5c79581ed0567f5deed98f8c2692c69f3b1eecb3539577a9ce76435ceb6c",
+    "electron/core/application/agentOrchestratorApplicationClosure.test.ts": "98a96c428db100814b7d1812090dddf0f2fd2fca36c630e5f9cb904aff177099",
+    "electron/core/application/agentOrchestratorApplicationClosure.ts": "e12c38dd7f0b23bd4ff0192027d4cb9d1a9dbca9ad0cac37e19500d8dae7a261",
+    "electron/core/application/agentOrchestratorFinishAndLoopGuards.ts": "a832ed86804430905d04563b3884ef0aef815961f157e9860c385b155322373a",
+    "electron/core/application/agentOrchestratorResponseInterpreter.ts": "cf2f9ae1330790516a7c8e62d9bef70d1b684bb637f506720f22229554d40f92",
+    "electron/core/application/agentOrchestratorSessionPersistence.ts": "f112ad19318268c8a468bba7b38ec2d91092483727f8792716a757bcf0d38233",
+    "electron/core/application/agentOrchestratorSessionState.ts": "544c805e94cde172037b1f19a42ca1744918b851ce82bc67be8613c8f1dda4ac",
+    "electron/core/application/agentOrchestratorToolResultProcessor.test.ts": "13976b172e0b4b7403087c3e85e970665760516def558b13f550576024c1e8c0",
+    "electron/core/application/agentOrchestratorToolResultProcessor.ts": "6d6bb7107130342e8b26c5dbc462ba042d22ccec4a90e9642d09de61fa01c91c",
+    "electron/core/application/agentOrchestratorTurnDispatch.ts": "9f76d5a48037094e22baeb7195004a6e0d54957615a20c621ec97a28ebe45363",
+    "electron/core/application/agentTaskRecovery.test.ts": "15d851f8da59361f149edf02d0aafd8d5d3b047f0e686ec09cb14b1c29e74f12",
+    "electron/core/application/agentToolExecutorService.ts": "1a4a5eb5bb85a1c36f6f42dce819c2aecd1b0e36c1c21b48f43c9e9980d28110",
+    "electron/core/application/appSettingsAppService.test.ts": "64020617b0409b4653dda0ea67050750ca693ab72e55204cd91c0c675b9d9150",
+    "electron/core/application/taskQueueAppService.test.ts": "4b90222d10c47c42d4d7d2c112a94c98cbfab49f1b8e92ea16ce6dc254b11a35",
+    "electron/core/application/taskQueueAppService.ts": "6c6fa104e907d3f7e6bec6d8be870b0243d8ebeb6366f1baaacca0ec4dd76ebe",
+    "electron/core/infrastructure/filesystem/agentCheckpointStore.test.ts": "7f6d10240fae1ef19ed9e68f139ad0622a5e5f3ee7b6d4b275a50a9b1b49c52a",
+    "electron/core/infrastructure/filesystem/agentCheckpointStore.ts": "48fcbc447ea0bd4d1a1a07de800b25735dc705db4105070ad92d58395f104448",
+    "electron/core/infrastructure/filesystem/agentSessionStateRepository.ts": "5ee695022f49d9fde7693dc66ce204edaf8457a7004f0e919ba5170e7a52268b",
+    "electron/core/infrastructure/filesystem/agentTaskRecoveryRepository.ts": "d7f26d24b3565e1ae807bcb6aab66980d31808aac955e15e8e2cb1329c191fac",
+    "electron/core/infrastructure/process/persistentPowerShellSession.test.ts": "db8c84eab8d38e7f67a9726dd648c343ed76481397d28133213357d2ea55dc4a",
+    "electron/core/presentation/agentIpc.test.ts": "ccf0101e996a512a0925a37aa0ddaecaeb3ab8ced41347d0bd3c092d157ef93b",
+    "electron/core/presentation/agentIpc.ts": "8162d23ee9c201518b4bb5fbf7052057b209161ea1bcca121300fd7f7f65fdbe",
+    "electron/core/presentation/secureIpcMain.ts": "23e6186ad4e6f014ffee850a944f9e5bacd966cc8e02f164ef3f716b4982c67f",
+    "package.json": "5c2093320dd527ae388f8fc3269efd4a213a15210f2e9878066f9b4fa2f7a61d",
+    "scripts/e2e/agentReliability.mjs": "4e4c6f2c4bcfcf73bc19446d6f39f213c96f2791119bbc930d1cacadc278db74",
+    "shared/ipc/ipcContract.ts": "616dadd803b08ac0b433cb158d91aa97dddaae6eb750c188a9a88cb6a2541fa2",
+    "shared/types/index.ts": "d9a294c2fafad4f691302206869bf34b3bab528433113626842dbf935e11b357",
+    "src/components/coding/AgentTaskRecoveryBanner.test.tsx": "2460935f6964fb6b85860b0ab0d26d4708519e17aa93a69b3594b27373225ba3",
+    "src/components/coding/AgentTaskRecoveryBanner.tsx": "72d18d325b176c9ea611de6c795f4ed16f923a3dc4dbe7acaa33cb7c6ea0d641",
+    "src/components/coding/CodingAgentView.tsx": "ace17a5b564abd240f3acfc93d14ce91579a8cb13a9e4ebdc67342d0b1876231",
+    "src/hooks/codingAgent/useCodingAgentExecution.test.tsx": "7c1ca11124d2daf753640a0948ab812fdbf3e6f35fce5276467e14dde56edede",
+    "src/hooks/codingAgent/useCodingAgentExecution.ts": "e0775f6088be764dd816947dd55d9b879a1fd3a3d3fb5279b894f9fdeda40595",
+    "src/hooks/useCodingAgent.ts": "a1e44decd01b14fbd4ca4e5b5959d2e8697b9f05d4e6843cfb724b0ee28afb7c",
+    "src/i18n/locales/en.ts": "75807bb3a121b48963a462fad193f406c23ab7ead55658379cc93ecc9ea291a8",
+    "src/i18n/locales/it.ts": "c24e4697336846a1bc3cae11d314ede395fcdcd86da1df165cedc4e352371811"
+  },
+  "nativeEvidence": {
+    "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\qualified-harness\\result.json",
+    "sha256": "2759a65a4b63a68686c2abe1cc1c2b0823a1a0590ea74e78fb477a34775384db",
+    "assertions": [
+      "no automatic dispatch",
+      "accepted queued request retained",
+      "transcript exactly retained after kill",
+      "acknowledged write not replayed",
+      "terminal readback after second restart",
+      "completed identities refused",
+      "explicit file checkpoint restoration"
+    ],
+    "bundleSha256": "92ba2e44c338186c629d641babdf5fb745ff9d2c83f7a05aff4590a1e9375376",
+    "fullReliabilityScenarios": 8,
+    "guardScenarios": 9,
+    "ownedFixtureCleanup": true
+  },
+  "checks": {
+    "typescript": {
+      "ordinaryPassed": 2939,
+      "files": 322,
+      "ordinarySeconds": 186.85,
+      "finalCoveragePassed": 2940,
+      "coverageSeconds": 218.25,
+      "coverage": {
+        "lines": {
+          "total": 20880,
+          "covered": 15430,
+          "skipped": 0,
+          "pct": 73.89
+        },
+        "statements": {
+          "total": 23984,
+          "covered": 17330,
+          "skipped": 0,
+          "pct": 72.25
+        },
+        "functions": {
+          "total": 4677,
+          "covered": 3095,
+          "skipped": 0,
+          "pct": 66.17
+        },
+        "branches": {
+          "total": 20580,
+          "covered": 13021,
+          "skipped": 0,
+          "pct": 63.27
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": 100
+        }
+      },
+      "note": "Final coverage includes the added conversation-order regression and both corrected CI fixtures."
+    },
+    "python": {
+      "passed": 598,
+      "skipped": 1,
+      "seconds": 187.99,
+      "skipReason": "Directory symlinks unavailable; actual junction cases executed"
+    },
+    "serialGate": {
+      "status": "passed",
+      "command": "pwsh -NoProfile -File scripts/lint_format.ps1 -Fast -SkipTests -Format",
+      "criticalPythonCases": 15,
+      "cleanupWhatIfCases": 31,
+      "cleanupRealCases": 17,
+      "pythonCompileCache": "external"
+    },
+    "ciFixtureTargeted": {
+      "passed": 19,
+      "files": 2,
+      "seconds": 13.57
+    }
+  },
+  "retainedAttempts": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28",
+  "residues": [
+    "AGENT-INFLIGHT-EFFECT-RECONCILIATION-01",
+    "DEVSERVER-LOOPBACK-PROBE-STABILITY-01",
+    "CI-CURRENT-REVISION-REMOTE-QUALIFICATION-01"
+  ],
+  "completedTasks": [
+    "AGENT-UNGRACEFUL-SHUTDOWN-RECOVERY-01",
+    "TEST-ELECTRON-AGENT-HARNESS-CONTRACT-01",
+    "CI-WINDOWS-TEST-FIXTURES-01"
+  ],
+  "artifacts": {
+    "qualified-harness/result.json": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\qualified-harness\\result.json",
+      "sha256": "2759a65a4b63a68686c2abe1cc1c2b0823a1a0590ea74e78fb477a34775384db"
+    },
+    "qualified-harness/harness.json": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\qualified-harness\\harness.json",
+      "sha256": "82bc9358f3a6db843400b425f55c91ee0452c1ae6ead859b46e4c3cc018b8878"
+    },
+    "qualified-harness/cleanup.json": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\qualified-harness\\cleanup.json",
+      "sha256": "7af1fc47ef7f1a4a6f8617f6bd8f526337e044e2ae4fb90947362c94c1b36249"
+    },
+    "qualified-harness.log": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\qualified-harness.log",
+      "sha256": "fc3e304502f0a4a6b321360935d94229ce1246c034be33dd2967477422a07daa"
+    },
+    "build-qualified.log": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\build-qualified.log",
+      "sha256": "bab6c36968519619f3057c3817f335f1637492356533b7d7451d4df524e46d2f"
+    },
+    "vitest-qualified.log": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\vitest-qualified.log",
+      "sha256": "b69cbf56e60523e35bc9609c101d3dda1a16e134ac5dfab9e9b8a59ff8a399d1"
+    },
+    "pytest-full.log": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\pytest-full.log",
+      "sha256": "785bd480d91704e3b18e60e9c73bb293d41ea21edfd16f5ba368125b9611953e"
+    },
+    "coverage-final.log": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\coverage-final.log",
+      "sha256": "9348c5f06eb188b672aeafdf1d2fe6e6d34df4a9b912398609f263bd7ef8e218"
+    },
+    "coverage-final/coverage-summary.json": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\coverage-final\\coverage-summary.json",
+      "sha256": "a3ec3ffc4243f7f8a144261bd4fa69ddb070409bb9216160dfd749b2a00f29e6"
+    },
+    "ci-fixtures-targeted.log": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\ci-fixtures-targeted.log",
+      "sha256": "0ae35a8ce2f38bd25d73805beb518fc393004fe32bc4b2390f8ae2b41528a2c8"
+    },
+    "conversation-order-red.log": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\conversation-order-red.log",
+      "sha256": "c7054c6bd8a4cd0787449c86f050a4db7685e3d8c843438dfc635b22e9dfd772"
+    },
+    "serial-gate-final.log": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\serial-gate-final.log",
+      "sha256": "513bf78c3e4cc60059309a5aadf097a88062da44a4be28f565e88ea1154c3c3d"
+    },
+    "ci-jobs.json": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\ci-jobs.json",
+      "sha256": "2d1294a7c02e4457e7ee8fba14326e0a6349802fd6591aed1d99150c9a13ae10"
+    },
+    "ci-failed.log": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\ci-failed.log",
+      "sha256": "5b577c5fa31b58225da1a9751ebd7a46cb956114c8dd795e147e5a1b042c1a19"
+    },
+    "retained-fixtures.json": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\retained-fixtures.json",
+      "sha256": "a64a33ebe4813347eb3d9498ec37e5a242c90c299927aeadef3b1bcccc82e147"
+    },
+    "serial-qualified.log": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\serial-qualified.log",
+      "sha256": "48d7dab9a5ca2a3bcfab7aaa271d8ea8cd983cee8a1c2c012d412574ea0b3d9a"
+    },
+    "secondbrain-sync.log": {
+      "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\secondbrain-sync.log",
+      "sha256": "1157a32f561e9f227708c160ea47fa8fe00848e71f35bda8380e8f1ea594c4dd"
+    }
+  },
+  "openTracker": {
+    "total": 38,
+    "autonomous": 19,
+    "userRequired": 19,
+    "unchangedPreviousItems": 33,
+    "previousItemsRefined": [
+      "DISTRIBUTION-CURRENT-SOURCE-QUALIFICATION-01",
+      "RETAINED-RESIDUE-DISPOSAL-01"
+    ]
+  },
+  "priorCI": {
+    "sha": "70341da05c56e8c152419ae83527d223d93b81f3",
+    "runId": 39380408183,
+    "status": "completed",
+    "conclusion": "failure",
+    "url": "https://github.com/dennidalpos/OnlyRagV2/actions/runs/39380408183",
+    "newRemoteRunAuthorized": false
+  },
+  "retainedCleanup": {
+    "automaticReview": "blocked by policy; no more specific reason",
+    "originalsRetained": [
+      "%TEMP%/onlyrag-electron-e2e-Ttw2dr",
+      "node_modules/onlyrag-vite-preview-9AuK0z"
+    ],
+    "verifiedCopyManifest": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-agent-recovery-b37553e0c24042bf9eceb5f42c613e28\\retained-fixtures.json",
+    "existingTask": "RETAINED-RESIDUE-DISPOSAL-01",
+    "preexistingViteFixturesPreserved": [
+      "onlyrag-vite-preview-8NlAGc",
+      "onlyrag-vite-preview-kRuJ7C"
+    ]
+  },
+  "environment": {
+    "platform": "Windows",
+    "node": "24.20.0",
+    "npm": "11.19.0",
+    "python": "3.13.15",
+    "electron": "43.7.4",
+    "vitest": "4.1.11"
+  },
+  "secondBrain": {
+    "contextUpdated": true,
+    "technicalMemoryUpdated": true,
+    "sync": "passed",
+    "sessionReleased": true,
+    "repositoryInstructionChanges": 0
+  }
+}

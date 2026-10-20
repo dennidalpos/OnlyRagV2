@@ -1,6 +1,14 @@
 import { AGENT_MAIN_TEXT_IT } from '../../../shared/domain/agent/agentMainText'
 
 export const it = {
+  agentRecovery: {
+    files: 'File',
+    terminal: 'Terminale',
+    fullAccess: 'Accesso completo',
+    notice: 'I task interrotti e in attesa sono conservati. Riprendi ogni task esplicitamente con modello e permessi originali.',
+    resume: 'Riprendi task',
+    failure: 'Recupero non disponibile; i task salvati sono conservati',
+  },
   requestScope: {
     title: 'Conferma l’ambito della richiesta',
     description:

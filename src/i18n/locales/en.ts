@@ -1,6 +1,14 @@
 import { TranslationSchema } from '../types'
 
 export const en: TranslationSchema = {
+  agentRecovery: {
+    files: 'Files',
+    terminal: 'Terminal',
+    fullAccess: 'Full access',
+    notice: 'Interrupted and waiting tasks are retained. Resume each task explicitly with its original model and permissions.',
+    resume: 'Resume task',
+    failure: 'Recovery unavailable; saved tasks are preserved',
+  },
   requestScope: {
     title: 'Confirm the request scope',
     description:

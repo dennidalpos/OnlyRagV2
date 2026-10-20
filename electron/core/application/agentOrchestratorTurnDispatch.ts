@@ -284,7 +284,7 @@ export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: Pr
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, 'Task cancelled by user.')
     }
-    agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.sessionId)
+    agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.session.id, ctx.session.identity.conversationId)
     ctx.finalizeSession()
     return { outcome: 'return', result: { success: false, summary: terminalSummary, completionStatus } }
   }

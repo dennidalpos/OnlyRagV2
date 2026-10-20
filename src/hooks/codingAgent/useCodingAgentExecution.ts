@@ -11,6 +11,7 @@ import type {
   AgentMode,
   AgentPlan,
   AgentRunIdentity,
+  AgentTaskRecovery,
   AppSettings,
   CodingSession,
   ExecutedPromptOutcome,
@@ -80,7 +81,10 @@ export function useCodingAgentExecution({
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false)
   const [agentPrompt, setAgentPrompt] = useState('')
   const [isExecuting, setIsExecuting] = useState(false)
+  const [recoverableTasks, setRecoverableTasks] = useState<AgentTaskRecovery[]>([])
+  const [recoveryError, setRecoveryError] = useState('')
   const [activeRunIdentity, setActiveRunIdentity] = useState<Readonly<AgentRunIdentity> | null>(null)
+  const recoveredRunRef = useRef<string | null>(null)
   const activeRunIdentityRef = useRef<Readonly<AgentRunIdentity> | null>(null)
   const [activeSkills, setActiveSkills] = useState<string[]>([])
   const [streamingText, setStreamingText] = useState('')
@@ -108,6 +112,48 @@ export function useCodingAgentExecution({
     activeRunIdentityRef.current = identity
     setActiveRunIdentity(identity)
   }, [])
+
+  useEffect(() => {
+    let current = true
+    if (!window.electronAPI?.listRecoverableAgentTasks || isExecuting) return
+    void window.electronAPI
+      .listRecoverableAgentTasks()
+      .then((tasks) => {
+        if (current)
+          setRecoverableTasks(tasks.filter((task) => task.identity.conversationId === session.activeSessionId && task.workspacePath === workspacePath))
+      })
+      .catch((error: unknown) => {
+        if (current) setRecoveryError(errorMessage(error))
+      })
+    return () => {
+      current = false
+    }
+  }, [isExecuting, session.activeSessionId, workspacePath])
+
+  const resumeRecoveredTask = async (task: AgentTaskRecovery) => {
+    if (isExecuting || activeRunIdentityRef.current || task.identity.conversationId !== session.activeSessionId || task.workspacePath !== workspacePath) return
+    const busyModule = peekGlobalTaskLock()
+    if (busyModule && busyModule !== 'coding') return
+    setRecoveryError('')
+    recoveredRunRef.current = task.identity.runId
+    updateActiveRunIdentity(task.identity)
+    setIsExecuting(true)
+    setAgentMode(task.agentMode)
+    setCapabilityProfile(task.capabilityProfile)
+    setCurrentStep(0)
+    setStreamingText('')
+    setChangeMetrics(EMPTY_CHANGE_METRICS)
+    try {
+      const result = await window.electronAPI!.resumeAgentTask(task.identity)
+      if (!result.success) throw new Error(result.error || result.summary)
+      setRecoverableTasks((tasks) => tasks.filter((candidate) => candidate.identity.runId !== task.identity.runId))
+    } catch (error: unknown) {
+      updateActiveRunIdentity(null)
+      recoveredRunRef.current = null
+      setIsExecuting(false)
+      setRecoveryError(errorMessage(error))
+    }
+  }
 
   const changeAgentMode = useCallback(
     (mode: AgentMode) => {
@@ -137,7 +183,8 @@ export function useCodingAgentExecution({
 
   useEffect(() => {
     const identity = activeRunIdentityRef.current
-    if (!isExecuting || !identity || preferredContext === undefined || !window.electronAPI?.updateActiveAgentRun) return
+    if (!isExecuting || !identity || recoveredRunRef.current === identity.runId || preferredContext === undefined || !window.electronAPI?.updateActiveAgentRun)
+      return
     void window.electronAPI
       .updateActiveAgentRun({ identity, numCtx: preferredContext })
       .catch((error: unknown) => logger.error('useCodingAgentExecution', `Failed updating active context: ${errorMessage(error)}`))
@@ -218,6 +265,7 @@ export function useCodingAgentExecution({
       planRevisionId,
       workspacePath,
     })
+    recoveredRunRef.current = null
     updateActiveRunIdentity(identity)
     runningExecutedPromptRef.current = {
       sessionId: runSessionId,
@@ -444,6 +492,8 @@ export function useCodingAgentExecution({
 
     const unsubDone = window.electronAPI.onAgentDone?.((res: AgentDoneResult & AgentRunIdentity) => {
       if (!matchesAgentRunIdentity(activeRunIdentityRef.current, res)) return
+      const wasRecovered = recoveredRunRef.current === res.runId
+      recoveredRunRef.current = null
       updateActiveRunIdentity(null)
       soundEffectsService.play(res?.success === false ? 'error' : 'completion', soundsEnabled)
       setCurrentLiveModel(null)
@@ -454,7 +504,7 @@ export function useCodingAgentExecution({
       setStreamingText('')
       setCurrentStatusText('')
 
-      const nextItem = res?.completionStatus === 'cancelled' ? undefined : dequeueNextPrompt()
+      const nextItem = wasRecovered || res?.completionStatus === 'cancelled' ? undefined : dequeueNextPrompt()
       if (nextItem) {
         dequeueTimer = setTimeout(() => {
           dequeueTimer = null
@@ -586,6 +636,9 @@ export function useCodingAgentExecution({
     agentPrompt,
     setAgentPrompt,
     isExecuting,
+    recoverableTasks,
+    recoveryError,
+    resumeRecoveredTask,
     activeRunIdentity,
     currentLiveModel,
     currentStep,

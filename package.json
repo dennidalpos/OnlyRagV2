@@ -20,6 +20,7 @@
     "test:unit-only": "vitest run --reporter=dot electron/core/domain electron/core/application",
     "test:agent": "vitest run --reporter=dot electron/core/domain/agent",
     "test:e2e:electron": "npm run build && node ./scripts/e2e/agentReliability.mjs",
+    "test:e2e:agent-crash": "npm run build && node ./scripts/e2e/agentReliability.mjs --crash-only",
     "test:e2e:agent-browser": "vitest run --config vitest.agent-browser.config.mts",
     "test:e2e:cold-start": "npm run build && node ./scripts/e2e/coldStartNetwork.mjs",
     "test:e2e:settings-bootstrap": "npm run build && node ./scripts/e2e/settingsBootstrap.mjs",

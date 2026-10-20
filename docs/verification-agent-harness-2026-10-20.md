@@ -1,0 +1,13 @@
+# Riallineamento della suite Electron agente — 20 ottobre 2026
+
+`TEST-ELECTRON-AGENT-HARNESS-CONTRACT-01` completa il residuo trovato durante la [qualifica del recupero](./verification-agent-crash-recovery-2026-10-20.md). Il primo avvio completo si fermava nella cancellazione sessioni: il JSON sintetico ometteva `workspacePath` e il test attendeva un booleano, mentre il contratto corrente restituisce `refused`, `pending` o `complete`.
+
+La fixture ora ha proprietario, workspace e stato validi. La cancellazione richiede `complete` e controlla l'arrivo del fence HTTP al servizio simulato. Ogni Main Electron posseduto instrada il proprio HTTP Sidecar verso il server temporaneo su porta assegnata; il Sidecar reale non viene avviato e un eventuale servizio personale sulla porta 8000 non riceve richieste dalla prova. Generazione e disponibilità dei modelli restano simulate.
+
+Lo scenario di crash è una funzione condivisa dalla modalità completa e da `--crash-only`. Le prove conservano sempre ricevute e fallimenti in una cartella esterna; una copia fallita delle fixture o un errore di cleanup non nasconde l'errore originale. Un errore durante il lancio chiude l'Electron appena creato. Il cleanup verifica la radice temporanea posseduta.
+
+Il comando `node scripts/e2e/agentReliability.mjs`, dopo `npm run build`, esegue **otto scenari di affidabilità e nove guard**, oltre ai controlli aggiuntivi già presenti su permessi, aggiornamento della run e milestone. Sono passati cancellazione nelle quattro fasi, coda e identità, Full access/Ask, workspace Git sporco, arresto forzato e doppio riavvio, recupero esplicito, loop, budget ed errori di verifica. Il progetto della prova di crash esegue un test Node reale sui byte creati. La modalità selezionata da sola certifica soltanto il proprio scenario.
+
+Durante il riallineamento la suite ha trovato anche una regressione del nuovo checkpoint: una modifica Full access esterna al workspace veniva classificata come fallimento di salvataggio. La correzione e la regressione dedicata mantengono quel cambiamento autorizzato, escludendolo dal checkpoint del workspace come previsto; non estendono il ripristino ad altri percorsi. I fallimenti intermedi, inclusi la prima inizializzazione del mock HTTP e il caso Full access, sono conservati.
+
+Ricevute complete, hash del runner, log e conferma della pulizia sono registrati nella [ricevuta del recupero](./verification-agent-crash-recovery-2026-10-20.json). Questa è una prova del Main/Preload di sviluppo con servizi deterministici: nessuna qualifica installata, chiamata a modelli reali, perdita di alimentazione o pubblicazione è implicata.

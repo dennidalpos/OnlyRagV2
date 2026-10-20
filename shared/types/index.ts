@@ -387,6 +387,16 @@ export interface AgentContextBudgetBreakdown {
   manualCompaction: boolean
 }
 
+export interface AgentTaskRecovery {
+  identity: AgentRunIdentity
+  userTask: string
+  workspacePath: string
+  agentMode: AgentMode
+  acceptedAt: string
+  activeModel?: string
+  capabilityProfile: AgentCapabilityProfile
+}
+
 export interface TaskQueueStatus {
   maxConcurrency: number
   runningCount: number

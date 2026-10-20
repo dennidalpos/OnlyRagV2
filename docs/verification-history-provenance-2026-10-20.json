@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-20",
+  "task": "HISTORY-EMBEDDING-CORRECTNESS-01",
+  "status": "source-gap-corrected-qualification-open",
+  "evidence_root": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-loopback-0e544c2b6c054c138ca52405c2a31b45",
+  "lancedb_version": "0.37.1",
+  "completed_task_ids": [],
+  "open_counts": {
+    "autonomous": 19,
+    "user_required": 19,
+    "total": 38
+  },
+  "checks": {
+    "typescript": {
+      "passed": 2940,
+      "files": 322,
+      "seconds": 186.75,
+      "log": "vitest-diagnostic.log"
+    },
+    "python_full": {
+      "passed": 621,
+      "skipped": 1,
+      "seconds": 159.2,
+      "log": "pytest-full.log",
+      "limitation": "collected before the final additional reopen test; that test subsequently passed in targeted checks"
+    },
+    "python_targeted_final": {
+      "passed": 92,
+      "log": "history-targeted-qualified.log"
+    },
+    "serial": {
+      "passed": true,
+      "log": "serial-gates-final.log"
+    },
+    "static": {
+      "passed": true,
+      "files": 858,
+      "secure_ipc_handlers": 105,
+      "log": "static.log"
+    },
+    "documentation": {
+      "passed": true,
+      "pages": 84
+    },
+    "secondbrain_sync": {
+      "warnings": 0,
+      "repositories": 23,
+      "log": "secondbrain-sync.log",
+      "passed": true
+    }
+  },
+  "loopback": {
+    "probes": 50000,
+    "correct_refusals": 50000,
+    "unexpected_connections": 0,
+    "root_cause_established": false,
+    "guard_changed": false
+  },
+  "residuals": [
+    "actual encoder and scoring qualification",
+    "explicit backed-up legacy-history reconstruction",
+    "original intermittent loopback refusal",
+    "pending owner inflight-effect recovery policy"
+  ],
+  "source_sha256": {
+    "sidecar/services/prompt_history_service.py": "9832157b914d6a442fae5965c25b35f33598df239375a6587ecf01c8dc2efb54",
+    "sidecar/infrastructure/embeddings.py": "76f5922042fc52b99c0375c7db770e13a0e417fb49caceeee206989abec343f1",
+    "sidecar/tests/conftest.py": "0daa20567ec1532440c14c0d3eb90ed78ccb901864042c7219f922d19b6e61d5",
+    "sidecar/tests/test_history_encoder_provenance.py": "3dad7088bb517a0762ebd3021890817f76b504b01c1aad0192c3f770cdee631a",
+    "sidecar/tests/test_prompt_history_failures.py": "43980c515a3466d27ad9f99773fabe2094bc5d81728e6973f6e4cb71971c7219",
+    "sidecar/tests/test_document_recovery.py": "379110d3201d62d975a28ae21b0a68a67c3f745aeddfe9cd5c801e07db2945df",
+    "sidecar/tests/test_embeddings.py": "e0bbe1a9cb6821c0dee8e070538414bef3f32609496a38b7adc6581d83254d15",
+    "sidecar/tests/test_sidecar.py": "d6c797deb873dd0f399bf87b120ade487c135e2ece9b2acfe79b29b475737492"
+  }
+}

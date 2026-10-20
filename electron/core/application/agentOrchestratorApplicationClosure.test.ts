@@ -69,6 +69,7 @@ describe('application-owned agent closure', () => {
       workspacePath,
       settings: { verifyBeforeFinish: true, enableCodingAgentDebugLog: false } as AppSettings,
       sessionId: 'closure-session',
+      runId: 'closure-run',
       stepCount: 7,
       flags: {
         hasFileMutations: options?.hasFileMutations ?? true,

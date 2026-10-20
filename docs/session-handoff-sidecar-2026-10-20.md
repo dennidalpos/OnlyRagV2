@@ -8,7 +8,13 @@ Richiesta esplicita: salvare il lavoro, aggiornare tracker, commit sul branch pr
 - [Ripresa tracker](./verification-tracker-resume-2026-10-20.md): CI dell'esatto `e48c468` completata con successo; diagnosi storiche worker/retention ancora aperte. Nuovo runner diagnostico dev-server, 25 casi nativi e 24 regressioni mirate passati, intermittenza non riprodotta e guardia invariata.
 - [Confronto lingua](./plan-chat-language-2026-10-20.md): preparazione offline e 24 input congelati verificati. Il proprietario ha risposto **«Mantieni il perimetro solo offline»**: zero inferenze, nessuna esecuzione pianificata e candidato non integrato.
 
-[Tracker](../PROJECT_STATUS.json): **34 attività aperte, 15 autonome / 19 owner-required, 4 P1 / 27 P2 / 3 P3**. Stessi ID, priorità, ordine, liste, criteri e note precedenti; nessuna chiusura nella presente consegna. Il difetto Sidecar corretto è descritto nel suo resoconto, senza nuovo task aperto duplicato. L'ulteriore runtime modificato conserva il gate di distribuzione sullo stesso artefatto.
+[Tracker](../PROJECT_STATUS.json): **35 attività aperte, 16 autonome / 19 owner-required, 4 P1 / 28 P2 / 3 P3**. Tutti i 34 task precedenti mantengono ID, priorità, ordine relativo, liste, criteri e note; nessuna chiusura nella presente consegna. Dopo il primo push è confermato un nuovo residuo Vite, registrato una sola volta come descritto sotto e fuori dal lotto salvato. Il difetto Sidecar corretto è descritto nel suo resoconto, senza nuovo task aperto duplicato. L'ulteriore runtime modificato conserva il gate di distribuzione sullo stesso artefatto.
+
+## Readback del primo push e nuovo residuo
+
+Commit applicativo `c179884d8c114bb76bdcfcc9e896dad9701ebd52` pubblicato su `master`, remoto identico e divergenza 0/0. [CI esatta](https://github.com/dennidalpos/OnlyRagV2/actions/runs/39494790939) in esecuzione al readback; il seguito documentale contenente questa nota richiede un proprio controllo CI, registrato nel dossier e nelle ricevute esterne.
+
+Durante il push GitHub segnala [Dependabot 29](https://github.com/dennidalpos/OnlyRagV2/security/dependabot/29), moderato e aperto. Il lock effettivo usa Vite **8.2.2**, dipendenza di sviluppo; l'[avviso del manutentore](https://github.com/vitejs/launch-editor/security/advisories/GHSA-698v-4r3x-3vcv), GHSA-698v-4r3x-3vcv/CVE-2026-112943, comprende 8.2.0–8.2.3 e indica 8.2.4 corretta. Su Windows il percorso editor può interpretare contenuto ostile quando l'attaccante può collocare un filename apposito e manipolare l'ambiente o uno stream NTFS. Sfruttabilità specifica e raggiungibilità nell'installato non verificate. Nuovo P2 `DEPENDENCY-VITE-WINDOWS-EDITOR-01`, autonomo, **fuori da questo lotto**: nessun aggiornamento pacchetti o correzione dichiarata. Ricevute API e versioni conservate nelle evidenze della pubblicazione.
 
 ## Ripresa
 

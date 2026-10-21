@@ -23,5 +23,10 @@ export function resolveOllamaUrl(apiPath: string, host?: string): OllamaUrl {
 export function requestOllama(url: OllamaUrl, options: http.RequestOptions, listener: (response: http.IncomingMessage) => void): http.ClientRequest {
   const secure = url.protocol === 'https:'
   const transport = secure ? https : http
-  return transport.request({ hostname: url.hostname, port: url.port, path: url.path, ...options, agent: secure ? httpsAgent : httpAgent }, listener)
+  return transport.request({ hostname: url.hostname, port: url.port, path: url.path, ...options, agent: secure ? httpsAgent : httpAgent }, (response) => {
+    // Ollama APIs are JSON/NDJSON. A per-response decoder retains UTF-8 code points
+    // split across TCP chunks before any caller accumulates or parses the text.
+    response.setEncoding('utf8')
+    listener(response)
+  })
 }

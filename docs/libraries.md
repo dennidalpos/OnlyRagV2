@@ -1,5 +1,7 @@
 # Dipendenze e limiti noti
 
+L'[audit corrente del 21 ottobre](./critical-application-audit-2026-10-21.md) aggiorna Electron a **43.8.3** e Pillow a **13.0.0**, con floor e vincolo esatto Python. L'inventario distingue installato, lock e candidate dei registri; audit npm/PyPI/OSV locali e alert remoti mantengono evidenze separate. La schermata Informazioni ricava la baseline dai file di build, senza dichiarare le versioni di servizi esterni. Le ricevute precedenti non sono il risultato dello scan nuovo.
+
 Il [seguito locale del 21 ottobre](./verification-tracker-completion-2026-10-21.md) aggiorna Vite a **8.2.4** per l'[advisory Windows editor-launch](https://github.com/vitejs/launch-editor/security/advisories/GHSA-698v-4r3x-3vcv): installazione pulita, audit, editor/dev-server Windows, suite complete, build e smoke Main passano. L'upstream `braces` resta 3.0.3 al controllo corrente; il fork locale resta necessario. Questi esiti sostituiscono i conteggi operativi dei resoconti datati sotto.
 
 Il [seguito del 20 ottobre](./verification-monaco-sanitizer-2026-10-20.md) sostituisce nel bundle il sanitizer incorporato di Monaco con DOMPurify 3.4.17 esatto e aggiunge una regressione Chromium/Electron ai gate CI. La sostituzione è verificata nel grafo di build; l'override da solo non bastava. Monaco resta 0.56.0: la candidata 0.57.0 contiene ancora DOMPurify 3.4.15. `braces` upstream resta 3.0.3 al nuovo readback del registro: il fork rimane necessario.
@@ -18,7 +20,7 @@ L'[audit Python del 2026-10-15](./python-dependency-audit-2026-10-15.md) confron
 
 ## Residui attuali
 
-Il [riesame del 16 ottobre](./dependency-remediation-2026-10-16.md) elimina tutte le copie di `sprintf-js` e applica una patch locale tracciata a `braces`: il risultato dell'audit npm non sostituisce le prove della patch. Restano nel [tracker](../PROJECT_STATUS.json) la sostituzione futura del fork con upstream verificato e il sanitizer incorporato in Monaco. Il worker di scansione conserva i propri limiti indipendenti. La cache HTTP Got del builder resta disabilitata; `http-cache-semantics` è alla 4.3.0, fuori dall'intervallo dell'advisory contestato dal manutentore ([riesame e limiti](#riesame-dependabot-del-15-ottobre-2026)). Il controllo dell'artefatto scaricato è separato. Rivedere catena di chiamata e advisory ufficiali prima di cambiare lockfile o confini di esecuzione.
+Il [riesame del 16 ottobre](./dependency-remediation-2026-10-16.md) elimina tutte le copie di `sprintf-js` e applica una patch locale tracciata a `braces`: il risultato dell'audit npm non sostituisce le prove della patch. Restano nel [tracker](../PROJECT_STATUS.json) la sostituzione futura del fork con upstream verificato e l'attribuzione del rifiuto storico dev-server; il sanitizer Monaco è già sostituito e verificato nel grafo. Il worker di scansione conserva i propri limiti indipendenti. La cache HTTP Got del builder resta disabilitata; `http-cache-semantics` è alla 4.3.0, fuori dall'intervallo dell'advisory contestato dal manutentore ([riesame e limiti](#riesame-dependabot-del-15-ottobre-2026)). Il controllo dell'artefatto scaricato è separato. Rivedere catena di chiamata e advisory ufficiali prima di cambiare lockfile o confini di esecuzione.
 
 ## Evidenze datate
 

@@ -209,7 +209,7 @@ export class WebClient {
 
     const results = parseDuckDuckGoHtmlResults(fetchRes.rawHtml || fetchRes.content, maxResults)
     if (results.length === 0) {
-      return this.searchInstantApi(cleanQuery)
+      return this.searchInstantApi(cleanQuery, signal)
     }
 
     return { success: true, results }
@@ -269,75 +269,116 @@ export class WebClient {
     const client = isHttps ? https : http
 
     return new Promise((resolve) => {
-      const req = client.get(
-        targetUrl,
-        {
-          headers: {
-            'User-Agent': this.userAgent,
-            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json,*/*;q=0.8',
-            'Accept-Language': 'it,en-US;q=0.9,en;q=0.8',
+      let req: http.ClientRequest | undefined
+      let response: http.IncomingMessage | undefined
+      let terminal = false
+      const retire = () => {
+        terminal = true
+        clearTimeout(deadline)
+        signal?.removeEventListener('abort', onAbort)
+      }
+      const fail = (error: string) => {
+        if (terminal) return
+        retire()
+        response?.destroy()
+        req?.destroy()
+        resolve({ success: false, error })
+      }
+      const onAbort = () => fail('Request cancelled by AbortSignal')
+      // A socket inactivity timeout alone permits an indefinitely trickling body.
+      const deadline = setTimeout(() => fail('Fetch exceeded its 15s response deadline'), 15000)
+      signal?.addEventListener('abort', onAbort, { once: true })
+      if (signal?.aborted) {
+        onAbort()
+        return
+      }
+
+      try {
+        req = client.get(
+          targetUrl,
+          {
+            headers: {
+              'User-Agent': this.userAgent,
+              Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json,*/*;q=0.8',
+              'Accept-Language': 'it,en-US;q=0.9,en;q=0.8',
+            },
+            timeout: 15000,
+            lookup: fullAccess ? undefined : publicOnlyLookup,
           },
-          timeout: 15000,
-          lookup: fullAccess ? undefined : publicOnlyLookup,
-        },
-        (res) => {
-          // Each hop is re-validated by the recursive call; the hop count is bounded.
-          if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-            res.resume()
-            if (redirectCount >= MAX_FETCH_REDIRECTS) {
-              return resolve({ success: false, error: `Fetch exceeded ${MAX_FETCH_REDIRECTS} redirect hops.` })
-            }
-            const redirectUrl = new URL(res.headers.location, targetUrl).toString()
-            return this.fetchWebContent(redirectUrl, maxChars, signal, redirectCount + 1, fullAccess).then(resolve)
-          }
-
-          if (res.statusCode && res.statusCode >= 400) {
-            resolve({ success: false, error: `HTTP ${res.statusCode} ${res.statusMessage || ''}` })
-            return
-          }
-
-          let rawData = ''
-          res.setEncoding('utf-8')
-          res.on('data', (chunk) => {
-            rawData += chunk
-            if (rawData.length > 5 * 1024 * 1024) {
-              req.destroy()
-            }
-          })
-          res.on('end', () => {
-            const cleanText = htmlToCleanMarkdown(rawData)
-            const titleMatch = rawData.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
-            const title = titleMatch ? htmlToCleanMarkdown(titleMatch[1]) : undefined
-            const truncated = cleanText.length > maxChars ? `${cleanText.slice(0, maxChars)}\n... [Content truncated for context budget]` : cleanText
-
-            resolve({
-              success: true,
-              content: truncated,
-              rawHtml: rawData.slice(0, 100000),
-              title,
+          (res) => {
+            response = res
+            res.on('error', (error: Error) => fail(error.message))
+            res.once('aborted', () => fail('Fetch response aborted before completion'))
+            res.once('close', () => {
+              if (!terminal) fail('Fetch response closed before completion')
             })
-          })
-        },
-      )
+            if (terminal) {
+              res.destroy()
+              return
+            }
+            // Each hop is re-validated by the recursive call; the hop count is bounded.
+            if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+              if (redirectCount >= MAX_FETCH_REDIRECTS) {
+                fail(`Fetch exceeded ${MAX_FETCH_REDIRECTS} redirect hops.`)
+                return
+              }
+              let redirectUrl: string
+              try {
+                redirectUrl = new URL(res.headers.location, targetUrl).toString()
+              } catch (error) {
+                fail(`Invalid fetch redirect: ${errorMessage(error)}`)
+                return
+              }
+              // Stop this response before handing cancellation to the next hop.
+              retire()
+              res.destroy()
+              req?.destroy()
+              void this.fetchWebContent(redirectUrl, maxChars, signal, redirectCount + 1, fullAccess).then(resolve)
+              return
+            }
 
-      req.on('error', (err: NodeJS.ErrnoException) => {
-        logger.log('WARN', 'WebClient', `Network error fetching ${urlStr}: ${err.message}`)
-        resolve({ success: false, error: err.message })
-      })
+            if (res.statusCode && res.statusCode >= 400) {
+              fail(`HTTP ${res.statusCode} ${res.statusMessage || ''}`)
+              return
+            }
 
-      req.on('timeout', () => {
-        req.destroy()
-        resolve({ success: false, error: `Request timed out (15s limit) for URL ${urlStr}` })
-      })
+            const chunks: Buffer[] = []
+            let bytes = 0
+            res.on('data', (chunk: Buffer | string) => {
+              if (terminal) return
+              const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+              bytes += buffer.length
+              if (bytes > 5 * 1024 * 1024) {
+                fail('Fetch exceeded 5 MiB safety limit')
+                return
+              }
+              chunks.push(buffer)
+            })
+            res.on('end', () => {
+              if (terminal) return
+              retire()
+              const rawData = Buffer.concat(chunks, bytes).toString('utf8')
+              const cleanText = htmlToCleanMarkdown(rawData)
+              const titleMatch = rawData.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
+              const title = titleMatch ? htmlToCleanMarkdown(titleMatch[1]) : undefined
+              const truncated = cleanText.length > maxChars ? `${cleanText.slice(0, maxChars)}\n... [Content truncated for context budget]` : cleanText
 
-      signal?.addEventListener(
-        'abort',
-        () => {
-          req.destroy()
-          resolve({ success: false, error: 'Request cancelled by AbortSignal' })
-        },
-        { once: true },
-      )
+              resolve({
+                success: true,
+                content: truncated,
+                rawHtml: rawData.slice(0, 100000),
+                title,
+              })
+            })
+          },
+        )
+
+        req.on('error', (error: Error) => fail(error.message))
+        req.on('timeout', () => fail('Request timed out (15s limit)'))
+        if (terminal) req.destroy()
+      } catch (error) {
+        fail(errorMessage(error))
+      }
     })
   }
 
@@ -498,16 +539,29 @@ export class WebClient {
               resolve({ success: true, downloadedBytes })
             })
 
+            let mimePrefix = Buffer.alloc(0)
+            let mimeChecked = fullAccess
+            const checkMime = () => {
+              mimeChecked = true
+              if (!downloadMimeAllowed(res.headers['content-type'], mimePrefix)) {
+                cleanupAndFail('Download content does not match declared MIME type.')
+              }
+            }
             res.on('data', (chunk: Buffer) => {
               if (terminal) return
               downloadedBytes += chunk.length
-              if (!fullAccess && downloadedBytes === chunk.length && !downloadMimeAllowed(res.headers['content-type'], Buffer.from(chunk))) {
-                cleanupAndFail('Download content does not match declared MIME type.')
-                return
+              if (!mimeChecked) {
+                mimePrefix = Buffer.concat([mimePrefix, chunk.subarray(0, 8 - mimePrefix.length)])
+                if (mimePrefix.length === 8) checkMime()
               }
               if (downloadedBytes > MAX_DOWNLOAD_BYTES) {
                 cleanupAndFail('Download exceeded 100MB safety limit.')
               }
+            })
+            // A signature shorter than eight bytes must also be checked before the
+            // destination stream can finish and publish its staging file.
+            res.once('end', () => {
+              if (!terminal && !mimeChecked) checkMime()
             })
 
             res.pipe(fileStream)

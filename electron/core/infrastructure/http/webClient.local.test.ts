@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { getEventListeners } from 'node:events'
 import fs from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
@@ -48,8 +49,39 @@ describe('agent network against owned HTTP services', () => {
           response.writeHead(200, { 'content-type': 'image/png' })
           response.end('%PDF-1.7')
           return
+        case '/short-mismatch':
+          response.writeHead(200, { 'content-type': 'image/png' })
+          response.end('%PDF')
+          return
+        case '/split-mismatch': {
+          response.writeHead(200, { 'content-type': 'image/png' })
+          response.write('%')
+          let attempts = 0
+          const timer = setInterval(() => {
+            if (fs.readdirSync(directory).some((name) => name.startsWith('.onlyrag-download-') && fs.statSync(path.join(directory, name)).size > 0)) {
+              clearInterval(timer)
+              response.end('PDF-1.7')
+            } else if (++attempts > 200) {
+              clearInterval(timer)
+              response.destroy()
+            }
+          }, 5)
+          return
+        }
         case '/page':
           response.end('<html><title>Owned page</title><body><h1>Local evidence</h1></body></html>')
+          return
+        case '/invalid-redirect':
+          response.writeHead(302, { location: 'http://[invalid' })
+          response.end()
+          return
+        case '/truncated':
+          response.writeHead(200, { 'content-length': '1000' })
+          response.write('partial')
+          setTimeout(() => response.destroy(), 10)
+          return
+        case '/oversized':
+          response.end('é'.repeat(3 * 1024 * 1024))
           return
         case '/slow':
           response.writeHead(200, { 'content-type': 'text/plain' })
@@ -93,14 +125,17 @@ describe('agent network against owned HTTP services', () => {
     expect(fetched.content).toContain('# Local evidence')
   })
 
-  it.each(['/error', '/mime', '/mismatch', '/private', '/loop'])('refuses %s without touching an existing file', async (route) => {
-    const destination = path.join(directory, 'existing.txt')
-    fs.writeFileSync(destination, 'retained')
-    const result = await client.downloadFile(`http://fixture.invalid${route}`, destination, directory)
-    expect(result.success).toBe(false)
-    expect(fs.readFileSync(destination, 'utf8')).toBe('retained')
-    expect(fs.readdirSync(directory)).toEqual(['existing.txt'])
-  })
+  it.each(['/error', '/mime', '/mismatch', '/short-mismatch', '/split-mismatch', '/private', '/loop'])(
+    'refuses %s without touching an existing file',
+    async (route) => {
+      const destination = path.join(directory, 'existing.txt')
+      fs.writeFileSync(destination, 'retained')
+      const result = await client.downloadFile(`http://fixture.invalid${route}`, destination, directory)
+      expect(result.success).toBe(false)
+      expect(fs.readFileSync(destination, 'utf8')).toBe('retained')
+      expect(fs.readdirSync(directory)).toEqual(['existing.txt'])
+    },
+  )
 
   it('acknowledges cancellation only after the real partial descriptor is closed and removed', async () => {
     const destination = path.join(directory, 'partial.txt')
@@ -147,5 +182,44 @@ describe('agent network against owned HTTP services', () => {
     if (!address || typeof address === 'string') throw new Error('Missing listener')
     await new Promise<void>((resolve) => server.close(() => resolve()))
     expect((await client.fetchWebContent('http://fixture.invalid/page')).success).toBe(false)
+  })
+
+  it.each(['/invalid-redirect', '/truncated', '/oversized', '/loop', '/error', '/private'])(
+    'settles a refused fetch %s without leaking its abort listener',
+    async (route) => {
+      const controller = new AbortController()
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        const result = await Promise.race([
+          client.fetchWebContent(`http://fixture.invalid${route}`, 16000, controller.signal),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('Fetch did not settle')), 1500)
+          }),
+        ])
+        expect(result.success).toBe(false)
+        expect(result.error).toBeTruthy()
+        expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+      } finally {
+        clearTimeout(timer)
+        controller.abort()
+      }
+    },
+  )
+
+  it('retires abort listeners across completed fetches and redirect hops', async () => {
+    const controller = new AbortController()
+    for (let i = 0; i < 12; i++) {
+      expect((await client.fetchWebContent('http://fixture.invalid/redirect', 16000, controller.signal)).success).toBe(true)
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+    }
+    controller.abort()
+  })
+
+  it('propagates cancellation into the empty-results search fallback', async () => {
+    const controller = new AbortController()
+    const fetch = vi.spyOn(client, 'fetchWebContent').mockResolvedValue({ success: true, content: 'No results', rawHtml: '<html></html>' })
+    await client.searchWeb('synthetic query', 8, controller.signal)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch.mock.calls[1][2]).toBe(controller.signal)
   })
 })

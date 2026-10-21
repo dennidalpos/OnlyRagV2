@@ -782,6 +782,7 @@ export const it = {
       'L’agente può leggere e modificare file fuori dal progetto, eseguire comandi, installare e creare commit con tutte le modifiche Git del progetto senza conferme. I privilegi restano quelli dell’utente del sistema operativo. I checkpoint coprono solo i file tracciati nel workspace; modifiche esterne e comandi shell non hanno un ripristino garantito.',
   },
   about: {
+    dependencyBaseline: 'Versioni di riferimento della build; i servizi esterni possono usare versioni diverse.',
     title: 'Informazioni su OnlyRag V2',
 
     authorTitle: 'Creatore & Manutentore',

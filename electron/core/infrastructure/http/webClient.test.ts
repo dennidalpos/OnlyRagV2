@@ -217,6 +217,24 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
     expect(request.destroy).toHaveBeenCalled()
   })
 
+  it('bounds the whole response even when body data keeps the socket active', async () => {
+    vi.useFakeTimers()
+    try {
+      const response = createMockResponse(200)
+      const request = createMockRequest()
+      mockHttpsGet(response, request)
+      const pending = client.fetchWebContent('https://example.com/trickle')
+      await vi.advanceTimersByTimeAsync(14999)
+      response.emit('data', 'still active')
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(pending).resolves.toMatchObject({ success: false, error: expect.stringContaining('deadline') })
+      expect(request.destroy).toHaveBeenCalled()
+      expect(response.destroy).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('cancels an in-flight download and removes the partial file', async () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-cancel-'))
     const targetPath = path.join(tempRoot, 'partial.zip')

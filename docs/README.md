@@ -57,6 +57,10 @@ Le guide descrivono il comportamento verificato nel codice al **13 ottobre 2026*
 
 ## Specifiche e prove conservate
 
+Il [passaggio di sessione dell’audit critico](./session-handoff-critical-audit-2026-10-21.md) salva correzioni, inventario delle versioni e tracker sul branch principale; conserva i due P2 aperti e i residui operativi protetti.
+
+L'[audit critico del 21 ottobre](./critical-application-audit-2026-10-21.md) corregge fetch/download, streaming UTF-8 e versioni Informazioni, aggiorna Pillow 13.0.0 ed Electron 43.8.3 e distingue audit locali, alert remoti, residui e proposte di aggiornamento. Include un [inventario delle dipendenze](./evidence/critical-audit-dependencies-2026-10-21.json).
+
 Il [seguito del tracker del 20 ottobre](./verification-tracker-followup-2026-10-20.md) riunisce cinque completamenti e 32 residui. È conclusa anche la [qualifica XLS installata](./verification-installed-xls-2026-10-20.md), con 14 casi nativi e corrispondenza dei 31 moduli Python congelati. La [campagna ledger di otto chiamate](./verification-ledger-bounded-2026-10-20.md) ha esaurito il budget: audit installato riletto, qualifica semantica ancora aperta.
 
 Le [dimensioni del candidato del 20 ottobre](./verification-candidate-footprint-2026-10-20.md) sono misurate sullo stesso installer estratto e installato: CPU OCR e avvio automatico passano, qualità e altri gate rimangono separati. Il conteggio storico di quel lotto è 32 attività aperte dopo cinque chiusure; le ricevute datate mantengono i propri conteggi.

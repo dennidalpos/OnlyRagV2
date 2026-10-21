@@ -777,6 +777,7 @@ export const en: TranslationSchema = {
       'The agent can read and change files outside the project, run commands, install, and commit all Git changes in the project without confirmation. Operating system privileges remain those of the current user. Checkpoints cover only tracked workspace files; external changes and shell commands have no guaranteed restore.',
   },
   about: {
+    dependencyBaseline: 'Build baseline versions; external services may use different versions.',
     title: 'About OnlyRag V2',
 
     authorTitle: 'Creator & Maintainer',

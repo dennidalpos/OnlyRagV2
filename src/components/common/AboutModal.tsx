@@ -7,7 +7,7 @@ import type { TranslationKey } from '../../i18n'
 import { OnlyRagLogo } from './OnlyRagLogo'
 import { GithubIcon } from './GithubIcon'
 import { logger } from '../../lib/logger'
-import { APP_AUTHOR, APP_REPOSITORY_SLUG, APP_REPOSITORY_URL, APP_VERSION } from '../../constants/appMetadata'
+import { DEPENDENCY_VERSIONS, APP_AUTHOR, APP_REPOSITORY_SLUG, APP_REPOSITORY_URL, APP_VERSION } from '../../constants/appMetadata'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
 export interface AboutModalProps {
@@ -26,11 +26,13 @@ export interface DependencyItem {
   url: string
 }
 
+const versions = (...names: string[]) => names.map((name) => (DEPENDENCY_VERSIONS[name] ? `v${DEPENDENCY_VERSIONS[name]}` : '?')).join(' / ')
+
 export const UPSTREAM_MODULES: DependencyItem[] = [
   // Core & Desktop Runtime
   {
     name: 'Electron',
-    version: 'v43.7.4',
+    version: versions('npm/electron'),
     description: 'Cross-platform native desktop application shell and context-isolated IPC runtime.',
     license: 'MIT',
     category: 'core',
@@ -38,7 +40,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'React 19',
-    version: 'v19.0.0',
+    version: versions('npm/react'),
     description: 'Modern component-driven presentation layer with direct ref passing and concurrent rendering.',
     license: 'MIT',
     category: 'core',
@@ -46,7 +48,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'TypeScript',
-    version: 'v6.0.3',
+    version: versions('npm/typescript'),
     description: 'Strict static type checking and compile-time verification across main and renderer layers.',
     license: 'Apache-2.0',
     category: 'core',
@@ -54,7 +56,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'Vite',
-    version: 'v8.2.1',
+    version: versions('npm/vite'),
     description: 'Next-generation frontend tooling with instant Hot Module Replacement (HMR).',
     license: 'MIT',
     category: 'core',
@@ -62,7 +64,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'Tailwind CSS',
-    version: 'v4.0.7',
+    version: versions('npm/tailwindcss'),
     description: 'High-performance atomic utility CSS engine and modern design tokens.',
     license: 'MIT',
     category: 'core',
@@ -70,7 +72,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'Vitest',
-    version: 'v4.1.10',
+    version: versions('npm/vitest'),
     description: 'Vite-native unit test runner for domain, application, and hook layers.',
     license: 'MIT',
     category: 'core',
@@ -78,7 +80,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'Electron Builder',
-    version: 'v26.15.3',
+    version: versions('npm/electron-builder'),
     description: 'Complete desktop application packaging and NSIS installer generation for Windows.',
     license: 'MIT',
     category: 'core',
@@ -86,7 +88,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'p-queue',
-    version: 'v9.3',
+    version: versions('npm/p-queue'),
     description: 'Promise concurrency queue with priority dispatching for serial task execution.',
     license: 'MIT',
     category: 'core',
@@ -94,7 +96,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'TypeScript Compiler API',
-    version: 'v5.x AST Engine',
+    version: versions('npm/typescript'),
     description: 'Programmatic AST parsing for code symbol extraction and structural repo mapping.',
     license: 'Apache-2.0',
     category: 'core',
@@ -104,7 +106,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   // AI, Vector Store & Sidecar
   {
     name: 'LanceDB',
-    version: '>= v0.6.0',
+    version: versions('python/lancedb'),
     description: 'Serverless embedded vector database with hybrid vector similarity + FTS search.',
     license: 'Apache-2.0',
     category: 'aiAndVector',
@@ -112,7 +114,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'Apache Arrow',
-    version: 'Columnar Standard',
+    version: versions('python/pyarrow'),
     description: 'Zero-copy in-memory columnar data structure backing LanceDB storage engine.',
     license: 'Apache-2.0',
     category: 'aiAndVector',
@@ -128,7 +130,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'FastAPI & Uvicorn',
-    version: '>= v0.110 / v0.28',
+    version: versions('python/fastapi', 'python/uvicorn'),
     description: 'High-performance asynchronous Python sidecar REST API with non-blocking concurrency.',
     license: 'MIT / BSD-3',
     category: 'aiAndVector',
@@ -136,7 +138,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'PyMuPDF (fitz)',
-    version: '>= v1.24.0',
+    version: versions('python/pymupdf'),
     description: 'High-speed document layout parsing, text extraction, and PDF compilation export.',
     license: 'AGPL-3.0 / Commercial',
     category: 'aiAndVector',
@@ -144,7 +146,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'RapidOCR (ONNX Runtime)',
-    version: '>= v1.4.0',
+    version: versions('python/rapidocr', 'python/onnxruntime'),
     description: 'Cross-platform OCR engine for scanned document and image ingestion with CUDA auto-detection.',
     license: 'Apache-2.0',
     category: 'aiAndVector',
@@ -152,7 +154,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'Pydantic',
-    version: '>= v2.6.0',
+    version: versions('python/pydantic'),
     description: 'Strict data validation and schema serialization for sidecar request/response payloads.',
     license: 'MIT',
     category: 'aiAndVector',
@@ -160,7 +162,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'HTTPX',
-    version: '>= v0.27.0',
+    version: versions('python/httpx'),
     description: 'Asynchronous HTTP client with connection pooling for Ollama streaming and sidecar IPC.',
     license: 'BSD-3-Clause',
     category: 'aiAndVector',
@@ -168,7 +170,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'OpenCV & Pillow',
-    version: '>= v4.8 / v10.0',
+    version: versions('python/opencv-python', 'python/pillow'),
     description: 'Computer vision image processing, binarization, deskewing, and OCR rasterization.',
     license: 'Apache-2.0 / MIT-CMU',
     category: 'aiAndVector',
@@ -176,7 +178,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'ftfy',
-    version: '>= v6.2.0',
+    version: versions('python/ftfy'),
     description: 'Universal Unicode text repair, mojibake decoding, and character normalization.',
     license: 'Apache-2.0',
     category: 'aiAndVector',
@@ -184,7 +186,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'WordFreq & SymSpell',
-    version: '>= v3.1 / v6.7',
+    version: versions('python/wordfreq', 'python/symspellpy'),
     description: 'Multilingual token frequency scoring, spell checking, and OCR error correction.',
     license: 'Apache-2.0 / CC BY-SA-4.0 (data) / MIT',
     category: 'aiAndVector',
@@ -192,7 +194,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'LangDetect & Tabulate',
-    version: '>= v1.0 / v0.9',
+    version: versions('python/langdetect', 'python/tabulate'),
     description: 'Multilingual document language detection and structured tabular Markdown formatting.',
     license: 'Apache-2.0 / MIT',
     category: 'aiAndVector',
@@ -200,7 +202,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'NumPy & Pandas',
-    version: '>= v1.26 / v2.0',
+    version: versions('python/numpy', 'python/pandas'),
     description: 'High-performance numerical computation and tabular document data manipulation.',
     license: 'BSD-3-Clause',
     category: 'aiAndVector',
@@ -208,7 +210,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'python-docx',
-    version: '>= v1.1.0',
+    version: versions('python/python-docx'),
     description: 'Microsoft Word (.docx) document parsing and structured text extraction.',
     license: 'MIT',
     category: 'aiAndVector',
@@ -218,7 +220,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   // UI, Monaco & Terminal
   {
     name: 'Monaco Editor',
-    version: 'v4.7.0',
+    version: versions('npm/monaco-editor'),
     description: 'VS Code editor engine for dual-pane Markdown review and DiffEditor translation.',
     license: 'MIT',
     category: 'uiAndEditor',
@@ -226,7 +228,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'Lucide React',
-    version: 'v1.31.0',
+    version: versions('npm/lucide-react'),
     description: 'Clean, accessible, and consistent iconography system.',
     license: 'ISC',
     category: 'uiAndEditor',
@@ -234,7 +236,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'TanStack Virtual',
-    version: 'v3.14.10',
+    version: versions('npm/@tanstack/react-virtual'),
     description: 'Headless virtual scrolling for high-volume logs, timelines, and document lists.',
     license: 'MIT',
     category: 'uiAndEditor',
@@ -242,7 +244,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'Diff (diff)',
-    version: 'v9.0.0',
+    version: versions('npm/diff'),
     description: 'Text and code diffing engine for line-by-line patch calculation and approval.',
     license: 'BSD-3-Clause',
     category: 'uiAndEditor',
@@ -250,7 +252,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'Strip ANSI',
-    version: 'v7.2.0',
+    version: versions('npm/strip-ansi'),
     description: 'ANSI escape code stripping for clean terminal log normalization and diagnostics.',
     license: 'MIT',
     category: 'uiAndEditor',
@@ -284,7 +286,7 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'Turndown & Cheerio',
-    version: 'v7.2 / v1.2',
+    version: versions('npm/turndown', 'npm/cheerio'),
     description: 'HTML-to-Markdown conversion and fast DOM parsing for web research scrapers.',
     license: 'MIT',
     category: 'skillsAndEcosystem',
@@ -292,31 +294,15 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'js-yaml',
-    version: 'v4.1.0',
+    version: versions('npm/js-yaml'),
     description: 'Universal YAML parser and serializer for Skill manifests (SKILL.md) and provenance tracking.',
     license: 'MIT',
     category: 'skillsAndEcosystem',
     url: 'https://github.com/nodeca/js-yaml',
   },
   {
-    name: 'Fast-Levenshtein',
-    version: 'v3.0.0',
-    description: 'Levenshtein distance string similarity calculation for typo-tolerant skill matching.',
-    license: 'MIT',
-    category: 'skillsAndEcosystem',
-    url: 'https://github.com/hiddentao/fast-levenshtein',
-  },
-  {
-    name: 'Ignore',
-    version: 'v7.0.6',
-    description: 'Gitignore rule matching and file system path filtering engine.',
-    license: 'MIT',
-    category: 'skillsAndEcosystem',
-    url: 'https://github.com/kaelzhang/node-ignore',
-  },
-  {
     name: 'GPT-Tokenizer',
-    version: 'v4.0.0',
+    version: versions('npm/gpt-tokenizer'),
     description: 'Fast BPE token counting (o200k_base) for agent context window budgeting.',
     license: 'MIT',
     category: 'skillsAndEcosystem',
@@ -495,6 +481,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 </span>
                 <Tooltip helpKey="about_creditsSubtitle" />
               </h3>
+              <p className="text-xs text-slate-400 mt-1">{t('about.dependencyBaseline')}</p>
             </div>
           </div>
 

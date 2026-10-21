@@ -19,7 +19,7 @@ nvidia-nvjitlink==13.4.52
 opencv-python==5.0.0.93
 openpyxl==3.1.5
 pandas==3.0.5
-pillow==12.3.0
+pillow==13.0.0
 puremagic==2.2.0
 pyarrow==25.0.1
 pydantic==2.13.4

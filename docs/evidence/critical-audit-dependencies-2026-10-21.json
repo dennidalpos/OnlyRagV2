@@ -1,0 +1,693 @@
+{
+  "date": "2026-10-21",
+  "scope": "Local source and development environments; no publication or personal installation",
+  "runtimes": {
+    "nodeHost": "24.20.0",
+    "npm": "11.19.0",
+    "python": "3.13.15",
+    "electron": "43.8.3",
+    "electronNode": "24.22.0",
+    "chromium": "150.0.7871.250"
+  },
+  "npm": [
+    {
+      "name": "braces",
+      "declaredBefore": "file:vendor/braces-3.0.4",
+      "installedBefore": "3.0.4+onlyrag.1",
+      "installedFinal": "3.0.4+onlyrag.1",
+      "latestAtAudit": "3.0.3"
+    },
+    {
+      "name": "cheerio",
+      "declaredBefore": "^1.2.0",
+      "installedBefore": "1.2.0",
+      "installedFinal": "1.2.0",
+      "latestAtAudit": "1.2.0"
+    },
+    {
+      "name": "depcheck",
+      "declaredBefore": "^1.4.7",
+      "installedBefore": "1.4.7",
+      "installedFinal": "1.4.7",
+      "latestAtAudit": "1.4.7"
+    },
+    {
+      "name": "diff",
+      "declaredBefore": "^9.0.0",
+      "installedBefore": "9.0.0",
+      "installedFinal": "9.0.0",
+      "latestAtAudit": "9.0.0"
+    },
+    {
+      "name": "js-yaml",
+      "declaredBefore": "^4.1.0",
+      "installedBefore": "4.3.2",
+      "installedFinal": "4.3.2",
+      "latestAtAudit": "5.5.0"
+    },
+    {
+      "name": "mustache",
+      "declaredBefore": "^4.2.0",
+      "installedBefore": "4.2.0",
+      "installedFinal": "4.2.0",
+      "latestAtAudit": "4.2.0"
+    },
+    {
+      "name": "p-queue",
+      "declaredBefore": "^9.3.3",
+      "installedBefore": "9.3.3",
+      "installedFinal": "9.3.3",
+      "latestAtAudit": "10.0.0"
+    },
+    {
+      "name": "playwright",
+      "declaredBefore": "^1.62.1",
+      "installedBefore": "1.62.1",
+      "installedFinal": "1.62.1",
+      "latestAtAudit": "1.64.1"
+    },
+    {
+      "name": "react-markdown",
+      "declaredBefore": "^10.1.0",
+      "installedBefore": "10.1.0",
+      "installedFinal": "10.1.0",
+      "latestAtAudit": "10.1.0"
+    },
+    {
+      "name": "remark-gfm",
+      "declaredBefore": "^4.0.1",
+      "installedBefore": "4.0.1",
+      "installedFinal": "4.0.1",
+      "latestAtAudit": "4.0.1"
+    },
+    {
+      "name": "semver",
+      "declaredBefore": "^7.8.5",
+      "installedBefore": "7.8.5",
+      "installedFinal": "7.8.5",
+      "latestAtAudit": "7.8.5"
+    },
+    {
+      "name": "strip-ansi",
+      "declaredBefore": "^7.2.0",
+      "installedBefore": "7.2.0",
+      "installedFinal": "7.2.0",
+      "latestAtAudit": "7.2.0"
+    },
+    {
+      "name": "turndown",
+      "declaredBefore": "^7.2.4",
+      "installedBefore": "7.2.4",
+      "installedFinal": "7.2.4",
+      "latestAtAudit": "7.2.4"
+    },
+    {
+      "name": "zod",
+      "declaredBefore": "^4.4.3",
+      "installedBefore": "4.4.3",
+      "installedFinal": "4.4.3",
+      "latestAtAudit": "4.6.7"
+    },
+    {
+      "name": "@biomejs/biome",
+      "declaredBefore": "2.5.12",
+      "installedBefore": "2.5.12",
+      "installedFinal": "2.5.12",
+      "latestAtAudit": "2.5.15"
+    },
+    {
+      "name": "@monaco-editor/react",
+      "declaredBefore": "^4.7.0",
+      "installedBefore": "4.7.0",
+      "installedFinal": "4.7.0",
+      "latestAtAudit": "4.7.0"
+    },
+    {
+      "name": "@tailwindcss/vite",
+      "declaredBefore": "^4.0.7",
+      "installedBefore": "4.3.3",
+      "installedFinal": "4.3.3",
+      "latestAtAudit": "4.3.3"
+    },
+    {
+      "name": "@tanstack/react-virtual",
+      "declaredBefore": "^3.14.10",
+      "installedBefore": "3.14.10",
+      "installedFinal": "3.14.10",
+      "latestAtAudit": "3.14.21"
+    },
+    {
+      "name": "@types/diff",
+      "declaredBefore": "^7.0.2",
+      "installedBefore": "7.0.2",
+      "installedFinal": "7.0.2",
+      "latestAtAudit": "7.0.2"
+    },
+    {
+      "name": "@types/js-yaml",
+      "declaredBefore": "^4.0.9",
+      "installedBefore": "4.0.9",
+      "installedFinal": "4.0.9",
+      "latestAtAudit": "4.0.9"
+    },
+    {
+      "name": "@types/mustache",
+      "declaredBefore": "^4.2.6",
+      "installedBefore": "4.2.6",
+      "installedFinal": "4.2.6",
+      "latestAtAudit": "4.2.6"
+    },
+    {
+      "name": "@types/node",
+      "declaredBefore": "^26.2.0",
+      "installedBefore": "26.4.0",
+      "installedFinal": "26.4.0",
+      "latestAtAudit": "26.6.5"
+    },
+    {
+      "name": "@types/react",
+      "declaredBefore": "^19.0.10",
+      "installedBefore": "19.2.18",
+      "installedFinal": "19.2.18",
+      "latestAtAudit": "19.3.0"
+    },
+    {
+      "name": "@types/react-dom",
+      "declaredBefore": "^19.0.4",
+      "installedBefore": "19.2.5",
+      "installedFinal": "19.2.5",
+      "latestAtAudit": "19.3.0"
+    },
+    {
+      "name": "@types/semver",
+      "declaredBefore": "^7.8.0",
+      "installedBefore": "7.8.0",
+      "installedFinal": "7.8.0",
+      "latestAtAudit": "7.8.0"
+    },
+    {
+      "name": "@types/turndown",
+      "declaredBefore": "^5.0.6",
+      "installedBefore": "5.0.6",
+      "installedFinal": "5.0.6",
+      "latestAtAudit": "5.0.6"
+    },
+    {
+      "name": "@vitejs/plugin-react",
+      "declaredBefore": "^6.0.5",
+      "installedBefore": "6.1.0",
+      "installedFinal": "6.1.0",
+      "latestAtAudit": "6.1.2"
+    },
+    {
+      "name": "@vitest/coverage-v8",
+      "declaredBefore": "^4.1.11",
+      "installedBefore": "4.1.11",
+      "installedFinal": "4.1.11",
+      "latestAtAudit": "5.0.5"
+    },
+    {
+      "name": "dompurify",
+      "declaredBefore": "3.4.17",
+      "installedBefore": "3.4.17",
+      "installedFinal": "3.4.17",
+      "latestAtAudit": "3.4.17"
+    },
+    {
+      "name": "dpdm",
+      "declaredBefore": "^4.3.0",
+      "installedBefore": "4.3.0",
+      "installedFinal": "4.3.0",
+      "latestAtAudit": "4.3.0"
+    },
+    {
+      "name": "electron",
+      "declaredBefore": "43.7.4",
+      "installedBefore": "43.7.4",
+      "installedFinal": "43.8.3",
+      "latestAtAudit": "45.0.0"
+    },
+    {
+      "name": "electron-builder",
+      "declaredBefore": "^26.15.3",
+      "installedBefore": "26.15.3",
+      "installedFinal": "26.15.3",
+      "latestAtAudit": "26.15.3"
+    },
+    {
+      "name": "gpt-tokenizer",
+      "declaredBefore": "^4.0.0",
+      "installedBefore": "4.0.0",
+      "installedFinal": "4.0.0",
+      "latestAtAudit": "4.1.0"
+    },
+    {
+      "name": "happy-dom",
+      "declaredBefore": "^20.11.2",
+      "installedBefore": "20.11.6",
+      "installedFinal": "20.11.6",
+      "latestAtAudit": "21.0.4"
+    },
+    {
+      "name": "knip",
+      "declaredBefore": "^6.32.3",
+      "installedBefore": "6.32.3",
+      "installedFinal": "6.32.3",
+      "latestAtAudit": "6.42.1"
+    },
+    {
+      "name": "lucide-react",
+      "declaredBefore": "^1.31.0",
+      "installedBefore": "1.34.0",
+      "installedFinal": "1.34.0",
+      "latestAtAudit": "1.61.0"
+    },
+    {
+      "name": "monaco-editor",
+      "declaredBefore": "^0.56.0",
+      "installedBefore": "0.56.0",
+      "installedFinal": "0.56.0",
+      "latestAtAudit": "0.57.0"
+    },
+    {
+      "name": "react",
+      "declaredBefore": "^19.0.0",
+      "installedBefore": "19.2.8",
+      "installedFinal": "19.2.8",
+      "latestAtAudit": "19.3.1"
+    },
+    {
+      "name": "react-dom",
+      "declaredBefore": "^19.0.0",
+      "installedBefore": "19.2.8",
+      "installedFinal": "19.2.8",
+      "latestAtAudit": "19.3.1"
+    },
+    {
+      "name": "skott",
+      "declaredBefore": "^0.35.11",
+      "installedBefore": "0.35.11",
+      "installedFinal": "0.35.11",
+      "latestAtAudit": "0.35.12"
+    },
+    {
+      "name": "tailwindcss",
+      "declaredBefore": "^4.0.7",
+      "installedBefore": "4.3.3",
+      "installedFinal": "4.3.3",
+      "latestAtAudit": "4.3.3"
+    },
+    {
+      "name": "typescript",
+      "declaredBefore": "^6.0.3",
+      "installedBefore": "6.0.3",
+      "installedFinal": "6.0.3",
+      "latestAtAudit": "7.0.2"
+    },
+    {
+      "name": "vite",
+      "declaredBefore": "~8.2.4",
+      "installedBefore": "8.2.4",
+      "installedFinal": "8.2.4",
+      "latestAtAudit": "8.3.5"
+    },
+    {
+      "name": "vite-plugin-electron",
+      "declaredBefore": "^1.1.1",
+      "installedBefore": "1.1.1",
+      "installedFinal": "1.1.1",
+      "latestAtAudit": "1.1.2"
+    },
+    {
+      "name": "vite-plugin-electron-renderer",
+      "declaredBefore": "^1.0.0",
+      "installedBefore": "1.0.0",
+      "installedFinal": "1.0.0",
+      "latestAtAudit": "1.0.0"
+    },
+    {
+      "name": "vitest",
+      "declaredBefore": "^4.1.10",
+      "installedBefore": "4.1.11",
+      "installedFinal": "4.1.11",
+      "latestAtAudit": "5.0.5"
+    }
+  ],
+  "python": [
+    {
+      "name": "chevron",
+      "constraint": "0.14.0",
+      "source": "https://pypi.org/pypi/chevron/json",
+      "latest": "0.14.0",
+      "requires_python": "",
+      "installedBefore": "0.14.0",
+      "installedFinal": "0.14.0"
+    },
+    {
+      "name": "fastapi",
+      "constraint": "0.141.1",
+      "source": "https://pypi.org/pypi/fastapi/json",
+      "latest": "0.156.6",
+      "requires_python": ">=3.10",
+      "installedBefore": "0.141.1",
+      "installedFinal": "0.141.1"
+    },
+    {
+      "name": "ftfy",
+      "constraint": "6.3.1",
+      "source": "https://pypi.org/pypi/ftfy/json",
+      "latest": "6.3.1",
+      "requires_python": ">=3.9",
+      "installedBefore": "6.3.1",
+      "installedFinal": "6.3.1"
+    },
+    {
+      "name": "httpx",
+      "constraint": "0.28.1",
+      "source": "https://pypi.org/pypi/httpx/json",
+      "latest": "0.28.1",
+      "requires_python": ">=3.8",
+      "installedBefore": "0.28.1",
+      "installedFinal": "0.28.1"
+    },
+    {
+      "name": "lancedb",
+      "constraint": "0.37.1",
+      "source": "https://pypi.org/pypi/lancedb/json",
+      "latest": "0.40.0",
+      "requires_python": ">=3.10",
+      "installedBefore": "0.37.1",
+      "installedFinal": "0.37.1"
+    },
+    {
+      "name": "langdetect",
+      "constraint": "1.0.9",
+      "source": "https://pypi.org/pypi/langdetect/json",
+      "latest": "1.0.9",
+      "requires_python": "",
+      "installedBefore": "1.0.9",
+      "installedFinal": "1.0.9"
+    },
+    {
+      "name": "numpy",
+      "constraint": "2.5.2",
+      "source": "https://pypi.org/pypi/numpy/json",
+      "latest": "2.5.4",
+      "requires_python": ">=3.12",
+      "installedBefore": "2.5.2",
+      "installedFinal": "2.5.2"
+    },
+    {
+      "name": "onnxruntime",
+      "constraint": "1.29.0",
+      "source": "https://pypi.org/pypi/onnxruntime/json",
+      "latest": "1.31.0",
+      "requires_python": ">=3.11",
+      "installedBefore": null,
+      "installedFinal": null
+    },
+    {
+      "name": "onnxruntime-gpu",
+      "constraint": "1.29.0",
+      "source": "https://pypi.org/pypi/onnxruntime-gpu/json",
+      "latest": "1.31.0",
+      "requires_python": ">=3.11",
+      "installedBefore": "1.29.0",
+      "installedFinal": "1.29.0"
+    },
+    {
+      "name": "nvidia-cublas",
+      "constraint": "13.7.0.27",
+      "source": "https://pypi.org/pypi/nvidia-cublas/json",
+      "latest": "13.8.1.7",
+      "requires_python": ">=3",
+      "installedBefore": "13.7.0.27",
+      "installedFinal": "13.7.0.27"
+    },
+    {
+      "name": "nvidia-cuda-nvrtc",
+      "constraint": "13.4.59",
+      "source": "https://pypi.org/pypi/nvidia-cuda-nvrtc/json",
+      "latest": "13.4.92",
+      "requires_python": ">=3",
+      "installedBefore": "13.4.59",
+      "installedFinal": "13.4.59"
+    },
+    {
+      "name": "nvidia-cuda-runtime",
+      "constraint": "13.4.49",
+      "source": "https://pypi.org/pypi/nvidia-cuda-runtime/json",
+      "latest": "13.4.92",
+      "requires_python": ">=3",
+      "installedBefore": "13.4.49",
+      "installedFinal": "13.4.49"
+    },
+    {
+      "name": "nvidia-cudnn-cu13",
+      "constraint": "9.26.0.51",
+      "source": "https://pypi.org/pypi/nvidia-cudnn-cu13/json",
+      "latest": "9.27.0.42",
+      "requires_python": ">=3",
+      "installedBefore": "9.26.0.51",
+      "installedFinal": "9.26.0.51"
+    },
+    {
+      "name": "nvidia-cufft",
+      "constraint": "12.4.0.34",
+      "source": "https://pypi.org/pypi/nvidia-cufft/json",
+      "latest": "12.4.0.43",
+      "requires_python": ">=3",
+      "installedBefore": "12.4.0.34",
+      "installedFinal": "12.4.0.34"
+    },
+    {
+      "name": "nvidia-curand",
+      "constraint": "10.4.4.49",
+      "source": "https://pypi.org/pypi/nvidia-curand/json",
+      "latest": "10.4.4.72",
+      "requires_python": ">=3",
+      "installedBefore": "10.4.4.49",
+      "installedFinal": "10.4.4.49"
+    },
+    {
+      "name": "nvidia-nvjitlink",
+      "constraint": "13.4.52",
+      "source": "https://pypi.org/pypi/nvidia-nvjitlink/json",
+      "latest": "13.4.92",
+      "requires_python": ">=3",
+      "installedBefore": "13.4.52",
+      "installedFinal": "13.4.52"
+    },
+    {
+      "name": "opencv-python",
+      "constraint": "5.0.0.93",
+      "source": "https://pypi.org/pypi/opencv-python/json",
+      "latest": "5.0.0.93",
+      "requires_python": ">=3.6",
+      "installedBefore": "5.0.0.93",
+      "installedFinal": "5.0.0.93"
+    },
+    {
+      "name": "openpyxl",
+      "constraint": "3.1.5",
+      "source": "https://pypi.org/pypi/openpyxl/json",
+      "latest": "3.1.5",
+      "requires_python": ">=3.8",
+      "installedBefore": "3.1.5",
+      "installedFinal": "3.1.5"
+    },
+    {
+      "name": "pandas",
+      "constraint": "3.0.5",
+      "source": "https://pypi.org/pypi/pandas/json",
+      "latest": "3.0.6",
+      "requires_python": ">=3.11",
+      "installedBefore": "3.0.5",
+      "installedFinal": "3.0.5"
+    },
+    {
+      "name": "pillow",
+      "constraint": "13.0.0",
+      "source": "https://pypi.org/pypi/pillow/json",
+      "latest": "13.0.0",
+      "requires_python": ">=3.11",
+      "installedBefore": "12.3.0",
+      "installedFinal": "13.0.0"
+    },
+    {
+      "name": "puremagic",
+      "constraint": "2.2.0",
+      "source": "https://pypi.org/pypi/puremagic/json",
+      "latest": "2.2.0",
+      "requires_python": ">=3.12",
+      "installedBefore": "2.2.0",
+      "installedFinal": "2.2.0"
+    },
+    {
+      "name": "pyarrow",
+      "constraint": "25.0.1",
+      "source": "https://pypi.org/pypi/pyarrow/json",
+      "latest": "26.0.0",
+      "requires_python": ">=3.11",
+      "installedBefore": "25.0.1",
+      "installedFinal": "25.0.1"
+    },
+    {
+      "name": "pydantic",
+      "constraint": "2.13.4",
+      "source": "https://pypi.org/pypi/pydantic/json",
+      "latest": "2.14.1",
+      "requires_python": ">=3.10",
+      "installedBefore": "2.13.4",
+      "installedFinal": "2.13.4"
+    },
+    {
+      "name": "pymupdf",
+      "constraint": "1.28.2",
+      "source": "https://pypi.org/pypi/pymupdf/json",
+      "latest": "2.0",
+      "requires_python": ">=3.11",
+      "installedBefore": "1.28.2",
+      "installedFinal": "1.28.2"
+    },
+    {
+      "name": "python-docx",
+      "constraint": "1.2.0",
+      "source": "https://pypi.org/pypi/python-docx/json",
+      "latest": "1.2.0",
+      "requires_python": ">=3.9",
+      "installedBefore": "1.2.0",
+      "installedFinal": "1.2.0"
+    },
+    {
+      "name": "python-multipart",
+      "constraint": "0.0.32",
+      "source": "https://pypi.org/pypi/python-multipart/json",
+      "latest": "0.0.32",
+      "requires_python": ">=3.10",
+      "installedBefore": "0.0.32",
+      "installedFinal": "0.0.32"
+    },
+    {
+      "name": "rapidocr",
+      "constraint": "3.9.2",
+      "source": "https://pypi.org/pypi/rapidocr/json",
+      "latest": "3.10.0",
+      "requires_python": "<4,>=3.8",
+      "installedBefore": "3.9.2",
+      "installedFinal": "3.9.2"
+    },
+    {
+      "name": "symspellpy",
+      "constraint": "6.10.0",
+      "source": "https://pypi.org/pypi/symspellpy/json",
+      "latest": "6.10.0",
+      "requires_python": ">=3.10",
+      "installedBefore": "6.10.0",
+      "installedFinal": "6.10.0"
+    },
+    {
+      "name": "tabulate",
+      "constraint": "0.10.0",
+      "source": "https://pypi.org/pypi/tabulate/json",
+      "latest": "0.10.0",
+      "requires_python": ">=3.10",
+      "installedBefore": "0.10.0",
+      "installedFinal": "0.10.0"
+    },
+    {
+      "name": "uvicorn",
+      "constraint": "0.52.4",
+      "source": "https://pypi.org/pypi/uvicorn/json",
+      "latest": "0.54.0",
+      "requires_python": ">=3.10",
+      "installedBefore": "0.52.4",
+      "installedFinal": "0.52.4"
+    },
+    {
+      "name": "wordfreq",
+      "constraint": "3.1.1",
+      "source": "https://pypi.org/pypi/wordfreq/json",
+      "latest": "3.1.1",
+      "requires_python": ">=3.8,<4",
+      "installedBefore": "3.1.1",
+      "installedFinal": "3.1.1"
+    },
+    {
+      "name": "xlrd",
+      "constraint": "2.0.2",
+      "source": "https://pypi.org/pypi/xlrd/json",
+      "latest": "2.0.2",
+      "requires_python": "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,>=2.7",
+      "installedBefore": "2.0.2",
+      "installedFinal": "2.0.2"
+    }
+  ],
+  "audits": {
+    "npm": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "pypi": {
+      "packages": 70,
+      "findings": 0,
+      "skipped": 0
+    },
+    "osv": {
+      "packages": 70,
+      "findings": 0,
+      "skipped": 0
+    },
+    "sourceDevelopmentPypi": {
+      "packages": 80,
+      "findings": 0,
+      "skipped": 0
+    },
+    "sourceDevelopmentOsv": {
+      "packages": 80,
+      "findings": 0,
+      "skipped": 0
+    },
+    "cpuPypi": {
+      "packages": 69,
+      "findings": 0,
+      "skipped": 0
+    },
+    "cpuOsv": {
+      "packages": 69,
+      "findings": 0,
+      "skipped": 0
+    }
+  },
+  "remoteBeforePublication": {
+    "openAlerts": 36,
+    "package": "Pillow",
+    "distinctAdvisories": [
+      "GHSA-58r4-6rv3-gfh8",
+      "GHSA-65qm-jvmh-6pqg",
+      "GHSA-vx6w-vv9f-6gvg",
+      "GHSA-q45j-58j2-45rg",
+      "GHSA-pchr-8j38-3x4p",
+      "GHSA-p4wg-p73j-c528",
+      "GHSA-462x-pgg6-55fp",
+      "GHSA-c6hw-5grf-ff96",
+      "GHSA-8g5g-8vmr-9782"
+    ],
+    "manifests": [
+      "sidecar/requirements.txt",
+      "sidecar/requirements-release.txt",
+      "sidecar/requirements-dev.txt",
+      "sidecar/requirements-common.txt"
+    ]
+  },
+  "limitations": [
+    "Known advisory scans do not prove absence of vulnerabilities",
+    "Latest registry versions are candidates, not demonstrated application compatibility",
+    "onnxruntime CPU is absent from the GPU development environment by design",
+    "Release/distribution and prior installers are separate"
+  ]
+}

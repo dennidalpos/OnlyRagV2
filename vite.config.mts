@@ -3,6 +3,7 @@ import path from 'node:path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { monacoSanitizerPlugin } from './scripts/monacoSanitizerPlugin.mts'
+import { dependencyVersions } from './scripts/dependencyVersions.mts'
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -12,6 +13,7 @@ const pkg = JSON.parse(readFileSync(path.resolve(rootDir, 'package.json'), 'utf-
 const authorName = String(pkg.author || '').replace(/\s*<[^>]*>\s*/g, '').trim()
 const authorUrl = (String(pkg.author || '').match(/<([^>]+)>/) || [])[1] || ''
 const appDefines = {
+  __DEPENDENCY_VERSIONS__: JSON.stringify(dependencyVersions(rootDir)),
   __APP_VERSION__: JSON.stringify(pkg.version || '0.0.0'),
   __APP_AUTHOR__: JSON.stringify(authorName || 'OnlyRag Contributors'),
   __APP_REPOSITORY_URL__: JSON.stringify(

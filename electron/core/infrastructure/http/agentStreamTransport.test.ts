@@ -52,6 +52,35 @@ function recordingOllama(records: readonly unknown[], seen: { path?: string; bod
 describe('AgentStreamTransport', () => {
   let activeServer: http.Server | null = null
 
+  it('preserves UTF-8 when a multibyte character crosses native HTTP chunks', async () => {
+    let acknowledge!: () => void
+    const firstConsumed = new Promise<void>((resolve) => {
+      acknowledge = resolve
+    })
+    const text = 'caffè 漢字 🚀'
+    const line = Buffer.from(JSON.stringify({ message: { content: text, thinking: text }, done: true }) + '\n')
+    const split = line.indexOf(Buffer.from('è')) + 1
+    const mock = await startMockOllama((_req, response) => {
+      response.writeHead(200, { 'content-type': 'application/x-ndjson' })
+      response.write(Buffer.concat([Buffer.from(JSON.stringify({ message: { content: 'prefix' }, done: false }) + '\n'), line.subarray(0, split)]))
+      void firstConsumed.then(() => response.end(line.subarray(split)))
+    })
+    activeServer = mock.server
+    const turn = await AgentStreamTransport.streamCompletion({
+      targetModel: 'synthetic',
+      messages: userMessage('fixture'),
+      toolCatalog: [],
+      runtimeOpts,
+      ollamaEndpoint: mock.baseUrl,
+      isCancelled: () => false,
+      onTokenChunk: (delta) => {
+        if (delta === 'prefix') acknowledge()
+      },
+    })
+    expect(turn.content).toBe('prefix' + text)
+    expect(turn.thinking).toBe(text)
+  })
+
   it('allows a slow native tool call to use the measured stream silence budget before response headers', () => {
     expect(initialResponseTimeoutMs()).toBe(10 * 60 * 1000)
     expect(initialResponseTimeoutMs(30 * 60 * 1000)).toBe(30 * 60 * 1000)

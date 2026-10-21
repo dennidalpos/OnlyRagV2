@@ -1,8 +1,10 @@
 # Verifica corrente per ambito
 
+L'[audit critico del 21 ottobre](./critical-application-audit-2026-10-21.md) è la verifica locale più recente: 3.002 TypeScript/328 file, 687 Python/un symlink host saltato, 15 critici senza skip, build e scenari Electron deterministici. Electron 43.8.3, Pillow 13.0.0, fetch/download e decodifica UTF-8 sono nel nuovo perimetro; i risultati storici sotto conservano versione e limiti propri. Il tracker corrente contiene **due P2 autonomi**.
+
 La [consegna locale UI e strumenti](./verification-local-ui-2026-10-20.md) implementa il ritiro di 24 task, mantiene 11 attività autonome e centralizza gli aiuti in tooltip. Le ricevute precedenti restano storiche.
 
-**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il conteggio corrente è quello dell'audit più recente e di PROJECT_STATUS.json.
 
 Il [passaggio di sessione Sidecar e verifiche locali](./session-handoff-sidecar-2026-10-20.md) salva la correzione dell'avvio, il runner loopback e il piano lingua offline con 34 attività ancora aperte. Commit e push su `master` autorizzati per questa consegna; verifiche complete ed esito remoto restano attribuiti ai rispettivi sorgenti.
 

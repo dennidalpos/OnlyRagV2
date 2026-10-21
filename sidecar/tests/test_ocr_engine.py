@@ -5,9 +5,40 @@ import types
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-
 from sidecar.infrastructure import ocr
 
+
+@pytest.mark.parametrize("format", ["PNG", "JPEG", "TIFF", "BMP", "GIF", "WEBP"])
+def test_native_image_codecs_preserve_ocr_preprocessing_contract(format):
+    """Exercise the installed native Pillow wheel, not a mocked Image module."""
+    import io
+    from PIL import Image
+
+    original = io.BytesIO()
+    Image.new("RGB", (96, 48), (240, 240, 240)).save(original, format=format)
+    prepared = ocr._prepare_image_for_ocr(original.getvalue(), max_dim=64, allow_deskew=False, enhance=False)
+    assert prepared != original.getvalue()
+    with Image.open(io.BytesIO(prepared)) as image:
+        image.load()
+        assert image.format == "PNG"
+        assert image.mode == "RGB"
+        assert image.size == (64, 32)
+        assert all(abs(channel - 240) <= 2 for channel in image.getpixel((0, 0)))
+
+
+def test_native_image_orientation_is_applied_before_ocr_resize():
+    import io
+    from PIL import Image
+
+    original = io.BytesIO()
+    image = Image.new("RGB", (96, 48), "white")
+    exif = image.getexif()
+    exif[274] = 6
+    image.save(original, format="JPEG", exif=exif)
+    prepared = ocr._prepare_image_for_ocr(original.getvalue(), max_dim=64, allow_deskew=False, enhance=False)
+    with Image.open(io.BytesIO(prepared)) as result:
+        result.load()
+        assert result.size == (32, 64)
 
 @pytest.fixture
 def fake_rapidocr(monkeypatch):

@@ -10,7 +10,7 @@ La provenienza dei vettori e la ricerca sono implementate in [`embeddings.py`](.
 - La codifica della query avviene fuori dal lock del database, lasciando disponibili health e letture. Prima della ricerca vengono ricontrollate versioni delle tabelle e provenienza degli encoder: un cambiamento restituisce un conflitto esplicito, senza usare lo snapshot superato.
 - La navigazione di una fonte verifica ID, revisioni, span e hash dell'originale. Una posizione valida non certifica la verità della frase generata.
 - Per i risultati di una ricerca, archivio e revisione canonica vengono letti e verificati una sola volta per documento. I risultati mantengono ordine e identità; la richiesta successiva rilegge i dati, compresi archivi prima assenti o modificati. Non esiste una cache persistente della provenienza.
-- Il rebuild offline richiede una radice dichiarata, backup/readback e attivazione esplicita tramite `data/active-store.json`; non migra automaticamente profili personali. Comandi e rifiuti sono in [`operations.md`](./operations.md).
+- Il rebuild esplicito richiede una radice dichiarata, backup/readback e attivazione tramite `data/active-store.json`; `prepare` chiama l'encoder selezionato. Non migra automaticamente profili personali. Comandi e rifiuti sono in [`operations.md`](./operations.md).
 
 ## Ciclo di vita degli archivi originali
 
@@ -36,7 +36,7 @@ Il successivo [aggiornamento FTS](./verification-fts-api-2026-10-21.md) conclude
 
 È concluso anche `RAG-EMBEDDING-REBUILD-QUALIFICATION-01`: 48 regressioni locali, incluse sette interruzioni native sul formato corrente non vuoto, backup/readback, attivazione esplicita e rollback. I byte originali e gli archivi restano preservati; nessuna nuova conversione legacy o qualifica encoder reale. Comandi e limiti sono nello stesso resoconto.
 
-La [valutazione del chunking strutturale](./verification-structure-chunking-2026-10-20.md) è conclusa: candidato a blocchi rifiutato, 9/11 passaggi globali e rank attesi identici alla baseline. Nessuna integrazione o modifica dei dati; il task di valutazione è rimosso, la qualifica di qualità rimane aperta.
+La [valutazione del chunking strutturale](./verification-structure-chunking-2026-10-20.md) è conclusa: candidato a blocchi rifiutato, 9/11 passaggi globali e rank attesi identici alla baseline. Nessuna integrazione o modifica dei dati. La campagna di qualità citata in quel rapporto è successivamente ritirata; il risultato negativo rimane conservato.
 
 La chat espone per ogni nuovo turno con documenti il **Contesto documentale inviato per questa risposta**: anteprime e candidati restituiti dalla ricerca, testo esatto incluso, troncamenti ed esclusioni per budget, testo vuoto o documenti fuori selezione. Il dettaglio viene associato al messaggio al dispatch e conservato nel checkpoint; non ricostruisce i turni storici privi del campo. I riferimenti dei passaggi inclusi corrispondono alle schede delle fonti; l'inclusione non certifica il supporto alle affermazioni. I conteggi UTF-16 riguardano il Markdown estratto o il singolo candidato, senza sommare testo duplicato come copertura del documento. Storico precedente, parti fuori shortlist e token effettivi restano distinti. [Verifica offline, persistenza e limiti](./verification-chat-coverage-2026-10-19.md).
 

@@ -1,12 +1,12 @@
 # RAG, OCR e traduzione
 
-Questa pagina mantiene i collegamenti storici. Per il comportamento attuale leggere [ingestion](./ingestion.md), [ricerca](./retrieval.md) e [traduzione](./translation.md). Il [contratto REST](./api-rest.md) e il [tracker](../PROJECT_STATUS.json) prevalgono sui risultati datati.
+Questa pagina mantiene i collegamenti storici. Per il comportamento attuale leggere [ingestion](./ingestion.md), [ricerca](./retrieval.md) e [traduzione](./translation.md). Il [contratto REST](./api-rest.md) descrive la superficie implementata; [decisioni approvate](./local-development-policy-2026-10-20.md) e [tracker](../PROJECT_STATUS.json) distinguono requisiti e stato operativo dai risultati datati.
 
 ## Indice delle evidenze precedenti
 
 ## Ammissione XLS in processo Windows — 2026-10-18
 
-[Worker contenuto prima del parser, limiti di commit/tempo e preservazione dei dati; frozen/installato ancora aperti](./verification-xls-admission-2026-10-18.md). Il nuovo limite si applica anche all'opt-in formato completo; la precedente accettazione del XLS numerico massimo descrive il candidato storico.
+[Worker contenuto prima del parser, limiti di commit/tempo e preservazione dei dati](./verification-xls-admission-2026-10-18.md). Il limite si applica anche all’opt-in formato completo; l’accettazione del XLS numerico massimo descrive il candidato precedente. La [qualifica installata del 20 ottobre](./verification-installed-xls-2026-10-20.md) conclude il task residuo, nei limiti dell’artefatto identificato.
 
 ## CSV/TSV literal integrity — 2026-10-02
 

@@ -9,7 +9,7 @@ Dossier SecondBrain di questo repository: 02-areas/products/OnlyRagV2, relativo 
 - Nei task di scrittura pulisci temporanei del task e residui confermati, preservando dati e lavoro unico; rivedi diff e git status --ignored. Esegui secondbrain.ps1 -Sync dopo modifiche a dossier o direttive, oppure su richiesta. Nei task di sola lettura segnala i residui senza rimuoverli.
 <!-- secondbrain:repository:end -->
 
-Revisione specifica del progetto 2.6 — 2026-10-20. Vincoli specifici del progetto; i contenuti comuni sono gestiti separatamente.
+Revisione specifica del progetto 2.7 — 2026-10-21. Vincoli specifici del progetto; i contenuti comuni sono gestiti separatamente.
 
 ## Contesto
 
@@ -56,7 +56,7 @@ Comandi verificati staticamente contro i file del progetto; questa revisione del
 
 ## Sviluppo locale e test autonomi — 2026-10-20
 
-- Il proprietario ha ritirato qualifiche/benchmark dei modelli, campagne live, obblighi CI, distribuzione pubblica e nuove migrazioni legacy. Il backlog operativo contiene 11 task autonomi; le ricevute storiche restano consultabili e non riattivano obblighi ritirati.
+- Il proprietario ha ritirato qualifiche/benchmark dei modelli, campagne live, obblighi CI, distribuzione pubblica e nuove migrazioni legacy. Il backlog iniziale di questa fase conteneva 11 task autonomi; lo stato corrente è in PROJECT_STATUS.json. Le ricevute storiche restano consultabili e non riattivano obblighi ritirati.
 - I test ordinari sono deterministici. Per smoke funzionali facoltativi usare esclusivamente host, ruoli e opzioni salvati manualmente nell'app, con impostazioni copiate in un profilo isolato; mai scaricare, sostituire modelli o modificare impostazioni personali.
 - Limite aggregato per sessione di lavoro: 4 generazioni, 16 batch embedding e 5 minuti, inclusi errori e riprove. Riutilizzare la stessa directory di sessione tra invocazioni; contatori e tentativi non si azzerano per riavviare un runner o proseguire questo task. `npm run test:models:smoke -- --session-dir <percorso-assoluto-condiviso> --roles chat,translation,coding,embedding`. Un ruolo mancante interrompe la prova.
 - Sono autorizzati profili e documenti sintetici, crash dei soli processi posseduti e installazione/disinstallazione in directory isolate. Per rete usare server locali controllati. Dati personali, perdita di alimentazione reale e installazioni di screen reader sono esclusi.

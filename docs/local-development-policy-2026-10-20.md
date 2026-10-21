@@ -1,6 +1,6 @@
 # Sviluppo locale e test autonomi — 20 ottobre 2026
 
-La decisione del proprietario sostituisce i precedenti obblighi di qualifica: prima l’app Windows funzionante localmente. Il tracker contiene **11 task autonomi**, con ID e priorità originali. **24 task sono ritirati, non completati**. Campagne, ricevute, versioni audit e copie di recupero restano conservate e non riattivano i task ritirati.
+La decisione del proprietario sostituisce i precedenti obblighi di qualifica: prima l’app Windows funzionante localmente. All’avvio della fase il tracker conteneva **11 task autonomi**, con ID e priorità originali; per il lavoro ancora aperto leggere [PROJECT_STATUS.json](../PROJECT_STATUS.json). **24 task sono ritirati, non completati**. Campagne, ricevute, versioni audit e copie di recupero restano conservate e non riattivano i task ritirati.
 
 ## Regole operative attuali
 

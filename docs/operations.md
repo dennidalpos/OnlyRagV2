@@ -6,7 +6,9 @@ La [verifica locale del writer del 21 ottobre](./verification-tracker-completion
 
 Durante l'avvio di sviluppo il Sidecar mostra `Verifica...` finché preparazione Python e readiness non terminano. Con `.venv` assente il primo avvio può installare le dipendenze runtime; un fallimento concluso resta `Offline`. Dopo modifiche al Main process chiudere e riavviare `npm run dev`. [Diagnosi, correzione e prove native del 20 ottobre](./verification-sidecar-dev-startup-2026-10-20.md).
 
-Eseguire i comandi da PowerShell nella radice del repository. Le versioni dichiarate sono Node [`24.19.0`](../.nvmrc), npm `>=11 <12` in [`package.json`](../package.json) e Python [`3.13.15`](../.python-version). Lo sviluppo richiede Ollama; l'endpoint locale predefinito è `http://127.0.0.1:11434`. Il manifest degli script e i loro effetti sono in [`package.json`](../package.json) e [`scripts/`](../scripts/).
+Eseguire i comandi da PowerShell nella radice del repository. Node `>=24.19.0 <25` e npm `>=11 <12` sono gli intervalli in [`package.json`](../package.json); [`.nvmrc`](../.nvmrc) indica Node 24.19.0 e [`.python-version`](../.python-version) Python 3.13.15. Il setup accetta Python 3.13.x. Ollama serve alle funzioni modello, non ai test deterministici; l'endpoint locale predefinito è `http://127.0.0.1:11434`.
+
+`setup:dev` usa `npm ci`, prepara Electron e installa `sidecar/requirements-dev.txt` nel `.venv`; può ricreare un venv incompatibile. L'auto-preparazione del Sidecar all'avvio installa invece i requisiti runtime: non garantisce che `pytest` sia disponibile. Per test Python verificare `.venv\Scripts\python.exe -m pytest --version`; se manca, completare il setup di sviluppo prima di dichiarare il gate eseguito.
 
 ## Comandi
 
@@ -14,18 +16,25 @@ Eseguire i comandi da PowerShell nella radice del repository. Le versioni dichia
 | --- | --- | --- |
 | Setup | `npm run setup:dev` | Installa dipendenze e runtime di sviluppo; comando documentato dal manifest, non rieseguito in questa revisione. |
 | Avvio | `npm run dev` | Avvia Vite/Electron e il Sidecar; può leggere il profilo di sviluppo. Non rieseguito qui. |
-| Documentazione | `npm run docs:check` | Controlla link, ancoraggi Markdown e nomi degli script. Verificato in questa revisione. |
+| Documentazione | `npm run docs:check`; `npm run format:check` | Controllano link locali, ancoraggi, nomi degli script e whitespace del diff. Non provano comportamento o URL remoti. Esiti della sessione nel [riesame documentale](./documentation-audit-2026-10-21.md). |
 | Tipi/statico | `npm run typecheck`, `npm run quality:static` | Controlli sorgente; eseguire se cambiano contratti o codice. Non necessari per sole pagine Markdown. |
 | Percorsi Python critici | `npm run quality:python` | 15 casi offline su ammissione, ricerca e persistenza. Esegue regressioni native esistenti in un subprocess isolato; errori, casi mancanti o saltati fanno fallire il gate. Incluso nel lint seriale anche con `-SkipTests`. [Qualifica e limiti](./verification-python-critical-2026-10-19.md). |
 | Test mirati | `npx vitest run <percorso>`; `.venv\Scripts\python.exe -m pytest -q <percorso>` | Usare per problemi concreti, con fixture isolate. |
-| Suite complete | `npm run test:fast -- --silent=true`; `.venv\Scripts\python.exe -m pytest -q` | Solo quando un problema o un gate di rilascio lo richiede; le ultime ricevute sono in [`verification-current.md`](./verification-current.md). |
-| Build | `npm run build` | Genera bundle locali. L'ultima qualifica con recupero agente è nella [ricevuta del 20 ottobre](./verification-agent-crash-recovery-2026-10-20.md). |
+| Suite complete | `npm run test`; `.venv\Scripts\python.exe -m pytest -q` | Gate obbligatorio pre-commit secondo [AGENTS.md](../AGENTS.md#comandi-e-verifica). `test:fast` cambia il reporter, non riduce la suite. Risultati datati in [verifica corrente](./verification-current.md). |
+| Build | `npm run build` | Genera `dist/` e `dist-electron/`. Un build non sostituisce pytest o una prova dell'app installata. |
+| Wrapper Sidecar | `npm run test:sidecar` | Se trova un server su `127.0.0.1:8000`, esegue richieste live health/export/search senza header token ed esce; altrimenti avvia pytest. Non è un gate offline affidabile né esegue sempre la suite. Preferire pytest diretto per regressioni deterministiche. |
 | Recupero chat e bozze | `npm run test:e2e:chat-drafts` | Build e prova Electron isolata di interruzione, riavvio, revisione obsoleta e rifiuto della chiusura; nessuna generazione reale. |
 | Recupero agente | `npm run test:e2e:agent-crash` | Build e arresto forzato dell'Electron posseduto, coda persistente e ripresa esplicita; servizi deterministici e profilo isolato. [Prova e limiti](./verification-agent-crash-recovery-2026-10-20.md). |
-| OpenAPI | `npm run generate:openapi` | Rigenera il contratto dopo modifiche REST. Non rieseguito qui. |
-| Installer | `npm run package:win` | Crea un nuovo candidato CPU in `release/cpu-*`; non installa né pubblica. Non rieseguito qui. |
+| OpenAPI | `npm run generate:openapi` | Importa l'app FastAPI e riscrive `sidecar/contracts/openapi-2.5.0.json`; usare dopo modifiche REST e rivedere il diff. Non eseguito per questa sola revisione documentale. |
+| Installer | `npm run package:win` | Installa dipendenze nel venv release e crea un candidato CPU in `release/cpu-*`; non installa l'app né pubblica. Dettagli in [distribuzione locale](./distribution.md). |
 
-Il workflow storico Windows in [`.github/workflows/ci.yml`](https://github.com/dennidalpos/OnlyRagV2/blob/683fa1dae0a4f0b5f1856707fb29cea869395276/.github/workflows/ci.yml) è ritirato: i controlli si eseguono localmente. Il runtime Electron può essere preparato con `node node_modules/electron/install.js`. Modelli e profili personali non sono gate di qualifica.
+Il workflow storico Windows in [`.github/workflows/ci.yml`](https://github.com/dennidalpos/OnlyRagV2/blob/683fa1dae0a4f0b5f1856707fb29cea869395276/.github/workflows/ci.yml) è ritirato: i controlli si eseguono localmente. Il runtime Electron può essere preparato con `node node_modules/electron/install.js`, che può scaricare il binario. In PowerShell controllare `$LASTEXITCODE` tra comandi nativi: un comando successivo riuscito non annulla un fallimento precedente. Modelli e profili personali non sono gate di qualifica.
+
+## File generati e documenti congelati
+
+OpenAPI deriva da `sidecar/main.py` e `sidecar/schemas.py` tramite `scripts/generate_openapi.py`. Gli asset dell'app derivano da `scripts/generate_assets.ps1`: `npm run assets:check` verifica senza rigenerare, `npm run assets:generate` scrive. Questo script non genera i diagrammi della guida in `docs/assets/flussi-utente/`: non c'è un generatore mantenuto di quei 26 SVG nel repository. Se cambia un percorso visivo, confrontare figura e sequenza testuale; non dichiarare la figura rigenerata senza una procedura verificata.
+
+Corpus, ricevute JSON, testi di licenza e snapshot storici non si riscrivono per adeguarli a un nuovo esito. I blocchi gestiti e gli snapshot SecondBrain seguono il proprio generatore/Sync; le correzioni alle guide non autorizzano modifiche manuali a questi file.
 
 ## Installazione manuale di Ollama
 
@@ -37,7 +46,7 @@ Le ricevute dei task agente sono in `agent-task-recovery.json` sotto il `userDat
 
 ## Offline embedding store maintenance — 2026-10-10
 
-[`scripts/rebuild_embeddings.py`](../scripts/rebuild_embeddings.py) espone `preview`, `prepare`, `activate` e `rollback`, sempre con `--root` esplicito. `prepare` richiede un encoder nativo selezionato, conserva backup, originali e candidato; `activate` cambia il puntatore versionato solo dopo readback. Operazioni fallite mantengono gli artefatti e restituiscono errore. Chiudere l'app prima della manutenzione, soprattutto per runtime precedenti che non condividono il lease. Nessun esempio di comando autorizza un rebuild personale. Contratto e limiti in [`retrieval.md`](./retrieval.md); prova datata in [`verification.md`](./verification.md#offline-embedding-store-rebuild--2026-10-10).
+[`scripts/rebuild_embeddings.py`](../scripts/rebuild_embeddings.py) espone `preview`, `prepare`, `activate` e `rollback`, sempre con `--root` assoluto esistente. `prepare` richiede `--model`, chiama l'encoder selezionato e conserva backup, originali e candidato: non è una verifica offline. `activate` e `rollback` richiedono invece `--rebuild-id`; l'attivazione cambia il puntatore versionato solo dopo readback. Per i parametri usare `.venv\Scripts\python.exe scripts/rebuild_embeddings.py --help`. Operazioni fallite mantengono gli artefatti e restituiscono errore. Chiudere l'app prima della manutenzione, soprattutto per runtime precedenti che non condividono il lease. Il titolo storico «offline» non significa assenza di chiamate all'encoder. Nessun esempio autorizza un rebuild personale. Contratto e limiti in [ricerca](./retrieval.md), vincoli sulle chiamate ai modelli nella [politica locale](./local-development-policy-2026-10-20.md).
 
 ## Cleanup safety policy — 2026-10-10
 

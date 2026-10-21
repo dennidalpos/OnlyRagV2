@@ -7,7 +7,7 @@ Il Renderer usa solo `window.electronAPI` esposta da [`electron/preload.ts`](../
 ## Viste e proprietà dei dati
 
 - Chat: [`useChatEngine.ts`](../src/hooks/useChatEngine.ts) gestisce streaming e contesto; [`useChatHistory.ts`](../src/hooks/useChatHistory.ts) conserva il formato localStorage corrente e attende una copia di recupero riconosciuta dal Main. Domanda e risposta attiva vengono checkpointate durante lo streaming; una risposta recuperata in corso è marcata incompleta. Errori di lettura impediscono di sovrascrivere l'originale; un salvataggio rifiutato blocca la chiusura normale. Il formato localStorage esistente resta leggibile.
-- Ingestion: la lista carica metadati, il Markdown arriva su richiesta e la cache ne verifica la revisione. Le bozze vengono conservate dal Main con la propria revisione di base e ricaricate al montaggio; un salvataggio tardivo non cambia la selezione. Dopo un rifiuto si può esportare la bozza o confermare lo scarto e ricaricare la versione salvata: una lettura fallita mantiene la bozza. Il bootstrap delle bozze precede la modifica; errori di archivio espongono Riprova ed export. Il recupero non ribasa una bozza su una revisione successiva. Desktop installato, memoria complessiva e perdita di alimentazione restano da qualificare.
+- Ingestion: la lista carica metadati, il Markdown arriva su richiesta e la cache ne verifica la revisione. Le bozze vengono conservate dal Main con la propria revisione di base e ricaricate al montaggio; un salvataggio tardivo non cambia la selezione. Dopo un rifiuto si può esportare la bozza o confermare lo scarto e ricaricare la versione salvata: una lettura fallita mantiene la bozza. Il bootstrap delle bozze precede la modifica; errori di archivio espongono Riprova ed export. Il recupero non ribasa una bozza su una revisione successiva. Le prove locali non attestano memoria complessiva, perdita di alimentazione o ogni build installata; ulteriori campagne installate sono fuori dalla fase corrente.
 - Traduzione: [`useTranslation.ts`](../src/hooks/useTranslation.ts) separa la selezione Markdown da PDF/DOCX; un blocco condiviso consente un job alla volta. L'identità PDF/DOCX esiste prima dell'invio; Stop e unmount chiedono la cancellazione e mantengono il blocco fino al risultato IPC. Eventi di altre operazioni sono ignorati; un errore di trasporto non viene presentato come cancellazione confermata.
 - Coding Agent: [`useCodingAgent.ts`](../src/hooks/useCodingAgent.ts) compone esecuzione, sessione, allegati, file e terminale. Gli eventi sono legati all'identità della run; i salvataggi rifiutati restano visibili per retry mentre la vista è attiva.
 
@@ -29,7 +29,7 @@ Il punteggio mostrato ordina i passaggi recuperati e non è una probabilità o u
 
 ## Salvataggio delle impostazioni — 2026-10-02
 
-[`useSettingsPersistence.ts`](../src/hooks/useSettingsPersistence.ts) serializza debounce, retry e flush di chiusura. Main attende impostazioni e storico Coding; una scrittura rifiutata mantiene aperta la finestra e rende disponibile il retry. Unmount invia comunque i valori pendenti. Crash, interruzioni forzate e desktop installato restano nel perimetro di `SETTINGS-CLOSE-DURABILITY-01`.
+[`useSettingsPersistence.ts`](../src/hooks/useSettingsPersistence.ts) serializza debounce, retry e flush di chiusura. Main attende impostazioni e storico Coding; una scrittura rifiutata mantiene aperta la finestra e rende disponibile il retry. Unmount invia comunque i valori pendenti. `SETTINGS-CLOSE-DURABILITY-01` è concluso: la [ricevuta installata del 20 ottobre](./verification-installed-settings-2026-10-20.md) copre chiusura, scrittura fallita/riprova e rilettura dopo riavvio e arresto del processo posseduto sul candidato identificato. Non qualifica perdita di alimentazione o ogni installer successivo.
 
 ## Hook e servizi
 
@@ -49,7 +49,7 @@ La stima espone contesto effettivo, base della misura e incertezza di memoria/of
 
 ## Modal focus and accessibility — 2026-10-02
 
-Lo stack di modali isola il livello attivo; i test Chrome tastiera/tree passano nei casi dichiarati. Il task autonomo conserva tastiera, zoom, albero accessibile e Monaco nel desktop locale riavviato; la campagna screen reader è ritirata.
+Lo stack di modali isola il livello attivo. Le [prove UX desktop del 21 ottobre](./verification-ux-targeted-2026-10-21.md) coprono tastiera, zoom, focus e Monaco nei casi dichiarati; non resta un task accessibilità aperto nel tracker. La campagna screen reader è ritirata.
 
 ## Chat readable output — 2026-10-11
 

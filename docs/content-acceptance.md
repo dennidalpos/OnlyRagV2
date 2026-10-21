@@ -1,12 +1,12 @@
 # Frozen content acceptance
 
-**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+**Corpus e risultati storici conservati.** I criteri, i fallimenti e le procedure sotto descrivono le campagne datate, non una nuova autorizzazione a eseguirle. La [politica locale](./local-development-policy-2026-10-20.md) le ha ritirate; corpus e policy di normalizzazione approvata restano invariati. Stato corrente in [verification-current.md](./verification-current.md).
 
 Il [seguito offline sulla lingua delle risposte](./plan-chat-language-2026-10-20.md) verifica la campagna conservata e prepara un confronto senza cambiare il corpus o il runtime. Il proprietario mantiene il perimetro solo offline; nessuna nuova qualifica semantica.
 
-La [campagna corrente del 20 ottobre](./verification-live-content-2026-10-20.md) raccoglie tutte le risposte ma fallisce il gate: 5/12 accettate congiuntamente, 9/11 passaggi globali. Aspettative, fallimenti e policy conservati; il task P1 resta aperto.
+La [campagna storica del 20 ottobre](./verification-live-content-2026-10-20.md) raccoglie tutte le risposte ma fallisce il gate: 5/12 accettate congiuntamente, 9/11 passaggi globali. Aspettative, fallimenti e policy sono conservati; il task P1 è stato successivamente ritirato, non completato.
 
-`QUALITY-CONTENT-ACCEPTANCE-01` is complete on 2026-10-02 as a fixed corpus and independent acceptance gate, and removed from the tracker. The application fails that gate. `QUALITY-CONTENT-LIVE-QUALIFICATION-01` retains the failed cases and broader live/desktop qualification; the explicitly approved whitespace-only normalization task is also complete; broader qualification remains tracked.
+`QUALITY-CONTENT-ACCEPTANCE-01` is complete on 2026-10-02 as a fixed corpus and independent acceptance gate, and removed from the tracker. The application fails that gate. `QUALITY-CONTENT-LIVE-QUALIFICATION-01` then retained the failed cases and broader live/desktop qualification; it was later retired by the owner. The explicitly approved whitespace-only normalization task is complete. The historical failed gate is not a current open task or a new execution requirement.
 
 ## Corpus and execution boundary
 
@@ -18,14 +18,14 @@ The Python collector exercises production extraction/indexing/search, not pytest
 
 Six normalization pairs intentionally use declared transport fixtures to measure decisions of the existing conservative guard. Their expected safe/unsafe labels were written independently before execution. The two live normalization cases use the real production normalizer and its existing 25-second budget, 2048-output-token limit and native request options. Missing output is unassessed, not a semantic success or false rejection. No timeout/retry change is allowed to turn a failed campaign into a pass.
 
-Run from the repository:
+Historical collection command (retired, not an operating instruction) and retained-evidence review:
 
 ```powershell
 npm run test:live -- scripts/live/contentAcceptance.live.ts
 .venv\Scripts\python.exe scripts/live/contentAcceptanceReview.py <retained-campaign-directory>
 ```
 
-The first command is an evidence collector: successful completion means twelve requests/outputs were captured, not semantic acceptance. The second is the acceptance gate and exits **1** on recorded failures. Infrastructure/partial-collection/hash/review-schema errors also fail instead of silently passing. A reviewer writes `review.json` beside the campaign, naming the independent reviewer, hashing exact `corpus.json`, `preparation.json` and `answers.json`, and recording one content/language/citation decision plus supporting notes per case. Each live normalization output needs a safe/unsafe decision; unavailable output explicitly uses `null` and fails qualification. The evaluated 9B model is never the source of expectations or the sole judge. `acceptance.json` preserves separate counts and hashes.
+At the time of collection the first command selected an evidence collector. Today `test:live` dispatches `scripts/retiredModelCampaign.mjs` and refuses before collection. A historical successful collection meant twelve requests/outputs captured, not semantic acceptance. The second is the acceptance gate and exits **1** on recorded failures. Infrastructure/partial-collection/hash/review-schema errors also fail instead of silently passing. A reviewer writes `review.json` beside the campaign, naming the independent reviewer, hashing exact `corpus.json`, `preparation.json` and `answers.json`, and recording one content/language/citation decision plus supporting notes per case. Each live normalization output needs a safe/unsafe decision; unavailable output explicitly uses `null` and fails qualification. The evaluated 9B model is never the source of expectations or the sole judge. `acceptance.json` preserves separate counts and hashes.
 
 ## Acceptance and critical-path coverage
 

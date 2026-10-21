@@ -1,10 +1,10 @@
 # Local model task baselines
 
-**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+**Documento storico di valutazione del 2 ottobre 2026.** Profili, versioni, digest e obiettivi hardware sotto descrivono quella proposta, non requisiti minimi, raccomandazioni correnti o assegnazioni salvate. Le campagne sono ritirate dalla [politica locale](./local-development-policy-2026-10-20.md). Per l’uso attuale leggere [guida utente](./guida-utente.md#23-modelli-assegnazioni-e-ocr) e [runtime fit](./model-runtime-fit.md).
 
-`MODEL-TASK-QUALITY-BASELINES-01` is complete as a profile definition on 2026-10-02. These are candidates for qualification, independent of the development computer. No profile is certified by its parameter count, upstream benchmark, download size or memory-fit badge. Actual role/hardware qualification remains in `LOCAL-MODEL-ROLE-QUALIFICATION-01`.
+`MODEL-TASK-QUALITY-BASELINES-01` is complete as a profile definition on 2026-10-02. These are candidates for qualification, independent of the development computer. No profile is certified by its parameter count, upstream benchmark, download size or memory-fit badge. At definition time, role/hardware qualification was assigned to `LOCAL-MODEL-ROLE-QUALIFICATION-01`; that campaign is now retired.
 
-## Product profiles
+## Historical product profiles
 
 | Profile | Roles and local suite | Declared hardware to qualify | Initial effective context and limits |
 | --- | --- | --- | --- |
@@ -47,8 +47,8 @@ Freeze the corpus, prompts, expected evidence and acceptance rules before genera
 
 For each qualified configuration record OS, CPU, RAM, GPU/VRAM, driver/backend, Ollama version, tag/digest/quantization, requested and observed context, thinking, cache/batch/parallel/keep-alive settings, corpus size and store/preparation identity. Capture cold/hot first-output latency, prefill/evaluation counts/durations, sustained tokens/s, peak RAM/VRAM and retrieval p50/p95. Include overlapping chat/encoder/OCR workloads. Timing thresholds from the audit remain proposed until measured on the declared hardware. Do not reuse one development-PC result as proof for every product profile.
 
-## Current evidence and rollout boundary
+## Evidence and rollout boundary recorded on 2026-10-02
 
-Fresh metadata reads confirm local Ollama **0.35.1** and installed `qwen3.5:9b` Q4_K_M with the matching digest above. The permitted live encoder is `nomic-embed-text:latest`, F16, digest `0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f`. Its [upstream card](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) is English-oriented; the retained IT/EN preparation campaign failed dense recall@3 (10/12) and pipeline recall@3 (9/12). Real 9B source cases have supported-detail successes and a retained mixed-source failure; English response consistency still fails. These are bounded observations, not profile certification. See [verification](./verification.md).
+Metadata reads recorded on 2026-10-02 confirmed local Ollama **0.35.1** and installed `qwen3.5:9b` Q4_K_M with the matching digest above. The permitted live encoder is `nomic-embed-text:latest`, F16, digest `0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f`. Its [upstream card](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) is English-oriented; the retained IT/EN preparation campaign failed dense recall@3 (10/12) and pipeline recall@3 (9/12). Real 9B source cases have supported-detail successes and a retained mixed-source failure; English response consistency still fails. These are bounded observations, not profile certification. See [verification](./verification.md).
 
 The shipped [starter catalog](../shared/domain/hardware/hardwareModelCatalog.ts) still selects 3B chat/translation/coding models and Nomic independently of hardware. This profile-definition task does not silently replace that UI policy, first-use presentation or saved settings. The former first-use/mobile-layout task was [withdrawn on 2026-10-17](./verification-current.md#perimetro-desktop--2026-10-17); it no longer owns a presentation/selection change. New downloads, stronger-model runs, personal-setting changes and encoder migration are separate decisions. Distribution component rights remain in `DISTRIBUTION-COMPONENT-RIGHTS-QUALIFICATION-01`.

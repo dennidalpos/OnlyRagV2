@@ -1,6 +1,6 @@
 # REST Sidecar
 
-[`sidecar/main.py`](../sidecar/main.py) registra FastAPI e le route; [`schemas.py`](../sidecar/schemas.py) definisce i payload. Il contratto generato è [`openapi-2.5.0.json`](../sidecar/contracts/openapi-2.5.0.json). Il Sidecar ascolta normalmente su `127.0.0.1:8000`; ogni route salvo `/health` richiede il token di avvio `X-OnlyRag-Token` quando configurato da Main.
+[`sidecar/main.py`](../sidecar/main.py) registra FastAPI e le route; [`schemas.py`](../sidecar/schemas.py) definisce i payload. Il contratto generato è [`openapi-2.5.0.json`](../sidecar/contracts/openapi-2.5.0.json). Il Sidecar ascolta normalmente su `127.0.0.1:8000`; il middleware richiede il token di avvio `X-OnlyRag-Token` quando configurato da Main, salvo `/health` e le richieste preflight `OPTIONS`. CORS applica gli origin configurati; non sostituisce il token.
 
 ## Route
 
@@ -14,6 +14,7 @@
 ## Regole operative
 
 - Ingestion e traduzione inviano eventi NDJSON. `task_id` collega progresso e cancellazione; una risposta di accettazione della cancellazione non afferma che il task sia già terminato.
+- I modelli di richiesta ereditano `StrictRequest` con `extra="forbid"`: i campi sconosciuti sono rifiutati, ma questo non rende tutti i tipi stretti. Limiti e validatori sono quelli dello schema. `task_id` è opzionale nei due schemi REST di streaming; Renderer/IPC/client Main lo richiedono per possedere progresso e cancellazione.
 - Ingestion con normalizzazione LLM richiede `normalization_model`; traduzione richiede `model`. Una normalizzazione rifiutata restituisce l'originale da rivedere senza indicizzarlo.
 - La ricerca verifica lo spazio embedding completo e può restituire provenance. `source-location` accetta solo ID, revisioni e span, mai percorsi forniti dal chiamante.
 - `/health` risponde 503 quando database o recovery non sono disponibili. Errori di lettura/scrittura/ricerca non diventano liste vuote; errori interni espongono un ID e tengono i dettagli nel log.

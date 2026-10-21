@@ -1,6 +1,6 @@
 # Model/runtime fit
 
-**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+La stima informativa descritta sotto è implementata; proposte, misure e replay del 2 ottobre sono evidenze datate. Le campagne di qualifica sono ritirate dalla [politica locale](./local-development-policy-2026-10-20.md); lo stato aperto è nel [tracker](../PROJECT_STATUS.json).
 
 ## Boundary proposal — 2026-10-02
 
@@ -35,4 +35,4 @@ Wizard labels use the context that its existing confirmation would save, with cu
 
 The nine-file native HTTP/domain/DOM/orchestrator run passes **113 tests in 11.44s**; typecheck, build and static quality (**781 files**) pass. Checks cover KV dimensions, independent weight/cache quantization, context growth, CPU/offload/combined-memory uncertainty, unsupported layouts, malformed/missing/stale/remote evidence, setup/coding overrides and explicit context selection. Metadata replay: `npx vitest run --config vitest.live.config.mts scripts/live/modelRuntimeFit.live.ts --reporter=dot`, **1 passed in 526ms**. Actual local runtime is **0.35.1**; `qwen3.5:9b` is **Q4_K_M**, 6,594,474,711 storage bytes, digest `6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7`, trained context 262144, architecture `qwen35`. Its hybrid geometry has no conventional fit claim at 4K/16K, and no matching loaded allocation was available. Report: `%USERPROFILE%/OnlyRag-Live/model-runtime-fit-2026-10-02T19-48-04-737Z-ae1d35ff/report.json`. No inference, model install/unload or server/configuration change occurred.
 
-Residues remain in `LOCAL-MODEL-ROLE-QUALIFICATION-01` (hybrid/encoder/accelerator allocation and speed), `OLLAMA-RESOURCE-ADMISSION-01` (cache/parallel/batch/model overlap) and `RAG-INDEX-METADATA-EFFICIENCY-01` (metadata/ps probe cost). A metadata replay is not production hardware, desktop, installer or model-quality certification.
+At the 2026-10-02 checkpoint, residues were recorded in `LOCAL-MODEL-ROLE-QUALIFICATION-01` (hybrid/encoder/accelerator allocation and speed), `OLLAMA-RESOURCE-ADMISSION-01` (cache/parallel/batch/model overlap) and `RAG-INDEX-METADATA-EFFICIENCY-01` (metadata/ps probe cost). The subsequent [local policy](./local-development-policy-2026-10-20.md) retires the model/admission campaigns; the RAG efficiency task is [completed locally](./verification-tracker-completion-2026-10-21.md). A metadata replay is not production hardware, desktop, installer or model-quality certification.

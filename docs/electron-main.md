@@ -8,7 +8,7 @@ Main carica le impostazioni, registra IPC e avvia il Sidecar locale. Il listener
 
 ## Stato e scritture
 
-Impostazioni, registro progetti, sessioni e stato agente usano scritture serializzate con staging nello stesso percorso, flush del file e rename. Un file illeggibile o una scrittura non confermata blocca le operazioni dipendenti; gli originali e lo staging restano disponibili. Flush della directory e perdita di alimentazione non sono qualificati (`STATE-WRITER-CRASH-DURABILITY-01`).
+Impostazioni, registro progetti, sessioni e stato agente usano scritture serializzate con staging nello stesso percorso, flush del file e rename. Un file illeggibile o una scrittura non confermata blocca le operazioni dipendenti. Lo staging completo anteriore alla sostituzione non viene promosso automaticamente dopo un crash; i temporanei di scritture fallite seguono il cleanup posseduto del writer, non una conservazione indiscriminata. `STATE-WRITER-CRASH-DURABILITY-01` è [concluso con 24 interruzioni Node/Electron e readback](./verification-tracker-completion-2026-10-21.md#state-writer-crash-durability-01--completato). Flush della directory e perdita di alimentazione restano fuori dalle prove.
 
 ## Session deletion recovery — 2026-10-12
 

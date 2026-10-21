@@ -1,6 +1,6 @@
 # Distribution license review — 2026-10-10
 
-**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+**Riesame storico dei candidati indicati.** Inventari, decisioni, limiti e testi di licenza rimangono conservati; i task di consegna pubblica citati sotto sono successivamente ritirati dalla [politica locale](./local-development-policy-2026-10-20.md). Per i comandi e il perimetro attivi leggere [distribuzione locale](./distribution.md).
 
 ## Local CPU candidate — 2026-10-12
 

@@ -1,6 +1,6 @@
 # Verifica e limiti noti
 
-**Politica corrente — 20 ottobre 2026:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md). Qualifiche dei modelli, campagne live, CI, distribuzione pubblica e migrazioni legacy sono ritirate. I resoconti e i criteri di campagne precedenti sotto conservano valore storico e non sono obblighi operativi. Il tracker corrente contiene 11 task autonomi.
+Questa pagina conserva gli ancoraggi delle evidenze datate. Per il perimetro operativo usare la [politica locale approvata](./local-development-policy-2026-10-20.md); i task e le autorizzazioni menzionati sotto valgono alle rispettive date, non riattivano campagne o pubblicazioni.
 
 Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [tracker](../PROJECT_STATUS.json) contiene solo i residui aperti. Le voci seguenti mantengono gli ancoraggi usati dai riferimenti esistenti e rinviano alle prove datate, che non diventano qualificazione generale.
 
@@ -12,7 +12,7 @@ Stato operativo sintetico: [verifica corrente](./verification-current.md). Il [t
 
 ## Preparazione offline del confronto sulla lingua — 2026-10-20
 
-[Corpus e sorgenti verificati, 24 input congelati a zero inferenze; proprietario conferma solo offline e P1 ancora aperto](./plan-chat-language-2026-10-20.md).
+[Corpus e sorgenti verificati, 24 input congelati a zero inferenze; preparazione solo offline prima del successivo ritiro della campagna P1](./plan-chat-language-2026-10-20.md).
 
 ## Ripresa CI e diagnosi dev-server — 2026-10-20
 

@@ -4,7 +4,7 @@
 
 ## Canali request/response
 
-I prefissi attivi comprendono `agent`, `artifacts`, `diagnostics`, `dialog`, `history`, `ingest`, `ollama`, `projects`, `sessions`, `settings`, `sidecar`, `skills`, `system`, `task` e `workspace`. Per aggiungere o cambiare un canale aggiornare contratto, schema, Preload/handler e chiamante; non copiare una lista statica dalla documentazione.
+I canali coprono agente, chat, documenti, modelli, progetti/sessioni, impostazioni, diagnostica, skill e workspace. Per l'elenco completo leggere il contratto; per aggiungere o cambiare un canale aggiornare contratto, schema, Preload/handler e chiamante, evitando una seconda enumerazione statica.
 
 `sessions:delete` e `sessions:clear` restituiscono `refused`, `pending` o `complete`; le azioni di recupero hanno ID di operazione e non cancellano implicitamente le copie conservate. `ingest:file` accetta `taskId` e l'opzione Excel. Una normalizzazione da rivedere è un risultato rifiutato con `originalMarkdown` e problemi per pagina.
 

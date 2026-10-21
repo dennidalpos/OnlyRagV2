@@ -1,5 +1,8 @@
 # Coding history close and interruption recovery
 
+Historical approved recovery boundary, implemented and qualified in the dated evidence below. Current usage is in [Coding Agent](../coding-agent.md) and [Main](../electron-main.md); this proposal does not create a new implementation or qualification task.
+
+
 The current `history.json`/`session_history.json` format remains canonical. Before this change, acknowledged saves survived normal close and abrupt Main termination in an isolated Electron restart probe, but a refused save was lost on React unmount/reopen. The user approved a Main-owned recovery journal with Retry/Export for that gap.
 
 ## Recovery boundary

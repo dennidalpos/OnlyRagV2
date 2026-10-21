@@ -31,7 +31,7 @@ Renderer (src/) -> Preload (electron/preload.ts) -> IPC Main (electron/core/pres
 3. Il servizio usa Domain e adapter Infrastructure.
 4. Il risultato torna via Promise IPC o evento IPC.
 
-Per il coding agent il flusso è `plan/interview → plan → execution → verification → outcome`; per ingestion e traduzione il Main inoltra al Sidecar i dati o lo stream NDJSON.
+Il Coding Agent consente avvio diretto oppure preparazione esplicita con intervista/piano; in Ask il percorso resta di analisi. Guided/Auto eseguono azioni e verifiche secondo il piano e il profilo acquisiti, poi producono l'esito. Per ingestion e traduzione il Main inoltra al Sidecar i dati o lo stream NDJSON.
 
 ## Risorse e ciclo di vita
 

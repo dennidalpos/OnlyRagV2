@@ -10,12 +10,12 @@ Local Windows desktop workspace for document ingestion, RAG chat, translation an
 - Hybrid local retrieval, citations and semantic prompt history.
 - Markdown and in-place PDF/DOCX translation with streaming progress.
 - React coding studio with plan approval, versioned edits, PowerShell tools, Git and verification gates.
-- Hardware-aware model selection and local skill hub.
+- Hardware diagnostics, explicit model assignments by role and local skill hub.
 - Renderer/Main process isolation through Electron Preload and typed IPC.
 
 ## Documentation
 
-The concise technical guides are organized by scope in [`docs/README.md`](./docs/README.md). Code is authoritative for IPC ([`shared/ipc/ipcContract.ts`](./shared/ipc/ipcContract.ts)), REST ([`sidecar/main.py`](./sidecar/main.py)) and shared types ([`shared/types/index.ts`](./shared/types/index.ts)).
+The guides are organized by scope in [`docs/README.md`](./docs/README.md), with separate [current verification](./docs/verification-current.md) and [historical evidence](./docs/history.md). Compare approved requirements with IPC ([`shared/ipc/ipcContract.ts`](./shared/ipc/ipcContract.ts)), REST ([`sidecar/main.py`](./sidecar/main.py)) and tests; report unresolved differences rather than assuming that implementation establishes the intended behavior.
 
 ## Quick start
 
@@ -44,4 +44,4 @@ skills/     Local agent skills
 
 ## License
 
-Project source uses MIT; see [`LICENSE`](./LICENSE). Bundled dependencies have additional terms. The approved CPU installer uses AGPL distribution terms, bundled notices and an adjacent matching source candidate; see the [CPU release record](./docs/distribution-cpu-release.md) and [license review](./docs/distribution-licenses.md). Complete corresponding-source, component-rights and public delivery qualification remain pending. Nothing has been published.
+Project source uses MIT; see [`LICENSE`](./LICENSE). Bundled dependencies have additional terms. The approved combined CPU candidate uses the terms in [`DISTRIBUTION-LICENSE.md`](./DISTRIBUTION-LICENSE.md); the [CPU record](./docs/distribution-cpu-release.md) and [license review](./docs/distribution-licenses.md) preserve the dated decision and evidence. Public installer delivery is outside the current [local-development scope](./docs/local-development-policy-2026-10-20.md); source repository publication does not qualify an installer or its corresponding-source delivery.

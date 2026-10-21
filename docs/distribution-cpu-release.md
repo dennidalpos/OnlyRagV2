@@ -1,5 +1,8 @@
 # Approved CPU release implementation — 2026-10-11
 
+**Registro storico degli artefatti, non descrizione dell’ultimo build.** Ogni candidata e autorizzazione sotto vale per il lotto indicato. La [politica locale](./local-development-policy-2026-10-20.md) ha ritirato le qualifiche pubbliche; [distribuzione locale](./distribution.md) descrive i comandi attivi. Hash, inventari e risultati restano invariati.
+
+
 ## Current source candidate — 2026-10-19
 
 Retained qualified candidate: `release/cpu-20261018-220641-87a891b9`, clean source commit `95752a0`, unsigned. Independent installer/source/notice/Python/ASAR readback, the CPU OCR/auth/PDF/retrieval probe and isolated packaged chat/draft recovery pass. Frozen parser/normalization HTTP regressions (29 passed), XLS budgets/timeout/owner-crash recovery and the native packaged IPC ingestion/translation/restart flow also pass with declared synthetic model responses. The broader current-source task remains open for the same-artifact gates below; installation and real-model campaigns are not authorized. [Exact evidence and residuals](./verification-current-source-2026-10-19.md). The [inventory of all three retained candidates](./verification-release-inventory-2026-10-19.md), including the October 19 artifact, does not qualify any as the changed current runtime. Dated candidates retain their historical qualification.

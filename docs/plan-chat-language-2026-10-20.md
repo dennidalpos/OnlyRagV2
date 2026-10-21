@@ -1,5 +1,8 @@
 # P1 qualità: confronto della lingua delle risposte — 20 ottobre 2026
 
+**Piano storico non eseguito.** Il successivo ritiro di `QUALITY-CONTENT-LIVE-QUALIFICATION-01` nella [politica locale](./local-development-policy-2026-10-20.md) supera lo stato «aperto» riportato sotto. Il confronto da 24 generazioni non è autorizzato né compatibile con il budget degli smoke correnti. Nessun candidato viene integrato da questo documento.
+
+
 Stato di `QUALITY-CONTENT-LIVE-QUALIFICATION-01`: **aperto; preparazione offline completata, nuova campagna non autorizzata**. Alla domanda sul confronto di 24 generazioni il proprietario ha risposto **«Mantieni il perimetro solo offline»**. Nessuna modifica al prompt applicativo e nessuna inferenza eseguita; non è in attesa una conferma automatica né è pianificata un'esecuzione.
 
 ## Evidenze verificate

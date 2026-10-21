@@ -2,7 +2,7 @@
 
 **Cosa vuoi fare?** Parti dalla mappa 00 e segui i numeri dei percorsi. I nomi in grassetto corrispondono ai comandi dell’interfaccia italiana. Ogni diagramma è seguito dagli stessi passaggi in testo.
 
-Guida ricavata dal codice corrente il **15 ottobre 2026**. Descrive le scelte disponibili: non certifica la qualità delle risposte dei modelli o il comportamento di una build installata diversa dal sorgente esaminato.
+Guida confrontata con viste, hook, testi italiani e decisioni approvate il **21 ottobre 2026**. I percorsi derivano dall'esame del codice; le prove native già eseguite hanno date e limiti propri nello [stato delle verifiche](./verification-current.md). La guida non certifica la qualità dei modelli o ogni build installata.
 
 ## Indice
 
@@ -50,6 +50,8 @@ I diagrammi SVG sono incorporati sotto ogni percorso e restano apribili singolar
 
 **Da sapere.** Il download iniziale di modelli e l’installazione di Ollama richiedono accesso alla rete. Il lavoro con runtime locale e risorse già disponibili può avvenire offline. Un server remoto riceve i dati delle richieste: scegli consapevolmente il percorso 22.
 
+Durante la preparazione del Sidecar la barra laterale mostra **Verifica...**; attendi l'esito prima di trattarlo come offline. Gli aiuti delle opzioni si aprono con mouse o focus da tastiera; Escape chiude prima l'aiuto e poi l'eventuale dialogo. Il wizard applica le proposte solo con la conferma o **Salva ed esci**: chiuderlo con X/Escape lascia le assegnazioni precedenti.
+
 ## Ingestione Doc
 
 ### 02 Importare un documento
@@ -94,7 +96,7 @@ I diagrammi SVG sono incorporati sotto ogni percorso e restano apribili singolar
 2. Se serve correggere, modifica il Markdown e premi **Salva Modifiche** o **Ctrl+S**. Il salvataggio aggiorna anche i vettori usati dalla ricerca.
 3. Attendi la conferma di salvataggio. Con errore conserva aperta la vista: riprova o esporta il contenuto corrente con 05. Se non modifichi il testo, prosegui direttamente a esportazione o chat.
 
-**Da sapere.** Le correzioni riguardano il testo indicizzato, non il file originale. Le bozze vengono conservate separatamente dal documento salvato e riproposte dopo riavvio con la revisione originale. Un avviso di recupero fallito offre **Riprova** ed esportazione; la chiusura normale resta bloccata se le nuove modifiche non sono state conservate. Le ultime battute prima di un arresto forzato possono non essere ancora checkpointate; la perdita di alimentazione non è qualificata. Non c’è un pulsante dedicato per annullare tutte le modifiche della bozza.
+**Da sapere.** Le correzioni riguardano il testo indicizzato, non il file originale. Le bozze vengono conservate separatamente dal documento salvato e riproposte dopo riavvio con la revisione originale. Un avviso di recupero fallito offre **Riprova** ed esportazione; la chiusura normale resta bloccata se le nuove modifiche non sono state conservate. Dopo un errore di salvataggio, **Scarta bozza e ricarica** richiede conferma e carica il documento salvato più recente. Esporta prima ciò che vuoi conservare: una lettura fallita o nuove battute durante l'attesa mantengono la bozza. Un arresto forzato può perdere le ultime battute non ancora confermate; la perdita di alimentazione non è qualificata.
 
 ### 05 Copiare o esportare un documento
 
@@ -107,6 +109,8 @@ I diagrammi SVG sono incorporati sotto ogni percorso e restano apribili singolar
 1. Per usare gli appunti premi **Copia MD**; per creare un file scegli **Esporta PDF** o **Esporta Markdown**.
 2. L’esportazione usa il contenuto corrente dell’editor, anche se modificato. Segui il dialogo di salvataggio e attendi l’esito.
 3. Se annulli o ricevi un errore, non considerare la copia salvata: riprova. Con esito positivo apri il file e controllalo; il salvataggio nel database resta un’azione separata, descritta in 04.
+
+**Testi molto grandi.** Un documento preesistente oltre 10 milioni di unità UTF-16 resta leggibile. Usa **Esporta Markdown** per conservarlo integralmente; per salvarlo nell'indice o convertirlo occorre ridurre il testo. L'export non risolve un errore di conservazione della bozza né sblocca da solo la chiusura.
 
 ### 06 Cercare nei passaggi indicizzati
 
@@ -222,11 +226,11 @@ I diagrammi SVG sono incorporati sotto ogni percorso e restano apribili singolar
 **Percorso testuale.**
 
 1. Scegli un documento PDF o DOCX compatibile e imposta le lingue. Seleziona la **Cartella di Destinazione (Obbligatoria)** con **Sfoglia Cartella…**; **Resetta cartella** rimuove quella scelta.
-2. Premi **Avvia Traduzione con Layout Preservato** e segui il progresso. **Annulla** diventa utilizzabile quando il job è identificato: attendi il messaggio di annullamento o l’esito finale.
+2. Premi **Avvia Traduzione con Layout Preservato** e segui il progresso. **Annulla** richiede l'interruzione anche prima del primo aggiornamento: attendi il messaggio finale o l'esito della richiesta.
 3. Con successo viene indicato il nome della nuova copia nella destinazione scelta. Aprila e confronta testo, tabelle e impaginazione con l’originale.
 4. Con errore o annullamento non considerare il lavoro completo. Leggi l’esito prima di riprovare; una richiesta arrivata troppo tardi può incontrare un job già completato.
 
-**Da sapere.** L’originale resta invariato. Un rifiuto dei controlli sul testo o sul layout non produce un risultato da trattare come valido. L’annullamento prima del primo evento e dopo chiusura della vista non è ancora garantito: cambiare scheda o chiudere l’app non equivale a confermare l’interruzione.
+**Da sapere.** L’originale resta invariato. Le destinazioni devono supportare hard link: una destinazione incompatibile o una collisione con un file già presente viene rifiutata senza sovrascriverlo. Per DOCX sono supportati corpo, tabelle annidate, hyperlink e intestazioni/piè di pagina; campi, textbox, note/commenti e revisioni non supportati vengono rifiutati. Le immagini non ricevono OCR in questo percorso. Lasciare la vista richiede l'annullamento e mantiene il blocco fino all'esito; una perdita di connessione è un errore, non una conferma di cancellazione. Cambiare scheda o chiudere l'app non sostituisce il messaggio finale.
 
 ## Coding Agent
 
@@ -318,7 +322,7 @@ Dopo un arresto imprevisto, apri la conversazione e il workspace originali e sce
 3. Se la preparazione è incompleta, esporta il recupero: riprova e ripristino sono disabilitati. Una cancellazione già completata può ancora esporre la copia conservata per ripristino o esportazione.
 4. Dopo ogni azione controlla conferma o errore e il percorso indicato. Se il recupero viene rifiutato, conserva i dati; **Mostra altre operazioni di recupero** visualizza eventuali record aggiuntivi.
 
-**Da sapere.** L’export del banner riguarda una copia di recupero già disponibile, non garantisce l’esportazione di ogni modifica rimasta soltanto in memoria. Se falliscono sia il salvataggio sia il recupero, tieni aperta la vista e conserva manualmente quanto puoi copiare; la sopravvivenza alla chiusura non è garantita.
+**Da sapere.** L’export del banner riguarda una copia di recupero già disponibile. Se falliscono sia salvataggio sia recupero, usa **Esporta modifiche in memoria** dal percorso 18 e verifica l'esito; se anche l'export fallisce, conserva aperta la vista e copia quanto puoi. Un'esportazione separata non conferma il salvataggio canonico e non rimuove il blocco della chiusura.
 
 ### 20 Gestire skill e sorgenti
 
@@ -410,6 +414,8 @@ Dopo un arresto imprevisto, apri la conversazione e il workspace originali e sce
 2. Per registrare ulteriori dettagli delle prossime run attiva **Log Debug Coding Agent** e scegli **File conservati**. Riproduci soltanto il problema necessario e consulta i dati raccolti; attivare il debug non recupera payload che non erano stati registrati.
 3. Conserva i log se ti servono per correggere la causa e riprovare. Se vuoi pulire il log di audit dell’agente, copia prima quanto serve e premi **Pulisci log agente**: la pulizia parte senza una seconda conferma.
 4. Controlla il segno di conferma accanto al pulsante. Se manca, non dare per riuscita la pulizia. Chiudere la console non cancella il log e pulire il log non corregge la causa dell’errore.
+
+Per identificare la build consulta **Informazioni**. Le versioni riportate sono la baseline del pacchetto costruito; non provano la versione del server Ollama o di un Sidecar esterno. Il comando delle licenze apre notice e dettagli dei sorgenti associati all'ambiente.
 
 **Da sapere.** Il debug registra passaggi, prompt, sorgenti e risposte, con credenziali oscurate. Percorsi e contenuti possono restare presenti: controlla le copie prima di condividerle. I log operativi e l’audit dell’agente sono distinti; Pulisci log agente agisce su quest’ultimo.
 

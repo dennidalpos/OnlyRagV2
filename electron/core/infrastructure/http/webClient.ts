@@ -2,6 +2,7 @@ import http from 'node:http'
 import https from 'node:https'
 import fs from 'node:fs'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { URL } from 'node:url'
 import TurndownService from 'turndown'
 import * as cheerio from 'cheerio'
@@ -360,6 +361,7 @@ export class WebClient {
     }
 
     const safeDestPath = pathCheck.safePath
+    const stagingPath = path.join(path.dirname(safeDestPath), `.onlyrag-download-${randomUUID()}.tmp`)
     const targetUrl = urlCheck.safeUrl
     const isHttps = targetUrl.protocol === 'https:'
     const client = isHttps ? https : http
@@ -388,7 +390,7 @@ export class WebClient {
         const complete = () => {
           if (fileOpened) {
             try {
-              fs.unlinkSync(safeDestPath)
+              fs.unlinkSync(stagingPath)
             } catch (unlinkErr) {
               if ((unlinkErr as NodeJS.ErrnoException).code !== 'ENOENT') {
                 message += `; Failed removing partial download: ${errorMessage(unlinkErr)}`
@@ -464,7 +466,7 @@ export class WebClient {
             }
 
             try {
-              fileStream = fs.createWriteStream(safeDestPath)
+              fileStream = fs.createWriteStream(stagingPath, { flags: 'wx', flush: true })
             } catch (err) {
               cleanupAndFail(errorMessage(err))
               return
@@ -480,6 +482,14 @@ export class WebClient {
               if (terminal) return
               if (!fileFinished) {
                 cleanupAndFail('Download file closed before completion')
+                return
+              }
+              try {
+                const destination = validatePathSafety(targetFilePath, workspaceRoot, fullAccess)
+                if (destination.safePath !== safeDestPath) throw new Error(destination.error || 'Download destination changed')
+                fs.renameSync(stagingPath, safeDestPath)
+              } catch (error) {
+                cleanupAndFail(`Failed publishing download: ${errorMessage(error)}`)
                 return
               }
               terminal = true

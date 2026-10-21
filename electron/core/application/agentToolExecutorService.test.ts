@@ -1240,25 +1240,29 @@ async def async_handler():
   })
 
   it('should execute git_status and git_diff without errors', async () => {
+    execSync('git init', { cwd: tempDir })
+    fs.writeFileSync(path.join(tempDir, 'untracked.txt'), 'owned status/diff fixture')
     const statusRes = await agentToolExecutorService.executeTool(
       {
         tool: 'git_status',
         parameters: {},
       },
-      process.cwd(),
+      tempDir,
       settings,
     )
     expect(statusRes.outputForHistory).toContain('[GIT STATUS:')
+    expect(statusRes.outputForHistory).toContain('untracked.txt')
 
     const diffRes = await agentToolExecutorService.executeTool(
       {
         tool: 'git_diff',
         parameters: {},
       },
-      process.cwd(),
+      tempDir,
       settings,
     )
     expect(diffRes.outputForHistory).toContain('[GIT DIFF')
+    expect(diffRes.outputForHistory).toContain('untracked.txt')
   })
 
   it('should execute git_commit successfully on an isolated temp git repository', async () => {

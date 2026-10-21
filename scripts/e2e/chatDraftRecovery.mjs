@@ -9,7 +9,7 @@ import { _electron as electron } from 'playwright'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const qualifiedExe = process.env.ONLYRAG_QUALIFICATION_EXE
 async function verifyRecovery(width, height) {
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-chat-drafts-'))
+  const scratch = fs.mkdtempSync(path.join(process.env.ONLYRAG_RECOVERY_EVIDENCE || os.tmpdir(), 'onlyrag-chat-drafts-'))
   const userData = path.join(scratch, 'user-data')
   const archive = path.join(userData, 'document-drafts.json')
   fs.mkdirSync(userData)
@@ -33,39 +33,44 @@ async function verifyRecovery(width, height) {
       env: environment,
       timeout: 30_000,
     })
-    await application.evaluate(({ ipcMain, dialog }, revision) => {
-      globalThis.__document = {
-        id: 'doc',
-        filename: 'notes.md',
-        filePath: 'notes.md',
-        fileSize: 10,
-        numPages: 1,
-        numChunks: 1,
-        status: 'indexed',
-        ingestedAt: revision,
-        fileType: 'text',
-        extractedMarkdown: '# Original',
-      }
-      globalThis.__saveRequests = []
-      globalThis.__closeWarnings = []
-      dialog.showMessageBox = async (_window, options) => {
-        globalThis.__closeWarnings.push(options.message)
-        return { response: 0, checkboxChecked: false }
-      }
-      for (const channel of ['ingest:list', 'ingest:get', 'ingest:update', 'ingest:search', 'ollama:generate-stream']) ipcMain.removeHandler(channel)
-      ipcMain.handle('ingest:list', () => [{ ...globalThis.__document }])
-      ipcMain.handle('ingest:get', () => ({ ...globalThis.__document }))
-      ipcMain.handle('ingest:search', () => [{ chunk_id: 'doc_chunk_0', doc_id: 'doc', doc_name: 'notes.md', text: 'A supplied passage.', score: 0.5 }])
-      ipcMain.handle('ingest:update', (_event, request) => {
-        globalThis.__saveRequests.push(request)
-        return { success: false, error: 'Document changed; draft retained.' }
-      })
-      ipcMain.handle('ollama:generate-stream', (event, request) => {
-        globalThis.__chatPrompt = request.prompt
-        event.sender.send('ollama:chunk', { operationId: request.operationId, chunk: 'A partial offline answer' })
-        return new Promise(() => {})
-      })
-    }, revision)
+    await application.evaluate(
+      ({ ipcMain, dialog, shell }, { revision, exportPath }) => {
+        dialog.showSaveDialog = async () => ({ canceled: false, filePath: exportPath })
+        shell.showItemInFolder = () => {}
+        globalThis.__document = {
+          id: 'doc',
+          filename: 'notes.md',
+          filePath: 'notes.md',
+          fileSize: 10,
+          numPages: 1,
+          numChunks: 1,
+          status: 'indexed',
+          ingestedAt: revision,
+          fileType: 'text',
+          extractedMarkdown: '# Original',
+        }
+        globalThis.__saveRequests = []
+        globalThis.__closeWarnings = []
+        dialog.showMessageBox = async (_window, options) => {
+          globalThis.__closeWarnings.push(options.message)
+          return { response: 0, checkboxChecked: false }
+        }
+        for (const channel of ['ingest:list', 'ingest:get', 'ingest:update', 'ingest:search', 'ollama:generate-stream']) ipcMain.removeHandler(channel)
+        ipcMain.handle('ingest:list', () => [{ ...globalThis.__document }])
+        ipcMain.handle('ingest:get', () => ({ ...globalThis.__document }))
+        ipcMain.handle('ingest:search', () => [{ chunk_id: 'doc_chunk_0', doc_id: 'doc', doc_name: 'notes.md', text: 'A supplied passage.', score: 0.5 }])
+        ipcMain.handle('ingest:update', (_event, request) => {
+          globalThis.__saveRequests.push(request)
+          return { success: false, error: 'Document changed; draft retained.' }
+        })
+        ipcMain.handle('ollama:generate-stream', (event, request) => {
+          globalThis.__chatPrompt = request.prompt
+          event.sender.send('ollama:chunk', { operationId: request.operationId, chunk: 'A partial offline answer' })
+          return new Promise(() => {})
+        })
+      },
+      { revision, exportPath: path.join(scratch, 'recovered-draft.md') },
+    )
     await application.evaluate(({ BrowserWindow }, bounds) => BrowserWindow.getAllWindows()[0].setSize(bounds.width, bounds.height), { width, height })
     const page = await application.firstWindow()
     await page.reload()
@@ -135,12 +140,21 @@ async function verifyRecovery(width, height) {
     const prompt = await application.evaluate(() => globalThis.__chatPrompt)
     assert(prompt.includes('[S1: notes.md | Section: General]\nA supplied passage.'))
     assert(prompt.includes('[Full Document: notes.md]\n# Original'))
+    const acknowledgedState = structuredClone(recoveredBeforeKill.state)
     // Only the process tree returned by this isolated launch is terminated.
     // The application exits after renderer crashes, so recovery requires a fresh launch.
     const interrupted = application.waitForEvent('close', { timeout: 20_000 })
     execFileSync('taskkill', ['/PID', String(application.process().pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' })
     await interrupted
     application = undefined
+    const freshProcessCheckpoint = JSON.parse(
+      execFileSync(
+        process.execPath,
+        ['-e', "process.stdout.write(require('node:fs').readFileSync(process.argv[1], 'utf8'))", path.join(userData, 'chat-history-recovery.json')],
+        { encoding: 'utf8', windowsHide: true, timeout: 10000 },
+      ),
+    )
+    assert.deepEqual(freshProcessCheckpoint, recoveredBeforeKill, 'Every acknowledged field must survive before bootstrap accepts a new UI revision')
     page = await launch('t2')
     await page.getByRole('tab', { name: 'RAG & Chat', exact: true }).click()
     await page.getByText('Generation was interrupted before completion. This response is incomplete.', { exact: true }).waitFor()
@@ -157,6 +171,65 @@ async function verifyRecovery(width, height) {
       return recovery.state.conversations.at(-1).messages.at(-1).contextCoverage
     })
     assert.deepEqual(restoredCoverage, coverage)
+    const restoredState = await page.evaluate(async () => (await window.electronAPI.loadChatRecovery()).state)
+    assert.deepEqual(
+      restoredState.conversations.map((conversation) => conversation.messages.map(({ id, sender, text }) => ({ id, sender, text }))),
+      acknowledgedState.conversations.map((conversation) => conversation.messages.map(({ id, sender, text }) => ({ id, sender, text }))),
+      'Acknowledged questions and partial answer must survive exactly; interrupted status is checked separately',
+    )
+
+    // Refuse a real Main archive write, while retaining the previous acknowledged revision.
+    assert.equal(await page.evaluate(() => window.__onlyragFlushChat()), true)
+    const expectedRecovery = {
+      ...acknowledgedState,
+      conversations: acknowledgedState.conversations.map((conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) => (message.isStreaming ? { ...message, isStreaming: false, interrupted: true } : message)),
+      })),
+    }
+    const acknowledgedRecovery = await page.evaluate(async () => (await window.electronAPI.loadChatRecovery()).state)
+    for (const conversation of expectedRecovery.conversations) {
+      const recovered = acknowledgedRecovery.conversations.find((item) => item.id === conversation.id)
+      assert(recovered)
+      assert(Date.parse(recovered.updatedAt) >= Date.parse(conversation.updatedAt))
+      // Opening the recovered conversation updates this UI timestamp; every other field is exact.
+      conversation.updatedAt = recovered.updatedAt
+    }
+    assert.deepEqual(acknowledgedRecovery, expectedRecovery)
+    const chatArchive = path.join(userData, 'chat-history-recovery.json')
+    const chatBeforeFailure = fs.readFileSync(chatArchive, 'utf8')
+    fs.renameSync(chatArchive, chatArchive + '.held')
+    fs.mkdirSync(chatArchive)
+    const question = page.getByRole('textbox', { name: /^Ask your documents/ })
+    await question.fill('A question pending storage retry')
+    await question.press('Enter')
+    assert.equal(await page.evaluate(() => window.__onlyragFlushChat()), false)
+    await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close())
+    const chatFailure = page.getByRole('alert').filter({ hasText: 'Chat could not be saved' })
+    await chatFailure.waitFor()
+    await application.evaluate(async () => {
+      const deadline = Date.now() + 3000
+      while (globalThis.__closeWarnings.length < 1 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    assert.equal(await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 1)
+    assert.equal(fs.readFileSync(chatArchive + '.held', 'utf8'), chatBeforeFailure)
+    const activeStop = page.getByRole('button', { name: 'Stop', exact: true })
+    if (await activeStop.isVisible()) await activeStop.click()
+    // Drain the production debounce while storage is still refused, before the explicit Retry.
+    await page.waitForTimeout(600)
+    fs.rmdirSync(chatArchive)
+    fs.renameSync(chatArchive + '.held', chatArchive)
+    await chatFailure.getByRole('button', { name: 'Retry saving', exact: true }).click()
+    await chatFailure.waitFor({ state: 'detached' })
+    assert.equal(await page.evaluate(() => window.__onlyragFlushChat()), true)
+    assert(
+      JSON.parse(fs.readFileSync(chatArchive, 'utf8')).state.conversations.some((conversation) =>
+        conversation.messages.some((message) => message.text === 'A question pending storage retry'),
+      ),
+    )
+    // Stop only this controlled stream; the later close must be free to test draft refusal.
+    const stop = page.getByRole('button', { name: 'Stop', exact: true })
+    if (await stop.isVisible()) await stop.click()
     await page.getByRole('tab', { name: 'Doc Ingestion', exact: true }).click()
     await page.waitForFunction(() => document.querySelector('.monaco-editor .view-lines')?.textContent?.includes('Recovered'))
     await page.getByRole('button', { name: 'Save Changes', exact: true }).click()
@@ -171,15 +244,22 @@ async function verifyRecovery(width, height) {
     await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close())
     const failure = page.getByRole('alert').filter({ hasText: 'Document draft recovery could not be saved or loaded' })
     await failure.waitFor()
+    await failure.getByRole('button', { name: 'Export', exact: true }).click()
+    const exportFile = path.join(scratch, 'recovered-draft.md')
+    const exportDeadline = Date.now() + 3000
+    while (!fs.existsSync(exportFile) && Date.now() < exportDeadline) await new Promise((resolve) => setTimeout(resolve, 20))
+    assert.equal(fs.readFileSync(exportFile, 'utf8'), '# Newer draft')
+    assert.equal(await failure.isVisible(), true, 'Export must not acknowledge canonical draft storage')
+    assert(fs.statSync(archive).isDirectory())
     await page.waitForFunction(() => Boolean(window.__onlyragFlushDocumentDrafts))
     assert(fs.statSync(archive).isDirectory())
     assert.equal(
       await application.evaluate(async () => {
         const deadline = Date.now() + 3000
-        while (!globalThis.__closeWarnings.length && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20))
+        while (globalThis.__closeWarnings.length < 2 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20))
         return globalThis.__closeWarnings.length
       }),
-      1,
+      2,
     )
     fs.rmdirSync(archive)
     fs.renameSync(archive + '.held', archive)
@@ -195,9 +275,15 @@ async function verifyRecovery(width, height) {
     page = await launch()
     await page.waitForFunction(() => document.querySelector('.monaco-editor .view-lines')?.textContent?.includes('Newer'))
     assert.equal(await page.evaluate(() => window.__onlyragFlushDocumentDrafts()), true)
+    const finalChat = await page.evaluate(async () => (await window.electronAPI.loadChatRecovery()).state)
+    assert(finalChat.conversations.some((conversation) => conversation.messages.some((message) => message.text === 'A question pending storage retry')))
     await application.close()
     application = undefined
     complete = true
+    fs.writeFileSync(
+      path.join(scratch, 'result.json'),
+      JSON.stringify({ width, height, complete, initialDraft, saved, finalChat, exported: fs.readFileSync(exportFile, 'utf8') }, null, 2),
+    )
     console.log(
       '[PASS] Real Main/Preload: active chat survives forced process interruption as incomplete; drafts retain their original revision, failed writes refuse close, retry and restart readback succeed. No real-model calls.',
     )
@@ -241,11 +327,12 @@ async function verifyRecovery(width, height) {
         console.error(`Could not terminate owned fixture PID ${application.process().pid}:`, cleanupError)
       }
     }
-    if (complete) {
+    if (complete && !process.env.ONLYRAG_RECOVERY_EVIDENCE) {
       assert.equal(path.dirname(path.resolve(scratch)), path.resolve(os.tmpdir()))
       assert(path.basename(scratch).startsWith('onlyrag-chat-drafts-'))
       fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
-    } else console.error(`Retained failed chat/draft fixture: ${scratch}`)
+    } else if (!complete) console.error(`Retained failed chat/draft fixture: ${scratch}`)
+    else console.log(`Retained verified chat/draft evidence: ${scratch}`)
   }
 }
 

@@ -1,5 +1,7 @@
 # Renderer React
 
+La [verifica locale del 21 ottobre](./verification-tracker-completion-2026-10-21.md) conclude recupero chat e bozze secondo il perimetro corrente: arresti Electron posseduti, riavvio, revisioni esatte, rifiuto della chiusura su errore reale, export senza conferma canonica e riprova. Modelli, installazione e perdita di alimentazione non sono qualificati da queste fixture.
+
 Il Renderer usa solo `window.electronAPI` esposta da [`electron/preload.ts`](../electron/preload.ts). Le viste sono in [`src/components/`](../src/components/) e gli hook in [`src/hooks/`](../src/hooks/). Contratti e validazione sono in [`api-ipc.md`](./api-ipc.md).
 
 ## Viste e proprietà dei dati

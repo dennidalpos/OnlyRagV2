@@ -1,5 +1,17 @@
 {
   "important_notes": [
+    "Tracker session publication 2026-10-21: owner explicitly requests saving all completed tracker work, commit on principal master and push; verified public origin dennidalpos/OnlyRagV2, base 473a55ab32208ea50aa53244d6114c5e5606c2e9 aligned 0/0. Owner explicitly confirms keeping DEPENDENCY-BRACES-UPSTREAM-01 and DEVSERVER-LOOPBACK-PROBE-STABILITY-01 open with evidence/resumption conditions; both original P2 records and criteria remain unchanged, zero owner-required tasks. Eight initial tasks plus the subsequent FTS residue were already completed/removed; no new completion in this publication. Fresh pre-commit full suites on SHA256-identical isolated source: 2989 TypeScript/327 files, 680 Python/one host directory symlink skip, 15 critical cases across eight checks with no skip. Preserve historical notes/evidence and rejected cleanup residues. Resume docs/session-handoff-tracker-2026-10-21.md; final SHA/push readback in external tracker-publication-20261021 receipt and SecondBrain context. Source publication only; no model campaign, installer release, personal migration, disposal or SecondBrain Git publication.",
+    "Operational P3 residue 2026-10-21: external FTS verification cache C:/Users/Utente/OnlyRag-Live/tracker-next-20261021-50b2e907/source/.pytest_cache is present and retained. Automatic approval review rejected the combined PowerShell cleanup command before execution: blocked by policy, no further reason. No phase executed and no alternate removal attempted. Evidence cleanup-rejection.json in the same root. Preserve the text location pointer C:/Users/Utente/OnlyRag-Live/tracker-next-current.txt with this evidence. Not an application failure and no retired disposal task reinstated; two existing P2 acceptance records remain unchanged.",
+    "FTS follow-up 2026-10-21: RAG-FTS-INDEX-API-01 completed and removed after native tokenizer/existing-index/incompatibility/race checks, four10k/100k768/1024D benchmarks with16 result hashes identical to the previous API, complete canonical rows/archives preserved, p95 maximum2701ms rounded, Python680 passed/one host symlink skip and critical15/no skip. create_index uses explicit replace=False; preserve the old local Tantivy refusal via public table uri. Two original P2 tasks remain unchanged: braces has no release above3.0.3, historical dev-server refusal has no original TCP endpoints; nine guard regressions pass without establishing attribution. No new application residue, model call, personal store change, commit or push. Docs/verification-fts-api-2026-10-21.md; evidence C:/Users/Utente/OnlyRag-Live/tracker-next-20261021-50b2e907. Previous local work and protected historical evidence retained.",
+    "Local completion 2026-10-21: DEPENDENCY-VITE-WINDOWS-EDITOR-01; Vite8.2.4 patch ufficiale installata;clean npm ci/audit0;editor Windows reale e25 casi dev-server;2989 TypeScript,674 Python+1 skip host,critico15;build/Main smoke e tipi/statico/Knip/cicli passati. Removed after local acceptance only. Report docs/verification-tracker-completion-2026-10-21.md; no model qualification, personal data mutation, commit or push.",
+    "Tracker continuation 2026-10-21: braces registry remains3.0.3; fork retained with no upstream remediation claim. Native dev-server25 cases pass on Vite8.2.4 but historical refusal has no attributable cause; keep both original IDs/priorities/criteria open. New P3 RAG-FTS-INDEX-API-01 preserves the deprecation warning previously carried by the completed RAG task. Report docs/verification-tracker-completion-2026-10-21.md. No historical disposal task reinstated.",
+    "Local completion 2026-10-21: AGENT-NETWORK-LIVE-01; 67 regressioni rete passate;HTTP locale reale,URL/DNS,MIME,redirect,annullamento/provenienza/cleanup;regressione MIME fallisce su HEAD e passa con staging esclusivo che preserva il file esistente. Removed after local acceptance only. Report docs/verification-tracker-completion-2026-10-21.md; no model qualification, personal data mutation, commit or push.",
+    "Local completion 2026-10-21: TRANSLATION-INPLACE-UNMOUNT-CANCELLATION-01; 200 regressioni Python traduzione senza skip;PDF/DOCX cancellati senza done con originali/output invariati;hook Stop/unmount,lock,identita,eventi tardivi e perdita trasporto passati. Removed after local acceptance only. Report docs/verification-tracker-completion-2026-10-21.md; no model qualification, personal data mutation, commit or push.",
+    "Local completion 2026-10-21: DOC-EDITOR-DRAFT-DURABILITY-01; Due dimensioni Electron:bozze esatte dopo crash,conflitto canonico senza rebase,errore storage rifiuta chiusura,export Markdown reale,riprova e riavvio;regressioni bozze multiple e archivi illeggibili passate. Removed after local acceptance only. Report docs/verification-tracker-completion-2026-10-21.md; no model qualification, personal data mutation, commit or push.",
+    "Local completion 2026-10-21: CHAT-DURABLE-HISTORY-01; Due dimensioni Electron reali:domande/risposta parziale e contesto esatti dopo crash e riavvio;errore filesystem reale rifiuta chiusura;riprova e secondo riavvio confermano nuova domanda. Removed after local acceptance only. Report docs/verification-tracker-completion-2026-10-21.md; no model qualification, personal data mutation, commit or push.",
+    "Local completion 2026-10-21: RAG-EMBEDDING-REBUILD-QUALIFICATION-01; 48 regressioni rebuild senza skip;7 tagli di processi posseduti sul formato corrente non vuoto;backup/readback,attivazione e rollback con tabelle originali identiche. Removed after local acceptance only. Report docs/verification-tracker-completion-2026-10-21.md; no model qualification, personal data mutation, commit or push.",
+    "Local completion 2026-10-21: STATE-WRITER-CRASH-DURABILITY-01; 24 tagli Node/Electron prima e dopo sostituzione e ack; readback da processi nuovi, staging preservato separatamente;9 regressioni serializzazione/errori passate. Removed after local acceptance only. Report docs/verification-tracker-completion-2026-10-21.md; no model qualification, personal data mutation, commit or push.",
+    "Local completion 2026-10-21: RAG-INDEX-METADATA-EFFICIENCY-01; Quattro benchmark RAG 10k/100k,768/1024D passati: p95 massimo2951ms, provenienza e record/archivi completi invariati, conflitti espliciti separati. Removed after local acceptance only. Report docs/verification-tracker-completion-2026-10-21.md; no model qualification, personal data mutation, commit or push.",
     "UX session publication 2026-10-21: owner explicitly requests saving the completed UX/UI work, commit on principal branch and push for session change. Verified public origin dennidalpos/OnlyRagV2, default master, base 50b418955c0c934e9101dfdb909feaabbf5af1b6, fetched alignment 0/0. All 42 changed/new implementation files match the final verification receipt by SHA256; only tracker/handoff/index documentation follows. Same-source local gates: 2977 TypeScript/326 files, 666 Python plus one host symlink skip, 15 critical/no skip; build/type/static/Knip/cycles and 11 UX/24 modal-tooltip groups pass. Ten autonomous IDs/priorities/acceptance records and all historical notes are preserved unchanged; no additional completion. Resume docs/session-handoff-ux-2026-10-21.md. Final SHA and push readback belong to the SecondBrain context and external ux-publication-20261021 receipt. Retain the previously refused TEMP cleanup residue. Source publication does not authorize real-model calls, installer release, personal migration, evidence disposal or SecondBrain Git publication.",
     "UX/UI implementation 2026-10-21: approved targeted fixes complete; see docs/verification-ux-targeted-2026-10-21.md. Explicit model assignment, truthful document collection state/retry, multiline Chat/IME, clipboard acknowledgement/errors, internal tab keyboard/panel relations and localized new greetings/plurals fixed. Electron additionally exposed implicit wizard dismissal saves, zoom clipping and Monaco worker/diff disposal errors; corrected and verified with isolated profiles and controlled IPC responses. MODAL-ASSISTIVE-TECHNOLOGY-QUALIFICATION-01 completed: actual wizard after restart at three sizes/three zooms plus eight native fixture groups at each size including stacked modal Tab/Shift+Tab, accessible descriptions and tooltip-first Escape. Ten other autonomous IDs and original criteria unchanged; no duplicate UX task. Operational P3 residue: prior TEMP onlyrag-ux-plan-d346ce0c101c4ab2822d6bf8906eab3c remains because automatic approval review rejected the combined stop/cleanup command before execution with blocked by policy, no further reason. Old owned PIDs 4080/28352 absent at final readback; no alternate deletion. Synthetic verification evidence retained under C:/Users/Utente/OnlyRag-Live/ux-targeted-20261021-*; no real model, installer, personal-data mutation, commit or push.",
     "Session handoff 2026-10-21: owner explicitly authorized saving this implementation, committing on the verified public origin default branch master and pushing for a session change. This batch implements local backlog simplification, shared IT/EN tooltips and bounded configured-model smoke tools; 24 tasks are withdrawn by decision, not completed. The 11 existing autonomous task IDs/priorities and local criteria remain open, with zero owner-required tasks. Full local gates already passed on the identical source snapshot (2972 TypeScript, 666 Python plus one host skip, 15 critical Python, build/Main smoke and six native tooltip groups); publication rechecks source correspondence, documents, JSON and protected data. No real inference, installer release, personal migration or evidence disposal is included. Current handoff: docs/session-handoff-local-ui-2026-10-21.md; final Git SHA/readback is recorded in the SecondBrain context and external publication receipt. CI/model qualification obligations remain retired; historical notes below do not reinstate them.",
@@ -45,64 +57,16 @@
   ],
   "todo_autonomous": [
     {
-      "id": "RAG-INDEX-METADATA-EFFICIENCY-01",
-      "p": "P2",
-      "task": "Complete local retrieval efficiency checks on current-format synthetic stores. Preserve the completed 10k/100k chunk, 768/1024-dimensional contention measurements and per-request provenance batching.",
-      "verify": "Run isolated concurrent reads/metadata writes with declared varied synthetic vectors and text, p95 <= 5000 ms. Compare complete canonical rows, result ordering, provenance and unindexed-tail retrieval; report revision conflicts separately. No encoder qualification, personal-store maintenance, installation campaign or semantic acceptance gate. Prior receipts: docs/verification-retrieval-contention-2026-10-20.md."
-    },
-    {
-      "id": "CHAT-DURABLE-HISTORY-01",
-      "p": "P2",
-      "task": "Complete local chat recovery regression checks using synthetic profiles and controlled generation responses. Checkpoints and failed-write close refusal already exist.",
-      "verify": "Exercise acknowledged questions, partial responses, failed writes, owned-process termination and fresh restart in development or isolated local installation. Compare exact acknowledged revisions; distinguish unsaved deltas. Preserve source profiles. Actual power loss and model qualification are out of scope."
-    },
-    {
-      "id": "DOC-EDITOR-DRAFT-DURABILITY-01",
-      "p": "P2",
-      "task": "Complete local document-draft recovery regression checks using synthetic current-format documents. Main draft archives and original-revision fencing already exist.",
-      "verify": "Exercise multiple drafts, concurrent canonical revisions, failed storage, owned-process termination and fresh restart in isolated development/installation profiles. Keep stale drafts separate, preserve unreadable archives, and verify exact saved content and export/retry. No personal data or actual power-loss campaign."
-    },
-    {
-      "id": "TRANSLATION-INPLACE-UNMOUNT-CANCELLATION-01",
-      "p": "P2",
-      "task": "Complete local in-place translation cancellation checks with controlled Sidecar/model responses. Preserve task ownership and the terminal acknowledgement boundary.",
-      "verify": "On synthetic PDF/DOCX, test stop before progress, component unmount, late events and transport loss. Verify task identity, lock release only after terminal settlement, original/output preservation and no false cancellation success. Development and isolated installation are authorized; no real-model qualification is required."
-    },
-    {
-      "id": "STATE-WRITER-CRASH-DURABILITY-01",
-      "p": "P2",
-      "task": "Complete local state-writer interruption checks on isolated synthetic files. Existing file flush and replacement remain supported.",
-      "verify": "Interrupt only owned processes before/after replacement and verify exact acknowledged revisions on restart, failure signalling, serial writes and staging recovery. Do not claim directory-metadata persistence or actual power-loss durability. Use scripts/e2e/stateWriterCrashDurability.mjs and existing regressions."
-    },
-    {
       "id": "DEPENDENCY-BRACES-UPSTREAM-01",
       "p": "P2",
       "task": "Maintain the local braces 3.0.4+onlyrag.1 parser-hardening fork until a suitable upstream release can replace it. This is current dependency maintenance, not a model or historical-campaign gate.",
       "verify": "When a supported candidate exists, compare parser/AST depth regressions, clean npm ci, YAML/proxy integration and native Electron/ASAR behavior; retain MIT notices and source provenance. Until then keep the current fork without declaring the upstream dependency fixed. No CI result is required."
     },
     {
-      "id": "DEPENDENCY-VITE-WINDOWS-EDITOR-01",
-      "p": "P2",
-      "task": "Remediate the Vite Windows development editor-launch advisory recorded in docs/session-handoff-sidecar-2026-10-20.md. Current lock is 8.2.2; inspect the exact maintainer advisory and supported fixed release before selecting an update.",
-      "verify": "Apply a supported corrected Vite/lockfile; verify clean npm ci, resolved advisory/dependency chain, native local development-server/editor-launch behavior, local frontend/backend gates, build and Main smoke. Preserve loopback/process guards and the braces fork. No remote CI, installer-publication or model qualification gate."
-    },
-    {
-      "id": "RAG-EMBEDDING-REBUILD-QUALIFICATION-01",
-      "p": "P2",
-      "task": "Complete local document-store rebuild regression checks on isolated current-format synthetic stores. Existing explicit prepare/activate/rollback behavior remains; no legacy conversion is requested.",
-      "verify": "Use controlled encoder vectors and nonempty synthetic stores. Verify provenance, backup/readback, explicit activation, owned-process interruption and rollback in development or isolated installation. Do not alter personal stores or implement prompt-history/legacy migrations. Actual power loss and encoder quality qualification are excluded."
-    },
-    {
       "id": "DEVSERVER-LOOPBACK-PROBE-STABILITY-01",
       "p": "P2",
       "task": "Diagnose intermittent local dev-server admission refusal on Windows. Keep current loopback and process-ownership guards unchanged until an attributable cause is found.",
       "verify": "Repeat bounded isolated Node/Vite allocations with socket/listener/PID receipts; accept the intended 127.0.0.1 listener and refuse external bindings. Preserve failed attempts and establish the cause before changing guards. Existing diagnostics: scripts/e2e/managedDevServerDiagnostics.mjs; docs/verification-tracker-resume-2026-10-20.md. No CI obligation."
-    },
-    {
-      "id": "AGENT-NETWORK-LIVE-01",
-      "p": "P2",
-      "task": "Complete deterministic local agent-network regression checks using controlled loopback HTTP services. The existing ID is retained for continuity; public-service live availability qualification is withdrawn.",
-      "verify": "Exercise success, redirects, unavailable service, URL/DNS rejection, download MIME/status refusal, cancellation and partial cleanup using owned local servers. Verify URL/hash provenance and filesystem guards; do not send prompts or personal data to public services. Stop only owned servers. No model, installation or public-network campaign is required."
     }
   ],
   "todo_user_required": []

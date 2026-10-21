@@ -229,7 +229,7 @@ def main():
         for owner, key, label in ((search, "_stored_embedding_spaces", "metadata"),
                                   (search, "_lexical_candidates", "lexical"), (source, "_archive", "archive"),
                                   (source, "_record", "documentRead"), (source, "text_revision", "textHash"),
-                                  (LanceTable, "create_fts_index", "ftsBuild")):
+                                  (LanceTable, "create_index", "ftsBuild")):
             stack.enter_context(patch.object(owner, key, timed(label, getattr(owner, key))))
         # No FTS indexes exist until the production first-search path creates them.
         assert list(table.list_indices()) == []

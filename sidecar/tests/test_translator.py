@@ -1648,11 +1648,18 @@ def test_translate_texts_skips_segments_already_in_target_language(monkeypatch):
     assert res_batch[1] == "This paragraph is already written in English and should be preserved."
 
 
-def test_translate_stream_stops_cooperatively_when_its_task_is_cancelled(tmp_path, monkeypatch):
+@pytest.mark.parametrize("extension", ["pdf", "docx"])
+def test_translate_stream_stops_cooperatively_when_its_task_is_cancelled(tmp_path, monkeypatch, extension):
     from sidecar.services.task_cancellation import cancel_task
 
-    path = str(tmp_path / "cancel_sample.pdf")
-    _make_pdf(path, "Text that will never be written translated")
+    path = str(tmp_path / f"cancel_sample.{extension}")
+    if extension == "pdf":
+        _make_pdf(path, "Text that will never be written translated")
+    else:
+        _make_docx(path)
+    original = open(path, "rb").read()
+    retained = tmp_path / "previous-output.txt"
+    retained.write_bytes(b"Previous output remains exact")
 
     def cancelling_call(text, *args, **kwargs):
         cancel_task("translate-cancel-test")
@@ -1671,7 +1678,9 @@ def test_translate_stream_stops_cooperatively_when_its_task_is_cancelled(tmp_pat
 
         assert events[-1] == {"type": "cancelled", "task_id": "translate-cancel-test"}
         assert not any(event["type"] == "done" for event in events)
-        assert os.listdir(tmp_path) == ["cancel_sample.pdf"]
+        assert sorted(os.listdir(tmp_path)) == [f"cancel_sample.{extension}", "previous-output.txt"]
+        assert open(path, "rb").read() == original
+        assert retained.read_bytes() == b"Previous output remains exact"
     finally:
         if doc_id:
             client.delete(f"/documents/{doc_id}")

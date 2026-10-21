@@ -1,5 +1,7 @@
 # Dipendenze e limiti noti
 
+Il [seguito locale del 21 ottobre](./verification-tracker-completion-2026-10-21.md) aggiorna Vite a **8.2.4** per l'[advisory Windows editor-launch](https://github.com/vitejs/launch-editor/security/advisories/GHSA-698v-4r3x-3vcv): installazione pulita, audit, editor/dev-server Windows, suite complete, build e smoke Main passano. L'upstream `braces` resta 3.0.3 al controllo corrente; il fork locale resta necessario. Questi esiti sostituiscono i conteggi operativi dei resoconti datati sotto.
+
 Il [seguito del 20 ottobre](./verification-monaco-sanitizer-2026-10-20.md) sostituisce nel bundle il sanitizer incorporato di Monaco con DOMPurify 3.4.17 esatto e aggiunge una regressione Chromium/Electron ai gate CI. La sostituzione è verificata nel grafo di build; l'override da solo non bastava. Monaco resta 0.56.0: la candidata 0.57.0 contiene ancora DOMPurify 3.4.15. `braces` upstream resta 3.0.3 al nuovo readback del registro: il fork rimane necessario.
 
 Le dipendenze correnti sono in [package.json](../package.json), [package-lock.json](../package-lock.json), [requirements.txt](../sidecar/requirements.txt) e [constraints.txt](../sidecar/constraints.txt). Non usare i conteggi degli audit datati come stato corrente. La distribuzione richiede l'inventario reale dei componenti: [distribution.md](./distribution.md).

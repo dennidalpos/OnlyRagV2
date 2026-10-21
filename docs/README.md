@@ -1,11 +1,17 @@
 # Documentazione OnlyRag V2
 
+La [consegna del tracker per il cambio sessione](./session-handoff-tracker-2026-10-21.md) raccoglie il lavoro completato, i due P2 mantenuti aperti per decisione del proprietario, le verifiche pre-commit e i riferimenti di ripresa; commit e push su `master` autorizzati.
+
+Il [seguito FTS del 21 ottobre](./verification-fts-api-2026-10-21.md) conclude l'aggiornamento all'API supportata di LanceDB con parità verificata; restano due P2 aperti, senza candidata upstream braces né prova TCP attribuibile per il dev-server.
+
+La [ripresa e il completamento dei task locali del 21 ottobre](./verification-tracker-completion-2026-10-21.md) registrano le nuove verifiche, le chiusure effettive e i residui. Per il lavoro ancora aperto prevale [PROJECT_STATUS.json](../PROJECT_STATUS.json).
+
 Il [passaggio di sessione UX del 21 ottobre](./session-handoff-ux-2026-10-21.md) salva le correzioni verificate, dieci task autonomi residui e l’autorizzazione al commit/push sul principale.
 
 Le [correzioni UX/UI mirate del 21 ottobre](./verification-ux-targeted-2026-10-21.md) distinguono osservazioni e rilievi statici, riportano prove Electron isolate, tastiera/zoom, scelta esplicita dei modelli e limiti dei servizi controllati.
 
 
-**Stato operativo corrente:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md), 11 task autonomi e 24 ritirati per decisione del proprietario. Nessuna CI o qualifica dei modelli; [implementazione e verifiche](./verification-local-ui-2026-10-20.md). I resoconti precedenti sotto sono storici.
+**Stato operativo corrente:** [sviluppo locale e test autonomi](./local-development-policy-2026-10-20.md); attività ancora aperte in [PROJECT_STATUS.json](../PROJECT_STATUS.json), completamenti e residui nel [resoconto del 21 ottobre](./verification-tracker-completion-2026-10-21.md). Restano ritirati i 24 task decisi dal proprietario, gli obblighi CI e le qualifiche dei modelli. I conteggi dei resoconti precedenti sotto sono storici.
 
 [Consegna per il cambio sessione del 21 ottobre](./session-handoff-local-ui-2026-10-21.md): tracker aggiornato, verifiche locali e riferimenti per riprendere gli 11 task; commit e push su `master` autorizzati dal proprietario.
 

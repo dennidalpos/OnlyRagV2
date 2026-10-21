@@ -13,6 +13,7 @@ import pyarrow as pa
 import pytest
 
 from sidecar.infrastructure.document_recovery import DocumentRecovery
+from sidecar.infrastructure.chunk_storage import chunk_schema
 from sidecar.infrastructure.embeddings import EmbeddingBatch, EmbeddingSpace, FALLBACK_SPACE
 from sidecar.infrastructure.store_control import StoreControlError, StoreLease, active_store, atomic_json, safe_path
 from sidecar.services import store_rebuild_service as service
@@ -370,7 +371,17 @@ def test_native_cli_roundtrip_with_declared_loopback_encoder(store):
 
 
 @pytest.mark.parametrize("phase", ["backup", "prepare-before", "prepare-after", "activate-before", "activate-after", "rollback-before", "rollback-after"])
-def test_owned_process_interruption_retains_truthful_activation_and_artifacts(store, phase):
+@pytest.mark.parametrize("current_format", [False, True], ids=["retained-legacy", "current-format"])
+def test_owned_process_interruption_retains_truthful_activation_and_artifacts(store, phase, current_format):
+    if current_format:
+        connection = service.connect(store / "data" / "lancedb_store")
+        connection.drop_table("chunks")
+        rows = [{"chunk_id": f"current_{index}", "doc_id": "one", "doc_name": "notes.md",
+                 "text": text, "vector": vector(text), "section_header": "Alpha",
+                 "chunk_index": index, "file_type": ".md", "ingested_at": "2026-10-10", **SPACE.metadata()}
+                for index, text in enumerate(["First retained clause.", "Second clause."])]
+        connection.create_table("chunks", data=pa.Table.from_pylist(rows, schema=chunk_schema(SPACE.embedding_dimension)))
+    baseline = service.table_evidence(service.connect(store / "data" / "lancedb_store"))
     identifier = prepared(store) if phase.startswith(("activate", "rollback")) else ""
     if phase.startswith("rollback"):
         service.activate(store, identifier)
@@ -452,6 +463,7 @@ else:
     else:
         service.rollback(store, identifier)
     assert active_store(store / "data")[0].store_id == "legacy"
+    assert service.table_evidence(service.connect(store / "data" / "lancedb_store")) == baseline
 
 
 def test_second_rebuild_uses_current_store_and_refuses_unrelated_rollback(store):

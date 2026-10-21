@@ -293,4 +293,43 @@ describe('translation hooks', () => {
     })
     expect(inplaceTranslation.status?.message).toBe('Storage failure')
   })
+
+  it.each(['pdf', 'docx'])('releases a %s job after transport loss and ignores late progress for its old identity', async (fileType) => {
+    documentsStore.documents = [{ ...pdfDoc, id: `transport-${fileType}`, filename: `fixture.${fileType}`, fileType } as IngestedDocument]
+    let reject!: (reason: Error) => void
+    let progress!: (payload: TranslateProgressPayload) => void
+    const translate = vi.fn(
+      (_request: { taskId: string }) =>
+        new Promise<{ success: boolean }>((_resolve, fail) => {
+          reject = fail
+        }),
+    )
+    window.electronAPI = {
+      ...window.electronAPI!,
+      translateDocumentInplace: translate,
+      cancelTask: vi.fn(async () => ({ success: true })),
+      onTranslateProgress: (callback) => {
+        progress = callback
+        return () => {}
+      },
+    }
+    await render({ translationModel: 'translator', translationOutputFolder: 'D:/fixture' })
+    let running!: Promise<void>
+    await act(async () => {
+      running = inplaceTranslation.handleStartInplaceTranslation()
+    })
+    const request = translate.mock.calls[0]
+    expect(request[0].taskId).toBeTruthy()
+    expect(peekGlobalTaskLock()).toBe('translation')
+    await act(async () => {
+      reject(new Error('Controlled transport loss'))
+      await running
+    })
+    expect(inplaceTranslation.status?.success).toBe(false)
+    expect(inplaceTranslation.status?.message).toContain('Controlled transport loss')
+    expect(inplaceTranslation.status?.message).not.toMatch(/cancelled/i)
+    expect(peekGlobalTaskLock()).toBeNull()
+    await act(async () => progress({ taskId: request[0].taskId, type: 'progress', page: 9, total_pages: 9, percent: 100 }))
+    expect(inplaceTranslation.translateProgress).toBeNull()
+  })
 })

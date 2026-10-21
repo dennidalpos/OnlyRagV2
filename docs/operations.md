@@ -1,5 +1,9 @@
 # Setup e operazioni
 
+La [verifica locale del writer del 21 ottobre](./verification-tracker-completion-2026-10-21.md) comprende 24 interruzioni Node/Electron e readback in processi nuovi. I temporanei completi precedenti alla sostituzione restano separati dal canonico confermato; non sono promossi o eliminati automaticamente dopo un crash.
+
+`node scripts/e2e/viteEditorWindows.mjs` verifica Vite ed editor Windows con server loopback e un editor sintetico posseduti. `ONLYRAG_LIVE_ROOT` sceglie la radice delle evidenze. Per conservare i profili di `chatDraftRecovery.mjs` impostare `ONLYRAG_RECOVERY_EVIDENCE` su una directory esistente dedicata; senza questa opzione le fixture riuscite vengono pulite. Nessuno dei due runner usa modelli reali.
+
 Durante l'avvio di sviluppo il Sidecar mostra `Verifica...` finché preparazione Python e readiness non terminano. Con `.venv` assente il primo avvio può installare le dipendenze runtime; un fallimento concluso resta `Offline`. Dopo modifiche al Main process chiudere e riavviare `npm run dev`. [Diagnosi, correzione e prove native del 20 ottobre](./verification-sidecar-dev-startup-2026-10-20.md).
 
 Eseguire i comandi da PowerShell nella radice del repository. Le versioni dichiarate sono Node [`24.19.0`](../.nvmrc), npm `>=11 <12` in [`package.json`](../package.json) e Python [`3.13.15`](../.python-version). Lo sviluppo richiede Ollama; l'endpoint locale predefinito è `http://127.0.0.1:11434`. Il manifest degli script e i loro effetti sono in [`package.json`](../package.json) e [`scripts/`](../scripts/).

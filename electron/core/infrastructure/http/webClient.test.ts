@@ -317,6 +317,8 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
         fs: {
           open: (_path, _flags, _mode, callback) => queueMicrotask(() => callback(Object.assign(new Error('open denied'), { code: 'EACCES' }))),
           write: fs.write,
+          // Node's flush option also requires fsync; @types/node omits it from this adapter type.
+          ...{ fsync: fs.fsync },
           close: fs.close,
         },
       })
@@ -349,6 +351,7 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
             fs.writeSync(fd, buffer, offset, Math.min(length ?? buffer.byteLength, 2), position)
             queueMicrotask(() => callback(Object.assign(new Error('disk full'), { code: 'ENOSPC' }), 0, buffer))
           }) as typeof fs.write,
+          ...{ fsync: fs.fsync },
           close: fs.close,
         },
       })
@@ -389,6 +392,7 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
             completeWrite = () => callback(Object.assign(new Error('late disk failure'), { code: 'EIO' }), 0, buffer)
             markWriting()
           }) as typeof fs.write,
+          ...{ fsync: fs.fsync },
           close: fs.close,
         },
       })
@@ -410,7 +414,8 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       request.emit('timeout')
       await Promise.resolve()
       expect(settled).toBe(false)
-      expect(fs.readFileSync(targetPath, 'utf8')).toBe('partial')
+      expect(fs.existsSync(targetPath)).toBe(false)
+      expect(fs.readFileSync(String(output?.path), 'utf8')).toBe('partial')
       completeWrite()
       await expect(pending).resolves.toEqual({ success: false, error: 'Download cancelled by AbortSignal' })
       expect(output?.closed).toBe(true)

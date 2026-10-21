@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { createRequire } from 'node:module'
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const entry = fileURLToPath(import.meta.url)
@@ -13,11 +13,12 @@ const require = createRequire(path.join(root, 'package.json'))
 
 if (process.argv[2] === 'child') {
   const [phase, target, compiled] = process.argv.slice(3)
-  if (phase === 'staged') {
+  if (phase === 'staged' || phase === 'replaced') {
     const rename = fs.promises.rename
     fs.promises.rename = async (source, destination) => {
       assert.equal(path.resolve(destination), target)
-      process.send({ phase: 'staged', staging: source })
+      if (phase === 'replaced') await rename(source, destination)
+      process.send({ phase, staging: source })
       await new Promise(() => {})
       return rename(source, destination)
     }
@@ -42,7 +43,8 @@ if (process.argv[2] === 'child') {
   }
   const compiled = path.join(evidence, 'compiled/electron/core/infrastructure/filesystem/safeAtomicFileWriter.js')
   const report = {
-    scope: 'Owned process interruption/readback; actual writer with native staging flush. No power-loss or staging-recovery qualification.',
+    scope:
+      'Owned process interruption and fresh-process readback of canonical and retained staging bytes. Unacknowledged staging is preserved, never promoted automatically. No power-loss qualification.',
     sources: hashes,
     cases: [],
   }
@@ -52,7 +54,7 @@ if (process.argv[2] === 'child') {
       ['Electron', require('electron')],
     ]) {
       for (const name of ['settings', 'registry', 'history', 'agent']) {
-        for (const phase of ['staged', 'acknowledged']) {
+        for (const phase of ['staged', 'replaced', 'acknowledged']) {
           const directory = path.join(evidence, `${runtime}-${name}-${phase}`)
           fs.mkdirSync(directory)
           const target = path.join(directory, 'state.json')
@@ -93,13 +95,30 @@ if (process.argv[2] === 'child') {
             assert.equal(message.phase, phase)
             assert(child.kill('SIGKILL'))
             await exited
-            assert.equal(fs.readFileSync(target, 'utf8'), phase === 'staged' ? 'retained' : 'replacement')
+            const restarted = JSON.parse(
+              execFileSync(
+                executable,
+                [
+                  '-e',
+                  `
+              const fs = require('node:fs'), path = require('node:path');
+              const target = process.argv[1], directory = path.dirname(target);
+              console.log(JSON.stringify({ canonical: fs.readFileSync(target, 'utf8'),
+                files: Object.fromEntries(fs.readdirSync(directory).map(name => [name, fs.readFileSync(path.join(directory, name), 'utf8')])) }));
+            `,
+                  target,
+                ],
+                { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, windowsHide: true, encoding: 'utf8', timeout: 10000 },
+              ),
+            )
+            assert.equal(restarted.canonical, phase === 'staged' ? 'retained' : 'replacement')
             if (phase === 'staged') {
               assert.equal(path.dirname(message.staging), directory)
               assert.equal(fs.readFileSync(message.staging, 'utf8'), 'replacement')
+              assert.equal(restarted.files[path.basename(message.staging)], 'replacement')
               assert.equal(fs.readdirSync(directory).length, 2)
             } else assert.deepEqual(fs.readdirSync(directory), ['state.json'])
-            report.cases.push({ runtime, name, phase, pid: child.pid, target, status: 'passed' })
+            report.cases.push({ runtime, name, phase, pid: child.pid, target, restarted, acknowledged: phase === 'acknowledged', status: 'passed' })
           } finally {
             if (child.exitCode === null && child.signalCode === null) {
               child.kill('SIGKILL')

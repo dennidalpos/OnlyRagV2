@@ -1,5 +1,7 @@
 # Coding Agent
 
+La [verifica locale di rete del 21 ottobre](./verification-tracker-completion-2026-10-21.md) conclude `AGENT-NETWORK-LIVE-01` con server HTTP posseduti. I download scrivono in staging esclusivo e sostituiscono la destinazione solo dopo validazione, flush e chiusura; errori e annullamento preservano il file precedente. URL, DNS, MIME e percorsi restano verificati secondo il livello di accesso esplicito.
+
 Il modello propone piani e azioni; Main decide cosa eseguire, verifica file/comandi e registra esiti. Il percorso è `intervista/piano → contesto → azione → verifica → risultato`. I contratti e le regole sono in [`shared/ipc/ipcContract.ts`](../shared/ipc/ipcContract.ts), [`electron/core/domain/agent/`](../electron/core/domain/agent/) e [`electron/core/application/`](../electron/core/application/).
 
 ## Uso e confini

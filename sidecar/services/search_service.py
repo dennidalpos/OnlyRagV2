@@ -1,4 +1,6 @@
 from typing import Any, Dict, List, Optional
+from pathlib import Path
+from lancedb.index import FTS
 from sidecar.config import CHUNKS_TABLE_NAME, DOCS_TABLE_NAME, logger
 from sidecar.schemas import SearchRequest, SearchResult
 from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, database_operation, delete_document_records, DatabaseConflictError
@@ -59,9 +61,13 @@ def _lexical_candidates(ctbl: Any, query: str, doc_filter: Optional[str], limit:
             if index.index_type != "FTS" or index.columns != [column]:
                 raise RuntimeError(f"Incompatible lexical index: {name}")
         else:
-            ctbl.create_fts_index(
-                column, name=name, use_tantivy=False, stem=False,
-                remove_stop_words=False, max_token_length=None, ascii_folding=False,
+            # The unified API does not carry the old method's local Tantivy refusal.
+            # Retain incompatible data and require explicit maintenance, never conversion.
+            if (Path(ctbl.uri) / "_indices" / "fts").exists():
+                raise ValueError("Legacy Tantivy FTS index detected; preserve it and rebuild explicitly.")
+            ctbl.create_index(
+                column, name=name, replace=False,
+                config=FTS(stem=False, remove_stop_words=False, max_token_length=None, ascii_folding=False),
             )
     search = ctbl.search(query, query_type="fts", fts_columns=list(_LEXICAL_COLUMNS))
     if doc_filter:

@@ -80,6 +80,7 @@ I file restano nei percorsi originali per preservare i collegamenti. Gli indici 
 
 ## Consegne di sessione
 
+- [Rinnovo asset media dal vivo e guida social — 22 ottobre 2026](./session-handoff-media-2026-10-22.md)
 - [Lotto tracker, pulizia, documentazione e guida Mermaid — 22 ottobre 2026](./session-handoff-2026-10-22.md)
 - [Skill e documentazione — 21 ottobre 2026](./session-handoff-documentation-2026-10-21.md)
 - [Passaggio di sessione — 19 ottobre 2026](./session-handoff-2026-10-19.md)

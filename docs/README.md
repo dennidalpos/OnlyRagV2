@@ -16,7 +16,7 @@
 | Decisioni della fase locale | [Politica approvata del 20 ottobre](./local-development-policy-2026-10-20.md), [direttive del repository](../AGENTS.md) |
 | Risultati datati, proposte e consegne | [Indice storico](./history.md) |
 
-Le guide correnti sono state riesaminate il **21 ottobre 2026**. [Metodo, correzioni, discrepanze e limiti](./documentation-audit-2026-10-21.md) distinguono confronto statico, test eseguiti e ricevute storiche. Per individuare il comportamento previsto confrontare direttive e decisioni approvate con contratti, implementazione e test: una divergenza non rende automaticamente corretto il codice.
+Le guide correnti sono state riallineate il **22 ottobre 2026**. Lo [stato corrente](./verification-current.md), il [passaggio di sessione del 22 ottobre](./session-handoff-2026-10-22.md), il [lotto del tracker del 22 ottobre](./verification-tracker-lot-2026-10-22.md) e il [riesame del 21 ottobre](./documentation-audit-2026-10-21.md) distinguono confronto statico, test eseguiti, discrepanze risolte o aperte e ricevute storiche. Per individuare il comportamento previsto confrontare direttive e decisioni approvate con contratti, implementazione e test: una divergenza non rende automaticamente corretto il codice.
 
 ## Fonti e file da preservare
 

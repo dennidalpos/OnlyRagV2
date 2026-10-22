@@ -1,6 +1,6 @@
 # Dipendenze e limiti noti
 
-Riesame documentale del **21 ottobre 2026**. Versioni e provenienza si ricavano da [package.json](../package.json), [package-lock.json](../package-lock.json), [requisiti comuni](../sidecar/requirements-common.txt) e [vincoli Python](../sidecar/constraints.txt). La baseline della schermata Informazioni è generata da [dependencyVersions.mts](../scripts/dependencyVersions.mts); non interroga Sidecar/Ollama esterni.
+Riesame documentale del **22 ottobre 2026**. Versioni e provenienza si ricavano da [package.json](../package.json), [package-lock.json](../package-lock.json), [requisiti comuni](../sidecar/requirements-common.txt) e [vincoli Python](../sidecar/constraints.txt). La baseline della schermata Informazioni è generata da [dependencyVersions.mts](../scripts/dependencyVersions.mts); non interroga Sidecar/Ollama esterni.
 
 ## Node/Electron
 
@@ -12,11 +12,11 @@ La [correzione Monaco](./verification-monaco-sanitizer-2026-10-20.md) sostituisc
 
 FastAPI/Pydantic espongono REST, LanceDB/Arrow conservano dati e vettori, pandas/openpyxl/xlrd leggono tabelle, PyMuPDF/python-docx elaborano documenti e RapidOCR/ONNX Runtime eseguono OCR. Il venv CPU di release è distinto da quello di sviluppo GPU; i [requisiti runtime](../sidecar/requirements.txt) non comprendono necessariamente tutti i [requisiti di test](../sidecar/requirements-dev.txt).
 
-L'[audit critico del 21 ottobre](./critical-application-audit-2026-10-21.md) conserva la qualifica di Electron 43.8.3/Pillow 13.0.0 e inventari/npm/PyPI/OSV datati. Non e un nuovo audit remoto o una garanzia di assenza di vulnerabilità; gli alert del servizio possono averè stato distinto dal checkout. Nessun registro di advisory è stato interrogato in questa revisione documentale.
+L'[audit critico del 21 ottobre](./critical-application-audit-2026-10-21.md) conserva la qualifica di Electron 43.8.3/Pillow 13.0.0 e inventari/npm/PyPI/OSV datati. Non è un nuovo audit remoto o una garanzia di assenza di vulnerabilità; gli alert del servizio possono avere stato distinto dal checkout. Nessun registro di advisory è stato interrogato in questa revisione documentale.
 
 ## Residui attuali
 
-Il [tracker](../PROJECT_STATUS.json) mantiene la futura sostituzione del fork `braces` con upstream idoneo è l’attribuzione del rifiuto storico dev-server. Il [rimedio locale del 16 ottobre](./dependency-remediation-2026-10-16.md) rimuove `sprintf-js` e conserva patch/provenienza del fork: non risultano task upstream `sprintf-js` o sanitizer Monaco ancora aperti. Il worker di scansione e la cache HTTP Got disabilitata mantengono i propri confini; una mitigazione non prova la risoluzione upstream.
+Il [tracker](../PROJECT_STATUS.json) mantiene la futura sostituzione del fork `braces` con upstream idoneo (`npm view braces version` ancora `3.0.3` al 22 ottobre) e l'attribuzione del rifiuto storico dev-server, oltre al determinismo offline della fixture `pnpm` (`TEST-PNPM-OFFLINE-PREPARATION-01`) e al provider OCR effettivo dopo fallback CPU (`OCR-RUNTIME-EFFECTIVE-PROVIDER-01`). Il [rimedio locale del 16 ottobre](./dependency-remediation-2026-10-16.md) rimuove `sprintf-js` e conserva patch/provenienza del fork: non risultano task upstream `sprintf-js` o sanitizer Monaco ancora aperti. Il worker di scansione e la cache HTTP Got disabilitata mantengono i propri confini; una mitigazione non prova la risoluzione upstream.
 
 ## Evidenze datate e ancoraggi conservati
 

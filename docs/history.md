@@ -1,6 +1,6 @@
 # Evidenze storiche e decisioni conservate
 
-Indice di consultazione del **21 ottobre 2026**. I documenti sotto conservano decisioni, risultati, fallimenti, hash e limiti delle rispettive date. Un task dichiarato aperto o una pubblicazione autorizzata in un vecchio rapporto descrive quel momento; per il lavoro attuale usare [tracker](../PROJECT_STATUS.json), [politica locale](./local-development-policy-2026-10-20.md) e [verifica corrente](./verification-current.md).
+Indice di consultazione del **22 ottobre 2026**. I documenti sotto conservano decisioni, risultati, fallimenti, hash e limiti delle rispettive date. Un task dichiarato aperto o una pubblicazione autorizzata in un vecchio rapporto descrive quel momento; per il lavoro attuale usare [tracker](../PROJECT_STATUS.json), [politica locale](./local-development-policy-2026-10-20.md) e [verifica corrente](./verification-current.md).
 
 I file restano nei percorsi originali per preservare i collegamenti. Gli indici di ancoraggi sono mantenuti per compatibilità documentale; i rapporti unici non sono stati cancellati come legacy. L'unico riepilogo spostato integralmente è la precedente verifica corrente, ora [cronologia dei riepiloghi](./verification-summary-history-2026-10-21.md).
 
@@ -44,7 +44,7 @@ I file restano nei percorsi originali per preservare i collegamenti. Gli indici 
 - [Recupero chat e bozze in CI — 18 ottobre 2026](./verification-chat-drafts-ci-2026-10-18.md)
 - [Recupero chat, bozze e budget del prompt](./verification-chat-drafts-context-2026-10-16.md)
 - [Fixture CI: scadenze worker e retention — 20 ottobre 2026](./verification-ci-boundaries-2026-10-20.md)
-- [Fixture Windows è stato CI — 20 ottobre 2026](./verification-ci-fixtures-2026-10-20.md)
+- [Fixture Windows e stato CI — 20 ottobre 2026](./verification-ci-fixtures-2026-10-20.md)
 - [P03: qualifica del candidato corrente — 19 ottobre 2026](./verification-current-source-2026-10-19.md)
 - [Limiti documentali e recupero Markdown — 18 ottobre 2026](./verification-document-limits-2026-10-18.md)
 - [Export e contesto chat — 17 ottobre 2026](./verification-export-chat-2026-10-17.md)
@@ -72,6 +72,7 @@ I file restano nei percorsi originali per preservare i collegamenti. Gli indici 
 - [Completamento del tracker locale — 21 ottobre 2026](./verification-tracker-completion-2026-10-21.md)
 - [Seguito del tracker — 20 ottobre 2026](./verification-tracker-followup-2026-10-20.md)
 - [Esecuzione locale del tracker — 20 ottobre 2026](./verification-tracker-local-2026-10-20.md)
+- [Lotto del tracker: wrapper Sidecar ed etichetta OCR — 22 ottobre 2026](./verification-tracker-lot-2026-10-22.md)
 - [Ripresa del tracker: CI e diagnosi dev-server — 20 ottobre 2026](./verification-tracker-resume-2026-10-20.md)
 - [Correzioni della traduzione — 20 ottobre 2026](./verification-translation-fixes-2026-10-20.md)
 - [Correzioni UX/UI mirate — 21 ottobre 2026](./verification-ux-targeted-2026-10-21.md)
@@ -79,6 +80,7 @@ I file restano nei percorsi originali per preservare i collegamenti. Gli indici 
 
 ## Consegne di sessione
 
+- [Lotto tracker, pulizia, documentazione e guida Mermaid — 22 ottobre 2026](./session-handoff-2026-10-22.md)
 - [Skill e documentazione — 21 ottobre 2026](./session-handoff-documentation-2026-10-21.md)
 - [Passaggio di sessione — 19 ottobre 2026](./session-handoff-2026-10-19.md)
 - [Passaggio di sessione: audit residui — 20 ottobre 2026](./session-handoff-audit-2026-10-20.md)
@@ -113,7 +115,7 @@ I file restano nei percorsi originali per preservare i collegamenti. Gli indici 
 ## Materiali congelati e testi di licenza
 
 - [evidence/](./evidence/) e i JSON accanto ai rapporti conservano ricevute/inventari; questo riesame non ne aggiorna hash o giudizi.
-- [licenses/](./licenses/) conserva testi e attribuzioni, incluso il [pacchetto di proposta](./licenses/agpl-route-2026-10-10/NOTICE-DRAFT.md). La nota [DISTRIBUTION-LICENSE.md](../DISTRIBUTION-LICENSE.md) rimanè un materiale del pacchetto.
+- [licenses/](./licenses/) conserva testi e attribuzioni, incluso il [pacchetto di proposta](./licenses/agpl-route-2026-10-10/NOTICE-DRAFT.md). La nota [DISTRIBUTION-LICENSE.md](../DISTRIBUTION-LICENSE.md) rimane un materiale del pacchetto.
 - [prompt_test_sequenza.txt](./prompt_test_sequenza.txt) è un input congelato. I [corpus di test](../sidecar/tests/fixtures/README.md) e le aspettative non si riscrivono per far coincidere un output.
 
 Per istruzioni di uso e manutenzione tornare all'[indice delle guide](./README.md).

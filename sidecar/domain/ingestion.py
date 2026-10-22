@@ -60,11 +60,6 @@ def _preflight_delimited(content, file_path, separator):
         finally:
             csv.field_size_limit(previous)
 
-_FIGURE_VISION_PROMPT = (
-    "Describe this figure, chart, table, or diagram concisely in Markdown: "
-    "extract any visible text, labels, axis values, and data points. "
-    "If it is a purely decorative image with no informational content, respond with an empty string."
-)
 
 def extract_tables_from_page(page: pymupdf.Page) -> Tuple[List[str], List[Any]]:
     """Extracts tables natively from a PDF page and converts them to formatted Markdown tables via tabulate."""

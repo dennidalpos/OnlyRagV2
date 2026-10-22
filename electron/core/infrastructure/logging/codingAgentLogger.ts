@@ -226,13 +226,6 @@ export class CodingAgentLogger {
     this.writeEntry(`[AGENT SESSION START] Session: ${sessionId}`, content)
   }
 
-  public logModeTransition(sessionId: string, fromMode: string, toMode: string, reason?: string): void {
-    const content = `Session ID: ${sessionId}
-Mode Changed: ${fromMode.toUpperCase()} ➔ ${toMode.toUpperCase()}
-${reason ? (this.includesPayload(sessionId) ? `Reason: ${reason}` : CodingAgentLogger.payloadSummary('Reason', reason)) : ''}`
-    this.writeEntry(`[AGENT MODE TRANSITION] Session: ${sessionId}`, content)
-  }
-
   public logPlanGeneration(sessionId: string, prompt: string, milestonesCount: number, mode: string): void {
     const promptDetail = this.includesPayload(sessionId) ? `Source Prompt: "${prompt}"` : CodingAgentLogger.payloadSummary('Source Prompt', prompt)
     const content = `Session ID: ${sessionId}
@@ -388,34 +381,6 @@ Milestone: ${milestoneId}
 Transition: ${fromStatus.toUpperCase()} -> ${toStatus.toUpperCase()}
 ${CodingAgentLogger.payloadSummary('Milestone Payload', `${milestoneTitle}\n${cause}`)}`
     this.writeEntry(`[STEP ${step} - MILESTONE ${milestoneId}: ${fromStatus.toUpperCase()} -> ${toStatus.toUpperCase()}] Session: ${sessionId}`, content)
-  }
-
-  public logPlanMilestoneUpdate(
-    sessionId: string,
-    step: number,
-    milestones: { id: string; title: string; status: string; notes?: string }[],
-    statusText?: string,
-  ): void {
-    if (!milestones || milestones.length === 0) return
-    const completed = milestones.filter((m) => m.status === 'verified').length
-    const progressPercent = Math.round((completed / milestones.length) * 100)
-
-    const milestoneLines = milestones
-      .map((m, idx) => {
-        let icon = '[ ]'
-        if (m.status === 'verified') icon = '[x]'
-        else if (m.status === 'in_progress') icon = '[>]'
-        else if (m.status === 'failed') icon = '[!]'
-        return this.includesPayload(sessionId)
-          ? `${idx + 1}. ${icon} ${m.title} — Status: ${m.status.toUpperCase()}${m.notes ? ` (${m.notes})` : ''}`
-          : `${idx + 1}. ${icon} ${m.id} — Status: ${m.status.toUpperCase()}`
-      })
-      .join('\n')
-
-    const content = `Session ID: ${sessionId} | Step: ${step} | Progress: ${completed}/${milestones.length} (${progressPercent}%)${statusText ? ` | ${statusText}` : ''}
-Structured Execution Plan Milestones:
-${milestoneLines}`
-    this.writeEntry(`[STEP ${step} - PLAN MILESTONES STATE] Session: ${sessionId}`, content)
   }
 
   public logLoopIntervention(

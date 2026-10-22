@@ -604,6 +604,9 @@ export const it = {
     ocrCpuOnly: 'CPU',
 
     ocrGpuPresentUnused: 'GPU Presente (ONNX CPU)',
+    ocrProviderCuda: 'CUDA',
+    ocrProviderCpu: 'CPU',
+    ocrProviderUnknown: 'provider in verifica',
 
     stepCompleted: 'Ingestione e indicizzazione completate con successo!',
     pipelineCompleted: 'Completato',

@@ -1,10 +1,9 @@
 import os
 import sys
-import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from sidecar.domain.word_segmenter import normalize_ocr_token_spacing, _viterbi_segment_compound
+from sidecar.domain.word_segmenter import normalize_ocr_token_spacing
 
 def test_normalize_ocr_token_spacing_splits_camel_and_numbers():
     assert normalize_ocr_token_spacing("ViaLaurentina449") == "Via Laurentina 449"

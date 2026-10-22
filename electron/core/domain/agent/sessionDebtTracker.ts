@@ -34,14 +34,6 @@ export class SessionDebtTracker {
     return this.data
   }
 
-  public updateReport(newData: Partial<SessionReportData>): void {
-    this.data = {
-      ...this.data,
-      ...newData,
-      lastUpdated: new Date().toISOString(),
-    }
-  }
-
   public compileTrackerMarkdown(): string {
     const timestamp = this.data.lastUpdated || new Date().toISOString()
     const lines: string[] = ['# SESSION_TRACKER', 'format: 2', `updated_at: ${timestamp}`, '', '## completed_tasks']

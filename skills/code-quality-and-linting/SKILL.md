@@ -10,7 +10,7 @@ tags: ["verification", "lint", "build"]
 - Run targeted TypeScript tests with `npx vitest run <path>` and Python tests with `.venv\Scripts\python.exe -m pytest -q <path>`.
 - Run `npm run typecheck` for TypeScript contracts and `npm run quality:static` for Biome, IPC registration and layering. `npm run test:skills` targets skill-domain tests.
 - Run `npm run quality:python` for the offline Python admission/retrieval/persistence gate. It runs required existing regressions and rejects missing or skipped checks; it also runs inside `scripts/lint_format.ps1`, including `-SkipTests`.
-- Prefer direct pytest for deterministic Sidecar checks. `npm run test:sidecar` first probes port 8000: an available server selects live health/export/search requests instead of pytest, without a launch-token header. It is not an offline suite or a substitute for the Python gate.
+- `npm run test:sidecar` always runs `.venv\Scripts\python.exe -m pytest -q` from the repository root (the `pytest.ini` suite) and propagates its exit code; it never contacts a running service, even when port 8000 is occupied. A missing interpreter or pytest fails with exit 2; `-PythonExe <path>` selects another interpreter. Direct pytest remains equivalent.
 - After REST contract changes, `npm run generate:openapi` rewrites `sidecar/contracts/openapi-2.5.0.json`; review that diff with the schema and client changes.
 - Run `npm run docs:check` for local Markdown links, anchors and npm script names. `npm run format:check` checks the diff with `git diff --check HEAD`.
 - Use `npm run audit:cycles` for dependency cycles and `npm run audit:deadcode` for Knip when relevant.

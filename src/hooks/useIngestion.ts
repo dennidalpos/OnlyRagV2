@@ -9,6 +9,7 @@ import { resolveNodeTemplate } from '../constants/promptConfig'
 import { type TranslationKey, useTranslation as useI18n } from '../i18n'
 import { normalizeError } from '../lib/errors/errorNormalizer'
 import { logger } from '../lib/logger'
+import { type NativeOcrProvider, resolveNativeOcrProvider } from '../lib/ocrProvider'
 import { peekDocumentMarkdown, primeDocumentMarkdown } from '../services/documentMarkdown'
 import { electronApi } from '../services/electronApi'
 import { acquireGlobalTaskLock, peekGlobalTaskLock, releaseGlobalTaskLock } from '../services/globalTaskLock'
@@ -22,6 +23,12 @@ import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 export function resolveVisionOcrPrompt(settings?: AppSettings): string | undefined {
   if (settings?.ocrEngine !== 'vision_model') return undefined
   return resolveNodeTemplate('images:analysis', settings).template || undefined
+}
+
+const NATIVE_OCR_PROVIDER_LABELS: Record<NativeOcrProvider, TranslationKey> = {
+  cuda: 'ingestion.ocrProviderCuda',
+  cpu: 'ingestion.ocrProviderCpu',
+  unknown: 'ingestion.ocrProviderUnknown',
 }
 
 export interface IngestionProgressState {
@@ -468,6 +475,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     const visionPrompt = resolveVisionOcrPrompt(settings)
     const useVisionOcr = visionPrompt !== undefined
     const visionModelName = settings?.visionModel || 'llama3.2-vision'
+    const nativeOcrLabel = t(NATIVE_OCR_PROVIDER_LABELS[resolveNativeOcrProvider(diagnostics)])
 
     let detectedCategory = t('ingestion.categoryText')
     let initialPipeline = 'Fast-Router: Pre-analisi & Classificazione'
@@ -476,11 +484,11 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     if (ext === 'pdf') {
       detectedCategory = t('ingestion.categoryPdf')
       initialPipeline = 'Pipeline: PDF Fast-Router & Layout Extraction'
-      ocrTech = useVisionOcr ? `PyMuPDF / Vision LLM OCR (${visionModelName}) + RapidOCR fallback` : 'PyMuPDF / RapidOCR (CUDA nativo)'
+      ocrTech = useVisionOcr ? `PyMuPDF / Vision LLM OCR (${visionModelName}) + RapidOCR fallback` : `PyMuPDF / RapidOCR (${nativeOcrLabel})`
     } else if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) {
       detectedCategory = t('ingestion.categoryImage')
       initialPipeline = useVisionOcr ? 'Pipeline: Multimodal Vision & OCR' : 'Pipeline: RapidOCR Layout'
-      ocrTech = useVisionOcr ? `Vision LLM OCR (${visionModelName}) + RapidOCR fallback` : 'RapidOCR (CUDA nativo)'
+      ocrTech = useVisionOcr ? `Vision LLM OCR (${visionModelName}) + RapidOCR fallback` : `RapidOCR (${nativeOcrLabel})`
     } else if (ext === 'docx') {
       detectedCategory = t('ingestion.categoryWord')
       initialPipeline = 'Pipeline: DOCX Structured XML Parser'

@@ -16,7 +16,7 @@ import { electronDesktopShell } from '../infrastructure/electron/electronDesktop
 import { logger } from '../infrastructure/logging/logger'
 import type { AgentToolCall, SupportedToolName } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
-import { AtomicWorkspaceJournal, RollbackResult } from '../infrastructure/filesystem/atomicWorkspaceJournal'
+import { AtomicWorkspaceJournal } from '../infrastructure/filesystem/atomicWorkspaceJournal'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { PersistentPowerShellSession } from '../infrastructure/process/persistentPowerShellSession'
 import { managedDevServerRepository } from '../infrastructure/process/managedDevServerRepository'
@@ -227,10 +227,6 @@ export class AgentToolExecutorService {
 
   public getJournal(): AtomicWorkspaceJournal {
     return this.journal
-  }
-
-  public rollbackJournal(): RollbackResult {
-    return this.recoveryToolService.rollbackWorkspace()
   }
 
   /** Marks the end of the current agent step so its file changes become undoable via the rollback_last_step tool. */

@@ -43,6 +43,7 @@ try {
     & git -C $repo add -- dist/tracked.txt
     if ($LASTEXITCODE -ne 0) { throw 'Fixture git add failed.' }
     Write-FixtureFile (Join-Path $repo 'dist-electron\main.js') 'compiled fixture'
+    Write-FixtureFile (Join-Path $repo 'sidecar\__pycache__\config.cpython-313.pyc') 'bytecode fixture'
     Write-FixtureFile (Join-Path $repo '.onlyrag\sessions\history.json')
     Write-FixtureFile (Join-Path $repo 'userdata_dev\settings.json')
     Write-FixtureFile (Join-Path $repo 'build\tabular-probes\evidence.txt')
@@ -79,6 +80,7 @@ exit $LASTEXITCODE
     Invoke-Case 'Tests need explicit selection' $workspaceScript @{ Mode = 'TestResidues' } 1 'DisposablePaths'
     Invoke-Case 'Full needs explicit selection' $workspaceScript @{ Mode = 'Full' } 1 'DisposablePaths'
     Invoke-Case 'Disposable generated candidate' $repoScript @{ DisposablePaths = @((Join-Path $repo 'dist-electron')) } 0 'Remove explicitly reviewed'
+    Invoke-Case 'Disposable sidecar pycache candidate' $repoScript @{ DisposablePaths = @((Join-Path $repo 'sidecar\__pycache__')) } 0 'Remove explicitly reviewed'
     Invoke-Case 'Overlapping selections' $repoScript @{ DisposablePaths = @((Join-Path $repo 'dist-electron'), (Join-Path $repo 'dist-electron\main.js')) } 1 'overlapping'
     Invoke-Case 'Source directories are not outputs' $repoScript @{ DisposablePaths = @((Join-Path $repo 'scripts')) } 1 'outside generated'
     Invoke-Case 'Literal brackets remain literal' $repoScript @{ DisposablePaths = @((Join-Path $repo 'dist-electron\absent[1].js')) } 1 'exist'

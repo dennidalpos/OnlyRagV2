@@ -62,7 +62,6 @@ def _render_docx_from_markdown(markdown_content: str, output_path: str):
     """Compiles Markdown content to DOCX Word document maintaining headings, lists, tables, and formatting."""
     import docx
     from docx.shared import Pt, RGBColor
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
 
     doc = docx.Document()
     

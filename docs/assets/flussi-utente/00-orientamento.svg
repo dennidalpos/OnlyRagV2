@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="360" height="1543" viewBox="0 0 360 1543" role="img" aria-labelledby="title desc" xml:lang="it">
 <title id="title">00 · Cosa vuoi fare?</title>
-<desc id="desc">Per importare, revisionare, esportare o cercare documenti: Ingestione Doc, percorsi 02–07. Per conversare e verificare le fonti: RAG &amp; Chat, percorsi 08–10. Per cambiare lingua a un documento: Traduzione, percorsi 11–13. Per analizzare o modificare un progetto: Coding Agent, percorsi 14–20. Per configurare ambiente e preferenze: Impostazioni, percorsi 21–25.</desc>
+<desc id="desc">Al primo avvio o se un servizio risulta non disponibile, prepara l’ambiente nel percorso 01. Per importare, revisionare, esportare o cercare documenti: Ingestione Doc, percorsi 02–07. Per conversare e verificare le fonti: RAG &amp; Chat, percorsi 08–10. Per cambiare lingua a un documento: Traduzione, percorsi 11–13. Per analizzare o modificare un progetto: Coding Agent, percorsi 14–20. Per configurare ambiente, modelli, permessi e log: Impostazioni, percorsi 21–25.</desc>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 Z" fill="#526779"/></marker></defs>
 <rect width="360" height="1543" fill="#ffffff"/>
 <g font-family="Segoe UI, Arial, sans-serif">

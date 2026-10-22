@@ -141,11 +141,6 @@ def get_vocab_manager() -> MultiLangVocabManager:
     return _VOCAB_MANAGER
 
 
-def _is_italian_fiscal_code(token: str) -> bool:
-    """Return whether a token is an Italian fiscal code."""
-    return bool(re.match(r'^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$', token))
-
-
 def _viterbi_segment_compound(text: str, lang: str = "it") -> str:
     """Segment a compound with SymSpell, then Viterbi while preserving casing."""
     if len(text) <= 3:

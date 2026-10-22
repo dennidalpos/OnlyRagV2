@@ -3,6 +3,7 @@ import React from 'react'
 import { Eye, Cpu, Zap, AlertTriangle } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
 import { useTranslation } from '../../i18n'
+import { resolveNativeOcrProvider } from '../../lib/ocrProvider'
 
 interface OcrEngineBadgeProps {
   settings?: AppSettings
@@ -27,9 +28,8 @@ export const OcrEngineBadge: React.FC<OcrEngineBadgeProps> = ({ settings, diagno
     )
   }
 
-  const ocrProvider = diagnostics?.sidecar?.ocr?.provider
   const hostHasGpu = diagnostics?.sidecar?.ocr?.host_has_gpu ?? false
-  const isCudaActive = ocrProvider === 'CUDAExecutionProvider'
+  const isCudaActive = resolveNativeOcrProvider(diagnostics) === 'cuda'
 
   return (
     <div className="inline-flex items-center gap-2">

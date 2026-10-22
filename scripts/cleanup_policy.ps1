@@ -16,6 +16,8 @@ function Test-CleanupWithin([string]$Path, [string]$Root, [switch]$IncludeRoot) 
 function Get-RepoCleanupRoots([string]$RepositoryRoot) {
     @('build', 'dist', 'dist-electron', 'out', 'release', 'sidecar_dist', 'scripts\build', 'scripts\dist',
       '.vite', 'node_modules\.vite', 'node_modules\.cache', '.pytest_cache', 'sidecar\.pytest_cache',
+      '__pycache__', 'scripts\__pycache__', 'sidecar\__pycache__', 'sidecar\domain\__pycache__',
+      'sidecar\infrastructure\__pycache__', 'sidecar\services\__pycache__', 'sidecar\tests\__pycache__',
       '.ruff_cache', '.mypy_cache', '.cache', 'coverage', '.nyc_output', 'test-results', 'htmlcov') |
         ForEach-Object { Get-CleanupFullPath (Join-Path $RepositoryRoot $_) }
 }

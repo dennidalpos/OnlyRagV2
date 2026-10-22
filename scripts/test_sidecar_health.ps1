@@ -1,126 +1,53 @@
 <#
 .SYNOPSIS
-    Suite di test per sidecar Python e database vettoriale LanceDB con Fail-Fast rigoroso.
+    Esegue la suite pytest ordinaria del Sidecar Python in modo deterministico.
 .DESCRIPTION
-    Verifica lo stato di salute del sidecar FastAPI, l'export Markdown/PDF, la ricerca vettoriale LanceDB
-    e la suite di unit test Pytest.
-.PARAMETER Fast
-    Esegue la suite in modalità sintetica veloce per AI Agent.
-.PARAMETER Full
-    Esegue la suite con output esteso e verboso per debugging.
-.PARAMETER FullOutput
-    Mostra i dati di risposta dettagliati dagli endpoint HTTP.
+    Non interroga servizi in esecuzione (nessuna richiesta alla porta 8000 o ad altri endpoint):
+    lancia sempre `python -m pytest -q` dalla radice del repository, usando `pytest.ini`
+    (testpaths = sidecar/tests), e propaga il codice di uscita di pytest.
+    Un interprete o un pytest mancante fa fallire il comando con un messaggio esplicito.
+.PARAMETER PythonExe
+    Interprete Python con pytest installato. Predefinito: .venv\Scripts\python.exe del checkout.
 #>
 
 [CmdletBinding()]
 param(
-    [switch]$Fast = $true,
-    [switch]$Full = $false,
-    [switch]$FullOutput = $false
+    [string]$PythonExe = ''
 )
 
-$ErrorActionPreference = "Stop"
-if (Test-Path Variable:\PSNativeCommandUseErrorActionPreference) {
-    $PSNativeCommandUseErrorActionPreference = $true
-}
+$ErrorActionPreference = 'Stop'
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-if (-not $Fast -or $Full) {
-    Write-Host "=====================================================" -ForegroundColor Cyan
-    Write-Host " OnlyRag V2 - Python Sidecar & Vector DB Test Suite" -ForegroundColor Cyan
-    Write-Host "=====================================================" -ForegroundColor Cyan
+$rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath '..')).Path
+if (-not $PythonExe) {
+    $PythonExe = Join-Path $rootDir '.venv\Scripts\python.exe'
 }
 
-$healthUrl = "http://127.0.0.1:8000/health"
-$exportUrl = "http://127.0.0.1:8000/export"
-$searchUrl = "http://127.0.0.1:8000/vector/search"
+if (-not (Test-Path -LiteralPath $PythonExe -PathType Leaf)) {
+    Write-Host "[FAIL] Interprete Python non trovato: $PythonExe. Eseguire npm run setup:dev." -ForegroundColor Red
+    exit 2
+}
 
-$liveServerAvailable = $false
+# Windows PowerShell 5.1 turns redirected native stderr into error records: with Stop they would
+# replace the interpreter's exit code. Native results are judged only by $LASTEXITCODE.
+$ErrorActionPreference = 'Continue'
+& $PythonExe -m pytest --version *> $null
+$versionExit = $LASTEXITCODE
+if ($versionExit -ne 0) {
+    Write-Host "[FAIL] pytest non disponibile per $PythonExe (exit $versionExit). Eseguire npm run setup:dev." -ForegroundColor Red
+    exit 2
+}
 
+Push-Location -LiteralPath $rootDir
 try {
-    $res = Invoke-RestMethod -Uri $healthUrl -Method Get -TimeoutSec 2 -ErrorAction Stop
-    $liveServerAvailable = $true
-} catch {
-    if (-not $Fast -or $Full) {
-        Write-Host "`n[INFO] Live sidecar server not bound at port 8000 (offline). Running Pytest suite..." -ForegroundColor Gray
-    }
+    & $PythonExe -m pytest -q
+    $code = $LASTEXITCODE
+} finally {
+    Pop-Location
 }
 
-if ($liveServerAvailable) {
-    try {
-        if (-not $Fast -or $Full) {
-            Write-Host "`n[1/3] Testing Python Sidecar Health Endpoint ($healthUrl)..." -NoNewline
-        }
-        if ($res.status -eq "online") {
-            if (-not $Fast -or $Full) { Write-Host " [PASS]" -ForegroundColor Green }
-            if ($FullOutput) {
-                Write-Host "      Engine: $($res.engine) | Version: $($res.version) | Vector DB: $($res.vector_db)" -ForegroundColor Gray
-            }
-        } else {
-            throw "[FAIL] Sidecar health endpoint returned non-online status: $($res.status)"
-        }
-
-        if (-not $Fast -or $Full) {
-            Write-Host "[2/3] Testing Markdown Export Engine ($exportUrl)..." -NoNewline
-        }
-        $body = @{ markdown_content = "# Test Document`n`nHello OnlyRag V2"; export_format = "pdf" } | ConvertTo-Json
-        $exportRes = Invoke-RestMethod -Uri $exportUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 5 -ErrorAction Stop
-        if ($exportRes.status -eq "success" -and $exportRes.base64_content) {
-            if (-not $Fast -or $Full) { Write-Host " [PASS]" -ForegroundColor Green }
-            if ($FullOutput) {
-                Write-Host "      Generated File: $($exportRes.file_name)" -ForegroundColor Gray
-            }
-        } else {
-            throw "[FAIL] Sidecar export engine failed to return valid response."
-        }
-
-        if (-not $Fast -or $Full) {
-            Write-Host "[3/3] Testing LanceDB Vector Search Endpoint ($searchUrl)..." -NoNewline
-        }
-        $searchBody = @{ query = "test query"; top_k = 2 } | ConvertTo-Json
-        $searchRes = Invoke-RestMethod -Uri $searchUrl -Method Post -Body $searchBody -ContentType "application/json" -TimeoutSec 5 -ErrorAction Stop
-        if (-not $Fast -or $Full) { Write-Host " [PASS]" -ForegroundColor Green }
-
-        Write-Host "`n=====================================================" -ForegroundColor Cyan
-        Write-Host " ALL SIDECAR LIVE TESTS PASSED!" -ForegroundColor Green
-        Write-Host "=====================================================" -ForegroundColor Cyan
-        exit 0
-    } catch {
-        Write-Host "`n[FATAL ERROR] $($_.Exception.Message)" -ForegroundColor Red
-        exit 1
-    }
+if ($code -ne 0) {
+    Write-Host "[FAIL] Suite pytest del Sidecar fallita (exit $code)." -ForegroundColor Red
 }
-
-try {
-    # Execute Pytest Test Suite
-    if (-not $Fast -or $Full) {
-        Write-Host "`n[4/4] Running Pytest test suite (sidecar/tests/)..." -ForegroundColor Yellow
-    }
-    $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
-    $testsDir = Join-Path $rootDir 'sidecar/tests'
-    if (-not (Test-Path -LiteralPath $testsDir)) {
-        throw "[FAIL] Required sidecar test directory not found: $testsDir"
-    }
-    $isWindowsHost = $IsWindows -or $env:OS -eq 'Windows_NT'
-    $venvBinDir = if ($isWindowsHost) { "Scripts" } else { "bin" }
-    $pytestExeName = if ($isWindowsHost) { "pytest.exe" } else { "pytest" }
-    $pytestBin = Join-Path (Join-Path $rootDir ".venv") (Join-Path $venvBinDir $pytestExeName)
-
-    if (-not (Test-Path -LiteralPath $pytestBin)) {
-        throw "[FAIL] Pytest non trovato in $pytestBin. Eseguire npm run setup:dev."
-    }
-    & $pytestBin $testsDir -q
-    if ($LASTEXITCODE -ne 0) {
-        throw "[FAIL] Pytest test suite failed with exit code $LASTEXITCODE."
-    }
-    if (-not $Fast -or $Full) { Write-Host "[PASS] Pytest sidecar test suite clean." -ForegroundColor Green }
-
-    Write-Host "`n=====================================================" -ForegroundColor Cyan
-    Write-Host " ALL SIDECAR TESTS PASSED!" -ForegroundColor Green
-    Write-Host "=====================================================" -ForegroundColor Cyan
-    exit 0
-} catch {
-    Write-Host "`n[FATAL ERROR] $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
-}
+exit $code

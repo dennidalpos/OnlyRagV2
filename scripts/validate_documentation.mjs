@@ -42,6 +42,100 @@ function headingAnchors(content) {
   return anchors
 }
 
+const mermaidHeaderPattern = /^(?:flowchart|graph)\s+(?:TD|TB|LR|RL|BT)$/
+const mermaidNodePattern = /^([A-Za-z][A-Za-z0-9_]*)\s*(\(\["[^"\n]+"\]\)|\["[^"\n]+"\]|\{"[^"\n]+"\})$/
+const mermaidEdgePattern =
+  /^([A-Za-z][A-Za-z0-9_]*)(?:\s*(\(\["[^"\n]+"\]\)|\["[^"\n]+"\]|\{"[^"\n]+"\}))?\s*(-->|--\s*"[^"\n]+"\s*-->)\s*([A-Za-z][A-Za-z0-9_]*)(?:\s*(\(\["[^"\n]+"\]\)|\["[^"\n]+"\]|\{"[^"\n]+"\}))?$/
+
+function unwrapMermaidLabel(shape) {
+  if (shape.startsWith('(["') && shape.endsWith('"])')) return shape.slice(3, -3)
+  if (shape.startsWith('["') && shape.endsWith('"]')) return shape.slice(2, -2)
+  if (shape.startsWith('{"') && shape.endsWith('"}')) return shape.slice(2, -2)
+  return shape
+}
+
+function validateMermaidBlocks(content, fileLabel, errors) {
+  const fenceMatches = [...content.matchAll(/^```mermaid[^\r\n]*$/gm)]
+  const blockMatches = [...content.matchAll(/^```mermaid[^\r\n]*\r?\n([\s\S]*?)\r?\n```$/gm)]
+  if (fenceMatches.length !== blockMatches.length) {
+    errors.push(`${fileLabel}: unclosed mermaid code fence`)
+    return
+  }
+
+  blockMatches.forEach((match, index) => {
+    const blockLabel = `${fileLabel} (mermaid #${index + 1})`
+    const lines = match[1]
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('%%'))
+
+    if (lines.length === 0 || !mermaidHeaderPattern.test(lines[0])) {
+      errors.push(`${blockLabel}: invalid or missing flowchart header`)
+      return
+    }
+
+    const nodes = new Map()
+    const edges = []
+
+    for (let i = 1; i < lines.length; i += 1) {
+      const line = lines[i]
+      const nodeMatch = mermaidNodePattern.exec(line)
+      if (nodeMatch) {
+        nodes.set(nodeMatch[1], nodeMatch[2])
+        continue
+      }
+      const edgeMatch = mermaidEdgePattern.exec(line)
+      if (edgeMatch) {
+        const [, fromId, fromShape, , toId, toShape] = edgeMatch
+        if (fromShape) nodes.set(fromId, fromShape)
+        if (toShape) nodes.set(toId, toShape)
+        edges.push([fromId, toId])
+        continue
+      }
+      errors.push(`${blockLabel}: invalid Mermaid statement '${line}'`)
+    }
+
+    if (edges.length === 0) {
+      errors.push(`${blockLabel}: flowchart must contain at least one transition`)
+      return
+    }
+
+    const outgoing = new Map()
+    const incoming = new Map()
+    for (const [fromId, toId] of edges) {
+      if (!nodes.has(fromId)) errors.push(`${blockLabel}: transition references undefined node '${fromId}'`)
+      if (!nodes.has(toId)) errors.push(`${blockLabel}: transition references undefined node '${toId}'`)
+      if (!outgoing.has(fromId)) outgoing.set(fromId, [])
+      outgoing.get(fromId).push(toId)
+      incoming.set(toId, (incoming.get(toId) ?? 0) + 1)
+    }
+
+    for (const [nodeId, shape] of nodes) {
+      const label = unwrapMermaidLabel(shape)
+      if (/<[^>]+>/.test(label)) errors.push(`${blockLabel}: node '${nodeId}' contains disallowed HTML tags`)
+      if (label.length > 110) errors.push(`${blockLabel}: node '${nodeId}' label exceeds 110 chars (${label.length})`)
+      if (shape.startsWith('{"') && (outgoing.get(nodeId)?.length ?? 0) < 2) {
+        errors.push(`${blockLabel}: decision node '${nodeId}' must have at least 2 outgoing branches`)
+      }
+    }
+
+    const entryNode = nodes.keys().next().value
+    const visited = new Set()
+    const queue = entryNode ? [entryNode] : []
+    while (queue.length > 0) {
+      const current = queue.shift()
+      if (!current || visited.has(current)) continue
+      visited.add(current)
+      for (const next of outgoing.get(current) ?? []) {
+        if (!visited.has(next)) queue.push(next)
+      }
+    }
+    for (const nodeId of nodes.keys()) {
+      if (!visited.has(nodeId)) errors.push(`${blockLabel}: unreachable or isolated node '${nodeId}'`)
+    }
+  })
+}
+
 export function validateDocumentation({ docsRoot, packageJsonPath, additionalRoots = [], additionalFiles = [] }) {
   const errors = []
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
@@ -84,6 +178,7 @@ export function validateDocumentation({ docsRoot, packageJsonPath, additionalRoo
       const scriptName = match[1]
       if (!scripts.has(scriptName)) errors.push(`${displayPath(filePath, docsRoot)}: undocumented npm script '${scriptName}' does not exist in package.json`)
     }
+    validateMermaidBlocks(content, displayPath(filePath, docsRoot), errors)
   }
 
   return { filesChecked: files.length, errors }

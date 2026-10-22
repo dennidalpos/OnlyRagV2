@@ -1,5 +1,7 @@
 # Riesame della documentazione — 21 ottobre 2026
 
+> **Aggiornamento del 22 ottobre 2026:** i due rilievi statici segnalati qui sotto su *Etichette OCR* (`INGESTION-OCR-PROVIDER-LABEL-01`) e *Wrapper test Sidecar* (`TEST-SIDECAR-DETERMINISTIC-WRAPPER-01`) sono stati risolti e verificati nel [lotto del tracker del 22 ottobre](./verification-tracker-lot-2026-10-22.md); resta tracciato in [PROJECT_STATUS.json](../PROJECT_STATUS.json) il limite sul provider disponibile vs effettivo dopo fallback CPU (`OCR-RUNTIME-EFFECTIVE-PROVIDER-01`). Questo documento conserva il resoconto del 21 ottobre.
+
 ## Perimetro e criterio
 
 Confrontati README, direttive specifiche, guide correnti per ambito, indici, skill, diagrammi della guida e README dei corpus con decisioni approvate, tracker, manifest, contratti e punti di ingresso del codice. Gli 84 rapporti storici, proposte, indici di ancoraggi e consegne sono censiti nell'[indice storico](./history.md): i loro risultati non vengono ricalcolati o presentati come prove del runtime corrente. Licenze, corpus congelati, ricevute JSON e snapshot restano conservati.

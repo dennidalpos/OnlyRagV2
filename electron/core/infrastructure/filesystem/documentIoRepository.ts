@@ -1,5 +1,4 @@
 import fs from 'node:fs'
-import path from 'node:path'
 import { logger } from '../logging/logger'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
@@ -46,32 +45,6 @@ export class DocumentIoRepository {
 
   ensureDirectory(targetPath: string): void {
     fs.mkdirSync(targetPath, { recursive: true })
-  }
-
-  async removeDirectory(targetPath: string): Promise<void> {
-    await fs.promises.rm(targetPath, { recursive: true, force: true })
-  }
-
-  /** Expands each existing path to itself (file) or its direct children matching `extensions` (directory). */
-  listFilesWithExtensions(paths: string[], extensions: readonly string[]): { files: string[]; failures: { path: string; error: string }[] } {
-    const files: string[] = []
-    const failures: { path: string; error: string }[] = []
-    for (const candidate of paths) {
-      if (!fs.existsSync(candidate)) continue
-      try {
-        const stat = fs.statSync(candidate)
-        if (stat.isFile()) {
-          files.push(candidate)
-        } else if (stat.isDirectory()) {
-          for (const entry of fs.readdirSync(candidate, { withFileTypes: true })) {
-            if (entry.isFile() && extensions.some((ext) => entry.name.endsWith(ext))) files.push(path.join(candidate, entry.name))
-          }
-        }
-      } catch (err: unknown) {
-        failures.push({ path: candidate, error: err instanceof Error ? err.message : String(err) })
-      }
-    }
-    return { files: Array.from(new Set(files)), failures }
   }
 
   /** Automatic exports must never replace an existing destination, including a concurrent writer's. */

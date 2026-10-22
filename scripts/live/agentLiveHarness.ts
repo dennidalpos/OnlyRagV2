@@ -162,12 +162,6 @@ function readSessionState(workspacePath: string, sessionId: string): Partial<Sav
   }
 }
 
-/** The plan state the run actually ended on, read back from the persisted session file. */
-export function readFinalMilestones(workspacePath: string, sessionId: string): PlanMilestone[] {
-  return readSessionState(workspacePath, sessionId).planMilestones || []
-}
-
-/** The orchestrator's own end-of-loop summaries, returned ONLY when the model never closed the session itself (agentOrchestratorAppService.ts, end of `runAgentOrchestratorLoop`). */
 /** What a run actually delivered: milestone evidence and the application-owned completion status, plus the context needed to read a red run. */
 export interface LiveRunMetrics {
   stepsUsed: number

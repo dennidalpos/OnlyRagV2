@@ -599,6 +599,9 @@ export const en: TranslationSchema = {
     ocrCpuOnly: 'CPU',
 
     ocrGpuPresentUnused: 'GPU Present (ONNX CPU)',
+    ocrProviderCuda: 'CUDA',
+    ocrProviderCpu: 'CPU',
+    ocrProviderUnknown: 'provider pending',
 
     stepCompleted: 'Ingestion and indexing completed successfully!',
     pipelineCompleted: 'Completed',

@@ -90,10 +90,6 @@ export class SkillAppService {
     return skills.map((item) => this.decorateHubSkill(item, installed, localModels)).sort(compareHubSkillQuality)
   }
 
-  async listHubSkills(workspaceRoot?: string | null, forceRefresh = false): Promise<HubSkillItem[]> {
-    return this.listHubSkillsBySource('official-core', workspaceRoot, forceRefresh)
-  }
-
   /** Every skill offered by EVERY configured hub source, deduplicated by name with the first source in the user's ordering winning. */
   async listHubSkillsAcrossSources(workspaceRoot?: string | null, forceRefresh = false): Promise<HubSkillItem[]> {
     const sources = await customHubRepository.listSources()

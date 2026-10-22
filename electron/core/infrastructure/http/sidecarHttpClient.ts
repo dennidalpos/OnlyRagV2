@@ -148,10 +148,6 @@ export class SidecarHttpClient {
     this.baseHost = h ? (h.startsWith('http') ? h : `http://${h}`) : DEFAULT_BASE_HOST
   }
 
-  getBaseHost(): string {
-    return this.baseHost
-  }
-
   /** Sets shared auth token for sidecar requests. */
   setAuthToken(token: string) {
     this.authToken = token

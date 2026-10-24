@@ -56,35 +56,4 @@ describe('TransactionalExecutionGuard Unit Tests', () => {
     expect(check.allowed).toBe(false)
     expect(check.reason).toContain('Oscillation Detected')
   })
-
-  it('should enforce Definition of Done gating when unverified milestones or unverified build changes exist', () => {
-    // 1. Pending milestones block finish
-    const check1 = guard.validateTaskCompletion({
-      requireVerifiedBuild: true,
-      hasVerifiedBuild: false,
-      pendingMilestonesCount: 2,
-      hasFileMutations: false,
-    })
-    expect(check1.allowed).toBe(false)
-    expect(check1.reason).toContain('Unverified Milestones')
-
-    // 2. Unverified build after file mutations blocks finish
-    const check2 = guard.validateTaskCompletion({
-      requireVerifiedBuild: true,
-      hasVerifiedBuild: false,
-      pendingMilestonesCount: 0,
-      hasFileMutations: true,
-    })
-    expect(check2.allowed).toBe(false)
-    expect(check2.reason).toContain('No Verified Build')
-
-    // 3. Fully verified build and zero pending milestones allows finish
-    const check3 = guard.validateTaskCompletion({
-      requireVerifiedBuild: true,
-      hasVerifiedBuild: true,
-      pendingMilestonesCount: 0,
-      hasFileMutations: true,
-    })
-    expect(check3.allowed).toBe(true)
-  })
 })

@@ -16,7 +16,7 @@ vi.mock('./sessionHistoryAppService', () => ({
 }))
 vi.mock('./sidecarAppService', () => ({
   sidecarAppService: {
-    removePromptHistoryForProject: vi.fn().mockResolvedValue({ success: true }),
+    removePromptHistoryForSessions: vi.fn().mockResolvedValue({ success: true }),
   },
 }))
 
@@ -37,7 +37,7 @@ describe('ProjectRegistryAppService project removal and purge fan-out', () => {
 
     expect(result).toBe(true)
     expect(sessionHistoryAppService.clearSessions).not.toHaveBeenCalled()
-    expect(sidecarAppService.removePromptHistoryForProject).not.toHaveBeenCalled()
+    expect(sidecarAppService.removePromptHistoryForSessions).not.toHaveBeenCalled()
     expect(projectRegistryRepository.remove).toHaveBeenCalledWith('/repo/a')
   })
 

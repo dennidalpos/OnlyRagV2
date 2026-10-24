@@ -1,6 +1,6 @@
 # Verifica corrente per ambito
 
-Stato aggiornato dal [lotto del tracker del 22 ottobre](./verification-tracker-lot-2026-10-22.md). [PROJECT_STATUS.json](../PROJECT_STATUS.json) contiene **quattro attività autonome: tre P2 e una P3**. Conclusi il wrapper Sidecar deterministico e l'etichetta del provider OCR. Restano il fork `braces` (nessun candidato upstream oltre 3.0.3) e il rifiuto storico del dev-server (100 nuovi casi senza riproduzione); nuovi residui il test pnpm dipendente dalla cache offline dell'host (P2) e il provider OCR disponibile riportato come effettivo (P3). Nessuna attività con decisione utente; criteri e condizioni di ripresa sono nel tracker.
+Stato aggiornato dalla [pulizia del 24 ottobre](./repository-cleanup-2026-10-24.md). [PROJECT_STATUS.json](../PROJECT_STATUS.json) conserva le **quattro attività autonome** del 22 ottobre (tre P2 e una P3), con criteri invariati; aggiunta una P2 con disposizione del proprietario per il recupero del log diagnostico perso durante la prima suite. I logger e il fallback di cancellazione estraneo sono corretti e coperti da regressioni, ma il contenuto originale di `logs/app.log` non è stato recuperato; l’utente non dispone di backup. Il log audit è ripristinato byte per byte e i 66 file di `userdata_dev` sono invariati. Suite finale: 3.039 TypeScript e 687 Python passati, un solo skip host per symlink; 15 casi critici senza skip. Residui temporanei conservati dopo rifiuto automatico della pulizia, dettagli nel rapporto.
 
 La [politica locale approvata](./local-development-policy-2026-10-20.md) ritira campagne/qualifiche dei modelli, obblighi CI, distribuzione pubblica e nuove migrazioni legacy. I fallimenti conservati non diventano successi e non riaprono automaticamente quei task.
 
@@ -8,6 +8,7 @@ La [politica locale approvata](./local-development-policy-2026-10-20.md) ritira 
 
 | Ambito | Ricevuta e perimetro |
 | --- | --- |
+| Pulizia e isolamento log del 24 ottobre | [Rapporto](./repository-cleanup-2026-10-24.md): quattro API inattive e un fallback legacy rimossi; log del profilo isolati; 68 output/cache rimossi dopo backup verificato. Tipi/statici/Knip/cicli/build/smoke verdi. Recupero del log operativo incompleto; temporanei rifiutati conservati. |
 | Wrapper Sidecar ed etichetta OCR del 22 ottobre | [Lotto del tracker](./verification-tracker-lot-2026-10-22.md): 688 Python nel checkout tramite il nuovo wrapper (overlay pytest isolato), 15 critici senza skip, 3035/3036 TypeScript con un fallimento ambientale pnpm tracciato; statici passati. Gate completo non interamente verde. |
 | Runtime e dipendenze del 21 ottobre | [Audit critico](./critical-application-audit-2026-10-21.md): 3.002 test TypeScript/328 file, 687 Python e un symlink host saltato, 15 casi critici senza skip, build e scenari Electron deterministici. Sono risultati datati, non suite ripetute per questa revisione documentale. |
 | IPC/UX e modelli scelti dall'utente | [UX mirata](./verification-ux-targeted-2026-10-21.md): tastiera, zoom, focus, errori/esportazioni, scelta esplicita nel wizard; servizi controllati. |

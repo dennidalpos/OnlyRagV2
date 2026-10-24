@@ -170,10 +170,6 @@ export class GoalDecompositionPlanner {
     return remapped
   }
 
-  public isAllVerified(): boolean {
-    return this.milestones.length > 0 && this.milestones.every((milestone) => milestone.status === 'verified')
-  }
-
   public getProgressSummary(): { completed: number; total: number; percentage: number } {
     const total = this.milestones.length
     if (total === 0) return { completed: 0, total: 0, percentage: 0 }

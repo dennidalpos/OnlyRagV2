@@ -216,13 +216,6 @@ export class EpisodicMemoryCompactor {
     return [...this.recentFullLogs]
   }
 
-  public toState(): { episodes: EpisodicStepRecord[]; recentFullLogs: EpisodicFullLog[] } {
-    return {
-      episodes: this.getEpisodes(),
-      recentFullLogs: this.getRecentFullLogs(),
-    }
-  }
-
   public fromState(episodes: EpisodicStepRecord[], recentLogs: EpisodicFullLog[]): void {
     this.episodes = episodes ? [...episodes] : []
     this.recentFullLogs = []

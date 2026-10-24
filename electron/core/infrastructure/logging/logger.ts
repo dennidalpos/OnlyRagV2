@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { app } from 'electron'
+import { userDataRoot } from '../filesystem/userDataRoot'
 import { sanitizeLogMessage } from '../../../logRedactor'
 import type { LogEntry, LogLevel } from '../../../../shared/types'
 
@@ -12,7 +12,7 @@ class SystemDiagnosticsLogger {
   private maxLogFileSizeBytes = 2 * 1024 * 1024 // 2 MB max per log file
 
   constructor() {
-    const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : process.cwd()
+    const baseDir = userDataRoot()
     const logDir = path.join(baseDir, 'logs')
     if (!fs.existsSync(logDir)) {
       fs.mkdirSync(logDir, { recursive: true })
@@ -98,10 +98,6 @@ class SystemDiagnosticsLogger {
     try {
       if (fs.existsSync(this.logFilePath)) {
         fs.writeFileSync(this.logFilePath, '', { encoding: 'utf-8' })
-      }
-      const cwdLog = path.join(process.cwd(), 'logs', 'app.log')
-      if (cwdLog !== this.logFilePath && fs.existsSync(cwdLog)) {
-        fs.writeFileSync(cwdLog, '', { encoding: 'utf-8' })
       }
     } catch (err) {
       console.error('Failed clearing physical log file:', err)

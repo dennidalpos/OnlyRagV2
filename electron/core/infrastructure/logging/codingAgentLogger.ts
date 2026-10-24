@@ -1,7 +1,7 @@
 import type { UntrustedJson } from '../../../../shared/types'
 import fs from 'node:fs'
 import path from 'node:path'
-import { app } from 'electron'
+import { userDataRoot } from '../filesystem/userDataRoot'
 import { logger } from './logger'
 import { redactSecrets } from '../../../logRedactor'
 import { AgentRunMetrics } from '../../domain/agent/agentRunMetrics'
@@ -23,7 +23,7 @@ export class CodingAgentLogger {
   private unredactedMirrorPath: string | null = null
 
   constructor(options?: { logFilePath?: string; maxSizeBytes?: number; maxRetainedFiles?: number }) {
-    const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : process.cwd()
+    const baseDir = userDataRoot()
     this.logFilePath = options?.logFilePath || path.join(baseDir, 'logs', 'coding_agent_audit.log')
     const logDir = path.dirname(this.logFilePath)
     if (!fs.existsSync(logDir)) {

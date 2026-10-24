@@ -1,6 +1,6 @@
 # Evidenze storiche e decisioni conservate
 
-Indice di consultazione del **22 ottobre 2026**. I documenti sotto conservano decisioni, risultati, fallimenti, hash e limiti delle rispettive date. Un task dichiarato aperto o una pubblicazione autorizzata in un vecchio rapporto descrive quel momento; per il lavoro attuale usare [tracker](../PROJECT_STATUS.json), [politica locale](./local-development-policy-2026-10-20.md) e [verifica corrente](./verification-current.md).
+Indice di consultazione del **24 ottobre 2026**. I documenti sotto conservano decisioni, risultati, fallimenti, hash e limiti delle rispettive date. Un task dichiarato aperto o una pubblicazione autorizzata in un vecchio rapporto descrive quel momento; per il lavoro attuale usare [tracker](../PROJECT_STATUS.json), [politica locale](./local-development-policy-2026-10-20.md) e [verifica corrente](./verification-current.md).
 
 I file restano nei percorsi originali per preservare i collegamenti. Gli indici di ancoraggi sono mantenuti per compatibilità documentale; i rapporti unici non sono stati cancellati come legacy. L'unico riepilogo spostato integralmente è la precedente verifica corrente, ora [cronologia dei riepiloghi](./verification-summary-history-2026-10-21.md).
 
@@ -16,6 +16,8 @@ I file restano nei percorsi originali per preservare i collegamenti. Gli indici 
 
 ## Audit e manutenzione
 
+- [Passaggio di sessione: pulizia e isolamento dei log — 24 ottobre 2026](./session-handoff-cleanup-2026-10-24.md)
+- [Pulizia del repository e isolamento dei log — 24 ottobre 2026](./repository-cleanup-2026-10-24.md)
 - [Riesame della documentazione — 21 ottobre 2026](./documentation-audit-2026-10-21.md)
 - [Audit del Coding Agent (2026-09-26)](./coding-agent-audit-2026-09-26.md)
 - [Critical application audit - 2026-10-01](./critical-app-audit-2026-10-01.md)

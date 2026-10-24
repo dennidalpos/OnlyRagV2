@@ -1,9 +1,35 @@
 import { describe, it, expect, vi } from 'vitest'
 import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
 import { logger } from './core/infrastructure/logging/logger'
+import { CodingAgentLogger } from './core/infrastructure/logging/codingAgentLogger'
+import { userDataRoot } from './core/infrastructure/filesystem/userDataRoot'
 import { redactSecrets, sanitizeLogMessage } from './logRedactor'
 
 describe('SystemDiagnosticsLogger Tests', () => {
+  it('keeps default operational and audit logs in the owned user-data profile', () => {
+    expect(logger.getLogFilePath()).toBe(path.join(userDataRoot(), 'logs', 'app.log'))
+    expect(new CodingAgentLogger().getLogFilePath()).toBe(path.join(userDataRoot(), 'logs', 'coding_agent_audit.log'))
+    expect(userDataRoot()).not.toBe(process.cwd())
+  })
+
+  it('preserves an unrelated working-directory log when clearing the active profile', () => {
+    const otherRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-other-log-'))
+    const otherLog = path.join(otherRoot, 'logs', 'app.log')
+    fs.mkdirSync(path.dirname(otherLog))
+    fs.writeFileSync(otherLog, 'retained diagnostic history')
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(otherRoot)
+    try {
+      logger.clearLogs()
+      expect(fs.readFileSync(otherLog, 'utf8')).toBe('retained diagnostic history')
+      expect(fs.readFileSync(logger.getLogFilePath(), 'utf8')).toBe('')
+    } finally {
+      cwd.mockRestore()
+      fs.rmSync(otherRoot, { recursive: true, force: true })
+    }
+  })
+
   it('should write logs and clear both in-memory buffer and physical file on disk', () => {
     logger.log('INFO', 'TestCategory', 'Test log message for physical file clear verification')
     const logs = logger.getLogs()

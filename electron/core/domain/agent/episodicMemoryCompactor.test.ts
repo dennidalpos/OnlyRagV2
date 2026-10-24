@@ -95,8 +95,7 @@ describe('EpisodicMemoryCompactor Domain Unit Tests', () => {
 
     expect(compactor.episodeCount).toBe(100)
     // Failure logs should be deduplicated (1 entry instead of 8 identical entries)
-    const state = compactor.toState()
-    expect(state.recentFullLogs.length).toBeLessThanOrEqual(3)
+    expect(compactor.getRecentFullLogs().length).toBeLessThanOrEqual(3)
   })
 })
 

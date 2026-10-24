@@ -166,10 +166,9 @@ describe('prompt history search failures', () => {
     if (scenario === 'empty') expect(await sidecarAppService.searchPromptHistory('query')).toEqual([])
     else await expect(sidecarAppService.searchPromptHistory('query')).rejects.toThrow()
   })
-  it.each([true, false, 'true', null])('requires Boolean acknowledgement of session/project cleanup: %s', async (success) => {
+  it.each([true, false, 'true', null])('requires Boolean acknowledgement of session cleanup: %s', async (success) => {
     vi.spyOn(sidecarHttpClient, 'postJsonEnvelope').mockResolvedValue({ success: true, data: { success } })
     expect(await sidecarAppService.removePromptHistoryForSessions(['session'])).toEqual({ success: success === true })
-    expect(await sidecarAppService.removePromptHistoryForProject('C:/synthetic')).toEqual({ success: success === true })
   })
   it('binds deletion and restore to the same Sidecar operation', async () => {
     const request = vi.spyOn(sidecarHttpClient, 'postJsonEnvelope').mockResolvedValue({ success: true, data: { success: true } })

@@ -39,7 +39,7 @@ describe('GoalDecompositionPlanner', () => {
     planner.updateMilestone('m-1', 'verified')
 
     expect(transitions).toEqual(['m-1:pending:in_progress', 'm-1:in_progress:verified'])
-    expect(planner.isAllVerified()).toBe(true)
+    expect(planner.getCompactState().isCompleted).toBe(true)
   })
 
   it('preserves an explicit canonical plan on load and exposes its compact state', () => {

@@ -54,6 +54,8 @@ Le ricevute dei task agente sono in `agent-task-recovery.json` sotto il `userDat
 
 ## Pulizia manuale dei log
 
+I due logger usano il profilo risolto da `userDataRoot`: il profilo Electron nell'app e `userdata_dev` in esecuzione headless. I test Node sostituiscono il resolver con un profilo temporaneo per file. Il comando UI di cancellazione del log operativo svuota soltanto il file del profilo attivo; non tocca un eventuale `logs/app.log` nella directory corrente. Correzione e limiti di recupero nella [verifica del 24 ottobre](./repository-cleanup-2026-10-24.md).
+
 Con app chiusa e dopo revisione dei file, usare `npm run clean:logs -- -DisposablePaths "<percorso assoluto del singolo log>" -ApplicationClosed -WhatIf` per il preflight; omettere `-WhatIf` per cancellare la selezione approvata. Il comando richiede file espliciti, senza cancellazione automatica per età o di intere directory. `-ApplicationClosed` è un'attestazione dell'operatore: lo script non rileva né arresta processi. Sono eleggibili solo i nomi applicativi e le generazioni specificate nella [policy verificata](./verification-log-cleanup-2026-10-19.md); log sconosciuti, evidenze, backup, originali e dati restano protetti. `npm run test:cleanup-logs` esegue 17 casi isolati tramite `powershell.exe` (da una sessione `pwsh` 7 eseguire direttamente `pwsh -NoProfile -File ./scripts/test_log_cleanup.ps1` per evitare il conflitto di `PSModulePath` su `Get-FileHash`). Le evidenze conservate restano protette; non esiste un obbligo aperto di smaltimento storico.
 
 ## Qualifica nativa dei progetti dell'agente

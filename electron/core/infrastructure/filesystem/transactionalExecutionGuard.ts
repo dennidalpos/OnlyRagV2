@@ -9,20 +9,13 @@ export interface FilesystemStateSnapshot {
   combinedTreeHash: string
 }
 
-export interface VerificationRequirement {
-  requireVerifiedBuild: boolean
-  hasVerifiedBuild: boolean
-  pendingMilestonesCount: number
-  hasFileMutations: boolean
-}
-
 export interface ExecutionGuardCheckResult {
   allowed: boolean
   reason?: string
   suggestedAction?: string
 }
 
-/** Enterprise Execution Guard providing: 1. */
+/** Detects workspace state oscillation using content snapshots. */
 export class TransactionalExecutionGuard {
   private historySnapshots: FilesystemStateSnapshot[] = []
   private readonly workspaceRoot: string
@@ -103,30 +96,6 @@ export class TransactionalExecutionGuard {
             'Analyze the error log before making further modifications.',
           ],
         ),
-      }
-    }
-
-    return { allowed: true }
-  }
-
-  /**
-   * Enforces Definition of Done (DoD) criteria prior to allowing the agent to complete the session.
-   */
-  public validateTaskCompletion(req: VerificationRequirement): ExecutionGuardCheckResult {
-    if (req.pendingMilestonesCount > 0) {
-      return {
-        allowed: false,
-        reason: `Unverified Milestones Remaining (${req.pendingMilestonesCount} remaining)`,
-        suggestedAction: `[DEFINITION OF DONE VIOLATION: UNVERIFIED MILESTONES]\nYou cannot call finish while there are ${req.pendingMilestonesCount} unverified milestones in your execution plan.\nExecute verification commands and update milestone statuses to verified before finishing.`,
-      }
-    }
-
-    if (req.hasFileMutations && req.requireVerifiedBuild && !req.hasVerifiedBuild) {
-      return {
-        allowed: false,
-        reason: 'No Verified Build Execution',
-        suggestedAction:
-          '[DEFINITION OF DONE VIOLATION: MANDATORY VERIFICATION MISSING]\nYou have modified workspace files but have not run a verification command (e.g. npm run build, npm test, or tsc --noEmit).\nExecute a verification command via run_command to confirm zero regressions before calling finish.',
       }
     }
 

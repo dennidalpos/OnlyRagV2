@@ -1,0 +1,284 @@
+import { Tooltip } from '../common/Tooltip'
+import React, { useState, useMemo } from 'react'
+import { CheckCircle2, XCircle, Loader2, Sparkles, Copy, Check, RotateCcw, TriangleAlert } from 'lucide-react'
+import { AgentPlan } from '../../hooks/usePlanApproval'
+import type { InterviewQuestion, UserInterviewAnswer } from '../../types'
+import { parsePlanChecklist } from './planChecklistParser'
+import { formatPromptForDisplay } from './promptFormatter'
+import { PlanPanelHeader } from './PlanPanelHeader'
+import { PlanPanelChecklistView } from './PlanPanelChecklistView'
+import { PlanPanelDocumentView } from './PlanPanelDocumentView'
+import { PlanInterviewCard } from './PlanInterviewCard'
+import { PlanReviewCard } from './PlanReviewCard'
+import type { OllamaOperationState } from '../../hooks/useOllamaGenerationState'
+import { useTranslation } from '../../i18n'
+import { RequestScopeReview } from './RequestScopeReview'
+import type { RequestCoverageLedger } from '../../../shared/domain/agent/requestCoverageLedger'
+
+interface PlanPanelProps {
+  scopeDraft?: RequestCoverageLedger | null
+  onConfirmScope?: (ledger: RequestCoverageLedger) => void
+  plan: AgentPlan | null
+  planHistory?: AgentPlan[]
+  activePlanIndex?: number
+  onSelectPlanVersion?: (index: number) => void
+  isGenerating: boolean
+  isExecuting?: boolean
+  isApprovingPlan?: boolean
+  isSavingPlanReview?: boolean
+  generationState?: OllamaOperationState
+  isCancellingFlow?: boolean
+  interviewQuestions?: InterviewQuestion[]
+  isInterviewActive?: boolean
+  isAnalyzingInterview?: boolean
+  onConfirmInterview?: (answers: UserInterviewAnswer[]) => void
+  onSkipInterview?: () => void
+  onCancelFlow?: () => void
+  onRetry?: () => void
+  onApprove: () => void
+  onReject: () => void
+  onSaveReview?: (revision: AgentPlan) => Promise<boolean>
+  completedStepCount?: number
+}
+
+export const PlanPanel: React.FC<PlanPanelProps> = ({
+  scopeDraft,
+  onConfirmScope,
+  plan,
+  planHistory = [],
+  activePlanIndex = 0,
+  onSelectPlanVersion,
+  isGenerating,
+  isExecuting = false,
+  isApprovingPlan = false,
+  isSavingPlanReview = false,
+  generationState = null,
+  isCancellingFlow = false,
+  interviewQuestions = [],
+  isInterviewActive = false,
+  isAnalyzingInterview = false,
+  onConfirmInterview,
+  onSkipInterview,
+  onCancelFlow,
+  onRetry,
+  onApprove,
+  onReject,
+  onSaveReview,
+  completedStepCount = 0,
+}) => {
+  const { t } = useTranslation()
+  const [viewMode, setViewMode] = useState<'checklist' | 'document'>('checklist')
+  const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false)
+
+  const formattedPrompt = useMemo(() => formatPromptForDisplay(plan?.prompt), [plan?.prompt])
+
+  const handleCopyPrompt = async () => {
+    if (!plan?.prompt) return
+    try {
+      await navigator.clipboard.writeText(plan.prompt)
+      setCopiedPrompt(true)
+      setTimeout(() => setCopiedPrompt(false), 2000)
+    } catch {
+      // ignore
+    }
+  }
+
+  const parsedChecklist = useMemo(() => parsePlanChecklist(plan), [plan?.milestones])
+
+  // Calculate items completed and active item status
+  const totalItems = parsedChecklist.length
+
+  const completedItemsCount = parsedChecklist.filter((item) => item.completed).length
+
+  const activeIndex = isExecuting ? parsedChecklist.findIndex((item) => !item.completed && item.status !== 'failed') : -1
+
+  const progressPercent = totalItems > 0 ? Math.round((completedItemsCount / totalItems) * 100) : 0
+  const schedulerState =
+    generationState === 'queued'
+      ? t('planPanel.schedulerQueued')
+      : generationState === 'running'
+        ? t('planPanel.schedulerRunning')
+        : generationState === 'cancelling'
+          ? t('planPanel.schedulerCancelling')
+          : generationState === 'failed'
+            ? t('planPanel.schedulerFailed')
+            : null
+
+  return (
+    <div className="flex-1 h-full flex flex-col bg-slate-950 text-slate-200 select-text font-sans overflow-hidden">
+      <PlanPanelHeader
+        plan={plan}
+        planHistory={planHistory}
+        activePlanIndex={activePlanIndex}
+        onSelectPlanVersion={onSelectPlanVersion}
+        totalItems={totalItems}
+        viewMode={viewMode}
+        onToggleViewMode={() => setViewMode(viewMode === 'checklist' ? 'document' : 'checklist')}
+      />
+
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {isCancellingFlow || generationState === 'cancelling' ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400" role="status">
+            <Loader2 className="w-8 h-8 animate-spin text-rose-400" />
+            <div className="font-bold text-slate-200 text-xs">{t('uiShell.cancelling')}</div>
+            <p className="text-[11px] text-slate-400 max-w-xs">{schedulerState || 'La richiesta viene arrestata in modo sicuro.'}</p>
+          </div>
+        ) : isAnalyzingInterview ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
+            <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+            <div className="font-bold text-slate-200 text-xs">{t('planPanel.analyzingTitle')}</div>
+            <Tooltip helpKey="planPanel_analyzingDescription" />
+            {schedulerState && (
+              <span className="text-[10px] text-amber-300" role="status">
+                {schedulerState}
+              </span>
+            )}
+            <button type="button" onClick={onCancelFlow} className="text-xs text-rose-300 hover:text-rose-200">
+              {t('common.cancel')}
+            </button>
+          </div>
+        ) : scopeDraft ? (
+          <RequestScopeReview draft={scopeDraft} onConfirm={onConfirmScope || (() => {})} onCancel={onCancelFlow} />
+        ) : isInterviewActive && interviewQuestions.length > 0 ? (
+          <PlanInterviewCard
+            questions={interviewQuestions}
+            onConfirm={onConfirmInterview || (() => {})}
+            onSkipWithRecommended={onSkipInterview || (() => {})}
+            isGenerating={isGenerating}
+          />
+        ) : isGenerating ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
+            <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+            <div className="font-bold text-slate-200 text-xs">
+              {t('planPanel.generatingTitle', {
+                version: planHistory.length + 1,
+              })}
+            </div>
+            <Tooltip helpKey="planPanel_generatingDescription" />
+            {schedulerState && (
+              <span className="text-[10px] text-amber-300" role="status">
+                {schedulerState}
+              </span>
+            )}
+            <button type="button" onClick={onCancelFlow} className="text-xs text-rose-300 hover:text-rose-200">
+              {t('common.cancel')}
+            </button>
+          </div>
+        ) : !plan ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
+            <Sparkles className="w-8 h-8 text-cyan-500/30" />
+            <div className="font-semibold text-slate-400 text-xs">{t('planPanel.noPlanTitle')}</div>
+            <Tooltip helpKey="planPanel_noPlanDescription" />
+          </div>
+        ) : plan.status === 'error' ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
+            <TriangleAlert className="w-8 h-8 text-rose-400" />
+            <div className="font-bold text-rose-200 text-xs">
+              {plan.errorPhase === 'interview' ? t('planPanel.interviewIncomplete') : t('planPanel.planningIncomplete')}
+            </div>
+            <p className="text-[11px] text-slate-400 max-w-md">{plan.errorMessage}</p>
+            {generationState === 'failed' && (
+              <span className="text-[10px] text-rose-300" role="status">
+                {schedulerState}
+              </span>
+            )}
+            <pre className="w-full max-w-2xl max-h-40 overflow-auto text-left whitespace-pre-wrap p-3 rounded-xl bg-slate-950 border border-slate-800 text-[10px] text-slate-300">
+              {formattedPrompt || plan.prompt}
+            </pre>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 text-xs font-semibold rounded-xl flex items-center gap-2"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> {t('planPanel.retryKeepingRequest')}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* User Request Pill Box */}
+            <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs space-y-2 shadow-sm">
+              <div className="flex items-center justify-between text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
+                <span>{t('planPanel.userRequest')}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyPrompt}
+                    title={t('planPanel.copyPrompt')}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 font-mono text-[9px] lowercase transition-colors cursor-pointer"
+                  >
+                    {copiedPrompt ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span className="text-emerald-400">copiato</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3 text-slate-400" />
+                        <span>copia</span>
+                      </>
+                    )}
+                  </button>
+                  <span className="px-2 py-0.5 rounded-md bg-cyan-950/80 border border-cyan-800/60 text-cyan-300 font-mono text-[9px]">
+                    v{plan.version || activePlanIndex + 1}
+                  </span>
+                </div>
+              </div>
+              <div className="font-mono text-slate-200 text-[11px] leading-relaxed whitespace-pre-wrap break-words max-h-48 overflow-y-auto p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80 select-text">
+                {formattedPrompt || plan.prompt}
+              </div>
+            </div>
+
+            <PlanReviewCard plan={plan} disabled={isExecuting || isApprovingPlan || isSavingPlanReview} onSave={onSaveReview} />
+
+            {plan.status === 'approved' && viewMode === 'checklist' ? (
+              <PlanPanelChecklistView
+                version={plan.version}
+                parsedChecklist={parsedChecklist}
+                completedItemsCount={completedItemsCount}
+                totalItems={totalItems}
+                progressPercent={progressPercent}
+                isExecuting={isExecuting}
+                activeIndex={activeIndex}
+              />
+            ) : (
+              <PlanPanelDocumentView plan={plan} />
+            )}
+
+            {plan.approvalError && (
+              <div role="alert" className="p-3 rounded-xl border border-rose-800/70 bg-rose-950/30 text-rose-200 text-xs">
+                {plan.approvalError}
+              </div>
+            )}
+
+            {/* Action Bar (Approve / Reject) */}
+            {(plan.status === 'ready' || (plan.status === 'approved' && !isExecuting && parsedChecklist.some((item) => !item.completed))) && (
+              <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-between gap-2 shadow-2xl">
+                <button
+                  type="button"
+                  onClick={onReject}
+                  disabled={isApprovingPlan || isSavingPlanReview}
+                  className="px-3.5 py-2 bg-slate-950 hover:bg-rose-950/50 border border-slate-800 hover:border-rose-800/80 text-rose-300 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 focus-ring"
+                >
+                  <XCircle className="w-3.5 h-3.5 text-rose-400" /> {t('planPanel.rejectPlan')}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onApprove}
+                  disabled={isApprovingPlan || isSavingPlanReview}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-950/50 focus-ring active:scale-95"
+                >
+                  {isApprovingPlan ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 fill-current" />}
+                  {isApprovingPlan ? t('planPanel.approving') : plan.status === 'approved' ? t('planPanel.runApprovedPlan') : t('planPanel.approveAndRun')}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

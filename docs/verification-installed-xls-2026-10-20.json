@@ -1,0 +1,1107 @@
+{
+  "date": "2026-10-20",
+  "root": "C:\\Users\\Utente\\OnlyRag-Live\\installed-xls-20261020-v1",
+  "task": "XLS-PARSER-MEMORY-ADMISSION-01",
+  "passed": true,
+  "installed": true,
+  "realModelCalls": 0,
+  "installerSha256": "7467194090ecd428351de480a35dba7e68cb3299f13c49a06978124d387e3706",
+  "sidecarSha256": "c8ed0a04e2bb5cb14d3f93985ae6c8b116994b6905015c50a12e1c6d3c2f3269",
+  "sourceZipSha256": "0a212d196ca4a416a5c6ec64513266de5114827bba883de6b656c3cb8d9636a6",
+  "compiledPythonModulesVerified": 31,
+  "embeddingMode": "Production versioned fallback; intentionally unreachable loopback port 9. No encoder quality claim.",
+  "acknowledgedDocuments": 8,
+  "finalChunks": 161,
+  "cases": [
+    {
+      "label": "small",
+      "file": "small.xls",
+      "expectedOutcomeVerified": true,
+      "success": true,
+      "error": null,
+      "elapsedMs": 2778,
+      "observation": {
+        "label": "small",
+        "action": "monitor",
+        "ownerPid": 27388,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [
+          {
+            "pid": 31120,
+            "parent": 27388,
+            "peakCommitBytes": 70098944,
+            "inJob": true,
+            "exited": true
+          }
+        ],
+        "elapsedSeconds": 2.789785099997971,
+        "passed": true
+      },
+      "retainedFailedOriginal": null,
+      "documentId": "f5ee5746-b1a1-43c8-8967-01ad3426ee9b",
+      "markdownChars": 268
+    },
+    {
+      "label": "sparse",
+      "file": "sparse.xls",
+      "expectedOutcomeVerified": true,
+      "success": true,
+      "error": null,
+      "elapsedMs": 2912,
+      "observation": {
+        "label": "sparse",
+        "action": "monitor",
+        "ownerPid": 27388,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [
+          {
+            "pid": 10616,
+            "parent": 27388,
+            "peakCommitBytes": 81924096,
+            "inJob": true,
+            "exited": true
+          }
+        ],
+        "elapsedSeconds": 2.9230227999978524,
+        "passed": true
+      },
+      "retainedFailedOriginal": null,
+      "documentId": "7530e3dc-3f9d-4a0a-8ea8-ac8d47b296ff",
+      "markdownChars": 275
+    },
+    {
+      "label": "strings",
+      "file": "strings.xls",
+      "expectedOutcomeVerified": true,
+      "success": true,
+      "error": null,
+      "elapsedMs": 3957,
+      "observation": {
+        "label": "strings",
+        "action": "monitor",
+        "ownerPid": 27388,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [
+          {
+            "pid": 14888,
+            "parent": 27388,
+            "peakCommitBytes": 186642432,
+            "inJob": true,
+            "exited": true
+          }
+        ],
+        "elapsedSeconds": 3.9679352000021026,
+        "passed": true
+      },
+      "retainedFailedOriginal": null,
+      "documentId": "cce4cbfe-1947-4b40-b461-caeb33116920",
+      "markdownChars": 82335
+    },
+    {
+      "label": "dense-admission",
+      "file": "dense.xls",
+      "expectedOutcomeVerified": true,
+      "success": false,
+      "error": "XLS source exceeds the 8 MiB parser limit; export as XLSX or CSV.",
+      "elapsedMs": 364,
+      "observation": {
+        "label": "dense-admission",
+        "action": "monitor",
+        "ownerPid": 27388,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [],
+        "elapsedSeconds": 0.3580282000002626,
+        "passed": true
+      },
+      "retainedFailedOriginal": "cefc7c80-ca04-41ea-bfdc-14d7cf32024c\\original.xls",
+      "documentId": null,
+      "markdownChars": 0
+    },
+    {
+      "label": "dense-memory",
+      "file": "dense.xls",
+      "expectedOutcomeVerified": true,
+      "success": false,
+      "error": "XLS parser exceeded its 512 MiB memory budget; export as CSV or XLSX.",
+      "elapsedMs": 8919,
+      "observation": {
+        "label": "dense-memory",
+        "action": "monitor",
+        "ownerPid": 27388,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [
+          {
+            "pid": 15476,
+            "parent": 27388,
+            "peakCommitBytes": 519864320,
+            "inJob": true,
+            "exited": true
+          }
+        ],
+        "elapsedSeconds": 8.93789260000267,
+        "passed": true
+      },
+      "retainedFailedOriginal": "66c69847-9d67-4e5f-b7fc-25eefc598a0b\\original.xls",
+      "documentId": null,
+      "markdownChars": 0
+    },
+    {
+      "label": "shared-memory",
+      "file": "shared.xls",
+      "expectedOutcomeVerified": true,
+      "success": false,
+      "error": "XLS parser exceeded its 512 MiB memory budget; export as CSV or XLSX.",
+      "elapsedMs": 1489,
+      "observation": {
+        "label": "shared-memory",
+        "action": "monitor",
+        "ownerPid": 27388,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [
+          {
+            "pid": 5020,
+            "parent": 27388,
+            "peakCommitBytes": 519094272,
+            "inJob": true,
+            "exited": true
+          }
+        ],
+        "elapsedSeconds": 1.489700800000719,
+        "passed": true
+      },
+      "retainedFailedOriginal": "6d9b38f7-bbd0-4d18-85e1-844c8b2ffece\\original.xls",
+      "documentId": null,
+      "markdownChars": 0
+    },
+    {
+      "label": "job-admission",
+      "file": "small.xls",
+      "expectedOutcomeVerified": true,
+      "success": false,
+      "error": "XLS resource containment could not be established; parsing refused.",
+      "elapsedMs": 57,
+      "observation": {
+        "label": "job-admission",
+        "action": "admission-refusal",
+        "ownerPid": 27388,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [],
+        "ownerActiveProcessLimit": 1,
+        "elapsedSeconds": 0.07713650000005146,
+        "passed": true
+      },
+      "retainedFailedOriginal": "8145c3a9-82b7-4953-aca2-5d771c0563f8\\original.xls",
+      "documentId": null,
+      "markdownChars": 0
+    },
+    {
+      "label": "after-admission",
+      "file": "small.xls",
+      "expectedOutcomeVerified": true,
+      "success": true,
+      "error": null,
+      "elapsedMs": 2773,
+      "observation": {
+        "label": "after-admission",
+        "action": "monitor",
+        "ownerPid": 27388,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [
+          {
+            "pid": 26492,
+            "parent": 27388,
+            "peakCommitBytes": 69959680,
+            "inJob": true,
+            "exited": true
+          }
+        ],
+        "elapsedSeconds": 2.7748566000009305,
+        "passed": true
+      },
+      "retainedFailedOriginal": null,
+      "documentId": "e2b9af55-3f09-4a0d-b551-990eb8cb073c",
+      "markdownChars": 268
+    },
+    {
+      "label": "timeout",
+      "file": "dense.xls",
+      "expectedOutcomeVerified": true,
+      "success": false,
+      "error": "XLS parser exceeded its 60-second time budget; export as CSV or XLSX.",
+      "elapsedMs": 60351,
+      "observation": {
+        "label": "timeout",
+        "action": "timeout",
+        "ownerPid": 27388,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [
+          {
+            "pid": 15720,
+            "parent": 27388,
+            "peakCommitBytes": 9424896,
+            "inJob": true,
+            "exited": true
+          }
+        ],
+        "suspendedThreads": 1,
+        "elapsedSeconds": 60.34729080000034,
+        "passed": true
+      },
+      "retainedFailedOriginal": "b8225b64-930f-40e5-a881-958cde15e95f\\original.xls",
+      "documentId": null,
+      "markdownChars": 0
+    },
+    {
+      "label": "after-timeout",
+      "file": "small.xls",
+      "expectedOutcomeVerified": true,
+      "success": true,
+      "error": null,
+      "elapsedMs": 2750,
+      "observation": {
+        "label": "after-timeout",
+        "action": "monitor",
+        "ownerPid": 27388,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [
+          {
+            "pid": 15976,
+            "parent": 27388,
+            "peakCommitBytes": 70340608,
+            "inJob": true,
+            "exited": true
+          }
+        ],
+        "elapsedSeconds": 2.7395627000005334,
+        "passed": true
+      },
+      "retainedFailedOriginal": null,
+      "documentId": "cb6f83f1-df5d-40cc-b5d8-d7b498062d8e",
+      "markdownChars": 268
+    },
+    {
+      "label": "owner-crash",
+      "file": "dense.xls",
+      "expectedOutcomeVerified": true,
+      "success": false,
+      "error": "read ECONNRESET",
+      "elapsedMs": 456,
+      "observation": {
+        "label": "owner-crash",
+        "action": "owner-crash",
+        "ownerPid": 27388,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [
+          {
+            "pid": 3772,
+            "parent": 27388,
+            "peakCommitBytes": 1183744,
+            "inJob": true,
+            "exited": true
+          }
+        ],
+        "suspendedThreads": 4,
+        "workerExitedWithinFiveSecondsOfOwner": true,
+        "elapsedSeconds": 0.467866300001333,
+        "passed": true
+      },
+      "retainedFailedOriginal": "429dd1e6-e19a-49d6-9d8d-3ec5f5f87c0e\\original.xls",
+      "documentId": null,
+      "markdownChars": 0
+    },
+    {
+      "label": "after-owner-crash",
+      "file": "small.xls",
+      "expectedOutcomeVerified": true,
+      "success": true,
+      "error": null,
+      "elapsedMs": 2766,
+      "observation": {
+        "label": "after-owner-crash",
+        "action": "monitor",
+        "ownerPid": 10564,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [
+          {
+            "pid": 27748,
+            "parent": 10564,
+            "peakCommitBytes": 70340608,
+            "inJob": true,
+            "exited": true
+          }
+        ],
+        "elapsedSeconds": 2.781735699998535,
+        "passed": true
+      },
+      "retainedFailedOriginal": null,
+      "documentId": "22674c01-3a13-4e88-b160-f2b6c82f9f26",
+      "markdownChars": 268
+    },
+    {
+      "label": "output-overflow",
+      "file": "overflow.xls",
+      "expectedOutcomeVerified": true,
+      "success": false,
+      "error": "XLS parser refused the workbook: XLS extraction exceeds the 32 MiB worker output limit; export as CSV or XLSX.",
+      "elapsedMs": 2822,
+      "observation": {
+        "label": "output-overflow",
+        "action": "monitor",
+        "ownerPid": 17092,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [
+          {
+            "pid": 10420,
+            "parent": 17092,
+            "peakCommitBytes": 337686528,
+            "inJob": true,
+            "exited": true
+          }
+        ],
+        "elapsedSeconds": 2.8158662999994704,
+        "passed": true
+      },
+      "retainedFailedOriginal": "097bafe8-3aa1-42b3-9aee-870b2cfdb82d\\original.xls",
+      "documentId": null,
+      "markdownChars": 0
+    },
+    {
+      "label": "after-overflow",
+      "file": "small.xls",
+      "expectedOutcomeVerified": true,
+      "success": true,
+      "error": null,
+      "elapsedMs": 2779,
+      "observation": {
+        "label": "after-overflow",
+        "action": "monitor",
+        "ownerPid": 17092,
+        "executable": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-ledger-install-20261020-v1\\resources\\sidecar\\sidecar.exe",
+        "workers": [
+          {
+            "pid": 28784,
+            "parent": 17092,
+            "peakCommitBytes": 70270976,
+            "inJob": true,
+            "exited": true
+          }
+        ],
+        "elapsedSeconds": 2.7739760000004026,
+        "passed": true
+      },
+      "retainedFailedOriginal": null,
+      "documentId": "1edda851-365a-4214-9dc3-e5b725eff7c3",
+      "markdownChars": 268
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "dense.xls",
+      "bytes": 101318770,
+      "sha256": "683e1380160bbb0ef3b51276ca6d39fd874cd18714023063fc0e833cc4dfbd7f"
+    },
+    {
+      "name": "keep.md",
+      "bytes": 83,
+      "sha256": "6dbaabde5a8b85fdbe53acd5dbea7201d885750f02eaec24df484ab6ddc7f621"
+    },
+    {
+      "name": "overflow.xls",
+      "bytes": 51648684,
+      "sha256": "6ff9851e95d5224c2f48f98dc33fed4dc0feaff7888df60dd0747716cb80a0d1"
+    },
+    {
+      "name": "shared.xls",
+      "bytes": 180945123,
+      "sha256": "b99889df4d51b6059cda8525194d529a333bf94b3ea74e49dfa1cb3a08930a2d"
+    },
+    {
+      "name": "small.xls",
+      "bytes": 130,
+      "sha256": "deecb82ec90edf9af601214587b481e203369ab73c5e85bcae38aa29c443acdf"
+    },
+    {
+      "name": "sparse.xls",
+      "bytes": 128,
+      "sha256": "67d3a40e5cbc9d59e47a0192c22cd7a5b6def7c438d6cfe9597acbedf9dae0f4"
+    },
+    {
+      "name": "strings.xls",
+      "bytes": 96312764,
+      "sha256": "046f88b013a5a47375e7663b80c7aeb7a9b88a5d0d93dd6c53d16098ef3adf07"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "after-admission.ready.json",
+      "bytes": 66,
+      "sha256": "ad131b423b5dd899b988612d7a1106cddea584809ac9134f1cf1c64b234e6bca"
+    },
+    {
+      "file": "after-admission.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "after-overflow.ready.json",
+      "bytes": 66,
+      "sha256": "031edb4c9388746d25afc91cb4c46575fc9c325f563db23f73b77d6526235465"
+    },
+    {
+      "file": "after-overflow.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "after-owner-crash.ready.json",
+      "bytes": 64,
+      "sha256": "d7320980fbdd857e989b7db6b5c2cf5bcc572468e1f72d3d9b120419654ee6d5"
+    },
+    {
+      "file": "after-owner-crash.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "after-timeout.ready.json",
+      "bytes": 65,
+      "sha256": "6fe34421bf672bc40afa4f14bfcc78d2dac19ce7b061c96b40b85618febf5e73"
+    },
+    {
+      "file": "after-timeout.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "capture.log",
+      "bytes": 1064,
+      "sha256": "f3e11080570d86060921e06daa04be8967d3a2f646849d2361e85d19e246672b"
+    },
+    {
+      "file": "dense-admission.ready.json",
+      "bytes": 66,
+      "sha256": "1fa229795e280094c8bf54672a5ae4898d6a176649382548ad8f930d34bf1069"
+    },
+    {
+      "file": "dense-admission.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "dense-memory.ready.json",
+      "bytes": 66,
+      "sha256": "bb6162a8ee45dc099be29fa3bf9a7649667afa7738609daf8d25e623b4829793"
+    },
+    {
+      "file": "dense-memory.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "fixtures-prepare.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "fixtures.json",
+      "bytes": 995,
+      "sha256": "ba7346fcd0fbb932afa3e697d8e7587619f285274e4abec8381357b93bb755db"
+    },
+    {
+      "file": "frozen-correspondence-final.log",
+      "bytes": 126,
+      "sha256": "012a70ecbda97105f99560364223bf11987f31f2e343cc8e697c403fb82bc031"
+    },
+    {
+      "file": "frozen-correspondence-initial-failure.log",
+      "bytes": 295,
+      "sha256": "c5adbd5e9285ea4d261239aab512d33df83cc38ad0c60ecb1c88b71833911ce4"
+    },
+    {
+      "file": "frozen-source-correspondence.json",
+      "bytes": 8316,
+      "sha256": "55857e33be7d8560aa4d75aa9b1d90e2f07265e5c41647d23bf706b224ff1b99"
+    },
+    {
+      "file": "index-after-admission-before.json",
+      "bytes": 4064790,
+      "sha256": "001042a4f6dffb6e898bdda0ee7257e88334a54336687a0bb1a83337308b0b89"
+    },
+    {
+      "file": "index-after-overflow-before.json",
+      "bytes": 4141785,
+      "sha256": "362ac7c4103c1582dbd22543d37eb2fd41825b8dfb5245b96bc318fba1cf1212"
+    },
+    {
+      "file": "index-after-owner-crash-before.json",
+      "bytes": 4116120,
+      "sha256": "00e1d7d79eb65d91769d2d82a3b26d55cda512f47f9d3dc095f08e5bfabe9c14"
+    },
+    {
+      "file": "index-after-timeout-before.json",
+      "bytes": 4090455,
+      "sha256": "fc02b5c1da224c66b17c65fb7da971cc2f10ec75620ae18240dfaef52aca809c"
+    },
+    {
+      "file": "index-dense-admission-after.json",
+      "bytes": 4064790,
+      "sha256": "001042a4f6dffb6e898bdda0ee7257e88334a54336687a0bb1a83337308b0b89"
+    },
+    {
+      "file": "index-dense-admission-before.json",
+      "bytes": 4064790,
+      "sha256": "001042a4f6dffb6e898bdda0ee7257e88334a54336687a0bb1a83337308b0b89"
+    },
+    {
+      "file": "index-dense-memory-after.json",
+      "bytes": 4064790,
+      "sha256": "001042a4f6dffb6e898bdda0ee7257e88334a54336687a0bb1a83337308b0b89"
+    },
+    {
+      "file": "index-dense-memory-before.json",
+      "bytes": 4064790,
+      "sha256": "001042a4f6dffb6e898bdda0ee7257e88334a54336687a0bb1a83337308b0b89"
+    },
+    {
+      "file": "index-final.json",
+      "bytes": 4167450,
+      "sha256": "f9345097e0b0d54a146d28eee68cf30e5d2e68332182ad810ee1c9af49531a8a"
+    },
+    {
+      "file": "index-job-admission-after.json",
+      "bytes": 4064790,
+      "sha256": "001042a4f6dffb6e898bdda0ee7257e88334a54336687a0bb1a83337308b0b89"
+    },
+    {
+      "file": "index-job-admission-before.json",
+      "bytes": 4064790,
+      "sha256": "001042a4f6dffb6e898bdda0ee7257e88334a54336687a0bb1a83337308b0b89"
+    },
+    {
+      "file": "index-output-overflow-after.json",
+      "bytes": 4141785,
+      "sha256": "362ac7c4103c1582dbd22543d37eb2fd41825b8dfb5245b96bc318fba1cf1212"
+    },
+    {
+      "file": "index-output-overflow-before.json",
+      "bytes": 4141785,
+      "sha256": "362ac7c4103c1582dbd22543d37eb2fd41825b8dfb5245b96bc318fba1cf1212"
+    },
+    {
+      "file": "index-owner-crash-after.json",
+      "bytes": 4116120,
+      "sha256": "00e1d7d79eb65d91769d2d82a3b26d55cda512f47f9d3dc095f08e5bfabe9c14"
+    },
+    {
+      "file": "index-owner-crash-before.json",
+      "bytes": 4116120,
+      "sha256": "00e1d7d79eb65d91769d2d82a3b26d55cda512f47f9d3dc095f08e5bfabe9c14"
+    },
+    {
+      "file": "index-restart-after.json",
+      "bytes": 4141785,
+      "sha256": "362ac7c4103c1582dbd22543d37eb2fd41825b8dfb5245b96bc318fba1cf1212"
+    },
+    {
+      "file": "index-restart-before.json",
+      "bytes": 4141785,
+      "sha256": "362ac7c4103c1582dbd22543d37eb2fd41825b8dfb5245b96bc318fba1cf1212"
+    },
+    {
+      "file": "index-shared-memory-after.json",
+      "bytes": 4064790,
+      "sha256": "001042a4f6dffb6e898bdda0ee7257e88334a54336687a0bb1a83337308b0b89"
+    },
+    {
+      "file": "index-shared-memory-before.json",
+      "bytes": 4064790,
+      "sha256": "001042a4f6dffb6e898bdda0ee7257e88334a54336687a0bb1a83337308b0b89"
+    },
+    {
+      "file": "index-small-before.json",
+      "bytes": 25350,
+      "sha256": "9248e2f7fe88b79f1d56cd36eff784ee205e5de65d70f5b8fbe6dfab9e7f841e"
+    },
+    {
+      "file": "index-sparse-before.json",
+      "bytes": 51015,
+      "sha256": "60e8de23f178ad17a0ec38973fa2afeffd63e2f94b2782d71c0c5b1d0bf309f9"
+    },
+    {
+      "file": "index-strings-before.json",
+      "bytes": 76714,
+      "sha256": "1bfdeffb5a656928b94a5496554f5b0c9643e5c6aaecdac5afae9e047ab9fe6f"
+    },
+    {
+      "file": "index-timeout-after.json",
+      "bytes": 4090455,
+      "sha256": "fc02b5c1da224c66b17c65fb7da971cc2f10ec75620ae18240dfaef52aca809c"
+    },
+    {
+      "file": "index-timeout-before.json",
+      "bytes": 4090455,
+      "sha256": "fc02b5c1da224c66b17c65fb7da971cc2f10ec75620ae18240dfaef52aca809c"
+    },
+    {
+      "file": "inputs\\dense.xls",
+      "bytes": 101318770,
+      "sha256": "683e1380160bbb0ef3b51276ca6d39fd874cd18714023063fc0e833cc4dfbd7f"
+    },
+    {
+      "file": "inputs\\keep.md",
+      "bytes": 83,
+      "sha256": "6dbaabde5a8b85fdbe53acd5dbea7201d885750f02eaec24df484ab6ddc7f621"
+    },
+    {
+      "file": "inputs\\overflow.xls",
+      "bytes": 51648684,
+      "sha256": "6ff9851e95d5224c2f48f98dc33fed4dc0feaff7888df60dd0747716cb80a0d1"
+    },
+    {
+      "file": "inputs\\shared.xls",
+      "bytes": 180945123,
+      "sha256": "b99889df4d51b6059cda8525194d529a333bf94b3ea74e49dfa1cb3a08930a2d"
+    },
+    {
+      "file": "inputs\\small.xls",
+      "bytes": 130,
+      "sha256": "deecb82ec90edf9af601214587b481e203369ab73c5e85bcae38aa29c443acdf"
+    },
+    {
+      "file": "inputs\\sparse.xls",
+      "bytes": 128,
+      "sha256": "67d3a40e5cbc9d59e47a0192c22cd7a5b6def7c438d6cfe9597acbedf9dae0f4"
+    },
+    {
+      "file": "inputs\\strings.xls",
+      "bytes": 96312764,
+      "sha256": "046f88b013a5a47375e7663b80c7aeb7a9b88a5d0d93dd6c53d16098ef3adf07"
+    },
+    {
+      "file": "job-admission.ready.json",
+      "bytes": 76,
+      "sha256": "1032f601e084e8f43339caac07b32e63e425d43d69d4b2beed08dc86415fe88e"
+    },
+    {
+      "file": "job-admission.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-after-admission.json",
+      "bytes": 430,
+      "sha256": "7c0026c1fa124b29d2efa3279e82c0f93403a962dd2aa282b7f5db315c14ef50"
+    },
+    {
+      "file": "observe-after-admission.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-after-overflow.json",
+      "bytes": 429,
+      "sha256": "4a110c8ce917433223e6e664c6d30096ea171f435e1e1e28d6ddf76a5310b1a5"
+    },
+    {
+      "file": "observe-after-overflow.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-after-owner-crash.json",
+      "bytes": 431,
+      "sha256": "1e06ce7c1c7330bab345c18329865c68be3b67acbf7f73abf87f1ef0dd06dab1"
+    },
+    {
+      "file": "observe-after-owner-crash.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-after-timeout.json",
+      "bytes": 428,
+      "sha256": "350e0ab78439ea74634c971facccfbbdff73b54433c7e325235cda7597d20615"
+    },
+    {
+      "file": "observe-after-timeout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-dense-admission.json",
+      "bytes": 287,
+      "sha256": "9058d85f5a7ad9c4ec0b67269a61ce5f52c187e90a68009e6eb023ce0c9f70ba"
+    },
+    {
+      "file": "observe-dense-admission.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-dense-memory.json",
+      "bytes": 426,
+      "sha256": "22bd8ca5a9cf22616c144a4fe0ecdeb8c2c327995f576edb0806ab5722827df4"
+    },
+    {
+      "file": "observe-dense-memory.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-job-admission.json",
+      "bytes": 329,
+      "sha256": "35b051c0787074862718bc8e761a6a162223f04c7b267936196610c239ef8d64"
+    },
+    {
+      "file": "observe-job-admission.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-output-overflow.json",
+      "bytes": 431,
+      "sha256": "f56fe0d6083de2dfe966ee99105b166efea8b7d402a91f6b1cc711f3b880216a"
+    },
+    {
+      "file": "observe-output-overflow.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-owner-crash.json",
+      "bytes": 502,
+      "sha256": "a959dd120636f351fd30ba421f3470b650d53d8e76936f7bc3941b2ca3d9a4a6"
+    },
+    {
+      "file": "observe-owner-crash.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-shared-memory.json",
+      "bytes": 427,
+      "sha256": "c9d288750983a8ab462929b89f69083dd15e5d275fd313bd7368f2b3973daf35"
+    },
+    {
+      "file": "observe-shared-memory.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-small.json",
+      "bytes": 419,
+      "sha256": "b05d01049fc5fa09332fc5eb3c7b6f001c27713a168f1862bc64bfa2893b4900"
+    },
+    {
+      "file": "observe-small.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-sparse.json",
+      "bytes": 421,
+      "sha256": "a5e30a8c76a3ef74dec0274aa864b3e95c359b7da0da8763609ca661b16053ba"
+    },
+    {
+      "file": "observe-sparse.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-strings.json",
+      "bytes": 423,
+      "sha256": "5935890e2b9f300b7e4139527d282faac466d8b5615a00cb14d089435e089624"
+    },
+    {
+      "file": "observe-strings.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "observe-timeout.json",
+      "bytes": 446,
+      "sha256": "df754525dd84f195105a1cfb61281e44d40ebf54e982098c11298d2956157d41"
+    },
+    {
+      "file": "observe-timeout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "output-overflow.ready.json",
+      "bytes": 66,
+      "sha256": "f5b239e243968e549f495881e4b3c8137cad6aae19aecec271cfeed1bc48b121"
+    },
+    {
+      "file": "output-overflow.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "owner-crash.ready.json",
+      "bytes": 70,
+      "sha256": "1b5ddff5ff519a83002897cee4d158e91f9b6f534c7943b447883b427fe3a491"
+    },
+    {
+      "file": "owner-crash.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "owner-crash.suspended.json",
+      "bytes": 82,
+      "sha256": "bb9ef4e9489945489260cb95cc9e06f4903b88ff8c41ca327e3b6127942f8e58"
+    },
+    {
+      "file": "readback-installed-invalid-payload.mjs",
+      "bytes": 3206,
+      "sha256": "75ddf0a389165bcbacfa00d4cfe8fdfdc263e0cb28463cd88cfecf2800bb38e0"
+    },
+    {
+      "file": "readback-installed.mjs",
+      "bytes": 3224,
+      "sha256": "b916a6a3934e8e21f81a6ca4d722b69f0507be5dff79ebcfdcf467cd774d96b8"
+    },
+    {
+      "file": "restart-readback-invalid-payload.json",
+      "bytes": 881,
+      "sha256": "fda2384684166229938b54beb738a44128c1dcad89864d93e46bc146e592b3ce"
+    },
+    {
+      "file": "restart-readback.json",
+      "bytes": 88655,
+      "sha256": "ae01ee3b5f1c662a1dc4da71196daaef286bb7dfadef5ce803042f87de1f61de"
+    },
+    {
+      "file": "result.json",
+      "bytes": 4399685,
+      "sha256": "a8d5f6e8d18c492f0987b89299c34fc1da492d6e78ce736f172a902d7aae1f47"
+    },
+    {
+      "file": "shared-memory.ready.json",
+      "bytes": 66,
+      "sha256": "a1a939400a6361b72b9b31d0e9ed9f41485813578eaa105a3945c23c675a886d"
+    },
+    {
+      "file": "shared-memory.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "small.ready.json",
+      "bytes": 65,
+      "sha256": "1877e89458a744f98c2cdae1aad5c4084fea551edb75160f89c96ade69f857ff"
+    },
+    {
+      "file": "small.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-after-admission-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-after-overflow-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-after-owner-crash-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-after-timeout-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-dense-admission-after.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-dense-admission-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-dense-memory-after.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-dense-memory-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-job-admission-after.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-job-admission-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-output-overflow-after.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-output-overflow-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-owner-crash-after.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-owner-crash-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-restart-after.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-restart-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-shared-memory-after.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-shared-memory-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-small-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-sparse-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-strings-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-timeout-after.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "snapshot-timeout-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "sources\\installedXls-readiness.mjs",
+      "bytes": 12151,
+      "sha256": "d0c731a928bfb82919d5f7266813f85b83327b706b3f20fcea772e97873cdff4"
+    },
+    {
+      "file": "sources\\installedXls.mjs",
+      "bytes": 11949,
+      "sha256": "29445344dfdfc149bb79724de6a8ba9570841dc69ee86fa40afc3c7064ff5bfb"
+    },
+    {
+      "file": "sources\\installedXlsProbe-owner-identity.py",
+      "bytes": 14095,
+      "sha256": "40d6048934daafb07163757e4057eeb8852dac34e5bc210414a08c6cb0c945ab"
+    },
+    {
+      "file": "sources\\installedXlsProbe.py",
+      "bytes": 12935,
+      "sha256": "da754f774d0b79b499a3a51c622038bc6355b072e54ec5cd4416a36d6c71ceca"
+    },
+    {
+      "file": "sources\\xls_process.py",
+      "bytes": 9730,
+      "sha256": "579f5896c79ccd5924884b91162fa6001602434ccc0b0b686ed30aa09cfeb88a"
+    },
+    {
+      "file": "sources\\xls_reader.py",
+      "bytes": 4256,
+      "sha256": "9dc137787a20f36cf465fe5e7a3670888e7649588534a643b48b2f0d5a69abfe"
+    },
+    {
+      "file": "sources\\xls_worker.py",
+      "bytes": 2227,
+      "sha256": "485caf43406673de58222b5348cd4cc82e89ed1478de117572b266eeda41da80"
+    },
+    {
+      "file": "sources\\_xls_fixtures.py",
+      "bytes": 3864,
+      "sha256": "a704cdf40dc9a606aed20cdc43511c74de46a2991611df19eb89600b98213734"
+    },
+    {
+      "file": "sparse.ready.json",
+      "bytes": 66,
+      "sha256": "dd1c984facf715c0e8b2879f3e34f6c237adf25ee325485326de29bb63942abf"
+    },
+    {
+      "file": "sparse.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "strings.ready.json",
+      "bytes": 66,
+      "sha256": "dfa3209bc9d90f4c76dbe74b6f1700344af4283da72a86e59359e997b9d7a64c"
+    },
+    {
+      "file": "strings.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "timeout.ready.json",
+      "bytes": 66,
+      "sha256": "222a551833dc3ff4ab469d0cca00395a69b83b7b787360753790bdec22b29ae7"
+    },
+    {
+      "file": "timeout.stop",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "timeout.suspended.json",
+      "bytes": 83,
+      "sha256": "62df8c38011dad410bde54b4cc5a475df43808bfbc1878b7c4754e6c38bdb045"
+    },
+    {
+      "file": "verify-frozen.py",
+      "bytes": 3954,
+      "sha256": "9427706fca8a0043860b09d0d302b6d297d80705738072de945e8bd0991e8d4d"
+    },
+    {
+      "file": "verify-xls.mjs",
+      "bytes": 4847,
+      "sha256": "cb9b87b443ce623a010df975be3241b79d9b47bee2da4e2d3e59f4fbdddd97fd"
+    }
+  ],
+  "limits": "Synthetic XLS mechanics on the exact installed CPU candidate; fallback vectors do not qualify encoders or semantic quality. Active-process Job refusal occurs at native process creation; exact AssignProcessToJobObject fault remains covered by matching source regression, not injected into the installed binary. IsProcessInJob reports any job, not its private quota; peak metric is PROCESS_MEMORY_COUNTERS.PeakPagefileUsage. Native memory refusal, timeout, owner closure and overflow are directly observed. An early restart log captured a stale marker; per-case observer used the verified fresh owner, and auxiliary final installed readback waits for a changed marker. Its first invalid IPC doc-id payload and initial frozenset repr comparison failure are retained; corrected readbacks pass. No personal data, plan execution, publication or power-loss qualification."
+}

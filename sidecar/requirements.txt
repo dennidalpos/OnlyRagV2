@@ -1,0 +1,4 @@
+-r requirements-common.txt
+
+# Development keeps CUDA; release uses a separate CPU environment.
+onnxruntime-gpu[cuda,cudnn]==1.29.0

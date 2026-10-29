@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="898" viewBox="0 0 360 898" role="img" aria-labelledby="title desc" xml:lang="it">
+<title id="title">09 · Verificare risposta e fonti</title>
+<desc id="desc">Distingui i passaggi citati dal modello dai candidati recuperati ma non citati; i riferimenti non risolti non sono supporto verificato. Premi Apri posizione originale. Se disponibile e verificata, confronta il passaggio con l’affermazione della risposta. Se non verificabile, consulta il documento da Ingestione Doc oppure riformula la domanda. Usa Copia Citazione o Copia Messaggio per conservare il testo; fai una domanda successiva per chiarire discrepanze.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 Z" fill="#526779"/></marker></defs>
+<rect width="360" height="898" fill="#ffffff"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="24" y="25" font-size="14" letter-spacing="0.5" fill="#526779">ONLYRAG V2 / GUIDA UTENTE</text>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="600" fill="#183249"><tspan x="180" y="53">09 · Verificare risposta e fonti</tspan></text>
+<g id="n0" data-node="s">
+<rect x="46" y="101" width="268" height="64" rx="30" fill="#183249" stroke="#183249" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#ffffff"><tspan x="180" y="133">Leggi risposta ed estratti</tspan></text>
+</g>
+<g id="n1" data-node="a">
+<rect x="46" y="221" width="268" height="64" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="253">Apri posizione originale</tspan></text>
+</g>
+<g id="n2" data-node="q">
+<polygon points="180,341 296,407 180,473 64,407" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="396.5">Posizione</tspan><tspan x="180" y="417.5">verificata?</tspan></text>
+</g>
+<g id="n3" data-node="a">
+<rect x="46" y="529" width="268" height="70" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="553.5">Confronta il passaggio</tspan><tspan x="180" y="574.5">originale con la frase</tspan></text>
+</g>
+<g id="n4" data-node="t">
+<rect x="46" y="655" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="679.5">Valuta il supporto; copia o</tspan><tspan x="180" y="700.5">approfondisci</tspan></text>
+</g>
+<g id="n5" data-node="t">
+<rect x="46" y="781" width="268" height="91" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="805.5">Fonte non verificabile:</tspan><tspan x="180" y="826.5">torna al documento o</tspan><tspan x="180" y="847.5">riformula</tspan></text>
+</g>
+<path data-edge="0-1" d="M 180 167 V 218" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="1-2" d="M 180 287 V 338" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="2-3" d="M 180 475 V 526" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="2-3"><rect x="183" y="490" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="500">Sì</tspan></text></g>
+<path data-edge="2-5" d="M 298 407 H 346 V 753 H 180 V 778" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="2-5"><rect x="300" y="378.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="388">No</tspan></text></g>
+<path data-edge="3-4" d="M 180 601 V 652" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+</g>
+</svg>

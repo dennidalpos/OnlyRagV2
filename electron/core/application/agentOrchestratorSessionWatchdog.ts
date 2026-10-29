@@ -1,0 +1,102 @@
+import type { AgentApprovalPayload, AgentCompletionEvidence, AgentCompletionStatus, AppSettings } from '../../../shared/types'
+import type { AgentSession, ApprovalResponse } from './agentOrchestratorTypes'
+import { logger } from '../infrastructure/logging/logger'
+import { agentToolExecutorService } from './agentToolExecutorService'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
+
+import type { EmitLog } from './agentOrchestratorTypes'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
+
+export interface SessionWatchdogParams {
+  session: AgentSession
+  sessionId: string
+  settings: AppSettings
+  emitLog: EmitLog
+  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus, evidence?: AgentCompletionEvidence) => void
+  persistCurrentState: (terminationReason?: AgentSessionTerminationReason, completionStatus?: AgentCompletionStatus) => Promise<void>
+  stepCountBox: { value: number }
+  isSessionActive: () => boolean
+  /** Removes this run's session from the module-level registry (the Map lives in agentOrchestratorAppService.ts). */
+  deregisterSession: () => void
+}
+
+export interface SessionWatchdog {
+  clearSessionTimeout: () => void
+  /** Single exit point for the loop: clears the session timeout and deregisters the session. */
+  finalizeSession: () => void
+  requestApproval: (approvalPayload: AgentApprovalPayload) => Promise<ApprovalResponse>
+}
+
+/** Arms the global session timeout (guarantees SESSION END is always written to the audit log even if the loop hangs) and builds the finalize/approval closures tied to it. */
+export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchdog {
+  const { session, sessionId, settings, emitLog, emitDone, persistCurrentState, stepCountBox, isSessionActive, deregisterSession } = params
+
+  const clearSessionTimeout = () => {
+    if (session.timeoutHandle) {
+      clearTimeout(session.timeoutHandle)
+      session.timeoutHandle = null
+    }
+  }
+
+  const finalizeSession = () => {
+    clearSessionTimeout()
+    deregisterSession()
+  }
+
+  const SESSION_TIMEOUT_MS = Math.max(5, settings.agentSessionTimeoutMinutes || 120) * 60 * 1000
+  session.timeoutHandle = setTimeout(async () => {
+    // isSessionActive() already covers both guards a bare identity check would add: it is false the instant this session is no longer the one registered under sessionId (e.g.
+    if (!isSessionActive()) return
+    const timeoutSummary = `Sessione terminata automaticamente: superato il limite di ${Math.round(SESSION_TIMEOUT_MS / 60000)} minuti.`
+    logger.log('WARN', 'AgentOrchestratorApp', `[SESSION TIMEOUT] ${timeoutSummary} SessionId: ${sessionId}`)
+    emitLocalizedLog(emitLog, 'info', { key: 'sessionTimeout', params: { minutes: Math.round(SESSION_TIMEOUT_MS / 60000) } })
+    // Reported before the session is marked cancelled: emitDone is suppressed for inactive sessions,
+    // so the Renderer never learned that a timed-out run had ended. The work stays on disk.
+    const checkpointId = agentToolExecutorService.checkpointJournal(session.workspacePath, session.id, session.identity.conversationId)
+    emitDone(false, timeoutSummary, 'blocked', {
+      changedFiles: session.changedFiles || [],
+      verification: session.lastVerification,
+      cancellationStatus: 'kept',
+      nonRollbackEffects: [...(session.nonRollbackEffects || [])],
+      ...(checkpointId ? { checkpointId } : {}),
+    })
+    session.isCancelled = true
+    session.abortController?.abort()
+    agentToolExecutorService.closeBrowserRun(session.id)
+    session.completionStatus = 'blocked'
+    session.terminalSummary = timeoutSummary
+    if (session.pendingApprovalResolve) {
+      session.pendingApprovalResolve({ approved: false })
+      session.pendingApprovalResolve = undefined
+      session.pendingApprovalReasons = undefined
+    }
+    codingAgentLogger.logSessionEnd(sessionId, stepCountBox.value, false, timeoutSummary)
+    try {
+      await persistCurrentState('timeout', 'blocked')
+    } catch (error: unknown) {
+      logger.log('ERROR', 'AgentOrchestratorApp', `Failed to persist timed-out run ${session.id}: ${String(error)}`)
+    } finally {
+      finalizeSession()
+    }
+  }, SESSION_TIMEOUT_MS)
+
+  /** Sends `agent:approval-request` and pauses the calling step in place until the renderer answers via the `agent:approval-response` IPC channel (see `respondToApproval` in agentOrchestratorAppService.ts), or until cancellation/timeout resolves it to `false`. */
+  const requestApproval = (approvalPayload: AgentApprovalPayload): Promise<ApprovalResponse> => {
+    return new Promise<ApprovalResponse>((resolve) => {
+      if (!session.rendererEvents?.isAvailable()) {
+        resolve({ approved: false })
+        return
+      }
+      session.pendingApprovalResolve = resolve
+      session.pendingApprovalReasons = approvalPayload.reasons
+      session.rendererEvents.send('agent:approval-request', {
+        ...session.identity,
+        sessionId: session.id,
+        ...approvalPayload,
+      })
+    })
+  }
+
+  return { clearSessionTimeout, finalizeSession, requestApproval }
+}

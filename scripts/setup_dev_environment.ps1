@@ -1,0 +1,108 @@
+<#
+.SYNOPSIS
+    Prepara l'ambiente di sviluppo usando la root del repository dello script.
+.DESCRIPTION
+    Verifica Node.js 24.19.x e Python 3.13.x, installa le dipendenze npm dal lockfile e
+    crea/aggiorna il virtualenv Python locale senza dipendere dalla directory corrente.
+#>
+
+[CmdletBinding()]
+param()
+
+$ErrorActionPreference = 'Stop'
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
+function Stop-WithMessage([string]$message) {
+    throw "[SETUP ERROR] $message"
+}
+
+try {
+    $rootDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+    Push-Location $rootDir
+
+    $nodeVersion = (& node --version).Trim().TrimStart('v')
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Node.js non trovato nel PATH. Installare Node.js 24.19.x.' }
+    $nodeParts = $nodeVersion.Split('.')
+    if ([int]$nodeParts[0] -ne 24 -or [int]$nodeParts[1] -lt 19) { Stop-WithMessage "Node.js $nodeVersion rilevato: richiesto >=24.19.0 e <25." }
+
+    $pythonLauncher = Get-Command py -ErrorAction SilentlyContinue
+    if ($pythonLauncher) {
+        $pythonCommand = 'py'
+        $pythonArgs = @('-3.13')
+        & $pythonCommand @pythonArgs --version | Out-Null
+    } else {
+        $pythonCommand = 'python'
+        $pythonArgs = @()
+        & $pythonCommand --version | Out-Null
+    }
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Python 3.13 non trovato. Installare Python 3.13 e ripetere.' }
+    $pythonVersion = (& $pythonCommand @pythonArgs --version 2>&1).ToString()
+    if ($pythonVersion -notmatch 'Python 3\.13\.') { Stop-WithMessage "Rilevato ${pythonVersion}: richiesto Python 3.13." }
+
+    npm ci
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage "Installazione delle dipendenze npm fallita con exit code $LASTEXITCODE." }
+    $electronInstallScript = Join-Path $rootDir 'node_modules/electron/install.js'
+    if (-not (Test-Path -LiteralPath $electronInstallScript)) { Stop-WithMessage "Script di installazione Electron non trovato dopo npm ci." }
+    & node $electronInstallScript
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage "Download del runtime Electron fallito con exit code $LASTEXITCODE." }
+    if ($env:OS -eq 'Windows_NT' -and -not (Test-Path -LiteralPath (Join-Path $rootDir 'node_modules/electron/dist/electron.exe'))) {
+        Stop-WithMessage 'Runtime Electron non presente dopo il download.'
+    }
+    $venvDir = Join-Path $rootDir '.venv'
+    $venvPython = if ($env:OS -eq 'Windows_NT') { Join-Path (Join-Path $venvDir 'Scripts') 'python.exe' } else { Join-Path (Join-Path $venvDir 'bin') 'python' }
+    $venvIsValid = $false
+    $venvConfig = Join-Path $venvDir 'pyvenv.cfg'
+    if ((Test-Path -LiteralPath $venvPython) -and (Test-Path -LiteralPath $venvConfig)) {
+        $venvVersion = (Get-Content -LiteralPath $venvConfig | Where-Object { $_ -match '^version\s*=' } | Select-Object -First 1)
+        $venvIsValid = $venvVersion -match 'version\s*=\s*3\.13\.'
+    }
+        if (-not $venvIsValid) {
+            if (Test-Path -LiteralPath $venvDir) {
+                Remove-Item -LiteralPath $venvDir -Recurse -Force
+            }
+            & $pythonCommand @pythonArgs -m venv $venvDir
+        }
+    if (-not (Test-Path -LiteralPath $venvPython)) { Stop-WithMessage "Virtualenv non creato in $venvDir." }
+
+    & $venvPython -m pip install --upgrade pip
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Aggiornamento di pip fallito.' }
+    & $venvPython -m pip install -r (Join-Path $rootDir 'sidecar/requirements-dev.txt')
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Installazione delle dipendenze Python fallita.' }
+    # rapidocr 3 no longer declares onnxruntime. Should another dependency pull the CPU wheel, it
+    # shares the onnxruntime package directory with onnxruntime-gpu, so swap it for the GPU wheel.
+    # Queried through stdout: pip show reports a missing package on stderr, which Windows
+    # PowerShell turns into a terminating error under ErrorActionPreference Stop.
+    $cpuOnnxRuntime = & $venvPython -c "import importlib.metadata as m; print(any((d.metadata['Name'] or '').lower() == 'onnxruntime' for d in m.distributions()))"
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Controllo del runtime ONNX fallito.' }
+    if ($cpuOnnxRuntime -eq 'True') {
+        & $venvPython -m pip uninstall --yes onnxruntime
+        if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Rimozione del runtime ONNX CPU fallita.' }
+        & $venvPython -m pip install --upgrade --force-reinstall --constraint (Join-Path $rootDir 'sidecar/constraints.txt') 'onnxruntime-gpu[cuda,cudnn]==1.29.0'
+        if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Installazione del runtime ONNX GPU fallita.' }
+    }
+    # Environments set up before 2026-09-26 also carry opencv-python-headless. Both builds install
+    # into the same cv2 directory, so removing one breaks cv2 until opencv-python is reinstalled.
+    $headlessOpenCv = & $venvPython -c "import importlib.metadata as m; print(any((d.metadata['Name'] or '').lower() == 'opencv-python-headless' for d in m.distributions()))"
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Controllo di OpenCV fallito.' }
+    if ($headlessOpenCv -eq 'True') {
+        & $venvPython -m pip uninstall --yes opencv-python-headless
+        if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Rimozione di opencv-python-headless fallita.' }
+        & $venvPython -m pip install --no-deps --force-reinstall --constraint (Join-Path $rootDir 'sidecar/constraints.txt') opencv-python
+        if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Reinstallazione di opencv-python fallita.' }
+    }
+    Write-Host ""
+    Write-Host "=== Riepilogo Setup Ambiente di Sviluppo ===" -ForegroundColor Cyan
+    Write-Host "Root repository:   $rootDir"
+    Write-Host "Node modules:      $(Join-Path $rootDir 'node_modules')"
+    Write-Host "Runtime Electron:  $(Join-Path $rootDir 'node_modules/electron/dist/electron.exe')"
+    Write-Host "Virtualenv Python: $venvDir"
+    Write-Host "Interprete Python: $venvPython"
+    Write-Host "==========================================="
+    Write-Host "[PASS] Ambiente pronto in $rootDir" -ForegroundColor Green
+    exit 0
+} catch {
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    exit 1
+} finally {
+    Pop-Location
+}

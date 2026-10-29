@@ -1,0 +1,111 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const handlers = new Map<string, (...args: unknown[]) => unknown>()
+
+vi.mock('electron', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('electron')>()),
+  ipcMain: {
+    handle: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
+      handlers.set(channel, handler)
+    }),
+  },
+}))
+
+vi.mock('../application/ollamaAppService', () => ({
+  ollamaAppService: {
+    installOrLaunchOllama: vi.fn(),
+    pullModel: vi.fn(),
+    cancelPullModel: vi.fn(),
+    deleteModel: vi.fn(),
+    cancelStream: vi.fn(),
+    getGenerationStatus: vi.fn(),
+    generateStream: vi.fn(),
+    getModelMetrics: vi.fn(),
+    getRunningModels: vi.fn(),
+    unloadModel: vi.fn(),
+    testConnection: vi.fn(),
+    checkModelUpdates: vi.fn(),
+  },
+}))
+
+import { ollamaAppService } from '../application/ollamaAppService'
+import { registerOllamaIpcHandlers } from './ollamaIpc'
+import { setTrustedIpcWindowProvider } from './secureIpcMain'
+
+const frame = {}
+const send = vi.fn()
+const sender = { mainFrame: frame, send }
+const trustedEvent = { sender, senderFrame: frame }
+
+describe('ollama IPC stream facade', () => {
+  beforeEach(() => {
+    handlers.clear()
+    vi.clearAllMocks()
+    setTrustedIpcWindowProvider(() => ({ webContents: sender }) as never)
+    registerOllamaIpcHandlers()
+  })
+
+  it('forwards the bounded output budget through the trusted IPC boundary', async () => {
+    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+    await handlers.get('ollama:generate-stream')!(trustedEvent, {
+      model: 'model',
+      prompt: 'prompt',
+      options: { num_ctx: 2048, num_predict: 1024 },
+      operationId: 'budget',
+    })
+    expect(ollamaAppService.generateStream).toHaveBeenCalledWith(
+      'model',
+      'prompt',
+      expect.any(Function),
+      expect.any(Function),
+      { num_ctx: 2048, num_predict: 1024 },
+      undefined,
+      'budget',
+    )
+  })
+
+  it.each([0, -1, 0.5, '1024', null, 2000001])('rejects an invalid output budget before application dispatch: %j', async (num_predict) => {
+    expect(() =>
+      handlers.get('ollama:generate-stream')!(trustedEvent, { model: 'model', prompt: 'prompt', options: { num_predict }, operationId: 'invalid-budget' }),
+    ).toThrow()
+    expect(ollamaAppService.generateStream).not.toHaveBeenCalled()
+  })
+
+  it('rejects a complete prompt beyond the shared IPC text limit', async () => {
+    expect(() => handlers.get('ollama:generate-stream')!(trustedEvent, { model: 'model', prompt: 'a'.repeat(120001), operationId: 'oversized' })).toThrow()
+    expect(ollamaAppService.generateStream).not.toHaveBeenCalled()
+  })
+
+  it('binds chunk and done events to the requested operation ID', async () => {
+    vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk, onDone) => {
+      onChunk('hello')
+      onDone()
+      return { success: true }
+    })
+    await handlers.get('ollama:generate-stream')?.(trustedEvent, {
+      model: 'model',
+      prompt: 'prompt',
+      options: {},
+      host: 'http://host:11434',
+      operationId: 'stream-1',
+    })
+
+    expect(send).toHaveBeenNthCalledWith(1, 'ollama:chunk', { operationId: 'stream-1', chunk: 'hello' })
+    expect(send).toHaveBeenNthCalledWith(2, 'ollama:done', { operationId: 'stream-1' })
+    expect(ollamaAppService.generateStream).toHaveBeenCalledWith(
+      'model',
+      'prompt',
+      expect.any(Function),
+      expect.any(Function),
+      {},
+      'http://host:11434',
+      'stream-1',
+    )
+  })
+
+  it('accepts a reasoning level as the thinking choice', async () => {
+    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+    await handlers.get('ollama:generate-stream')?.(trustedEvent, { model: 'model', prompt: 'prompt', options: { think: 'low' }, operationId: 'stream-2' })
+    expect(vi.mocked(ollamaAppService.generateStream).mock.calls[0][4]).toEqual({ think: 'low' })
+  })
+})

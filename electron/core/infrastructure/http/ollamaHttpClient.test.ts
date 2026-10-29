@@ -1,0 +1,525 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import http from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { afterEach, beforeEach } from 'vitest'
+import { OllamaHttpClient } from './ollamaHttpClient'
+
+describe('budgeted translation stream completion', () => {
+  it.each([
+    { done: true, done_reason: 'length' },
+    { done: true, error: 'controlled refusal' },
+  ])('does not acknowledge partial or refused output: %j', async (terminal) => {
+    let received: Record<string, unknown> | undefined
+    const mock = await createMockOllamaServer([
+      {
+        method: 'POST',
+        path: '/api/generate',
+        handler: (req, res) => {
+          let body = ''
+          req.on('data', (data) => {
+            body += data
+          })
+          req.on('end', () => {
+            received = JSON.parse(body)
+            res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+            res.end(JSON.stringify({ response: 'partial', ...terminal }) + '\n')
+          })
+        },
+      },
+    ])
+    try {
+      let done = false
+      const chunks: string[] = []
+      const result = await new OllamaHttpClient().generateStream(
+        'model',
+        'prompt',
+        (text) => chunks.push(text),
+        () => {
+          done = true
+        },
+        { num_ctx: 2048, num_predict: 1024 },
+        mock.baseUrl,
+      )
+      expect(result.success).toBe(false)
+      expect(done).toBe(false)
+      expect(chunks).toEqual(['partial'])
+      expect(received?.options).toMatchObject({ num_ctx: 2048, num_predict: 1024 })
+    } finally {
+      await new Promise<void>((resolve) => mock.server.close(() => resolve()))
+    }
+  })
+})
+
+function createMockOllamaServer(routes: Array<{ method: string; path: string; handler: (req: http.IncomingMessage, res: http.ServerResponse) => void }>) {
+  return new Promise<{ server: http.Server; baseUrl: string }>((resolve) => {
+    const server = http.createServer((req, res) => {
+      const route = routes.find((r) => r.method === req.method && (req.url || '').startsWith(r.path))
+      if (route) {
+        route.handler(req, res)
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Not found' }))
+      }
+    })
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address() as AddressInfo
+      resolve({ server, baseUrl: `http://127.0.0.1:${addr.port}` })
+    })
+  })
+}
+
+describe('OllamaHttpClient — /api/tags Consolidation Unit Tests', () => {
+  let server: http.Server
+  let client: OllamaHttpClient
+
+  beforeAll(async () => {
+    const mock = await createMockOllamaServer([
+      {
+        method: 'GET',
+        path: '/api/tags',
+        handler: (_req, res) => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(
+            JSON.stringify({
+              models: [
+                {
+                  name: 'qwen2.5-coder:7b',
+                  digest: 'sha256:abcd1234',
+                  modified_at: '2026-08-20T12:00:00Z',
+                  size: 4700000000,
+                  details: {
+                    parameter_size: '7.6B',
+                    quantization_level: 'Q4_K_M',
+                    family: 'qwen2',
+                    context_length: 32768,
+                  },
+                  capabilities: ['completion', 'tools'],
+                },
+                {
+                  name: 'llama3.2:3b',
+                  digest: 'sha256:efgh5678',
+                  modified_at: '2026-08-21T14:00:00Z',
+                  size: 2000000000,
+                  details: {
+                    parameter_size: '3.2B',
+                    quantization_level: 'Q4_K_M',
+                    family: 'llama',
+                  },
+                  capabilities: ['completion'],
+                },
+              ],
+            }),
+          )
+        },
+      },
+      {
+        method: 'POST',
+        path: '/api/show',
+        handler: (req, res) => {
+          let body = ''
+          req.on('data', (c) => {
+            body += c
+          })
+          req.on('end', () => {
+            const parsed = JSON.parse(body || '{}')
+            if (parsed.model === 'llama3.2:3b') {
+              res.writeHead(200, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ details: { context_length: 8192 } }))
+            } else {
+              res.writeHead(200, { 'Content-Type': 'application/json' })
+              res.end(
+                JSON.stringify({
+                  capabilities: ['completion', 'tools'],
+                  model_info: {
+                    'general.architecture': 'qwen2',
+                    'qwen2.block_count': 28,
+                    'qwen2.embedding_length': 3584,
+                    'qwen2.attention.head_count': 28,
+                    'qwen2.attention.head_count_kv': 4,
+                  },
+                }),
+              )
+            }
+          })
+        },
+      },
+      {
+        method: 'GET',
+        path: '/api/ps',
+        handler: (_req, res) => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(
+            JSON.stringify({
+              models: [
+                { name: 'qwen2.5-coder:7b', digest: 'sha256:abcd1234', size: 6_000_000_000, size_vram: 4_000_000_000, context_length: 16384 },
+                { name: 'llama3.2:3b', digest: 'stale', size: 3_000_000_000, size_vram: 3_000_000_000, context_length: 8192 },
+              ],
+            }),
+          )
+        },
+      },
+    ])
+    server = mock.server
+    client = new OllamaHttpClient()
+    client.setBaseHost(mock.baseUrl)
+  })
+
+  afterAll(() => {
+    server.close()
+  })
+
+  it('getModelTagsWithDigests extracts tag names, digests, and modifiedAt', async () => {
+    const list = await client.getModelTagsWithDigests()
+    expect(list).toHaveLength(2)
+    expect(list[0]).toEqual({
+      name: 'qwen2.5-coder:7b',
+      digest: 'sha256:abcd1234',
+      modifiedAt: '2026-08-20T12:00:00Z',
+    })
+    expect(list[1].name).toBe('llama3.2:3b')
+  })
+
+  it('getModelCapabilities extracts model capabilities accurately', async () => {
+    const capabilities = await client.getModelCapabilities()
+    expect(capabilities['qwen2.5-coder:7b']).toEqual(['completion', 'tools'])
+    expect(capabilities['llama3.2:3b']).toEqual(['completion'])
+  })
+
+  it('getModelMetrics extracts and enriches model metrics', async () => {
+    const metrics = await client.getModelMetrics()
+    expect(metrics['qwen2.5-coder:7b']).toBeDefined()
+    expect(metrics['qwen2.5-coder:7b'].contextLength).toBe(32768)
+    expect(metrics['qwen2.5-coder:7b'].parameterSize).toBe('7.6B')
+    expect(metrics['qwen2.5-coder:7b'].family).toBe('qwen2')
+    expect(metrics['qwen2.5-coder:7b'].memoryGeometry?.kvHeadCount).toBe(4)
+    expect(metrics['qwen2.5-coder:7b'].runtimeAllocation?.contextLength).toBe(16384)
+    expect(metrics['qwen2.5-coder:7b'].runtimeAllocation?.totalBytes).toBe(6_000_000_000)
+    expect(metrics['llama3.2:3b'].runtimeAllocation).toBeUndefined()
+
+    // llama3.2 context length should be enriched from /api/show
+    expect(metrics['llama3.2:3b'].contextLength).toBe(8192)
+    expect(metrics['llama3.2:3b'].family).toBe('llama')
+  })
+
+  it('handles offline host gracefully without throwing or rejecting', async () => {
+    const offlineClient = new OllamaHttpClient()
+    offlineClient.setBaseHost('http://127.0.0.1:19997')
+
+    const tags = await offlineClient.getModelTagsWithDigests()
+    expect(tags).toEqual([])
+
+    const caps = await offlineClient.getModelCapabilities()
+    expect(caps).toEqual({})
+
+    const metrics = await offlineClient.getModelMetrics()
+    expect(metrics).toEqual({})
+  })
+})
+
+describe('OllamaHttpClient — structured chat responses', () => {
+  let server: http.Server
+  let client: OllamaHttpClient
+  /** One object is sent as a single unterminated line; an array as one NDJSON line per chunk. */
+  let responseBody: Record<string, unknown> | Record<string, unknown>[]
+  let capturedRequest: Record<string, unknown> | null
+
+  beforeEach(async () => {
+    capturedRequest = null
+    const mock = await createMockOllamaServer([
+      {
+        method: 'POST',
+        path: '/api/chat',
+        handler: (req, res) => {
+          let raw = ''
+          req.on('data', (chunk) => {
+            raw += chunk
+          })
+          req.on('end', () => {
+            capturedRequest = JSON.parse(raw)
+            res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+            if (!Array.isArray(responseBody)) {
+              res.end(JSON.stringify(responseBody))
+              return
+            }
+            for (const line of responseBody)
+              res.write(`${JSON.stringify(line)}
+`)
+            res.end()
+          })
+        },
+      },
+    ])
+    server = mock.server
+    client = new OllamaHttpClient()
+    client.setBaseHost(mock.baseUrl)
+  })
+
+  afterEach(() => server.close())
+
+  const request = () => ({
+    model: 'qwen2.5-coder:1.5b',
+    systemPrompt: 'Return the requested shape.',
+    userContent: '{"request":"inspect"}',
+    format: { type: 'object', properties: { result: { type: 'string' } } },
+    think: false,
+    options: { num_ctx: 4096, temperature: 0, num_predict: 128 },
+  })
+
+  it('sends separate system and user messages with format and bounded options', async () => {
+    responseBody = {
+      done: true,
+      done_reason: 'stop',
+      prompt_eval_count: 42,
+      eval_count: 18,
+      message: { content: '{"result":"ok"}', thinking: 'hidden reasoning' },
+    }
+
+    const result = await client.generateStructured(request())
+
+    expect(result).toEqual({
+      status: 'complete',
+      content: '{"result":"ok"}',
+      doneReason: 'stop',
+      promptEvalCount: 42,
+      evalCount: 18,
+      thinkingChars: 16,
+    })
+    expect(capturedRequest).toMatchObject({
+      model: 'qwen2.5-coder:1.5b',
+      stream: true,
+      messages: [
+        { role: 'system', content: 'Return the requested shape.' },
+        { role: 'user', content: '{"request":"inspect"}' },
+      ],
+      format: { type: 'object' },
+      think: false,
+      options: { num_ctx: 4096, temperature: 0, num_predict: 128 },
+    })
+    expect(capturedRequest?.tools).toBeUndefined()
+  })
+
+  it('sends enabled thinking while returning only final JSON content', async () => {
+    responseBody = {
+      done: true,
+      message: { content: '{"result":"ok"}', thinking: 'not JSON' },
+    }
+    const result = await client.generateStructured({ ...request(), think: true })
+    expect(capturedRequest?.think).toBe(true)
+    expect(result).toMatchObject({ status: 'complete', content: '{"result":"ok"}' })
+  })
+
+  it('passes a reasoning level through for level-only models', async () => {
+    responseBody = { done: true, message: { content: '{"result":"ok"}', thinking: 'brief' } }
+    await client.generateStructured({ ...request(), think: 'low' })
+    expect(capturedRequest?.think).toBe('low')
+  })
+
+  it('joins streamed thinking and content and reads the telemetry from the final line', async () => {
+    responseBody = [
+      { message: { thinking: 'first ' } },
+      { message: { thinking: 'second' } },
+      { message: { content: '{"result":' } },
+      { message: { content: '"ok"}' } },
+      { done: true, done_reason: 'stop', prompt_eval_count: 7, eval_count: 5, message: { content: '' } },
+    ]
+    expect(await client.generateStructured(request())).toEqual({
+      status: 'complete',
+      content: '{"result":"ok"}',
+      doneReason: 'stop',
+      promptEvalCount: 7,
+      evalCount: 5,
+      thinkingChars: 12,
+    })
+  })
+
+  it('reports an error line in the stream as a transport error', async () => {
+    responseBody = [{ message: { content: '{' } }, { error: 'model runner has unexpectedly stopped' }]
+    expect(await client.generateStructured(request())).toMatchObject({ status: 'transport_error', error: expect.stringContaining('unexpectedly stopped') })
+  })
+
+  it('reports missing completion and length truncation as incomplete', async () => {
+    responseBody = { done: false, message: { content: '{"result":' } }
+    expect(await client.generateStructured(request())).toMatchObject({ status: 'incomplete' })
+
+    responseBody = { done: true, done_reason: 'length', message: { content: '{"result":"partial"}' } }
+    expect(await client.generateStructured(request())).toMatchObject({ status: 'incomplete' })
+  })
+})
+
+describe('OllamaHttpClient — immutable request hosts', () => {
+  let first: http.Server
+  let second: http.Server
+  let firstHost: string
+  let secondHost: string
+  const received: string[] = []
+
+  beforeEach(async () => {
+    received.length = 0
+    const create = (name: string) =>
+      createMockOllamaServer([
+        {
+          method: 'POST',
+          path: '/api/pull',
+          handler: (_req, res) => {
+            received.push(`${name}:pull`)
+            res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+            res.end('{"status":"success"}\n')
+          },
+        },
+        {
+          method: 'DELETE',
+          path: '/api/delete',
+          handler: (_req, res) => {
+            received.push(`${name}:delete`)
+            res.writeHead(200)
+            res.end()
+          },
+        },
+        {
+          method: 'POST',
+          path: '/api/generate',
+          handler: (_req, res) => {
+            received.push(`${name}:generate`)
+            res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+            res.end('{"response":"ok"}\n{"done":true}\n')
+          },
+        },
+      ])
+    const [left, right] = await Promise.all([create('first'), create('second')])
+    first = left.server
+    second = right.server
+    firstHost = left.baseUrl
+    secondHost = right.baseUrl
+  })
+
+  afterEach(() => {
+    first.close()
+    second.close()
+  })
+
+  it('keeps concurrent pull, delete, and generation requests on their supplied hosts', async () => {
+    const client = new OllamaHttpClient()
+    const [pull, deleted] = await Promise.all([client.pullModel('model-a', firstHost), client.deleteModel('model-b', secondHost)])
+    const generated = await client.generateStream(
+      'model-c',
+      'hello',
+      () => {},
+      () => {},
+      undefined,
+      secondHost,
+    )
+
+    expect(pull.success).toBe(true)
+    expect(deleted.success).toBe(true)
+    expect(generated.success).toBe(true)
+    expect(received).toEqual(expect.arrayContaining(['first:pull', 'second:delete', 'second:generate']))
+  })
+
+  it('retains HTTPS as an explicit transport choice', () => {
+    const client = new OllamaHttpClient()
+    const internals = client as unknown as { resolveUrl(path: string, host: string): unknown }
+    expect(internals.resolveUrl('/api/tags', 'https://ollama.example.test')).toMatchObject({
+      protocol: 'https:',
+      hostname: 'ollama.example.test',
+      port: 443,
+    })
+  })
+})
+
+describe('OllamaHttpClient — stream failures', () => {
+  let server: http.Server
+
+  afterEach(() => server.close())
+
+  it.each([true, 'low'])('sends the top-level thinking choice (%s) and streams only final content', async (think) => {
+    let capturedRequest: Record<string, unknown> | undefined
+    const mock = await createMockOllamaServer([
+      {
+        method: 'POST',
+        path: '/api/generate',
+        handler: (req, res) => {
+          let raw = ''
+          req.on('data', (chunk) => {
+            raw += chunk
+          })
+          req.on('end', () => {
+            capturedRequest = JSON.parse(raw)
+            res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+            res.end('{"thinking":"private","response":"answer","done":false}\n{"done":true}\n')
+          })
+        },
+      },
+    ])
+    server = mock.server
+    const chunks: string[] = []
+    const result = await new OllamaHttpClient().generateStream(
+      'qwen3:4b',
+      'hello',
+      (chunk) => chunks.push(chunk),
+      () => {},
+      { think },
+      mock.baseUrl,
+    )
+    expect(result.success).toBe(true)
+    expect(capturedRequest?.think).toBe(think)
+    expect(chunks).toEqual(['answer'])
+  })
+
+  it('returns HTTP failures without emitting error text or completion', async () => {
+    const mock = await createMockOllamaServer([
+      {
+        method: 'POST',
+        path: '/api/generate',
+        handler: (_req, res) => {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end('{"error":"failed"}')
+        },
+      },
+    ])
+    server = mock.server
+    const chunks: string[] = []
+    let done = false
+
+    const result = await new OllamaHttpClient().generateStream(
+      'model',
+      'prompt',
+      (chunk) => chunks.push(chunk),
+      () => {
+        done = true
+      },
+      undefined,
+      mock.baseUrl,
+    )
+
+    expect(result).toMatchObject({ success: false })
+    expect(chunks).toEqual([])
+    expect(done).toBe(false)
+  })
+
+  it('rejects a partial stream that lacks the terminal done event', async () => {
+    const mock = await createMockOllamaServer([
+      {
+        method: 'POST',
+        path: '/api/generate',
+        handler: (_req, res) => {
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+          res.end('{"response":"partial"}\n')
+        },
+      },
+    ])
+    server = mock.server
+    const chunks: string[] = []
+
+    const result = await new OllamaHttpClient().generateStream(
+      'model',
+      'prompt',
+      (chunk) => chunks.push(chunk),
+      () => {},
+      undefined,
+      mock.baseUrl,
+    )
+
+    expect(result).toEqual({ success: false, error: 'Ollama stream ended before completion.' })
+    expect(chunks).toEqual(['partial'])
+  })
+})

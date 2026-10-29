@@ -1,0 +1,150 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
+import { promoteMilestonesProvenBy, selectMilestonesAwaitingVerification } from './agentOrchestratorCircuitBreakerAndVerification'
+import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
+import type { ToolResultProcessingContext } from './agentOrchestratorRunContext'
+import { WEB_UI_SMOKE_VERIFICATION } from '../domain/agent/milestoneVerificationPromotion'
+
+/** Reproduction of live-full-task, 2026-08-25T12:11 — the run behind the tracker entry "nessuna milestone promossa a verified nonostante 16 file su disco". */
+
+const LIVE_MILESTONE_TITLES: readonly [string, string][] = [
+  ['m-1', 'The project declares its dependencies and its build script — `package.json`'],
+  ['m-2', 'The TypeScript compiler knows which files to check — `tsconfig.json`'],
+  ['m-3', 'The app has its Tailwind base styles — `src/styles/globals.css`; The project has a clean architecture — `src/services/`'],
+  ['m-4', 'The entrypoint loads the application — `index.html`'],
+  ['m-5', 'The root component mounts the application — `src/main.tsx`'],
+  ['m-6', 'The Dashboard page is created — `src/pages/DashboardPage.tsx`'],
+  ['m-7', 'The Tasks page lists the tasks and marks one complete — `src/pages/TasksPage.tsx`'],
+  ['m-8', 'Basic task cards are implemented on the Tasks page — `src/components/TaskCard.tsx`'],
+  ['m-9', 'Navigation between Dashboard and Tasks pages is functional — `src/App.tsx`'],
+  ['m-10', 'Left sidebar navigation is implemented for desktop — `src/components/Sidebar.tsx`'],
+  ['m-11', 'Hamburger menu with slide-out drawer is implemented for mobile — `src/components/HamburgerMenu.tsx`'],
+  ['m-12', 'Buttons have a minimum touch target of 44x44 px — `src/components/Button.tsx`'],
+  ['m-13', 'Responsive layout using Tailwind CSS utilities — `src/styles/globals.css`'],
+  [
+    'm-14',
+    'Mobile-first approach from the very beginning — `src/components/TaskCard.tsx`, `src/pages/DashboardPage.tsx`, `src/pages/TasksPage.tsx`; Application is fully runnable, usable, and responsive',
+  ],
+]
+
+/** Every file the run wrote, in the order its episode log records them. */
+const LIVE_WRITTEN_FILES = [
+  'package.json',
+  'tsconfig.json',
+  'src/styles/globals.css',
+  'src/index.html',
+  'src/main.tsx',
+  'src/pages/DashboardPage.tsx',
+  'src/components/TaskCard.tsx',
+  'src/pages/TasksPage.tsx',
+  'src/components/Button.tsx',
+  'src/components/HamburgerMenu.tsx',
+  'src/App.tsx',
+  'src/components/Sidebar.tsx',
+]
+
+let tempDir: string
+
+/** Real content, so nothing here is filtered out as a placeholder by isPlaceholderContent. */
+function writeLiveWorkspace(files: readonly string[]) {
+  for (const relative of files) {
+    const full = path.join(tempDir, relative)
+    fs.mkdirSync(path.dirname(full), { recursive: true })
+    fs.writeFileSync(full, `export const value = ${JSON.stringify(relative)}\nexport default value\n`)
+  }
+}
+
+function livePlan(): PlanMilestone[] {
+  return LIVE_MILESTONE_TITLES.map(([id, title]) => ({ id, title, status: 'in_progress' }) as PlanMilestone)
+}
+
+/** The narrow slice of the orchestrator context both functions under test read. */
+function makeDeps(plan: PlanMilestone[], logs: string[] = []) {
+  return {
+    workspacePath: tempDir,
+    goalPlanner: {
+      getMilestones: () => plan,
+      getActiveMilestone: () => plan.find((m) => m.status === 'pending' || m.status === 'in_progress'),
+      updateMilestone: (id: string, status: PlanMilestone['status'], notes?: string) => {
+        const target = plan.find((m) => m.id === id)
+        if (!target) return false
+        target.status = status
+        target.notes = notes
+        return true
+      },
+      getProgressSummary: () => ({
+        completed: plan.filter((m) => m.status === 'verified').length,
+        total: plan.length,
+        percentage: 0,
+      }),
+    },
+    emitLog: (_level: string, message: string) => logs.push(message),
+  } as unknown as Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner' | 'emitLog'>
+}
+
+describe('milestone promotion on the live-full-task workspace', () => {
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-budget-exhaustion-'))
+  })
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('uses the application-owned check for milestones without a dedicated command', () => {
+    writeLiveWorkspace(LIVE_WRITTEN_FILES)
+    const plan = livePlan()
+
+    expect(selectMilestonesAwaitingVerification(makeDeps(plan), 'npm run build').map((m) => m.id)).toEqual(['m-1', 'm-2', 'm-4', 'm-5', 'm-6', 'm-7', 'm-8'])
+    expect(selectMilestonesAwaitingVerification(makeDeps(plan), WEB_UI_SMOKE_VERIFICATION).map((m) => m.id)).toEqual([
+      'm-3',
+      'm-9',
+      'm-10',
+      'm-11',
+      'm-12',
+      'm-13',
+      'm-14',
+    ])
+  })
+
+  it('promotes only the active milestone with the application-owned check', () => {
+    writeLiveWorkspace(LIVE_WRITTEN_FILES)
+    const plan = livePlan()
+    const logs: string[] = []
+
+    expect(promoteMilestonesProvenBy(makeDeps(plan, logs), 'npm run build')).toBe(1)
+    expect(plan[0].status).toBe('verified')
+    expect(plan.slice(1).every((m) => m.status === 'in_progress')).toBe(true)
+    expect(Object.keys(plan[0].fileEvidence || {}).length).toBeGreaterThan(0)
+    expect(logs.join('\n')).toContain('1 milestone verificate')
+  })
+
+  it('requires both the associated command and the declared artifact', () => {
+    writeLiveWorkspace(LIVE_WRITTEN_FILES.filter((f) => f !== 'src/components/Sidebar.tsx'))
+    const plan = livePlan()
+    plan[8].verificationCommand = 'npm run build'
+    plan[9].verificationCommand = 'npm run build'
+    plan.forEach((milestone, index) => {
+      if (index !== 8 && index !== 9) milestone.verificationCommand = 'npm test'
+    })
+
+    expect(selectMilestonesAwaitingVerification(makeDeps(plan), WEB_UI_SMOKE_VERIFICATION).map((m) => m.id)).toEqual(['m-9'])
+  })
+
+  it('promotes nothing when the workspace holds only placeholders', () => {
+    // The other half of the same guarantee: files exist, and a passing check over them still
+    // proves no milestone, because what they hold is a deferral rather than a deliverable.
+    for (const relative of LIVE_WRITTEN_FILES) {
+      const full = path.join(tempDir, relative)
+      fs.mkdirSync(path.dirname(full), { recursive: true })
+      fs.writeFileSync(full, '// TODO: implement this\n')
+    }
+    const plan = livePlan()
+
+    expect(promoteMilestonesProvenBy(makeDeps(plan), 'npm run build')).toBe(0)
+    expect(plan.every((m) => m.status === 'in_progress')).toBe(true)
+  })
+})

@@ -1,0 +1,217 @@
+# 1 - Project setup and mobile-first foundation
+
+Create a new application called Project Dashboard Task using React and Tailwind CSS.
+
+Design the application using a mobile-first approach from the very beginning. Every page and component must be fully responsive instead of adapting a desktop layout later.
+
+Set up a clean architecture with:
+- Dashboard page
+- Tasks page
+- Reusable UI components
+- Services folder for future integrations
+
+Prepare the project structure for MongoDB, Redis, TodoWrite and Nuvolaris OpenServerless integrations without implementing them yet.
+
+Responsive requirements:
+
+- Use Tailwind CSS mobile-first utilities.
+- Use responsive breakpoints (sm, md, lg, xl).
+- Support screen widths from 320px to 1920px.
+- Never allow horizontal scrolling.
+- Avoid fixed widths whenever possible.
+- Use responsive Flexbox and CSS Grid layouts.
+- Buttons must have a minimum touch target of 44×44 px.
+- Components must never overflow their containers.
+- Use responsive spacing and typography.
+
+Navigation:
+- Desktop: left sidebar.
+- Tablet: collapsible sidebar.
+- Mobile: hamburger menu with slide-out drawer.
+
+Dashboard:
+- Desktop: multi-column layout.
+- Tablet: two-column layout.
+- Mobile: single-column layout with stacked cards.
+
+Tasks page:
+- Desktop: grid or table layout.
+- Mobile: stacked task cards.
+
+Forms:
+- Desktop: multi-column when appropriate.
+- Mobile: full-width inputs and vertically stacked buttons.
+
+Build a fully working first version containing:
+- Dashboard page
+- Tasks page
+- Basic task cards
+- Working navigation between pages
+
+Validate the interface at:
+- 320px
+- 375px
+- 768px
+- 1024px
+- 1440px
+
+Fix every overflow, clipping or spacing issue before continuing.
+
+Ensure the application is fully runnable, usable and responsive before moving to the next step.
+
+-----------------------------------------
+
+# 2 - Task management with MongoDB and TodoWrite
+
+Maintain the existing mobile-first responsive design while adding new features.
+
+Replace the initial task storage with MongoDB.
+
+Each task must contain:
+- Title
+- Description
+- Category
+- Priority (low, medium, high)
+- Due date
+- Status (todo, in progress, completed)
+- Creation date
+
+Create backend APIs or Nuvolaris OpenServerless actions to:
+- Create tasks
+- Read tasks
+- Update tasks
+- Delete tasks
+
+Integrate TodoWrite to manage task operations.
+
+Implement:
+- Create task form
+- Edit task form
+- Delete task action
+- Complete task action
+- Task list page
+- Filters by status
+- Filters by priority
+
+Ensure every new page, form and component remains fully responsive on all supported screen sizes.
+
+Verify the complete CRUD workflow before continuing.
+
+-----------------------------------------
+
+# 3 - Fast search and Redis caching
+
+Maintain the existing mobile-first responsive design while adding new features.
+
+Add a complete search and filtering system.
+
+Implement:
+- Global search bar
+- Search by title
+- Search by description
+- Filter by category
+- Filter by priority
+- Filter by status
+- Real-time search updates
+
+Use Redis to:
+- Cache frequently requested task lists
+- Cache common searches
+- Improve dashboard loading performance
+
+Ensure search, filters and cached data work correctly on desktop, tablet and mobile.
+
+Verify the application remains fully functional before continuing.
+
+-----------------------------------------
+
+# 4 - Statistics dashboard and interactive navigation
+
+Maintain the existing mobile-first responsive design while adding new features.
+
+Build the statistics dashboard.
+
+Display:
+- Total tasks
+- Completed tasks
+- Pending tasks
+- Overdue tasks
+- Tasks grouped by priority
+- Tasks grouped by category
+- Completion percentage
+
+Create responsive dashboard cards and visual components.
+
+Every statistics card must:
+- Be fully clickable.
+- Navigate to the Tasks page.
+- Automatically apply the appropriate filter.
+- Preserve the selected filter after navigation.
+
+Improve the interface with:
+- Status badges
+- Priority badges
+- Loading states
+- Empty states
+- Error states
+
+Charts and dashboard sections must resize correctly without overflow on every supported device.
+
+Statistics must update automatically whenever tasks change.
+
+-----------------------------------------
+
+# 5 - Final polish, responsiveness validation and deployment preparation
+
+Review the entire Project Dashboard Task application.
+
+Verify:
+- Navigation works correctly.
+- CRUD operations work correctly.
+- TodoWrite integration works.
+- MongoDB integration works.
+- Redis caching works.
+- Search works correctly.
+- Dashboard statistics update correctly.
+- Statistics cards navigate with the correct filters applied.
+- Responsive design works correctly.
+- Nuvolaris OpenServerless functions are properly configured.
+
+Validate the interface at:
+- 320px
+- 375px
+- 390px
+- 430px
+- 768px
+- 1024px
+- 1440px
+- 1920px
+
+Fix:
+- Horizontal scrolling
+- Overflow
+- Clipping
+- Misaligned layouts
+- Broken grids
+- Incorrect spacing
+- Components exceeding viewport width
+- Responsive regressions
+
+Improve:
+- Error handling
+- Performance
+- Accessibility
+- User experience
+- Code quality
+
+Prepare the application for deployment while keeping every feature fully functional and maintaining a production-quality responsive experience across all supported devices.
+
+-----------------------------------------
+
+
+
+-----------------------------------------
+
+
+
+-----------------------------------------

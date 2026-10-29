@@ -1,0 +1,69 @@
+import { describe, it, expect } from 'vitest'
+import { AgentRuntimeModeFsm } from './agentRuntimeMode'
+
+describe('AgentRuntimeModeFsm', () => {
+  it('initializes in the default Guided mode', () => {
+    const fsm = new AgentRuntimeModeFsm()
+    expect(fsm.getMode()).toBe('GUIDED')
+    expect(fsm.isToolAllowed('write_file')).toBe(true)
+    expect(fsm.isToolAllowed('run_command')).toBe(true)
+  })
+
+  it('should restrict permissions in ASK mode', () => {
+    const fsm = new AgentRuntimeModeFsm('ask')
+    expect(fsm.getMode()).toBe('ASK')
+    expect(fsm.isToolAllowed('read_file')).toBe(true)
+    expect(fsm.isToolAllowed('list_dir')).toBe(true)
+    expect(fsm.isToolAllowed('write_file')).toBe(false)
+    expect(fsm.isToolAllowed('run_command')).toBe(false)
+    expect(fsm.isToolAllowed('probe_local_http')).toBe(true)
+    expect(fsm.isToolAllowed('start_dev_server')).toBe(false)
+    expect(fsm.isToolAllowed('stop_dev_server')).toBe(false)
+  })
+
+  it('allows mutating tools in Guided mode for the approval gate to review', () => {
+    const fsm = new AgentRuntimeModeFsm('guided')
+    expect(fsm.getMode()).toBe('GUIDED')
+    expect(fsm.isToolAllowed('replace_file_content')).toBe(true)
+    expect(fsm.isToolAllowed('run_command')).toBe(true)
+    expect(fsm.isToolAllowed('start_dev_server')).toBe(true)
+    expect(fsm.isToolAllowed('stop_dev_server')).toBe(true)
+  })
+
+  it('allows all execution and diagnostic tools in Auto mode', () => {
+    const fsm = new AgentRuntimeModeFsm('auto')
+    expect(fsm.getMode()).toBe('AUTO')
+    expect(fsm.isToolAllowed('list_files_recursive')).toBe(true)
+    expect(fsm.isToolAllowed('get_file_info')).toBe(true)
+    expect(fsm.isToolAllowed('open_in_browser')).toBe(true)
+    expect(fsm.isToolAllowed('validate_visual_artifact')).toBe(true)
+    expect(fsm.isToolAllowed('run_tests')).toBe(true)
+    expect(fsm.isToolAllowed('create_directory')).toBe(true)
+    expect(fsm.isToolAllowed('copy_file')).toBe(true)
+    expect(fsm.isToolAllowed('move_file')).toBe(true)
+    expect(fsm.isToolAllowed('git_status')).toBe(true)
+    expect(fsm.isToolAllowed('git_diff')).toBe(true)
+  })
+
+  it('allows read-only exploration in Ask mode', () => {
+    const askFsm = new AgentRuntimeModeFsm('ask')
+    expect(askFsm.isToolAllowed('list_files_recursive')).toBe(true)
+    expect(askFsm.isToolAllowed('get_file_info')).toBe(true)
+    expect(askFsm.isToolAllowed('open_in_browser')).toBe(true)
+    expect(askFsm.isToolAllowed('validate_visual_artifact')).toBe(true)
+    expect(askFsm.isToolAllowed('git_status')).toBe(true)
+    expect(askFsm.isToolAllowed('git_diff')).toBe(true)
+    expect(askFsm.isToolAllowed('create_directory')).toBe(false)
+    expect(askFsm.isToolAllowed('run_command')).toBe(false)
+  })
+
+  it('safely handles arbitrary or unknown tool names without throwing or requiring casts', () => {
+    const fsm = new AgentRuntimeModeFsm('auto')
+    expect(fsm.isToolAllowed('unknown_custom_tool')).toBe(false)
+    expect(fsm.isToolAllowed('')).toBe(false)
+    expect(fsm.isToolAllowed('eval')).toBe(false)
+
+    const filtered = fsm.filterAllowedTools(['write_file', 'unknown_tool', 'run_command', 'another_random_string'])
+    expect(filtered).toEqual(['write_file', 'run_command'])
+  })
+})

@@ -1,0 +1,77 @@
+import { defineConfig } from 'vitest/config'
+import path from 'node:path'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dependencyVersions } from './scripts/dependencyVersions.mts'
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url))
+
+// Application identity injected from package.json — consumed by src/constants/appMetadata.ts.
+// The About dialog needs the real version/author, not the i18n field labels.
+const pkg = JSON.parse(readFileSync(path.resolve(rootDir, 'package.json'), 'utf-8'))
+const authorName = String(pkg.author || '').replace(/\s*<[^>]*>\s*/g, '').trim()
+const authorUrl = (String(pkg.author || '').match(/<([^>]+)>/) || [])[1] || ''
+const appDefines = {
+  __DEPENDENCY_VERSIONS__: JSON.stringify(dependencyVersions(rootDir)),
+  __APP_VERSION__: JSON.stringify(pkg.version || '0.0.0'),
+  __APP_AUTHOR__: JSON.stringify(authorName || 'OnlyRag Contributors'),
+  __APP_REPOSITORY_URL__: JSON.stringify(
+    authorUrl.startsWith('http') ? `${authorUrl.replace(/\/$/, '')}/OnlyRagV2` : 'https://github.com/dennidalpos/OnlyRagV2'
+  ),
+}
+
+const nodeTestGlobs = [
+  'electron/**/*.test.{ts,tsx}',
+  'shared/**/*.test.{ts,tsx}',
+  'src/services/**/*.test.{ts,tsx}',
+  'src/constants/**/*.test.{ts,tsx}',
+  'scripts/**/*.test.{ts,tsx,mts}',
+]
+
+export default defineConfig({
+  define: appDefines,
+  test: {
+    globals: true,
+    // Main-process, shared and pure-service tests run in Node; only renderer UI tests get a DOM.
+    // (environmentMatchGlobs was removed in Vitest 4 and silently ignored, putting everything in happy-dom.)
+    projects: [
+      { extends: true, test: { name: 'node', environment: 'node', include: nodeTestGlobs, setupFiles: ['scripts/test/nodeSetup.ts'] } },
+      {
+        extends: true,
+        test: { name: 'dom', environment: 'happy-dom', include: ['src/**/*.test.{ts,tsx}'], exclude: nodeTestGlobs, setupFiles: ['src/test/domSetup.ts'] },
+      },
+    ],
+    fileParallelism: false,
+    maxWorkers: 1,
+    minWorkers: 1,
+    // Test files declare different Electron/application mock factories. Per-file module
+    // isolation prevents those factories from leaking through the shared module cache.
+    isolate: true,
+    testTimeout: 5000,
+    hookTimeout: 5000,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary'],
+      include: ['src/**/*.{ts,tsx}', 'electron/**/*.{ts,tsx}', 'shared/**/*.{ts,tsx}'],
+      exclude: [
+        '**/*.test.{ts,tsx}',
+        '**/*.d.ts',
+        'src/main.tsx',
+        'electron/main.ts',
+        'electron/preload.ts',
+      ],
+      thresholds: {
+        statements: 45,
+        branches: 40,
+        functions: 35,
+        lines: 45,
+      },
+    },
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(rootDir, 'src'),
+    },
+  },
+})
+

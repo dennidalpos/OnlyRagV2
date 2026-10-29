@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-25",
+  "head": "2ccffda3f5adec79a452c8ec4abf58fd1b65b495",
+  "initial_local_artifacts": 18,
+  "completed": [
+    "INGESTION-DOCX-TEXT-COVERAGE-01",
+    "INGESTION-TIFF-ROUTING-01"
+  ],
+  "new_regressions": 46,
+  "negative_controls_failed": 15,
+  "python": {
+    "passed": 795,
+    "host_skip": 1,
+    "seconds": 214.55
+  },
+  "critical": {
+    "passed": 15,
+    "required_checks": 8,
+    "skipped": 0
+  },
+  "static": {
+    "files": 892,
+    "ipc_handlers": 107
+  },
+  "source_files": 1262,
+  "typescript_sources_unchanged": 853,
+  "typescript_suite_repeated": false,
+  "previous_typescript_tests": 3050,
+  "protected_files_unchanged": 68,
+  "python_environment": "checkout interpreter plus existing external pytest overlay; critical external prepared interpreter; checkout quality:python missing pytest; .venv unchanged",
+  "open_autonomous": [
+    "DEPENDENCY-BRACES-UPSTREAM-01",
+    "DEVSERVER-LOOPBACK-PROBE-STABILITY-01",
+    "TRANSLATION-MARKDOWN-CHUNK-BOUNDARIES-01",
+    "SKILLS-PERSISTENCE-INTEGRITY-01",
+    "SETUP-DISK-SPACE-UNKNOWN-01",
+    "SHELL-QUOTED-CHAIN-NORMALIZATION-01"
+  ],
+  "open_owner_required": [
+    "DIAGNOSTICS-LOG-HISTORY-RECOVERY-01"
+  ],
+  "new_application_residues": [],
+  "evidence_root": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-coverage-lot-20261025",
+  "logs_sha256": {
+    "negative-final.log": "417fa3de66233305182018bcb8fe9e88ee5529f16c674d63a133cd139e7dcf96",
+    "negative-final.xml": "afed636ba703361ab10f0a52fd0628f753844d879b9d09bfd40d8d331e932dae",
+    "python-full.log": "60a065d4b61a0cacafd6110a2bd758dfbe7b1d95a45045409b4902e5bafb6566",
+    "python-full.xml": "6e381212cc6155066781dd5b6efa968762e98195a4a2876fbb3019a3217ca8da",
+    "python-final.log": "bc34032d76d4b84fe5aa6686db15c9ef203dbb870b3f02983ad1c49b9ba919b4",
+    "python-final.xml": "fde90a0aa4beb00c8d3cc71b93fceba6dacf40276135e536e5eef1e71e8b6297",
+    "python-critical.log": "02807d58956025bc735fde5966d94352d498a87882a30e81ef2c4b33354ff5b6",
+    "targeted-final.log": "158ebfd61676e12ab2b271ab1e6898063bc9d570dc7b2826a2162268e17f3884",
+    "normalization-fixture.log": "d4fdbc113a8c826f2472739c71511fb07bff1c27fa545f769d48fb627cc0c0c2",
+    "static.log": "40fcedcad4e2562b2a5101c3461c5aefaf8d3fa017d647c81199d730f89f0e21",
+    "checkout-gate.log": "7546027b4374cad1b2da5c29f00625b5f3a73ed61563027935882fc63c0916cd",
+    "tested-source-final.json": "05c58f35d648c4b0efdc82cd15e6a04e66803724edebb32a6fbf7a9974c4cdf5",
+    "protected-before.json": "9f6e071f27f5493f1abe2945d8fa4bf0a56d6730a2c9f0f5967a6ce2083fb299",
+    "docs.log": "2934105fea68e2e26471a82624cd2a45acd36d243037ea1b0b36531cbb5d09a7",
+    "cleanup-preflight.json": "1e8904f0843eae1ed5d8d010304c44d379ba3ea3f1b3b5092b1293e56481f858",
+    "cleanup-rejection.json": "a087f921941c148388853fb8c47c593c34e24a58b302a478dcd07073cdbaf2b2",
+    "secondbrain-sync.log": "69162d0b81f867713207725ba3914430f9d7071d8a8cdc154a6d888d5d2c08ca",
+    "secondbrain-check.log": "69162d0b81f867713207725ba3914430f9d7071d8a8cdc154a6d888d5d2c08ca"
+  },
+  "real_models": false,
+  "commit": false,
+  "push": false,
+  "docs_checked": 135,
+  "tested_source_zip_sha256": "d0fe05c3d4dd2baa85744c046a12c54df3bd5a789c6229ecd4c17c4211525252",
+  "cleanup": {
+    "automatic_review_rejected": true,
+    "reason": "blocked by policy",
+    "executed": false,
+    "retained": [
+      "source",
+      "negative",
+      "tested-source.zip"
+    ],
+    "alternative_deletion_attempted": false
+  },
+  "secondbrain": {
+    "sync_exit": 0,
+    "check_exit": 0,
+    "repositories": 23,
+    "findings": 0
+  }
+}

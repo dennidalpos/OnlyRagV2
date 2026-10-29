@@ -1,0 +1,75 @@
+import { describe, expect, it, vi } from 'vitest'
+import { authorizeAndPersistNetworkApproved, authorizeNetworkApproved, buildCapabilityPolicyAuditEvent } from './networkApprovedPolicy'
+
+const base = {
+  sessionId: 'session-network',
+  toolName: 'download_file',
+  capability: 'http-download' as const,
+  operation: 'download' as const,
+  mode: 'network-approved' as const,
+  workspaceRoot: 'D:/projects/demo',
+  target: 'https://example.test/archive.zip',
+}
+
+describe('network-approved capability policy', () => {
+  it('allows the managed local browser without external network consent', () => {
+    expect(
+      authorizeNetworkApproved({
+        ...base,
+        capability: 'browser',
+        operation: 'open',
+        toolName: 'browser_navigate',
+        target: 'http://127.0.0.1:43123/',
+        consent: { requested: false, granted: false },
+      }),
+    ).toMatchObject({ allowed: true, requiresConsent: false })
+  })
+  it('denies network access without explicit consent', () => {
+    expect(authorizeNetworkApproved({ ...base, consent: { requested: false, granted: false } })).toMatchObject({
+      allowed: false,
+      requiresConsent: true,
+    })
+  })
+
+  it('allows network access only with a requested and granted consent id', () => {
+    const request = { ...base, consent: { requested: true, granted: true, consentId: 'consent-7' } }
+    const decision = authorizeNetworkApproved(request)
+    expect(decision).toMatchObject({ allowed: true, requiresConsent: true })
+
+    expect(buildCapabilityPolicyAuditEvent(request, decision, '2026-08-27T15:00:00.000Z')).toMatchObject({
+      sessionId: 'session-network',
+      allowed: true,
+      consentId: 'consent-7',
+      capability: 'http-download',
+    })
+  })
+
+  it('allows local filesystem operations without consent and blocks remote shell egress', () => {
+    expect(
+      authorizeNetworkApproved({ ...base, capability: 'filesystem', operation: 'read', toolName: 'read_file', consent: { requested: false, granted: false } })
+        .allowed,
+    ).toBe(true)
+    expect(
+      authorizeNetworkApproved({
+        ...base,
+        capability: 'shell',
+        operation: 'execute',
+        toolName: 'run_command',
+        target: 'git push origin main',
+        consent: { requested: false, granted: false },
+      }).allowed,
+    ).toBe(false)
+  })
+
+  it('persists the decision before returning it to an external caller', async () => {
+    const append = vi.fn().mockResolvedValue(true)
+    const decision = await authorizeAndPersistNetworkApproved(
+      { ...base, consent: { requested: false, granted: false } },
+      { append },
+      '2026-08-27T15:00:00.000Z',
+    )
+
+    expect(decision.allowed).toBe(false)
+    expect(append).toHaveBeenCalledOnce()
+  })
+})

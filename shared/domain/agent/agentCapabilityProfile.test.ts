@@ -1,0 +1,54 @@
+import { describe, expect, it } from 'vitest'
+import { DEFAULT_AGENT_STEP_BUDGET } from './agentStepBudget'
+import { resolveAgentCapabilityProfile } from './agentCapabilityProfile'
+
+describe('Agent capability profile', () => {
+  it('enables local tools and requires network approval when settings are absent', () => {
+    expect(resolveAgentCapabilityProfile()).toEqual({
+      allowFileModifications: true,
+      allowTerminalExecution: true,
+      fullAccess: false,
+      capabilityPolicyMode: 'network-approved',
+      maxToolCallSteps: DEFAULT_AGENT_STEP_BUDGET,
+    })
+  })
+
+  it('keeps explicit permissions and bounds the run budget', () => {
+    expect(
+      resolveAgentCapabilityProfile({
+        allowFileModifications: true,
+        allowTerminalExecution: true,
+        capabilityPolicyMode: 'network-approved',
+        maxToolCallSteps: 1000,
+      }),
+    ).toEqual({
+      allowFileModifications: true,
+      allowTerminalExecution: true,
+      fullAccess: false,
+      capabilityPolicyMode: 'network-approved',
+      maxToolCallSteps: 200,
+    })
+  })
+
+  it('preserves explicit local tool restrictions', () => {
+    expect(
+      resolveAgentCapabilityProfile({ allowFileModifications: false, allowTerminalExecution: false, capabilityPolicyMode: 'offline-strict' }),
+    ).toMatchObject({
+      allowFileModifications: false,
+      allowTerminalExecution: false,
+      capabilityPolicyMode: 'offline-strict',
+    })
+  })
+
+  it('keeps full access explicit and defaults old profiles to restricted access', () => {
+    expect(resolveAgentCapabilityProfile({ fullAccess: true }).fullAccess).toBe(true)
+    expect(resolveAgentCapabilityProfile({ allowFileModifications: true }).fullAccess).toBe(false)
+  })
+
+  it('preserves the unlimited sentinel and finite upper limit', () => {
+    expect(resolveAgentCapabilityProfile({ maxToolCallSteps: 0 }).maxToolCallSteps).toBe(0)
+    expect(resolveAgentCapabilityProfile({ maxToolCallSteps: 10 }).maxToolCallSteps).toBe(10)
+    expect(resolveAgentCapabilityProfile({ maxToolCallSteps: 100 }).maxToolCallSteps).toBe(100)
+    expect(resolveAgentCapabilityProfile({ maxToolCallSteps: 200 }).maxToolCallSteps).toBe(200)
+  })
+})

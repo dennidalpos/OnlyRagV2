@@ -1,0 +1,18 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "electron/main.ts!",
+    "electron/preload.ts!",
+    "electron/typecheckWorker.ts!",
+    "electron/dependencyScanWorker.ts!",
+    "src/components/chat/ChatView.tsx!",
+    "src/components/coding/CodingAgentView.tsx!",
+    "src/components/translation/TranslationView.tsx!",
+    "src/components/ingestion/IngestionView.tsx!",
+    "src/components/settings/SettingsView.tsx!"
+  ],
+  "project": ["src/**/*.{ts,tsx,css}!", "electron/**/*.{ts,tsx}!", "shared/**/*.{ts,tsx}!", "!src/test/**!", "scripts/monacoSanitizerPlugin.mts"],
+  "ignoreExportsUsedInFile": true,
+  "ignoreBinaries": ["nvidia-smi"],
+  "ignoreDependencies": ["@types/diff", "@biomejs/biome", "braces"]
+}

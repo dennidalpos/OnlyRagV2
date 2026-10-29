@@ -1,0 +1,178 @@
+{
+  "name": "onlyrag-v2",
+  "version": "1.0.0",
+  "description": "Privacy-First Local AI Workspace App with Ollama, Vision OCR, Document RAG, Translation & Coding Agent",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "setup:dev": "powershell -ExecutionPolicy Bypass -File ./scripts/setup_dev_environment.ps1",
+    "format:check": "git diff --check HEAD",
+    "quality:static": "node ./scripts/check_static_quality.mjs",
+    "quality:python": ".venv\\Scripts\\python.exe scripts/check_python_critical.py",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:fast": "vitest run --reporter=dot",
+    "test:verification-native": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test_native_verification.ps1",
+    "test:cleanup-logs": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test_log_cleanup.ps1",
+    "test:coverage": "vitest run --coverage --testTimeout=10000 --hookTimeout=10000 --reporter=dot",
+    "test:unit-only": "vitest run --reporter=dot electron/core/domain electron/core/application",
+    "test:agent": "vitest run --reporter=dot electron/core/domain/agent",
+    "test:e2e:electron": "npm run build && node ./scripts/e2e/agentReliability.mjs",
+    "test:e2e:agent-crash": "npm run build && node ./scripts/e2e/agentReliability.mjs --crash-only",
+    "test:e2e:agent-browser": "vitest run --config vitest.agent-browser.config.mts",
+    "test:e2e:cold-start": "npm run build && node ./scripts/e2e/coldStartNetwork.mjs",
+    "test:e2e:settings-bootstrap": "npm run build && node ./scripts/e2e/settingsBootstrap.mjs",
+    "test:e2e:settings-close": "npm run build && node ./scripts/e2e/settingsCloseDurability.mjs",
+    "test:e2e:document-revision": "npm run build && node ./scripts/e2e/documentRevisionRecovery.mjs",
+    "test:e2e:chat-drafts": "npm run build && node ./scripts/e2e/chatDraftRecovery.mjs",
+    "test:e2e:export-chat": "npm run build && node ./scripts/e2e/exportChatReliability.mjs",
+    "test:e2e:bundle-ux": "npm run build && node ./scripts/e2e/bundleUx.mjs",
+    "test:e2e:monaco-sanitizer": "node ./scripts/e2e/monacoSanitizer.mjs",
+    "test:e2e:ingest-translate": "npm run build && node ./scripts/e2e/ingestTranslate.mjs",
+    "test:e2e:sidecar-ownership": "vitest run --config vitest.sidecar.config.mts",
+    "test:skills": "vitest run --reporter=dot electron/core/domain/skills",
+    "test:sidecar": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test_sidecar_health.ps1",
+    "generate:openapi": "powershell -ExecutionPolicy Bypass -File ./scripts/generate_openapi.ps1",
+    "docs:check": "node ./scripts/validate_documentation.mjs",
+    "test:smoke": "powershell -ExecutionPolicy Bypass -File ./scripts/test_bundle_smoke.ps1 -Fast",
+    "lint": "powershell -ExecutionPolicy Bypass -File ./scripts/lint_format.ps1 -Fast",
+    "clean": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_repo.ps1",
+    "clean:logs": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode Logs",
+    "clean:tests": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode TestResidues",
+    "clean:installer-cache": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode InstallerCache",
+    "clean:user": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode UserData",
+    "clean:full": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode Full",
+    "assets:generate": "powershell -ExecutionPolicy Bypass -File ./scripts/generate_assets.ps1",
+    "assets:check": "powershell -ExecutionPolicy Bypass -File ./scripts/generate_assets.ps1 -Check",
+    "package:win": "powershell -ExecutionPolicy Bypass -File ./scripts/build_package.ps1",
+    "audit:cycles": "dpdm --circular --warning=false --exit-code circular:1 src/main.tsx electron/main.ts",
+    "audit:deadcode": "knip && knip --production",
+    "audit:graph": "skott --displayMode=webapp",
+    "audit:all": "powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast",
+    "test:models:smoke": "node scripts/e2e/configuredModelSmoke.mjs",
+    "test:ux": "npm run build && node scripts/e2e/uxFlows.mjs",
+    "test:tooltips": "node scripts/e2e/tooltips.mjs",
+    "test:live": "node scripts/retiredModelCampaign.mjs"
+  },
+  "keywords": [],
+  "author": "Danny Perondi <https://github.com/dennidalpos>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.19.0 <25",
+    "npm": ">=11 <12"
+  },
+  "dependencies": {
+    "braces": "file:vendor/braces-3.0.4",
+    "cheerio": "^1.2.0",
+    "depcheck": "^1.4.7",
+    "diff": "^9.0.0",
+    "js-yaml": "^4.1.0",
+    "mustache": "^4.2.0",
+    "p-queue": "^9.3.3",
+    "playwright": "^1.62.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "semver": "^7.8.5",
+    "strip-ansi": "^7.2.0",
+    "turndown": "^7.2.4",
+    "zod": "^4.6.7"
+  },
+  "overrides": {
+    "argparse": "2.0.1",
+    "global-agent": "4.1.3",
+    "dompurify": "3.4.17"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.12",
+    "@monaco-editor/react": "^4.7.0",
+    "@tailwindcss/vite": "^4.0.7",
+    "@tanstack/react-virtual": "^3.14.10",
+    "@types/diff": "^7.0.2",
+    "@types/js-yaml": "^4.0.9",
+    "@types/mustache": "^4.2.6",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@types/semver": "^7.8.0",
+    "@types/turndown": "^5.0.6",
+    "@vitejs/plugin-react": "^6.0.5",
+    "@vitest/coverage-v8": "^4.1.12",
+    "dompurify": "3.4.17",
+    "dpdm": "^4.3.0",
+    "electron": "43.8.3",
+    "electron-builder": "^26.15.3",
+    "gpt-tokenizer": "^4.0.0",
+    "happy-dom": "^21.0.4",
+    "knip": "^6.32.3",
+    "lucide-react": "^1.31.0",
+    "monaco-editor": "^0.56.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "skott": "^0.35.11",
+    "tailwindcss": "^4.0.7",
+    "typescript": "^6.0.3",
+    "vite": "~8.2.4",
+    "vite-plugin-electron": "^1.1.1",
+    "vite-plugin-electron-renderer": "^1.0.0",
+    "vitest": "^4.1.12"
+  },
+  "build": {
+    "appId": "com.onlyrag.v2",
+    "productName": "OnlyRag V2",
+    "publish": null,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/index.html",
+      "dist/assets/**/*",
+      "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "build/release-cpu/sidecar",
+        "to": "sidecar",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "build/release-cpu/licenses",
+        "to": "licenses",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "OnlyRag V2",
+      "uninstallDisplayName": "OnlyRag V2 Local AI Workspace",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "include": "installer/installer.nsh"
+    }
+  },
+  "allowScripts": {
+    "@parcel/watcher@2.6.0": true,
+    "electron-winstaller@5.4.0": true,
+    "electron@43.8.3": true
+  }
+}

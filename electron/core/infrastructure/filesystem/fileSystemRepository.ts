@@ -1,0 +1,480 @@
+import path from 'node:path'
+import fs from 'node:fs'
+import * as ts from 'typescript'
+import { logger } from '../logging/logger'
+import { contentVersion } from './fileContentVersion'
+import { scriptKindForPath } from '../../domain/agent/sourceScriptKind'
+import { isIgnoredPath, isSecretFile, validatePathSafety as domainValidatePathSafety } from '../../domain/agent/contextFilter'
+import { MAX_FILE_READ_BYTES, MAX_PROJECT_MAP_DEPTH, MAX_SEARCH_FILE_BYTES, MAX_SEARCH_MATCHES } from '../../domain/agent/ioLimits'
+import { errorCode, errorMessage } from '../../../../shared/domain/errors/errorMessage'
+
+export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null, fullAccess = false): string | null {
+  const result = domainValidatePathSafety(filePath, workspaceRoot, fullAccess)
+  if (!result.safePath) {
+    if (result.error) {
+      logger.log('WARN', 'WorkspaceRepo', `Path safety validation rejected '${filePath}': ${result.error}`)
+    }
+    return null
+  }
+  return result.safePath
+}
+
+export class FileSystemRepository {
+  private fullAccess = false
+  constructor(private readonly versionedCommitInterleave?: (filePath: string) => void) {}
+
+  setFullAccess(value: boolean): void {
+    this.fullAccess = value
+  }
+
+  async listFiles(targetPath: string) {
+    const rootDir = validatePathSafety(targetPath, undefined, this.fullAccess)
+    if (!rootDir) return []
+
+    try {
+      if (!fs.existsSync(rootDir) || !(await fs.promises.stat(rootDir)).isDirectory()) {
+        return []
+      }
+      const entries = await fs.promises.readdir(rootDir, { withFileTypes: true })
+      const result = []
+
+      for (const entry of entries) {
+        if (!this.fullAccess && isIgnoredPath(entry.name, entry.isDirectory())) continue
+        const fullPath = path.join(rootDir, entry.name)
+        let sizeBytes = 0
+        if (!entry.isDirectory()) {
+          try {
+            const st = await fs.promises.stat(fullPath)
+            sizeBytes = st.size
+          } catch (stErr: unknown) {
+            logger.log('WARN', 'WorkspaceRepo', `Could not stat file '${fullPath}': ${errorMessage(stErr)}`)
+          }
+        }
+        result.push({
+          name: entry.name,
+          path: fullPath,
+          isDir: entry.isDirectory(),
+          sizeBytes,
+        })
+      }
+
+      return result
+    } catch (err: unknown) {
+      logger.log('ERROR', 'WorkspaceRepo', `Error listing files: ${errorMessage(err)}`)
+      return []
+    }
+  }
+
+  async readFile(
+    filePath: string,
+    startLine?: number,
+    endLine?: number,
+  ): Promise<{ success: boolean; content?: string; contentHash?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }> {
+    const resolved = validatePathSafety(filePath, undefined, this.fullAccess)
+    if (!resolved) return { success: false, error: 'Invalid file path' }
+
+    try {
+      if (!fs.existsSync(resolved) || !(await fs.promises.stat(resolved)).isFile()) {
+        return { success: false, error: 'File not found or invalid target' }
+      }
+
+      const stats = await fs.promises.stat(resolved)
+      if (stats.size > MAX_FILE_READ_BYTES) {
+        return {
+          success: false,
+          error: `File size exceeds ${MAX_FILE_READ_BYTES / (1024 * 1024)}MB limit (${(stats.size / (1024 * 1024)).toFixed(1)}MB). Select a smaller file for editor preview.`,
+        }
+      }
+
+      const rawContent = await fs.promises.readFile(resolved, 'utf-8')
+      const contentHash = contentVersion(rawContent)
+      const lines = rawContent.split(/\r?\n/)
+      const totalLines = lines.length
+
+      if (startLine !== undefined || endLine !== undefined) {
+        const s = Math.max(1, startLine || 1)
+        const e = Math.min(totalLines, endLine || totalLines)
+        const slicedLines = lines.slice(s - 1, e)
+        const formattedSlice = slicedLines.map((line, idx) => `${s + idx}: ${line}`).join('\n')
+        return { success: true, content: formattedSlice, contentHash, totalLines, startLine: s, endLine: e }
+      }
+
+      return { success: true, content: rawContent, contentHash, totalLines }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'WorkspaceRepo', `Error reading file '${filePath}': ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
+    }
+  }
+
+  async deleteFile(filePath: string): Promise<{ success: boolean; error?: string }> {
+    const resolved = validatePathSafety(filePath, undefined, this.fullAccess)
+    if (!resolved) return { success: false, error: 'Invalid file path' }
+
+    try {
+      if (!fs.existsSync(resolved)) {
+        return { success: false, error: 'File does not exist' }
+      }
+      const stat = await fs.promises.stat(resolved)
+      if (stat.isDirectory()) {
+        await fs.promises.rm(resolved, { recursive: true, force: true })
+      } else {
+        await fs.promises.unlink(resolved)
+      }
+      logger.log('INFO', 'WorkspaceRepo', `Deleted: ${resolved}`)
+      return { success: true }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'WorkspaceRepo', `Failed to delete ${filePath}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
+    }
+  }
+
+  async writeFile(filePath: string, content: string): Promise<{ success: boolean; error?: string }> {
+    const resolved = validatePathSafety(filePath, undefined, this.fullAccess)
+    if (!resolved) return { success: false, error: 'Invalid file path' }
+
+    try {
+      await fs.promises.mkdir(path.dirname(resolved), { recursive: true })
+      await fs.promises.writeFile(resolved, content, 'utf-8')
+      logger.log('INFO', 'WorkspaceRepo', `Wrote to file: ${resolved}`)
+      return { success: true }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'WorkspaceRepo', `Failed to write file ${filePath}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
+    }
+  }
+
+  /** Commits through a sibling temp file after a final version check. */
+  writeFileVersioned(
+    filePath: string,
+    content: string,
+    expectedContentHash: string | undefined,
+    recordCommittedWrite: (originalContent: string | null) => void,
+  ): { success: boolean; error?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean } {
+    const resolved = validatePathSafety(filePath, undefined, this.fullAccess)
+    if (!resolved) return { success: false, error: 'Invalid file path' }
+
+    let tempPath: string | undefined
+    try {
+      const exists = fs.existsSync(resolved)
+      if (exists) {
+        const originalContent = fs.readFileSync(resolved, 'utf-8')
+        const currentContentHash = contentVersion(originalContent)
+        if (!expectedContentHash || expectedContentHash !== currentContentHash) {
+          return { success: false, error: 'File version conflict', currentContentHash, currentContent: originalContent, conflict: true }
+        }
+
+        tempPath = path.join(path.dirname(resolved), `.${path.basename(resolved)}.${process.pid}.${Date.now()}.tmp`)
+        fs.writeFileSync(tempPath, content, { encoding: 'utf-8', flag: 'wx' })
+
+        this.versionedCommitInterleave?.(resolved)
+        const latestContent = fs.readFileSync(resolved, 'utf-8')
+        const latestHash = contentVersion(latestContent)
+        if (latestHash !== expectedContentHash) {
+          return { success: false, error: 'File version conflict', currentContentHash: latestHash, currentContent: latestContent, conflict: true }
+        }
+
+        fs.renameSync(tempPath, resolved)
+        tempPath = undefined
+        recordCommittedWrite(originalContent)
+      } else {
+        if (expectedContentHash) return { success: false, error: 'File no longer exists', conflict: true }
+        fs.mkdirSync(path.dirname(resolved), { recursive: true })
+        this.versionedCommitInterleave?.(resolved)
+        fs.writeFileSync(resolved, content, { encoding: 'utf-8', flag: 'wx' })
+        recordCommittedWrite(null)
+      }
+      logger.log('INFO', 'WorkspaceRepo', `Versioned write to file: ${resolved}`)
+      return { success: true }
+    } catch (err: unknown) {
+      const currentContent = fs.existsSync(resolved) ? fs.readFileSync(resolved, 'utf-8') : undefined
+      const currentContentHash = currentContent === undefined ? undefined : contentVersion(currentContent)
+      const conflict = errorCode(err) === 'EEXIST' || currentContentHash !== expectedContentHash
+      return {
+        success: false,
+        error: errorCode(err) === 'EEXIST' ? 'File was created concurrently' : errorMessage(err),
+        currentContentHash,
+        currentContent,
+        conflict,
+      }
+    } finally {
+      if (tempPath && fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
+    }
+  }
+
+  async replaceChunk(filePath: string, targetContent: string, replacementContent: string): Promise<{ success: boolean; error?: string }> {
+    return this.multiReplaceChunks(filePath, [{ targetContent, replacementContent }])
+  }
+
+  async multiReplaceChunks(
+    filePath: string,
+    replacements: { targetContent: string; replacementContent: string }[],
+  ): Promise<{ success: boolean; replacedCount?: number; error?: string }> {
+    const resolved = validatePathSafety(filePath, undefined, this.fullAccess)
+    if (!resolved) return { success: false, error: 'Invalid file path' }
+
+    try {
+      if (!fs.existsSync(resolved)) {
+        return { success: false, error: 'File does not exist' }
+      }
+      let existing = await fs.promises.readFile(resolved, 'utf-8')
+      const hadCrlf = existing.includes('\r\n')
+      let replacedCount = 0
+
+      for (let idx = 0; idx < replacements.length; idx++) {
+        const { targetContent, replacementContent } = replacements[idx]
+        if (!targetContent) continue
+
+        if (existing.includes(targetContent)) {
+          existing = existing.replace(targetContent, () => replacementContent)
+          replacedCount++
+        } else {
+          // Normalize CRLF to LF and retry fuzzy replacement
+          const normExisting = existing.replace(/\r\n/g, '\n')
+          const normTarget = targetContent.replace(/\r\n/g, '\n')
+          const normReplacement = replacementContent.replace(/\r\n/g, '\n')
+
+          if (normExisting.includes(normTarget)) {
+            existing = normExisting.replace(normTarget, () => normReplacement)
+            replacedCount++
+          } else {
+            return {
+              success: false,
+              replacedCount,
+              error: `Chunk #${idx + 1} target content was not found in file: "${targetContent.slice(0, 120)}..."`,
+            }
+          }
+        }
+      }
+
+      // Preserve original CRLF line endings if the original file had them
+      if (hadCrlf && !existing.includes('\r\n')) {
+        existing = existing.replace(/\n/g, '\r\n')
+      }
+
+      await fs.promises.writeFile(resolved, existing, 'utf-8')
+      logger.log('INFO', 'WorkspaceRepo', `Successfully applied ${replacedCount} chunk replacement(s) in: ${resolved}`)
+      return { success: true, replacedCount }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'WorkspaceRepo', `Failed replacing chunk(s) in ${filePath}: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
+    }
+  }
+
+  async grepSearch(
+    dirPath: string,
+    query: string,
+    isRegex?: boolean,
+    caseInsensitive?: boolean,
+  ): Promise<{ filePath: string; relativePath: string; lineNumber: number; lineContent: string }[]> {
+    const rootDir = validatePathSafety(dirPath, undefined, this.fullAccess)
+    if (!rootDir || !fs.existsSync(rootDir)) return []
+    const safeRootDir = rootDir
+    const fullAccess = this.fullAccess
+
+    const IGNORED_NAMES = new Set(['.git', 'node_modules', 'dist', 'dist-electron', '.venv', 'build', 'sidecar_dist', '__pycache__'])
+    const BINARY_EXTENSIONS = new Set([
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.gif',
+      '.ico',
+      '.pdf',
+      '.zip',
+      '.tar',
+      '.gz',
+      '.exe',
+      '.dll',
+      '.so',
+      '.dylib',
+      '.pyc',
+      '.db',
+      '.sqlite',
+      '.bin',
+      '.dat',
+      '.woff',
+      '.woff2',
+      '.ttf',
+      '.eot',
+      '.mp3',
+      '.mp4',
+      '.mov',
+      '.avi',
+    ])
+    const results: { filePath: string; relativePath: string; lineNumber: number; lineContent: string }[] = []
+    let matcher: (line: string) => boolean
+    if (isRegex) {
+      try {
+        const flags = caseInsensitive ? 'i' : ''
+        const regex = new RegExp(query, flags)
+        matcher = (line: string) => regex.test(line)
+      } catch (regErr: unknown) {
+        // Reported, not swallowed: an empty list read as "no matches" and sent the agent looking elsewhere.
+        throw new Error(`Invalid regular expression: ${errorMessage(regErr)}. Fix the pattern, or set isRegex to false to search the literal text.`)
+      }
+    } else {
+      const q = caseInsensitive ? query.toLowerCase() : query
+      matcher = (line: string) => (caseInsensitive ? line.toLowerCase().includes(q) : line.includes(q))
+    }
+
+    async function searchDir(currentDir: string, depth: number) {
+      if (depth > MAX_PROJECT_MAP_DEPTH || results.length >= MAX_SEARCH_MATCHES) return
+      try {
+        const entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (results.length >= MAX_SEARCH_MATCHES) break
+          if (!fullAccess && IGNORED_NAMES.has(entry.name)) continue
+          // Links can lead outside the workspace, and secret files stay unreadable as with read_file.
+          if (!fullAccess && (entry.isSymbolicLink() || isSecretFile(entry.name))) continue
+
+          const fullPath = path.join(currentDir, entry.name)
+          if (entry.isDirectory()) {
+            await searchDir(fullPath, depth + 1)
+          } else {
+            try {
+              const ext = path.extname(entry.name).toLowerCase()
+              if (BINARY_EXTENSIONS.has(ext)) continue
+
+              const stat = await fs.promises.stat(fullPath)
+              if (stat.size > MAX_SEARCH_FILE_BYTES) continue
+
+              const content = await fs.promises.readFile(fullPath, 'utf-8')
+              const lines = content.split('\n')
+              const relPath = path.relative(safeRootDir, fullPath).replace(/\\/g, '/')
+
+              for (let i = 0; i < lines.length; i++) {
+                if (results.length >= MAX_SEARCH_MATCHES) break
+                if (matcher(lines[i])) {
+                  results.push({
+                    filePath: fullPath,
+                    relativePath: relPath,
+                    lineNumber: i + 1,
+                    lineContent: lines[i].trim().slice(0, 300),
+                  })
+                }
+              }
+            } catch (readErr: unknown) {
+              logger.log('WARN', 'WorkspaceRepo', `Grep read failed on '${fullPath}': ${errorMessage(readErr)}`)
+            }
+          }
+        }
+      } catch (dirErr: unknown) {
+        logger.log('WARN', 'WorkspaceRepo', `Grep search directory error on '${currentDir}': ${errorMessage(dirErr)}`)
+      }
+    }
+
+    await searchDir(rootDir, 0)
+    return results
+  }
+
+  async extractCodeSymbols(
+    filePath: string,
+    filterKind?: string,
+  ): Promise<{ success: boolean; symbols?: CodeSymbolItem[]; totalCount?: number; error?: string }> {
+    const resolved = validatePathSafety(filePath, undefined, this.fullAccess)
+    if (!resolved) return { success: false, error: 'Invalid file path' }
+
+    try {
+      if (!fs.existsSync(resolved) || !(await fs.promises.stat(resolved)).isFile()) {
+        return { success: false, error: 'File not found or invalid target' }
+      }
+
+      const rawContent = await fs.promises.readFile(resolved, 'utf-8')
+      const ext = path.extname(resolved).toLowerCase()
+      const symbols: CodeSymbolItem[] = []
+      const normFilter = filterKind ? filterKind.toLowerCase().trim() : null
+
+      if (['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'].includes(ext)) {
+        const sourceFile = ts.createSourceFile(resolved, rawContent, ts.ScriptTarget.Latest, true, scriptKindForPath(resolved))
+
+        const visit = (node: ts.Node) => {
+          const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+          const lineNum = line + 1
+
+          if (ts.isFunctionDeclaration(node) && node.name) {
+            const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
+            symbols.push({ name: node.name.text, kind: 'function', startLine: lineNum, signature: firstLine.slice(0, 160) })
+          } else if (ts.isClassDeclaration(node) && node.name) {
+            const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
+            symbols.push({ name: node.name.text, kind: 'class', startLine: lineNum, signature: firstLine.slice(0, 160) })
+          } else if (ts.isInterfaceDeclaration(node) && node.name) {
+            const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
+            symbols.push({ name: node.name.text, kind: 'interface', startLine: lineNum, signature: firstLine.slice(0, 160) })
+          } else if (ts.isTypeAliasDeclaration(node) && node.name) {
+            const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
+            symbols.push({ name: node.name.text, kind: 'type', startLine: lineNum, signature: firstLine.slice(0, 160) })
+          } else if (ts.isEnumDeclaration(node) && node.name) {
+            const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
+            symbols.push({ name: node.name.text, kind: 'enum', startLine: lineNum, signature: firstLine.slice(0, 160) })
+          } else if (ts.isVariableStatement(node)) {
+            for (const decl of node.declarationList.declarations) {
+              if (ts.isIdentifier(decl.name) && decl.initializer && (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))) {
+                const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
+                symbols.push({ name: decl.name.text, kind: 'function', startLine: lineNum, signature: firstLine.slice(0, 160) })
+              }
+            }
+          }
+
+          ts.forEachChild(node, visit)
+        }
+
+        visit(sourceFile)
+      } else {
+        const lines = rawContent.split(/\r?\n/)
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i]
+          const trimmed = line.trim()
+          if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('#')) {
+            continue
+          }
+
+          const lineNum = i + 1
+
+          if (ext === '.py') {
+            const pyClassMatch = line.match(/^\s*class\s+([a-zA-Z0-9_]+)/)
+            if (pyClassMatch) {
+              symbols.push({ name: pyClassMatch[1], kind: 'class', startLine: lineNum, signature: trimmed.slice(0, 160) })
+              continue
+            }
+
+            const pyDefMatch = line.match(/^\s*(?:async\s+)?def\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/)
+            if (pyDefMatch) {
+              const isMethod = line.startsWith('    ') || line.startsWith('\t')
+              symbols.push({ name: pyDefMatch[1], kind: isMethod ? 'method' : 'function', startLine: lineNum, signature: trimmed.slice(0, 160) })
+              continue
+            }
+          } else if (['.go', '.rs', '.c', '.cpp', '.h', '.hpp', '.cs', '.java'].includes(ext)) {
+            const genClassMatch = line.match(/(?:class|struct|interface|trait|enum)\s+([a-zA-Z0-9_]+)/)
+            if (genClassMatch) {
+              symbols.push({ name: genClassMatch[1], kind: 'class', startLine: lineNum, signature: trimmed.slice(0, 160) })
+              continue
+            }
+
+            const genFnMatch = line.match(/(?:func|fn|def|void|int|string|bool|async|public|private)\s+([a-zA-Z0-9_]+)\s*\(/)
+            if (genFnMatch) {
+              symbols.push({ name: genFnMatch[1], kind: 'function', startLine: lineNum, signature: trimmed.slice(0, 160) })
+              continue
+            }
+          }
+        }
+      }
+
+      const filtered = normFilter && normFilter !== 'all' ? symbols.filter((s) => s.kind === normFilter) : symbols
+
+      return {
+        success: true,
+        symbols: filtered,
+        totalCount: filtered.length,
+      }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'WorkspaceRepo', `Error extracting code symbols from '${filePath}': ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
+    }
+  }
+}
+
+export interface CodeSymbolItem {
+  name: string
+  kind: 'function' | 'class' | 'interface' | 'type' | 'enum' | 'method'
+  startLine: number
+  signature: string
+}

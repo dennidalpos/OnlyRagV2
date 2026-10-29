@@ -1,0 +1,567 @@
+import http from 'node:http'
+import { z } from 'zod'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
+import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
+import { sourceLocationSchema, sourceProvenanceSchema } from '../../../../shared/domain/sourceProvenance'
+import type { NormalizationReview, OllamaThinkValue, SourceLocation, SourceLocationRequest, VectorSearchResult } from '../../../../shared/types'
+import {
+  parseNormalizationReview,
+  sidecarDocumentRecordSchema,
+  sidecarDocumentSummarySchema,
+  sidecarIngestResultSchema,
+  sidecarTranslationResultSchema,
+  toIngestionProgressPayload,
+  toTranslateProgressPayload,
+} from '../../domain/sidecarContract'
+import { logger } from '../logging/logger'
+
+export interface SidecarIngestStreamPayload {
+  file_path: string
+  task_id: string
+  vision_model?: string
+  vision_prompt?: string
+  normalize_with_llm?: boolean
+  normalization_model?: string
+  num_ctx?: number
+  normalization_think?: boolean
+  allow_full_excel_format?: boolean
+  embedding_model?: string
+}
+
+export interface SidecarTranslateStreamPayload {
+  source_lang: string
+  target_lang: string
+  model?: string
+  target_dir?: string
+  num_ctx?: number
+  /** The switch, or a reasoning level such as "low". */
+  think?: OllamaThinkValue
+  task_id: string
+}
+
+/** Metadata summary for GET /documents. */
+export interface SidecarDocumentSummary {
+  id: string
+  filename: string
+  file_path?: string
+  filePath?: string
+  file_size: number
+  num_pages: number
+  num_chunks: number
+  status: string
+  ingested_at: string
+  file_type?: string
+  used_fallback_embeddings?: boolean
+}
+
+export interface SidecarDocumentRecord extends SidecarDocumentSummary {
+  extracted_markdown: string
+}
+
+export interface SidecarPagePreviewResult {
+  docId: string
+  pageNumber: number
+  totalPages: number
+  imageBase64: string
+  mimeType: string
+}
+
+/** Wire representation of GET /documents/{id}/page-preview/{page}. */
+interface SidecarPagePreviewWire {
+  doc_id: string
+  page_number: number
+  total_pages: number
+  image_base64: string
+  mime_type?: string
+}
+
+/** NDJSON stream progress event. */
+export interface SidecarStreamEvent {
+  type?: string
+  data?: unknown
+  error?: unknown
+  step?: unknown
+  [key: string]: unknown
+}
+
+/** Stream endpoint resolution result. */
+export interface SidecarStreamResult<T> {
+  success: boolean
+  cancelled?: boolean
+  data?: T
+  error?: string
+  normalizationReview?: NormalizationReview
+}
+
+type Envelope<T> = { success: true; data: T } | { success: false; error: string }
+
+interface SendOptions {
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  path: string
+  body?: unknown
+  timeoutMs: number
+  idleTimeoutMs?: number
+  timeoutMessage?: string
+  onLine?: (line: string) => void
+  onRequest?: (req: http.ClientRequest) => void
+}
+
+interface SendResult {
+  status: number
+  body: string
+}
+
+const DEFAULT_BASE_HOST = 'http://127.0.0.1:8000'
+const STREAM_TIMEOUT_MS = 600_000
+/** Vector search timeout allowing for model load. */
+const VECTOR_SEARCH_TIMEOUT_MS = 65_000
+
+/** Extracts error detail from response body. */
+function parseDetail(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body.trim()) as { detail?: unknown; error?: unknown }
+    if (typeof parsed.detail === 'string') return parsed.detail
+    if (parsed.detail !== undefined) return JSON.stringify(parsed.detail)
+    return typeof parsed.error === 'string' ? parsed.error : null
+  } catch {
+    return null
+  }
+}
+
+function errorDetail(status: number, body: string, fallback = `Sidecar error HTTP ${status}`): string {
+  const detail = parseDetail(body)
+  if (detail) return detail
+  return body.trim() ? `${fallback}: ${body.trim().slice(0, 200)}` : fallback
+}
+
+export class SidecarHttpClient {
+  private baseHost: string
+  private authToken = ''
+  private readonly httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
+
+  constructor(baseHost: string = DEFAULT_BASE_HOST) {
+    this.baseHost = baseHost
+  }
+
+  setBaseHost(host?: string) {
+    const h = host?.trim()
+    this.baseHost = h ? (h.startsWith('http') ? h : `http://${h}`) : DEFAULT_BASE_HOST
+  }
+
+  /** Sets shared auth token for sidecar requests. */
+  setAuthToken(token: string) {
+    this.authToken = token
+  }
+
+  /** Sends HTTP request to sidecar. */
+  private send(options: SendOptions): Promise<SendResult> {
+    const url = new URL(options.path, this.baseHost)
+    const payload = options.body === undefined ? undefined : JSON.stringify(options.body)
+    const headers: http.OutgoingHttpHeaders =
+      payload === undefined ? { 'Content-Length': 0 } : { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+    if (this.authToken) headers['X-OnlyRag-Token'] = this.authToken
+
+    return new Promise((resolve, reject) => {
+      let settled = false
+      let deadline: ReturnType<typeof setTimeout> | undefined
+      const fail = (error: Error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(deadline)
+        reject(error)
+        req.destroy()
+      }
+      const req = http.request(
+        {
+          hostname: url.hostname,
+          port: Number(url.port) || 80,
+          path: `${url.pathname}${url.search}`,
+          method: options.method,
+          agent: this.httpAgent,
+          headers,
+        },
+        (res) => {
+          res.setEncoding('utf8')
+          let buffer = ''
+          res.on('data', (chunk: string) => {
+            if (settled) return
+            buffer += chunk
+            if (!options.onLine || (res.statusCode || 0) !== 200) return
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ''
+            try {
+              for (const line of lines) {
+                if (line.trim()) options.onLine(line.trim())
+              }
+            } catch (error) {
+              fail(new Error(`Invalid Sidecar stream: ${errorMessage(error)}`))
+            }
+          })
+          res.on('end', () => {
+            if (settled) return
+            settled = true
+            clearTimeout(deadline)
+            resolve({ status: res.statusCode || 0, body: buffer })
+          })
+          res.on('error', fail)
+          res.on('aborted', () => fail(new Error('Sidecar response interrupted; operation outcome is not confirmed.')))
+        },
+      )
+      req.on('error', fail)
+      // Total elapsed time includes agent queueing; socket inactivity is a separate bound.
+      deadline = setTimeout(() => {
+        fail(new Error(options.timeoutMessage || `${options.path} timed out after ${options.timeoutMs}ms; operation outcome is not confirmed.`))
+      }, options.timeoutMs)
+      req.setTimeout(options.idleTimeoutMs ?? options.timeoutMs, () => {
+        fail(new Error(`${options.path} timed out from inactivity; operation outcome is not confirmed.`))
+      })
+      try {
+        options.onRequest?.(req)
+        if (payload !== undefined) req.write(payload)
+        req.end()
+      } catch (error) {
+        fail(new Error(errorMessage(error)))
+      }
+    })
+  }
+
+  /** Consumes an NDJSON progress stream. */
+  private async streamNdjson<T>(
+    path: string,
+    body: unknown,
+    label: string,
+    resultSchema: z.ZodType<T>,
+    onProgress: (event: SidecarStreamEvent) => void,
+    onRequest?: (req: http.ClientRequest) => void,
+  ): Promise<SidecarStreamResult<T>> {
+    let finalResult: T | null = null
+    let streamError: string | null = null
+    let cancelled = false
+    let terminal = false
+    let normalizationReview: SidecarStreamResult<T>['normalizationReview']
+    const handleLine = (line: string) => {
+      if (streamError) return
+      if (terminal) throw new Error('Event received after a terminal event')
+      const parsed: unknown = JSON.parse(line)
+      const progress = label === 'Ingestion' ? toIngestionProgressPayload(parsed, '') : toTranslateProgressPayload(parsed, '')
+      if (!progress) throw new Error('Malformed progress event')
+      const event = parsed as SidecarStreamEvent
+      if (event.type === 'done') {
+        finalResult = resultSchema.parse(event.data)
+        terminal = true
+      }
+      if (event.type === 'cancelled') {
+        cancelled = true
+        terminal = true
+      }
+      onProgress(event)
+      if (event.type === 'error') {
+        streamError = String(event.error || event.step || `${label} failed`)
+        if (event.normalization_review !== undefined) {
+          const review = parseNormalizationReview(event.normalization_review)
+          if (review) normalizationReview = review
+          else streamError = 'Invalid normalization review payload; ingestion was not accepted'
+        }
+      }
+    }
+
+    try {
+      const res = await this.send({
+        method: 'POST',
+        path,
+        body,
+        timeoutMs: STREAM_TIMEOUT_MS,
+        timeoutMessage: `${label} timed out (10 minute total limit); operation outcome is not confirmed.`,
+        onLine: handleLine,
+        onRequest,
+      })
+      if (res.status !== 200) {
+        const detail = errorDetail(res.status, res.body)
+        logger.log('ERROR', 'SidecarClient', `${label} sidecar error: ${detail}`)
+        return { success: false, error: detail }
+      }
+      if (res.body.trim()) handleLine(res.body.trim())
+      if (streamError) return { success: false, error: streamError, ...(normalizationReview ? { normalizationReview } : {}) }
+      if (cancelled) return { success: false, cancelled: true, error: `${label} cancelled after cleanup` }
+      if (finalResult) return { success: true, data: finalResult }
+      logger.log('WARN', 'SidecarClient', `${label} stream ended without a done event`)
+      return { success: false, error: `${label} stream terminated without completion confirmation` }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SidecarClient', `${label} HTTP error: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err) }
+    }
+  }
+
+  private async notifyTaskCancellation(taskId: string): Promise<void> {
+    const res = await this.send({ method: 'POST', path: `/tasks/cancel?task_id=${encodeURIComponent(taskId)}`, timeoutMs: 5000 })
+    if (res.status !== 200) throw new Error(errorDetail(res.status, res.body))
+    z.object({ status: z.literal('success'), message: z.string() }).parse(JSON.parse(res.body))
+  }
+
+  /** Sidecar health probe. */
+  async getStatus(timeoutMs = 3000): Promise<{ status: string; [key: string]: unknown }> {
+    try {
+      const res = await this.send({
+        method: 'GET',
+        path: '/health',
+        timeoutMs,
+        timeoutMessage: `Health probe timed out after ${timeoutMs}ms`,
+      })
+      if (res.status !== 200) return { status: 'offline', error: `HTTP ${res.status || 'unknown'}` }
+      let data: ReturnType<typeof parseSidecarHealthResponse> = null
+      try {
+        data = parseSidecarHealthResponse(JSON.parse(res.body))
+      } catch (err: unknown) {
+        logger.log('WARN', 'SidecarClient', `Failed to parse /health JSON response: ${errorMessage(err)}`)
+      }
+      if (!data) return { status: 'offline', error: 'Malformed /health response' }
+      return {
+        status: data.status,
+        engine: data.engine,
+        version: data.version,
+        documentsCount: data.documents_count,
+        chunksCount: data.chunks_count,
+      }
+    } catch (err: unknown) {
+      return { status: 'offline', error: errorMessage(err) }
+    }
+  }
+
+  /** Streaming file ingestion. */
+  ingestFileStream(
+    payload: SidecarIngestStreamPayload,
+    onProgress: (event: SidecarStreamEvent) => void,
+    onCancelRegister?: (cancelFn: () => void) => void,
+  ): Promise<SidecarStreamResult<SidecarDocumentRecord>> {
+    return this.streamNdjson<SidecarDocumentRecord>(
+      '/ingest-path-stream',
+      payload,
+      'Ingestion',
+      sidecarIngestResultSchema,
+      onProgress,
+      this.cancellableBy(payload.task_id, onCancelRegister),
+    )
+  }
+
+  /** Streaming in-place document translation. */
+  translateDocumentInplaceStream(
+    docId: string,
+    payload: SidecarTranslateStreamPayload,
+    onProgress: (event: SidecarStreamEvent) => void,
+    onCancelRegister?: (cancelFn: () => void) => void,
+  ): Promise<SidecarStreamResult<SidecarDocumentRecord>> {
+    return this.streamNdjson<SidecarDocumentRecord>(
+      `/documents/${encodeURIComponent(docId)}/translate-inplace-stream`,
+      payload,
+      'Translation',
+      sidecarTranslationResultSchema.refine((record) => record.id === docId, 'Translation response document identity mismatch'),
+      onProgress,
+      this.cancellableBy(payload.task_id, onCancelRegister),
+    )
+  }
+
+  /** Registers cancellation handler for streaming request. */
+  private cancellableBy(taskId: string, onCancelRegister?: (cancelFn: () => void) => void) {
+    return (req: http.ClientRequest) => {
+      onCancelRegister?.(() => {
+        void this.notifyTaskCancellation(taskId).catch((err: unknown) => {
+          logger.log('WARN', 'SidecarClient', `Cancellation relay failed: ${errorMessage(err)}`)
+          req.destroy(new Error('Cancellation failed; operation outcome and partial-data cleanup are not confirmed.'))
+        })
+        // Both workflows wait for the terminal Sidecar outcome; a relay acknowledgement is not completion.
+      })
+    }
+  }
+
+  /** Updates document markdown and re-indexes. */
+  async updateDocument(
+    docId: string,
+    markdownContent: string,
+    expectedRevision: string,
+    embeddingModel?: string,
+  ): Promise<SidecarStreamResult<SidecarDocumentRecord>> {
+    const result = await this.requestJson<SidecarDocumentRecord>(
+      'PUT',
+      `/documents/${encodeURIComponent(docId)}`,
+      { markdown_content: markdownContent, expected_revision: expectedRevision, embedding_model: embeddingModel || undefined },
+      60_000,
+      sidecarIngestResultSchema.refine((record) => record.id === docId, 'Update response document identity mismatch'),
+    )
+    return result.success ? result : { success: false, error: result.error }
+  }
+
+  /** Fetches bitmap preview of document page. */
+  async getDocumentPagePreview(docId: string, pageNumber: number): Promise<SidecarPagePreviewResult | null> {
+    const page = Math.max(1, Number(pageNumber) || 1)
+    const result = await this.requestJson<SidecarPagePreviewWire>(
+      'GET',
+      `/documents/${encodeURIComponent(docId)}/page-preview/${page}`,
+      undefined,
+      5000,
+      z.object({
+        doc_id: z.literal(docId),
+        page_number: z.literal(page),
+        total_pages: z.number().int().min(page),
+        image_base64: z.string().min(1),
+        mime_type: z.enum(['image/png', 'image/jpeg']).optional(),
+      }),
+    )
+    if (!result.success) {
+      logger.log('DEBUG', 'SidecarClient', `Page preview unavailable for doc ${docId} page ${page}: ${result.error}`)
+      return null
+    }
+    const data = result.data
+    return {
+      docId: data.doc_id,
+      pageNumber: data.page_number,
+      totalPages: data.total_pages,
+      imageBase64: data.image_base64,
+      mimeType: data.mime_type || 'image/png',
+    }
+  }
+
+  /** Lists all indexed documents. */
+  async listDocuments(): Promise<SidecarDocumentSummary[] | null> {
+    const result = await this.requestJson<SidecarDocumentSummary[]>('GET', '/documents', undefined, 5000, z.array(sidecarDocumentSummarySchema))
+    if (result.success) return result.data
+    if (!result.error.includes('ECONNREFUSED')) {
+      logger.log('WARN', 'SidecarClient', `Failed requesting /documents: ${result.error}`)
+    }
+    return null
+  }
+
+  /** Fetches single document record by ID. */
+  async getDocument(docId: string): Promise<SidecarDocumentRecord | null> {
+    const result = await this.requestJson<SidecarDocumentRecord>(
+      'GET',
+      `/documents/${encodeURIComponent(docId)}`,
+      undefined,
+      10_000,
+      sidecarDocumentRecordSchema.refine((record) => record.id === docId, 'Document response identity mismatch'),
+    )
+    return result.success ? result.data : null
+  }
+
+  /** Deletes document and chunks from vector store. */
+  async deleteDocument(docId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await this.send({
+        method: 'DELETE',
+        path: `/documents/${encodeURIComponent(docId)}`,
+        timeoutMs: 5000,
+        timeoutMessage: 'Eliminazione scaduta dopo 5 secondi. Verifica il Sidecar e riprova.',
+      })
+      if (res.status === 200) {
+        z.object({ status: z.literal('success'), message: z.string() }).parse(JSON.parse(res.body))
+        return { success: true }
+      }
+      return { success: false, error: parseDetail(res.body) || `Il Sidecar ha rifiutato l'eliminazione (HTTP ${res.status || 'sconosciuto'}).` }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SidecarClient', `Failed deleting document ${docId}: ${errorMessage(err)}`)
+      const timedOut = errorMessage(err).startsWith('Eliminazione scaduta')
+      return { success: false, error: timedOut ? errorMessage(err) : `Sidecar non raggiungibile: ${errorMessage(err)}` }
+    }
+  }
+
+  /** Verify a revision-bound original location. */
+  async getSourceLocation(payload: SourceLocationRequest): Promise<SourceLocation> {
+    const params = new URLSearchParams({
+      chunk_id: payload.chunkId,
+      source_revision: payload.sourceRevision,
+      extraction_revision: payload.extractionRevision,
+      index_revision: payload.indexRevision,
+      span_start: String(payload.spanStart),
+      span_end: String(payload.spanEnd),
+    })
+    const result = await this.requestJson<unknown>('GET', `/documents/${encodeURIComponent(payload.docId)}/source-location?${params}`, undefined, 15_000)
+    if (!result.success) throw new Error(result.error)
+    const location = sourceLocationSchema.parse(result.data)
+    if (
+      location.doc_id !== payload.docId ||
+      location.chunk_id !== payload.chunkId ||
+      location.source_revision !== payload.sourceRevision ||
+      location.extraction_revision !== payload.extractionRevision ||
+      location.index_revision !== payload.indexRevision ||
+      location.span_start !== payload.spanStart ||
+      location.span_end !== payload.spanEnd
+    )
+      throw new Error('Source response identity mismatch')
+    return location
+  }
+
+  /** Hybrid vector search over indexed chunks. */
+  async searchVectorDb(query: string, topK: number = 5, docIds?: string[]): Promise<VectorSearchResult[]> {
+    if (typeof query !== 'string' || !query.trim()) return []
+    const payload: Record<string, unknown> = { query, top_k: topK }
+    if (docIds && docIds.length > 0) payload.doc_ids = docIds
+    const result = await this.requestJson<VectorSearchResult[]>('POST', '/vector/search', payload, VECTOR_SEARCH_TIMEOUT_MS)
+    if (!result.success) throw new Error(`Vector search failed: ${result.error}`)
+    return z
+      .array(
+        z.object({
+          chunk_id: z.string(),
+          doc_id: z.string().nullish(),
+          doc_name: z.string(),
+          section_header: z.string().nullish(),
+          text: z.string(),
+          score: z.number().finite(),
+          provenance: sourceProvenanceSchema.nullish(),
+        }),
+      )
+      .parse(result.data)
+      .map((row) => ({ ...row, doc_id: row.doc_id ?? undefined, section_header: row.section_header ?? undefined }))
+  }
+
+  /** POST JSON with fallback on failure. */
+  async postJson<T>(urlPath: string, payload: unknown, timeoutMs: number = 5000, fallback: T): Promise<T> {
+    const result = await this.requestJson<T>('POST', urlPath, payload, timeoutMs)
+    return result.success ? result.data : fallback
+  }
+
+  /** POST JSON returning envelope. */
+  postJsonEnvelope<T>(urlPath: string, payload: unknown, timeoutMs: number = 15_000): Promise<Envelope<T>> {
+    return this.requestJson<T>('POST', urlPath, payload, timeoutMs)
+  }
+
+  private async requestJson<T>(method: SendOptions['method'], urlPath: string, body: unknown, timeoutMs: number, schema?: z.ZodType<T>): Promise<Envelope<T>> {
+    let res: SendResult
+    try {
+      res = await this.send({ method, path: urlPath, body, timeoutMs })
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SidecarClient', `${urlPath} request failed: ${errorMessage(err)}`)
+      return { success: false, error: errorMessage(err).includes('timed out') ? errorMessage(err) : `Sidecar connection error: ${errorMessage(err)}` }
+    }
+    if (res.status < 200 || res.status >= 300) {
+      const detail = errorDetail(res.status, res.body, `HTTP ${res.status}`)
+      logger.log('ERROR', 'SidecarClient', `Non-2xx from ${urlPath}: ${detail}`)
+      return { success: false, error: detail }
+    }
+    try {
+      const data: unknown = JSON.parse(res.body)
+      return { success: true, data: schema ? schema.parse(data) : (data as T) }
+    } catch (err: unknown) {
+      logger.log('ERROR', 'SidecarClient', `JSON parse error on ${urlPath}: ${errorMessage(err)}`)
+      return { success: false, error: `Response parse error: ${errorMessage(err)}` }
+    }
+  }
+
+  /** Export markdown to PDF / DOCX via /export. */
+  async exportDocument(markdownContent: string, format: string): Promise<SidecarStreamResult<{ base64_content?: string }>> {
+    return this.requestJson(
+      'POST',
+      '/export',
+      { markdown_content: markdownContent, export_format: format },
+      30_000,
+      z.object({
+        status: z.literal('success'),
+        format: z.literal(format),
+        base64_content: z.string().min(1),
+        file_name: z.string().min(1),
+        file_path: z.string().min(1),
+        message: z.string(),
+      }),
+    )
+  }
+}
+
+export const sidecarHttpClient = new SidecarHttpClient()

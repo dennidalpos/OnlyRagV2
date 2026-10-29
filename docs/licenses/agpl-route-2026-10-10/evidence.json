@@ -1,0 +1,1222 @@
+{
+  "schemaVersion": 1,
+  "reviewDate": "2026-10-10",
+  "scope": "Read-only byte comparison of selected installed-distribution files with retained frozen artifacts. Installed RECORD is provenance evidence, not independent verification of an upstream wheel or full frozen build.",
+  "distributions": [
+    {
+      "name": "nvidia-cublas",
+      "installedVersion": "13.7.0.27",
+      "installedRecord": {
+        "path": ".venv/Lib/site-packages/nvidia_cublas-13.7.0.27.dist-info/RECORD",
+        "sha256": "1176a07c577d0ff7298b46b44aa62520b04937f3ad7442461424430489a37dd7"
+      },
+      "installedLicenseFiles": [
+        {
+          "path": ".venv/Lib/site-packages/nvidia_cublas-13.7.0.27.dist-info/licenses/License.txt",
+          "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+        }
+      ],
+      "matchedFiles": [
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cu13/bin/x86_64/cublas64_13.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cu13/bin/x86_64/cublas64_13.dll",
+          "bytes": 54942320,
+          "sha256": "1119dbca0a808e0c8850bb4221e330daf0b5ddb348d62d37b6ac533854723df9",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "ERnbygqAjgyIULtCIeMw2vC13bNI1i03tqxTOFRyPfk"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cu13/bin/x86_64/cublasLt64_13.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cu13/bin/x86_64/cublasLt64_13.dll",
+          "bytes": 492752496,
+          "sha256": "0f5bc315fef706b5626248ebd74e8a48a9e82fa2f0cad38330f5f70984913107",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "D1vDFf73BrViYkjr106KSKnoL6LwytODMPX3CYSRMQc"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cu13/bin/x86_64/nvblas64_13.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cu13/bin/x86_64/nvblas64_13.dll",
+          "bytes": 220784,
+          "sha256": "541042866f4ee243de298ddd4212ac64bea9502e3503dc4ca5c210ae10cad262",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "VBBChm9O4kPeKY3dQhKsZL6pUC41A9xMpcIQrhDK0mI"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nvidia-cuda-nvrtc",
+      "installedVersion": "13.4.59",
+      "installedRecord": {
+        "path": ".venv/Lib/site-packages/nvidia_cuda_nvrtc-13.4.59.dist-info/RECORD",
+        "sha256": "7a2b2831317e8b5729af55beafc3fe6331221a9686f6c1798e70ba9eabad4fb9"
+      },
+      "installedLicenseFiles": [
+        {
+          "path": ".venv/Lib/site-packages/nvidia_cuda_nvrtc-13.4.59.dist-info/licenses/License.txt",
+          "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+        }
+      ],
+      "matchedFiles": [
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cu13/bin/x86_64/nvrtc-builtins64_134.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cu13/bin/x86_64/nvrtc-builtins64_134.dll",
+          "bytes": 7240816,
+          "sha256": "b49089ced9cde0b6400aeb009b68aff3030fb76b99abc13e9be515a40648f64e",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "tJCJztnN4LZACusAm2iv8wMPt2uZq8E-m-UVpAZI9k4"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cu13/bin/x86_64/nvrtc64_130_0.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cu13/bin/x86_64/nvrtc64_130_0.dll",
+          "bytes": 106037872,
+          "sha256": "bbc235709274cacd9e7d0fff4892d24ba4256c4bb2543288299d60454b6515f2",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "u8I1cJJ0ys2efQ__SJLSS6QlbEuyVDKIKZ1gRUtlFfI"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nvidia-cuda-runtime",
+      "installedVersion": "13.4.49",
+      "installedRecord": {
+        "path": ".venv/Lib/site-packages/nvidia_cuda_runtime-13.4.49.dist-info/RECORD",
+        "sha256": "55b5e005eecad153d25b4292c072c3f03b98756efff15d64c1def4b1c0cb0974"
+      },
+      "installedLicenseFiles": [
+        {
+          "path": ".venv/Lib/site-packages/nvidia_cuda_runtime-13.4.49.dist-info/licenses/License.txt",
+          "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+        }
+      ],
+      "matchedFiles": [
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cu13/bin/x86_64/cudart64_13.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cu13/bin/x86_64/cudart64_13.dll",
+          "bytes": 551024,
+          "sha256": "05bfafcb97bd53b0089568a96e1e5bd6921637bd0853ff7f5342bd31a6a16890",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "Bb-vy5e9U7AIlWipbh5b1pIWN70IU_9_U0K9MaahaJA"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nvidia-cudnn-cu13",
+      "installedVersion": "9.26.0.51",
+      "installedRecord": {
+        "path": ".venv/Lib/site-packages/nvidia_cudnn_cu13-9.26.0.51.dist-info/RECORD",
+        "sha256": "c7119953cd0247a97c45c4c5168010a98375a46e8f4cdb4894da1d8d7baa5ec9"
+      },
+      "installedLicenseFiles": [
+        {
+          "path": ".venv/Lib/site-packages/nvidia_cudnn_cu13-9.26.0.51.dist-info/licenses/License.txt",
+          "sha256": "49cf79bdb35734b52fe6203013b3bd759f81e998cd32aa2c65c51db9a88c61d2"
+        }
+      ],
+      "matchedFiles": [
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cudnn/bin/cudnn64_9.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cudnn/bin/cudnn64_9.dll",
+          "bytes": 270448,
+          "sha256": "1a0728a6bd5c704bcdd1347cc6127fb6085fce773aaf9f1824281e9846c7b090",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "Ggcopr1ccEvN0TR8xhJ_tghfznc6r58YJCgemEbHsJA"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cudnn/bin/cudnn_adv64_9.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cudnn/bin/cudnn_adv64_9.dll",
+          "bytes": 105227888,
+          "sha256": "235134b2f410569d3517da2df3cccc5bc8b3ed8466bb49c2503702598d2bf12a",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "I1E0svQQVp01F9ot88zMW8iz7YRmu0nCUDcCWY0r8So"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cudnn/bin/cudnn_cnn64_9.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cudnn/bin/cudnn_cnn64_9.dll",
+          "bytes": 1533040,
+          "sha256": "f479a762f5e8b10ae737a8a279cef630e41ce4d4b32618f1fd9f943f61ff18d5",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "9HmnYvXosQrnN6iiec72MOQc5NSzJhjx_Z-UP2H_GNU"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cudnn/bin/cudnn_engines_precompiled64_9.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cudnn/bin/cudnn_engines_precompiled64_9.dll",
+          "bytes": 224516720,
+          "sha256": "c289ff5cab82e2be6a2ad116f966f4c655c94e11731e146bc3963d809eb46fc8",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "won_XKuC4r5qKtEW-Wb0xlXJThFzHhRrw5Y9gJ60b8g"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cudnn/bin/cudnn_engines_runtime_compiled64_9.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cudnn/bin/cudnn_engines_runtime_compiled64_9.dll",
+          "bytes": 32993904,
+          "sha256": "30a222f73ea8b89c216cc5384080addff3632a77ae6eed0d1eaa87fb57d9b184",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "MKIi9z6ouJwhbMU4QICt3_NjKneubu0NHqqH-1fZsYQ"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cudnn/bin/cudnn_engines_tensor_ir64_9.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cudnn/bin/cudnn_engines_tensor_ir64_9.dll",
+          "bytes": 156272,
+          "sha256": "b97ef392f51923ee8dc616dca596fbc6f979281b135eb76991e8cadd43c6294f",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "uX7zkvUZI-6NxhbcpZb7xvl5KBsTXrdpkejK3UPGKU8"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cudnn/bin/cudnn_ext64_9.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cudnn/bin/cudnn_ext64_9.dll",
+          "bytes": 130160,
+          "sha256": "ba3a74ab3996caee8ca893825db87b27e97f00ab14a13f7e985fd2ebc7683ea0",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "ujp0qzmWyu6MqJOCXbh7J-l_AKsUoT9-mF_S68doPqA"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cudnn/bin/cudnn_graph64_9.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cudnn/bin/cudnn_graph64_9.dll",
+          "bytes": 116192880,
+          "sha256": "8f98ea372de52da536559b538f84739b0f1c50ae7f32a07e7fd111f4938fb641",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "j5jqNy3lLaU2VZtTj4Rzmw8cUK5_MqB-f9ER9JOPtkE"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cudnn/bin/cudnn_heuristic64_9.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cudnn/bin/cudnn_heuristic64_9.dll",
+          "bytes": 73166960,
+          "sha256": "7ff562ba7530ff390575abd62794338565d397cd5627760bb94028e6d256012d",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "f_ViunUw_zkFdavWJ5QzhWXTl81WJ3YLuUAo5tJWAS0"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cudnn/bin/cudnn_ops64_9.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cudnn/bin/cudnn_ops64_9.dll",
+          "bytes": 37461616,
+          "sha256": "bf813ebb0a8c1e09dd95499ac701b5e45e3d066d5624b2716a289ed5a2ca1c28",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "v4E-uwqMHgndlUmaxwG15F49Bm1WJLJxaiie1aLKHCg"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nvidia-cufft",
+      "installedVersion": "12.4.0.34",
+      "installedRecord": {
+        "path": ".venv/Lib/site-packages/nvidia_cufft-12.4.0.34.dist-info/RECORD",
+        "sha256": "4f64c7e370f1683d93b4b8efb342c4f4db5ec87db5d0fe6d9c808693bb6ccb19"
+      },
+      "installedLicenseFiles": [
+        {
+          "path": ".venv/Lib/site-packages/nvidia_cufft-12.4.0.34.dist-info/licenses/License.txt",
+          "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+        }
+      ],
+      "matchedFiles": [
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cu13/bin/x86_64/cufft64_12.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cu13/bin/x86_64/cufft64_12.dll",
+          "bytes": 232604272,
+          "sha256": "4599bb1399b1047084e8fb792fd1ab937ce28c5c09f562bd670cc66ee845cccb",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "RZm7E5mxBHCE6Pt5L9Grk3zijFwJ9WK9ZwzGbuhFzMs"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cu13/bin/x86_64/cufftw64_12.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cu13/bin/x86_64/cufftw64_12.dll",
+          "bytes": 198256,
+          "sha256": "622ab165ff80375c7d83fd5b1a5ee570a5de127a0a4e1fdd759c8f2bf4f9cb9b",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "YiqxZf-AN1x9g_1bGl7lcKXeEnoKTh_ddZyPK_T5y5s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nvidia-curand",
+      "installedVersion": "10.4.4.49",
+      "installedRecord": {
+        "path": ".venv/Lib/site-packages/nvidia_curand-10.4.4.49.dist-info/RECORD",
+        "sha256": "836f708fc4b7e1f2fe4baccf4a8aa33d1276eaa5569611a1d8aa24cf2f41525d"
+      },
+      "installedLicenseFiles": [
+        {
+          "path": ".venv/Lib/site-packages/nvidia_curand-10.4.4.49.dist-info/licenses/License.txt",
+          "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+        }
+      ],
+      "matchedFiles": [
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cu13/bin/x86_64/curand64_10.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cu13/bin/x86_64/curand64_10.dll",
+          "bytes": 60045424,
+          "sha256": "2e04701a9370e84eb60777e25d542e66d07086d452d5a5925f6a503468ffb208",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "LgRwGpNw6E62B3fiXVQuZtBwhtRS1aWSX2pQNGj_sgg"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nvidia-nvjitlink",
+      "installedVersion": "13.4.52",
+      "installedRecord": {
+        "path": ".venv/Lib/site-packages/nvidia_nvjitlink-13.4.52.dist-info/RECORD",
+        "sha256": "c1860d5827182b411361cbcbd564a5a0ff203a4161f88cc32bd8c5a71f39069f"
+      },
+      "installedLicenseFiles": [
+        {
+          "path": ".venv/Lib/site-packages/nvidia_nvjitlink-13.4.52.dist-info/licenses/License.txt",
+          "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+        }
+      ],
+      "matchedFiles": [
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/nvidia/cu13/bin/x86_64/nvJitLink_130_0.dll",
+          "installedPath": ".venv/Lib/site-packages/nvidia/cu13/bin/x86_64/nvJitLink_130_0.dll",
+          "bytes": 97117296,
+          "sha256": "3cba760a61417bb376418b5216abe8afd5378fd638100bba0c16d868c4108346",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "PLp2CmFBe7N2QYtSFqvor9U3j9Y4EAu6DBbYaMQQg0Y"
+          }
+        }
+      ]
+    },
+    {
+      "name": "onnxruntime-gpu",
+      "installedVersion": "1.29.0",
+      "installedRecord": {
+        "path": ".venv/Lib/site-packages/onnxruntime_gpu-1.29.0.dist-info/RECORD",
+        "sha256": "5edd86f38339a172e3bb33052a3e6c889fdf053f33a256d279434c0c2bbd2765"
+      },
+      "installedLicenseFiles": [],
+      "matchedFiles": [
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/onnxruntime/capi/onnxruntime.dll",
+          "installedPath": ".venv/Lib/site-packages/onnxruntime/capi/onnxruntime.dll",
+          "bytes": 17687904,
+          "sha256": "5fcb53f98b8f9bba38ffed168796b69bbf1d74254a30644937a7ddf9eed9834b",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "X8tT-YuPm7o4_-0Wh5a2m78ddCVKMGRJN6fd-e7Zg0s"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/onnxruntime/capi/onnxruntime_providers_cuda.dll",
+          "installedPath": ".venv/Lib/site-packages/onnxruntime/capi/onnxruntime_providers_cuda.dll",
+          "bytes": 171982136,
+          "sha256": "0022f048f334a6ed4feb3d42402f0b418817ae7e6daec96ec920eb501107888f",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "ACLwSPM0pu1P6z1CQC8LQYgXrn5trsluySDrUBEHiI8"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/onnxruntime/capi/onnxruntime_providers_shared.dll",
+          "installedPath": ".venv/Lib/site-packages/onnxruntime/capi/onnxruntime_providers_shared.dll",
+          "bytes": 21816,
+          "sha256": "4f872c58c46db294a2f91303801d59882598ced8d07acabc6915b6e34023eea8",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "T4csWMRtspSi-RMDgB1ZiCWYztjQesq8aRW240Aj7qg"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/onnxruntime/capi/onnxruntime_providers_tensorrt.dll",
+          "installedPath": ".venv/Lib/site-packages/onnxruntime/capi/onnxruntime_providers_tensorrt.dll",
+          "bytes": 876896,
+          "sha256": "023c22ac2029ccabcf03dea96c5e0c6e9f948c964ce4280c528e09dd33887f5d",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "AjwirCApzKvPA96pbF4Mbp-UjJZM5CgMUo4J3TOIf10"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/onnxruntime/capi/onnxruntime_pybind11_state.pyd",
+          "installedPath": ".venv/Lib/site-packages/onnxruntime/capi/onnxruntime_pybind11_state.pyd",
+          "bytes": 18877240,
+          "sha256": "d7a6b1ad389bce0c48e12c6d02eef7900595ad33f9ec04488e929ed6b50afa74",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "16axrTibzgxI4SxtAu73kAWVrTP57ARIjpKe1rUK-nQ"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wordfreq",
+      "installedVersion": "3.1.1",
+      "installedRecord": {
+        "path": ".venv/Lib/site-packages/wordfreq-3.1.1.dist-info/RECORD",
+        "sha256": "6f05d7a10e51a4b9ad13809881a6388d1608654eba2e0fdcf151b40d3505b930"
+      },
+      "installedLicenseFiles": [
+        {
+          "path": ".venv/Lib/site-packages/wordfreq-3.1.1.dist-info/LICENSE.txt",
+          "sha256": "262b51ebd3e7e29d3e5b82cb1fceefcf0a0db5627f119d4ad85157adfb6e16fe"
+        }
+      ],
+      "matchedFiles": [
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/_chinese_mapping.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/_chinese_mapping.msgpack.gz",
+          "bytes": 16831,
+          "sha256": "26712429f9c2c76ad412e38d5cf5e510a7c78b681e9e81eb04043f36e0d0073e",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "JnEkKfnCx2rUEuONXPXlEKfHi2genoHrBAQ_NuDQBz4"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/jieba_zh.txt",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/jieba_zh.txt",
+          "bytes": 491198,
+          "sha256": "cb653136f9abb53fde1f2450429aa58b8710b9f3c06cc1e69f7749e9b5489b45",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "y2UxNvmrtT_eHyRQQpqli4cQufPAbMHmn3dJ6bVIm0U"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/jieba_zh_orig.txt",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/jieba_zh_orig.txt",
+          "bytes": 5071852,
+          "sha256": "7197c3211ddd98962b036cdf40324d1ea2bfaa12bd028e68faa70111a88e12a8",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "cZfDIR3dmJYrA2zfQDJNHqK_qhK9Ao5o-qcBEaiOEqg"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_ar.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_ar.msgpack.gz",
+          "bytes": 3063585,
+          "sha256": "aa12410764f1946f21d986a920c289c22accb069d9b287d71b61657005516eec",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "qhJBB2TxlG8h2YapIMKJwirMsGnZsofXG2FlcAVRbuw"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_bn.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_bn.msgpack.gz",
+          "bytes": 1555615,
+          "sha256": "d10ed5ca1e61a6bf210324424ee25c53ff71175398833067d810ccc6c826d581",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "0Q7Vyh5hpr8hAyRCTuJcU_9xF1OYgzBn2BDMxsgm1YE"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_ca.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_ca.msgpack.gz",
+          "bytes": 887918,
+          "sha256": "386451032613893f6a72ab8b6de52faef4aea1a61b8e089f6a1fb97092ed5b5b",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "OGRRAyYTiT9qcquLbeUvrvSuoaYbjgifah-5cJLtW1s"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_cs.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_cs.msgpack.gz",
+          "bytes": 3252178,
+          "sha256": "3971d2ea15c0d0218fb31cdf4f109dfa4027d8f4ea52bd7b574a2b7678f1e60f",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "OXHS6hXA0CGPsxzfTxCd-kAn2PTqUr17V0ordnjx5g8"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_de.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_de.msgpack.gz",
+          "bytes": 3622737,
+          "sha256": "8ef04d3f4a28fb48d800d25fa80a96d90a5f80c8496c9a453f99f887c6ad3c12",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "jvBNP0oo-0jYANJfqAqW2QpfgMhJbJpFP5n4h8atPBI"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_en.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_en.msgpack.gz",
+          "bytes": 1494836,
+          "sha256": "dffae8066b78dce0a6667cf5f58e567054f902674667090a7ac8a8a44628b05c",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "3_roBmt43OCmZnz19Y5WcFT5AmdGZwkKesiopEYosFw"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_es.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_es.msgpack.gz",
+          "bytes": 1652691,
+          "sha256": "14f326b4f68d517f9b8b99c1e26ef56a508d2dc8d0ee7a9e6e8732ddab1aa65e",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "FPMmtPaNUX-bi5nB4m71alCNLcjQ7nqebocy3asapl4"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_fi.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_fi.msgpack.gz",
+          "bytes": 4230131,
+          "sha256": "98fb498142d5cb4ff47df65d6c4784dff4fa2fc6d191a0b26cf6341101922151",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "mPtJgULVy0_0ffZdbEeE3_T6L8bRkaCybPY0EQGSIVE"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_fr.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_fr.msgpack.gz",
+          "bytes": 1491216,
+          "sha256": "6f16cd80b9b66c5698ed002becea83ae30d0584c3205f1cf01714ad562c00c8b",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "bxbNgLm2bFaY7QAr7OqDrjDQWEwyBfHPAXFK1WLADIs"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_he.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_he.msgpack.gz",
+          "bytes": 2891674,
+          "sha256": "4b35ef0a8e6226e4f062d3220c9b2982f4c70a5c90f60864e16e7ed98bbfb3d9",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "SzXvCo5iJuTwYtMiDJspgvTHClyQ9ghk4W5-2Yu_s9k"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_it.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_it.msgpack.gz",
+          "bytes": 1576222,
+          "sha256": "0b5500e425a50e0f1fefb256d9125e74f586ac6b2f2a6e41bc96634bd5613cc7",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "C1UA5CWlDg8f77JW2RJedPWGrGsvKm5BvJZjS9VhPMc"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_ja.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_ja.msgpack.gz",
+          "bytes": 1217884,
+          "sha256": "e6ab743b939c1802fc03791f1d58dee2861e822ceecdcdee3f0e05b863ef26d8",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "5qt0O5OcGAL8A3kfHVje4oYegizuzc3uPw4FuGPvJtg"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_mk.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_mk.msgpack.gz",
+          "bytes": 1486661,
+          "sha256": "edec2769d3f093adc82da15c16177f29c29955dc2c2bcf6dc5393c2b6cb7a2c8",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "7ewnadPwk63ILaFcFhd_KcKZVdwsK89txTk8K2y3osg"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_nb.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_nb.msgpack.gz",
+          "bytes": 1706984,
+          "sha256": "8ac61baa0d7619b2d7529dcab18b6ad32e5f8915a1bf8619fe25779a2ad8386f",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "isYbqg12GbLXUp3KsYtq0y5fiRWhv4YZ_iV3mirYOG8"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_nl.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_nl.msgpack.gz",
+          "bytes": 1661682,
+          "sha256": "cfdae01b2ccd5bc94be046645b6ba8682e65d6709beedf6ab98d7bdc5414d671",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "z9rgGyzNW8lL4EZkW2uoaC5l1nCb7t9quY173FQU1nE"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_pl.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_pl.msgpack.gz",
+          "bytes": 2368608,
+          "sha256": "fac63e49c49ea2e39dd8a48152d7e54cec0920abbc59993088063ed5d9b528c2",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "-sY-ScSeouOd2KSBUtflTOwJIKu8WZkwiAY-1dm1KMI"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_pt.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_pt.msgpack.gz",
+          "bytes": 1286674,
+          "sha256": "7d764586bca6262f554d5fa77ad8e6841ef42534776e70558065140853660ce2",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "fXZFhrymJi9VTV-netjmhB70JTR3bnBVgGUUCFNmDOI"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_ru.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_ru.msgpack.gz",
+          "bytes": 4524376,
+          "sha256": "0440613cc765c14a20fb9483225f2fec4d85e66672809076bcec9b29119f9b43",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "BEBhPMdlwUog-5SDIl8v7E2F5mZygJB2vOybKRGfm0M"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_sv.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_sv.msgpack.gz",
+          "bytes": 1847538,
+          "sha256": "16971de5b9c6731b0dc3647743f93357bd7ead336f783aa3f747db6855e36a90",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "Fpcd5bnGcxsNw2R3Q_kzV71-rTNveDqj90fbaFXjapA"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_uk.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_uk.msgpack.gz",
+          "bytes": 2774028,
+          "sha256": "0a7d525ef5b9d2c84cd3ccd1064b02eb6a07232e5d1e465df40cc00168fdaac2",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "Cn1SXvW50shM08zRBksC62oHIy5dHkZd9AzAAWj9qsI"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/large_zh.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/large_zh.msgpack.gz",
+          "bytes": 1773909,
+          "sha256": "e079d7aaff1cfb92874850cb3ffbc7b611af939d9d671c1cbda932d968467cdd",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "4HnXqv8c-5KHSFDLP_vHthGvk52dZxwcvaky2WhGfN0"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_ar.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_ar.msgpack.gz",
+          "bytes": 259359,
+          "sha256": "a132f33543885d96dab7255ae8a4e6eab0b89cb3f79b2c7240787181ee4785cc",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "oTLzNUOIXZbatyVa6KTm6rC4nLP3myxyQHhxge5Hhcw"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_bg.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_bg.msgpack.gz",
+          "bytes": 202364,
+          "sha256": "b19e0a302b7c50439af94ed72b4e3d049b5233db9956add43f16922349fca359",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "sZ4KMCt8UEOa-U7XK049BJtSM9uZVq3UPxaSI0n8o1k"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_bn.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_bn.msgpack.gz",
+          "bytes": 207377,
+          "sha256": "5dd9f6f83be5389dcda4b037e96d6d7f659793c8a344d4a7531e903131534a31",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "Xdn2-DvlOJ3NpLA36W1tf2WXk8ijRNSnUx6QMTFTSjE"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_ca.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_ca.msgpack.gz",
+          "bytes": 119705,
+          "sha256": "13fa468e915d70f3b2991244f71fa5c160ab1d097d3f084546b8a7f15e8a5f03",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "E_pGjpFdcPOymRJE9x-lwWCrHQl9PwhFRrin8V6KXwM"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_cs.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_cs.msgpack.gz",
+          "bytes": 244134,
+          "sha256": "213812b32ab2b2cdb626e5e1ced308d0d89e2990ae1eb5cf183c5e1f16d52940",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "ITgSsyqyss22JuXhztMI0NieKZCuHrXPGDxeHxbVKUA"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_da.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_da.msgpack.gz",
+          "bytes": 130515,
+          "sha256": "80db682ff7bb30e7c8fd3e5dac2b9fe8c12faa206c45438f1a799a048ab10d8b",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "gNtoL_e7MOfI_T5drCuf6MEvqiBsRUOPGnmaBIqxDYs"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_de.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_de.msgpack.gz",
+          "bytes": 186094,
+          "sha256": "2115b5bb4adb671a3352555a480b9c2f5b03493e9f7e4047997361d62310017a",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "IRW1u0rbZxozUlVaSAucL1sDST6ffkBHmXNh1iMQAXo"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_el.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_el.msgpack.gz",
+          "bytes": 275904,
+          "sha256": "9ec327293a1657eac51518d6506e387dda453b548e506f47ef6e720592c1d9c9",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "nsMnKToWV-rFFRjWUG44fdpFO1SOUG9H725yBZLB2ck"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_en.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_en.msgpack.gz",
+          "bytes": 124892,
+          "sha256": "f94a80cba6a3857b260d0666b5432bb7ea9b85315574dee9c306e87f61298247",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "-UqAy6ajhXsmDQZmtUMrt-qbhTFVdN7pwwbof2Epgkc"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_es.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_es.msgpack.gz",
+          "bytes": 154340,
+          "sha256": "ff5853040f65bcc9cb3ed3721d1d09d4405389c1741ebbf529612220829ff5af",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "_1hTBA9lvMnLPtNyHR0J1EBTicF0Hrv1KWEiIIKf9a8"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_fa.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_fa.msgpack.gz",
+          "bytes": 147747,
+          "sha256": "bfb503f6b0d6bdddce720ee8154faf1c79d8b0417e6c865643da3b17b7638057",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "v7UD9rDWvd3Ocg7oFU-vHHnYsEF-bIZWQ9o7F7djgFc"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_fi.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_fi.msgpack.gz",
+          "bytes": 286020,
+          "sha256": "7c33d07743908b9ae43347d96f60e4d1d30fa3529f59fdefcbf16441040183d7",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "fDPQd0OQi5rkM0fZb2Dk0dMPo1KfWf3vy_FkQQQBg9c"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_fil.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_fil.msgpack.gz",
+          "bytes": 132820,
+          "sha256": "e18224d2efa12c3ca6e8eaee76ec4eae0cf4c437988545e8e8dae36a1a7a940d",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "4YIk0u-hLDym6OruduxOrgz0xDeYhUXo6Nrjahp6lA0"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_fr.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_fr.msgpack.gz",
+          "bytes": 138496,
+          "sha256": "8fbbf619ff2e6ff5b3d99d41e69c105daf5795771ce8ef36529f210d571abe6e",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "j7v2Gf8ub_Wz2Z1B5pwQXa9XlXcc6O82Up8hDVcavm4"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_he.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_he.msgpack.gz",
+          "bytes": 252281,
+          "sha256": "b68a4d94dbda037255c3992d4c3ae7250ac6a67aedcf90246afc020681a462e5",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "topNlNvaA3JVw5ktTDrnJQrGpnrtz5AkavwCBoGkYuU"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_hi.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_hi.msgpack.gz",
+          "bytes": 148115,
+          "sha256": "92ccbf70297d28e97af55a2a517b95c3d8b599e4cc943fb6d4612a3d44a86992",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "ksy_cCl9KOl69VoqUXuVw9i1meTMlD-21GEqPUSoaZI"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_hu.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_hu.msgpack.gz",
+          "bytes": 228299,
+          "sha256": "84130f74f9ea8f097bfb25d3778d03d26449dba255df7e60f42bbef463fdc582",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "hBMPdPnqjwl7-yXTd40D0mRJ26JV335g9Cu-9GP9xYI"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_id.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_id.msgpack.gz",
+          "bytes": 133311,
+          "sha256": "6fd891027cd6395b5c038c0e6402fa7e107ffd8973f862053246b897beb1bcd3",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "b9iRAnzWOVtcA4wOZAL6fhB__Ylz-GIFMka4l76xvNM"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_is.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_is.msgpack.gz",
+          "bytes": 198345,
+          "sha256": "2c4d79aa407c827278c145d394e4843c6ce3b7c7d56847fba548b9170def87a4",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "LE15qkB8gnJ4wUXTlOSEPGzjt8fVaEf7pUi5Fw3vh6Q"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_it.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_it.msgpack.gz",
+          "bytes": 157993,
+          "sha256": "07a4355d735d9cc864ce9fe679d94a13dee4cefa2495b6b013ecdb214b231c66",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "B6Q1XXNdnMhkzp_medlKE97kzvoklbawE-zbIUsjHGY"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_ja.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_ja.msgpack.gz",
+          "bytes": 141445,
+          "sha256": "cb86d1b139615d650573ee66ada5f6cb61ff0825557943de9db46f5f3f0e71f9",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "y4bRsTlhXWUFc-5mraX2y2H_CCVVeUPenbRvXz8Ocfk"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_ko.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_ko.msgpack.gz",
+          "bytes": 131176,
+          "sha256": "01014287a9e779d232f965d054a9cb5eb10b0bc46ee464fbd42935a5df7c8319",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "AQFCh6nnedIy-WXQVKnLXrELC8Ru5GT71Ck1pd98gxk"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_lt.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_lt.msgpack.gz",
+          "bytes": 303381,
+          "sha256": "36ea5906d64376a4ad1eef03b4d03f5f86b374a50018a1ac7b45dc49dd8f2044",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "NupZBtZDdqStHu8DtNA_X4azdKUAGKGse0XcSd2PIEQ"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_lv.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_lv.msgpack.gz",
+          "bytes": 210864,
+          "sha256": "fa1996db4bb977099205d4fb57aa9181f320573cab9ac477c89b90cf4a67c639",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "-hmW20u5dwmSBdT7V6qRgfMgVzyrmsR3yJuQz0pnxjk"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_mk.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_mk.msgpack.gz",
+          "bytes": 181786,
+          "sha256": "9960970cc6ea2323ba42c2c352542c39cfd892bee3d6f89b5ab0949fdc4ccd18",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "mWCXDMbqIyO6QsLDUlQsOc_Ykr7j1vibWrCUn9xMzRg"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_ms.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_ms.msgpack.gz",
+          "bytes": 119736,
+          "sha256": "dca0d42e666ae1998b74685963570d35407fb3d7c4a4796b21b3cd33954ffc1a",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "3KDULmZq4ZmLdGhZY1cNNUB_s9fEpHlrIbPNM5VP_Bo"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_nb.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_nb.msgpack.gz",
+          "bytes": 114636,
+          "sha256": "f979e2d16f41758572ce8c3992047f015cbef65c012702a86e7c416ab8d83659",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "-Xni0W9BdYVyzow5kgR_AVy-9lwBJwKobnxBarjYNlk"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_nl.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_nl.msgpack.gz",
+          "bytes": 132025,
+          "sha256": "ae0d64f10e9d11898b2b9481c0b20698ec40c79b8025edfdd70856bd593ad4b0",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "rg1k8Q6dEYmLK5SBwLIGmOxAx5uAJe391whWvVk61LA"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_pl.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_pl.msgpack.gz",
+          "bytes": 232166,
+          "sha256": "95691a55cc2afe0719c11f187fe55a8956bef0654ec476e945af3c495b4aa285",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "lWkaVcwq_gcZwR8Yf-VaiVa-8GVOxHbpRa88SVtKooU"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_pt.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_pt.msgpack.gz",
+          "bytes": 147253,
+          "sha256": "fe4e551f6da739583d66cd5ef4fca28a1ccfa2ae5a53a5cbf48aa73dd7c91e0c",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "_k5VH22nOVg9Zs1e9PyiihzPoq5aU6XL9IqnPdfJHgw"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_ro.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_ro.msgpack.gz",
+          "bytes": 196154,
+          "sha256": "c17fe82952ed209bb45b95c56cb5c7f077ca921a84578c3807d48ddc1dd842e2",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "wX_oKVLtIJu0W5XFbLXH8HfKkhqEV4w4B9SN3B3YQuI"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_ru.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_ru.msgpack.gz",
+          "bytes": 348771,
+          "sha256": "ddb45281a609f8c5c4bf3ece7b045c540f76fe36bb438a108e2a45c6f593a078",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "3bRSgaYJ-MXEvz7OewRcVA92_ja7Q4oQjipFxvWToHg"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_sh.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_sh.msgpack.gz",
+          "bytes": 239434,
+          "sha256": "aea3996335662bd8101383ba69d49123f7b5bc82d7f907f69f477d040bf74d89",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "rqOZYzVmK9gQE4O6adSRI_e1vILX-Qf2n0d9BAv3TYk"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_sk.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_sk.msgpack.gz",
+          "bytes": 281773,
+          "sha256": "ed772a1d7efd8125d025b2ee21736cfcf186847e059ada62ea3fd7ecf4437a71",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "7XcqHX79gSXQJbLuIXNs_PGGhH4Fmtpi6j_X7PRDenE"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_sl.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_sl.msgpack.gz",
+          "bytes": 235774,
+          "sha256": "68fa0bfb6c083e90cef397435832fd744f7e7a6b90e60319ab969fb266124ae1",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "aPoL-2wIPpDO85dDWDL9dE9-emuQ5gMZq5afsmYSSuE"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_sv.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_sv.msgpack.gz",
+          "bytes": 137451,
+          "sha256": "a7c52a3d3576db1b7d4280be47aafccabdc70f9a56c5a40bc94b9139e271adf6",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "p8UqPTV22xt9QoC-R6r8yr3HD5pWxaQLyUuROeJxrfY"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_ta.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_ta.msgpack.gz",
+          "bytes": 453574,
+          "sha256": "68ed68a8bd703e1aafe8c0adc3827dada57eb3226837dabf26716187fb796547",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "aO1oqL1wPhqv6MCtw4J9raV-syJoN9q_JnFhh_t5ZUc"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_tr.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_tr.msgpack.gz",
+          "bytes": 300420,
+          "sha256": "10980704ee3ac5b52f226579251905412a04ead57092a12182dd0b8be6a765df",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "EJgHBO46xbUvImV5JRkFQSoE6tVwkqEhgt0Li-anZd8"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_uk.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_uk.msgpack.gz",
+          "bytes": 272025,
+          "sha256": "c8cc895dd13da4a905d268d96382f2675f49fed770e89804c4f8f114a2564dec",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "yMyJXdE9pKkF0mjZY4LyZ19J_tdw6JgExPjxFKJWTew"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_ur.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_ur.msgpack.gz",
+          "bytes": 103189,
+          "sha256": "2587f23e5974e940e4dbeff64e9d3c918b5bd81b5089020cb6803f3c09626ac6",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "JYfyPll06UDk2-_2Tp08kYtb2BtQiQIMtoA_PAliasY"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_vi.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_vi.msgpack.gz",
+          "bytes": 39727,
+          "sha256": "bde76e2846f38fc8f4ad5112493d524c0c7f5e5545072b4de773d0a83159f15f",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "veduKEbzj8j0rVESST1STAx_XlVFBytN53PQqDFZ8V8"
+          }
+        },
+        {
+          "frozenPath": "sidecar_dist/sidecar/_internal/wordfreq/data/small_zh.msgpack.gz",
+          "installedPath": ".venv/Lib/site-packages/wordfreq/data/small_zh.msgpack.gz",
+          "bytes": 179188,
+          "sha256": "441ce2e01370185606f0e3c5da47f64887981758b0f65ae511c0a5927b1ab359",
+          "matchesInstalledBytes": true,
+          "installedRecordHash": {
+            "mode": "sha256",
+            "value": "RBzi4BNwGFYG8OPF2kf2SIeYF1iw9lrlEcClknsas1k"
+          }
+        }
+      ]
+    }
+  ],
+  "proposedCpuWheel": {
+    "source": "https://pypi.org/pypi/onnxruntime/1.29.0/json",
+    "artifacts": [
+      {
+        "filename": "onnxruntime-1.29.0-cp313-cp313-win_amd64.whl",
+        "sha256": "2945e1f82f81f27e88decea88c7861f45baea23818950d467bf3909aa303119e",
+        "url": "https://files.pythonhosted.org/packages/e1/3b/66b424c63fa92dfaa48d1719efaae66fc8c256b9426a832eda51d8dfe1e9/onnxruntime-1.29.0-cp313-cp313-win_amd64.whl"
+      }
+    ],
+    "downloadedOrInstalled": false
+  },
+  "retainedTexts": [
+    {
+      "path": "AGPL-3.0.txt",
+      "sha256": "57c8ff33c9c0cfc3ef00e650a1cc910d7ee479a8bc509f6c9209a7c2a11399d6",
+      "bytes": 34520,
+      "source": "https://raw.githubusercontent.com/ArtifexSoftware/mupdf/ecd0129a551c96a4b05d77ef55601125e2fc2c67/COPYING",
+      "scope": "Verbatim AGPL version 3; license text only, not a match to the bundled MuPDF source revision."
+    },
+    {
+      "path": "Apache-2.0.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358,
+      "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+      "scope": "Unmodified Apache license text."
+    },
+    {
+      "path": "CC-BY-SA-4.0.txt",
+      "sha256": "23ee78c8bae49cf08ea2f0c84945c66b987ebe4520881fb51b3dad4fb43d07c2",
+      "bytes": 20137,
+      "source": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt",
+      "scope": "Complete CC BY-SA 4.0 legal code, whitespace-normalized copy; applies to data, not the whole application.",
+      "originalBytesSha256": "28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5",
+      "originalBytes": 20138,
+      "normalization": "Generated copy: trailing spaces/tabs and excess blank lines at EOF removed; full wording/copyright unchanged. Original bytes remain in the retained CPU source/archive and original font notice."
+    },
+    {
+      "path": "wordfreq-3.1.1-data-attribution.txt",
+      "sha256": "c9caa6d50dba4f1e848045dabbc5e6b4022a4c6d36b7a66808ee87ef81e67797",
+      "bytes": 6054,
+      "source": "https://pypi.org/pypi/wordfreq/3.1.1/json",
+      "scope": "Verbatim license and citation sections of exact-release PyPI description; not a claimed release NOTICE file."
+    },
+    {
+      "path": "wordfreq-3.1.1-code-license.txt",
+      "sha256": "262b51ebd3e7e29d3e5b82cb1fceefcf0a0db5627f119d4ad85157adfb6e16fe",
+      "bytes": 552,
+      "source": ".venv/Lib/site-packages/wordfreq-3.1.1.dist-info/LICENSE.txt",
+      "scope": "Installed code license; release version corroborated separately."
+    },
+    {
+      "path": "OFL-NotoSans.txt",
+      "sha256": "e2e177a32561584d4fc13aaa3cd8e53758a12910f013fe9ca125419111722029",
+      "bytes": 4395,
+      "source": "sidecar/assets/fonts/OFL-NotoSans.txt",
+      "scope": "Existing project OFL text; exact font source/version/copyright still needs binding.",
+      "originalBytesSha256": "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a",
+      "originalBytes": 4396,
+      "normalization": "Generated copy: trailing spaces/tabs and excess blank lines at EOF removed; full wording/copyright unchanged. Original bytes remain in the retained CPU source/archive and original font notice."
+    },
+    {
+      "path": "OFL-NotoSansCJK.txt",
+      "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+      "bytes": 4301,
+      "source": "sidecar/assets/fonts/OFL-NotoSansCJK.txt",
+      "scope": "Existing project OFL text; exact font source/version/copyright still needs binding."
+    }
+  ],
+  "residuals": [
+    "Exact complete frozen dependency/build provenance remains open.",
+    "cuDNN 9.26.0.51 installed license supplement (January 28, 2020) lists cudnn64_7.dll while retained files include cuDNN 9 DLLs; newer web terms do not prove applicability.",
+    "Font text copies require exact font copyright and version binding.",
+    "RapidOCR code license is declared in installed metadata but no license file is installed in its dist-info.",
+    "No final installer carries these draft texts yet."
+  ]
+}

@@ -1,0 +1,100 @@
+import './retiredCampaign'
+import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
+import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
+import { liveWorkspacePath, loadRealSettings, reportRun, resetWorkspace } from './agentLiveHarness'
+
+const WORKSPACE = liveWorkspacePath('ts2305')
+const SESSION = 'live-ts2305'
+const PACKAGE_NAME = 'onlyrag-export-probe'
+
+function seedWorkspace(): { packageJson: string; packageTypes: string } {
+  resetWorkspace(WORKSPACE)
+  fs.mkdirSync(path.join(WORKSPACE, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(WORKSPACE, 'node_modules', PACKAGE_NAME), { recursive: true })
+
+  const packageJson = JSON.stringify(
+    {
+      name: 'ts2305-probe',
+      version: '1.0.0',
+      private: true,
+      scripts: { build: 'tsc --noEmit' },
+      dependencies: { [PACKAGE_NAME]: '1.0.0' },
+    },
+    null,
+    2,
+  )
+  const packageTypes =
+    ['export declare const Dialog: any', 'export declare const Menu: any', 'export declare const Listbox: any', 'export declare const Switch: any'].join('\n') +
+    '\n'
+
+  fs.writeFileSync(path.join(WORKSPACE, 'package.json'), packageJson, 'utf-8')
+  fs.writeFileSync(
+    path.join(WORKSPACE, 'tsconfig.json'),
+    JSON.stringify(
+      { compilerOptions: { strict: true, module: 'commonjs', target: 'es2020', moduleResolution: 'node', jsx: 'preserve' }, include: ['src'] },
+      null,
+      2,
+    ),
+    'utf-8',
+  )
+  fs.writeFileSync(path.join(WORKSPACE, 'src', 'global.d.ts'), 'declare namespace JSX { interface IntrinsicElements { [element: string]: any } }\n', 'utf-8')
+  fs.writeFileSync(
+    path.join(WORKSPACE, 'src', 'TaskCard.tsx'),
+    `import { Card, List } from '${PACKAGE_NAME}'\n\nexport const taskCard = Card + List\n`,
+    'utf-8',
+  )
+  fs.writeFileSync(
+    path.join(WORKSPACE, 'node_modules', PACKAGE_NAME, 'package.json'),
+    JSON.stringify({ name: PACKAGE_NAME, version: '1.0.0', types: 'index.d.ts' }, null, 2),
+    'utf-8',
+  )
+  fs.writeFileSync(path.join(WORKSPACE, 'node_modules', PACKAGE_NAME, 'index.d.ts'), packageTypes, 'utf-8')
+  return { packageJson, packageTypes }
+}
+
+describe('live: TS2305 export recovery', () => {
+  it('rewrites the importer using the package export list', async () => {
+    const fixture = seedWorkspace()
+    await agentSessionStateRepository.seedPlanMilestones(
+      SESSION,
+      WORKSPACE,
+      [{ id: 'm-ts2305', title: 'Fix src/TaskCard.tsx', status: 'pending', verificationCommand: 'npm run build' }],
+      'Fix the TypeScript build error in src/TaskCard.tsx.',
+    )
+
+    const result = await runAgentOrchestratorLoop(
+      {
+        userTask:
+          `Run \`npm run build\` first and fix every error in src/TaskCard.tsx. ` +
+          `The package ${PACKAGE_NAME} and node_modules are already correct: do not edit package.json, ` +
+          'do not edit node_modules, and do not install any package. Stop only after npm run build passes.',
+        workspacePath: WORKSPACE,
+        agentMode: 'auto',
+        sessionId: SESSION,
+        settings: loadRealSettings({ maxToolCallSteps: 12 }),
+      },
+      null,
+    )
+
+    const metrics = reportRun({
+      label: 'TS2305 export recovery',
+      workspacePath: WORKSPACE,
+      sessionId: SESSION,
+      success: result.success,
+      summary: result.summary,
+    })
+    const source = fs.readFileSync(path.join(WORKSPACE, 'src', 'TaskCard.tsx'), 'utf-8')
+
+    expect(metrics.commands.some((command) => command.includes('npm run build'))).toBe(true)
+    expect(metrics).toMatchObject({ verified: 1, failed: 0, pending: 0, completionStatus: 'unverifiable' })
+    expect(result).toMatchObject({ success: false, completionStatus: 'unverifiable' })
+    const importLine = source.split('\n').find((line) => line.trimStart().startsWith('import ')) || ''
+    expect(importLine).not.toMatch(/\b(Card|List)\b/)
+    expect(importLine).toMatch(/\b(Dialog|Menu|Listbox|Switch)\b/)
+    expect(fs.readFileSync(path.join(WORKSPACE, 'package.json'), 'utf-8')).toBe(fixture.packageJson)
+    expect(fs.readFileSync(path.join(WORKSPACE, 'node_modules', PACKAGE_NAME, 'index.d.ts'), 'utf-8')).toBe(fixture.packageTypes)
+  })
+})

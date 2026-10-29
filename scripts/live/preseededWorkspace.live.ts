@@ -1,0 +1,47 @@
+import './retiredCampaign'
+import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { liveWorkspacePath, loadRealSettings, resetWorkspace, seedGeneratedPlan } from './agentLiveHarness'
+
+const WORKSPACE = liveWorkspacePath('preseeded')
+const SESSION = 'live-preseeded'
+
+function seedExistingWorkspace(): void {
+  resetWorkspace(WORKSPACE)
+  fs.mkdirSync(path.join(WORKSPACE, 'src'), { recursive: true })
+  fs.writeFileSync(
+    path.join(WORKSPACE, 'package.json'),
+    JSON.stringify(
+      {
+        name: 'preseeded-probe',
+        version: '1.0.0',
+        private: true,
+        scripts: { build: 'tsc --noEmit' },
+      },
+      null,
+      2,
+    ),
+    'utf-8',
+  )
+  fs.writeFileSync(path.join(WORKSPACE, 'src', 'App.tsx'), 'export function App() { return null }\n', 'utf-8')
+}
+
+describe('live: pre-seeded workspace', () => {
+  it('adds the existing project build to the generated plan', async () => {
+    seedExistingWorkspace()
+    const settings = loadRealSettings()
+
+    const seeded = await seedGeneratedPlan({
+      sessionId: SESSION,
+      workspacePath: WORKSPACE,
+      userTask: 'Improve the existing dashboard while preserving its current project structure.',
+      settings,
+      interviewPolicy: 'skip',
+    })
+
+    const runnable = seeded.milestones.find((milestone) => milestone.verificationCommand === 'npm run build')
+    expect(runnable, 'the existing project build was not carried into the plan').toBeDefined()
+    expect(seeded.milestones.some((milestone) => milestone.title.includes('package.json'))).toBe(false)
+  })
+})

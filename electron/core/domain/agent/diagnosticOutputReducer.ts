@@ -1,0 +1,188 @@
+import stripAnsi from 'strip-ansi'
+
+export interface ExtractedErrorFrame {
+  filePath?: string
+  lineNumber?: number
+  columnNumber?: number
+  errorMessage: string
+  errorType: string
+  rawTrace: string
+}
+
+const ERROR_HEADER_REGEX = /(?:Error|Exception|TypeError|ReferenceError|SyntaxError|FAIL|Failed): (.*)/i
+const FILE_LINE_REGEX =
+  /(?:at\s+(?:.*?\()|at\s+|in\s+|^|\s)([a-zA-Z]:[\\/][^\s:]+\.(?:ts|tsx|js|jsx|py|json)|[a-zA-Z0-9_./\\-]+\.(?:ts|tsx|js|jsx|py|json)):(\d+)(?::(\d+))?/i
+
+export class DiagnosticOutputReducer {
+  /** Keeps the first actionable project error when generated output floods ESLint's report. */
+  public static summarizeLintFailure(output: string): string {
+    const lines = this.stripAnsi(output).split(/\r?\n/)
+    const generated = lines.some((line) => /[\\/](?:dist|build)[\\/]/i.test(line))
+    const firstProjectFile = lines.findIndex(
+      (line) => /(?:[\\/]src[\\/]|(?:^|[\\/])(?:eslint|vite|tailwind|postcss)\.config\.)/i.test(line) && /\.(?:[cm]?[jt]sx?)\s*$/i.test(line.trim()),
+    )
+    const firstFile = firstProjectFile >= 0 ? firstProjectFile : lines.findIndex((line) => /\.(?:[cm]?[jt]sx?)\s*$/i.test(line.trim()))
+    const excerpt = firstFile >= 0 ? lines.slice(firstFile, Math.min(firstFile + 5, lines.length)).join('\n') : lines.slice(0, 8).join('\n')
+    const summary = [...lines].reverse().find((line) => /\d+ problems? \(|\d+ errors?\b/i.test(line)) || ''
+    return [
+      '[ESLINT FAILURE SUMMARY]',
+      generated
+        ? 'Generated dist/build output appears in the lint report. Exclude it in the ESLint configuration or .eslintignore; do not delete it to repair lint.'
+        : '',
+      'First project diagnostic:',
+      excerpt,
+      summary,
+      'When passing a temporary ESLint option through npm, use npm run lint -- --ignore-pattern dist/**.',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  public static stripAnsi(text: string): string {
+    if (!text) return ''
+    return stripAnsi(text)
+  }
+
+  /**
+   * Bounds command output for the model. Build and test tools print the failure summary last, so the
+   * tail gets the larger share; the omitted middle is stated, never silent.
+   */
+  public static keepHeadAndTail(text: string, maxChars: number): string {
+    if (text.length <= maxChars) return text
+    const tailChars = Math.floor(maxChars * 0.6)
+    const headChars = Math.max(0, maxChars - tailChars - 80)
+    const omitted = text.length - headChars - tailChars
+    return `${text.slice(0, headChars)}\n[... ${omitted} characters omitted ...]\n${text.slice(-tailChars)}`
+  }
+
+  /** Joins a command's two output streams into the single text the model gets to read. */
+  public static composeCommandOutput(stdout?: string, stderr?: string, exitCode?: number | null): string {
+    const out = (stdout || '').trim()
+    const err = (stderr || '').trim()
+    if (out && err) return `${out}\n${err}`
+    if (out || err) return out || err
+    return `Exit code ${exitCode ?? 'unknown'}`
+  }
+
+  /**
+   * Distills voluminous terminal output down to high-signal diagnostic headers, error frames, and summary lines.
+   */
+  public static distillTerminalOutput(output: string, maxChars: number = 2500): string {
+    if (!output || typeof output !== 'string') return ''
+
+    const clean = this.stripAnsi(output).trim()
+    if (clean.length <= maxChars) return clean
+
+    const lines = clean.split(/\r?\n/)
+    const totalLines = lines.length
+
+    // `[plugin vite:css] src/index.css:1:0`, Rolldown's `[UNRESOLVED_IMPORT] Could not resolve …` and
+    // its code frame `[ src/main.jsx:3:8 ]` carry the only project path of a bundler failure; dropping them left the arbiter with no file to name
+    // (live full task runs 33 and 35 of 2026-09-25 re-ran the build 20-30 times).
+    const errorPattern =
+      /(?:FAIL|ERROR|Error:|AssertionError|SyntaxError|TypeError|ReferenceError|Exception|failed|UnhandledPromiseRejection|TS\d{4}:|\sat\s|>>>|\berror\b|\[plugin\s[^\]]+\]|is not exported by|\[\s*[^\s\]]+:\d+:\d+\s*\]|\[[A-Z][A-Z_]{3,}\]|Could not resolve|Failed to resolve)/i
+    const summaryPattern = /(?:Test Files|Tests|Passed|Failed|Duration|Exit code|npm ERR!|error Command failed)/i
+
+    const highlightedLines: string[] = []
+    const summaryLines: string[] = []
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim()
+      if (!line) continue
+
+      if (summaryPattern.test(line)) {
+        summaryLines.push(line)
+      } else if (errorPattern.test(line)) {
+        highlightedLines.push(line)
+        if (i + 1 < lines.length && lines[i + 1].trim().startsWith('at ')) {
+          highlightedLines.push(lines[i + 1].trim())
+          i++
+        }
+      }
+    }
+
+    const headLines = lines.slice(0, 5).filter((l) => l.trim().length > 0)
+    const tailLines = lines.slice(-5).filter((l) => l.trim().length > 0)
+
+    const distilledParts: string[] = [`[TERMINAL OUTPUT DISTILLED: original was ${totalLines} lines / ${clean.length} chars]`, '--- HEAD ---', ...headLines]
+
+    if (highlightedLines.length > 0) {
+      distilledParts.push('--- RELEVANT DIAGNOSTICS / FAILURES ---')
+      distilledParts.push(...highlightedLines.slice(0, 30))
+    }
+
+    if (summaryLines.length > 0) {
+      distilledParts.push('--- SUMMARY ---')
+      distilledParts.push(...summaryLines)
+    } else if (tailLines.length > 0) {
+      distilledParts.push('--- TAIL ---')
+      distilledParts.push(...tailLines)
+    }
+
+    const result = distilledParts.join('\n')
+    if (result.length > maxChars) {
+      return result.slice(0, maxChars) + '\n... [truncated]'
+    }
+    return result
+  }
+
+  /**
+   * Extracts exact failing file path and line number from terminal output for small LLM error convergence.
+   */
+  public static extractErrorDiagnostics(rawTerminalOutput: string): ExtractedErrorFrame | null {
+    if (!rawTerminalOutput || !rawTerminalOutput.trim()) return null
+
+    const lines = rawTerminalOutput.split('\n')
+    let errorMessage = ''
+    let errorType = 'Runtime Error'
+    let filePath: string | undefined
+    let lineNumber: number | undefined
+    let columnNumber: number | undefined
+
+    for (const line of lines) {
+      const headerMatch = line.match(ERROR_HEADER_REGEX)
+      if (headerMatch && !errorMessage) {
+        errorMessage = headerMatch[1].trim()
+        const typeMatch = line.match(/([a-zA-Z]+Error|[a-zA-Z]+Exception)/)
+        if (typeMatch) errorType = typeMatch[1]
+      }
+
+      const fileMatch = line.match(FILE_LINE_REGEX)
+      if (fileMatch && !filePath) {
+        filePath = fileMatch[1]
+        lineNumber = parseInt(fileMatch[2], 10)
+        if (fileMatch[3]) columnNumber = parseInt(fileMatch[3], 10)
+      }
+    }
+
+    if (!errorMessage && !filePath) {
+      return null
+    }
+
+    return {
+      filePath,
+      lineNumber,
+      columnNumber,
+      errorMessage: errorMessage || 'Terminal command failed',
+      errorType,
+      rawTrace: lines.slice(-25).join('\n'),
+    }
+  }
+
+  public static formatDiagnosticPrompt(frame: ExtractedErrorFrame): string {
+    const locStr = frame.filePath ? `At ${frame.filePath}${frame.lineNumber ? `:${frame.lineNumber}` : ''}` : 'Location unknown'
+    return `[TARGETED ERROR DIAGNOSTIC FOR SMALL LLM CONVERGENCE]
+Type: ${frame.errorType}
+Location: ${locStr}
+Message: ${frame.errorMessage}
+
+Relevant Terminal Tail Stack Trace:
+\`\`\`
+${frame.rawTrace}
+\`\`\`
+DIRECTIVE: Fix the exact error at ${locStr} using replace_file_content or write_file.`
+  }
+}
+
+export const extractErrorDiagnostics = DiagnosticOutputReducer.extractErrorDiagnostics
+export const formatDiagnosticPrompt = DiagnosticOutputReducer.formatDiagnosticPrompt

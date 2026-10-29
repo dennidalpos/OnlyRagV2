@@ -1,0 +1,7 @@
+{
+  "onlyrag": 5.0,
+  "lancedb": 5.0,
+  "ollama": 5.0,
+  "fastapi": 5.0,
+  "pyinstaller": 5.0
+}

@@ -1,0 +1,52 @@
+# Architettura
+
+OnlyRag è una desktop app Windows composta da Renderer React, Preload Electron, Main Electron, Sidecar Python locale e Ollama locale/remoto.
+
+```text
+Renderer (src/) -> Preload (electron/preload.ts) -> IPC Main (electron/core/presentation/)
+                                                        |
+                              +-------------------------+------------------------+
+                              |                         |                        |
+                         Application                Domain                Infrastructure
+                         use cases              regole pure              I/O e processi
+                              |                         |                        |
+                         Sidecar HTTP -------------- Ollama HTTP -------------- FS/PTY
+                              |
+                         FastAPI :8000 -> LanceDB
+```
+
+## Confini
+
+- `src/` e `electron/` non si importano a vicenda.
+- Il codice condiviso passa da `shared/`, inclusi tipi, regole pure e contratto IPC.
+- `electron/core/presentation/` registra gli IPC tramite `secureIpcMain`, che controlla frame mittente e schema degli argomenti per canale; `application/` coordina i casi d'uso senza importare `electron` né `node:fs`; `domain/` resta senza I/O e definisce le porte (`domain/ports/`); `infrastructure/` contiene HTTP, filesystem, processi e gli adapter Electron. `npm run quality:static` verifica queste regole di import. Application può importare direttamente gli adapter e i singleton di Infrastructure: le porte in `domain/ports/` esistono solo dove serve un confine verificato (`HardwareProbePort`, imposto dal guard di layering) o una seconda implementazione reale, per esempio un doppio nei test (`RendererEventSink`, `TaskRunnerPort`). Non si aggiungono porte per simmetria; i test di Application sostituiscono gli adapter con `vi.mock`.
+- `electron/preload.ts` espone l'unica API `window.electronAPI`; `nodeIntegration` è disabilitato e `contextIsolation`/sandbox sono attivi.
+- Il Sidecar espone HTTP su `127.0.0.1:8000`; ogni operazione Ollama acquisisce l'endpoint configurato all'avvio e non condivide host mutabile. Il client supporta HTTP e HTTPS.
+- Il modello di ogni generazione si risolve solo con `resolveConfiguredModel` ([`shared/domain/settings/configuredModel.ts`](../shared/domain/settings/configuredModel.ts)): scelta esplicita, poi il modello del ruolo (`chatModel`, `codingModel`, `translationModel`), poi `defaultModel`. Senza modello configurato il flusso si ferma con un errore esplicito (preflight `model` del Coding Agent, piano e intervista, chat, traduzione, `generateOllamaStream`) invece di indovinare un modello che potrebbe non essere installato; il Sidecar rifiuta con `422` una traduzione senza `model` e una normalizzazione LLM senza `normalization_model`.
+
+## Flussi principali
+
+1. Il Renderer invoca l'API tipizzata del Preload.
+2. Un handler Presentation valida gli argomenti e delega all'Application service.
+3. Il servizio usa Domain e adapter Infrastructure.
+4. Il risultato torna via Promise IPC o evento IPC.
+
+Il Coding Agent consente avvio diretto oppure preparazione esplicita con intervista/piano; in Ask il percorso resta di analisi. Guided/Auto eseguono azioni e verifiche secondo il piano e il profilo acquisiti, poi producono l'esito. Per ingestion e traduzione il Main inoltra al Sidecar i dati o lo stream NDJSON.
+
+## Risorse e ciclo di vita
+
+- La traduzione Markdown prepara tutti i prompt prima del primo invio. Il limite IPC condiviso è 120.000 caratteri, istruzioni incluse; il conteggio applicativo `countPromptTokens` riserva metà del contesto configurato all'output e almeno 256 token (o il 2%) al margine. `num_predict` limita la generazione alla riserva di output. È una stima con il tokenizer applicativo, non una misura del tokenizer di ogni modello Ollama. Prosa lunga e Unicode sono suddivisi senza perdita del sorgente; fence backtick/tilde restano interi, inclusi paragrafi vuoti e marcatori pagina interni. Fence non chiusi o blocchi indivisibili oltre budget rifiutano l'intero piano prima dell'invio con errore visibile IT/EN. Un errore, stream senza conferma o arresto `length` lascia l'output incompleto e non esportabile. La vista in-place resta un flusso separato.
+
+- `taskQueueAppService` serializza i task agente.
+- `ollamaGenerationScheduler` serializza a una richiesta le generazioni Main, identifica ogni operazione e pubblica attiva/coda per annullamenti mirati.
+- `sidecarProcessManager` avvia, monitora e arresta il Sidecar; `orphanPortReclaim` gestisce residui autorizzati su `:8000`.
+- Il Coding Agent modifica il workspace in place. Il journal protegge i singoli step e conserva checkpoint ripristinabili sotto `.onlyrag/checkpoints`; Stop mantiene le modifiche e il ripristino richiede una scelta esplicita.
+- Il terminale UI e i tool shell dell'agente usano `PersistentPowerShellSession`, con sessioni separate per workspace. I comandi consecutivi mantengono directory corrente e variabili; la directory corrente è riportata con la grafia del workspace quando vi è contenuta (PowerShell restituisce il path lungo e risolto, mentre un workspace aperto tramite nome corto 8.3 o junction conserva il proprio), così il controllo di sicurezza dei comandi continua a risolvere i path relativi dalla destinazione del `cd`; timeout, cancellazione e prompt interattivi ricreano la sessione. `TaskRunner` chiude le sessioni UI quando annulla tutti i task o l'app termina.
+- Gli esecutori usano Windows PowerShell 5.1. La compatibilità `&&` legge stringhe, escape, commenti, here-string e delimitatori prima di trasformare le sole catene eseguibili, chiudendole al confine della relativa istruzione. Testo nativo quotato, variabili con nome delimitato e argomenti `--%` restano dati. Comandi multilinea e Unicode sono inviati come UTF-8 codificato e valutati nello scope della sessione: non richiedono input aggiuntivo su stdin e conservano variabili e directory. La normalizzazione resta successiva ai controlli di autorizzazione esistenti; non introduce nuovi permessi o provisioning.
+
+- Il Sidecar coordina documento e chunk con un lock e `data/document-recovery.json`. Le scritture native sono atomiche per tabella; le versioni precedenti consentono rollback e recupero prima della manutenzione. Un recupero fallito conserva il registro e rende indisponibile il database.
+- La chat conserva il formato localStorage esistente e un checkpoint Main `chat-history-recovery.json`, necessario per il recupero dopo interruzione del processo; `useChatHistory` gestisce validazione, checkpoint del turno attivo e recupero delle risposte incomplete, mentre `useChatEngine` gestisce streaming e contesto RAG.
+
+Verifiche: `npm run audit:cycles`, `npm run typecheck` e `npm run docs:check`.
+
+Le bozze documentali sono snapshot versionati nel Main (`document-drafts.json` sotto userData), separati dai documenti canonici Sidecar. Scritture serializzate, revisione SHA256, copia precedente `.bak` e readback precedono la conferma. Il Renderer conserva le modifiche più recenti fino al riconoscimento dello stesso snapshot; leggere un archivio invalido non autorizza una riscrittura. [Contratto e verifica](./verification-chat-drafts-context-2026-10-16.md).

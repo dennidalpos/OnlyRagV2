@@ -7,7 +7,7 @@ tags: ["release", "maintenance"]
 
 # Release and maintenance
 
-- Use [AGENTS.md](../../AGENTS.md#comandi-e-verifica) for the pre-commit gate and [verification commands](../code-quality-and-linting/SKILL.md) for targeted checks.
+- Follow [AGENTS.md](../../AGENTS.md) for applicable directives, the [operations command reference](../../docs/operations.md#comandi) for full checks, and [verification commands](../code-quality-and-linting/SKILL.md) for targeted checks.
 - `npm run package:win` creates a fresh `release/cpu-*` candidate with Sidecar, licenses, notices and source archive. It installs release Python dependencies into `build/release-cpu/venv` and runs build/smoke steps; it is not a read-only validation command.
 - `pwsh -NoProfile -File scripts/build_package.ps1 -RequireSignature` requires a valid installer signature. `-SkipSidecar` is rejected. Use [distribution.md](../../docs/distribution.md) for packaging details; historical qualification records do not create a current publication or model-campaign requirement.
 - Preview cleanup with `pwsh -NoProfile -File scripts/clean_workspace.ps1 -Mode Repo -DisposablePaths "<reviewed-absolute-path>" -WhatIf`. `Repo`, `TestResidues` and `Full` require an explicit selection; the npm aliases do not supply one. `Full` excludes profiles. Read `scripts/cleanup_policy.ps1` for eligible roots; the preflight can refuse even with `-WhatIf`.

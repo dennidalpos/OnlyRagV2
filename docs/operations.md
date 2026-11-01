@@ -12,15 +12,37 @@ Eseguire i comandi da PowerShell nella radice del repository. Node `>=24.19.0 <2
 
 ## Comandi
 
+### Primo avvio dal checkout
+
+```powershell
+npm run setup:dev
+# Proseguire soltanto se il setup termina senza errori.
+npm run dev
+```
+
+Il setup richiede rete per le dipendenze mancanti e può ricreare un `.venv` incompatibile. Dopo l'avvio controllare lo stato di Sidecar e Ollama nelle impostazioni, scegliere modelli installati per i ruoli necessari, quindi importare un documento piccolo. Senza un modello di generazione configurato chat, agente e traduzione si fermano con errore esplicito. L'assegnazione del modello embedding va mantenuta coerente con l'indice esistente; cambiare modello non ricostruisce automaticamente i vettori.
+
+### Diagnosi iniziale
+
+| Sintomo | Controllo e azione |
+| --- | --- |
+| Il setup rifiuta Node o Python | Confrontare `node --version`, `npm --version` e `py -3.13 --version` con i prerequisiti sopra; correggere la selezione del toolchain prima di riprovare. |
+| Sidecar resta in verifica o diventa Offline | Leggere l'errore di preparazione/readiness nei log; verificare l'interprete `.venv` e le dipendenze. Non arrestare un processo sconosciuto soltanto perché occupa la porta 8000. |
+| Ollama non è disponibile | Controllare modalità locale/remota, endpoint e modelli installati nelle impostazioni; ripetere la diagnostica. L'apertura della pagina di installazione non conferma che il server sia online. |
+| L'anteprima originale viene rifiutata | Verificare l'errore dell'archivio conservato; un file esterno presente non sostituisce automaticamente una copia mancante o alterata. Vedere [ingestion](./ingestion.md). |
+| Una modifica al Main non compare | Chiudere e riavviare il comando di sviluppo: l'hot reload del Renderer non sostituisce il riavvio del Main. |
+
+### Riferimento comandi
+
 | Scopo | Comando | Effetto e stato |
 | --- | --- | --- |
 | Setup | `npm run setup:dev` | Installa dipendenze e runtime di sviluppo; comando documentato dal manifest, non rieseguito in questa revisione. |
 | Avvio | `npm run dev` | Avvia Vite/Electron e il Sidecar; può leggere il profilo di sviluppo. Non rieseguito qui. |
-| Documentazione | `npm run docs:check`; `npm run format:check` | Controllano link locali, ancoraggi, nomi degli script e whitespace del diff. Non provano comportamento o URL remoti. Esiti della sessione nel [riesame documentale](./documentation-audit-2026-10-21.md). |
+| Documentazione | `npm run docs:check`; `npm run format:check` | Controllano link locali, ancoraggi, nomi degli script, struttura dei flowchart Mermaid supportati e whitespace del diff. Non eseguono rendering né provano comportamento o URL remoti. Il [riesame documentale](./documentation-audit-2026-10-21.md) conserva il riferimento storico. |
 | Tipi/statico | `npm run typecheck`, `npm run quality:static` | Controlli sorgente; eseguire se cambiano contratti o codice. Non necessari per sole pagine Markdown. |
 | Percorsi Python critici | `npm run quality:python` | 15 casi offline su ammissione, ricerca e persistenza. Esegue regressioni native esistenti in un subprocess isolato; errori, casi mancanti o saltati fanno fallire il gate. Incluso nel lint seriale anche con `-SkipTests`. [Qualifica e limiti](./verification-python-critical-2026-10-19.md). |
 | Test mirati | `npx vitest run <percorso>`; `.venv\Scripts\python.exe -m pytest -q <percorso>` | Usare per problemi concreti, con fixture isolate. |
-| Suite complete | `npm run test`; `.venv\Scripts\python.exe -m pytest -q` | Gate obbligatorio pre-commit secondo [AGENTS.md](../AGENTS.md#comandi-e-verifica). `test:fast` cambia il reporter, non riduce la suite. La fixture nativa pnpm usa cache/home isolati, una dipendenza locale offline e il lockfile; parte con offline esterno disabilitato e richiede che il wrapper rifiuti il pin pnpm 12 non preparato senza richieste. Risultati e limiti in [verifica corrente](./verification-current.md). |
+| Suite complete | `npm run test`; `.venv\Scripts\python.exe -m pytest -q` | Suite complete frontend/backend, distinte dal gate Python critico. `test:fast` cambia il reporter, non riduce la suite. La fixture nativa pnpm usa cache/home isolati, una dipendenza locale offline e il lockfile; parte con offline esterno disabilitato e richiede che il wrapper rifiuti il pin pnpm 12 non preparato senza richieste. Risultati e limiti in [verifica corrente](./verification-current.md). |
 | Build | `npm run build` | Genera `dist/` e `dist-electron/`. Un build non sostituisce pytest o una prova dell'app installata. |
 | Wrapper Sidecar | `npm run test:sidecar` | Esegue sempre `.venv\Scripts\python.exe -m pytest -q` dalla radice (suite di `pytest.ini`) e ne propaga il codice di uscita; non invia richieste a servizi in esecuzione, nemmeno se la porta 8000 è occupata. Interprete o pytest mancanti falliscono con exit 2 e messaggio esplicito. `-PythonExe <percorso>` sceglie un altro interprete. [Verifica del 22 ottobre](./verification-tracker-lot-2026-10-22.md). |
 | Recupero chat e bozze | `npm run test:e2e:chat-drafts` | Build e prova Electron isolata di interruzione, riavvio, revisione obsoleta e rifiuto della chiusura; nessuna generazione reale. |

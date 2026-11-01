@@ -2,18 +2,27 @@
 
 OnlyRag è una desktop app Windows composta da Renderer React, Preload Electron, Main Electron, Sidecar Python locale e Ollama locale/remoto.
 
-```text
-Renderer (src/) -> Preload (electron/preload.ts) -> IPC Main (electron/core/presentation/)
-                                                        |
-                              +-------------------------+------------------------+
-                              |                         |                        |
-                         Application                Domain                Infrastructure
-                         use cases              regole pure              I/O e processi
-                              |                         |                        |
-                         Sidecar HTTP -------------- Ollama HTTP -------------- FS/PTY
-                              |
-                         FastAPI :8000 -> LanceDB
+```mermaid
+flowchart TD
+  Renderer["Renderer React: src"] --> Preload["Preload: window.electronAPI"]
+  Preload --> IPC["Presentation: mittente e schemi IPC"]
+  IPC --> Application["Application: casi d'uso"]
+  Application --> Domain["Domain e shared: regole senza I/O"]
+  Application --> Infrastructure["Infrastructure: HTTP, filesystem e processi"]
+  Infrastructure --> Sidecar["Sidecar FastAPI su loopback"]
+  Infrastructure --> Ollama["Server Ollama configurato"]
+  Infrastructure --> Workspace["Profilo locale e workspace codice"]
+  Sidecar --> Ollama
+  Sidecar --> Storage["LanceDB locale e archivio originali"]
 ```
+
+Le frecce rappresentano invocazioni e accessi ai dati, non tutte le dipendenze di import. Main e Sidecar chiamano Ollama per operazioni diverse: le generazioni Main e gli embedding/traduzioni documentali Sidecar non passano da un unico client.
+
+## Elaborazione locale e rete
+
+Il valore iniziale di `ollamaHost` è `http://127.0.0.1:11434` e `ollamaMode` è `local`; le impostazioni permettono anche un server remoto ([default](../shared/domain/settings/appSettingsDefaults.ts), [configurazione UI](../src/components/settings/OllamaServerConfig.tsx)). Richieste e contenuti inviati a quel server escono dalla postazione. Setup, download modelli, hub skill e strumenti web hanno a loro volta operazioni di rete: l'architettura locale non è una garanzia di assenza di connessioni esterne.
+
+Il profilo agente distingue `offline-strict`, `local-only` e `network-approved`; il default delle impostazioni è `network-approved`. Verificare profilo e permessi effettivi prima dell'esecuzione. Le guardie e i loro limiti sono descritti in [agent-guards.md](./agent-guards.md); nessun diagramma certifica l'isolamento di rete dell'intero prodotto.
 
 ## Confini
 

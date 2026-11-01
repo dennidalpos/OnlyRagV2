@@ -6,7 +6,7 @@ La fase corrente è lo [sviluppo locale approvato](./local-development-policy-20
 
 `npm run package:win` richiama [build_package.ps1](../scripts/build_package.ps1): crea un nuovo `release/cpu-*`, prepara un venv CPU separato in `build/release-cpu/venv`, installa i requisiti release ed esegue compilazione Sidecar, build/smoke e packaging NSIS. Produce installer, notice, manifest/hash e archivio sorgenti associato. Il comando non installa l'app e passa `--publish never` al builder.
 
-Lo script rifiuta `-SkipSidecar`. `-RequireSignature` richiede una firma valida; il candidato può essere non firmato senza tale opzione. Una build riuscita non prova installazione, aggiornamento, correttezza semantica o corrispondenza con un candidato precedente. I gate pre-commit sono in [AGENTS.md](../AGENTS.md#comandi-e-verifica); gli effetti dei comandi sono in [operazioni](./operations.md).
+Lo script rifiuta `-SkipSidecar`. `-RequireSignature` richiede una firma valida; il candidato può essere non firmato senza tale opzione. Una build riuscita non prova installazione, aggiornamento, correttezza semantica o corrispondenza con un candidato precedente. Le direttive applicabili sono in [AGENTS.md](../AGENTS.md); controlli e comandi sono descritti in [operazioni](./operations.md#comandi).
 
 ## Licenze e conservazione
 

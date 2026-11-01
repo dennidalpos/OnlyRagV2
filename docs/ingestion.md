@@ -8,6 +8,22 @@ Le bozze dell'editor vengono salvate in un archivio Main separato dall'indice: l
 
 ## Comportamento attuale
 
+### Dal file all'indice
+
+```mermaid
+flowchart TD
+  File(["File selezionato nell'app"]) --> Validate["Main valida la richiesta e apre lo stream Sidecar"]
+  Validate --> Archive["Sidecar conserva copia originale e proprietà del task"]
+  Archive --> Extract["Estrazione testuale o OCR e controllo dei limiti"]
+  Extract --> Accepted{"Estrazione accettata?"}
+  Accepted -- "No" --> Refuse["Errore esplicito; nessun commit di documento e chunk"]
+  Accepted -- "Sì" --> Prepare["Prepara chunk e embedding"]
+  Prepare --> Commit["Commit coordinato di documento e chunk"]
+  Commit --> Review["Anteprima originale e revisione Markdown"]
+```
+
+È il percorso ordinario di successo o rifiuto dell'estrazione. Un errore può conservare l'originale del tentativo; annullamento e rollback hanno il ciclo di vita distinto descritto sotto. Il caricamento UI ordinario non attiva la normalizzazione LLM. Le estrazioni tabulari sono limitate e l'anteprima DOCX non riproduce l'impaginazione Word.
+
 - `POST /ingest-path-stream` emette progresso NDJSON; `POST /tasks/cancel` prende il `task_id`. L'originale del chiamante non viene modificato. Le nuove ingestion conservano una copia verificabile in `data/source-documents/<doc_id>`.
 - DOCX malformati, troncati, illeggibili, cifrati riconosciuti o senza testo estraibile terminano con errore prima di chunk, embedding e commit. Non passano al fallback UTF-8; gli originali del tentativo fallito restano conservati.
 - Il testo DOCX mantiene l'ordine di paragrafi e tabelle del corpo, include hyperlink e tabelle annidate, senza ripetere il testo delle celle unite. Le parti header/footer esistenti vengono lette una volta anche se condivise tra sezioni: intestazioni prima del corpo, piè di pagina dopo, senza creare parti mancanti. È una rappresentazione testuale; non riproduce impaginazione, coordinate o griglia delle celle unite di Word. Campi, textbox, note/commenti, revisioni e altri contenitori testuali non supportati causano rifiuto esplicito. L'OCR delle immagini incorporate supportate conserva il filtro preesistente di 1.500 byte, deduplica le risorse condivise e aggiunge il testo dopo le parti strutturate; non certifica testo in icone o formati esclusi. Un errore nell'estrazione delle immagini non viene più presentato come estrazione completa. [Criteri e prove DOCX/TIFF](./verification-coverage-lot-2026-10-25.md).

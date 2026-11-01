@@ -6,6 +6,21 @@ Il modello propone piani e azioni; Main decide cosa eseguire, verifica file/coma
 
 ## Uso e confini
 
+```mermaid
+flowchart TD
+  Request(["Richiesta nel workspace selezionato"]) --> Mode{"Modalità Ask?"}
+  Mode -- "Sì" --> Analysis["Analisi senza eseguire modifiche"]
+  Mode -- "No: Guided o Auto" --> Plan["Avvio diretto o preparazione esplicita con piano"]
+  Plan --> Guards["Controlli di modalità, profilo e autorizzazione dell'azione"]
+  Guards --> Allowed{"Azione ammessa?"}
+  Allowed -- "No" --> Refused["Richiesta di approvazione o rifiuto secondo la policy"]
+  Allowed -- "Sì" --> Execute["Esecuzione e registrazione degli effetti"]
+  Execute --> Verify["Verifiche richieste e raccolta delle prove"]
+  Verify --> Result["Esito, diff e limiti osservati"]
+```
+
+Il diagramma riassume un'azione; il runtime può eseguirne più di una. Stop mantiene le modifiche già effettuate. Checkpoint e journal sono strumenti di recupero, non una promessa di snapshot completo o rollback universale: rivedere diff e prove prima di un ripristino o di azioni distruttive.
+
 - Ask legge; Guided e Auto usano il piano JSON e l'identità immutabile di run, conversazione, revisione e workspace. Esegui parte subito; Pianifica richiede la scelta esplicita prevista dalla modalità.
 - Una modifica di file esistente richiede la versione letta. Il journal protegge lo step e conserva checkpoint sotto `.onlyrag/checkpoints`; Stop lascia il lavoro e il ripristino è esplicito.
 - Comandi, rete, installazioni e commit passano dai controlli della modalità e del profilo acquisito all'avvio. Una verifica è `verified` solo quando le prove richieste passano; il testo del modello non basta.
@@ -17,6 +32,8 @@ Il modello propone piani e azioni; Main decide cosa eseguire, verifica file/coma
 Le skill salvate usano il serializer YAML di js-yaml con verifica del roundtrip e readback del file. Virgolette, backslash, nuove righe, liste e corpo Markdown vengono conservati; il nome mantiene la normalizzazione locale già prevista. Il matcher normalizza e deduplica i termini solo per il punteggio. L'attivazione pubblica uno staging riletto dopo flush prima di aggiornare la memoria; un errore mantiene lo stato precedente, senza dichiarare attiva una skill che non lo sarà al riavvio. Stato persistito invalido o illeggibile viene rifiutato senza sovrascriverlo. Non è una qualifica di perdita di alimentazione.
 
 I test di `SkillAppService` usano risposte web locali attraverso gli adapter concreti, cache svuotata e metriche modello controllate. Una guardia registra e rifiuta le richieste native HTTP(S) sfuggite alle fixture prima dell'invio, anche se un fallback applicativo ne nasconde l'errore; gli adapter di produzione mantengono il comportamento di scoperta.
+
+Il roundtrip del serializer riguarda i dati ricevuti dal servizio. L'[editor delle skill](../src/components/coding/skills/SkillEditorModal.tsx) converte invece trigger e tag da liste a testo separato da virgole, poi applica split, trim e minuscole; rimuove anche gli spazi esterni del corpo. Salvare dall'editor può quindi modificare il contenuto anche senza un intervento manuale. Controllare il file risultante prima di considerare la modifica priva di perdite.
 
 I guard e gli scenari isolati dimostrano la meccanica dichiarata. Le campagne storiche `qwen3.5:9b` non hanno qualificato una sequenza TaskLab completa o la pianificazione generale; la [politica locale](./local-development-policy-2026-10-20.md) ha ritirato quei gate live senza convertirli in successi. La [qualifica delle verifiche native](./verification-native-projects-2026-10-19.md) e le [regressioni su root, discovery ed evidenza](./verification-project-regressions-2026-10-20.md) hanno ricevute separate. Il tracker (SecondBrain: `02-areas/products/OnlyRagV2/tracker.json`) contiene il lavoro attualmente aperto; la riconciliazione inflight è implementata e conclusa, non una qualifica residua.
 

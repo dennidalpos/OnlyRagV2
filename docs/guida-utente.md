@@ -4,6 +4,8 @@
 
 Guida confrontata con viste, hook, testi italiani e decisioni approvate il **22 ottobre 2026**. I percorsi derivano dall'esame del codice; le prove native già eseguite hanno date e limiti propri nello [stato delle verifiche](./verification-current.md). La guida non certifica la qualità dei modelli o ogni build installata.
 
+Il riesame documentale del **1 novembre 2026** precisa i limiti del recupero file e del salvataggio nell'editor skill nei percorsi 17 e 20; i diagrammi dei percorsi restano quelli esistenti. Per prerequisiti e avvio dal checkout consulta [setup e operazioni](./operations.md#comandi).
+
 ## Indice
 
 | Obiettivo | Percorsi |
@@ -501,7 +503,7 @@ flowchart TD
 3. Se disponibile, **Ripristina lo stato precedente** propone il recupero da checkpoint. Leggi la conferma: riporta i file coperti allo stato precedente e rimuove quelli creati dalla run. Conferma solo se è ciò che vuoi, oppure annulla.
 4. Dopo il ripristino controlla conferma, errori ed effetti residui. Se conservi le modifiche, verifica il risultato prima di inviare un’altra richiesta.
 
-**Da sapere.** **Arresta non ripristina automaticamente le modifiche.** Checkpoint e ripristino non garantiscono l’annullamento di comandi shell, installazioni o modifiche esterne al workspace, in particolare con Full access.
+**Da sapere.** **Arresta non ripristina automaticamente le modifiche.** Checkpoint e ripristino non garantiscono uno snapshot completo né l’annullamento di comandi shell, installazioni o modifiche esterne al workspace, in particolare con Full access. Verifica i file effettivamente coperti e conserva separatamente quelli necessari prima di un'azione distruttiva.
 
 ### 18 Gestire sessioni e storico progetto
 
@@ -586,6 +588,8 @@ flowchart TD
 4. Con discovery attiva, se l’agente propone una skill, scegli **Installa** oppure **Rifiuta** nella richiesta. Se fallisce, leggi l’errore; se annulli la creazione o l’importazione, torna alle skill senza considerare completato l’inserimento.
 
 **Da sapere.** Le skill contengono istruzioni per l’agente, non una certificazione del risultato. La presenza di una skill installata non significa che sia attiva in ogni task: controlla **Skill Attive**. Se il cambio di attivazione fallisce, il valore precedente resta visibile: correggi la causa e riprova. Un errore che indica skill salvata ma attivazione non salvata richiede una riprova prima di considerare conclusa l'operazione.
+
+L'editor corrente separa trigger e tag con virgole, li converte in minuscolo e rimuove gli spazi esterni del corpo. Anche un salvataggio senza modifiche manuali può alterare quei valori: copia le istruzioni prima di intervenire e controlla il risultato. La verifica del serializer del servizio non certifica la conservazione integrale del form.
 
 ## Impostazioni
 

@@ -1,8 +1,28 @@
 # Traduzione dei documenti
 
-Il Renderer gestisce Markdown e traduzione PDF/DOCX con selezioni separate e un blocco condiviso ([`useTranslation.ts`](../src/hooks/useTranslation.ts)). Il Sidecar esegue la traduzione e il reinserimento tramite [`translator.py`](../sidecar/domain/translator.py); Main valida gli eventi e inoltra la cancellazione.
+Il Renderer gestisce Markdown e traduzione PDF/DOCX con selezioni separate e un blocco condiviso ([`useTranslation.ts`](../src/hooks/useTranslation.ts)). La traduzione Markdown usa la generazione Main; per PDF/DOCX il Sidecar esegue traduzione e reinserimento tramite [`translator.py`](../sidecar/domain/translator.py), mentre Main valida gli eventi e inoltra la cancellazione.
 
 ## Comportamento attuale
+
+### Scegliere il percorso
+
+```mermaid
+flowchart TD
+  Start(["Documento, lingue e modello selezionati"]) --> Mode{"Traduzione PDF o DOCX con layout?"}
+  Mode -- "No: testo o Markdown" --> Prompts["Prepara tutti i prompt entro budget"]
+  Prompts --> Stream["Generazione Main tramite Ollama"]
+  Stream --> Complete{"Output completo e confermato?"}
+  Complete -- "No" --> Partial["Output incompleto: export disabilitato"]
+  Complete -- "Sì" --> Export["Confronta il testo ed esporta"]
+  Mode -- "Sì" --> Source["Verifica copia archiviata e revisione"]
+  Source --> Translate["Sidecar traduce e reinserisce il testo"]
+  Translate --> Check["Salva in staging, rileggi e ricontrolla la revisione"]
+  Check --> Publish["Crea un nuovo output senza sovrascrivere l'esistente"]
+```
+
+Il ramo layout mostra il percorso riuscito: errori di marker, archivio, revisione, collisione o formato interrompono l'operazione. L'originale non viene riscritto; per PDF/DOCX la destinazione deve supportare hard link. Il testo tradotto e la resa visiva vanno comunque rivisti.
+
+Il ramo Markdown è gestito da Main e dal pianificatore in [`translationChunks.ts`](../src/services/translationChunks.ts): i prompt vengono preparati prima del primo invio, i fence integri restano indivisibili e un blocco oltre budget viene rifiutato. Un arresto per limite di output o uno stream senza conferma finale non diventa una traduzione esportabile.
 
 - La richiesta richiede un modello esplicito e usa contesto e `think` selezionati. Lo stream segnala progresso, errore o annullamento; una traduzione parziale o rifiutata non è esportabile.
 - Per PDF e DOCX l'originale resta invariato. La traduzione protegge contatti completi, valori letterali, identificatori e asterischi con marker verificati; marker mancanti, duplicati o aggiunti causano rifiuto.

@@ -4,6 +4,20 @@ La provenienza dei vettori e la ricerca sono implementate in [`embeddings.py`](.
 
 ## Invarianti
 
+```mermaid
+flowchart TD
+  Query(["Query e documenti selezionati"]) --> Spaces["Leggi spazi encoder e versioni delle tabelle"]
+  Spaces --> Encode["Codifica query fuori dal lock del database"]
+  Encode --> Current{"Versioni e provenienza ancora valide?"}
+  Current -- "No" --> Conflict["Rifiuto esplicito: non usare lo snapshot superato"]
+  Current -- "Sì" --> Candidates["Candidati densi e BM25 con filtro documenti"]
+  Candidates --> Rank["RRF e segnali lessicali"]
+  Rank --> Sources["Verifica archivio e riferimenti dei risultati"]
+  Sources --> Results["Chunk ordinati per inspector o contesto chat"]
+```
+
+L'inspector termina con i risultati; la chat costruisce poi un contesto entro budget e chiama il modello configurato. I dettagli del contesto inviato permettono di controllare inclusioni e troncamenti, senza certificare il supporto di ogni frase generata.
+
 - Ogni spazio nativo conserva modello, digest, dimensione, normalizzazione e preparazione. Documento e query devono usare la stessa identità completa. Gli indici legacy senza provenienza non ricevono un'identità presunta; un cambio di modello o preparazione richiede un rebuild verificato.
 - Nomic usa prefissi diversi per documento e query; Qwen usa un'istruzione sulla query; BGE-M3 e lo spazio hash mantengono testo raw. Solo errori di trasporto dell'encoder possono produrre il fallback hash, in uno spazio distinto.
 - La ricerca combina candidati densi e BM25 nativo, applica il filtro documento e ordina con RRF e segnali lessicali. Il punteggio è un ordine di ranking, non una probabilità di correttezza né una prova che una risposta sia supportata.

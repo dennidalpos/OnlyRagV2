@@ -1,177 +1,142 @@
 # OnlyRag V2
 
-A local Windows desktop workspace for multi-format document ingestion, offline RAG retrieval, document translation, and coding-agent workflows. Powered by local Ollama models, local LanceDB vector storage, and an isolated Python Sidecar service.
+A Windows desktop workspace for document ingestion, retrieval-augmented chat, translation, and coding tasks. React runs inside Electron; a Python Sidecar extracts documents and stores their text and vectors in local LanceDB. Ollama supplies generation and embeddings.
 
-Development currently targets a working local Windows app. [Local policy and autonomous tests](./docs/local-development-policy-2026-10-20.md): no model qualification campaigns or automatic CI; optional smoke tests use only models manually configured in the app. Public installer delivery is outside this phase.
+Use it to inspect extracted text, ask questions across selected documents, compare translations, or work on a code folder with an agent. The interface is available in Italian and English.
 
----
+The current development phase targets a working local Windows app. Public installer delivery and automatic CI are outside this phase; see the [local development policy](./docs/local-development-policy-2026-10-20.md).
 
-## Architecture
+## What you can do
 
-OnlyRag V2 separates concerns across isolated processes to guarantee stability, security, and responsive UI rendering:
+| Task | Implemented workflow | Details and limits |
+| --- | --- | --- |
+| Import and review | Extract PDF, DOCX, supported images, text, and tabular files; inspect the original preview alongside editable Markdown. | [Ingestion and OCR](./docs/ingestion.md); table extracts are bounded and unsupported DOCX structures can be refused. |
+| Search and ask | Combine dense retrieval and BM25, inspect ranked chunks, and chat with selected documents and source references. | [Retrieval](./docs/retrieval.md); scores rank candidates and citations still need review. |
+| Translate | Stream a text/Markdown translation or create a separate translated PDF/DOCX through the layout workflow. | [Translation](./docs/translation.md); incomplete output cannot be exported and layout preservation has format-specific limits. |
+| Work on code | Open a workspace, use Ask, Guided, or Auto, inspect diffs, run permitted commands, and review verification results. | [Coding Agent](./docs/coding-agent.md); changes affect the workspace and Stop keeps edits already made. |
+| Configure models | Inspect hardware and assign installed Ollama models to chat, translation, coding, and embedding roles. | [User guide](./docs/guida-utente.md#impostazioni); memory estimates do not guarantee that a model will fit. |
 
-```mermaid
-flowchart TD
-  User(["User Desktop Interaction"]) --> UI["React Renderer (Electron)"]
-  UI -- "Typed Preload IPC" --> Main["Electron Main Process"]
-  Main -- "Local REST API" --> Sidecar["Python FastAPI Sidecar"]
-  Main -- "Local HTTP API" --> Ollama["Ollama (Local LLM & Embeddings)"]
-  Sidecar --> Storage["LanceDB Vector Store & File System"]
-```
+## Visual tour
 
-- **React Renderer**: Modern desktop interface targeting Windows 1080p, running in an isolated web context without direct Node.js or filesystem access.
-- **Electron Preload & IPC**: Strictly validated runtime contracts using Zod schemas to ensure type-safe inter-process communication ([`shared/ipc/ipcContract.ts`](./shared/ipc/ipcContract.ts)).
-- **Main Process**: Application lifecycle, window management, local configuration, system diagnostics, and background task management.
-- **Python Sidecar**: FastAPI service managing document parsing, OCR pipelines, text chunking, and LanceDB persistence ([`sidecar/main.py`](./sidecar/main.py)).
-- **Ollama Runtime**: Local LLM and embedding server ensuring 100% offline data privacy without cloud telemetry.
+These are existing captures of the Electron app from **22 October 2026**, using an isolated demonstration profile with synthetic documents and controlled scenario data. They illustrate the interface, not new model-quality or hardware benchmarks. See [capture provenance and limitations](./docs/assets/screenshot-provenance.md).
 
----
+### Inspect documents
 
-## Core Workflows & Visual Tour
+![Document ingestion with original preview and editable Markdown](./assets/screenshots/01-prima-pagina-ingestione.png)
 
-### 1. Document Ingestion & Multi-Format OCR
-Ingest PDF, DOCX, images (PNG, JPG, TIFF), text files, and tabular data with OCR extraction and immediate Markdown preview.
+### Configure Ollama models
 
-![Document ingestion and OCR preview](./assets/screenshots/01-prima-pagina-ingestione.png)
+![Hardware and model setup wizard, first of three steps](./assets/screenshots/02-setup-wizard-modelli.png)
 
-### 2. Guided Model Setup & Role Allocation
-Dedicated configuration wizard assigns local Ollama models to specialized roles: Chat, Translation, Coding, and Embeddings.
+### Review answers and sources
 
-![Guided model configuration wizard](./assets/screenshots/02-setup-wizard-modelli.png)
+![Document chat with source excerpts and an expandable record of the submitted context](./assets/screenshots/04-rag-chat-fonti.png)
 
-### 3. Local Semantic & Hybrid Retrieval
-LanceDB vector indexing with cosine similarity, keyword matching, exact chunk provenance, and relevance scoring.
+### Compare a translation
 
-![Vector search and chunk retrieval](./assets/screenshots/03-ricerca-vettoriale.png)
+![Original and translated Markdown displayed side by side](./assets/screenshots/05-traduzione-markdown.png)
 
-### 4. Offline RAG Chat with Grounded Citations
-Interact with documents through a conversational interface with transparent source citations and expandable context snippets.
+## Quick start from source
 
-![RAG Chat with transparent citations](./assets/screenshots/04-rag-chat-fonti.png)
+Run the commands in PowerShell. Prerequisites come from [package.json](./package.json), [.nvmrc](./.nvmrc), [.python-version](./.python-version), and the [setup script](./scripts/setup_dev_environment.ps1).
 
-### 5. Document & Markdown Translation
-Translate Markdown files directly or perform in-place document translation preserving layout structure, complete with live streaming progress.
-
-![Markdown document translation](./assets/screenshots/05-traduzione-markdown.png)
-
-![In-place document translation with preserved layout](./assets/screenshots/06-traduzione-layout-preservato.png)
-
-### 6. Coding Agent Studio
-Full-featured coding workspace with step-by-step plan approval, Monaco diff view, versioned edits, controlled PowerShell tooling, Git inspection, and verification gates.
-
-![Coding Agent Studio with plan approval and diffs](./assets/screenshots/07-coding-agent-studio.png)
-
-### 7. Diagnostics, System Settings & Model Management
-Monitor real-time hardware status (CPU, RAM, GPU/VRAM), manage local models, and configure workspace preferences.
-
-![Settings, diagnostics, and model management](./assets/screenshots/08-impostazioni-e-modelli.png)
-
----
-
-## Ingestion & Retrieval Pipeline
-
-```mermaid
-flowchart TD
-  Workflow(["User Document Lifecycle"]) --> Ingestion["Document Ingestion & Text Extraction"]
-  Ingestion --> Chunking["Chunking & Embedding Generation"]
-  Chunking --> LanceDBStorage["Local LanceDB Vector Store"]
-  LanceDBStorage --> HybridSearch["Hybrid Semantic & Keyword Retrieval"]
-  Workflow --> Query["User Search Query or Chat Prompt"]
-  Query --> HybridSearch
-  HybridSearch --> RankedSources["Ranked Chunks with Verifiable Citations"]
-  RankedSources --> AnswerGen["Local LLM Context Synthesis (Ollama)"]
-```
-
----
-
-## Quick Start
-
-### Prerequisites
-- **OS**: Windows 10/11 64-bit (desktop target: 1080p).
-- **Node.js**: `>=24.19.0 <25`
-- **npm**: `>=11 <12`
-- **Python**: `3.13.15`
-- **Ollama**: Installed and running locally with your desired models (e.g., `nomic-embed-text`, `qwen2.5-coder`, `llama3.2`).
-
-### Installation and Launch
+| Requirement | Supported configuration |
+| --- | --- |
+| OS | Windows x64; desktop interface targets 1080p. |
+| Node.js | `>=24.19.0 <25` (repository pin: `24.19.0`). |
+| npm | `>=11 <12`. |
+| Python | Python 3.13.x discoverable through `py -3.13` or `python` (repository pin: `3.13.15`). |
+| Ollama | A running server and installed models appropriate to the roles you configure. Default endpoint: `http://127.0.0.1:11434`. |
 
 ```powershell
-# Clone the repository
 git clone https://github.com/dennidalpos/OnlyRagV2.git
 cd OnlyRagV2
-
-# Set up local dependencies (Node packages and Python venv)
 npm run setup:dev
-
-# Start the application in development mode with hot reload
+# Continue only after setup succeeds.
 npm run dev
 ```
 
-For development, operational maintenance, profiling, packaging, and safe cleanup commands, refer to [`docs/operations.md`](./docs/operations.md).
+`setup:dev` installs npm dependencies from the lockfile, prepares Electron, and installs Python development requirements in `.venv`. It needs network access for missing dependencies and can recreate an incompatible `.venv`; review existing local environments first. This documentation update checks the command definitions without rerunning installation or starting your application profile.
 
----
+On first launch:
 
-## Documentation Map
+1. Open **Settings / Impostazioni** and check the Ollama endpoint and service status.
+2. Use the hardware/model wizard or model assignment controls to select installed generation and embedding models. Generation stops with an explicit error if no usable model is configured.
+3. Import a small document in **Ingestione Doc** and review its extraction.
+4. Select the document in **RAG & Chat**, ask a question, then inspect the submitted context and source references.
 
-Detailed technical documentation is organized by domain in [`docs/README.md`](./docs/README.md):
+See [setup, diagnostics, and recovery](./docs/operations.md) for service failures and development commands.
 
-| Domain / Audience | Guides |
+## Architecture and data flow
+
+```mermaid
+flowchart TD
+  UI["React Renderer"] --> Preload["Electron Preload: typed API"]
+  Preload --> Main["Electron Main: IPC validation and application services"]
+  Main -- "Local REST and NDJSON" --> Sidecar["Python FastAPI Sidecar"]
+  Main -- "Generation and model management" --> Ollama["Configured Ollama server"]
+  Sidecar -- "Embeddings and document translation" --> Ollama
+  Sidecar --> Store["Local LanceDB and source archives"]
+  Main --> Files["Settings, recovery records and code workspace"]
+```
+
+The Renderer has no direct Node.js or filesystem access. Main validates requests through the [IPC contract](./shared/ipc/ipcContract.ts); the Sidecar handles [document REST operations](./sidecar/main.py). Ollama is local by default, and a remote endpoint can be configured.
+
+```mermaid
+flowchart TD
+  Start(["Choose a document or ask a question"]) --> Action{"Import a document?"}
+  Action -- "Yes" --> Archive["Archive original and extract text or OCR"]
+  Archive --> Embed["Split text and generate document embeddings"]
+  Embed --> Index["Commit document and chunks to local LanceDB"]
+  Index --> Select["Select documents and enter a question"]
+  Action -- "No: use indexed documents" --> Select
+  Select --> Search["Encode query, combine dense and BM25 candidates"]
+  Search --> Context["Build context within the configured budget"]
+  Context --> Generate["Generate with the configured Ollama model"]
+  Generate --> Review["Inspect answer, submitted context and source references"]
+```
+
+The diagram shows the successful path; [ingestion](./docs/ingestion.md), [retrieval](./docs/retrieval.md), and the [user guide](./docs/guida-utente.md) describe refusals and recovery.
+
+## Local operation and limits
+
+- **Connectivity:** local models and storage support local document workflows once dependencies and models are installed. Setup, model downloads, skill hubs, and permitted agent web tools can access the network. Selecting a remote Ollama endpoint sends model requests to that server; this is not an unconditional offline guarantee.
+- **Network policy:** the agent exposes `offline-strict`, `local-only`, and `network-approved` profiles. The settings default is `network-approved`; inspect the active profile and permissions before running a task. See [agent guards](./docs/agent-guards.md).
+- **Document fidelity:** extraction, translation, and generated answers require review. Ranking scores are not confidence probabilities. DOCX preview represents extracted content, and translated layout is not qualified for every document.
+- **Stored originals:** removing a document from the index retains its archived original. Deletion from the index is not a purge; see [source archive lifecycle](./docs/retrieval.md#ciclo-di-vita-degli-archivi-originali).
+- **Agent changes:** checkpoints and verification results do not guarantee a complete rollback of every action. Stop leaves existing edits in place; inspect diffs and recovery evidence before resuming or restoring.
+- **Platform and release:** Windows desktop is the target. Historical test and installer results apply to their recorded revisions; they do not certify the current checkout or a new installer.
+
+## Documentation
+
+The [documentation index](./docs/README.md) separates task guides, implementation contracts, and dated reference material. Most detailed guides are in Italian.
+
+| Audience / goal | Read |
 | --- | --- |
-| **End Users** | [User Guide (Guida Utente)](./docs/guida-utente.md) |
-| **Operations & Setup** | [Operations & Toolchain](./docs/operations.md) |
-| **Architecture & Structure** | [Architecture](./docs/architecture.md), [Frontend Renderer](./docs/frontend.md), [Electron Main](./docs/electron-main.md) |
-| **Process Contracts** | [Typed IPC Contract](./docs/api-ipc.md) ([`shared/ipc/ipcContract.ts`](./shared/ipc/ipcContract.ts)), [REST API](./docs/api-rest.md) ([`sidecar/main.py`](./sidecar/main.py)) |
-| **Ingestion, RAG & Translation** | [Ingestion & OCR](./docs/ingestion.md), [Retrieval & Embeddings](./docs/retrieval.md), [Translation](./docs/translation.md) |
-| **Coding Agent** | [Agent Overview & Boundaries](./docs/coding-agent.md), [Agent Runtime](./docs/agent-runtime.md), [Guards](./docs/agent-guards.md), [Diagnostics](./docs/agent-diagnostics.md) |
-| **Models & Sizing** | [Hardware Runtime Fit](./docs/model-runtime-fit.md) |
-| **Verification & History** | [Current Verification](./docs/verification-current.md), [Historical Evidence](./docs/history.md) |
+| Use the app | [Visual user guide](./docs/guida-utente.md) |
+| Develop and troubleshoot | [Operations](./docs/operations.md), [architecture](./docs/architecture.md), [Renderer](./docs/frontend.md), [Main](./docs/electron-main.md) |
+| Inspect process contracts | [Typed IPC](./docs/api-ipc.md), [REST](./docs/api-rest.md) |
+| Work on document features | [Ingestion](./docs/ingestion.md), [retrieval](./docs/retrieval.md), [translation](./docs/translation.md) |
+| Work on the agent | [Usage and boundaries](./docs/coding-agent.md), [runtime](./docs/agent-runtime.md), [guards](./docs/agent-guards.md), [diagnostics](./docs/agent-diagnostics.md) |
+| Understand verification and packaging | [Recorded verification](./docs/verification-current.md), [local distribution](./docs/distribution.md), [historical index](./docs/history.md) |
 
----
+## Development checks
 
-## Verification & Quality Gates
-
-The project enforces deterministic offline checks and gates:
+Run the checks appropriate to your change. They are local commands; listing them here does not claim they all passed for this documentation revision.
 
 ```powershell
-# Run frontend Vitest test suite
-npm run test
-
-# Run critical Python offline gates (admission, search, persistence)
-npm run quality:python
-
-# Verify documentation links, anchors, scripts, and Mermaid blocks
 npm run docs:check
-
-# Run static quality and IPC consistency analysis
+npm run format:check
+npm run typecheck
 npm run quality:static
+npm run test
+npm run quality:python
 ```
 
----
+`docs:check` checks local links, anchors, npm script names, and the supported Mermaid flowchart syntax and graph structure. It does not render diagrams, check remote URLs, or prove application behavior. `quality:python` runs critical offline Python cases and rejects missing/skipped cases; it is separate from the full backend suite. See [operations](./docs/operations.md#comandi) for the complete commands and verification boundaries.
 
-## Repository Map
+## Support and license
 
-```text
-assets/     High-resolution screenshots, icons, and public visual assets
-docs/       Technical guides, architectural blueprints, and user documentation
-electron/   Main process, IPC handlers, application services, and infrastructure
-scripts/    Setup, validation, test suites, and packaging automation
-shared/     Cross-process types, IPC contracts, and domain models
-sidecar/    FastAPI service, LanceDB storage, OCR engines, and document parsing
-skills/     Local agent development skills
-src/        React desktop frontend (UI components, hooks, stores, and styles)
-```
+For a problem, consult [operations](./docs/operations.md) and [agent diagnostics](./docs/agent-diagnostics.md), then open an [issue](https://github.com/dennidalpos/OnlyRagV2/issues) with your revision, tool versions, reproduction steps, and sanitized diagnostics. Review logs and screenshots for document contents, local paths, and credentials before sharing them.
 
----
-
-## Limits & Target Boundaries
-
-- **Form Factor**: Desktop Windows 1080p target only. Mobile and tablet viewports are intentionally outside the application target.
-- **Privacy & Connectivity**: Operates fully offline; models run locally via Ollama. No remote telemetry, external tracking, or mandatory internet connectivity.
-- **Development Phase**: Focuses on architecture simplification, core performance, and local reliability. Standalone installer distribution and public cloud services are outside the scope of this phase ([`docs/local-development-policy-2026-10-20.md`](./docs/local-development-policy-2026-10-20.md)).
-
----
-
-## License & Third-Party Credits
-
-- **Project Code**: Licensed under the MIT License; see [`LICENSE`](./LICENSE).
-- **Third-Party Components**: Bundled libraries and standalone CPU runtime terms are documented in [`DISTRIBUTION-LICENSE.md`](./DISTRIBUTION-LICENSE.md), [`docs/distribution-cpu-release.md`](./docs/distribution-cpu-release.md), and [`docs/distribution-licenses.md`](./docs/distribution-licenses.md).
+Project source is licensed under [MIT](./LICENSE). Bundled components, models, and distribution candidates have separate terms: see [DISTRIBUTION-LICENSE.md](./DISTRIBUTION-LICENSE.md) and [distribution licenses](./docs/distribution-licenses.md).

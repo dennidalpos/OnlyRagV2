@@ -35,4 +35,4 @@ Il target e il solo desktop Windows, normalmente 1920×1080; tablet e smartphone
 
 ## Cronologia
 
-La precedente pagina accumulava conteggi, autorizzazioni e risultati di sessioni diverse. Il testo è conservato integralmente nei [riepiloghi storici](./verification-summary-history-2026-10-21.md); [history.md](./history.md) indicizza tutte le ricevute per ambito. Per requisiti di verifica e comandi operativi usare [AGENTS.md](../AGENTS.md#comandi-e-verifica) e [operations.md](./operations.md).
+La precedente pagina accumulava conteggi, autorizzazioni e risultati di sessioni diverse. Il testo è conservato integralmente nei [riepiloghi storici](./verification-summary-history-2026-10-21.md); [history.md](./history.md) indicizza tutte le ricevute per ambito. Per le direttive applicabili usare [AGENTS.md](../AGENTS.md); per i comandi e i limiti dei controlli usare [operations.md](./operations.md#comandi).

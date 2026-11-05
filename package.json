@@ -103,7 +103,7 @@
     "dpdm": "^4.3.0",
     "electron": "43.8.3",
     "electron-builder": "^26.15.3",
-    "gpt-tokenizer": "^4.0.0",
+    "gpt-tokenizer": "^4.1.0",
     "happy-dom": "^21.0.4",
     "knip": "^6.32.3",
     "lucide-react": "^1.31.0",

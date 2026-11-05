@@ -102,7 +102,7 @@
     "dompurify": "3.4.17",
     "dpdm": "^4.3.0",
     "electron": "43.8.3",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "^26.18.0",
     "gpt-tokenizer": "^4.0.0",
     "happy-dom": "^21.0.4",
     "knip": "^6.32.3",

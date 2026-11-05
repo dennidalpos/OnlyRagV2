@@ -26,6 +26,6 @@ Le guide descrivono il prodotto; i rapporti datati attestano soltanto i casi, la
 - [package.json](../package.json), lockfile e [requisiti Python](../sidecar/requirements-dev.txt) identificano comandi e dipendenze effettivi.
 - [Contratto IPC](../shared/ipc/ipcContract.ts), [route REST](../sidecar/main.py) e [schemi](../sidecar/schemas.py) definiscono i confini implementati.
 - [OpenAPI](../sidecar/contracts/openapi-2.5.0.json) e asset dell'app hanno generatori: [operazioni](./operations.md#file-generati-e-documenti-congelati) ne distingue uso e rigenerazione. I blocchi gestiti di AGENTS.md seguono SecondBrain Sync.
-- Le [skill del repository](../skills/) sono istruzioni per lo sviluppo; sono distinte dalle skill installate dal Coding Agent nei workspace.
+- Le istruzioni di sviluppo specifiche del repository sono nel dossier SecondBrain; le skill installate dal Coding Agent nei workspace sono una funzionalità separata del prodotto.
 
 `npm run docs:check` controlla collegamenti locali, ancoraggi, nomi degli script npm e il sottoinsieme Mermaid supportato dal validatore. Non esegue rendering, richieste agli URL remoti o prove del comportamento applicativo. Una modifica documentale non rinnova le qualifiche storiche dei modelli o degli installer.

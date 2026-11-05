@@ -213,11 +213,11 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                     <div className="flex items-center gap-2 text-xs text-slate-200">
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
                       <span className="font-semibold">{tr.selectedDoc?.filename || t('common.document')}</span>
-                      <span className="text-slate-400">â€¢</span>
+                      <span className="text-slate-400">•</span>
                       {(tr.generationState === 'queued' || tr.generationState === 'running') && (
                         <>
                           <span className="text-amber-300 font-semibold">{t(`common.${tr.generationState}`)}</span>
-                          <span className="text-slate-400">â€¢</span>
+                          <span className="text-slate-400">•</span>
                         </>
                       )}
                       <span className="text-sky-300 font-mono">
@@ -625,7 +625,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(
                             </span>
                           </div>
                           <span className="text-[11px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                            {tr.translatedMarkdown ? `${tr.translatedMarkdown.length} chars` : tr.isTranslating ? t('translation.translating') : 'â€”'}
+                            {tr.translatedMarkdown ? `${tr.translatedMarkdown.length} chars` : tr.isTranslating ? t('translation.translating') : '—'}
                           </span>
                         </div>
                         <div className="flex-1 bg-[#080c14]">

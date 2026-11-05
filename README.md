@@ -14,7 +14,7 @@ The current development phase targets a working local Windows app. Public instal
 | Search and ask | Combine dense retrieval and BM25, inspect ranked chunks, and chat with selected documents and source references. | [Retrieval](./docs/retrieval.md); scores rank candidates and citations still need review. |
 | Translate | Stream a text/Markdown translation or create a separate translated PDF/DOCX through the layout workflow. | [Translation](./docs/translation.md); incomplete output cannot be exported and layout preservation has format-specific limits. |
 | Work on code | Open a workspace, use Ask, Guided, or Auto, inspect diffs, run permitted commands, and review verification results. | [Coding Agent](./docs/coding-agent.md); changes affect the workspace and Stop keeps edits already made. |
-| Configure models | Inspect hardware and assign installed Ollama models to chat, translation, coding, and embedding roles. | [User guide](./docs/guida-utente.md#impostazioni); memory estimates do not guarantee that a model will fit. |
+| Configure models | Inspect hardware and assign installed Ollama models to chat, translation, coding, and embedding roles. | [User guide](./docs/user-guide.md); memory estimates do not guarantee that a model will fit. |
 
 ## Visual tour
 
@@ -65,7 +65,7 @@ On first launch:
 3. Import a small document in **Ingestione Doc** and review its extraction.
 4. Select the document in **RAG & Chat**, ask a question, then inspect the submitted context and source references.
 
-See [setup, diagnostics, and recovery](./docs/operations.md) for service failures and development commands.
+See [English setup, diagnostics, and recovery](./docs/developer-guide.md) for service failures and development commands.
 
 ## Architecture and data flow
 
@@ -109,12 +109,12 @@ The diagram shows the successful path; [ingestion](./docs/ingestion.md), [retrie
 
 ## Documentation
 
-The [documentation index](./docs/README.md) separates task guides, implementation contracts, and dated reference material. Most detailed guides are in Italian.
+The [documentation index](./docs/README.md) separates task guides, implementation contracts, and dated reference material. The English user/developer guides cover maintained workflows; Italian visual/technical originals and dated receipts remain linked for detail.
 
 | Audience / goal | Read |
 | --- | --- |
-| Use the app | [Visual user guide](./docs/guida-utente.md) |
-| Develop and troubleshoot | [Operations](./docs/operations.md), [architecture](./docs/architecture.md), [Renderer](./docs/frontend.md), [Main](./docs/electron-main.md) |
+| Use the app | [English user guide](./docs/user-guide.md) · [Italian visual guide](./docs/guida-utente.md) |
+| Develop and troubleshoot | [English developer/operations guide](./docs/developer-guide.md), [architecture](./docs/architecture.md), [Renderer](./docs/frontend.md), [Main](./docs/electron-main.md) |
 | Inspect process contracts | [Typed IPC](./docs/api-ipc.md), [REST](./docs/api-rest.md) |
 | Work on document features | [Ingestion](./docs/ingestion.md), [retrieval](./docs/retrieval.md), [translation](./docs/translation.md) |
 | Work on the agent | [Usage and boundaries](./docs/coding-agent.md), [runtime](./docs/agent-runtime.md), [guards](./docs/agent-guards.md), [diagnostics](./docs/agent-diagnostics.md) |

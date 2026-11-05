@@ -1,31 +1,42 @@
-# Documentazione OnlyRag V2
+# OnlyRag V2 documentation
 
-Per iniziare dall'app segui la [guida utente](./guida-utente.md); per preparare il checkout usa [setup e operazioni](./operations.md). Il [README GitHub](../README.md) presenta funzionalità, avvio rapido, schermate e limiti.
+Start with the [English user guide](user-guide.md) for the app's26 workflows or the [English developer/operations guide](developer-guide.md) for setup, architecture, contracts, tests and recovery. The [root README](../README.md) gives the quick start, existing screenshots and product limits.
 
-## Guide per ambito
+## Coverage map
 
-| Per chi / obiettivo | Documento |
-| --- | --- |
-| Utilizzatori: scelte e flussi desktop | [Guida utente](./guida-utente.md) |
-| Manutentore: setup, comandi, profili e recupero | [Operazioni](./operations.md) |
-| Architettura e responsabilità | [Architettura](./architecture.md), [Renderer](./frontend.md), [Main](./electron-main.md) |
-| Contratti tra processi | [IPC](./api-ipc.md), [REST](./api-rest.md) |
-| Documenti, ricerca e lingue | [Ingestion/OCR](./ingestion.md), [embedding e fonti](./retrieval.md), [traduzione](./translation.md) |
-| Coding Agent | [Uso e confini](./coding-agent.md), [runtime](./agent-runtime.md), [guard](./agent-guards.md), [diagnostica](./agent-diagnostics.md) |
-| Modelli e stime di memoria | [Runtime fit](./model-runtime-fit.md) |
-| Dipendenze e candidati locali | [Librerie](./libraries.md), [distribuzione](./distribution.md) |
-| Verifiche registrate e relativi limiti | [Stato delle verifiche](./verification-current.md) |
-| Decisioni della fase locale | [Politica del 20 ottobre](./local-development-policy-2026-10-20.md), [direttive del repository](../AGENTS.md) |
-| Risultati datati e riferimenti conservati | [Indice storico](./history.md) |
-| Schermate dell'app | [Provenienza e limiti degli asset](./assets/screenshot-provenance.md) |
+The English guides consolidate the maintained operational subjects below. Original Italian pages remain useful detailed translations/reference; dated reports and approved/frozen texts remain originals, not newly qualified instructions.
 
-## Come usare le fonti
+| Retained source | English coverage |
+|---|---|
+| [Visual user flows00–25](guida-utente.md) | [User guide](user-guide.md): orientation, services, ingestion02–07, chat08–10, translation11–13, coding14–20 and settings21–25 |
+| [Operations](operations.md) | [Developer guide](developer-guide.md): prerequisites, setup/check commands, generated files, recovery, embedding maintenance and cleanup limits |
+| [Architecture](architecture.md) | Developer guide: process boundaries and storage/acknowledgement model |
+| [Renderer](frontend.md) | User guide: settings/chat/document/agent persistence and recovery; developer guide: Renderer/Preload boundary |
+| [Electron Main](electron-main.md) | Developer guide: IPC validation, lifecycle/Sidecar ownership and application/domain responsibilities |
+| [IPC](api-ipc.md) | Developer guide: typed contract as authority, secure dispatch and field/behavior limits |
+| [REST](api-rest.md) | Developer guide: FastAPI/schemas/OpenAPI, token, CORS and transport/cancellation |
+| [Ingestion/OCR](ingestion.md) | User guide: import/review/edit/export; developer guide: original archives, provider diagnostics and revision checks |
+| [Retrieval](retrieval.md) | User guide: inspector/context/citations; developer guide: provenance, ranking, archive lifetime and embedding maintenance |
+| [Translation](translation.md) | Both guides: Markdown/layout choices, verified source/revision, markers, format limits, cancellation and publication |
+| [Coding Agent](coding-agent.md) | User guide: workspace/modes/plans/actions/results/recovery; developer guide: arbitration and ownership |
+| [Agent runtime](agent-runtime.md) | Developer guide: policy/budgets, recovery receipts and explicit resume; historical anchors remain in original |
+| [Agent guards](agent-guards.md) | Developer guide: compare-and-swap, profile differences and native verification |
+| [Agent diagnostics](agent-diagnostics.md) | Developer guide: advice versus authority, parser/test/compiler and incomplete-proof distinctions |
+| [Model/runtime fit](model-runtime-fit.md) | User guide: roles, estimates and fit limits; dated proposals/measures remain originals |
+| [Libraries](libraries.md) | Developer guide: manifest/lockfile/generated version authority; dated dependency review retained |
+| [Local candidates](distribution.md) | Developer guide: CPU candidate build and active local-phase boundaries |
+| [RAG/Sidecar](rag-sidecar.md) | Developer guide: extraction/retrieval/translation; historical index retained |
+| [Current verification](verification-current.md) | Developer guide: check scope and qualification distinctions; dated receipts retain original provenance |
+| [Screenshots](assets/screenshot-provenance.md) | User guide/root README: existing captures and bounded provenance, no new screenshot claim |
 
-Le guide descrivono il prodotto; i rapporti datati attestano soltanto i casi, la revisione e l'ambiente indicati. I riferimenti storici trasferiti nel dossier privato conservano gli ancoraggi esistenti e non sono guide di avvio. Il tracker interno e i passaggi operativi di sessione sono gestiti in SecondBrain.
+## Historical and approved material
 
-- [package.json](../package.json), lockfile e [requisiti Python](../sidecar/requirements-dev.txt) identificano comandi e dipendenze effettivi.
-- [Contratto IPC](../shared/ipc/ipcContract.ts), [route REST](../sidecar/main.py) e [schemi](../sidecar/schemas.py) definiscono i confini implementati.
-- [OpenAPI](../sidecar/contracts/openapi-2.5.0.json) e asset dell'app hanno generatori: [operazioni](./operations.md#file-generati-e-documenti-congelati) ne distingue uso e rigenerazione. I blocchi gestiti di AGENTS.md seguono SecondBrain Sync.
-- Le istruzioni di sviluppo specifiche del repository sono nel dossier SecondBrain; le skill installate dal Coding Agent nei workspace sono una funzionalità separata del prodotto.
+[History](history.md), dated audit/verification/handoff reports, distribution license proposals/reviews, frozen content acceptance, model-task baselines and the [approved local-phase policy](local-development-policy-2026-10-20.md) preserve their original wording, hashes, decisions and limits. They do not authorize new publication, real model campaigns, customer-data operations or cleanup.
 
-`npm run docs:check` controlla collegamenti locali, ancoraggi, nomi degli script npm e il sottoinsieme Mermaid supportato dal validatore. Non esegue rendering, richieste agli URL remoti o prove del comportamento applicativo. Una modifica documentale non rinnova le qualifiche storiche dei modelli o degli installer.
+## Sources of truth
+
+- [package.json](../package.json), lockfile, .nvmrc and Python requirement/pin files define the actual toolchain and commands.
+- [IPC contract](../shared/ipc/ipcContract.ts), [FastAPI routes](../sidecar/main.py) and [schemas](../sidecar/schemas.py) define implemented interfaces.
+- OpenAPI and app assets have generators. Existing visual-guide SVGs have no maintained generator; do not claim a regeneration from assets:generate.
+- Managed instructions are generated through SecondBrain; repository knowledge and task changes remain in the identity-resolved dossier.
+- npm run docs:check validates local links/anchors/command names and supported Mermaid syntax. It does not render diagrams, check live URLs or prove application behavior.

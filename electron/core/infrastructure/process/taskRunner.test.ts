@@ -1,0 +1,129 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { TaskRunner } from './taskRunner'
+import { normalizePowerShellCommand } from './powerShellCommand'
+import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
+
+/** Cases that spawn a real powershell.exe: it exists only on Windows, so other hosts report them as skipped. */
+const itWithPowerShell = it.skipIf(process.platform !== 'win32')
+
+describe('TaskRunner Unit & Reliability Tests', () => {
+  let runner: TaskRunner
+
+  beforeEach(() => {
+    runner = new TaskRunner()
+  })
+
+  afterEach(() => runner.cancelAllTasks())
+
+  it('should register and unregister active tasks correctly', () => {
+    const destroyMock = vi.fn()
+    const taskId = runner.registerActiveTask('task-1', 'terminal_command', destroyMock)
+
+    expect(taskId).toBe('task-1')
+    runner.unregisterActiveTask('task-1')
+
+    // Cancelling after unregister should return not found
+    const cancelRes = runner.cancelTask('task-1')
+    expect(cancelRes.success).toBe(false)
+    expect(destroyMock).not.toHaveBeenCalled()
+  })
+
+  it('should cancel an active task and clean only its temporary residue', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-taskrunner-test-'))
+    const sourceFile = path.join(tempDir, 'source.pdf')
+    const tempFile = path.join(tempDir, 'partial.tmp')
+    fs.writeFileSync(sourceFile, 'source document', 'utf-8')
+    fs.writeFileSync(tempFile, 'partial residue data', 'utf-8')
+
+    const destroyMock = vi.fn()
+    runner.registerActiveTask('task-to-cancel', 'export', destroyMock, {
+      sourcePath: sourceFile,
+      temporaryResiduePath: tempFile,
+    })
+
+    const cancelRes = runner.cancelTask('task-to-cancel')
+    expect(cancelRes.success).toBe(true)
+    expect(destroyMock).toHaveBeenCalledOnce()
+    expect(fs.existsSync(sourceFile)).toBe(true)
+    expect(fs.existsSync(tempFile)).toBe(false)
+
+    fs.rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it.each(['ingestion', 'translation'] as const)('keeps %s cancellable until its owner confirms settlement', (type) => {
+    const requestCancel = vi.fn()
+    runner.registerActiveTask('pending-sidecar', type, requestCancel)
+    expect(runner.cancelTask('pending-sidecar')).toMatchObject({ success: true, message: expect.stringContaining('awaiting Sidecar') })
+    expect(runner.cancelTask('pending-sidecar').success).toBe(true)
+    expect(requestCancel).toHaveBeenCalledTimes(2)
+    runner.unregisterActiveTask('pending-sidecar')
+    expect(runner.cancelTask('pending-sidecar').success).toBe(false)
+  })
+
+  it('should preserve sources during lifecycle cancellation and clean temporary residues', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-taskrunner-lifecycle-test-'))
+    const sourceFile = path.join(tempDir, 'source.docx')
+    const tempFile = path.join(tempDir, 'partial.tmp')
+    fs.writeFileSync(sourceFile, 'source document', 'utf-8')
+    fs.writeFileSync(tempFile, 'partial residue data', 'utf-8')
+
+    const d1 = vi.fn()
+    const d2 = vi.fn()
+    runner.registerActiveTask('t1', 'ingestion', d1, {
+      sourcePath: sourceFile,
+      temporaryResiduePath: tempFile,
+    })
+    runner.registerActiveTask('t2', 'export', d2)
+
+    runner.cancelAllTasks()
+    expect(d1).toHaveBeenCalledOnce()
+    expect(d2).toHaveBeenCalledOnce()
+    expect(fs.existsSync(sourceFile)).toBe(true)
+    expect(fs.existsSync(tempFile)).toBe(false)
+
+    fs.rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('should normalize compound && commands to valid PowerShell conditional syntax', () => {
+    const input = 'cd project-dashboard-task && npm install tailwindcss postcss autoprefixer'
+    const normalized = normalizePowerShellCommand(input)
+    expect(normalized).toContain('cd project-dashboard-task; if ($?) { npm install tailwindcss postcss autoprefixer }')
+
+    const multi = 'npm install && npm test && npm run build'
+    const multiNormalized = normalizePowerShellCommand(multi)
+    expect(multiNormalized).toContain('npm install; if ($?) { npm test; if ($?) { npm run build }')
+  })
+
+  it('should inject non-interactive flags for npx and create-vite commands', () => {
+    const npxCmd = 'npx create-react-app my-app'
+    expect(normalizePowerShellCommand(npxCmd)).toBe('npx -y create-react-app my-app')
+
+    const viteCmd = 'npm create vite@latest . --template react-ts'
+    expect(normalizePowerShellCommand(viteCmd)).toBe('npm create vite@latest . -- --template react-ts --yes')
+
+    const viteAlreadyYes = 'npm create vite@latest . -- --template react-ts --yes'
+    expect(normalizePowerShellCommand(viteAlreadyYes)).toBe('npm create vite@latest . -- --template react-ts --yes')
+  })
+
+  it('should reject invalid command safely', async () => {
+    const res = await runner.executeTerminalCommand('')
+    expect(res.success).toBe(false)
+    expect(res.error).toBe('Invalid command')
+  })
+
+  itWithPowerShell('should execute simple PowerShell command and return clean output', async () => {
+    const res = await runner.executeTerminalCommand('Write-Output "TaskRunnerReliabilityCheck"', undefined, undefined, 10000)
+    expect(res.success).toBe(true)
+    expect(res.output).toContain('TaskRunnerReliabilityCheck')
+  })
+
+  itWithPowerShell('keeps shell state between UI terminal commands in one workspace', async () => {
+    const first = await runner.executePowerShellCommand('$env:ONLYRAG_UI_TERMINAL_TEST = "persisted"', process.cwd(), 10000)
+    const second = await runner.executePowerShellCommand('Write-Output $env:ONLYRAG_UI_TERMINAL_TEST', process.cwd(), 10000)
+
+    expect(first.success).toBe(true)
+    expect(second).toMatchObject({ success: true, output: 'persisted' })
+  })
+})

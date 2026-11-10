@@ -1,0 +1,73 @@
+import { logger } from '../logging/logger'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
+
+export interface PackageFacts {
+  name: string
+  /** Absent when the registry does not know this package at all (HTTP 404). */
+  latest?: string
+  /** Published versions, absent when the registry could not be reached or returned malformed data. */
+  versions?: string[]
+  exists: boolean
+}
+
+const REGISTRY = 'https://registry.npmjs.org'
+
+/** Registry answers do not change inside one agent session, and each lookup costs a round trip. */
+const cache = new Map<string, PackageFacts>()
+
+/** A scoped or plain package name, rejecting anything that is not one. */
+const VALID_NAME = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/i
+
+export class NpmRegistryClient {
+  /** Looks a package up, once per session. */
+  async lookup(name: string, timeoutMs = 5000): Promise<PackageFacts> {
+    if (!VALID_NAME.test(name)) return { name, exists: false }
+    const cached = cache.get(name)
+    if (cached) return cached
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const res = await fetch(`${REGISTRY}/${encodeURIComponent(name)}`, {
+        signal: controller.signal,
+        // The install-v1 representation omits README and other authoring metadata while retaining
+        // dist-tags and published versions, which are the only registry facts the agent needs.
+        headers: { Accept: 'application/vnd.npm.install-v1+json' },
+      })
+      if (res.status === 404) {
+        const missing: PackageFacts = { name, exists: false }
+        cache.set(name, missing)
+        return missing
+      }
+      if (!res.ok) return { name, exists: true }
+      const body = (await res.json()) as { 'dist-tags'?: { latest?: string }; versions?: Record<string, unknown> }
+      const latest = body?.['dist-tags']?.latest
+      const versions = body?.versions && typeof body.versions === 'object' ? Object.keys(body.versions) : undefined
+      const facts: PackageFacts = {
+        name,
+        exists: true,
+        latest: typeof latest === 'string' ? latest : undefined,
+        versions,
+      }
+      cache.set(name, facts)
+      return facts
+    } catch (err: unknown) {
+      logger.log('WARN', 'NpmRegistry', `Lookup failed for ${name}: ${errorMessage(err)}`)
+      return { name, exists: true }
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  /** Looks up several packages concurrently, preserving input order. */
+  async lookupAll(names: string[], timeoutMs = 5000): Promise<PackageFacts[]> {
+    return Promise.all(names.map((name) => this.lookup(name, timeoutMs)))
+  }
+
+  /** Test seam: the cache is process-wide and would otherwise leak between cases. */
+  clearCache(): void {
+    cache.clear()
+  }
+}
+
+export const npmRegistryClient = new NpmRegistryClient()

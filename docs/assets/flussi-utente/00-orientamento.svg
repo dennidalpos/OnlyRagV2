@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="1543" viewBox="0 0 360 1543" role="img" aria-labelledby="title desc" xml:lang="it">
+<title id="title">00 · Cosa vuoi fare?</title>
+<desc id="desc">Al primo avvio o se un servizio risulta non disponibile, prepara l’ambiente nel percorso 01. Per importare, revisionare, esportare o cercare documenti: Ingestione Doc, percorsi 02–07. Per conversare e verificare le fonti: RAG &amp; Chat, percorsi 08–10. Per cambiare lingua a un documento: Traduzione, percorsi 11–13. Per analizzare o modificare un progetto: Coding Agent, percorsi 14–20. Per configurare ambiente, modelli, permessi e log: Impostazioni, percorsi 21–25.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 Z" fill="#526779"/></marker></defs>
+<rect width="360" height="1543" fill="#ffffff"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="24" y="25" font-size="14" letter-spacing="0.5" fill="#526779">ONLYRAG V2 / GUIDA UTENTE</text>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="600" fill="#183249"><tspan x="180" y="53">00 · Cosa vuoi fare?</tspan></text>
+<g id="n0" data-node="s">
+<rect x="46" y="101" width="268" height="64" rx="30" fill="#183249" stroke="#183249" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#ffffff"><tspan x="180" y="133">Scegli il tuo obiettivo</tspan></text>
+</g>
+<g id="n1" data-node="q">
+<polygon points="180,221 296,287 180,353 64,287" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="276.5">Preparare</tspan><tspan x="180" y="297.5">documenti?</tspan></text>
+</g>
+<g id="n2" data-node="t">
+<rect x="46" y="409" width="268" height="64" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="441">Ingestione Doc → 02–07</tspan></text>
+</g>
+<g id="n3" data-node="q">
+<polygon points="180,529 296,595 180,661 64,595" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="595">Fare domande?</tspan></text>
+</g>
+<g id="n4" data-node="t">
+<rect x="46" y="717" width="268" height="64" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="749">RAG &amp; Chat → 08–10</tspan></text>
+</g>
+<g id="n5" data-node="q">
+<polygon points="180,837 296,903 180,969 64,903" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="903">Tradurre?</tspan></text>
+</g>
+<g id="n6" data-node="t">
+<rect x="46" y="1025" width="268" height="64" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1057">Traduzione → 11–13</tspan></text>
+</g>
+<g id="n7" data-node="q">
+<polygon points="180,1145 296,1211 180,1277 64,1211" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="1200.5">Lavorare sul</tspan><tspan x="180" y="1221.5">codice?</tspan></text>
+</g>
+<g id="n8" data-node="t">
+<rect x="46" y="1333" width="268" height="64" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1365">Coding Agent → 14–20</tspan></text>
+</g>
+<g id="n9" data-node="t">
+<rect x="46" y="1453" width="268" height="64" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1485">Impostazioni → 21–25</tspan></text>
+</g>
+<path data-edge="0-1" d="M 180 167 V 218" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="1-2" d="M 180 355 V 406" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="1-2"><rect x="183" y="370" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="380">Sì</tspan></text></g>
+<path data-edge="1-3" d="M 298 287 H 346 V 501 H 180 V 526" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="1-3"><rect x="300" y="258.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="268">No</tspan></text></g>
+<path data-edge="3-4" d="M 180 663 V 714" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="3-4"><rect x="183" y="678" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="688">Sì</tspan></text></g>
+<path data-edge="3-5" d="M 298 595 H 346 V 809 H 180 V 834" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="3-5"><rect x="300" y="566.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="576">No</tspan></text></g>
+<path data-edge="5-6" d="M 180 971 V 1022" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="5-6"><rect x="183" y="986" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="996">Sì</tspan></text></g>
+<path data-edge="5-7" d="M 298 903 H 346 V 1117 H 180 V 1142" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="5-7"><rect x="300" y="874.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="884">No</tspan></text></g>
+<path data-edge="7-8" d="M 180 1279 V 1330" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="7-8"><rect x="183" y="1294" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="1304">Sì</tspan></text></g>
+<path data-edge="7-9" d="M 298 1211 H 346 V 1425 H 180 V 1450" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="7-9"><rect x="300" y="1182.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="1192">No</tspan></text></g>
+</g>
+</svg>

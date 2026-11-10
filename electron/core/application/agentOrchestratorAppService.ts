@@ -1,0 +1,786 @@
+import path from 'node:path'
+import type { RendererEventSink } from '../domain/ports/rendererEventSink'
+import { logger } from '../infrastructure/logging/logger'
+import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
+import { handleUpdatePlanTool } from './agentOrchestratorPlanTool'
+import { recordToolPolicyDenial, runToolGates } from './agentOrchestratorToolGates'
+import { applyVersionedReadEvidence, runToolResultProcessing } from './agentOrchestratorToolResultProcessor'
+import { interpretTurnResponse } from './agentOrchestratorResponseInterpreter'
+import { collectTurnContext, requestTurnProposal } from './agentOrchestratorTurnDispatch'
+import { bootstrapAgentSession } from './agentOrchestratorBootstrap'
+import { closeAgentRunFromEvidence } from './agentOrchestratorApplicationClosure'
+import { agentToolExecutorService } from './agentToolExecutorService'
+import { skillAppService } from './skillAppService'
+import { taskRunner } from '../infrastructure/process/taskRunner'
+import type { AgentSession } from './agentOrchestratorTypes'
+import type { AgentRunContext } from './agentOrchestratorRunContext'
+import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
+import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
+import type { AgentRunIdentity } from '../../../shared/types'
+import { evaluateAgentCodingPreflight } from './agentCodingPreflight'
+import { workspaceAppService } from './workspaceAppService'
+import { ollamaAppService } from './ollamaAppService'
+import { hardwareProbe } from '../infrastructure/diagnostics/hardwareProbe'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { appendToolResponse } from './agentChatTranscript'
+import { restoreAgentCheckpoint } from '../infrastructure/filesystem/agentCheckpointStore'
+import type { AgentChatToolCall } from '../infrastructure/http/agentStreamTransport'
+import type { PreparedAgentTurn, TurnDispatchData } from './agentOrchestratorRunContext'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
+import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
+import type { AgentExecutionMode } from '../../../shared/types'
+import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
+import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
+import { isLocalOllamaHost } from '../../../shared/domain/ollamaHost'
+import { skillInstallApprovalService } from './skillInstallApprovalService'
+import { sessionDeletionRunGate } from './sessionDeletionRunGate'
+import { sessionDeletionJournal } from '../infrastructure/filesystem/sessionDeletionJournal'
+
+const activeAgentSessions = new Map<string, AgentSession>()
+
+function cleanupSession(session: AgentSession): Promise<void> {
+  if (session.cancellationSettlement) return session.cancellationSettlement
+  agentToolExecutorService.closeBrowserRun(session.id)
+  session.isCancelled = true
+  session.abortController?.abort()
+  session.completionStatus = 'cancelled'
+  session.terminalSummary = "Task interrotto dall'utente."
+  skillInstallApprovalService.cancelRun(session.identity)
+  // Denial releases the paused step so it can observe cancellation.
+  if (session.pendingApprovalResolve) {
+    session.pendingApprovalResolve({ approved: false })
+    session.pendingApprovalResolve = undefined
+    session.pendingApprovalReasons = undefined
+  }
+  if (session.timeoutHandle) {
+    clearTimeout(session.timeoutHandle)
+    session.timeoutHandle = null
+  }
+  if (session.activeCancelHandle) {
+    try {
+      session.activeCancelHandle()
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentOrchestrator', `Failed cancelling active stream during cleanup: ${errorMessage(err)}`)
+    }
+    session.activeCancelHandle = null
+  }
+  if (session.activeChildProcess) {
+    try {
+      if (process.platform === 'win32' && session.activeChildProcess.pid) {
+        taskRunner.killProcessTreeWindows(session.activeChildProcess.pid)
+      } else {
+        session.activeChildProcess.kill('SIGKILL')
+      }
+    } catch (err: unknown) {
+      logger.log('WARN', 'AgentOrchestrator', `Failed terminating child process during cleanup: ${errorMessage(err)}`)
+    }
+    session.activeChildProcess = null
+  }
+  // Cancelling keeps the work on disk: undoing it is the user's explicit choice (checkpoint restore),
+  // not a side effect of pressing Stop.
+  let checkpointId: string | null = null
+  try {
+    checkpointId = agentToolExecutorService.checkpointJournal(session.workspacePath, session.id, session.identity.conversationId)
+  } catch (err: unknown) {
+    logger.log('WARN', 'AgentOrchestrator', `Failed saving the run checkpoint during cleanup: ${errorMessage(err)}`)
+  }
+  if (session.rendererEvents?.isAvailable()) {
+    const nonRollbackEffects = [...(session.nonRollbackEffects || [])]
+    session.rendererEvents.send('agent:log', {
+      ...session.identity,
+      id: `${Date.now()}-cancelled`,
+      timestamp: new Date().toISOString(),
+      type: 'info',
+      message: "Task interrotto dall'utente.",
+    })
+    session.rendererEvents.send('agent:done', {
+      ...session.identity,
+      success: false,
+      summary: "Task interrotto dall'utente.",
+      completionStatus: 'cancelled',
+      evidence: {
+        changedFiles: session.changedFiles || [],
+        verification: session.lastVerification,
+        cancellationStatus: 'kept',
+        nonRollbackEffects,
+        ...(checkpointId ? { checkpointId } : {}),
+      },
+    })
+  }
+  session.cancellationSettlement = session.persistCancellation?.() ?? Promise.resolve()
+  void session.cancellationSettlement.catch((error: unknown) => {
+    logger.log('ERROR', 'AgentOrchestratorApp', `Failed to persist cancelled run ${session.id}: ${errorMessage(error)}`)
+  })
+  return session.cancellationSettlement
+}
+
+export function cancelActiveAgentTask(targetRunId?: string): Promise<void> {
+  const settlements: Promise<void>[] = []
+  if (targetRunId) {
+    const session = activeAgentSessions.get(targetRunId)
+    if (session) {
+      settlements.push(cleanupSession(session))
+      logger.log('INFO', 'AgentOrchestratorApp', `Agent run ${targetRunId} cancelled by user.`)
+    }
+  } else {
+    for (const session of activeAgentSessions.values()) {
+      settlements.push(cleanupSession(session))
+    }
+    logger.log('INFO', 'AgentOrchestratorApp', `All active agent sessions cancelled by user.`)
+  }
+  const settled = Promise.all(settlements).then(() => {})
+  void settled.catch(() => {}) // The individual failures are logged above; lifecycle callers await them.
+  return settled
+}
+
+/**
+ * Restores a run's checkpoint on the user's request. Refused while a run is editing the same
+ * workspace, since both would write the same files.
+ */
+export function restoreRunCheckpoint(workspacePath: string, checkpointId: string): { success: boolean; restoredCount: number; errors: string[] } {
+  const target = path.resolve(workspacePath)
+  for (const session of activeAgentSessions.values()) {
+    if (session.workspacePath && path.resolve(session.workspacePath) === target) {
+      return {
+        success: false,
+        restoredCount: 0,
+        errors: ['An agent run is still working in this workspace; stop it and wait for settlement before restoring.'],
+      }
+    }
+  }
+  return restoreAgentCheckpoint(target, checkpointId)
+}
+
+/** Applies manual prompt compaction to the next turn without altering Renderer audit logs. */
+export function requestActiveAgentContextCompaction(target: AgentRunIdentity | string): boolean {
+  const runId = typeof target === 'string' ? target : target.runId
+  const session = activeAgentSessions.get(runId)
+  if (!session || (typeof target !== 'string' && !matchesAgentRunIdentity(session.identity, target))) return false
+  session.forceContextCompaction = true
+  session.nativeSystemPrompt = undefined
+  return true
+}
+
+/** Answers a step paused inside requestApproval(). */
+export function respondToApproval(target: AgentRunIdentity | string, approved: boolean, approvedHunkIndices?: number[]): boolean {
+  const targetRunId = typeof target === 'string' ? target : target.runId
+  const session = activeAgentSessions.get(targetRunId)
+  if (typeof target !== 'string' && session && !matchesAgentRunIdentity(session.identity, target)) return false
+  if (!session || !session.pendingApprovalResolve) return false
+  const resolve = session.pendingApprovalResolve
+  session.pendingApprovalResolve = undefined
+  session.pendingApprovalReasons = undefined
+  resolve({ approved, approvedHunkIndices })
+  return true
+}
+
+/** Applies UI changes to the matching active run; queued and completed runs are untouched. */
+export function updateActiveAgentRun(update: { identity: AgentRunIdentity; mode?: AgentExecutionMode; numCtx?: number }): {
+  updated: boolean
+  approvalResolved: boolean
+  numCtx?: number
+} {
+  const session = activeAgentSessions.get(update.identity.runId)
+  if (!session || !matchesAgentRunIdentity(session.identity, update.identity) || session.isCancelled || !session.updateActiveRun) {
+    return { updated: false, approvalResolved: false }
+  }
+  return { updated: true, ...session.updateActiveRun(update) }
+}
+
+export async function runAgentOrchestratorLoop(
+  payload: AgentTaskPayload,
+  rendererEvents: RendererEventSink | null,
+  customSessionId?: string,
+): Promise<AgentTaskResult> {
+  if (!payload.userTask || !payload.userTask.trim()) {
+    return { success: false, summary: 'Task prompt empty', error: 'Task prompt is required', completionStatus: 'blocked' }
+  }
+
+  const conversationId =
+    payload.identity?.conversationId || payload.sessionId || customSessionId || `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+  const identity = createAgentRunIdentity({
+    ...payload.identity,
+    runId: payload.identity?.runId || customSessionId || conversationId,
+    conversationId,
+    workspacePath: payload.workspacePath,
+  })
+  const sessionId = identity.conversationId
+  const runId = identity.runId
+  const releaseRun = sessionDeletionRunGate.beginRun(sessionId, payload.workspacePath)
+  if (!releaseRun) return { success: false, summary: 'Session deletion needs recovery before starting another run.', completionStatus: 'blocked' }
+  const session: AgentSession = {
+    id: runId,
+    identity,
+    isCancelled: false,
+    abortController: new AbortController(),
+    rendererEvents,
+    activeCancelHandle: null,
+    activeChildProcess: null,
+    workspacePath: payload.workspacePath,
+    forceContextCompaction: Boolean(payload.forceContextCompaction),
+  }
+  activeAgentSessions.set(runId, session)
+  const rejectBeforeBootstrap = async (summary: string): Promise<AgentTaskResult> => {
+    try {
+      await session.cancellationSettlement
+    } finally {
+      if (activeAgentSessions.get(runId) === session) activeAgentSessions.delete(runId)
+      releaseRun()
+    }
+    return { success: false, summary, completionStatus: 'blocked' }
+  }
+  try {
+    const records = await sessionDeletionJournal.list()
+    if (records.some((record) => record.status !== 'restored' && record.sessionIds.includes(sessionId))) {
+      return rejectBeforeBootstrap('Session deletion needs recovery before starting another run.')
+    }
+  } catch (error: unknown) {
+    return rejectBeforeBootstrap(`Session deletion recovery is unavailable: ${errorMessage(error)}`)
+  }
+
+  // Compares by identity, not just by key presence: if a later run registers under the same
+  // reused sessionId, this run must recognise that it is no longer the owner and stand down.
+  const isSessionActive = () => {
+    if (!session.isCancelled && rendererEvents && !rendererEvents.isAvailable()) void cleanupSession(session)
+    return activeAgentSessions.get(runId) === session && !session.isCancelled
+  }
+
+  const executeSession = async (): Promise<AgentTaskResult> => {
+    try {
+      // One-shot session setup: task/workspace/settings resolution, model warm-up, skill matching, state restore, and the persist/watchdog closures the turn loop shares below.
+      let boot: Awaited<ReturnType<typeof bootstrapAgentSession>>
+      try {
+        boot = await bootstrapAgentSession({
+          payload,
+          session,
+          sessionId,
+          isSessionActive,
+          deregisterSession: () => {
+            agentToolExecutorService.closeBrowserRun(runId)
+            if (activeAgentSessions.get(runId) === session) activeAgentSessions.delete(runId)
+          },
+        })
+      } catch (err: unknown) {
+        const summary = errorMessage(err)
+        if (isSessionActive() && rendererEvents?.isAvailable()) {
+          rendererEvents.send('agent:done', { ...identity, success: false, summary, completionStatus: 'blocked' })
+        }
+        session.abortController?.abort()
+        if (activeAgentSessions.get(runId) === session) activeAgentSessions.delete(runId)
+        return { success: false, summary, error: summary, completionStatus: 'blocked' }
+      }
+      const {
+        userTask,
+        initialUserTask,
+        agentMode,
+        workspacePath,
+        isStandaloneMode,
+        settings,
+        attachedContext,
+        pinnedFilesContextStr,
+        projectContextMapStr,
+        availableModels,
+        codingModel,
+        modelCapabilities,
+        modelMetrics,
+        skillMatchContext,
+        skillMatchingOptions,
+        matchedSkills,
+        resumeValidationError,
+        episodicCompactor,
+        phaseController,
+        goalPlanner,
+        fsmMode,
+        executionGuard,
+        loopDetector,
+        surfacedDodReasons,
+        mutableFlags,
+        responseInterpreterState,
+        sessionNumCtxBox,
+        sessionChangedFiles,
+        stepCountBox,
+        MAX_STEPS,
+        maxStepsLabel,
+        isUnlimitedSteps,
+        emitLog,
+        emitDone,
+        emitStepUpdate,
+        persistCurrentState,
+        buildSessionTracker,
+        requestApproval,
+        finalizeSession,
+        clearSessionTimeout,
+      } = boot
+
+      if (!isSessionActive()) {
+        return { success: false, summary: session.terminalSummary || 'Agent run cancelled.', completionStatus: 'cancelled' }
+      }
+
+      const phaseLabels = {
+        collect_context: 'Raccolta contesto',
+        propose_action: 'Proposta corrente',
+        apply_action: 'Applicazione',
+        verify: 'Verifica',
+        outcome: 'Esito',
+      } as const
+      const setExecutionPhase = (phase: keyof typeof phaseLabels) => {
+        phaseController.transition(phase)
+        emitStepUpdate(phaseLabels[phase])
+      }
+
+      if (resumeValidationError) {
+        const errorMsg = `Ripresa sessione bloccata: ${resumeValidationError}`
+        emitLog('info', `❌ ${errorMsg}`)
+        emitDone(false, errorMsg, 'blocked')
+        await persistCurrentState('runtime_validation', 'blocked')
+        clearSessionTimeout()
+        setExecutionPhase('outcome')
+        finalizeSession()
+        return { success: false, summary: errorMsg, completionStatus: 'blocked' }
+      }
+
+      if (!workspacePath && !isStandaloneMode) {
+        const errorMsg =
+          'Nessuna cartella di progetto / workspace specificata. Per creare o scrivere file di progetto, seleziona o apri prima una directory di lavoro in OnlyRag.'
+        emitLocalizedLog(emitLog, 'info', { key: 'workspaceError', params: { error: errorMsg } })
+        emitDone(false, errorMsg, 'blocked')
+        await persistCurrentState('runtime_validation', 'blocked')
+        clearSessionTimeout()
+        setExecutionPhase('outcome')
+        finalizeSession()
+        return { success: false, summary: errorMsg, completionStatus: 'blocked' }
+      }
+
+      const [ollamaConnection, guestOsInfo] = await Promise.all([
+        ollamaAppService.testConnection(settings.ollamaHost),
+        workspaceAppService.inspectGuestOsEnvironment(),
+      ])
+      if (!isSessionActive()) return { success: false, summary: session.terminalSummary || 'Agent run cancelled.', completionStatus: 'cancelled' }
+      // Resolve the selected context with the same hardware policy used for model turns.
+      if (!hardwareProbe.getCachedGpuInfo()) await hardwareProbe.detectGpu().catch(() => null)
+      const cachedGpu = hardwareProbe.getCachedGpuInfo()
+      const hardwareFacts = {
+        hasGpu: cachedGpu?.hasNvidiaGpu,
+        vramTotalMB: cachedGpu?.vramTotalMB,
+        systemRamGB: hardwareProbe.getMemoryInfo().totalRAMGB,
+      }
+      const hardwareContext = HardwareProfileResolver.resolveOllamaOptions('Auto', hardwareFacts).num_ctx
+      const preflight = evaluateAgentCodingPreflight({
+        codingModel,
+        availableModels,
+        modelMetrics,
+        effectiveContextTokens:
+          session.ollamaRuntimeProfile?.options.num_ctx ??
+          resolveModelContextLength(codingModel, settings.modelContextLengths, hardwareContext, modelMetrics[codingModel]?.contextLength),
+        ollamaReachable: ollamaConnection.success,
+        ollamaError: ollamaConnection.error,
+        workspacePath,
+        sourceWorkspacePath: payload.sourceWorkspacePath,
+        isStandaloneMode,
+        toolchain: guestOsInfo.tools,
+        hardwareFacts: settings.ollamaMode !== 'remote' && isLocalOllamaHost(settings.ollamaHost) ? hardwareFacts : undefined,
+      })
+      for (const check of preflight.checks) {
+        emitLocalizedLog(emitLog, 'info', {
+          key: 'preflightCheck',
+          params: { mark: check.passed ? '✓' : check.blocking ? '✗' : '!', id: check.id, detail: check.detail },
+        })
+      }
+      if (!preflight.ready) {
+        const failures = preflight.checks
+          .filter((check) => check.blocking && !check.passed)
+          .map((check) => check.id)
+          .join(', ')
+        const errorMsg = `Agent Coding preflight blocked: ${failures}.`
+        emitDone(false, errorMsg, 'blocked')
+        await persistCurrentState('runtime_validation', 'blocked')
+        clearSessionTimeout()
+        setExecutionPhase('outcome')
+        finalizeSession()
+        return { success: false, summary: errorMsg, completionStatus: 'blocked' }
+      }
+
+      session.changedFiles = [...sessionChangedFiles.keys()]
+      session.nonRollbackEffects ||= []
+
+      const closeApplicationRun = (request: Parameters<typeof closeAgentRunFromEvidence>[1]) =>
+        closeAgentRunFromEvidence(
+          {
+            workspacePath,
+            settings,
+            sessionId,
+            stepCount: stepCountBox.value,
+            runId,
+            flags: mutableFlags,
+            state: responseInterpreterState,
+            goalPlanner,
+            episodicCompactor,
+            isSessionActive,
+            emitLog,
+            emitDone,
+            persistCurrentState,
+            buildSessionTracker,
+            finalizeSession,
+            setExecutionPhase,
+            getExecutionPhase: () => phaseController.getPhase(),
+            runtimeProfile: session.ollamaRuntimeProfile,
+            generationTelemetry: session.ollamaGenerationTelemetry,
+            lastVerification: session.lastVerification,
+            recordVerificationEvidence: (evidence) => {
+              session.lastVerification = evidence
+            },
+            nonRollbackEffects: session.nonRollbackEffects,
+            requestApproval,
+            signal: session.abortController?.signal,
+          },
+          request,
+        )
+
+      const run: AgentRunContext = {
+        session,
+        payload,
+        sessionId,
+        runIdentity: identity,
+        userTask,
+        initialUserTask,
+        agentMode,
+        workspacePath,
+        isStandaloneMode,
+        settings,
+        availableModels,
+        codingModel,
+        modelCapabilities,
+        modelMetrics,
+        attachedContext,
+        pinnedFilesContextStr,
+        projectContextMapStr,
+        skillMatchContext,
+        skillMatchingOptions,
+        maxSteps: MAX_STEPS,
+        maxStepsLabel,
+        isUnlimitedSteps,
+        flags: mutableFlags,
+        state: responseInterpreterState,
+        surfacedDodReasons,
+        sessionChangedFiles,
+        sessionNumCtxBox,
+        episodicCompactor,
+        goalPlanner,
+        fsmMode,
+        executionGuard,
+        loopDetector,
+        rendererEvents: session.rendererEvents,
+        isSessionActive,
+        emitLog,
+        emitDone,
+        persistCurrentState,
+        finalizeSession,
+        buildSessionTracker,
+        closeApplicationRun,
+        recordChangedFile: (filePath) => {
+          if (!session.changedFiles!.includes(filePath)) session.changedFiles!.push(filePath)
+        },
+        recordNonRollbackEffect: (effect) => {
+          if (!session.nonRollbackEffects!.includes(effect)) session.nonRollbackEffects!.push(effect)
+        },
+      }
+
+      session.updateActiveRun = ({ mode, numCtx }) => {
+        let approvalResolved = false
+        if (mode && mode !== run.agentMode) {
+          run.agentMode = mode
+          session.currentAgentMode = mode
+          fsmMode.setMode(mode)
+          session.nativeSystemPrompt = undefined
+          const reasons = session.pendingApprovalReasons
+          if (session.pendingApprovalResolve && (mode === 'ask' || (mode === 'auto' && reasons?.length === 1 && reasons[0] === 'guided_review'))) {
+            const resolve = session.pendingApprovalResolve
+            session.pendingApprovalResolve = undefined
+            session.pendingApprovalReasons = undefined
+            resolve({ approved: mode === 'auto' })
+            approvalResolved = true
+          }
+          emitLog('info', `Execution mode changed to ${mode.toUpperCase()} for the active run.`)
+        }
+        let appliedContext: number | undefined
+        if (numCtx !== undefined) {
+          const model = session.ollamaRuntimeProfile?.model || codingModel
+          settings.modelContextLengths = { ...settings.modelContextLengths, [model]: numCtx }
+          const profile = session.ollamaRuntimeProfile
+          if (profile) {
+            const effective = resolveModelContextLength(model, settings.modelContextLengths, profile.options.num_ctx, modelMetrics[model]?.contextLength)
+            if (effective !== profile.options.num_ctx) {
+              profile.options.num_ctx = effective
+              profile.options.num_predict = HardwareProfileResolver.deriveNumPredict(effective)
+              profile.options.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(effective)
+              sessionNumCtxBox.value = effective
+              session.nativeSystemPrompt = undefined
+              emitLog('info', `Context window changed to ${effective} tokens for ${model}; the next model request will use it.`)
+            }
+            appliedContext = effective
+          }
+        }
+        return { approvalResolved, ...(appliedContext !== undefined ? { numCtx: appliedContext } : {}) }
+      }
+
+      // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
+      const pendingNativeCalls: Array<{ call: AgentChatToolCall; prepared: PreparedAgentTurn; data: TurnDispatchData }> = []
+      while (isSessionActive()) {
+        const operationalMilestones = goalPlanner.getMilestones().filter((milestone) => !isCompletionMilestoneTitle(milestone))
+        if (
+          pendingNativeCalls.length === 0 &&
+          operationalMilestones.length > 0 &&
+          operationalMilestones.every((milestone) => milestone.status === 'verified')
+        ) {
+          const closure = await closeApplicationRun({ trigger: 'finish', reason: { key: 'reasonPlanVerified' }, allowCorrection: true })
+          if (closure.outcome === 'closed') return closure.result
+        }
+        if (stepCountBox.value >= MAX_STEPS) break
+        stepCountBox.value++
+        setExecutionPhase('collect_context')
+        // Re-fitted every turn: the manifest the skills must agree with is usually written during the run.
+        const skillsBlock = skillAppService.skillsBlockForWorkspace(matchedSkills, workspacePath)
+        // A new model turn must never outrun the durable transcript of completed actions.
+        agentToolExecutorService.persistJournalCheckpoint(workspacePath, runId, sessionId)
+        await persistCurrentState()
+
+        // Routes the turn to a model, assembles/compacts the prompt, freezes/grows num_ctx, decides Ollama context-cache reuse, and dispatches to the LLM with resilient fallback.
+        const turnContext = { ...run, stepCount: stepCountBox.value, skillsBlock }
+        const pending = pendingNativeCalls.shift()
+        let preparedTurn: PreparedAgentTurn
+        let turnData: TurnDispatchData
+        if (pending) {
+          preparedTurn = pending.prepared
+          turnData = { ...pending.data, nativeCalls: [pending.call] }
+          setExecutionPhase('propose_action')
+        } else {
+          const hadRuntimeProfile = Boolean(session.ollamaRuntimeProfile)
+          preparedTurn = await collectTurnContext(turnContext)
+          if (!hadRuntimeProfile && session.ollamaRuntimeProfile) await persistCurrentState()
+          setExecutionPhase('propose_action')
+          const dispatchOutcome = await requestTurnProposal(turnContext, preparedTurn)
+          if (dispatchOutcome.outcome === 'return') {
+            setExecutionPhase('outcome')
+            return dispatchOutcome.result
+          }
+          turnData = { ...dispatchOutcome.data, nativeBatchSize: dispatchOutcome.data.nativeCalls?.length }
+          for (const call of turnData.nativeCalls?.slice(1) || []) pendingNativeCalls.push({ call, prepared: preparedTurn, data: turnData })
+        }
+        const { streamedOutput, hasRecentToolFailure, errorCountInHistory, compiledHistoryBlock, targetModel } = turnData
+        const nativeCall = turnData.nativeCalls?.[0]
+        const recordNativeResult = (output: string) => {
+          if (nativeCall) session.chatMessages = appendToolResponse(session.chatMessages || [], nativeCall, output)
+        }
+        if (nativeCall && (turnData.nativeBatchSize || 0) > 1 && (nativeCall.function.name === 'finish' || nativeCall.function.name === 'ask')) {
+          recordNativeResult(`${nativeCall.function.name} must be called alone after the other tool results are available.`)
+          setExecutionPhase('collect_context')
+          continue
+        }
+
+        // Interprets the raw LLM output for this turn: plan extraction, tool-call parsing (with no-tool-call / malformed-call recovery), and the finish/loop-detection/ask special cases.
+        const interpretation = await interpretTurnResponse({
+          ...run,
+          streamedOutput,
+          nativeCall,
+          stepCount: stepCountBox.value,
+          hasRecentToolFailure,
+          errorCountInHistory,
+          compiledHistoryBlock,
+        })
+        if (interpretation.outcome === 'continue') {
+          const feedback = episodicCompactor.feedbackForStep(stepCountBox.value) ?? 'The requested action was not executed. Choose a different next step.'
+          if (nativeCall) recordNativeResult(feedback)
+          // A prose-only reply has no call to answer: the feedback becomes the next user message, so the
+          // transcript never ends on an assistant message the model would merely continue.
+          else session.chatMessages = [...(session.chatMessages || []), { role: 'user', content: feedback }]
+          setExecutionPhase('collect_context')
+          continue
+        }
+        if (interpretation.outcome === 'return') {
+          setExecutionPhase('outcome')
+          return interpretation.result
+        }
+        const parsedTool = interpretation.parsedTool
+
+        // Approval + FSM permission gates (strict Ask, Guided review, always-confirm commit,
+        // and contextual network/install consent).
+        setExecutionPhase('apply_action')
+        const gateResult = await runToolGates({
+          parsedTool,
+          agentMode: run.agentMode,
+          fsmMode,
+          workspacePath,
+          stepCount: stepCountBox.value,
+          episodicCompactor,
+          emitLog,
+          requestApproval,
+          capabilityPolicyMode: settings.capabilityPolicyMode,
+          fullAccess: settings.fullAccess === true,
+          allowedToolsForTurn: preparedTurn.toolPolicy.allowedTools,
+          requiredReadPath: preparedTurn.toolPolicy.requiredReadPath,
+          runOwnedPaths: Array.from(sessionChangedFiles.keys()),
+        })
+        if (gateResult.outcome === 'denied') {
+          recordNativeResult(gateResult.feedback)
+          if (settings.enableCodingAgentDebugLog && gateResult.feedback) {
+            codingAgentLogger.logToolResult(sessionId, stepCountBox.value, parsedTool.tool, gateResult.feedback)
+          }
+          if (gateResult.policyDenial) {
+            const policyStop = await recordToolPolicyDenial(responseInterpreterState, stepCountBox.value, closeApplicationRun)
+            if (policyStop) {
+              setExecutionPhase('outcome')
+              return policyStop
+            }
+          }
+          setExecutionPhase('collect_context')
+          continue
+        }
+        const versionedEdit = applyVersionedReadEvidence(gateResult.toolCallForExecution, responseInterpreterState)
+        const toolCallForExecution = versionedEdit.toolCall
+        if (versionedEdit.consumed) await persistCurrentState()
+        if (!isSessionActive()) break
+
+        // Orchestrator-level pseudo-tool: the model's explicit handle on plan progression.
+        if ((parsedTool.tool as string) === 'update_plan') {
+          setExecutionPhase('verify')
+          await handleUpdatePlanTool({
+            parsedTool,
+            goalPlanner,
+            workspacePath,
+            emitLog,
+            emitStepUpdate,
+            episodicCompactor,
+            persistCurrentState,
+            settings,
+            sessionId,
+            stepCount: stepCountBox.value,
+            maxStepsLabel,
+            signal: session.abortController?.signal,
+          })
+          recordNativeResult(
+            episodicCompactor.feedbackForStep(stepCountBox.value) ?? 'Plan update processed. The current plan state is in the latest user message.',
+          )
+          setExecutionPhase('collect_context')
+          continue
+        }
+
+        // Execute tool through tool executor service
+        // A crash during an external effect must be distinguishable from a completed action.
+        await persistCurrentState()
+        const toolStartedAtMs = Date.now()
+        const toolRes = await agentToolExecutorService.executeTool(
+          toolCallForExecution,
+          workspacePath,
+          settings,
+          (terminalChunk) => emitLog('terminal', terminalChunk),
+          (childProc) => {
+            session.activeChildProcess = childProc
+          },
+          skillsBlock,
+          session.abortController?.signal,
+          gateResult.policyConsent,
+          sessionId,
+          // A call the gate substituted (a shell read run as read_file) was authorized by the gate
+          // itself; re-checking it against the proposed tool's phase would deny what the gate allowed.
+          settings.fullAccess && run.agentMode !== 'ask'
+            ? undefined
+            : toolCallForExecution.tool === parsedTool.tool
+              ? preparedTurn.toolPolicy.allowedTools
+              : [...preparedTurn.toolPolicy.allowedTools, toolCallForExecution.tool],
+          gateResult.commandApprovalGranted,
+          runId,
+        )
+        recordNativeResult(toolRes.outputForHistory)
+        agentToolExecutorService.endJournalStep()
+        agentToolExecutorService.persistJournalCheckpoint(workspacePath, runId, sessionId)
+
+        if (!isSessionActive()) {
+          setExecutionPhase('outcome')
+          return {
+            success: false,
+            summary: session.terminalSummary || "Task interrotto dall'utente.",
+            completionStatus: session.completionStatus || 'cancelled',
+          }
+        }
+
+        setExecutionPhase('verify')
+        const processingOutcome = await runToolResultProcessing({
+          ...run,
+          toolRes,
+          parsedTool: toolCallForExecution,
+          toolStartedAtMs,
+          stepCount: stepCountBox.value,
+          targetModel,
+        })
+        if (processingOutcome.outcome === 'return') {
+          setExecutionPhase('outcome')
+          return processingOutcome.result
+        }
+      }
+
+      for (const pending of pendingNativeCalls) {
+        session.chatMessages = appendToolResponse(session.chatMessages || [], pending.call, 'Not executed: the run ended before this tool call.')
+      }
+
+      // Cancellation and timeout persist their own terminal checkpoint. Do not fall through to
+      // the ordinary epilogue, which would overwrite that reason with a successful completion.
+      if (session.isCancelled) {
+        setExecutionPhase('outcome')
+        return {
+          success: false,
+          summary: session.terminalSummary || "Task interrotto dall'utente.",
+          completionStatus: session.completionStatus || 'cancelled',
+        }
+      }
+
+      const budgetExhausted = stepCountBox.value >= MAX_STEPS && MAX_STEPS !== Infinity
+      const closure = await closeApplicationRun({
+        trigger: budgetExhausted ? 'step_budget' : 'model_silence',
+        ...(budgetExhausted ? { guard: 'step_budget' as const } : {}),
+        reason: budgetExhausted ? { key: 'reasonStepBudget', params: { max: MAX_STEPS } } : { key: 'reasonLoopEnded', params: { steps: stepCountBox.value } },
+      })
+      return closure.outcome === 'closed'
+        ? closure.result
+        : { success: false, summary: 'La chiusura applicativa non ha prodotto un esito terminale.', completionStatus: 'blocked' }
+    } catch (error: unknown) {
+      const summary = errorMessage(error)
+      logger.log('ERROR', 'AgentOrchestratorApp', `Agent run ${runId} stopped: ${summary}`)
+      if (!session.isCancelled && rendererEvents?.isAvailable()) {
+        rendererEvents.send('agent:done', { ...identity, success: false, summary, completionStatus: 'blocked' })
+      }
+      session.abortController?.abort()
+      session.activeCancelHandle?.()
+      session.pendingApprovalResolve?.({ approved: false })
+      agentToolExecutorService.checkpointJournal(session.workspacePath, runId, sessionId)
+      return { success: false, summary, error: summary, completionStatus: session.completionStatus || 'blocked' }
+    }
+  }
+  let result: AgentTaskResult
+  let settlementError: unknown
+  try {
+    result = await executeSession()
+    if (session.isCancelled && session.completionStatus === 'cancelled') {
+      // Bootstrap or an in-flight tool may have produced evidence after the first cancellation write.
+      await session.cancellationSettlement
+      await session.persistCancellation?.()
+    }
+  } catch (error: unknown) {
+    logger.log('ERROR', 'AgentOrchestratorApp', `Cancellation settlement failed for ${runId}: ${errorMessage(error)}`)
+    settlementError = error
+    result = { success: false, summary: errorMessage(error), completionStatus: 'blocked' }
+  } finally {
+    if (session.timeoutHandle) clearTimeout(session.timeoutHandle)
+    try {
+      await agentToolExecutorService.closeBrowserRun(runId)
+    } finally {
+      if (activeAgentSessions.get(runId) === session) activeAgentSessions.delete(runId)
+      releaseRun()
+    }
+  }
+  if (settlementError) throw settlementError
+  if (session.isCancelled) {
+    return { success: false, summary: session.terminalSummary || 'Agent run cancelled.', completionStatus: session.completionStatus || 'cancelled' }
+  }
+  return result
+}

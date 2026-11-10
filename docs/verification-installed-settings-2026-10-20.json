@@ -1,0 +1,115 @@
+{
+  "executablePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-next-tasks-c9663097cc8849fea2f65670b710293e\\installed-app\\OnlyRag V2.exe",
+  "settings": {
+    "version": 2,
+    "settings": {
+      "defaultModel": "offline-fixture",
+      "ocrEngine": "native_cuda",
+      "ollamaHost": "http://127.0.0.1:11434",
+      "ollamaMode": "local",
+      "capabilityPolicyMode": "network-approved",
+      "fullAccess": false,
+      "allowFullExcelFormat": false,
+      "language": "it",
+      "autoInstallHubSkills": "disabled",
+      "autoInstallMinScore": 8,
+      "enableSkillRouter": false,
+      "maxToolCallSteps": 25,
+      "enableCodingAgentDebugLog": false,
+      "codingAgentDebugRetentionFiles": 2,
+      "modelThinkingPreferences": {},
+      "hasCompletedInitialSetup": true,
+      "modelSamplingOverrides": {}
+    }
+  },
+  "assertions": [
+    "pending close flush",
+    "failed write preserves obstruction",
+    "retry and close",
+    "restart language",
+    "owned force kill",
+    "acknowledged revision after second restart"
+  ],
+  "limits": "Isolated E2E profile, automatic Sidecar disabled; no model or power-loss qualification.",
+  "completedTask": {
+    "id": "SETTINGS-CLOSE-DURABILITY-01",
+    "p": "P2",
+    "task": "Qualify installed-desktop settings persistence and forced-interruption recovery beyond the isolated Main/Preload close, failed-write retry and restart readback tests (docs/verification.md). Audit 2026-10-19: Status: Qualification pending; existing deterministic/historical evidence does not establish the remaining acceptance boundary. Evidence: electron/main.ts; src/hooks/useSettingsPersistence.ts; scripts/e2e/settingsCloseDurability.mjs. Impact: Development close/retry checks do not establish installed interruption recovery. Scope: Acknowledged settings revisions across close, failed writes, interruption and restart.",
+    "verify": "After installation is explicitly authorized, use an isolated profile to verify acknowledged settings after close, failed-write retry, forced interruption and restart; retain before/after readback. Dependencies: Explicit isolated installation authorization; coordinate the current-source candidate."
+  },
+  "installation": {
+    "personalProfileLaunched": false,
+    "installRoot": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-next-tasks-c9663097cc8849fea2f65670b710293e\\installed-app",
+    "installer": "D:\\GITHUB\\OnlyRagV2\\release\\cpu-20261020-114718-c7ebd99c\\OnlyRag V2 Setup 1.0.0.exe",
+    "utc": "2026-10-20T12:44:50.7577121Z",
+    "exitCode": 0
+  },
+  "payloadCorrespondence": {
+    "candidate": "cpu-20261020-114718-c7ebd99c",
+    "installer": {
+      "path": "OnlyRag V2 Setup 1.0.0.exe",
+      "sha256": "3323260e985417415ce7bc041190079e76c75130c0f60d53859abe5291c57d7b",
+      "bytes": 416383893
+    },
+    "source": {
+      "path": "OnlyRag-1.0.0-source.zip",
+      "sha256": "ad2d79cacf6b676bf56d4e815402bd06db6bf858bae4819904fb1322fb302991"
+    },
+    "pathSetEqual": true,
+    "matchedPayloadFiles": 3589,
+    "unpackedBytes": 1240921299
+  },
+  "runnerSha256": "349ad82ae31414d7e3de3cae1898f0ba3bfa0f24b4c15089d39fab63fb14ab47",
+  "finalQualification": {
+    "candidate": "cpu-20261020-130728-0e85c502",
+    "installer": {
+      "path": "OnlyRag V2 Setup 1.0.0.exe",
+      "sha256": "7467194090ecd428351de480a35dba7e68cb3299f13c49a06978124d387e3706",
+      "bytes": 416384924
+    },
+    "installedSettings": {
+      "executablePath": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-next-tasks-c9663097cc8849fea2f65670b710293e\\installed-app\\OnlyRag V2.exe",
+      "settings": {
+        "version": 2,
+        "settings": {
+          "defaultModel": "offline-fixture",
+          "ocrEngine": "native_cuda",
+          "ollamaHost": "http://127.0.0.1:11434",
+          "ollamaMode": "local",
+          "capabilityPolicyMode": "network-approved",
+          "fullAccess": false,
+          "allowFullExcelFormat": false,
+          "language": "it",
+          "autoInstallHubSkills": "disabled",
+          "autoInstallMinScore": 8,
+          "enableSkillRouter": false,
+          "maxToolCallSteps": 25,
+          "enableCodingAgentDebugLog": false,
+          "codingAgentDebugRetentionFiles": 2,
+          "modelThinkingPreferences": {},
+          "hasCompletedInitialSetup": true,
+          "modelSamplingOverrides": {}
+        }
+      },
+      "assertions": [
+        "pending close flush",
+        "failed write preserves obstruction",
+        "retry and close",
+        "restart language",
+        "owned force kill",
+        "acknowledged revision after second restart"
+      ],
+      "limits": "Isolated E2E profile, automatic Sidecar disabled; no model or power-loss qualification."
+    },
+    "tests": {
+      "typescript": 2948,
+      "typescriptFiles": 322,
+      "typescriptSeconds": 201.21,
+      "python": 622,
+      "pythonSkipped": 1,
+      "pythonSeconds": 200.69,
+      "focused": 64,
+      "focusedFiles": 5
+    }
+  }
+}

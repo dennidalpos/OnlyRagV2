@@ -1,0 +1,282 @@
+import { extractDeliverablePaths, resolveDeclaredFilePaths } from './milestoneDeliverableResolver'
+import { selectPromptMilestoneWindow } from './planPromptWindow'
+import { buildActiveInterventionActions } from './activeInterventionActions'
+import type { PlanMilestone } from './planMilestone'
+
+export type { PlanMilestone } from './planMilestone'
+
+export interface CompactPlanState {
+  objective: string
+  restorePoint: string
+  activeMicroTask: string
+  pendingMicroTasks: string[]
+  completedCount: number
+  totalCount: number
+  isCompleted: boolean
+}
+
+/**
+ * Recognises a closing milestone ("finish", "final report") a model may still write into its plan,
+ * so it is not treated as outstanding work: the application owns session closure.
+ */
+export function isCompletionMilestoneTitle(input: string | Pick<PlanMilestone, 'title' | 'filePaths'>): boolean {
+  const title = typeof input === 'string' ? input : input.title
+  if (typeof input !== 'string' && input.filePaths?.length) return false
+  if (!/finish|completamento|arresto|riepilogo|final report/i.test(title || '')) return false
+  return extractDeliverablePaths(title || '').length === 0
+}
+
+function normalizePlanPath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Maps `filePath` through a move of `source` (a file, or a directory prefix) to `target`. */
+function remapPlanPath(filePath: string, source: string, target: string): string | undefined {
+  const normalized = normalizePlanPath(filePath)
+  const lower = normalized.toLowerCase()
+  const sourceLower = source.toLowerCase()
+  if (lower === sourceLower) return target
+  if (lower.startsWith(`${sourceLower}/`)) return `${target}${normalized.slice(source.length)}`
+  return undefined
+}
+
+/** Rewrites whole path tokens only: `src/App.js` never matches inside `src/App.jsx` or `lib/src/App.js`. */
+function remapPathTokens(text: string, source: string, target: string): string {
+  const pattern = new RegExp(`(^|[\\s'"\`(]|\\./)${escapeRegExp(source)}(?=$|[\\s'"\`),;:/]|\\.(?:\\s|$))`, 'gi')
+  return text.replace(pattern, (_match, prefix: string) => `${prefix}${target}`)
+}
+
+export interface MilestoneTransition {
+  id: string
+  title: string
+  from: PlanMilestone['status']
+  to: PlanMilestone['status']
+  cause: string
+}
+
+export class GoalDecompositionPlanner {
+  private milestones: PlanMilestone[] = []
+  private transitionListener?: (transition: MilestoneTransition) => void
+
+  public onMilestoneTransition(listener: (transition: MilestoneTransition) => void): void {
+    this.transitionListener = listener
+  }
+
+  public initializePlan(milestones: PlanMilestone[]): void {
+    this.milestones = milestones.map((milestone, index) => ({
+      ...milestone,
+      id: milestone.id || `milestone-${index + 1}`,
+      status: milestone.status || 'pending',
+    }))
+  }
+
+  public loadMilestones(milestones: PlanMilestone[]): void {
+    this.milestones = milestones ? [...milestones] : []
+  }
+
+  public getMilestones(): ReadonlyArray<PlanMilestone> {
+    return this.milestones
+  }
+
+  public hasPlan(): boolean {
+    return this.milestones.length > 0
+  }
+
+  public getActiveMilestone(): PlanMilestone | undefined {
+    const firstOpen = this.milestones.find(
+      (milestone) => (milestone.status === 'pending' || milestone.status === 'in_progress') && !isCompletionMilestoneTitle(milestone),
+    )
+    if (firstOpen) return firstOpen
+    return this.milestones.find((milestone) => milestone.status === 'pending' || milestone.status === 'in_progress')
+  }
+
+  public findMilestone(idOrIndex: string | number): PlanMilestone | undefined {
+    if (typeof idOrIndex === 'number') return this.milestones[idOrIndex]
+    return this.milestones.find((milestone) => milestone.id === idOrIndex || milestone.title.toLowerCase().includes(idOrIndex.toLowerCase()))
+  }
+
+  public updateMilestone(idOrIndex: string | number, status: PlanMilestone['status'], notes?: string): boolean {
+    const target = this.findMilestone(idOrIndex)
+    if (!target) return false
+
+    if (
+      !isCompletionMilestoneTitle(target) &&
+      target.status !== 'verified' &&
+      target.status !== 'failed' &&
+      status !== target.status &&
+      this.getActiveMilestone()?.id !== target.id
+    )
+      return false
+
+    const previousStatus = target.status
+    target.status = status
+    if (notes) target.notes = notes
+    if (previousStatus !== status) {
+      this.transitionListener?.({
+        id: target.id,
+        title: target.title,
+        from: previousStatus,
+        to: status,
+        cause: notes || target.notes || 'No cause recorded.',
+      })
+    }
+    return true
+  }
+
+  /**
+   * Follows a successful move_file: milestones that name the moved file (or a file under a moved
+   * directory) now name its new path, so a rename ordered by a directive (e.g. JSX in src/App.js)
+   * does not leave milestones pointing at a path that can never be delivered. File evidence keeps
+   * its hash because a move preserves content. Returns the ids of the milestones it rewrote.
+   */
+  public remapFilePath(sourcePath: string, targetPath: string): string[] {
+    const source = normalizePlanPath(sourcePath)
+    const target = normalizePlanPath(targetPath)
+    if (!source || !target || source.toLowerCase() === target.toLowerCase()) return []
+
+    const remapped: string[] = []
+    for (const milestone of this.milestones) {
+      const declared = resolveDeclaredFilePaths(milestone)
+      const nextPaths = declared.map((filePath) => remapPlanPath(filePath, source, target) ?? filePath)
+      const pathsChanged = nextPaths.some((filePath, index) => filePath !== declared[index])
+
+      let evidenceChanged = false
+      let nextEvidence: Record<string, string> | undefined
+      if (milestone.fileEvidence) {
+        nextEvidence = {}
+        for (const [filePath, hash] of Object.entries(milestone.fileEvidence)) {
+          const mapped = remapPlanPath(filePath, source, target)
+          if (mapped) evidenceChanged = true
+          nextEvidence[mapped ?? filePath] = hash
+        }
+      }
+      if (!pathsChanged && !evidenceChanged) continue
+
+      if (pathsChanged) milestone.filePaths = [...new Set(nextPaths)]
+      if (evidenceChanged) milestone.fileEvidence = nextEvidence
+      milestone.title = remapPathTokens(milestone.title, source, target)
+      if (milestone.verificationCommand) {
+        milestone.verificationCommand = remapPathTokens(milestone.verificationCommand, source, target)
+      }
+      if (milestone.acceptanceCriteria) {
+        milestone.acceptanceCriteria = milestone.acceptanceCriteria.map((criterion) => remapPathTokens(criterion, source, target))
+      }
+      remapped.push(milestone.id)
+    }
+    return remapped
+  }
+
+  public getProgressSummary(): { completed: number; total: number; percentage: number } {
+    const total = this.milestones.length
+    if (total === 0) return { completed: 0, total: 0, percentage: 0 }
+    const completed = this.milestones.filter((milestone) => milestone.status === 'verified').length
+    return { completed, total, percentage: Math.round((completed / total) * 100) }
+  }
+
+  public getCompactState(customObjective?: string): CompactPlanState {
+    return GoalDecompositionPlanner.getCompactStateFromMilestones(this.milestones, customObjective)
+  }
+
+  public static getCompactStateFromMilestones(milestones: ReadonlyArray<PlanMilestone>, customObjective?: string): CompactPlanState {
+    const completedMilestones = milestones.filter((milestone) => milestone.status === 'verified')
+    const pendingMilestones = milestones.filter((milestone) => milestone.status !== 'verified')
+    const lastCompleted = completedMilestones.at(-1)
+    const activeMilestone = pendingMilestones[0]
+
+    return {
+      objective: customObjective || 'Execution Plan',
+      restorePoint: lastCompleted ? `${lastCompleted.id}: ${lastCompleted.title}` : 'None (Session Initialized)',
+      activeMicroTask: activeMilestone ? `${activeMilestone.id}: ${activeMilestone.title}` : 'None (Plan Completed)',
+      pendingMicroTasks: pendingMilestones.map((milestone) => `${milestone.id}: ${milestone.title}`),
+      completedCount: completedMilestones.length,
+      totalCount: milestones.length,
+      isCompleted: milestones.length > 0 && pendingMilestones.length === 0,
+    }
+  }
+
+  public compileProgressPrompt(context?: { directive?: { blockDirective?: string | null; closureStepDirective?: string | null } | null }): string {
+    if (this.milestones.length === 0) return ''
+    const blockDirective = context?.directive?.blockDirective
+    const progress = this.getProgressSummary()
+    const lines = [
+      `### STRUCTURED EXECUTION PLAN (${progress.completed}/${progress.total} verified - ${progress.percentage}%)`,
+      'Execute systematically. Mark milestones verified only when validated.',
+    ]
+
+    const activeMilestone = this.getActiveMilestone()
+    const promptWindow = selectPromptMilestoneWindow(this.milestones, activeMilestone?.id)
+    if (promptWindow.omittedBefore > 0) {
+      lines.push(`[${promptWindow.omittedBefore} earlier milestones omitted from this turn; retained in canonical state.]`)
+    }
+
+    for (const { milestone, planIndex } of promptWindow.entries) {
+      const icon = milestone.status === 'verified' ? '[x]' : milestone.status === 'in_progress' ? '[>]' : milestone.status === 'failed' ? '[!]' : '[ ]'
+      let line = `${planIndex + 1}. ${icon} **${milestone.id}: ${milestone.title}**`
+      if (milestone.filePaths?.length) {
+        line += ` — *Files:* ${milestone.filePaths.map((filePath) => `\`${filePath}\``).join(', ')}`
+      }
+      if (milestone.acceptanceCriteria?.length) line += ` — *Criteria:* ${milestone.acceptanceCriteria.join('; ')}`
+      if (milestone.falsifiableHypothesis) line += ` — *Hypothesis:* ${milestone.falsifiableHypothesis}`
+      if (milestone.verificationCommand) line += ` — *Verify with:* \`${milestone.verificationCommand}\``
+      if (milestone.notes) line += ` (Note: ${milestone.notes})`
+      lines.push(line)
+      if (milestone.id === activeMilestone?.id) {
+        buildActiveInterventionActions(milestone).forEach((action, index) => lines.push(`   Action ${index + 1}: ${action}`))
+      }
+    }
+
+    if (promptWindow.omittedAfter > 0) {
+      lines.push(`[${promptWindow.omittedAfter} later milestones omitted from this turn; retained in canonical state.]`)
+      const upcoming = this.milestones
+        .slice((promptWindow.entries.at(-1)?.planIndex ?? -1) + 1)
+        .filter((milestone) => milestone.status === 'pending' || milestone.status === 'in_progress')
+      lines.push('[UPCOMING PLAN CONTEXT — preserve these connections; only the active milestone may advance]')
+      upcoming.slice(0, 6).forEach((milestone) => {
+        lines.push(
+          `${milestone.id}: ${milestone.title.slice(0, 200)}${milestone.filePaths?.length ? ` — files: ${milestone.filePaths.slice(0, 6).join(', ')}` : ''}`,
+        )
+      })
+    }
+
+    const failedMilestones = this.milestones.filter((milestone) => milestone.status === 'failed')
+    if (progress.completed === progress.total && progress.total > 0) {
+      lines.push(
+        "\n[ALL CHECKLIST MILESTONES COMPLETED - FINAL REPORT REQUIRED]\nAll operational checklist tasks are complete. DO NOT execute any more file edits or commands.\nReply with a comprehensive final report (in the user's language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Final Conclusion\nThe application will independently evaluate the evidence and close the session; no finish tool is required.",
+      )
+    } else if (!activeMilestone || isCompletionMilestoneTitle(activeMilestone)) {
+      const failedList =
+        failedMilestones.length > 0
+          ? `\nThe following milestones were abandoned and MUST be reported as incomplete in your summary:\n${failedMilestones.map((milestone) => `- ${milestone.id}: ${milestone.title}`).join('\n')}`
+          : ''
+      lines.push(
+        `\n[NO OPERATIONAL MILESTONES REMAIN - FINAL REPORT REQUIRED]\nEvery milestone that can still be worked on is either verified or abandoned. DO NOT execute any more file edits or commands, and DO NOT ask the user a question.\nReply with a comprehensive final report (in the user's language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Work left incomplete and why\n5. Final Conclusion\nThe application will independently evaluate the evidence and close the session; no finish tool is required.${failedList}`,
+      )
+    } else if (blockDirective) {
+      lines.push(`\n${blockDirective}`)
+    } else {
+      const closureStep =
+        context?.directive?.closureStepDirective ||
+        '2. Complete and verify this milestone with "update_plan" or its declared check before starting the next one.'
+      lines.push(
+        [
+          '\n[CURRENT ACTIVE MICRO-TASK FOCUS]',
+          '🎯 ACTIVE MILESTONE (Focus on this step now):',
+          `👉 **Task ${activeMilestone.id}: ${activeMilestone.title}**`,
+          'Directives:',
+          '1. Focus your actions on achieving the goals of this milestone.',
+          closureStep,
+          '3. Never repeat identical file writes or commands in a loop. If configuration or boilerplate files are already created, advance immediately to implementing components in src/.',
+          '4. Do NOT invoke "finish" until all operational checklist milestones are completed and verified.',
+          '5. If a scaffolding command fails or hangs, create only the files named by the active milestone; preserve the accepted stack and existing infrastructure.',
+          '6. Keep the active edit group connected: imports must resolve, and a web HTML entry must load its source entry module. Run the active group check once its files are coherent, even if later feature milestones remain pending.',
+        ].join('\n'),
+      )
+    }
+
+    return lines.join('\n')
+  }
+}

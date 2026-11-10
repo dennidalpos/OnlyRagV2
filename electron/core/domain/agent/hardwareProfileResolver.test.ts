@@ -1,0 +1,112 @@
+import { describe, it, expect } from 'vitest'
+import { HardwareProfileResolver } from './hardwareProfileResolver'
+
+describe('HardwareProfileResolver Domain Unit Tests', () => {
+  it('scales the generation reserve with the effective context window without phase caps', () => {
+    expect(HardwareProfileResolver.deriveNumPredict(4096)).toBe(1433)
+    expect(HardwareProfileResolver.deriveNumPredict(8192)).toBe(2867)
+    expect(HardwareProfileResolver.deriveNumPredict(16384)).toBe(5734)
+    expect(HardwareProfileResolver.deriveNumPredict(32768)).toBe(11468)
+  })
+
+  it('should resolve Low profile with 4096 context and leave sampling and threads to the Modelfile', () => {
+    const opts = HardwareProfileResolver.resolveOllamaOptions('Low', { cpuCount: 8 })
+    expect(opts).toEqual({
+      num_ctx: 4096,
+      num_predict: HardwareProfileResolver.deriveNumPredict(4096),
+      maxContextChars: HardwareProfileResolver.deriveMaxContextChars(4096),
+    })
+  })
+
+  it('should resolve Medium profile with 8192 context', () => {
+    const opts = HardwareProfileResolver.resolveOllamaOptions('Medium', { cpuCount: 8 })
+    expect(opts.num_ctx).toBe(8192)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(8192))
+  })
+
+  it('should resolve High profile with 16384 context', () => {
+    const opts = HardwareProfileResolver.resolveOllamaOptions('High', { cpuCount: 8 })
+    expect(opts.num_ctx).toBe(16384)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(16384))
+  })
+
+  it('should cap generation with a window-derived num_predict and send no stop sequences', () => {
+    const low = HardwareProfileResolver.resolveOllamaOptions('Low', { cpuCount: 4 })
+    const high = HardwareProfileResolver.resolveOllamaOptions('High', { cpuCount: 4 })
+
+    expect(low.num_predict).toBe(HardwareProfileResolver.deriveNumPredict(4096))
+    expect(high.num_predict).toBe(HardwareProfileResolver.deriveNumPredict(16384))
+    expect(low).not.toHaveProperty('stop')
+    expect(high).not.toHaveProperty('stop')
+  })
+
+  it('should dynamically resolve Auto profile to High when 16GB VRAM GPU is detected', () => {
+    const opts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
+      hasGpu: true,
+      vramTotalMB: 16384,
+      systemRamGB: 32,
+    })
+    expect(opts.num_ctx).toBe(65536)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
+  })
+
+  it("should dynamically resolve Auto profile to Medium (not Low) for an entry-tier 6GB VRAM GPU, matching chatContextBudget.ts's treatment of the entry tier", () => {
+    const opts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
+      hasGpu: true,
+      vramTotalMB: 6144,
+      systemRamGB: 16,
+    })
+    expect(opts.num_ctx).toBe(16384)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
+  })
+
+  it('should dynamically resolve Auto profile to Medium tier with RAM-upgraded 16K context when 8GB VRAM GPU is detected and 16GB RAM is available', () => {
+    const opts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
+      hasGpu: true,
+      vramTotalMB: 8192,
+      systemRamGB: 16,
+    })
+    expect(opts.num_ctx).toBe(16384)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
+  })
+
+  it('should dynamically resolve Auto profile to Low when no dedicated GPU is detected', () => {
+    const opts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
+      hasGpu: false,
+      vramTotalMB: 0,
+      systemRamGB: 8,
+      cpuCount: 6,
+    })
+    expect(opts.num_ctx).toBe(4096)
+    expect(opts).not.toHaveProperty('num_thread')
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
+  })
+
+  it('should keep num_predict and maxContextChars inside the context window on every profile', () => {
+    // Regression: these three used to be hand-set per tier and drifted apart — the Medium profile shipped num_ctx 8192 with num_predict 6144 AND a 28000-char prompt budget, i.e.
+    for (const profile of ['Low', 'Medium', 'High'] as const) {
+      const opts = HardwareProfileResolver.resolveOllamaOptions(profile, { cpuCount: 4 })
+      const promptTokenBudget = Math.ceil(opts.maxContextChars / 3.6)
+      expect(opts.num_predict).toBeLessThan(opts.num_ctx)
+      expect(promptTokenBudget + opts.num_predict).toBeLessThanOrEqual(opts.num_ctx)
+    }
+  })
+
+  it('should keep CPU-only context on the detected hardware tier without RAM offloading', () => {
+    const opts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
+      hasGpu: false,
+      vramTotalMB: 0,
+      systemRamGB: 32,
+      cpuCount: 8,
+    })
+    expect(opts.num_ctx).toBe(32768)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
+  })
+})
+
+describe('agent context on a nominal 32 GB host', () => {
+  it('gives the agent the 64k window Ollama recommends even though the OS reports 31.9 GB', () => {
+    expect(HardwareProfileResolver.resolveOllamaOptions('Auto', { hasGpu: true, vramTotalMB: 8192, systemRamGB: 31.89 }).num_ctx).toBe(65536)
+    expect(HardwareProfileResolver.resolveOllamaOptions('Auto', { hasGpu: false, systemRamGB: 31.89 }).num_ctx).toBe(32768)
+  })
+})

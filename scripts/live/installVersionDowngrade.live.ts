@@ -1,0 +1,101 @@
+import './retiredCampaign'
+import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
+import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
+import { liveWorkspacePath, loadRealSettings, readRunMetrics, resetWorkspace } from './agentLiveHarness'
+
+const WORKSPACE = liveWorkspacePath('version_downgrade')
+const SESSION = 'live-version-downgrade'
+
+function seedWorkspace(): { packageJson: string } {
+  resetWorkspace(WORKSPACE)
+  fs.mkdirSync(path.join(WORKSPACE, 'node_modules', 'vite'), { recursive: true })
+  const packageJson = JSON.stringify(
+    {
+      name: 'version-downgrade-probe',
+      version: '1.0.0',
+      private: true,
+      scripts: { build: 'node -e "process.exit(0)"' },
+      devDependencies: { vite: '^5.0.0' },
+    },
+    null,
+    2,
+  )
+  fs.writeFileSync(path.join(WORKSPACE, 'package.json'), packageJson, 'utf-8')
+  fs.writeFileSync(path.join(WORKSPACE, 'package-lock.json'), `${packageJson}\n`, 'utf-8')
+  fs.writeFileSync(path.join(WORKSPACE, 'node_modules', 'vite', 'package.json'), JSON.stringify({ name: 'vite', version: '5.4.0' }), 'utf-8')
+  return { packageJson }
+}
+
+describe('live: version downgrade guard', () => {
+  it('blocks a declared major downgrade before npm runs', async () => {
+    const fixture = seedWorkspace()
+    await agentSessionStateRepository.seedPlanMilestones(
+      SESSION,
+      WORKSPACE,
+      [{ id: 'm-version-downgrade', title: 'Preserve the Vite dependency', status: 'pending' }],
+      'Preserve the declared Vite dependency while resolving the requested install.',
+    )
+
+    const result = await runAgentOrchestratorLoop(
+      {
+        userTask:
+          'Run exactly `npm install vite@^4.0.0` first. The command must not execute because package.json declares Vite 5. ' +
+          'After the guard explains the conflict, stop without changing any file.',
+        workspacePath: WORKSPACE,
+        agentMode: 'auto',
+        sessionId: SESSION,
+        settings: loadRealSettings({ maxToolCallSteps: 6 }),
+      },
+      null,
+    )
+
+    const metrics = readRunMetrics({ workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })
+    expect(metrics.commands).toContain('[step 1] FAILURE npm install vite@^4.0.0')
+    expect(metrics.completionStatus).toBeDefined()
+    expect(result.success).toBe(false)
+    expect(fs.readFileSync(path.join(WORKSPACE, 'package.json'), 'utf-8')).toBe(fixture.packageJson)
+    expect(fs.readFileSync(path.join(WORKSPACE, 'package-lock.json'), 'utf-8')).toBe(`${fixture.packageJson}\n`)
+    expect(JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'node_modules', 'vite', 'package.json'), 'utf-8')).version).toBe('5.4.0')
+  })
+
+  it('refuses an unpublished version before npm can return ETARGET', async () => {
+    const fixture = seedWorkspace()
+    await agentSessionStateRepository.seedPlanMilestones(
+      `${SESSION}-etarget`,
+      WORKSPACE,
+      [{ id: 'm-etarget', title: 'Preserve the Vite dependency', status: 'pending' }],
+      'Use the registry-backed version preflight before installing a dependency.',
+    )
+
+    const result = await runAgentOrchestratorLoop(
+      {
+        userTask:
+          'Run exactly `npm install vite@^999.0.0` first. The command must be refused before npm because no published Vite version matches it. ' +
+          'After the guard explains the conflict, stop without changing any file.',
+        workspacePath: WORKSPACE,
+        agentMode: 'auto',
+        sessionId: `${SESSION}-etarget`,
+        settings: loadRealSettings({ maxToolCallSteps: 6 }),
+      },
+      null,
+    )
+
+    const metrics = readRunMetrics({
+      workspacePath: WORKSPACE,
+      sessionId: `${SESSION}-etarget`,
+      success: result.success,
+      summary: result.summary,
+    })
+    // A preflight refusal is a confirmed failure outcome: the guard prevented npm from
+    // starting, while the file invariants below prove that the workspace stayed intact.
+    expect(metrics.commands).toContain('[step 1] FAILURE npm install vite@^999.0.0')
+    expect(metrics.completionStatus).toBeDefined()
+    expect(result.success).toBe(false)
+    expect(fs.readFileSync(path.join(WORKSPACE, 'package.json'), 'utf-8')).toBe(fixture.packageJson)
+    expect(fs.readFileSync(path.join(WORKSPACE, 'package-lock.json'), 'utf-8')).toBe(`${fixture.packageJson}\n`)
+    expect(JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'node_modules', 'vite', 'package.json'), 'utf-8')).version).toBe('5.4.0')
+  })
+})

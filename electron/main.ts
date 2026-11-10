@@ -1,0 +1,280 @@
+// Must stay the first import: it fixes the app name and userData before any module reads them.
+import { isElectronE2ETest } from './appIdentity'
+import { app, BrowserWindow, dialog } from 'electron'
+import path from 'node:path'
+import fs from 'node:fs'
+import { pathToFileURL } from 'node:url'
+import { isAllowedAppNavigation, isAllowedExternalUrl } from './navigationPolicy'
+
+const isSingleInstance = app.requestSingleInstanceLock()
+if (!isSingleInstance && !process.env.ONLYRAG_SMOKE_TEST && !process.argv.includes('--smoke-test')) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
+  })
+}
+
+// Suppress noisy Chromium GPU shader disk cache locking errors on Windows
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
+
+import { logger } from './core/infrastructure/logging/logger'
+import { sidecarProcessManager } from './core/infrastructure/process/sidecarProcessManager'
+import { managedDevServerRepository } from './core/infrastructure/process/managedDevServerRepository'
+import { taskRunner } from './core/infrastructure/process/taskRunner'
+import { registerAgentIpcHandlers } from './core/presentation/agentIpc'
+import { registerWorkspaceIpcHandlers } from './core/presentation/workspaceIpc'
+import { registerSidecarIpcHandlers } from './core/presentation/sidecarIpc'
+import { registerOllamaIpcHandlers } from './core/presentation/ollamaIpc'
+import { registerSystemIpcHandlers } from './core/presentation/systemIpc'
+import { createWindowEventSink } from './core/infrastructure/electron/rendererEventSinks'
+import { registerSkillIpcHandlers } from './core/presentation/skillIpc'
+import { registerSessionHistoryIpcHandlers } from './core/presentation/sessionHistoryIpc'
+import { registerProjectRegistryIpcHandlers } from './core/presentation/projectRegistryIpc'
+import { registerDiagnosticsIpcHandlers } from './core/presentation/diagnosticsIpc'
+import { registerSettingsIpcHandlers } from './core/presentation/settingsIpc'
+import { registerArtifactIpcHandlers } from './core/presentation/artifactIpc'
+import { setTrustedIpcWindowProvider } from './core/presentation/secureIpcMain'
+import { systemAppService } from './core/application/systemAppService'
+import { agentToolExecutorService } from './core/application/agentToolExecutorService'
+import { taskQueueAppService } from './core/application/taskQueueAppService'
+import { dependencyScanWorker } from './core/infrastructure/process/dependencyScanWorkerClient'
+import type { RendererEventSink } from './core/domain/ports/rendererEventSink'
+
+process.env.DIST = path.join(__dirname, '../dist')
+process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(__dirname, '../public')
+
+let win: BrowserWindow | null = null
+let agentRendererEvents: RendererEventSink | null = null
+
+const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
+
+// Global Exception & Unhandled Rejection Crash Safeguards
+let fatalShutdownStarted = false
+function fatalMainError(reason: unknown) {
+  if (fatalShutdownStarted) return
+  fatalShutdownStarted = true
+  logger.log('ERROR', 'MainProcess', `Fatal Main error: ${reason instanceof Error ? reason.stack || reason.message : String(reason)}`)
+  taskRunner.cancelAllTasks()
+  void shutdownOwnedResources().finally(() => app.exit(1))
+}
+process.on('uncaughtException', fatalMainError)
+process.on('unhandledRejection', fatalMainError)
+
+function createWindow() {
+  const iconPath = path.join(__dirname, '../assets/icon.png')
+  win = new BrowserWindow({
+    title: 'OnlyRag V2 - Local AI Workspace',
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
+    width: 1400,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 700,
+    backgroundColor: '#020617', // slate-950
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+    autoHideMenuBar: true,
+  })
+  const ownedWindow = win
+  let invalidateRenderer: () => void
+  const bindRenderer = () => {
+    let available = true
+    const events = createWindowEventSink(() => (available ? ownedWindow : null))
+    agentRendererEvents = events
+    invalidateRenderer = () => {
+      if (!available) return
+      available = false
+      if (agentRendererEvents === events) agentRendererEvents = null
+      void taskQueueAppService.cancelRendererTasks(events).catch((error: unknown) => {
+        logger.log('ERROR', 'MainProcess', `Lost-renderer agent settlement failed: ${String(error)}`)
+      })
+    }
+  }
+  bindRenderer()
+  ownedWindow.webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+    if (!isMainFrame || isInPlace) return
+    invalidateRenderer()
+    bindRenderer()
+  })
+  ownedWindow.on('closed', () => invalidateRenderer())
+  let closeApproved = false
+  let closeChecking = false
+  ownedWindow.on('close', (event) => {
+    if (closeApproved || ownedWindow.webContents.isDestroyed()) return
+    event.preventDefault()
+    if (closeChecking) return
+    closeChecking = true
+    let timer: ReturnType<typeof setTimeout>
+    void Promise.race([
+      ownedWindow.webContents.executeJavaScript(
+        'Promise.all([window.__onlyragFlushCodingHistory?.() ?? true, window.__onlyragFlushSettings?.() ?? true, window.__onlyragFlushChat?.() ?? true, window.__onlyragFlushDocumentDrafts?.() ?? true]).then(results => results.every(Boolean))',
+      ),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), 10_000)
+      }),
+    ])
+      .then((safe) => {
+        if (ownedWindow.isDestroyed()) return
+        if (safe) {
+          closeApproved = true
+          ownedWindow.close()
+        } else {
+          void dialog.showMessageBox(ownedWindow, {
+            type: 'warning',
+            buttons: ['Keep open'],
+            message: 'Settings, history or document drafts are not yet saved. Retry storage before closing.',
+          })
+        }
+      })
+      .catch((error: unknown) => {
+        logger.log('WARN', 'MainProcess', `Storage close check failed: ${String(error)}`)
+        if (!ownedWindow.isDestroyed()) {
+          void dialog.showMessageBox(ownedWindow, {
+            type: 'warning',
+            buttons: ['Keep open'],
+            message: 'Unsaved data could not be checked. Retry storage before closing.',
+          })
+        }
+      })
+      .finally(() => {
+        clearTimeout(timer)
+        closeChecking = false
+      })
+  })
+
+  // The UI needs no camera, microphone, geolocation or notification permissions.
+  win.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedExternalUrl(url)) {
+      void systemAppService.openExternal(url).catch((error: unknown) => logger.log('WARN', 'MainProcess', `External URL failed: ${String(error)}`))
+    }
+    return { action: 'deny' }
+  })
+
+  win.webContents.on('will-navigate', (event, url) => {
+    const packagedIndexUrl = pathToFileURL(path.join(process.env.DIST || path.join(__dirname, '../dist'), 'index.html')).href
+    if (!isAllowedAppNavigation(url, VITE_DEV_SERVER_URL, packagedIndexUrl)) {
+      event.preventDefault()
+      logger.log('WARN', 'MainProcess', `Blocked renderer navigation outside the application origin: ${url}`)
+    }
+  })
+
+  win.webContents.on('render-process-gone', (_, details) => {
+    logger.log('WARN', 'MainProcess', `Renderer process gone/crashed: ${details.reason} (exitCode: ${details.exitCode})`)
+    taskRunner.cancelAllTasks()
+    invalidateRenderer()
+  })
+
+  if (VITE_DEV_SERVER_URL) {
+    win.loadURL(VITE_DEV_SERVER_URL)
+  } else {
+    win.loadFile(path.join(process.env.DIST || path.join(__dirname, '../dist'), 'index.html'))
+  }
+
+  logger.log('INFO', 'MainProcess', 'Window created successfully.')
+}
+
+let ownedShutdown: Promise<void> | undefined
+function shutdownOwnedResources(): Promise<void> {
+  if (ownedShutdown) return ownedShutdown
+  taskRunner.cancelAllTasks()
+  managedDevServerRepository.stopAll()
+  sidecarProcessManager.stopPythonSidecar()
+  const cleanup = Promise.allSettled([
+    dependencyScanWorker.shutdown(),
+    taskQueueAppService.shutdown(),
+    agentToolExecutorService.closeAllBrowserRuns(),
+    taskRunner.cleanTempResiduals(),
+  ]).then((results) => {
+    const failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason as unknown)
+    if (failures.length) throw new AggregateError(failures, 'Owned shutdown resources failed to settle.')
+  })
+  let timer: ReturnType<typeof setTimeout>
+  ownedShutdown = Promise.race([
+    cleanup,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Owned shutdown exceeded 5000ms; retained state/checkpoints may require recovery.')), 5000)
+    }),
+  ])
+    .catch((error: unknown) => {
+      logger.log('ERROR', 'MainProcess', `Shutdown settlement failed: ${String(error)}`)
+    })
+    .finally(() => clearTimeout(timer))
+  return ownedShutdown
+}
+
+let quitCleanupStarted = false
+let quitCleanupFinished = false
+app.on('before-quit', (event) => {
+  if (quitCleanupFinished) return
+  event.preventDefault()
+  if (quitCleanupStarted) return
+  quitCleanupStarted = true
+  logger.log('INFO', 'MainProcess', 'Application before-quit event triggered. Cleaning up active tasks & temp files...')
+  void shutdownOwnedResources().finally(() => {
+    quitCleanupFinished = true
+    app.quit()
+  })
+})
+
+app.on('window-all-closed', () => {
+  taskRunner.cancelAllTasks()
+  sidecarProcessManager.stopPythonSidecar()
+  if (process.platform !== 'darwin') {
+    app.quit()
+    win = null
+  }
+})
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow()
+  }
+})
+
+app.whenReady().then(() => {
+  setTrustedIpcWindowProvider(() => win)
+  // Log run identity before startup work so dev and packaged logs remain attributable.
+  logger.log(
+    'INFO',
+    'MainProcess',
+    `Run context: ${app.isPackaged ? 'PACKAGED' : 'DEV'} | version ${app.getVersion()} | pid ${process.pid} | exec ${process.execPath} | userData ${app.getPath('userData')}`,
+  )
+  logger.log('INFO', 'MainProcess', 'Electron App Ready. Creating window & initializing Sidecar...')
+
+  // Clean startup residuals
+  taskRunner.cleanTempResiduals().catch(() => {})
+
+  registerSystemIpcHandlers()
+  registerOllamaIpcHandlers()
+  registerWorkspaceIpcHandlers()
+  registerSidecarIpcHandlers()
+  registerAgentIpcHandlers(() => agentRendererEvents)
+  registerSkillIpcHandlers()
+  registerSessionHistoryIpcHandlers()
+  registerProjectRegistryIpcHandlers()
+  registerDiagnosticsIpcHandlers()
+  registerSettingsIpcHandlers()
+  registerArtifactIpcHandlers()
+
+  if (process.env.ONLYRAG_SMOKE_TEST === '1' || process.argv.includes('--smoke-test')) {
+    logger.log('INFO', 'MainProcess', '[SMOKE_TEST_PASS] Main process bundle and IPC handlers initialized successfully.')
+    setTimeout(() => {
+      app.quit()
+    }, 50)
+    return
+  }
+
+  createWindow()
+  if (!isElectronE2ETest) {
+    sidecarProcessManager.startPythonSidecar()
+  }
+})

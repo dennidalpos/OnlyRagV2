@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "documents": [
+    {"id": "delivery", "text": "Il componente TX-417 deve essere consegnato entro quattordici giorni lavorativi dalla conferma dell'ordine. La consegna avviene presso il magazzino del cliente."},
+    {"id": "payment", "text": "The contractor must receive payment within thirty days of the invoice date. The monthly maintenance fee is 250 euros, excluding taxes."},
+    {"id": "storage", "text": "Il vaccino deve essere conservato in frigorifero tra due e otto gradi Celsius. Non congelare le fiale; eliminarle se la catena del freddo viene interrotta."},
+    {"id": "support", "text": "Technical support is available Monday through Friday from nine in the morning until five in the afternoon. The emergency telephone number is 800-555-0199."},
+    {"id": "backup", "text": "Il backup del database viene eseguito ogni notte alle ore due. Le copie sono conservate per novanta giorni su un disco separato."},
+    {"id": "leave", "text": "Employees receive twenty paid vacation days per year. Leave requests require approval from the department manager at least two weeks before departure."},
+    {"id": "insurance", "text": "La polizza assicurativa puo essere annullata tramite raccomandata con ricevuta di ritorno almeno sessanta giorni prima della scadenza annuale."},
+    {"id": "password", "text": "To reset a forgotten account password, select the recovery link on the login screen. A single-use verification code will be sent to the registered email address."}
+  ],
+  "queries": [
+    {"id": "delivery-it", "language": "it", "source_language": "it", "text": "Qual e il termine per la consegna del componente ordinato?", "expected": "delivery"},
+    {"id": "delivery-en", "language": "en", "source_language": "it", "text": "How many working days are allowed for delivery after the order is confirmed?", "expected": "delivery"},
+    {"id": "payment-en", "language": "en", "source_language": "en", "text": "When must the invoice be paid?", "expected": "payment"},
+    {"id": "payment-it", "language": "it", "source_language": "en", "text": "Entro quanto tempo deve essere pagata la fattura del manutentore?", "expected": "payment"},
+    {"id": "storage-it", "language": "it", "source_language": "it", "text": "A quale temperatura bisogna tenere le fiale in frigorifero?", "expected": "storage"},
+    {"id": "storage-en", "language": "en", "source_language": "it", "text": "What refrigerator temperature is required for the vaccine?", "expected": "storage"},
+    {"id": "support-en", "language": "en", "source_language": "en", "text": "What are the opening hours of technical assistance?", "expected": "support"},
+    {"id": "support-it", "language": "it", "source_language": "en", "text": "In quali giorni e orari posso chiamare l'assistenza tecnica?", "expected": "support"},
+    {"id": "backup-it", "language": "it", "source_language": "it", "text": "Per quanti giorni vengono conservate le copie di sicurezza?", "expected": "backup"},
+    {"id": "leave-en", "language": "en", "source_language": "en", "text": "How much annual paid leave do employees receive?", "expected": "leave"},
+    {"id": "insurance-it", "language": "it", "source_language": "it", "text": "Con quale preavviso posso disdire l'assicurazione?", "expected": "insurance"},
+    {"id": "password-en", "language": "en", "source_language": "en", "text": "How can I recover access if I forget my password?", "expected": "password"}
+  ]
+}

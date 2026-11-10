@@ -1,0 +1,169 @@
+import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
+import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
+import { parseNativeToolCall, type ToolCallRejection } from '../domain/agent/toolParser'
+import { buildToolSchemaCorrectionDirective } from '../domain/agent/ollamaToolSchemaCatalog'
+import { schemaStopReason } from '../domain/agent/agentProgressPolicy'
+import { MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
+import { agentToolExecutorService } from './agentToolExecutorService'
+import { logger } from '../infrastructure/logging/logger'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import { handleAskTool } from './agentOrchestratorAskAutoHealing'
+import { handleFinishTool, handleLoopDetection } from './agentOrchestratorFinishAndLoopGuards'
+import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorRunContext'
+import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
+import { emitLocalizedLog } from './agentOrchestratorTypes'
+
+async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections: readonly ToolCallRejection[] = []): Promise<ResponseInterpretationOutcome> {
+  const streamedOutput = ctx.streamedOutput || ''
+  // Native calls arrive structured, so only a schema rejection is a failed attempt; JSON in the prose
+  // (a code sample, a config file) is not a call and must not spend the schema budget.
+  const rejected = rejections.at(-1)
+  if (rejected) {
+    // The loop detector never sees these calls: validation rejects them before it runs.
+    const toolLabel = rejected.toolName
+    const signature = `${toolLabel}:${rejected.errors.join('|').toLowerCase()}`
+    const decision = ctx.state.progress.onSchemaRejection(signature)
+
+    if (decision.action === 'stop') {
+      const reason = schemaStopReason(toolLabel, ctx.state.progress.schemaRejections)
+      ctx.emitLog('info', `⛔ ${formatAgentTextIt(reason)}`, undefined, { category: 'system_alert', localized: { message: reason } })
+      const closure = await ctx.closeApplicationRun({
+        trigger: 'protocol_error',
+        guard: 'schema_budget',
+        reason,
+        modelSummary: streamedOutput,
+      })
+      return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
+    }
+
+    recordGuardEvent(ctx.state.guardEvents, 'schema_budget', 'advise', ctx.stepCount)
+    const feedback = buildToolSchemaCorrectionDirective(rejected.toolName, rejected.errors)
+    ctx.episodicCompactor.recordStep(
+      {
+        step: ctx.stepCount,
+        tool: toolLabel,
+        // Carries the tool name as target so the episodic buffer collapses the repeats onto one
+        // slot instead of spending the whole recent-outputs window on them.
+        target: toolLabel,
+        status: 'BLOCKED',
+        summary: `Tool call rejected (${ctx.state.progress.schemaRejections}x): ${rejected.errors.join('; ').slice(0, 100)}`,
+      },
+      feedback,
+    )
+    emitLocalizedLog(ctx.emitLog, 'info', {
+      key: 'toolCallRejected',
+      params: {
+        step: ctx.stepCount,
+        tool: rejected.toolName,
+        used: decision.state.totalFailures,
+        limit: MAX_FAILURES_PER_RECOVERY_CATEGORY,
+        errors: rejected.errors.join('; '),
+      },
+    })
+    if (ctx.settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, toolLabel, feedback)
+    }
+    return { outcome: 'continue' }
+  }
+
+  const hasOperationalWork =
+    !ctx.goalPlanner.hasPlan() ||
+    ctx.goalPlanner
+      .getMilestones()
+      .some((milestone) => !isCompletionMilestoneTitle(milestone) && (milestone.status === 'pending' || milestone.status === 'in_progress'))
+
+  // If operational work remains, give prose-only output two chances to turn into an action.
+  if (ctx.agentMode !== 'ask' && hasOperationalWork && ctx.stepCount < ctx.maxSteps && ctx.state.progress.tryProseRetry()) {
+    recordGuardEvent(ctx.state.guardEvents, 'model_silence', 'advise', ctx.stepCount)
+    const feedback = `[ACTION REQUIRED: NO NATIVE TOOL CALL DETECTED]\nYour previous response contained no native tool_calls. A JSON object embedded in prose or a Markdown code block is only text and will not execute. Invoke one tool through the provided function-calling interface for the current milestone. When the work is actually complete, provide the final report as prose: the application will run the final evidence gate and close the session.`
+    ctx.episodicCompactor.recordStep(
+      { step: ctx.stepCount, tool: 'no_tool_detected', status: 'BLOCKED', summary: 'No tool call found in conversational response' },
+      feedback,
+    )
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'noToolCall', params: { step: ctx.stepCount } })
+    if (ctx.settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'no_tool_detected', feedback)
+    }
+    return { outcome: 'continue' }
+  }
+
+  const summary = streamedOutput.trim() || 'Task completed successfully.'
+
+  // In CHAT mode a prose answer with no tool call IS the deliverable: the turn is done.
+  if (ctx.agentMode === 'ask') {
+    agentToolExecutorService.checkpointJournal(ctx.workspacePath, ctx.session.id, ctx.session.identity.conversationId)
+    ctx.emitLog('info', `Task Finished: ${summary.slice(0, 300)}`)
+    await ctx.persistCurrentState('finish', 'verified')
+    ctx.emitDone(true, summary, 'verified')
+    if (ctx.settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, true, summary)
+    }
+    ctx.finalizeSession()
+    return { outcome: 'return', result: { success: true, summary } }
+  }
+
+  const closure = await ctx.closeApplicationRun({
+    trigger: 'model_silence',
+    ...(hasOperationalWork ? { guard: 'model_silence' as const } : {}),
+    reason: hasOperationalWork ? { key: 'reasonModelSilenceOpenWork' } : { key: 'reasonSummaryWithoutFinish' },
+    modelSummary: summary,
+  })
+  return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
+}
+
+/** Interprets one turn's raw LLM output: plan extraction, tool-call parsing (with the no-tool-call / malformed-call recovery paths), the finish/loop-detection/ask special cases (see agentOrchestratorFinishAndLoopGuards.ts and agentOrchestratorAskAutoHealing.ts), */
+export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Promise<ResponseInterpretationOutcome> {
+  const rejections: ToolCallRejection[] = []
+  const onRejection = (rejection: ToolCallRejection) => {
+    logger.log('WARN', 'ToolParser', `Rejected ${rejection.toolName} call: ${rejection.errors.join('; ')}`)
+    rejections.push(rejection)
+  }
+  const parsedTool = ctx.nativeCall ? parseNativeToolCall(ctx.nativeCall.function.name, ctx.nativeCall.function.arguments, onRejection) : null
+  if (!parsedTool) return handleMissingToolCall(ctx, rejections)
+
+  // A call that parses ends any prose or rejection streak: the model has produced a valid shape again.
+  ctx.state.progress.onToolCallParsed()
+
+  if (parsedTool.tool === 'finish') return handleFinishTool(ctx, parsedTool)
+
+  const loopOutcome = await handleLoopDetection(ctx, parsedTool)
+  if (loopOutcome) return loopOutcome
+
+  if (parsedTool.tool === 'ask') {
+    // Deliberately does NOT reset the loop-block streak first: "ask" isn't forward progress, so a model that just burned through a write-loop's stagnation budget and pivots to asking inherits that same streak instead of getting a fresh grace period (see agentOrchestrator
+    const askOutcome = await handleAskTool({
+      parsedTool,
+      agentMode: ctx.agentMode,
+      stepCount: ctx.stepCount,
+      maxSteps: ctx.maxSteps,
+      sessionId: ctx.sessionId,
+      settings: ctx.settings,
+      hasRecentToolFailure: ctx.hasRecentToolFailure,
+      errorCountInHistory: ctx.errorCountInHistory,
+      compiledHistoryBlock: ctx.compiledHistoryBlock,
+      progress: ctx.state.progress,
+      guardEvents: ctx.state.guardEvents,
+      episodicCompactor: ctx.episodicCompactor,
+      emitLog: ctx.emitLog,
+      emitDone: ctx.emitDone,
+      persistCurrentState: ctx.persistCurrentState,
+      finalizeSession: ctx.finalizeSession,
+      closeApplicationRun: ctx.closeApplicationRun,
+      answerVersionQuestion: (question) => agentToolExecutorService.answerVersionQuestion(question, ctx.workspacePath),
+    })
+    return askOutcome
+  }
+
+  ctx.state.progress.onCallAccepted()
+
+  emitLocalizedLog(
+    ctx.emitLog,
+    'tool_call',
+    { key: 'toolCallHeader', params: { step: ctx.stepCount, tool: parsedTool.tool } },
+    JSON.stringify(parsedTool.tool === 'browser_fill' ? { ...parsedTool.parameters, value: '[REDACTED]' } : parsedTool.parameters, null, 2),
+  )
+  if (ctx.settings.enableCodingAgentDebugLog) {
+    codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, parsedTool.tool, parsedTool.parameters, parsedTool.explanation)
+  }
+  return { outcome: 'proceed', parsedTool }
+}

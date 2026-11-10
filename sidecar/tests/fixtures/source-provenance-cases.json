@@ -1,0 +1,34 @@
+[
+  {
+    "id": "late-page",
+    "language": "en",
+    "pages": ["Introduction: this document describes invoice handling.", "Payment is due within 21 days after invoice receipt."],
+    "query": "When is invoice payment due, and what starts the deadline?",
+    "expected": "21 days after invoice receipt, with a valid citation to original page 2.",
+    "requiresCitation": true
+  },
+  {
+    "id": "absent",
+    "language": "en",
+    "pages": ["Delivery must occur within 30 days. No daily delay penalty is specified in this agreement."],
+    "query": "What is the daily monetary penalty for late delivery?",
+    "expected": "No daily monetary penalty is specified; do not invent an amount.",
+    "requiresCitation": false
+  },
+  {
+    "id": "conditional",
+    "language": "it",
+    "pages": ["Il fornitore deve rimborsare il cliente solo dopo la ricezione di una diffida scritta. In assenza di diffida non e dovuto alcun rimborso."],
+    "query": "Il rimborso e dovuto anche senza diffida scritta?",
+    "expected": "No; preserve the written-notice condition and cite the supporting source.",
+    "requiresCitation": true
+  },
+  {
+    "id": "contradiction",
+    "language": "en",
+    "pages": ["Policy A requires delivery within 15 days.", "Policy B requires delivery within 30 days. Neither policy establishes precedence."],
+    "query": "Which single delivery deadline is authoritative?",
+    "expected": "Identify the 15/30-day conflict and abstain from choosing; cite both original passages.",
+    "requiresCitation": true
+  }
+]

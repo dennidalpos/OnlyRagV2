@@ -1,0 +1,199 @@
+import { describe, it, expect } from 'vitest'
+import {
+  compilePlanMilestones,
+  ensureScaffoldMilestones,
+  ensureRunnableMilestone,
+  renderAgentPlanMarkdown,
+} from '../../../../shared/domain/agent/planCompilation'
+import { resolveGreenfieldScaffold } from './greenfieldScaffoldResolver'
+import { selectMilestonesProvenByVerification } from './milestoneVerificationPromotion'
+
+describe('ensureScaffoldMilestones', () => {
+  const web = {
+    isGreenfield: true,
+    requirements: [
+      { path: 'package.json', title: 'Declare web project', proposedVerificationCommand: 'npm run build' },
+      { path: 'index.html', title: 'Create root page' },
+      { path: 'src/main.tsx', title: 'Create React entry' },
+    ],
+  }
+  const pagePlan = [
+    { id: 'm-1', title: 'The Dashboard page shows the totals — `src/pages/DashboardPage.tsx`', status: 'pending' as const },
+    { id: 'm-2', title: 'Navigation between the pages works — `src/App.tsx`', status: 'pending' as const },
+  ]
+
+  it('prepends one coherent scaffold while preserving each feature intervention', () => {
+    const plan = ensureScaffoldMilestones(pagePlan, web)
+
+    expect(plan).toHaveLength(3)
+    expect(plan[0].filePaths).toEqual(['package.json', 'index.html', 'src/main.tsx'])
+    expect(plan.slice(1).map((m) => m.title)).toEqual(pagePlan.map((m) => m.title))
+    expect(plan[0].proposedVerificationCommand).toBe('npm run build')
+    expect(plan[0].verificationCommand).toBeUndefined()
+    expect(plan.map((m) => m.id)).toEqual(['m-1', 'm-2', 'm-3'])
+  })
+
+  it('appends end-placed requirements after the work they verify', () => {
+    const withSmokeTest = {
+      ...web,
+      requirements: [
+        ...web.requirements,
+        {
+          path: 'src/App.test.tsx',
+          title: 'A behavioral smoke test renders the App',
+          proposedVerificationCommand: 'npm test',
+          acceptanceCriteria: ['npm test runs src/App.test.tsx and exits with code 0.'],
+          placement: 'end' as const,
+        },
+      ],
+    }
+
+    const plan = ensureScaffoldMilestones(pagePlan, withSmokeTest)
+
+    expect(plan).toHaveLength(4)
+    expect(plan.at(-1)).toMatchObject({
+      id: 'm-4',
+      filePaths: ['src/App.test.tsx'],
+      proposedVerificationCommand: 'npm test',
+      acceptanceCriteria: ['npm test runs src/App.test.tsx and exits with code 0.'],
+      falsifiableHypothesis: 'npm test runs src/App.test.tsx and exits with code 0.',
+    })
+    expect(plan[1].title).toContain('DashboardPage')
+  })
+
+  it('includes named entrypoints in the coherent prerequisite without dropping authored work', () => {
+    const withEntry = [{ id: 'm-1', title: 'The entry script mounts the app — `src/main.tsx`', status: 'pending' as const }, ...pagePlan]
+
+    const plan = ensureScaffoldMilestones(withEntry, web)
+
+    expect(plan).toHaveLength(4)
+    expect(plan[0].filePaths).toEqual(['package.json', 'index.html', 'src/main.tsx'])
+    expect(plan.slice(1).map((m) => m.title)).toEqual(withEntry.map((m) => m.title))
+  })
+
+  it.each([undefined, 'npm run build'])('retains the canonical behavioral gate when the model already names its test file (%s)', (verificationCommand) => {
+    const authored = {
+      id: 'model-test',
+      title: 'Create heading render test',
+      status: 'pending' as const,
+      filePaths: ['src/App.test.jsx'],
+      acceptanceCriteria: ['The rendered heading says TaskLab.'],
+      verificationCommand,
+    }
+    const { scaffold } = resolveGreenfieldScaffold(true, 'Create a JavaScript React/Vite app.')
+    const plan = ensureScaffoldMilestones([authored], scaffold)
+    const test = plan.find((milestone) => milestone.title === authored.title)!
+
+    expect(plan.filter((milestone) => milestone.filePaths?.includes('src/App.test.jsx'))).toHaveLength(1)
+    expect(test.acceptanceCriteria).toContain(authored.acceptanceCriteria[0])
+    expect(test.acceptanceCriteria?.some((criterion) => criterion.includes('npm test runs src/App.test.jsx'))).toBe(true)
+    expect(test.proposedVerificationCommand).toBe('npm test')
+    expect(selectMilestonesProvenByVerification([test], 'npm run build', () => 'satisfied')).toEqual([])
+    expect(selectMilestonesProvenByVerification([test], 'npm test', () => 'satisfied')).toEqual([{ id: test.id, title: test.title }])
+  })
+
+  it('does not duplicate an existing complete first scaffold group', () => {
+    const group = { id: 'm-1', title: 'Initialize project', status: 'pending' as const, filePaths: web.requirements.map((entry) => entry.path) }
+    expect(ensureScaffoldMilestones([group, ...pagePlan], web)).toEqual([group, ...pagePlan].map((m, index) => ({ ...m, id: `m-${index + 1}` })))
+  })
+
+  it('stays out for existing or unresolved workspaces', () => {
+    expect(ensureScaffoldMilestones(pagePlan, { isGreenfield: false, requirements: web.requirements })).toEqual(pagePlan)
+    expect(ensureScaffoldMilestones(pagePlan, { isGreenfield: true, requirements: [] })).toEqual(pagePlan)
+    expect(ensureScaffoldMilestones(pagePlan, null)).toEqual(pagePlan)
+  })
+})
+describe('ensureRunnableMilestone', () => {
+  const files = [
+    { id: 'm-1', title: 'Create `package.json`', status: 'pending' as const },
+    { id: 'm-2', title: 'Create `src/App.tsx`', status: 'pending' as const },
+  ]
+
+  it('appends the milestone a file-shaped plan can never contain', () => {
+    // Measured 2026-08-25: 14/15 verified, every deliverable present, and `vite build` emitting
+    // no JavaScript. Nothing in the plan was about the application working.
+    const plan = ensureRunnableMilestone(files, 'npm run build')
+
+    expect(plan).toHaveLength(3)
+    expect(plan[2].verificationCommand).toBe('npm run build')
+    expect(plan[2].title).toContain('builds and runs')
+  })
+
+  it('names no file, so no write can close it', () => {
+    const appended = ensureRunnableMilestone(files, 'npm run build')[2]
+
+    expect(appended.title).not.toMatch(/\.[a-z]{2,4}\b/)
+  })
+
+  it('invents nothing when the project declares no check', () => {
+    expect(ensureRunnableMilestone(files, null)).toEqual(files)
+    expect(ensureRunnableMilestone(files, undefined)).toEqual(files)
+  })
+
+  it('does not duplicate a check the plan already declares', () => {
+    const withCheck = [...files, { id: 'm-3', title: 'Build it', status: 'pending' as const, verificationCommand: 'npm run build' }]
+
+    expect(ensureRunnableMilestone(withCheck, 'npm run build')).toHaveLength(3)
+  })
+
+  it('stays before the closing report milestone, which the finish tool owns', () => {
+    const withClosing = [...files, { id: 'm-3', title: 'Write the final report and finish', status: 'pending' as const }]
+    const plan = ensureRunnableMilestone(withClosing, 'npm run build')
+
+    expect(plan[2].verificationCommand).toBe('npm run build')
+    expect(plan[3].title).toContain('final report')
+    expect(plan.map((m) => m.id)).toEqual(['m-1', 'm-2', 'm-3', 'm-4'])
+  })
+})
+
+describe('application-owned closure compilation', () => {
+  it('derives the review document from structured plan data', () => {
+    const markdown = renderAgentPlanMarkdown({
+      version: 2,
+      objective: 'Ship authentication',
+      decisions: [{ id: 'q-1', statement: 'Storage: local', source: 'explicit_user' }],
+      retainedEvidence: [{ interventionId: 'm-0', summary: 'Schema verified', verificationReferences: ['npm test'] }],
+      milestones: [
+        {
+          id: 'm-1',
+          title: 'Login works',
+          status: 'pending',
+          filePaths: ['src/auth.ts'],
+          acceptanceCriteria: ['Valid credentials create a session'],
+        },
+      ],
+      supersededWork: [{ interventionId: 'm-old', reason: 'Replaced by the new endpoint.' }],
+    })
+
+    expect(markdown).toContain('## Objective\nShip authentication')
+    expect(markdown).toContain('`src/auth.ts`')
+    expect(markdown).toContain('Valid credentials create a session')
+    expect(markdown).toContain('## Retained evidence')
+    expect(markdown).toContain('## Superseded work')
+  })
+
+  it('drops a synthetic finish milestone from new canonical plans', () => {
+    const plan = compilePlanMilestones([
+      { id: 'm-1', title: 'Create `src/app.ts`', status: 'pending' },
+      { id: 'm-2', title: 'Write the final report and invoke finish', status: 'pending' },
+    ])
+
+    expect(plan).toHaveLength(1)
+    expect(plan[0].title).toContain('src/app.ts')
+  })
+
+  it('preserves every intervention identity and verification command beyond fifteen entries', () => {
+    const source = Array.from({ length: 18 }, (_, index) => ({
+      id: `m-${index + 1}`,
+      title: `Capability ${index + 1} — \`src/file-${index + 1}.ts\``,
+      status: 'pending' as const,
+      verificationCommand: `npm run check-${index + 1}`,
+    }))
+
+    const compiled = compilePlanMilestones(source)
+
+    expect(compiled).toHaveLength(source.length)
+    expect(compiled.map((milestone) => milestone.id)).toEqual(source.map((milestone) => milestone.id))
+    expect(compiled.map((milestone) => milestone.verificationCommand)).toEqual(source.map((milestone) => milestone.verificationCommand))
+  })
+})

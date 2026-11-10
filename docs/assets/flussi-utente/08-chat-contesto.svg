@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="1260" viewBox="0 0 360 1260" role="img" aria-labelledby="title desc" xml:lang="it">
+<title id="title">08 · Fare domande con o senza documenti</title>
+<desc id="desc">Per interrogare documenti selezionali in Contesto LanceDB o collegali con @; Aggiorna Documenti aggiorna l’elenco. Senza selezione puoi inviare la domanda, ma non stai interrogando il corpus documentale. Scrivi la richiesta, anche da Domande Rapide, e premi Invia o Invio; Shift+Invio aggiunge una riga. Opzioni Prompt e Personalizza System Prompt consentono di regolare contesto e istruzioni. Durante la generazione usa Ferma per interrompere. La risposta risultante è incompleta. In caso di contesto bloccato, selezione assente o servizio indisponibile, correggi il problema e invia nuovamente la domanda. Se appare un avviso di contesto parziale, le parti omesse non sono visibili al modello: riduci la selezione o fai domande più mirate. Per una risposta completata passa a 09.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 Z" fill="#526779"/></marker></defs>
+<rect width="360" height="1260" fill="#ffffff"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="24" y="25" font-size="14" letter-spacing="0.5" fill="#526779">ONLYRAG V2 / GUIDA UTENTE</text>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="600" fill="#183249"><tspan x="180" y="53">08 · Fare domande con o senza</tspan><tspan x="180" y="74">documenti</tspan></text>
+<g id="n0" data-node="s">
+<rect x="46" y="122" width="268" height="64" rx="30" fill="#183249" stroke="#183249" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#ffffff"><tspan x="180" y="154">Apri RAG &amp; Chat</tspan></text>
+</g>
+<g id="n1" data-node="q">
+<polygon points="180,242 296,308 180,374 64,308" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="308">Usare documenti?</tspan></text>
+</g>
+<g id="n2" data-node="a">
+<rect x="46" y="430" width="268" height="70" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="454.5">Selezionali nel Contesto</tspan><tspan x="180" y="475.5">LanceDB oppure con @</tspan></text>
+</g>
+<g id="n3" data-node="a">
+<rect x="46" y="556" width="268" height="70" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="580.5">Scrivi la domanda e premi</tspan><tspan x="180" y="601.5">Invia</tspan></text>
+</g>
+<g id="n4" data-node="q">
+<polygon points="180,682 296,748 180,814 64,748" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="737.5">Risposta</tspan><tspan x="180" y="758.5">completata?</tspan></text>
+</g>
+<g id="n5" data-node="t">
+<rect x="46" y="870" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="894.5">Leggi risposta e avvisi;</tspan><tspan x="180" y="915.5">verifica le fonti → 09</tspan></text>
+</g>
+<g id="n6" data-node="t">
+<rect x="46" y="996" width="268" height="91" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1020.5">Ferma o errore: risposta</tspan><tspan x="180" y="1041.5">incompleta; correggi e</tspan><tspan x="180" y="1062.5">riprova</tspan></text>
+</g>
+<g id="n7" data-node="t">
+<rect x="46" y="1143" width="268" height="91" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1167.5">Scrivi e invia senza</tspan><tspan x="180" y="1188.5">documenti; controlla la</tspan><tspan x="180" y="1209.5">risposta</tspan></text>
+</g>
+<path data-edge="0-1" d="M 180 188 V 239" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="1-2" d="M 180 376 V 427" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="1-2"><rect x="183" y="391" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="401">Sì</tspan></text></g>
+<path data-edge="1-7" d="M 298 308 H 346 V 1115 H 180 V 1140" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="1-7"><rect x="300" y="279.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="289">No</tspan></text></g>
+<path data-edge="2-3" d="M 180 502 V 553" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="3-4" d="M 180 628 V 679" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="4-5" d="M 180 816 V 867" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="4-5"><rect x="183" y="831" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="841">Sì</tspan></text></g>
+<path data-edge="4-6" d="M 62 748 H 14 V 968 H 180 V 993" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="4-6"><rect x="18" y="719.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="39" y="729">No</tspan></text></g>
+</g>
+</svg>

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="1072" viewBox="0 0 360 1072" role="img" aria-labelledby="title desc" xml:lang="it">
+<title id="title">12 · Tradurre testo e Markdown</title>
+<desc id="desc">Seleziona il documento, lingue e modello. Scegli Singola Pagina o Tutto il Documento: con una sola pagina selezionata traduci quell’ambito, non l’intero documento. Premi Avvia Traduzione. Interrompi ferma il lavoro; un errore o un risultato incompleto non permette l’esportazione. Correggi la causa e avvia una nuova traduzione. Confronta Vista Affiancata e Vista Differenze; usa Scroll Sincronizzato, zoom e a capo secondo necessità. Controlla che lingua e contenuti siano corretti. Con risultato completo usa Copia Traduzione, Esporta PDF, Esporta DOCX o Esporta Markdown. Controlla il messaggio finale: un’esportazione annullata o fallita va ripetuta. Nuova Traduzione azzera la selezione e il risultato.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 Z" fill="#526779"/></marker></defs>
+<rect width="360" height="1072" fill="#ffffff"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="24" y="25" font-size="14" letter-spacing="0.5" fill="#526779">ONLYRAG V2 / GUIDA UTENTE</text>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="600" fill="#183249"><tspan x="180" y="53">12 · Tradurre testo e Markdown</tspan></text>
+<g id="n0" data-node="s">
+<rect x="46" y="101" width="268" height="70" rx="30" fill="#183249" stroke="#183249" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#ffffff"><tspan x="180" y="125.5">Scegli documento, lingue e</tspan><tspan x="180" y="146.5">ambito</tspan></text>
+</g>
+<g id="n1" data-node="a">
+<rect x="46" y="227" width="268" height="64" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="259">Avvia Traduzione</tspan></text>
+</g>
+<g id="n2" data-node="q">
+<polygon points="180,347 296,413 180,479 64,413" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="402.5">Traduzione</tspan><tspan x="180" y="423.5">completa?</tspan></text>
+</g>
+<g id="n3" data-node="a">
+<rect x="46" y="535" width="268" height="70" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="559.5">Vista Affiancata oppure</tspan><tspan x="180" y="580.5">Vista Differenze</tspan></text>
+</g>
+<g id="n4" data-node="a">
+<rect x="46" y="661" width="268" height="91" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="685.5">Copia Traduzione oppure</tspan><tspan x="180" y="706.5">esporta PDF, DOCX o</tspan><tspan x="180" y="727.5">Markdown</tspan></text>
+</g>
+<g id="n5" data-node="t">
+<rect x="46" y="808" width="268" height="91" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="832.5">Controlla esito e file;</tspan><tspan x="180" y="853.5">Nuova Traduzione per</tspan><tspan x="180" y="874.5">ricominciare</tspan></text>
+</g>
+<g id="n6" data-node="t">
+<rect x="46" y="955" width="268" height="91" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="979.5">Interrompi o errore:</tspan><tspan x="180" y="1000.5">esportazione bloccata;</tspan><tspan x="180" y="1021.5">riprova</tspan></text>
+</g>
+<path data-edge="0-1" d="M 180 173 V 224" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="1-2" d="M 180 293 V 344" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="2-3" d="M 180 481 V 532" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="2-3"><rect x="183" y="496" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="506">Sì</tspan></text></g>
+<path data-edge="2-6" d="M 298 413 H 346 V 927 H 180 V 952" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="2-6"><rect x="300" y="384.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="394">No</tspan></text></g>
+<path data-edge="3-4" d="M 180 607 V 658" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="4-5" d="M 180 754 V 805" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+</g>
+</svg>

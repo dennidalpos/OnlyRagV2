@@ -1,0 +1,552 @@
+import type { ChildProcess } from 'node:child_process'
+import { checkCommandSecurity } from '../domain/agent/commandSecurity'
+import { sanitizePowerShellCommand } from '../domain/agent/shellStreamGuard'
+import { isBlockingDevServerCommand, resolveCommandTimeoutMs } from '../domain/agent/tools/execution/commandPolicy'
+import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
+import type { PersistentPowerShellSession, ShellExecutionOutput } from '../infrastructure/process/persistentPowerShellSession'
+import type { ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
+import { formatToolchainInventory, type DevToolStatus } from '../domain/agent/devToolchain'
+import os from 'node:os'
+import type { AgentToolCall } from '../domain/agent/agentTypes'
+import { DEV_TOOL_ALLOWLIST, buildInstallCommand, findToolDefinition, resolveInstallTarget } from '../domain/agent/devToolchain'
+import {
+  firstDowngradingInstallTarget,
+  firstInvalidRegistryInstallTarget,
+  firstNonexistentInstallTarget,
+} from '../domain/agent/tools/execution/installCommandGuards'
+import type { PackageFacts } from '../infrastructure/http/npmRegistryClient'
+import { probeDevTool } from '../domain/agent/tools/execution/devToolchainTools'
+import { devToolProbeRepository } from '../infrastructure/process/devToolProbeRepository'
+import { INSTALL_COMMAND_TIMEOUT_MS } from '../domain/agent/tools/execution/commandPolicy'
+import { logger } from '../infrastructure/logging/logger'
+import { executeRunTestsTool } from './runTestsTool'
+import { extractRequestedPackages } from '../domain/agent/installCommandParser'
+import { findAlreadyInstalledPackages } from '../domain/agent/tools/execution/commandPolicy'
+import { npmResolutionNoteFor } from '../domain/agent/npmResolutionConflict'
+import { buildVersionNotFoundNote, parseVersionNotFound } from '../domain/agent/npmVersionNotFound'
+import { buildVersionRealityNote, declaredDependencies, findVersionReality } from '../domain/agent/dependencyVersionReality'
+import { buildModuleResolutionNote, classifyModuleDiagnostic, unresolvedPackages } from '../domain/agent/moduleResolutionDiagnostic'
+import { buildDiagnosticFixAdvice, buildDeferredDiagnosticNote, type DiagnosticWorkspaceFacts } from '../domain/agent/compilerDiagnosticDirective'
+import { diagnosticAdvice, renderAdvice, renderAdviceSteps } from '../domain/agent/diagnosticAdvice'
+import { formatAgentTextIt } from '../../../shared/domain/agent/agentMainText'
+import { toolLog } from '../domain/agent/tools/toolExecutionContracts'
+
+export interface RunCommandExecution {
+  command: string
+  result: ShellExecutionOutput
+  rawOutput: string
+  isCancelled: boolean
+  isFailure: boolean
+}
+
+const TOOL_NAME_PREFIXES = [
+  'write_file',
+  'read_file',
+  'replace_file_content',
+  'multi_replace_file_content',
+  'delete_file',
+  'list_dir',
+  'list_files_recursive',
+  'grep_search',
+  'extract_code_symbols',
+  'create_directory',
+  'copy_file',
+  'move_file',
+  'web_search',
+  'fetch_web_content',
+  'download_file',
+  'inspect_os_env',
+  'ask',
+  'finish',
+  'start_dev_server',
+  'probe_local_http',
+  'stop_dev_server',
+]
+
+interface ProcessToolDependencies {
+  getShellSession(workspacePath: string | null | undefined): PersistentPowerShellSession
+  probeToolchain?: () => DevToolStatus[]
+  probeVersion?: (binary: string, versionArgs: string[]) => string | null
+  platform?: NodeJS.Platform
+  readPackageJson?: (workspacePath: string) => Promise<string | null>
+  lookupPackages?: (names: string[]) => Promise<PackageFacts[]>
+  lookupPackage?: (name: string) => Promise<PackageFacts>
+  missingFromNodeModules?: (workspacePath: string, packages: string[]) => string[]
+}
+
+/** Application service for the guarded, cancellable execution boundary of run_command. */
+export class ProcessToolService {
+  constructor(private readonly dependencies: ProcessToolDependencies) {}
+
+  validateRunCommandPreconditions(command: string): ToolExecutionResult | null {
+    const confusedToolName = TOOL_NAME_PREFIXES.find((toolName) => command.trimStart().startsWith(toolName))
+    if (confusedToolName) {
+      const output = renderAdviceSteps(
+        `[TOOL_AS_SHELL_BLOCK]`,
+        [`Command: "${command}"`, `EXECUTION BLOCKED: "${confusedToolName}" is a structured tool, not a shell executable, so run_command cannot run it.`],
+        [`Call the "${confusedToolName}" tool directly as a native tool call with its own parameters.`],
+      )
+      logger.log('WARN', 'ProcessToolService', `[TOOL_AS_SHELL_BLOCK] Model tried to run tool "${confusedToolName}" as shell command`)
+      return {
+        outcome: 'rejected',
+        outputForHistory: output,
+        ...toolLog('toolShellToolConfusion', { tool: confusedToolName }),
+        isTerminal: true,
+      }
+    }
+
+    if (isBlockingDevServerCommand(command)) {
+      const output = renderAdviceSteps(
+        `[BLOCKING_DEV_SERVER_BLOCK]`,
+        [
+          `Command: "${command}"`,
+          `EXECUTION BLOCKED: this command starts a dev/watch server or otherwise never exits on its own.`,
+          `run_command waits synchronously for the process to exit, so this would hang until the timeout is reached, wasting several minutes with no useful result. Dev servers, watch-mode test runners and other long-lived processes are refused the same way.`,
+        ],
+        [
+          `To verify the project builds correctly, use a one-shot command instead (e.g. "npm run build" or "tsc --noEmit").`,
+          `For a live local preview, call start_dev_server for the workspace package.json dev script, probe_local_http on loopback, then stop_dev_server.`,
+        ],
+      )
+      logger.log('WARN', 'ProcessToolService', `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${command}"`)
+      return {
+        outcome: 'rejected',
+        outputForHistory: output,
+        ...toolLog('toolDevServerBlocked', { command }),
+        isTerminal: true,
+      }
+    }
+
+    return null
+  }
+
+  async validateInstallPreconditions(command: string, workspacePath: string | null | undefined): Promise<ToolExecutionResult | null> {
+    if (!this.dependencies.lookupPackages) return null
+    const unknownPackage = await firstNonexistentInstallTarget(command, this.dependencies.lookupPackages)
+    if (unknownPackage) {
+      const output = renderAdviceSteps(
+        `[PACKAGE DOES NOT EXIST — INSTALL NOT RUN]`,
+        [
+          `The npm registry has no package named "${unknownPackage}". This command was not executed, because no flag makes an install of a non-existent package succeed: rerunning it, with or without --force or --legacy-peer-deps, is refused the same way.`,
+        ],
+        [`If your code imports "${unknownPackage}", it is importing something that does not exist: use a real package, or write that code yourself.`],
+      )
+      return { outcome: 'rejected', outputForHistory: output, ...toolLog('toolInstallUnknownPackage', { package: unknownPackage }), isTerminal: true }
+    }
+
+    const packageJson = workspacePath && this.dependencies.readPackageJson ? await this.dependencies.readPackageJson(workspacePath) : null
+    const invalidTarget = await firstInvalidRegistryInstallTarget(command, packageJson, this.dependencies.lookupPackages)
+    if (invalidTarget) {
+      logger.log('WARN', 'ProcessToolService', `[INSTALL_VERSION_REFUSED] ${command}`)
+      return {
+        outcome: 'rejected',
+        outputForHistory: invalidTarget.refusal,
+        ...toolLog('toolInstallInvalidVersion', { package: invalidTarget.name, kind: invalidTarget.kind }),
+        isTerminal: true,
+      }
+    }
+
+    if (!this.dependencies.lookupPackage) return null
+    const downgrade = await firstDowngradingInstallTarget(command, packageJson, this.dependencies.lookupPackage)
+    if (downgrade) {
+      logger.log('WARN', 'ProcessToolService', `[VERSION_DOWNGRADE_REFUSED] ${command}`)
+      return {
+        outcome: 'rejected',
+        outputForHistory: downgrade.refusal,
+        ...toolLog('toolInstallDowngrade', { package: downgrade.name }),
+        isTerminal: true,
+      }
+    }
+    return null
+  }
+
+  async validateRedundantInstall(command: string, workspacePath: string | null | undefined): Promise<ToolExecutionResult | null> {
+    if (!workspacePath || !this.dependencies.readPackageJson || !this.dependencies.missingFromNodeModules) return null
+    const requested = extractRequestedPackages(command)
+    const requestedPackages = requested.some((pkg) => pkg.hasExplicitVersion) ? [] : requested.map((pkg) => pkg.name)
+    if (requestedPackages.length === 0) return null
+
+    const packageJson = await this.dependencies.readPackageJson(workspacePath)
+    const declared = packageJson ? findAlreadyInstalledPackages(requestedPackages, packageJson) : null
+    const notOnDisk = declared ? this.dependencies.missingFromNodeModules(workspacePath, declared) : []
+    if (declared && notOnDisk.length > 0) {
+      logger.log('INFO', 'ProcessToolService', `[REDUNDANT_INSTALL_ALLOW] Declared but not in node_modules, install proceeds: ${notOnDisk.join(', ')}`)
+    }
+    if (!declared || notOnDisk.length > 0) return null
+
+    const output = [
+      `[REDUNDANT_INSTALL_SKIP]`,
+      `Command: "${command}"`,
+      `EXECUTION SKIPPED: every requested package (${declared.join(', ')}) is declared in package.json AND already present in node_modules.`,
+      `Re-running this install would do nothing but waste time.`,
+      `Directive: proceed with the next step of your plan -- this dependency is already installed.`,
+    ].join('\n')
+    logger.log('WARN', 'ProcessToolService', `[REDUNDANT_INSTALL_SKIP] Skipped already-installed packages: ${declared.join(', ')}`)
+    return {
+      outcome: 'success',
+      outputForHistory: output,
+      ...toolLog('toolInstallRedundant', { packages: declared.join(', ') }),
+      isTerminal: true,
+    }
+  }
+
+  buildCommonFailureDirectives(
+    command: string,
+    result: ShellExecutionOutput,
+    rawOutput: string,
+    workspacePath: string | null | undefined,
+    isCancelled: boolean,
+    workspaceFileExists: (workspacePath: string, fileName: string) => boolean,
+  ): string {
+    const lowerOutput = rawOutput.toLowerCase()
+    const permissions = ['eperm', 'eacces', 'operation not permitted', 'permission denied'].some((marker) => lowerOutput.includes(marker))
+      ? `\n\n[PERMISSIONS WARNING: EPERM DETECTED]\nCommand failed due to Windows file permission restrictions (EPERM / Access Denied). DO NOT attempt to write files or run npm install inside system-protected folders (Program Files). Move the project or work inside a user workspace directory (e.g. Desktop or Documents).`
+      : ''
+    const viteMissing =
+      (lowerOutput.includes('0 modules transformed') || (lowerOutput.includes('vite') && result.code !== 0)) &&
+      workspacePath &&
+      !workspaceFileExists(workspacePath, 'index.html')
+        ? `\n\n[VITE ENTRY POINT MISSING DIAGNOSTIC]\nVite build failed or transformed 0 modules because 'index.html' is missing in project root ('${workspacePath}'). Create 'index.html' (referencing '<script type="module" src="/src/main.tsx"></script>') and 'src/main.tsx' before re-running build.`
+        : ''
+    const createViteCancelled =
+      (command.includes('create-vite') || command.includes('create vite') || command.includes('create-app')) && isCancelled
+        ? `\n\n[VITE CLI NON-INTERACTIVE DIRECTIVE]\n'npm create vite' was cancelled because the target directory is not empty or requires interactive prompt selections. DO NOT re-run 'npm create vite' interactively.\nInstead, construct 'package.json', 'index.html', and 'src/main.tsx' directly using write_file, or run 'npx -y create-vite@latest . -- --template react-ts' after clearing conflicting files.`
+        : ''
+    return `${permissions}${viteMissing}${createViteCancelled}`
+  }
+
+  /**
+   * When npm refuses a range package.json itself declares, the fix is the manifest, and every
+   * unpublished range in it at once. Ordering `npm install <that package>@<latest>` instead
+   * failed again on the next unpublished range (react-dom after react, full-task run of
+   * 2026-09-24), and the second failure spent the execution budget at step 5.
+   */
+  private async manifestVersionRealityDirective(refusedPackage: string, workspacePath: string | null | undefined): Promise<string> {
+    if (!workspacePath || !this.dependencies.readPackageJson || !this.dependencies.lookupPackages) return ''
+    let manifest: unknown
+    try {
+      manifest = JSON.parse((await this.dependencies.readPackageJson(workspacePath)) || 'null')
+    } catch {
+      return ''
+    }
+    const declared = declaredDependencies(manifest)
+    if (!declared.some((dep) => dep.name === refusedPackage)) return ''
+    const findings = findVersionReality(declared, await this.dependencies.lookupPackages(declared.map((dep) => dep.name)))
+    // Only what blocks the install: an old major is advice, not the reason this command failed.
+    return buildVersionRealityNote({ ...findings, outdated: [] }) || ''
+  }
+
+  async classifyFailureDiagnostics(
+    rawOutput: string,
+    workspacePath: string | null | undefined,
+  ): Promise<{
+    resolutionConflictDirective: string
+    versionNotFoundDirective: string
+    unresolved: string[]
+    moduleResolutionDirective: string
+    missingDepDirective: string
+  }> {
+    const resolutionConflictDirective = npmResolutionNoteFor(rawOutput)
+    const versionNotFound = resolutionConflictDirective ? null : parseVersionNotFound(rawOutput)
+    const manifestVersionDirective = versionNotFound ? await this.manifestVersionRealityDirective(versionNotFound.packageName, workspacePath) : ''
+    const versionNotFoundDirective =
+      manifestVersionDirective ||
+      (versionNotFound && this.dependencies.lookupPackage
+        ? buildVersionNotFoundNote(versionNotFound, (await this.dependencies.lookupPackage(versionNotFound.packageName)).latest)
+        : '')
+    const unresolved = resolutionConflictDirective ? [] : unresolvedPackages(rawOutput)
+    const moduleCause =
+      workspacePath && unresolved.length > 0 && this.dependencies.missingFromNodeModules
+        ? classifyModuleDiagnostic(rawOutput, (pkg) => this.dependencies.missingFromNodeModules!(workspacePath, [pkg]).length === 0)
+        : 'none'
+    const moduleResolutionDirective = moduleCause === 'compiler_resolution' ? buildModuleResolutionNote(rawOutput, unresolved) : ''
+    const lowerOutput = rawOutput.toLowerCase()
+    const isMissingDependency =
+      !resolutionConflictDirective &&
+      moduleCause !== 'compiler_resolution' &&
+      ((lowerOutput.includes('cannot find module') && unresolved.length > 0) ||
+        lowerOutput.includes('module_not_found') ||
+        lowerOutput.includes('failed to resolve import'))
+    const missingDepList = unresolved
+      .slice(0, 5)
+      .map((pkg) => `"${pkg}"`)
+      .join(', ')
+    const missingDepDirective = isMissingDependency
+      ? `\n\n${renderAdvice(
+          diagnosticAdvice(
+            '[MISSING DEPENDENCY DIAGNOSTIC]',
+            [
+              `Compilation failed because ${missingDepList ? `${missingDepList} ${unresolved.length === 1 ? 'is' : 'are'} imported but not installed` : 'an imported module/package is missing'}.`,
+            ],
+            `"run_command" with: npm install ${missingDepList ? unresolved.slice(0, 5).join(' ') : '<the package named in the error above>'}`,
+            ['Do NOT re-run the project check until that install has completed.'],
+          ),
+        )}`
+      : ''
+    return { resolutionConflictDirective, versionNotFoundDirective, unresolved, moduleResolutionDirective, missingDepDirective }
+  }
+
+  buildInteractionFailureDirectives(
+    rawOutput: string,
+    interruptedByPrompt?: boolean,
+  ): {
+    npmNamingDirective: string
+    interactivePromptDirective: string
+  } {
+    const lowerOutput = rawOutput.toLowerCase()
+    const npmNamingDirective = [
+      'npm naming restrictions',
+      'can no longer contain capital letters',
+      'name can only contain url-friendly',
+      'name is invalid',
+    ].some((marker) => lowerOutput.includes(marker))
+      ? `\n\n[NPM NAMING RESTRICTION DIRECTIVE]\nProject/package name is invalid because npm packages cannot contain uppercase letters or spaces. DO NOT repeat the command with capital letters. Either run with an all-lowercase name (e.g. 'project-dashboard-task') or construct the files directly using write_file (e.g. 'package.json', 'vite.config.ts', 'index.html', 'src/App.tsx').`
+      : ''
+    const interactivePromptDirective = interruptedByPrompt
+      ? `\n\n[INTERACTIVE PROMPT DIRECTIVE]\nThe command was aborted because it requested interactive user input (e.g. a [y/n] confirmation or password prompt), which run_command cannot answer. Re-run using the tool's non-interactive flag (e.g. -y, --yes, --force, --batch) so it completes without prompting.`
+      : ''
+    return { npmNamingDirective, interactivePromptDirective }
+  }
+
+  buildAutoHealingFailureResult(
+    command: string,
+    result: ShellExecutionOutput,
+    rawOutput: string,
+    directives: string,
+    healingTail: string,
+  ): ToolExecutionResult {
+    const boundedOutput = /(?:^|\s)(?:npm run lint|eslint\b)/i.test(command)
+      ? DiagnosticOutputReducer.summarizeLintFailure(rawOutput)
+      : DiagnosticOutputReducer.keepHeadAndTail(rawOutput, 4000)
+    const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nCommand: "${command}" (Exit Code: ${result.code}${result.timedOut ? ' - TIMED OUT' : ''}${result.interruptedByPrompt ? ' - INTERACTIVE PROMPT DETECTED' : ''})\nCaptured Error Stack Trace & Failure Output:\n\`\`\`\n${boundedOutput}\n\`\`\`${directives}\n\n${healingTail}`
+    const message = { key: 'toolCommandFailed' } as const
+    return {
+      outcome: 'failure',
+      outputForHistory:
+        result.timedOut || result.interruptedByPrompt
+          ? `${output}\n\n[UNCERTAIN EFFECT - DO NOT RETRY]\nThe process was stopped after it began; inspect state before any further mutation.`
+          : output,
+      logMessage: formatAgentTextIt(message),
+      localized: { message },
+      logDetail: rawOutput.slice(0, 1000),
+      isTerminal: true,
+      effectOutcome: result.timedOut || result.interruptedByPrompt ? 'uncertain' : 'confirmed',
+    }
+  }
+
+  chooseAutoHealingDirective(
+    rawOutput: string,
+    specificDirectiveFired: boolean,
+    readPackageExports: (packageName: string) => string[],
+    readLocalModuleExports: (importingFile: string, specifier: string) => string[],
+    workspaceFacts: DiagnosticWorkspaceFacts = {},
+  ): { deferredDiagnosticNote: string; healingTail: string } {
+    const diagnosticAdvice = specificDirectiveFired ? null : buildDiagnosticFixAdvice(rawOutput, readPackageExports, readLocalModuleExports, workspaceFacts)
+    const deferredDiagnosticNote = specificDirectiveFired ? buildDeferredDiagnosticNote(rawOutput) || '' : ''
+    const healingTail = specificDirectiveFired
+      ? 'A vague clarification question to the user will not help here: the diagnostics above name the fix.'
+      : diagnosticAdvice
+        ? renderAdvice(diagnosticAdvice)
+        : 'AUTO-HEALING NOTE: The command above failed, and re-running it unchanged will fail the same way; a vague clarification question to the user will not help either. Read the output above, identify the one file or command parameter at fault, and fix that with write_file.'
+    return { deferredDiagnosticNote, healingTail }
+  }
+
+  inspectOsEnvironment(): ToolExecutionResult {
+    const hostLine = `Guest OS Environment: ${os.platform()} ${os.arch()} | CPUs: ${os.cpus().length} (${os.cpus()[0]?.model || ''}) | RAM Free: ${(os.freemem() / 1024 / 1024 / 1024).toFixed(2)}GB`
+    const output = `${hostLine}\n\n${formatToolchainInventory(this.dependencies.probeToolchain?.() || [])}`
+    return {
+      outcome: 'success',
+      outputForHistory: output,
+      ...toolLog('toolOsInventory'),
+      logDetail: output,
+    }
+  }
+
+  executeRunTests(
+    command: string | undefined,
+    workspacePath: string | null | undefined,
+    allowTerminalExecution: boolean | undefined,
+    onTerminalOutput: ((data: string) => void) | undefined,
+    onProcessSpawned: ((proc: ChildProcess) => void) | undefined,
+    signal?: AbortSignal,
+    fullAccess = false,
+  ): Promise<ToolExecutionResult> {
+    if (allowTerminalExecution === false) {
+      const message = { key: 'toolTerminalDisabled' } as const
+      return Promise.resolve({
+        outcome: 'blocked',
+        outputForHistory: 'Terminal command execution disabled in Settings.',
+        logMessage: formatAgentTextIt(message),
+        localized: { message },
+        isTerminal: true,
+      })
+    }
+    return executeRunTestsTool(
+      command,
+      workspacePath,
+      (path) => this.dependencies.getShellSession(path),
+      onTerminalOutput,
+      onProcessSpawned,
+      signal,
+      fullAccess,
+    )
+  }
+
+  async executeEnsureTool(
+    parameters: AgentToolCall['parameters'],
+    workspacePath: string | null | undefined,
+    allowTerminalExecution: boolean | undefined,
+    signal: AbortSignal | undefined,
+    onTerminalOutput: ((data: string) => void) | undefined,
+    onProcessSpawned: ((proc: ChildProcess) => void) | undefined,
+  ): Promise<ToolExecutionResult> {
+    const requested = String(parameters.toolName || parameters.tool || parameters.name || '').trim()
+    const definition = findToolDefinition(requested)
+    if (!definition) {
+      const allowed = DEV_TOOL_ALLOWLIST.map((tool) => tool.id).join(', ')
+      return {
+        outcome: 'rejected',
+        outputForHistory: `[ENSURE_TOOL REJECTED] '${requested || '(empty)'}' is not an installable development tool. Allowed: ${allowed}. Installing anything else is not permitted — ask the user instead.`,
+        ...toolLog('toolEnsureNotAllowed', { tool: String(requested) }),
+        isTerminal: true,
+      }
+    }
+
+    const probeVersion = this.dependencies.probeVersion || ((binary, versionArgs) => devToolProbeRepository.probeVersion(binary, versionArgs))
+    const status = probeDevTool(definition.id, probeVersion)
+    if (status.installed) {
+      return {
+        outcome: 'success',
+        outputForHistory: `${definition.displayName} is already installed (version ${status.version}). No installation performed.`,
+        ...toolLog('toolEnsurePresent', { name: definition.displayName, version: String(status.version) }),
+        isTerminal: true,
+      }
+    }
+
+    if (allowTerminalExecution === false) {
+      return {
+        outcome: 'blocked',
+        outputForHistory: `${definition.displayName} is missing, but terminal execution is disabled in Settings so it cannot be installed. Ask the user to install it manually.`,
+        ...toolLog('toolEnsureTerminalDisabled'),
+        isTerminal: true,
+      }
+    }
+
+    const installTarget = resolveInstallTarget(definition.id)
+    const installCmd = buildInstallCommand(definition.id)
+    if (!installTarget || !installCmd) {
+      return {
+        outcome: 'failure',
+        outputForHistory: `[ENSURE_TOOL ERROR] No installation package is registered for '${definition.id}'.`,
+        ...toolLog('toolEnsureNoPackage', { tool: definition.id }),
+        isTerminal: true,
+      }
+    }
+
+    if ((this.dependencies.platform || process.platform) !== 'win32') {
+      return {
+        outcome: 'blocked',
+        outputForHistory: `[ENSURE_TOOL UNSUPPORTED] Automatic installation is only implemented for Windows (winget). Install ${definition.displayName} manually, then continue.`,
+        ...toolLog('toolEnsureUnsupportedPlatform'),
+        isTerminal: true,
+      }
+    }
+
+    logger.log('INFO', 'ProcessToolService', `[ENSURE_TOOL] Installing ${installTarget.displayName} via winget (${installTarget.wingetId})`)
+    try {
+      const shell = this.dependencies.getShellSession(workspacePath)
+      const result = await shell.execute(installCmd, (chunk) => onTerminalOutput?.(chunk.trim()), onProcessSpawned, INSTALL_COMMAND_TIMEOUT_MS, signal)
+
+      shell.refreshEnvironmentPath?.()
+      const verified = probeDevTool(definition.id, probeVersion)
+      if (verified.installed) {
+        logger.log('INFO', 'ProcessToolService', `[ENSURE_TOOL] ${definition.displayName} installed: ${verified.version}`)
+        return {
+          outcome: 'success',
+          outputForHistory: `Successfully installed ${installTarget.displayName}. ${definition.displayName} is now available (version ${verified.version}). PATH refreshed for this session.`,
+          ...toolLog('toolEnsureInstalled', { name: installTarget.displayName, tool: definition.id, version: String(verified.version) }),
+          logDetail: installCmd,
+          isTerminal: true,
+        }
+      }
+
+      const rawOutput = DiagnosticOutputReducer.composeCommandOutput(result.stdout, result.stderr, result.code)
+      return {
+        outcome: 'failure',
+        outputForHistory: `[ENSURE_TOOL INSTALL FAILED]\nCommand: "${installCmd}"\n${definition.displayName} is still not detectable after installation.\nOutput:\n${rawOutput.slice(0, 2000)}\n\nDo not retry the same installation. Continue without this tool or ask the user to install it manually.`,
+        ...toolLog('toolEnsureStillMissing', { name: definition.displayName }),
+        logDetail: rawOutput.slice(0, 1000),
+        isTerminal: true,
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        outcome: 'failure',
+        outputForHistory: `[ENSURE_TOOL ERROR] Failed installing ${installTarget.displayName}: ${message}`,
+        ...toolLog('toolEnsureException', { error: message }),
+        isTerminal: true,
+      }
+    }
+  }
+
+  async executeRunCommand(
+    command: string,
+    workspacePath: string | null | undefined,
+    timeoutSeconds: number | undefined,
+    signal: AbortSignal | undefined,
+    onTerminalOutput: ((data: string) => void) | undefined,
+    onProcessSpawned: ((proc: ChildProcess) => void) | undefined,
+    securityApprovalGranted = false,
+    fullAccess = false,
+  ): Promise<RunCommandExecution | ToolExecutionResult> {
+    const shell = this.dependencies.getShellSession(workspacePath)
+    const security = fullAccess
+      ? { isAllowed: true, requiresApproval: false, sanitizedCommand: command }
+      : checkCommandSecurity(command, workspacePath, shell.currentDirectory)
+    if (!security.isAllowed) {
+      const output = `[SECURITY GUARDRAIL BLOCK]\nCommand: "${command}"\nExecution FORBIDDEN by Security Policy: ${security.blockedReason}\nDirective: Refrain from executing dangerous commands.`
+      return { outcome: 'rejected', outputForHistory: output, ...toolLog('toolSecurityBlock', { command }), isTerminal: true }
+    }
+    if (security.requiresApproval && !securityApprovalGranted) {
+      return {
+        outcome: 'rejected',
+        outputForHistory: `[SECURITY APPROVAL REQUIRED]\nCommand: "${command}"\nExecution requires an explicit approval through the agent gate.`,
+        ...toolLog('toolSecurityApprovalRequired', { command }),
+        isTerminal: true,
+      }
+    }
+
+    let executableCommand = security.sanitizedCommand
+    if (process.platform === 'win32') executableCommand = sanitizePowerShellCommand(executableCommand)
+    const timeoutMs = resolveCommandTimeoutMs(command, timeoutSeconds)
+
+    try {
+      const result = await shell.execute(executableCommand, (chunk) => onTerminalOutput?.(chunk.trim()), onProcessSpawned, timeoutMs, signal)
+      const rawOutput = DiagnosticOutputReducer.composeCommandOutput(result.stdout, result.stderr, result.code)
+      // A generator that was cancelled prints the notice as its own line ("✖ Operation cancelled").
+      // Matching anywhere in the text turned passing test runs into failures whenever a test name
+      // or log line merely contained "aborted".
+      const isCancelled = /^[^\w\n]*(?:operation|user) cancel{1,2}ed\b/im.test(rawOutput)
+
+      return {
+        command,
+        result,
+        rawOutput,
+        isCancelled,
+        isFailure: result.code !== 0 || Boolean(result.timedOut) || isCancelled,
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nFailed executing command "${command}": ${message}`
+      const localizedMessage = { key: 'toolCommandException', params: { error: message } } as const
+      return {
+        outcome: 'failure',
+        outputForHistory: `${output}\n\n[UNCERTAIN EFFECT - DO NOT RETRY]\nExecution failed after dispatch; inspect state before any further mutation.`,
+        logMessage: formatAgentTextIt(localizedMessage),
+        localized: { message: localizedMessage },
+        isTerminal: true,
+        effectOutcome: 'uncertain',
+      }
+    }
+  }
+}

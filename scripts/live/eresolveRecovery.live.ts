@@ -1,0 +1,91 @@
+import './retiredCampaign'
+import { describe, it, expect } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
+import { execSync } from 'node:child_process'
+import { runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
+import { liveWorkspacePath, loadRealSettings, reportRun, resetWorkspace } from './agentLiveHarness'
+
+const WORKSPACE = liveWorkspacePath('eresolve')
+const SESSION = 'live-eresolve'
+
+/** The version the probe pins, and the plugin release that cannot coexist with it. */
+const PINNED_VITE = '4.5.14'
+const CONFLICTING_PLUGIN = '@vitejs/plugin-react@6.1.0'
+
+function seedConflictingWorkspace(): void {
+  resetWorkspace(WORKSPACE)
+  fs.mkdirSync(path.join(WORKSPACE, 'src'), { recursive: true })
+  fs.writeFileSync(
+    path.join(WORKSPACE, 'package.json'),
+    JSON.stringify(
+      {
+        name: 'eresolve-probe',
+        version: '1.0.0',
+        private: true,
+        scripts: { build: 'vite build' },
+        dependencies: { react: '^18.2.0', 'react-dom': '^18.2.0' },
+        devDependencies: { vite: PINNED_VITE },
+      },
+      null,
+      2,
+    ),
+    'utf-8',
+  )
+  fs.writeFileSync(
+    path.join(WORKSPACE, 'index.html'),
+    '<!doctype html><html><body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>',
+    'utf-8',
+  )
+  fs.writeFileSync(
+    path.join(WORKSPACE, 'src', 'main.jsx'),
+    "import { createRoot } from 'react-dom/client'\ncreateRoot(document.getElementById('root')).render('ok')\n",
+    'utf-8',
+  )
+
+  // Really installed, so npm reports `Found: vite@4.5.14` from the tree and not from the
+  // manifest — the manifest is the part the model is free to rewrite.
+  execSync('npm install --no-audit --no-fund', { cwd: WORKSPACE, stdio: 'ignore' })
+}
+
+function installedVersion(pkg: string): string | null {
+  const manifest = path.join(WORKSPACE, 'node_modules', ...pkg.split('/'), 'package.json')
+  return fs.existsSync(manifest) ? JSON.parse(fs.readFileSync(manifest, 'utf-8')).version : null
+}
+
+describe('live: eresolve recovery', () => {
+  it('resolves a peer-version conflict instead of asking or forcing', async () => {
+    const settings = loadRealSettings({ maxToolCallSteps: 16 })
+    seedConflictingWorkspace()
+
+    const result = await runAgentOrchestratorLoop(
+      {
+        userTask:
+          `Use npm for every command (not pnpm, not yarn). Run exactly this command first: \`npm install ${CONFLICTING_PLUGIN}\`. ` +
+          'It will fail. Resolve the failure so the install succeeds, then run `npm run build` and make it pass. Do not rewrite src files.',
+        workspacePath: WORKSPACE,
+        agentMode: 'auto',
+        sessionId: SESSION,
+        settings,
+      },
+      null,
+    )
+
+    const metrics = reportRun({
+      label: 'eresolve recovery',
+      workspacePath: WORKSPACE,
+      sessionId: SESSION,
+      success: result.success,
+      summary: result.summary,
+    })
+    console.log(`vite installed: ${installedVersion('vite')} (started at ${PINNED_VITE})`)
+    console.log(`plugin installed: ${installedVersion('@vitejs/plugin-react')}`)
+
+    expect(metrics.commands[0]).toBe(`[step 1] FAILURE npm install ${CONFLICTING_PLUGIN}`)
+    expect(metrics.commands.some((command) => command.includes('npm run build') && command.includes('SUCCESS'))).toBe(true)
+    expect(metrics.commands.join('\n')).not.toMatch(/--force|--legacy-peer-deps/)
+    expect(metrics.completionStatus).toBeDefined()
+    expect(installedVersion('vite')).not.toBe(PINNED_VITE)
+    expect(installedVersion('@vitejs/plugin-react')).not.toBeNull()
+  })
+})

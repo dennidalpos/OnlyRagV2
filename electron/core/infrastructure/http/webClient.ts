@@ -1,0 +1,580 @@
+import http from 'node:http'
+import https from 'node:https'
+import fs from 'node:fs'
+import path from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { URL } from 'node:url'
+import TurndownService from 'turndown'
+import * as cheerio from 'cheerio'
+import { logger } from '../logging/logger'
+import { validatePathSafety } from '../../domain/agent/contextFilter'
+import { MAX_DOWNLOAD_BYTES } from '../../domain/agent/ioLimits'
+import { isPrivateNetworkAddress, publicOnlyLookup } from './networkAddressPolicy'
+import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
+
+const MAX_DOWNLOAD_REDIRECTS = 3
+const MAX_FETCH_REDIRECTS = 5
+const BLOCKED_DOWNLOAD_MIME_TYPES = new Set([
+  'application/x-msdownload',
+  'application/x-msdos-program',
+  'application/x-sh',
+  'application/x-bat',
+  'application/x-httpd-php',
+])
+
+function normalizedMime(contentType: string | undefined): string {
+  return (contentType || '').split(';', 1)[0].trim().toLowerCase()
+}
+
+function sniffDownloadMime(chunk: Buffer): string | null {
+  if (chunk.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) return 'application/zip'
+  if (chunk.subarray(0, 4).equals(Buffer.from('%PDF'))) return 'application/pdf'
+  if (chunk.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png'
+  if (chunk.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return 'image/jpeg'
+  if (chunk.subarray(0, 3).equals(Buffer.from('GIF'))) return 'image/gif'
+  if (chunk.subarray(0, 2).equals(Buffer.from([0x1f, 0x8b]))) return 'application/gzip'
+  return null
+}
+
+function downloadMimeAllowed(contentType: string | undefined, firstChunk?: Buffer): boolean {
+  const declared = normalizedMime(contentType)
+  if (BLOCKED_DOWNLOAD_MIME_TYPES.has(declared)) return false
+  const sniffed = firstChunk && sniffDownloadMime(firstChunk)
+  if (!declared || declared === 'application/octet-stream' || declared === 'binary/octet-stream') return true
+  return !sniffed || declared === sniffed || (sniffed === 'application/zip' && declared === 'application/x-zip-compressed')
+}
+
+export interface WebSearchResultItem {
+  title: string
+  url: string
+  snippet: string
+}
+
+const turndownService = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+  bulletListMarker: '-',
+})
+turndownService.remove(['script', 'style', 'noscript', 'nav', 'footer', 'iframe'] as (keyof HTMLElementTagNameMap)[])
+
+export function htmlToCleanMarkdown(html: string): string {
+  if (!html || typeof html !== 'string') return ''
+
+  try {
+    const $ = cheerio.load(html)
+    // 1. Remove non-content elements
+    $('script, style, svg, noscript, nav, footer, iframe, header').remove()
+
+    const bodyHtml = $('body').html() || $.html()
+    const md = turndownService.turndown(bodyHtml)
+    return md.replace(/\n\s*\n\s*\n+/g, '\n\n').trim()
+  } catch {
+    // Robust fallback
+    return html
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/[ \t]+/g, ' ')
+      .trim()
+  }
+}
+
+export function parseDuckDuckGoHtmlResults(html: string, maxResults: number = 8): WebSearchResultItem[] {
+  const results: WebSearchResultItem[] = []
+  if (!html) return results
+
+  try {
+    const $ = cheerio.load(html)
+    const items = $('.result, .results_links, .web-result')
+
+    if (items.length > 0) {
+      items.each((_, el) => {
+        if (results.length >= maxResults) return false
+        const titleEl = $(el).find('.result__a, .result__title a, a.result__url').first()
+        const snippetEl = $(el).find('.result__snippet, .result__snippet-wrapper').first()
+        const rawUrl = titleEl.attr('href') || ''
+        const rawTitle = titleEl.text().trim()
+        const snippet = snippetEl.text().trim()
+
+        let cleanUrl = rawUrl
+        try {
+          if (rawUrl.includes('uddg=')) {
+            const u = new URL(rawUrl.startsWith('http') ? rawUrl : `https:${rawUrl}`)
+            const uddg = u.searchParams.get('uddg')
+            if (uddg) cleanUrl = decodeURIComponent(uddg)
+          }
+        } catch {}
+
+        if (rawTitle && cleanUrl) {
+          results.push({
+            title: rawTitle,
+            url: cleanUrl,
+            snippet: snippet || rawTitle,
+          })
+        }
+      })
+    }
+
+    if (results.length === 0) {
+      const snippetMatches = [...html.matchAll(/<a[^>]+class="result__snippet[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)]
+      const titleMatches = [...html.matchAll(/<a[^>]+class="result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)]
+
+      for (let i = 0; i < Math.min(titleMatches.length, maxResults); i++) {
+        const rawUrl = titleMatches[i][1] || ''
+        const rawTitle = $(titleMatches[i][2]).text() || titleMatches[i][2]
+        const rawSnippet = snippetMatches[i] ? $(snippetMatches[i][2]).text() : ''
+
+        let cleanUrl = rawUrl
+        try {
+          if (rawUrl.includes('uddg=')) {
+            const u = new URL(rawUrl.startsWith('http') ? rawUrl : `https:${rawUrl}`)
+            const uddg = u.searchParams.get('uddg')
+            if (uddg) cleanUrl = decodeURIComponent(uddg)
+          }
+        } catch {}
+
+        const title = rawTitle.trim()
+        const snippet = (rawSnippet || rawTitle).trim()
+
+        if (title && cleanUrl) {
+          results.push({
+            title,
+            url: cleanUrl,
+            snippet: snippet || title,
+          })
+        }
+      }
+    }
+  } catch (e) {
+    logger.log('WARN', 'WebClient', `Failed parsing DDG html results: ${e}`)
+  }
+
+  return results
+}
+
+export class WebClient {
+  private userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 OnlyRagV2/1.0'
+
+  public validateUrlSafety(urlStr: string, fullAccess = false): { safeUrl: URL | null; error?: string } {
+    if (!urlStr || typeof urlStr !== 'string') {
+      return { safeUrl: null, error: 'Empty or invalid URL' }
+    }
+    try {
+      const u = new URL(urlStr)
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+        return { safeUrl: null, error: `Forbidden protocol '${u.protocol}'. Only HTTP and HTTPS are permitted.` }
+      }
+      if (fullAccess) return { safeUrl: u }
+
+      // URL keeps IPv6 literals bracketed ("[::1]"), so compare the bare address.
+      const host = u.hostname
+        .toLowerCase()
+        .trim()
+        .replace(/^\[|\]$/g, '')
+
+      // Block known cloud metadata hostnames & IP
+      if (host === '169.254.169.254' || host === 'metadata.google.internal' || host === 'metadata.internal' || host === 'instance-data') {
+        return { safeUrl: null, error: 'Access to cloud metadata endpoints is strictly blocked (SSRF Protection).' }
+      }
+
+      // Block localhost, IPv6 loopback, and local domain variants
+      if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0' || host.endsWith('.localhost') || host.endsWith('.local')) {
+        return { safeUrl: null, error: 'Access to loopback/localhost addresses is forbidden (SSRF Protection).' }
+      }
+
+      // IP literals (IPv4, IPv6, IPv4-mapped IPv6). Hostnames are checked again after DNS
+      // resolution by publicOnlyLookup, which every request below uses.
+      if (isPrivateNetworkAddress(host)) {
+        return { safeUrl: null, error: `Access to private/local network IP range '${host}' is forbidden (SSRF Protection).` }
+      }
+
+      return { safeUrl: u }
+    } catch (err: unknown) {
+      return { safeUrl: null, error: `Invalid URL: ${errorMessage(err)}` }
+    }
+  }
+
+  async searchWeb(query: string, maxResults: number = 8, signal?: AbortSignal): Promise<{ success: boolean; results: WebSearchResultItem[]; error?: string }> {
+    if (!query || typeof query !== 'string' || !query.trim()) {
+      return { success: false, results: [], error: 'Search query is empty' }
+    }
+    const cleanQuery = query.trim()
+    logger.log('INFO', 'WebClient', `Executing web search for query: "${cleanQuery}"`)
+
+    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQuery)}`
+    const fetchRes = await this.fetchWebContent(searchUrl, 16000, signal)
+
+    if (!fetchRes.success || !fetchRes.content) {
+      // Fallback: search via instant API
+      return this.searchInstantApi(cleanQuery, signal)
+    }
+
+    const results = parseDuckDuckGoHtmlResults(fetchRes.rawHtml || fetchRes.content, maxResults)
+    if (results.length === 0) {
+      return this.searchInstantApi(cleanQuery, signal)
+    }
+
+    return { success: true, results }
+  }
+
+  private async searchInstantApi(query: string, signal?: AbortSignal): Promise<{ success: boolean; results: WebSearchResultItem[]; error?: string }> {
+    try {
+      const apiUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
+      const res = await this.fetchWebContent(apiUrl, 16000, signal)
+      if (!res.success || !res.content) {
+        return { success: false, results: [], error: res.error || 'Web search returned no results' }
+      }
+      const data = JSON.parse(res.content)
+      const results: WebSearchResultItem[] = []
+
+      if (data.AbstractText && data.AbstractURL) {
+        results.push({
+          title: data.Heading || query,
+          url: data.AbstractURL,
+          snippet: data.AbstractText,
+        })
+      }
+
+      if (Array.isArray(data.RelatedTopics)) {
+        for (const topic of data.RelatedTopics.slice(0, 6)) {
+          if (topic.Text && topic.FirstURL) {
+            results.push({
+              title: topic.Text.split(' - ')[0] || topic.Text.slice(0, 50),
+              url: topic.FirstURL,
+              snippet: topic.Text,
+            })
+          }
+        }
+      }
+
+      return { success: true, results }
+    } catch (err: unknown) {
+      return { success: false, results: [], error: errorMessage(err) }
+    }
+  }
+
+  async fetchWebContent(
+    urlStr: string,
+    maxChars: number = 16000,
+    signal?: AbortSignal,
+    redirectCount = 0,
+    fullAccess = false,
+  ): Promise<{ success: boolean; content?: string; rawHtml?: string; title?: string; error?: string }> {
+    if (signal?.aborted) return { success: false, error: 'Request cancelled by AbortSignal' }
+    const urlCheck = this.validateUrlSafety(urlStr, fullAccess)
+    if (!urlCheck.safeUrl) {
+      return { success: false, error: urlCheck.error }
+    }
+
+    const targetUrl = urlCheck.safeUrl
+    const isHttps = targetUrl.protocol === 'https:'
+    const client = isHttps ? https : http
+
+    return new Promise((resolve) => {
+      let req: http.ClientRequest | undefined
+      let response: http.IncomingMessage | undefined
+      let terminal = false
+      const retire = () => {
+        terminal = true
+        clearTimeout(deadline)
+        signal?.removeEventListener('abort', onAbort)
+      }
+      const fail = (error: string) => {
+        if (terminal) return
+        retire()
+        response?.destroy()
+        req?.destroy()
+        resolve({ success: false, error })
+      }
+      const onAbort = () => fail('Request cancelled by AbortSignal')
+      // A socket inactivity timeout alone permits an indefinitely trickling body.
+      const deadline = setTimeout(() => fail('Fetch exceeded its 15s response deadline'), 15000)
+      signal?.addEventListener('abort', onAbort, { once: true })
+      if (signal?.aborted) {
+        onAbort()
+        return
+      }
+
+      try {
+        req = client.get(
+          targetUrl,
+          {
+            headers: {
+              'User-Agent': this.userAgent,
+              Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json,*/*;q=0.8',
+              'Accept-Language': 'it,en-US;q=0.9,en;q=0.8',
+            },
+            timeout: 15000,
+            lookup: fullAccess ? undefined : publicOnlyLookup,
+          },
+          (res) => {
+            response = res
+            res.on('error', (error: Error) => fail(error.message))
+            res.once('aborted', () => fail('Fetch response aborted before completion'))
+            res.once('close', () => {
+              if (!terminal) fail('Fetch response closed before completion')
+            })
+            if (terminal) {
+              res.destroy()
+              return
+            }
+            // Each hop is re-validated by the recursive call; the hop count is bounded.
+            if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+              if (redirectCount >= MAX_FETCH_REDIRECTS) {
+                fail(`Fetch exceeded ${MAX_FETCH_REDIRECTS} redirect hops.`)
+                return
+              }
+              let redirectUrl: string
+              try {
+                redirectUrl = new URL(res.headers.location, targetUrl).toString()
+              } catch (error) {
+                fail(`Invalid fetch redirect: ${errorMessage(error)}`)
+                return
+              }
+              // Stop this response before handing cancellation to the next hop.
+              retire()
+              res.destroy()
+              req?.destroy()
+              void this.fetchWebContent(redirectUrl, maxChars, signal, redirectCount + 1, fullAccess).then(resolve)
+              return
+            }
+
+            if (res.statusCode && res.statusCode >= 400) {
+              fail(`HTTP ${res.statusCode} ${res.statusMessage || ''}`)
+              return
+            }
+
+            const chunks: Buffer[] = []
+            let bytes = 0
+            res.on('data', (chunk: Buffer | string) => {
+              if (terminal) return
+              const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+              bytes += buffer.length
+              if (bytes > 5 * 1024 * 1024) {
+                fail('Fetch exceeded 5 MiB safety limit')
+                return
+              }
+              chunks.push(buffer)
+            })
+            res.on('end', () => {
+              if (terminal) return
+              retire()
+              const rawData = Buffer.concat(chunks, bytes).toString('utf8')
+              const cleanText = htmlToCleanMarkdown(rawData)
+              const titleMatch = rawData.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
+              const title = titleMatch ? htmlToCleanMarkdown(titleMatch[1]) : undefined
+              const truncated = cleanText.length > maxChars ? `${cleanText.slice(0, maxChars)}\n... [Content truncated for context budget]` : cleanText
+
+              resolve({
+                success: true,
+                content: truncated,
+                rawHtml: rawData.slice(0, 100000),
+                title,
+              })
+            })
+          },
+        )
+
+        req.on('error', (error: Error) => fail(error.message))
+        req.on('timeout', () => fail('Request timed out (15s limit)'))
+        if (terminal) req.destroy()
+      } catch (error) {
+        fail(errorMessage(error))
+      }
+    })
+  }
+
+  async downloadFile(
+    urlStr: string,
+    targetFilePath: string,
+    workspaceRoot?: string | null,
+    signal?: AbortSignal,
+    redirectCount = 0,
+    fullAccess = false,
+  ): Promise<{ success: boolean; downloadedBytes?: number; error?: string }> {
+    if (signal?.aborted) return { success: false, error: 'Download cancelled by AbortSignal' }
+    const urlCheck = this.validateUrlSafety(urlStr, fullAccess)
+    if (!urlCheck.safeUrl) {
+      return { success: false, error: urlCheck.error }
+    }
+
+    const pathCheck = validatePathSafety(targetFilePath, workspaceRoot, fullAccess)
+    if (!pathCheck.safePath) {
+      return { success: false, error: pathCheck.error }
+    }
+
+    const safeDestPath = pathCheck.safePath
+    const stagingPath = path.join(path.dirname(safeDestPath), `.onlyrag-download-${randomUUID()}.tmp`)
+    const targetUrl = urlCheck.safeUrl
+    const isHttps = targetUrl.protocol === 'https:'
+    const client = isHttps ? https : http
+
+    return new Promise((resolve) => {
+      try {
+        fs.mkdirSync(path.dirname(safeDestPath), { recursive: true })
+      } catch (dirErr: unknown) {
+        return resolve({ success: false, error: `Failed creating directory: ${errorMessage(dirErr)}` })
+      }
+
+      let req: http.ClientRequest | undefined
+      let response: http.IncomingMessage | undefined
+      let fileStream: fs.WriteStream | undefined
+      let downloadedBytes = 0
+      let terminal = false
+      let fileOpened = false
+      let fileFinished = false
+
+      const cleanupAndFail = (message: string) => {
+        if (terminal) return
+        terminal = true
+        signal?.removeEventListener('abort', onAbort)
+        response?.destroy()
+        req?.destroy()
+        const complete = () => {
+          if (fileOpened) {
+            try {
+              fs.unlinkSync(stagingPath)
+            } catch (unlinkErr) {
+              if ((unlinkErr as NodeJS.ErrnoException).code !== 'ENOENT') {
+                message += `; Failed removing partial download: ${errorMessage(unlinkErr)}`
+                logger.log('WARN', 'WebClient', message)
+              }
+            }
+          }
+          resolve({ success: false, error: message })
+        }
+        // On Windows the descriptor must be closed before removing the partial file.
+        if (fileStream && !fileStream.closed) {
+          fileStream.once('close', complete)
+          fileStream.destroy()
+        } else {
+          complete()
+        }
+      }
+
+      const onAbort = () => cleanupAndFail('Download cancelled by AbortSignal')
+      signal?.addEventListener('abort', onAbort, { once: true })
+      if (signal?.aborted) {
+        onAbort()
+        return
+      }
+
+      try {
+        req = client.get(
+          targetUrl,
+          {
+            headers: {
+              'User-Agent': this.userAgent,
+            },
+            timeout: 60000,
+            lookup: fullAccess ? undefined : publicOnlyLookup,
+          },
+          (res) => {
+            response = res
+            res.on('error', (err: Error) => cleanupAndFail(err.message))
+            res.once('aborted', () => cleanupAndFail('Download response aborted before completion'))
+            if (terminal) {
+              res.destroy()
+              return
+            }
+            if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+              if (redirectCount >= MAX_DOWNLOAD_REDIRECTS) {
+                cleanupAndFail(`Download exceeded ${MAX_DOWNLOAD_REDIRECTS} redirect hops.`)
+                return
+              }
+              let redirectUrl: string
+              try {
+                redirectUrl = new URL(res.headers.location, targetUrl).toString()
+              } catch (err) {
+                cleanupAndFail(`Invalid download redirect: ${errorMessage(err)}`)
+                return
+              }
+              // Retire this hop before handing the signal and destination to the next one.
+              terminal = true
+              signal?.removeEventListener('abort', onAbort)
+              res.destroy()
+              req?.destroy()
+              this.downloadFile(redirectUrl, targetFilePath, workspaceRoot, signal, redirectCount + 1, fullAccess).then(resolve)
+              return
+            }
+
+            if (res.statusCode && res.statusCode >= 400) {
+              cleanupAndFail(`HTTP ${res.statusCode} ${res.statusMessage || ''}`)
+              return
+            }
+
+            if (!fullAccess && !downloadMimeAllowed(res.headers['content-type'])) {
+              cleanupAndFail(`Download MIME type is not allowed: ${res.headers['content-type']}`)
+              return
+            }
+
+            try {
+              fileStream = fs.createWriteStream(stagingPath, { flags: 'wx', flush: true })
+            } catch (err) {
+              cleanupAndFail(errorMessage(err))
+              return
+            }
+            fileStream.once('open', () => {
+              fileOpened = true
+            })
+            fileStream.on('error', (err) => cleanupAndFail(err.message))
+            fileStream.once('finish', () => {
+              fileFinished = true
+            })
+            fileStream.once('close', () => {
+              if (terminal) return
+              if (!fileFinished) {
+                cleanupAndFail('Download file closed before completion')
+                return
+              }
+              try {
+                const destination = validatePathSafety(targetFilePath, workspaceRoot, fullAccess)
+                if (destination.safePath !== safeDestPath) throw new Error(destination.error || 'Download destination changed')
+                fs.renameSync(stagingPath, safeDestPath)
+              } catch (error) {
+                cleanupAndFail(`Failed publishing download: ${errorMessage(error)}`)
+                return
+              }
+              terminal = true
+              signal?.removeEventListener('abort', onAbort)
+              logger.log('INFO', 'WebClient', `Successfully downloaded ${downloadedBytes} bytes to ${safeDestPath}`)
+              resolve({ success: true, downloadedBytes })
+            })
+
+            let mimePrefix = Buffer.alloc(0)
+            let mimeChecked = fullAccess
+            const checkMime = () => {
+              mimeChecked = true
+              if (!downloadMimeAllowed(res.headers['content-type'], mimePrefix)) {
+                cleanupAndFail('Download content does not match declared MIME type.')
+              }
+            }
+            res.on('data', (chunk: Buffer) => {
+              if (terminal) return
+              downloadedBytes += chunk.length
+              if (!mimeChecked) {
+                mimePrefix = Buffer.concat([mimePrefix, chunk.subarray(0, 8 - mimePrefix.length)])
+                if (mimePrefix.length === 8) checkMime()
+              }
+              if (downloadedBytes > MAX_DOWNLOAD_BYTES) {
+                cleanupAndFail('Download exceeded 100MB safety limit.')
+              }
+            })
+            // A signature shorter than eight bytes must also be checked before the
+            // destination stream can finish and publish its staging file.
+            res.once('end', () => {
+              if (!terminal && !mimeChecked) checkMime()
+            })
+
+            res.pipe(fileStream)
+          },
+        )
+        req.on('error', (err) => cleanupAndFail(err.message))
+        req.on('timeout', () => cleanupAndFail('Download request timed out (60s limit)'))
+        if (terminal) req.destroy()
+      } catch (err) {
+        cleanupAndFail(errorMessage(err))
+      }
+    })
+  }
+}
+
+export const webClient = new WebClient()

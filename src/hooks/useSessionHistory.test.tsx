@@ -1,0 +1,336 @@
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
+import type { AgentPlan, CodingSession } from '../types'
+import { useSessionHistory } from './useSessionHistory'
+
+type History = ReturnType<typeof useSessionHistory>
+
+describe('useSessionHistory persistence', () => {
+  let container: HTMLDivElement
+  let root: Root
+  let history: History
+  const saveCodingSession = vi.fn<(session: CodingSession) => Promise<CodingSession | null>>(async (session) => session)
+  const stageCodingSession = vi.fn<(session: CodingSession) => Promise<boolean>>(async () => true)
+  const exportCodingSessionSnapshot = vi.fn(async (_payload: { session: CodingSession; destinationDirectory: string }) => 'C:/export/snapshot.json')
+
+  function Harness({ workspacePath = 'C:/workspace' }: { workspacePath?: string } = {}) {
+    history = useSessionHistory(workspacePath)
+    return null
+  }
+
+  beforeEach(async () => {
+    vi.useFakeTimers()
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      saveCodingSession,
+      stageCodingSession,
+      exportCodingSessionSnapshot,
+      listCodingSessions: vi.fn(async () => []),
+    }
+    saveCodingSession.mockReset().mockImplementation(async (session) => session)
+    stageCodingSession.mockReset().mockResolvedValue(true)
+    exportCodingSessionSnapshot.mockReset().mockResolvedValue('C:/export/snapshot.json')
+    container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root.render(<Harness />))
+    await act(async () => vi.runAllTimersAsync())
+    saveCodingSession.mockClear()
+    stageCodingSession.mockClear()
+  })
+
+  afterEach(async () => {
+    await act(async () => root.unmount())
+    vi.useRealTimers()
+  })
+
+  it('coalesces a burst of log updates into a single write of the latest state', async () => {
+    const sessionId = history.activeSessionId
+    await act(async () => {
+      for (let i = 1; i <= 50; i++) {
+        history.updateSessionContent(sessionId, { actionLogs: Array.from({ length: i }, (_, n) => ({ id: `log-${n}` }) as never) })
+      }
+    })
+    expect(saveCodingSession).not.toHaveBeenCalled()
+
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    expect(saveCodingSession).toHaveBeenCalledTimes(1)
+    expect(saveCodingSession.mock.calls[0][0].actionLogs).toHaveLength(50)
+  })
+
+  it('stages a persistable revision before the debounced canonical save', async () => {
+    const sessionId = history.activeSessionId
+    await act(async () => history.updateSessionContent(sessionId, { actionLogs: [{ id: 'staged' } as never] }))
+    expect(stageCodingSession).toHaveBeenCalledWith(expect.objectContaining({ id: sessionId, actionLogs: [{ id: 'staged' }] }))
+    expect(saveCodingSession).not.toHaveBeenCalled()
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    expect(saveCodingSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses close while neither canonical history nor Main staging acknowledges a revision', async () => {
+    stageCodingSession.mockResolvedValue(false)
+    saveCodingSession.mockResolvedValue(null)
+    await act(async () => history.updateSessionContent(history.activeSessionId, { actionLogs: [{ id: 'at-risk' } as never] }))
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    const flush = (window as Window & { __onlyragFlushCodingHistory?: () => Promise<boolean> }).__onlyragFlushCodingHistory
+    expect(flush).toBeDefined()
+    expect(await flush!()).toBe(false)
+    stageCodingSession.mockResolvedValue(true)
+    expect(await flush!()).toBe(true)
+  })
+
+  it('shows a failed load without creating a replacement session, then retries', async () => {
+    await act(async () => root.unmount())
+    root = createRoot(container)
+    const list = vi.fn().mockRejectedValue(new Error('Unreadable retained store'))
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = { saveCodingSession, listCodingSessions: list }
+    await act(async () => root.render(<Harness />))
+    expect(history.storageFailed).toBe(true)
+    expect(history.isLoadingSessions).toBe(false)
+    expect(history.sessions).toEqual([])
+    expect(history.activeSessionId).toBe('')
+    expect(saveCodingSession).not.toHaveBeenCalled()
+    list.mockResolvedValue([])
+    await act(async () => history.retryStorage())
+    expect(history.storageFailed).toBe(false)
+    expect(history.sessions).toHaveLength(1)
+  })
+
+  it('exports the latest failed memory revision without acknowledging storage or allowing close', async () => {
+    stageCodingSession.mockResolvedValue(false)
+    saveCodingSession.mockResolvedValue(null)
+    const sessionId = history.activeSessionId
+    await act(async () => history.updateSessionContent(sessionId, { actionLogs: [{ id: 'first' } as never] }))
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    await act(async () => history.updateSessionContent(sessionId, { actionLogs: [{ id: 'latest' } as never] }))
+    let paths: string[] = []
+    await act(async () => {
+      paths = await history.exportUnsavedSessions('C:/export')
+    })
+    expect(paths).toEqual(['C:/export/snapshot.json'])
+    expect(exportCodingSessionSnapshot).toHaveBeenCalledWith({
+      destinationDirectory: 'C:/export',
+      session: expect.objectContaining({ id: sessionId, actionLogs: [{ id: 'latest' }] }),
+    })
+    expect(history.storageFailed).toBe(true)
+    const flush = (window as unknown as { __onlyragFlushCodingHistory: () => Promise<boolean> }).__onlyragFlushCodingHistory
+    expect(await flush()).toBe(false)
+    exportCodingSessionSnapshot.mockRejectedValueOnce(new Error('Export destination unavailable'))
+    await expect(history.exportUnsavedSessions('C:/export')).rejects.toThrow('Export destination unavailable')
+    expect(await flush()).toBe(false)
+    stageCodingSession.mockResolvedValue(true)
+    saveCodingSession.mockImplementation(async (session) => session)
+    await act(async () => history.retryStorage())
+    expect(saveCodingSession.mock.lastCall?.[0].actionLogs).toEqual([{ id: 'latest' }])
+    expect(await flush()).toBe(true)
+  })
+
+  it('refuses an export without failed snapshots', async () => {
+    await expect(history.exportUnsavedSessions('C:/export')).rejects.toThrow('No unsaved')
+    expect(exportCodingSessionSnapshot).not.toHaveBeenCalled()
+  })
+
+  it.each(['reject', 'false'])('retains failed session changes and retries acknowledgement: %s', async (failure) => {
+    if (failure === 'reject') saveCodingSession.mockRejectedValueOnce(new Error('Read blocked'))
+    else saveCodingSession.mockResolvedValueOnce(null)
+    const sessionId = history.activeSessionId
+    const logs = [{ id: 'retained', timestamp: '2026-10-06T00:00:00Z', type: 'info' as const, message: 'Retained change' }]
+    await act(async () => history.updateSessionContent(sessionId, { actionLogs: logs }))
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    expect(history.storageFailed).toBe(true)
+    expect(history.activeSession?.actionLogs).toEqual(logs)
+    vi.mocked(window.electronAPI!.listCodingSessions).mockImplementation(async () => [saveCodingSession.mock.calls.at(-1)![0]])
+    await act(async () => history.retryStorage())
+    expect(saveCodingSession).toHaveBeenCalledTimes(2)
+    expect(history.storageFailed).toBe(false)
+    expect(history.activeSession?.actionLogs).toEqual(logs)
+  })
+
+  it('flushes the pending write on unmount instead of dropping it', async () => {
+    const sessionId = history.activeSessionId
+    await act(async () => history.updateSessionContent(sessionId, { actionLogs: [{ id: 'last-log' } as never] }))
+    await act(async () => root.unmount())
+    await act(async () => Promise.resolve())
+    expect(saveCodingSession).toHaveBeenCalledWith(expect.objectContaining({ actionLogs: [{ id: 'last-log' }] }))
+    root = createRoot(container)
+  })
+
+  it.each(['reject', 'null'] as const)('keeps a failed snapshot after unregistering its workspace: %s', async (failure) => {
+    if (failure === 'reject') saveCodingSession.mockRejectedValueOnce(new Error('Store unavailable'))
+    else saveCodingSession.mockResolvedValueOnce(null)
+    const sessionId = history.activeSessionId
+    const logs = [{ id: 'unsaved-before-unregister' } as never]
+    await act(async () => history.updateSessionContent(sessionId, { actionLogs: logs }))
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    expect(history.storageFailed).toBe(true)
+
+    act(() => history.purgeWorkspace('C:/workspace'))
+    expect(history.sessions).toEqual([])
+    expect(history.storageFailed).toBe(true)
+    await act(async () => root.render(<Harness workspacePath="C:/other" />))
+    await act(async () => history.retryStorage())
+    expect(saveCodingSession).toHaveBeenCalledTimes(2)
+    expect(saveCodingSession.mock.calls[1][0]).toMatchObject({ id: sessionId, workspacePath: 'C:/workspace', actionLogs: logs })
+    expect(history.storageFailed).toBe(false)
+  })
+
+  it('keeps an owned debounced write when its workspace is unregistered', async () => {
+    const sessionId = history.activeSessionId
+    await act(async () => history.updateSessionContent(sessionId, { actionLogs: [{ id: 'pending-unregister' } as never] }))
+    act(() => history.purgeWorkspace('C:/workspace'))
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    expect(saveCodingSession).toHaveBeenCalledTimes(1)
+    expect(saveCodingSession.mock.calls[0][0]).toMatchObject({ id: sessionId, workspacePath: 'C:/workspace' })
+    expect(history.sessions).toEqual([])
+  })
+
+  it('persists a plan revision with JSON-safe action logs', async () => {
+    const sessionId = history.activeSessionId
+    const plan: AgentPlan = {
+      formatVersion: 2,
+      id: 'plan-1',
+      version: 1,
+      prompt: 'Build the page',
+      objective: 'Build the page',
+      decisions: [],
+      retainedEvidence: [],
+      milestones: [{ id: 'step-1', title: 'Create the page', status: 'pending' }],
+      supersededWork: [],
+      status: 'approved',
+      createdAt: new Date().toISOString(),
+    }
+
+    await act(async () => {
+      history.updateSessionContent(sessionId, {
+        actionLogs: [{ id: 'log-1', timestamp: '10:00:00', type: 'info', message: 'Automatic planning started', detail: undefined }],
+      })
+    })
+
+    let persisted = false
+    await act(async () => {
+      persisted = await history.persistSessionPlan(sessionId, plan)
+    })
+
+    expect(persisted).toBe(true)
+    expect(saveCodingSession).toHaveBeenCalledTimes(1)
+    const payload = saveCodingSession.mock.calls[0][0]
+    expect(z.json().safeParse(payload.actionLogs[0]).success).toBe(true)
+    expect(payload.plans?.[0]).toEqual(plan)
+  })
+
+  it('does not retry a failed snapshot after confirmed deletion', async () => {
+    saveCodingSession.mockRejectedValueOnce(new Error('Failed write'))
+    await act(async () => history.updateSessionContent(history.activeSessionId, { actionLogs: [{ id: 'retained' } as never] }))
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      saveCodingSession,
+      listCodingSessions: vi.fn(async () => []),
+      deleteCodingSession: vi.fn(async () => ({ status: 'complete' })),
+    }
+    await act(async () => history.deleteSession(history.activeSessionId))
+    await act(async () => history.retryStorage())
+    expect(saveCodingSession).toHaveBeenCalledTimes(1)
+    expect(history.storageFailed).toBe(false)
+  })
+
+  it.each(['delete', 'clear'] as const)('preserves the active session after refused %s and allows explicit retry', async (operation) => {
+    const id = history.activeSessionId
+    await act(async () => history.updateSessionContent(id, { actionLogs: [{ id: 'kept' } as never] }))
+    saveCodingSession.mockResolvedValueOnce(null)
+    await act(async () => vi.advanceTimersByTimeAsync(600))
+    const remove = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'refused' })
+      .mockRejectedValueOnce(new Error('Storage blocked'))
+      .mockResolvedValue({ status: 'complete' })
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      saveCodingSession,
+      listCodingSessions: vi.fn(async () => []),
+      deleteCodingSession: remove,
+      clearCodingSessions: remove,
+    }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await act(async () => (operation === 'delete' ? history.deleteSession(id) : history.clearSessions()))
+      expect(history.activeSessionId).toBe(id)
+      expect(history.activeSession?.actionLogs).toEqual([{ id: 'kept' }])
+      expect(history.storageFailed).toBe(true)
+    }
+    await act(async () => (operation === 'delete' ? history.deleteSession(id) : history.clearSessions()))
+    expect(history.activeSessionId).not.toBe(id)
+    await act(async () => history.retryStorage())
+    expect(saveCodingSession).toHaveBeenCalledTimes(1)
+    expect(history.storageFailed).toBe(false)
+  })
+
+  it.each(['delete', 'clear'] as const)('does not replace a newer selected session after delayed %s acknowledgement', async (operation) => {
+    const removedId = history.activeSessionId
+    let release!: (value: { status: 'complete' }) => void
+    const remove = vi.fn(
+      () =>
+        new Promise<{ status: 'complete' }>((resolve) => {
+          release = resolve
+        }),
+    )
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      saveCodingSession,
+      listCodingSessions: vi.fn(async () => []),
+      deleteCodingSession: remove,
+      clearCodingSessions: remove,
+    }
+    let pending!: Promise<CodingSession | null>
+    await act(async () => {
+      pending = operation === 'delete' ? history.deleteSession(removedId) : history.clearSessions()
+      await Promise.resolve()
+    })
+    let selected!: CodingSession
+    act(() => {
+      selected = history.createSession()
+    })
+    let result: CodingSession | null = null
+    await act(async () => {
+      release({ status: 'complete' })
+      result = await pending
+    })
+    expect(history.activeSessionId).toBe(selected.id)
+    expect(result).toBeNull()
+  })
+
+  it.each(['delete', 'clear'] as const)('does not treat a missing %s port as acknowledged deletion', async (operation) => {
+    const id = history.activeSessionId
+    await act(async () => (operation === 'delete' ? history.deleteSession(id) : history.clearSessions()))
+    expect(history.activeSessionId).toBe(id)
+    expect(history.storageFailed).toBe(true)
+  })
+
+  it.each(['delete', 'clear'] as const)('ignores late %s success/refusal after changing workspace', async (operation) => {
+    const originalId = history.activeSessionId
+    for (const acknowledgement of [true, false]) {
+      let release!: (value: { status: 'complete' | 'refused' }) => void
+      const remove = vi.fn(
+        () =>
+          new Promise<{ status: 'complete' | 'refused' }>((resolve) => {
+            release = resolve
+          }),
+      )
+      ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+        saveCodingSession,
+        listCodingSessions: vi.fn(async () => []),
+        deleteCodingSession: remove,
+        clearCodingSessions: remove,
+      }
+      let pending!: Promise<CodingSession | null>
+      await act(async () => {
+        pending = operation === 'delete' ? history.deleteSession(originalId) : history.clearSessions()
+        await Promise.resolve()
+      })
+      await act(async () => root.render(<Harness workspacePath={`C:/workspace-${acknowledgement}`} />))
+      const selected = history.activeSessionId
+      await act(async () => {
+        release({ status: acknowledgement ? 'complete' : 'refused' })
+        await pending
+      })
+      expect(history.activeSessionId).toBe(selected)
+      expect(history.storageFailed).toBe(false)
+    }
+  })
+})

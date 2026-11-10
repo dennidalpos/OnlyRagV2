@@ -1,0 +1,318 @@
+import os
+import sys
+
+# Ensure sidecar directory and its parent directory are in sys.path for packaged Electron runtime
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_parent_dir = os.path.dirname(_current_dir)
+if _parent_dir not in sys.path:
+    sys.path.insert(0, _parent_dir)
+if _current_dir not in sys.path:
+    sys.path.insert(0, _current_dir)
+
+if __name__ == "__main__" and sys.argv[1:] == ["--xls-worker"]:
+    from sidecar.xls_worker import main as run_xls_worker
+    raise SystemExit(run_xls_worker())
+
+import asyncio
+import hmac
+import json
+import uuid
+from typing import List, Optional
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
+from sidecar.domain.document_limits import DocumentSizeError
+
+from sidecar.config import ALLOWED_ORIGINS, SIDECAR_AUTH_HEADER, SIDECAR_AUTH_TOKEN, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
+from sidecar.schemas import (
+    IngestResponse, IngestPathRequest, SearchRequest, SearchResult, HealthResponse,
+    DocumentRecord, DocumentSummary, DeleteResponse, ExportResponse, SuccessResponse,
+    TaskCancelResponse,
+    ExportRequest, UpdateDocumentRequest, PagePreviewResponse, SourceLocationResponse,
+    IndexPromptHistoryRequest, PromptHistorySearchRequest, PromptHistorySearchResult,
+    PromptHistoryRemoveRequest, TranslateInplaceRequest,
+)
+from sidecar.infrastructure.db import lance_db, get_existing_tables, run_db_maintenance, recover_database, DatabaseRecoveryError, DatabaseConflictError, database_operation
+from sidecar.infrastructure.ocr import detect_gpu_acceleration, get_ocr_runtime_info
+from sidecar.domain.exporter import export_markdown_to_file
+from sidecar.services.ingest_service import (
+    process_and_index_document_generator,
+    update_and_reindex_document,
+    render_document_page_preview
+)
+from sidecar.services.task_cancellation import cancel_task
+from sidecar.domain.translator import (
+    prepare_translation,
+    translate_document_stream,
+    UnsupportedDocumentTypeError
+)
+from sidecar.services.search_service import perform_vector_search, list_stored_documents, get_stored_document, delete_stored_document
+from sidecar.services.prompt_history_service import index_prompt_history, search_prompt_history, remove_prompt_history
+from sidecar.services.vocab_service import background_vocab_sync_startup
+from sidecar.infrastructure.source_provenance import resolve_source_location
+from sidecar.infrastructure.embeddings import DEFAULT_EMBEDDING_MODEL
+
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app_instance: FastAPI):
+    logger.info("FastAPI Sidecar starting up. Loading bundled vocabulary & DB maintenance...")
+    try:
+        await asyncio.to_thread(recover_database)
+    except DatabaseRecoveryError:
+        yield
+        return
+    # Held so the event loop cannot garbage-collect the tasks mid-flight.
+    startup_tasks = {
+        asyncio.create_task(background_vocab_sync_startup()),
+        asyncio.create_task(asyncio.to_thread(run_db_maintenance)),
+    }
+    yield
+    for task in startup_tasks:
+        task.cancel()
+    await asyncio.gather(*startup_tasks, return_exceptions=True)
+    logger.info("FastAPI Sidecar shutting down.")
+
+app = FastAPI(title="OnlyRag V2 Python Sidecar Engine", version="2.5.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.middleware("http")
+async def require_launch_token(request: Request, call_next):
+    """Rejects callers that lack the token Electron passed at launch.
+
+    A custom header also forces browsers into a CORS preflight, which the origin allowlist
+    refuses, so a web page can no longer post "simple" requests to the local API.
+    """
+    if SIDECAR_AUTH_TOKEN and request.url.path != "/health" and request.method != "OPTIONS":
+        supplied = request.headers.get(SIDECAR_AUTH_HEADER, "")
+        if not hmac.compare_digest(supplied.encode(), SIDECAR_AUTH_TOKEN.encode()):
+            return JSONResponse(status_code=401, content={"detail": "Missing or invalid sidecar token"})
+    return await call_next(request)
+
+
+@app.exception_handler(DatabaseConflictError)
+async def database_conflict_handler(request: Request, exc: DatabaseConflictError):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    error_id = uuid.uuid4().hex[:12]
+    logger.error(json.dumps({
+        "event": "unhandled_exception",
+        "error_id": error_id,
+        "method": request.method,
+        "path": request.url.path,
+        "error_type": type(exc).__name__,
+    }, sort_keys=True))
+    return JSONResponse(
+        status_code=503 if request.url.path == "/health" and isinstance(exc, DatabaseRecoveryError) else 500,
+        content={"detail": "Internal Server Error", "error_id": error_id}
+    )
+
+@app.get("/health", response_model=HealthResponse, responses={503: {"description": "Database unavailable or pending recovery"}})
+@database_operation
+def health_check():
+    doc_count, chunk_count = 0, 0
+    try:
+        if DOCS_TABLE_NAME in get_existing_tables():
+            doc_count = lance_db.open_table(DOCS_TABLE_NAME).count_rows()
+        if CHUNKS_TABLE_NAME in get_existing_tables():
+            chunk_count = lance_db.open_table(CHUNKS_TABLE_NAME).count_rows()
+    except Exception as e:
+        logger.error(f"Error checking LanceDB status: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable") from e
+
+    gpu_info = detect_gpu_acceleration()
+    ocr_info = get_ocr_runtime_info()
+
+    return {
+        "status": "online",
+        "engine": "FastAPI Python Sidecar + LanceDB OCR Engine V2",
+        "version": "2.5.0",
+        "vector_db": "LanceDB Embedded",
+        "gpu": gpu_info,
+        "ocr": ocr_info,
+        "documents_count": doc_count,
+        "chunks_count": chunk_count,
+        "python_version": sys.version
+    }
+
+@app.post("/ingest-path-stream", description=(
+    "NDJSON progress/done/error/cancelled stream. Rejected LLM normalization returns an error "
+    "with normalization_review: original_markdown (the complete pre-normalization extraction) "
+    "and issues (page, reason). No document or chunks are indexed for that outcome. "
+    "num_ctx is shared by Vision OCR and optional normalization. Normalization-eligible pages "
+    "without a selected context return context_missing; insufficient input/output budget returns "
+    "context_budget_exceeded, preserving the complete original without generation or indexing."
+))
+async def ingest_document_by_path_stream(req: IngestPathRequest):
+    logger.info(f"Received path for streaming ingestion: {req.file_path} (normalize_with_llm={req.normalize_with_llm})")
+    resolved_path = os.path.abspath(req.file_path)
+    if not os.path.exists(resolved_path) or not os.path.isfile(resolved_path):
+        raise HTTPException(status_code=400, detail="Invalid or non-existent file path")
+    return StreamingResponse(
+        process_and_index_document_generator(
+            resolved_path,
+            task_id=req.task_id,
+            vision_model=req.vision_model, vision_prompt=req.vision_prompt,
+            normalize_with_llm=bool(req.normalize_with_llm),
+            normalization_model=req.normalization_model,
+            normalization_think=bool(req.normalization_think),
+            num_ctx=req.num_ctx,
+            max_tabular_rows=req.max_tabular_rows,
+            max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
+            max_excel_sheets=req.max_excel_sheets,
+            allow_full_excel_format=req.allow_full_excel_format,
+            embedding_model=req.embedding_model or DEFAULT_EMBEDDING_MODEL,
+        ),
+        media_type="application/x-ndjson"
+    )
+
+@app.put("/documents/{doc_id}", response_model=IngestResponse, responses={409: {"description": "Document changed during re-indexing"}, 413: {"description": "Sanitized document exceeds its text budget"}, 500: {"description": "Database update failed"}})
+async def update_document(doc_id: str, req: UpdateDocumentRequest):
+    logger.info(f"Updating and re-indexing document {doc_id} in LanceDB")
+    try:
+        return await asyncio.to_thread(
+            update_and_reindex_document,
+            doc_id,
+            req.markdown_content,
+            req.expected_revision,
+            req.embedding_model or DEFAULT_EMBEDDING_MODEL,
+        )
+    except DocumentSizeError as size_err:
+        raise HTTPException(status_code=413, detail=str(size_err))
+    except ValueError as val_err:
+        raise HTTPException(status_code=404, detail=str(val_err))
+    except Exception as e:
+        logger.error(f"Error updating document {doc_id}: {e}")
+        raise
+
+@app.post("/documents/{doc_id}/translate-inplace-stream")
+async def translate_document_inplace_stream_endpoint(doc_id: str, req: TranslateInplaceRequest):
+    logger.info(f"Streaming in-place translation requested for document {doc_id}: {req.source_lang} -> {req.target_lang}")
+    try:
+        record = await asyncio.to_thread(prepare_translation, doc_id)
+    except UnsupportedDocumentTypeError as type_err:
+        raise HTTPException(status_code=400, detail=str(type_err))
+    except ValueError as val_err:
+        raise HTTPException(status_code=404, detail=str(val_err))
+    return StreamingResponse(
+        translate_document_stream(
+            record,
+            req.source_lang,
+            req.target_lang,
+            model=req.model,
+            target_dir=req.target_dir,
+            num_ctx=req.num_ctx,
+            think=req.think if isinstance(req.think, str) else bool(req.think),
+            task_id=req.task_id,
+        ),
+        media_type="application/x-ndjson",
+    )
+
+@app.get("/documents/{doc_id}/page-preview/{page_num}", response_model=PagePreviewResponse)
+async def get_page_preview(doc_id: str, page_num: int):
+    logger.info(f"Rendering page preview for doc {doc_id}, page {page_num}")
+    try:
+        return await asyncio.to_thread(render_document_page_preview, doc_id, page_num)
+    except ValueError as val_err:
+        raise HTTPException(status_code=404, detail=str(val_err))
+    except Exception as e:
+        logger.error(f"Error rendering page preview: {e}")
+        raise
+
+@app.get("/documents/{doc_id}/source-location", response_model=SourceLocationResponse)
+async def get_source_location(doc_id: str, chunk_id: str = Query(min_length=1, max_length=200),
+                              source_revision: str = Query(pattern=r"^[a-f0-9]{64}$"),
+                              extraction_revision: str = Query(pattern=r"^[a-f0-9]{64}$"),
+                              index_revision: str = Query(pattern=r"^[a-f0-9]{64}$"),
+                              span_start: int = Query(ge=0), span_end: int = Query(ge=1, le=10_000_000)):
+    try:
+        return await asyncio.to_thread(resolve_source_location, doc_id, chunk_id, source_revision,
+                                       extraction_revision, index_revision, span_start, span_end)
+    except (ValueError, FileNotFoundError) as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@app.get("/documents", response_model=List[DocumentSummary], responses={500: {"description": "Database read failed"}})
+async def list_documents():
+    return await asyncio.to_thread(list_stored_documents)
+
+@app.get("/documents/{doc_id}", response_model=DocumentRecord, responses={500: {"description": "Database read failed"}})
+async def get_document(doc_id: str):
+    try:
+        document = await asyncio.to_thread(get_stored_document, doc_id)
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
+    if document is None:
+        raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
+    return document
+
+@app.delete("/documents/{doc_id}", response_model=DeleteResponse, responses={500: {"description": "Database deletion failed"}})
+async def delete_document(doc_id: str):
+    try:
+        return await asyncio.to_thread(delete_stored_document, doc_id)
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
+    except Exception as e:
+        logger.error(f"Error deleting document {doc_id}: {e}")
+        raise
+
+@app.post("/vector/search", response_model=List[SearchResult], responses={409: {"description": "Database changed during query encoding"}, 500: {"description": "Database search failed"}})
+async def search_vector_db(req: SearchRequest):
+    logger.info("Performing LanceDB vector search (query_length=%s, top_k=%s)", len(req.query), req.top_k)
+    return await asyncio.to_thread(perform_vector_search, req)
+
+@app.post("/history/index", response_model=SuccessResponse)
+async def index_history(req: IndexPromptHistoryRequest):
+    try:
+        await asyncio.to_thread(index_prompt_history, req)
+        return {"success": True}
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
+    except Exception as e:
+        logger.error(f"Error indexing prompt history entry {req.id}: {e}")
+        raise
+
+@app.post("/history/search", response_model=List[PromptHistorySearchResult])
+async def search_history(req: PromptHistorySearchRequest):
+    return await asyncio.to_thread(search_prompt_history, req)
+
+@app.post("/history/remove", response_model=SuccessResponse)
+async def remove_history(req: PromptHistoryRemoveRequest):
+    try:
+        return await asyncio.to_thread(remove_prompt_history, req)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+@app.post("/export", response_model=ExportResponse)
+async def export_document(req: ExportRequest):
+    logger.info(f"Exporting markdown content to format: {req.export_format}")
+    if not req.markdown_content.strip():
+        raise HTTPException(status_code=400, detail="Markdown content is empty")
+    try:
+        return await asyncio.to_thread(export_markdown_to_file, req.markdown_content, req.export_format)
+    except Exception as e:
+        logger.error(f"Export failed: {e}")
+        raise
+
+@app.post("/tasks/cancel", response_model=TaskCancelResponse)
+async def cancel_sidecar_task(task_id: Optional[str] = Query(None)):
+    if not task_id:
+        raise HTTPException(status_code=400, detail="task_id is required")
+    cancel_task(task_id)
+    logger.info(f"Cancellation requested for task: {task_id}")
+    return {"status": "success", "message": f"Cancellation requested for task {task_id}"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)

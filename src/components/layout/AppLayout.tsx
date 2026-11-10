@@ -1,0 +1,683 @@
+import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react'
+import { AppSettings } from '../../types'
+import { DEFAULT_APP_SETTINGS } from '../../../shared/domain/settings/appSettingsDefaults'
+import { Layers, FileText, MessageSquare, Languages, Code, Settings, Zap, Cpu, HardDrive, Terminal, Info, Globe, Download, Check, X } from 'lucide-react'
+// The five main views are code-split: only the tabs the user actually opens are
+// downloaded, instead of shipping every view inside the initial renderer chunk.
+const SettingsView = lazy(() => import('../settings/SettingsView').then((m) => ({ default: m.SettingsView })))
+const IngestionView = lazy(() => import('../ingestion/IngestionView').then((m) => ({ default: m.IngestionView })))
+const ChatView = lazy(() => import('../chat/ChatView').then((m) => ({ default: m.ChatView })))
+const TranslationView = lazy(() => import('../translation/TranslationView').then((m) => ({ default: m.TranslationView })))
+const CodingAgentView = lazy(() => import('../coding/CodingAgentView').then((m) => ({ default: m.CodingAgentView })))
+const DiagnosticsDrawer = lazy(() => import('../diagnostics/DiagnosticsDrawer').then((m) => ({ default: m.DiagnosticsDrawer })))
+const AboutModal = lazy(() => import('../common/AboutModal').then((m) => ({ default: m.AboutModal })))
+const HardwareSetupWizardModal = lazy(() => import('../common/HardwareSetupWizardModal').then((m) => ({ default: m.HardwareSetupWizardModal })))
+import { OnlyRagLogo } from '../common/OnlyRagLogo'
+import { SystemRamBreakdown } from '../common/SystemRamBreakdown'
+import { useDiagnostics } from '../../hooks/useDiagnostics'
+import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
+import { notifyTabChanged } from '../../hooks/useIngestedDocuments'
+import { useTranslation, Language } from '../../i18n'
+import { logger } from '../../lib/logger'
+import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
+import { errorMessage } from '../../../shared/domain/errors/errorMessage'
+import { useSettingsPersistence } from '../../hooks/useSettingsPersistence'
+
+export type NavTab = 'ingestion' | 'chat' | 'translation' | 'coding' | 'settings'
+
+/** Shown only while a view chunk is being fetched for the first time. */
+const ViewChunkFallback: React.FC = () => {
+  const { t } = useTranslation()
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="h-full w-full flex flex-col items-center justify-center text-slate-400 text-xs font-sans gap-3 animate-in fade-in duration-150"
+    >
+      <div className="w-6 h-6 rounded-full border-2 border-cyan-500/80 border-t-transparent animate-spin shadow-sm shadow-cyan-950" />
+      <span className="font-medium text-slate-300">{t('common.loadingInterface')}</span>
+    </div>
+  )
+}
+
+export const AppLayout: React.FC = () => {
+  const { t, language, setLanguage } = useTranslation()
+  const [activeTab, setActiveTab] = useState<NavTab>(() => {
+    try {
+      const savedTab = localStorage.getItem('onlyrag_active_tab') as NavTab
+      if (savedTab && ['ingestion', 'chat', 'translation', 'coding', 'settings'].includes(savedTab)) {
+        return savedTab
+      }
+    } catch (err: unknown) {
+      logger.warn('AppLayout', `Failed reading active tab from localStorage: ${errorMessage(err)}`)
+    }
+    return 'ingestion'
+  })
+  // A view is mounted from the first time its tab is opened and stays mounted afterwards,
+  // so switching tabs never discards the state of a view already in use.
+  const [visitedTabs, setVisitedTabs] = useState<Set<NavTab>>(() => new Set<NavTab>([activeTab]))
+  useEffect(() => {
+    setVisitedTabs((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)))
+  }, [activeTab])
+
+  const [isDiagnosticsDrawerOpen, setIsDiagnosticsDrawerOpen] = useState(false)
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false)
+  const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false)
+  const [ollamaSetupFeedback, setOllamaSetupFeedback] = useState<'manual-download' | 'launched' | 'error' | null>(null)
+
+  const [settings, setSettings] = useState<AppSettings>(() => ({ ...DEFAULT_APP_SETTINGS }))
+  // Nothing is saved, migrated or diagnosed until settings.json has been read: a failed read must never be
+  // mistaken for a first launch, or the defaults held in memory would overwrite the user's file.
+  const [settingsBootstrap, setSettingsBootstrap] = useState<{ status: 'loading' | 'ready' | 'failed'; error?: string }>({ status: 'loading' })
+  const [settingsLoadAttempt, setSettingsLoadAttempt] = useState(0)
+  const settingsReady = settingsBootstrap.status === 'ready'
+  const [settingsSaveAttempt, setSettingsSaveAttempt] = useState(0)
+  const settingsSave = useSettingsPersistence(settings, settingsReady, settingsSaveAttempt)
+  const isRemoteOllama = isRemoteOllamaMode(settings)
+
+  // Load and synchronize settings with canonical Electron main process filesystem store
+  useEffect(() => {
+    let isMounted = true
+    const loadMainSettings = async () => {
+      if (!window.electronAPI?.getAppSettings) return
+      setSettingsBootstrap({ status: 'loading' })
+      try {
+        const backendSettings = await window.electronAPI.getAppSettings()
+        if (!isMounted) return
+        if (backendSettings) {
+          setSettings(backendSettings)
+          if (backendSettings.language && backendSettings.language !== language) setLanguage(backendSettings.language)
+        }
+        if (!backendSettings?.hasCompletedInitialSetup && !backendSettings?.defaultModel) setIsWizardOpen(true)
+        setSettingsBootstrap({ status: 'ready' })
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        logger.error('AppLayout', `Failed initializing settings from filesystem store: ${message}`)
+        if (isMounted) setSettingsBootstrap({ status: 'failed', error: message })
+      }
+    }
+    loadMainSettings()
+    return () => {
+      isMounted = false
+    }
+  }, [setLanguage, settingsLoadAttempt])
+
+  const handleUpdateSettings = useCallback(
+    (newSettings: Partial<AppSettings>) => {
+      // Update the language provider outside the settings state updater.
+      if (newSettings.language && newSettings.language !== language) {
+        setLanguage(newSettings.language)
+      }
+
+      setSettings((prev) => ({ ...prev, ...newSettings }))
+    },
+    [language, setLanguage],
+  )
+
+  const { diagnostics, refreshDiagnostics: runDiagnosticsScan } = useDiagnostics(settings, settingsReady)
+  const sidecarStatus = diagnostics?.sidecar?.status ?? 'checking'
+  const sidecarStatusColor = sidecarStatus === 'online' ? 'text-emerald-400' : sidecarStatus === 'checking' ? 'text-cyan-400' : 'text-rose-400'
+  const {
+    isDownloading: isModelDownloading,
+    modelName: downloadingModelName,
+    percent: downloadPercent,
+    mbCompleted: downloadMbCompleted,
+    mbTotal: downloadMbTotal,
+    status: downloadStatus,
+    lastCompletedModel,
+    cancelDownload: cancelModelDownload,
+  } = useModelDownloadProgress()
+
+  // Immediately refresh diagnostics when a model completes downloading
+  useEffect(() => {
+    if (lastCompletedModel) {
+      runDiagnosticsScan()
+    }
+  }, [lastCompletedModel, runDiagnosticsScan])
+
+  const handleCloseWizard = useCallback(() => {
+    setIsWizardOpen(false)
+    handleUpdateSettings({ hasCompletedInitialSetup: true })
+  }, [handleUpdateSettings])
+
+  const handleOpenWizard = useCallback(() => setIsWizardOpen(true), [])
+  const handleOpenDiagnostics = useCallback(() => setIsDiagnosticsDrawerOpen(true), [])
+  const handleCloseDiagnostics = useCallback(() => setIsDiagnosticsDrawerOpen(false), [])
+  const handleOpenAboutModal = useCallback(() => setIsAboutModalOpen(true), [])
+  const handleCloseAboutModal = useCallback(() => setIsAboutModalOpen(false), [])
+
+  const handleSelectTab = (tab: NavTab) => {
+    setActiveTab(tab)
+    try {
+      localStorage.setItem('onlyrag_active_tab', tab)
+    } catch (err: unknown) {
+      logger.warn('AppLayout', `Failed saving active tab to localStorage: ${errorMessage(err)}`)
+    }
+    notifyTabChanged(tab)
+  }
+
+  const toggleLanguage = () => {
+    const nextLang: Language = language === 'it' ? 'en' : 'it'
+    setLanguage(nextLang)
+    handleUpdateSettings({ language: nextLang })
+  }
+
+  return (
+    <div className="flex h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden select-text">
+      {/* Navigation Sidebar */}
+      <aside className="w-64 max-[900px]:w-16 glass-panel border-r border-slate-800 flex flex-col justify-between p-4 max-[900px]:p-2 z-10 shrink-0 overflow-y-auto gap-4 [&>div]:shrink-0">
+        <div>
+          {/* App Branding */}
+          <div className="flex items-center justify-between max-[900px]:flex-col max-[900px]:gap-2 px-2 max-[900px]:px-0 py-3 mb-6 border-b border-slate-800/80">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-900/90 border border-cyan-500/30 flex items-center justify-center p-1.5 shadow-lg shadow-cyan-950/40 relative overflow-hidden group">
+                <div className="absolute inset-0 bg-cyan-500/10 opacity-50 group-hover:opacity-100 transition-opacity" />
+                <OnlyRagLogo className="w-full h-full object-contain relative z-10 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+              </div>
+              <div className="max-[900px]:hidden">
+                <div className="font-bold text-base tracking-wide text-slate-100">{t('common.appName')}</div>
+                <div className="text-[11px] text-cyan-400 font-medium">{t('common.tagline')}</div>
+              </div>
+            </div>
+
+            {/* Language Switcher Badge */}
+            <button
+              type="button"
+              onClick={toggleLanguage}
+              title={t('sidebar.switchLanguage')}
+              aria-label={t('sidebar.switchLanguage')}
+              className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-lg text-[10px] font-bold text-cyan-400 flex items-center gap-1 transition-all focus-ring active:scale-95 shadow-sm"
+            >
+              <Globe className="w-3 h-3" />
+              <span>{language.toUpperCase()}</span>
+            </button>
+          </div>
+
+          {/* Navigation Links */}
+          <nav
+            className="space-y-1.5"
+            role="tablist"
+            aria-label="Main application navigation"
+            aria-orientation="vertical"
+            onKeyDown={(e) => {
+              const tabs: NavTab[] = ['ingestion', 'chat', 'translation', 'coding', 'settings']
+              const currentIndex = tabs.indexOf(activeTab)
+              if (e.key === 'Home' || e.key === 'End') {
+                e.preventDefault()
+                const target = e.key === 'Home' ? tabs[0] : tabs[tabs.length - 1]
+                handleSelectTab(target)
+                document.getElementById(`tab-${target}`)?.focus()
+              } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                e.preventDefault()
+                const nextIndex = (currentIndex + 1) % tabs.length
+                handleSelectTab(tabs[nextIndex])
+                document.getElementById(`tab-${tabs[nextIndex]}`)?.focus()
+              } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                e.preventDefault()
+                const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length
+                handleSelectTab(tabs[prevIndex])
+                document.getElementById(`tab-${tabs[prevIndex]}`)?.focus()
+              }
+            }}
+          >
+            <button
+              type="button"
+              role="tab"
+              tabIndex={activeTab === 'ingestion' ? 0 : -1}
+              aria-selected={activeTab === 'ingestion'}
+              aria-controls="panel-ingestion"
+              id="tab-ingestion"
+              onClick={() => handleSelectTab('ingestion')}
+              aria-label={t('navigation.ingestion')}
+              className={`w-full flex items-center gap-3 max-[900px]:justify-center px-3.5 max-[900px]:px-2 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
+                activeTab === 'ingestion'
+                  ? 'bg-slate-900 text-cyan-300 border-l-2 border-cyan-400 font-semibold shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+              }`}
+            >
+              <FileText className="w-4 h-4 shrink-0" /> <span className="max-[900px]:hidden">{t('navigation.ingestion')}</span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              tabIndex={activeTab === 'chat' ? 0 : -1}
+              aria-selected={activeTab === 'chat'}
+              aria-controls="panel-chat"
+              id="tab-chat"
+              onClick={() => handleSelectTab('chat')}
+              aria-label={t('navigation.chat')}
+              className={`w-full flex items-center gap-3 max-[900px]:justify-center px-3.5 max-[900px]:px-2 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
+                activeTab === 'chat'
+                  ? 'bg-slate-900 text-cyan-300 border-l-2 border-cyan-400 font-semibold shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4 shrink-0" /> <span className="max-[900px]:hidden">{t('navigation.chat')}</span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              tabIndex={activeTab === 'translation' ? 0 : -1}
+              aria-selected={activeTab === 'translation'}
+              aria-controls="panel-translation"
+              id="tab-translation"
+              onClick={() => handleSelectTab('translation')}
+              aria-label={t('navigation.translation')}
+              className={`w-full flex items-center gap-3 max-[900px]:justify-center px-3.5 max-[900px]:px-2 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
+                activeTab === 'translation'
+                  ? 'bg-slate-900 text-cyan-300 border-l-2 border-cyan-400 font-semibold shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+              }`}
+            >
+              <Languages className="w-4 h-4 shrink-0" /> <span className="max-[900px]:hidden">{t('navigation.translation')}</span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              tabIndex={activeTab === 'coding' ? 0 : -1}
+              aria-selected={activeTab === 'coding'}
+              aria-controls="panel-coding"
+              id="tab-coding"
+              onClick={() => handleSelectTab('coding')}
+              aria-label={t('navigation.coding')}
+              className={`w-full flex items-center gap-3 max-[900px]:justify-center px-3.5 max-[900px]:px-2 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
+                activeTab === 'coding'
+                  ? 'bg-slate-900 text-cyan-300 border-l-2 border-cyan-400 font-semibold shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+              }`}
+            >
+              <Code className="w-4 h-4 shrink-0" /> <span className="max-[900px]:hidden">{t('navigation.coding')}</span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              tabIndex={activeTab === 'settings' ? 0 : -1}
+              aria-selected={activeTab === 'settings'}
+              aria-controls="panel-settings"
+              id="tab-settings"
+              onClick={() => handleSelectTab('settings')}
+              aria-label={t('navigation.settings')}
+              className={`w-full flex items-center gap-3 max-[900px]:justify-center px-3.5 max-[900px]:px-2 py-2.5 rounded-xl text-xs font-medium transition-all focus-ring active:scale-95 ${
+                activeTab === 'settings'
+                  ? 'bg-slate-900 text-cyan-300 border-l-2 border-cyan-400 font-semibold shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+              }`}
+            >
+              <Settings className="w-4 h-4 shrink-0" /> <span className="max-[900px]:hidden">{t('navigation.settings')}</span>
+            </button>
+          </nav>
+        </div>
+
+        {/* Hardware Status Widget & Diagnostics Button */}
+        <div className="space-y-3 pt-4 border-t border-slate-800/80">
+          <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2 max-[900px]:hidden">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-400 flex items-center gap-1.5">
+                <Layers className={`w-3 h-3 ${sidecarStatusColor}`} />
+                {t('sidebar.sidecarLanceDb')}
+              </span>
+              <span className={`font-semibold capitalize text-[10px] font-mono ${sidecarStatusColor}`}>
+                {sidecarStatus === 'online'
+                  ? `${diagnostics?.sidecar.documentsCount || 0} Docs`
+                  : sidecarStatus === 'checking'
+                    ? t('common.checking')
+                    : t('common.offline')}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-400 flex items-center gap-1.5">
+                <Zap className={`w-3 h-3 ${diagnostics?.ollama.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`} />
+                {t('sidebar.ollamaLocal')}
+              </span>
+              <span className={`font-semibold capitalize ${diagnostics?.ollama.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {diagnostics?.ollama.status === 'online'
+                  ? t('common.online')
+                  : diagnostics?.ollama.status === 'checking'
+                    ? t('common.checking')
+                    : t('common.offline')}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-400 flex items-center gap-1.5">
+                <Cpu className="w-3 h-3 text-cyan-400" />
+                {t('sidebar.gpuVram')}
+              </span>
+              <span className="font-mono text-slate-200 text-[10px]">
+                {diagnostics?.gpu.hasNvidiaGpu ? `${diagnostics.gpu.vramUsedMB}/${diagnostics.gpu.vramTotalMB} MB` : t('sidebar.cpuOnly')}
+              </span>
+            </div>
+
+            <div className="space-y-1 text-[11px]">
+              <div className="text-slate-400 flex items-center gap-1.5">
+                <HardDrive className="w-3 h-3 text-sky-400" />
+                {t('sidebar.systemRam')}
+              </div>
+              <SystemRamBreakdown memory={diagnostics?.memory} />
+            </div>
+          </div>
+
+          {diagnostics?.ollama.status !== 'online' && !isRemoteOllama && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (window.electronAPI?.installOrLaunchOllama) {
+                  setOllamaSetupFeedback(null)
+                  try {
+                    const result = await window.electronAPI.installOrLaunchOllama()
+                    if (!result.success) {
+                      logger.error('AppLayout', result.error)
+                      setOllamaSetupFeedback('error')
+                    } else {
+                      setOllamaSetupFeedback(result.action)
+                      if (result.action === 'launched') runDiagnosticsScan()
+                    }
+                  } catch (err: unknown) {
+                    logger.error('AppLayout', `Ollama setup failed: ${errorMessage(err)}`)
+                    setOllamaSetupFeedback('error')
+                  }
+                }
+              }}
+              aria-label={t('sidebar.installLaunchOllama')}
+              className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-cyan-950/40 max-[900px]:hidden"
+            >
+              <Zap className="w-3.5 h-3.5 fill-current" /> {t('sidebar.installLaunchOllama')}
+            </button>
+          )}
+
+          {diagnostics?.ollama.status !== 'online' && !isRemoteOllama && ollamaSetupFeedback && (
+            <p role="status" aria-live="polite" className="text-xs text-slate-300">
+              {ollamaSetupFeedback === 'manual-download'
+                ? t('sidebar.ollamaSetupManual')
+                : ollamaSetupFeedback === 'launched'
+                  ? t('sidebar.ollamaSetupLaunched')
+                  : t('sidebar.ollamaSetupError')}
+            </p>
+          )}
+
+          {diagnostics?.ollama.status !== 'online' && isRemoteOllama && (
+            <div className="grid grid-cols-2 gap-2 max-[900px]:hidden">
+              <button
+                type="button"
+                onClick={runDiagnosticsScan}
+                aria-label={t('sidebar.retryRemoteOllama')}
+                className="py-2 bg-sky-950/60 hover:bg-sky-900/70 border border-sky-700/60 text-sky-300 text-[11px] font-semibold rounded-xl transition-all focus-ring"
+              >
+                {t('sidebar.retryRemoteOllama')}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTab('settings')}
+                aria-label={t('sidebar.configureRemoteOllama')}
+                className="py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold rounded-xl transition-all focus-ring"
+              >
+                {t('sidebar.configureRemoteOllama')}
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 max-[900px]:flex-col">
+            <button
+              type="button"
+              onClick={handleOpenWizard}
+              aria-label={t('settings.hardwareWizard')}
+              title={t('settings.hardwareWizard')}
+              className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 font-medium rounded-xl transition-all focus-ring active:scale-95"
+            >
+              <Zap className="w-4 h-4 text-cyan-400 fill-cyan-400/20" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenDiagnostics}
+              aria-label={t('sidebar.logsConsole')}
+              className="flex-1 max-[900px]:flex-none max-[900px]:w-full py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-medium rounded-xl transition-all focus-ring active:scale-95 flex items-center justify-center gap-1.5"
+            >
+              <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="truncate max-[900px]:hidden">{t('sidebar.logsConsole')}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenAboutModal}
+              aria-label={t('sidebar.contributionsAndInfo')}
+              title={t('sidebar.contributionsAndInfo')}
+              className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 font-medium rounded-xl transition-all focus-ring active:scale-95"
+            >
+              <Info className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main App Content View */}
+      <main className="flex-1 min-w-0 h-full flex flex-col overflow-hidden relative">
+        {settingsReady && settingsSave.status !== 'idle' && (
+          <div
+            role={settingsSave.status === 'failed' ? 'alert' : 'status'}
+            aria-atomic="true"
+            data-testid="settings-save-status"
+            className={`shrink-0 flex items-center gap-3 px-4 py-2 border-b text-xs ${
+              settingsSave.status === 'failed' ? 'border-amber-600/60 bg-amber-950 text-amber-100' : 'border-slate-800 bg-slate-900 text-slate-400'
+            }`}
+          >
+            <span className="flex-1">
+              {settingsSave.status === 'failed'
+                ? t('sidebar.settingsSaveFailed')
+                : t(settingsSave.status === 'saving' ? 'sidebar.settingsSaving' : 'sidebar.settingsSaved')}
+            </span>
+            {settingsSave.status === 'failed' && (
+              <button
+                type="button"
+                data-testid="settings-save-retry"
+                onClick={() => setSettingsSaveAttempt((attempt) => attempt + 1)}
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold focus-ring"
+              >
+                {t('sidebar.settingsLoadRetry')}
+              </button>
+            )}
+          </div>
+        )}
+        {settingsBootstrap.status === 'failed' && (
+          <div
+            role="alert"
+            data-testid="settings-bootstrap-error"
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-40 w-[min(36rem,calc(100%-2rem))] flex items-start gap-3 px-4 py-3 rounded-xl border border-amber-600/60 bg-amber-950/90 text-amber-100 text-xs shadow-lg shadow-black/40"
+          >
+            <span className="flex-1 leading-relaxed">{t('sidebar.settingsLoadFailed', { error: settingsBootstrap.error || '-' })}</span>
+            <button
+              type="button"
+              onClick={() => setSettingsLoadAttempt((attempt) => attempt + 1)}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold transition-all focus-ring"
+            >
+              {t('sidebar.settingsLoadRetry')}
+            </button>
+          </div>
+        )}
+        <div
+          id="panel-ingestion"
+          role="tabpanel"
+          aria-labelledby="tab-ingestion"
+          className={`flex-1 min-h-0 w-full flex flex-col ${activeTab === 'ingestion' ? '' : 'hidden'}`}
+        >
+          {visitedTabs.has('ingestion') && (
+            <Suspense fallback={<ViewChunkFallback />}>
+              <IngestionView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} isActive={activeTab === 'ingestion'} />
+            </Suspense>
+          )}
+        </div>
+        <div
+          id="panel-chat"
+          role="tabpanel"
+          aria-labelledby="tab-chat"
+          className={`flex-1 min-h-0 w-full flex flex-col ${activeTab === 'chat' ? '' : 'hidden'}`}
+        >
+          {visitedTabs.has('chat') && (
+            <Suspense fallback={<ViewChunkFallback />}>
+              <ChatView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} isActive={activeTab === 'chat'} />
+            </Suspense>
+          )}
+        </div>
+        <div
+          id="panel-translation"
+          role="tabpanel"
+          aria-labelledby="tab-translation"
+          className={`flex-1 min-h-0 w-full flex flex-col ${activeTab === 'translation' ? '' : 'hidden'}`}
+        >
+          {visitedTabs.has('translation') && (
+            <Suspense fallback={<ViewChunkFallback />}>
+              <TranslationView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} isActive={activeTab === 'translation'} />
+            </Suspense>
+          )}
+        </div>
+        <div
+          id="panel-coding"
+          role="tabpanel"
+          aria-labelledby="tab-coding"
+          className={`flex-1 min-h-0 w-full flex flex-col ${activeTab === 'coding' ? '' : 'hidden'}`}
+        >
+          {visitedTabs.has('coding') && (
+            <Suspense fallback={<ViewChunkFallback />}>
+              <CodingAgentView settings={settings} onUpdateSettings={handleUpdateSettings} diagnostics={diagnostics} isActive={activeTab === 'coding'} />
+            </Suspense>
+          )}
+        </div>
+        <div
+          id="panel-settings"
+          role="tabpanel"
+          aria-labelledby="tab-settings"
+          className={`flex-1 min-h-0 w-full flex flex-col ${activeTab === 'settings' ? '' : 'hidden'}`}
+        >
+          {visitedTabs.has('settings') && (
+            <Suspense fallback={<ViewChunkFallback />}>
+              <SettingsView
+                diagnostics={diagnostics}
+                settings={settings}
+                onUpdateSettings={handleUpdateSettings}
+                onRefreshDiagnostics={runDiagnosticsScan}
+                onOpenAboutModal={handleOpenAboutModal}
+                onOpenWizard={handleOpenWizard}
+                isActive={activeTab === 'settings'}
+              />
+            </Suspense>
+          )}
+        </div>
+      </main>
+
+      {/* Diagnostics Drawer Modal */}
+      {isDiagnosticsDrawerOpen && (
+        <Suspense fallback={null}>
+          <DiagnosticsDrawer
+            isOpen={isDiagnosticsDrawerOpen}
+            onClose={handleCloseDiagnostics}
+            diagnostics={diagnostics}
+            onRefreshDiagnostics={runDiagnosticsScan}
+          />
+        </Suspense>
+      )}
+
+      {/* About & Contributions Modal */}
+      {isAboutModalOpen && (
+        <Suspense fallback={null}>
+          <AboutModal isOpen={isAboutModalOpen} onClose={handleCloseAboutModal} />
+        </Suspense>
+      )}
+
+      {/* Complete Hardware & Model Setup Wizard Modal */}
+      {isWizardOpen && (
+        <Suspense fallback={null}>
+          <HardwareSetupWizardModal
+            isOpen={isWizardOpen}
+            onClose={handleCloseWizard}
+            diagnostics={diagnostics}
+            settings={settings}
+            onUpdateSettings={handleUpdateSettings}
+            onRefreshDiagnostics={runDiagnosticsScan}
+            onOpenOllamaSettings={() => {
+              setIsWizardOpen(false)
+              handleSelectTab('settings')
+            }}
+            isInitialSetup={!settings.hasCompletedInitialSetup}
+          />
+        </Suspense>
+      )}
+
+      {/* Persistent Background Download Progress Banner / Pill */}
+      {(isModelDownloading || lastCompletedModel) && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 right-6 z-40 max-w-sm bg-slate-900/95 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-3.5 shadow-2xl shadow-cyan-950/40 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className={`p-2 rounded-xl shrink-0 ${
+                  isModelDownloading ? 'bg-cyan-500/20 text-cyan-400 animate-pulse' : 'bg-emerald-500/20 text-emerald-400'
+                }`}
+              >
+                {isModelDownloading ? <Download className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-200 truncate">
+                  {isModelDownloading ? (
+                    <>
+                      {t('common.download')}: <span className="text-cyan-400 font-mono">{downloadingModelName}</span>
+                    </>
+                  ) : (
+                    <>
+                      {t('common.done')}: <span className="text-emerald-400 font-mono">{lastCompletedModel}</span>
+                    </>
+                  )}
+                </p>
+                <p className="text-[11px] text-slate-400 truncate">
+                  {isModelDownloading
+                    ? `${downloadPercent}% • ${downloadMbCompleted} / ${downloadMbTotal} MB (${downloadStatus || t('common.inProgress')})`
+                    : t('common.modelReady')}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {!isWizardOpen && (
+                <button
+                  type="button"
+                  onClick={() => setIsWizardOpen(true)}
+                  aria-label={t('common.viewDetails')}
+                  className="px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-medium rounded-lg transition-all focus-ring active:scale-95"
+                >
+                  {t('common.viewDetails')}
+                </button>
+              )}
+              {isModelDownloading && (
+                <button
+                  type="button"
+                  onClick={cancelModelDownload}
+                  title={t('common.cancel')}
+                  aria-label={t('common.cancel')}
+                  className="p-1 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 rounded-lg transition-all focus-ring active:scale-95"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {isModelDownloading && (
+            <div className="w-full bg-slate-950/80 rounded-full h-1.5 overflow-hidden border border-slate-800">
+              <div
+                className="bg-gradient-to-r from-cyan-500 to-blue-500 h-full rounded-full transition-all duration-300"
+                style={{ width: `${downloadPercent}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

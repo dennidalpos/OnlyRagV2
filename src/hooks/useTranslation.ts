@@ -1,0 +1,655 @@
+import { useState, useRef, useCallback, useEffect, type MutableRefObject } from 'react'
+import { IngestedDocument, AppSettings, DiagnosticsData, OllamaThinkValue, TranslateProgressPayload } from '../types'
+import { electronApi } from '../services/electronApi'
+import { logger } from '../lib/logger'
+import { getEffectivePrompt } from '../constants/promptConfig'
+import { notifyDocumentsChanged, useIngestedDocuments } from './useIngestedDocuments'
+import { useDocumentMarkdown } from './useDocumentMarkdown'
+import { loadDocumentMarkdown } from '../services/documentMarkdown'
+import { useTranslation as useI18n } from '../i18n'
+import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from '../services/globalTaskLock'
+import { normalizeError } from '../lib/errors/errorNormalizer'
+import { resolveModelContextLength } from '../../shared/domain/settings/modelContextPreference'
+import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
+import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
+import { useOllamaModelMetrics } from './useOllamaModelMetrics'
+import { useOllamaGenerationState } from './useOllamaGenerationState'
+import { chosenThinkValue, resolveOllamaThinkingPreference } from '../../shared/domain/agent/ollamaThinkingPolicy'
+import { resolveConfiguredModel } from '../../shared/domain/settings/configuredModel'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import type { OnMount } from '@monaco-editor/react'
+import { prepareTranslationPrompts, splitMarkdownForTranslation, TranslationChunkError } from '../services/translationChunks'
+
+/** The editor instance Monaco hands to `onMount`; a type-only import, so Monaco still loads on demand. */
+type MonacoCodeEditor = Parameters<OnMount>[0]
+
+export const LANGUAGES = ['English', 'Italian', 'German', 'French', 'Spanish', 'Portuguese', 'Russian', 'Chinese', 'Japanese']
+
+export function extractPageMarkdown(fullMarkdown: string, pageNumber: number): string {
+  if (!fullMarkdown) return ''
+  const header = new RegExp(`^#{1,2}[ \\t]+Page[ \\t]+${pageNumber}\\b`, 'i')
+  // Page markers inside a fence are document content, including in the single-page view.
+  const pages = splitMarkdownForTranslation(fullMarkdown, Number.MAX_SAFE_INTEGER)
+  return pages.find((page) => header.test(page))?.trim() ?? fullMarkdown
+}
+
+const isLayoutTranslatable = (doc: IngestedDocument) => doc.fileType === 'pdf' || doc.fileType === 'docx'
+
+export type TranslationJobKind = 'markdown' | 'inplace'
+
+/** State both translators of one view share: the language pair and which of them is running. */
+export interface SharedTranslationState {
+  sourceLang: string
+  setSourceLang: (lang: string) => void
+  targetLang: string
+  setTargetLang: (lang: string) => void
+  activeJob: TranslationJobKind | null
+  activeJobRef: MutableRefObject<TranslationJobKind | null>
+  setActiveJob: (job: TranslationJobKind | null) => void
+}
+
+/** Owned by the view that mounts both translators, so one job at a time runs across its tabs. */
+export function useSharedTranslationState(): SharedTranslationState {
+  const [sourceLang, setSourceLang] = useState('Italian')
+  const [targetLang, setTargetLang] = useState('English')
+  const [activeJob, updateActiveJob] = useState<TranslationJobKind | null>(null)
+  const activeJobRef = useRef<TranslationJobKind | null>(null)
+  const setActiveJob = useCallback((job: TranslationJobKind | null) => {
+    activeJobRef.current = job
+    updateActiveJob(job)
+  }, [])
+  return { sourceLang, setSourceLang, targetLang, setTargetLang, activeJob, activeJobRef, setActiveJob }
+}
+
+/**
+ * Common translation setup; each translator owns its document selection.
+ */
+function useTranslationBase(
+  settings: AppSettings | undefined,
+  diagnostics: DiagnosticsData | null | undefined,
+  jobKind: TranslationJobKind,
+  acceptsDocument?: (doc: IngestedDocument) => boolean,
+  sharedState?: SharedTranslationState,
+) {
+  const { t } = useI18n()
+  const { metrics: modelMetrics } = useOllamaModelMetrics(settings?.ollamaHost)
+  const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics || null))
+  const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
+  const ownState = useSharedTranslationState()
+  const { sourceLang, setSourceLang, targetLang, setTargetLang, activeJob, activeJobRef, setActiveJob } = sharedState ?? ownState
+  const [isTranslating, updateIsTranslating] = useState(false)
+  const ownsJobRef = useRef(false)
+  /** The other translator of the same view is running: both use the same 'translation' lock key. */
+  const otherJobRunning = activeJob !== null && activeJob !== jobKind
+
+  // Claim preparation synchronously, before document reads or stream dispatch.
+  const setIsTranslating = useCallback(
+    (busy: boolean): boolean => {
+      if (busy) {
+        if (ownsJobRef.current || activeJobRef.current !== null || peekGlobalTaskLock() !== null || !acquireGlobalTaskLock('translation')) return false
+        ownsJobRef.current = true
+        setActiveJob(jobKind)
+      } else if (ownsJobRef.current) {
+        ownsJobRef.current = false
+        releaseGlobalTaskLock('translation')
+        if (activeJobRef.current === jobKind) setActiveJob(null)
+      }
+      updateIsTranslating(busy)
+      return true
+    },
+    [activeJobRef, jobKind, setActiveJob],
+  )
+  useEffect(
+    () => () => {
+      // In-place work owns its lock until its IPC promise settles, even after unmount.
+      if (!ownsJobRef.current || jobKind === 'inplace') return
+      ownsJobRef.current = false
+      releaseGlobalTaskLock('translation')
+      if (activeJobRef.current === jobKind) setActiveJob(null)
+    },
+    [activeJobRef, jobKind, setActiveJob],
+  )
+
+  const acceptsDocumentRef = useRef(acceptsDocument)
+  const handleDocsUpdated = useCallback((docs: IngestedDocument[]) => {
+    const accepted = acceptsDocumentRef.current ? docs.filter(acceptsDocumentRef.current) : docs
+    setSelectedDoc((prev) => (prev && accepted.find((d) => d.id === prev.id)) || accepted[0] || null)
+  }, [])
+
+  const { documents: allDocuments, documentCollection, refetchDocuments: fetchDocuments } = useIngestedDocuments({ onDocsUpdated: handleDocsUpdated })
+  const documents = acceptsDocument ? allDocuments.filter(acceptsDocument) : allDocuments
+
+  const handleSwapLanguages = () => {
+    setSourceLang(targetLang)
+    setTargetLang(sourceLang)
+  }
+
+  /** Message explaining why another module's running task blocks translation, or null when translation may start. */
+  const crossModuleBlockMessage = (): string | null => {
+    if (activeJobRef.current !== null && activeJobRef.current !== jobKind) return t('translation.otherJobRunning')
+    const busyModule = peekGlobalTaskLock()
+    if (!busyModule) return null
+    if (busyModule === 'translation') return t('translation.otherJobRunning')
+    return t('common.crossModuleTaskBlocked', { module: t(busyModule === 'coding' ? 'common.moduleNameCoding' : 'common.moduleNameIngestion') })
+  }
+
+  /** Model, context window and thinking flag for the configured translation model; null when no model is configured. */
+  const resolveGenerationOptions = (): { model: string; numCtx: number; think: OllamaThinkValue } | null => {
+    const model = resolveConfiguredModel('translation', settings)
+    if (!model) return null
+    return {
+      model,
+      numCtx: resolveModelContextLength(model, settings?.modelContextLengths, hardwareDefault, modelMetrics[model]?.contextLength),
+      think: chosenThinkValue(resolveOllamaThinkingPreference(model, settings || {}, modelMetrics)),
+    }
+  }
+
+  return {
+    t,
+    documents,
+    documentCollection,
+    fetchDocuments,
+    selectedDoc,
+    setSelectedDoc,
+    sourceLang,
+    setSourceLang,
+    targetLang,
+    setTargetLang,
+    handleSwapLanguages,
+    isTranslating,
+    setIsTranslating,
+    configuredModel: resolveConfiguredModel('translation', settings),
+    crossModuleBlockMessage,
+    otherJobRunning,
+    resolveGenerationOptions,
+  }
+}
+
+export function useDocumentTranslation(settings?: AppSettings, diagnostics?: DiagnosticsData | null, sharedState?: SharedTranslationState) {
+  const base = useTranslationBase(settings, diagnostics, 'markdown', undefined, sharedState)
+  const { t, selectedDoc, sourceLang, targetLang, isTranslating, setIsTranslating, setSelectedDoc } = base
+  const { markdown: selectedDocMarkdown } = useDocumentMarkdown(selectedDoc)
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
+  const [translatedMarkdown, setTranslatedMarkdown] = useState('')
+  const [completedSource, setCompletedSource] = useState<string | null>(null)
+  const { generationState, trackOperation } = useOllamaGenerationState()
+  const activeRunRef = useRef<{ source: string; streamId: string | null } | null>(null)
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const exportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mountedRef = useRef(true)
+  const outputEpochRef = useRef(0)
+
+  const [currentChunkIndex, setCurrentChunkIndex] = useState(0)
+  const [totalChunks, setTotalChunks] = useState(0)
+  const [exportMessage, setExportMessage] = useState<string | null>(null)
+  const [translationError, setTranslationError] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'split' | 'diff'>('split')
+  const [syncScroll, setSyncScroll] = useState<boolean>(true)
+
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [pageViewMode, setPageViewMode] = useState<'page' | 'all'>('all')
+
+  const leftEditorRef = useRef<MonacoCodeEditor | null>(null)
+  const editorRef = useRef<MonacoCodeEditor | null>(null)
+  const isSyncingScrollRef = useRef<boolean>(false)
+  const sourceKey = JSON.stringify([
+    selectedDoc?.id,
+    selectedDoc?.ingestedAt,
+    sourceLang,
+    targetLang,
+    pageViewMode,
+    pageViewMode === 'page' ? currentPage : null,
+  ])
+  const sourceKeyRef = useRef(sourceKey)
+  sourceKeyRef.current = sourceKey
+  const isTranslationComplete = completedSource === sourceKey
+
+  const syncEditorScroll = (source: MonacoCodeEditor, target: MonacoCodeEditor) => {
+    const scrollHeight = source.getScrollHeight()
+    const layout = source.getLayoutInfo()
+    const clientHeight = layout ? layout.height : 0
+    const maxScroll = scrollHeight - clientHeight
+    if (maxScroll <= 0) return
+
+    const scrollPercent = source.getScrollTop() / maxScroll
+    const targetScrollHeight = target.getScrollHeight()
+    const targetLayout = target.getLayoutInfo()
+    const targetClientHeight = targetLayout ? targetLayout.height : 0
+    const maxTargetScroll = targetScrollHeight - targetClientHeight
+    if (maxTargetScroll > 0) {
+      target.setScrollTop(scrollPercent * maxTargetScroll)
+    }
+  }
+
+  const handleLeftEditorDidMount = (editor: MonacoCodeEditor) => {
+    leftEditorRef.current = editor
+    editor.onDidScrollChange((e) => {
+      if (!syncScroll || isSyncingScrollRef.current || !editorRef.current || !e.scrollTopChanged) return
+      isSyncingScrollRef.current = true
+      syncEditorScroll(editor, editorRef.current)
+      requestAnimationFrame(() => {
+        isSyncingScrollRef.current = false
+      })
+    })
+  }
+
+  const handleEditorDidMount = (editor: MonacoCodeEditor) => {
+    editorRef.current = editor
+    editor.onDidScrollChange((e) => {
+      if (!syncScroll || isSyncingScrollRef.current || !leftEditorRef.current || !e.scrollTopChanged) return
+      isSyncingScrollRef.current = true
+      syncEditorScroll(editor, leftEditorRef.current)
+      requestAnimationFrame(() => {
+        isSyncingScrollRef.current = false
+      })
+    })
+  }
+
+  const handleStopTranslation = useCallback(async () => {
+    const run = activeRunRef.current
+    if (!run) return
+    activeRunRef.current = null
+    setCompletedSource(null)
+    trackOperation(null)
+    setIsTranslating(false)
+    const operationId = run.streamId
+    if (operationId && window.electronAPI?.cancelOllamaStream) {
+      try {
+        await window.electronAPI.cancelOllamaStream({ operationId })
+      } catch (err: unknown) {
+        logger.warn('useTranslation', `Error cancelling Ollama stream: ${errorMessage(err)}`)
+      }
+    }
+  }, [trackOperation, setIsTranslating])
+
+  useEffect(() => {
+    void handleStopTranslation()
+    outputEpochRef.current++
+    setCompletedSource(null)
+    setTranslatedMarkdown('')
+    setCurrentChunkIndex(0)
+    setTotalChunks(0)
+    setExportMessage(null)
+    setTranslationError(null)
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+    if (exportTimerRef.current) clearTimeout(exportTimerRef.current)
+  }, [sourceKey, handleStopTranslation])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      const run = activeRunRef.current
+      activeRunRef.current = null
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+      if (exportTimerRef.current) clearTimeout(exportTimerRef.current)
+      if (run?.streamId && window.electronAPI?.cancelOllamaStream) {
+        window.electronAPI.cancelOllamaStream({ operationId: run.streamId }).catch((err: unknown) => {
+          logger.warn('useTranslation', `Failed cancelling unmounted translation: ${errorMessage(err)}`)
+        })
+      }
+    }
+  }, [])
+
+  const showTranslationError = (message: string) => {
+    setTranslationError(message)
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+    errorTimerRef.current = setTimeout(() => setTranslationError(null), 5000)
+  }
+
+  const handleStartTranslation = async () => {
+    if (!selectedDoc || activeRunRef.current || !mountedRef.current) return
+
+    const blockedMessage = base.crossModuleBlockMessage()
+    if (blockedMessage) {
+      showTranslationError(blockedMessage)
+      return
+    }
+    const generation = base.resolveGenerationOptions()
+    if (!generation) {
+      showTranslationError(t('translation.noModelConfigured'))
+      return
+    }
+
+    if (!setIsTranslating(true)) return
+    const run = { source: sourceKey, streamId: null as string | null }
+    activeRunRef.current = run
+    const ownsRun = () => mountedRef.current && activeRunRef.current === run && sourceKeyRef.current === run.source
+    outputEpochRef.current++
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+    if (exportTimerRef.current) clearTimeout(exportTimerRef.current)
+    setTranslationError(null)
+    setExportMessage(null)
+    setCompletedSource(null)
+    setTranslatedMarkdown('')
+    setCurrentChunkIndex(0)
+    setTotalChunks(0)
+
+    try {
+      const fullMarkdown = selectedDocMarkdown ?? (await loadDocumentMarkdown(selectedDoc))
+      if (!ownsRun()) return
+      if (fullMarkdown === null) throw new Error(t('common.documentLoadFailed'))
+
+      // The language pair goes in as template variables.
+      const systemInstruction = getEffectivePrompt('translation', settings, {
+        variables: { sourceLang, targetLang },
+      }).prompt
+      let prepared: ReturnType<typeof prepareTranslationPrompts>
+      try {
+        const sourceMarkdown = pageViewMode === 'page' && selectedDoc.numPages > 1 ? extractPageMarkdown(fullMarkdown, currentPage) : fullMarkdown
+        prepared = prepareTranslationPrompts(sourceMarkdown, systemInstruction, generation.numCtx)
+      } catch (error) {
+        if (error instanceof TranslationChunkError)
+          throw new Error(t(error.reason === 'fence' ? 'translation.unclosedCodeFence' : 'translation.promptBudgetExceeded'))
+        throw error
+      }
+      const { prompts, numPredict } = prepared
+      if (prompts.length === 0) throw new Error('Document contains no translatable text.')
+      setTotalChunks(prompts.length)
+      let accumulatedResults = ''
+
+      for (let i = 0; i < prompts.length; i++) {
+        if (!ownsRun()) return
+
+        setCurrentChunkIndex(i + 1)
+        const prompt = prompts[i]
+
+        let currentChunkTranslation = ''
+        if (window.electronAPI?.generateOllamaStream) {
+          const operationId = crypto.randomUUID()
+          run.streamId = operationId
+          trackOperation(operationId)
+          try {
+            const result = await window.electronAPI.generateOllamaStream(
+              {
+                model: generation.model,
+                prompt,
+                options: { num_ctx: generation.numCtx, num_predict: numPredict, think: generation.think },
+                host: settings?.ollamaHost,
+                operationId,
+              },
+              (c) => {
+                if (!ownsRun()) return
+                currentChunkTranslation += c
+                const livePreview = accumulatedResults + (accumulatedResults ? '\n\n' : '') + currentChunkTranslation
+                setTranslatedMarkdown(livePreview)
+              },
+            )
+            if (!ownsRun()) return
+            if (!result.success) throw new Error(result.error || 'Ollama translation failed.')
+            if (!currentChunkTranslation.trim()) throw new Error('Ollama returned an empty translation.')
+          } finally {
+            if (ownsRun()) {
+              run.streamId = null
+              trackOperation(null)
+            }
+          }
+        } else {
+          throw new Error('Local Ollama API offline or window.electronAPI unattached.')
+        }
+
+        if (!ownsRun()) return
+
+        accumulatedResults += (accumulatedResults ? '\n\n' : '') + currentChunkTranslation
+        setTranslatedMarkdown(accumulatedResults)
+      }
+      if (ownsRun()) setCompletedSource(run.source)
+    } catch (err: unknown) {
+      if (!ownsRun()) return
+      const normalized = normalizeError(err, 'Translation')
+      logger.error('TranslationView', `Error translating document: ${normalized.message}`)
+      setTranslationError(normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message)
+    } finally {
+      if (activeRunRef.current === run) {
+        activeRunRef.current = null
+        trackOperation(null)
+        setIsTranslating(false)
+      }
+    }
+  }
+
+  const handleExportTranslation = async (format: 'pdf' | 'docx' | 'md' = 'pdf') => {
+    if (!isTranslationComplete || !translatedMarkdown.trim()) return
+    const epoch = outputEpochRef.current
+    const ownsExport = () => mountedRef.current && outputEpochRef.current === epoch && sourceKeyRef.current === sourceKey
+    if (exportTimerRef.current) clearTimeout(exportTimerRef.current)
+    setExportMessage(t('translation.exportPreparing', { format: format.toUpperCase() }))
+    try {
+      const res = await electronApi().exportDocument({ markdownContent: translatedMarkdown, format, outputFolder: settings?.translationOutputFolder })
+      if (!ownsExport()) return
+      if (res.success) {
+        setExportMessage(res.message || t('translation.exportSuccess', { format: format.toUpperCase() }))
+      } else {
+        setExportMessage(res.error || res.message || t('translation.exportCancelled'))
+      }
+    } catch (err: unknown) {
+      if (!ownsExport()) return
+      const normalized = normalizeError(err, 'Translation Export')
+      setExportMessage(t('translation.exportError', { message: normalized.message }))
+    } finally {
+      if (ownsExport()) exportTimerRef.current = setTimeout(() => setExportMessage(null), 5000)
+    }
+  }
+
+  const handleResetTranslation = () => {
+    void handleStopTranslation()
+    outputEpochRef.current++
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+    if (exportTimerRef.current) clearTimeout(exportTimerRef.current)
+    setCompletedSource(null)
+    setTranslatedMarkdown('')
+    setCurrentChunkIndex(0)
+    setTotalChunks(0)
+    setSelectedDoc(null)
+    setExportMessage(null)
+    setTranslationError(null)
+  }
+
+  return {
+    isPromptModalOpen,
+    setIsPromptModalOpen,
+    configuredModel: base.configuredModel,
+    documents: base.documents,
+    documentCollection: base.documentCollection,
+    selectedDoc,
+    selectedDocMarkdown,
+    setSelectedDoc,
+    sourceLang,
+    setSourceLang: base.setSourceLang,
+    targetLang,
+    setTargetLang: base.setTargetLang,
+    translatedMarkdown,
+    setTranslatedMarkdown,
+    isTranslating,
+    otherJobRunning: base.otherJobRunning,
+    isTranslationComplete,
+    generationState,
+    currentChunkIndex,
+    totalChunks,
+    exportMessage,
+    translationError,
+    setTranslationError,
+    viewMode,
+    setViewMode,
+    syncScroll,
+    setSyncScroll,
+    currentPage,
+    setCurrentPage,
+    pageViewMode,
+    setPageViewMode,
+    handleLeftEditorDidMount,
+    handleEditorDidMount,
+    fetchDocuments: base.fetchDocuments,
+    handleSwapLanguages: base.handleSwapLanguages,
+    handleStopTranslation,
+    handleStartTranslation,
+    handleExportTranslation,
+    handleResetTranslation,
+  }
+}
+
+/**
+ * Layout-preserving translation. Its state must outlive the panel that shows it: the view mounts
+ * this hook once, so switching to the Markdown tab keeps the job's progress and the 'translation'
+ * task lock for as long as the sidecar job runs.
+ */
+export function useInplaceTranslation(settings?: AppSettings, diagnostics?: DiagnosticsData | null, sharedState?: SharedTranslationState) {
+  const base = useTranslationBase(settings, diagnostics, 'inplace', isLayoutTranslatable, sharedState)
+  const { t, selectedDoc, sourceLang, targetLang, isTranslating, setIsTranslating } = base
+  const [targetDir, setTargetDir] = useState<string>(settings?.translationOutputFolder || '')
+  const [translateProgress, setTranslateProgress] = useState<TranslateProgressPayload | null>(null)
+  const [status, setStatus] = useState<{ success: boolean; message: string; filename?: string } | null>(null)
+  const [isCancelling, setIsCancelling] = useState(false)
+  // Identity exists before dispatch, including before the first progress event.
+  const activeTaskIdRef = useRef<string | null>(null)
+  const mountedRef = useRef(true)
+
+  // Listen to live streaming translation progress from Electron / sidecar
+  useEffect(() => {
+    mountedRef.current = true
+    const unsubscribe = window.electronAPI?.onTranslateProgress?.((payload) => {
+      if (!mountedRef.current || payload.taskId !== activeTaskIdRef.current) return
+      setTranslateProgress(payload)
+    })
+    return () => {
+      mountedRef.current = false
+      unsubscribe?.()
+      const taskId = activeTaskIdRef.current
+      if (taskId) {
+        void window.electronAPI?.cancelTask?.({ taskId }).catch((error: unknown) => {
+          logger.warn('InplaceTranslation', `Unmount cancellation failed: ${errorMessage(error)}`)
+        })
+      }
+    }
+  }, [])
+
+  // Sync targetDir when settings change
+  useEffect(() => {
+    if (settings?.translationOutputFolder && !targetDir) {
+      setTargetDir(settings.translationOutputFolder)
+    }
+  }, [settings?.translationOutputFolder, targetDir])
+
+  const handleSelectTargetDir = async () => {
+    if (!window.electronAPI?.openDirectoryDialog) return
+    const dir = await window.electronAPI.openDirectoryDialog({
+      title: t('translation.inplaceBrowseTitle'),
+    })
+    if (dir) {
+      setTargetDir(dir)
+    }
+  }
+
+  const handleStartInplaceTranslation = async (overrideDoc?: IngestedDocument) => {
+    const docToTranslate = overrideDoc || selectedDoc
+    if (!docToTranslate || activeTaskIdRef.current || !mountedRef.current) return
+
+    const blockedMessage = base.crossModuleBlockMessage()
+    if (blockedMessage) {
+      setStatus({ success: false, message: blockedMessage })
+      return
+    }
+
+    if (!targetDir.trim()) {
+      setStatus({ success: false, message: t('translation.inplaceTargetDirRequired') })
+      return
+    }
+    const generation = base.resolveGenerationOptions()
+    if (!generation) {
+      setStatus({ success: false, message: t('translation.noModelConfigured') })
+      return
+    }
+
+    if (!setIsTranslating(true)) return
+    setStatus(null)
+    setTranslateProgress(null)
+    const taskId = crypto.randomUUID()
+    activeTaskIdRef.current = taskId
+
+    try {
+      const res = await electronApi().translateDocumentInplace({
+        docId: docToTranslate.id,
+        taskId,
+        sourceLang,
+        targetLang,
+        model: generation.model,
+        targetDir,
+        numCtx: generation.numCtx,
+        think: generation.think,
+      })
+
+      if (!mountedRef.current) return
+      if (res.cancelled) {
+        setStatus({ success: false, message: t('translation.inplaceCancelled') })
+      } else if (res.success && res.data) {
+        setStatus({
+          success: true,
+          message: t('translation.inplaceSuccess', { filename: res.data.filename }),
+          filename: res.data.filename,
+        })
+        notifyDocumentsChanged()
+        await base.fetchDocuments()
+      } else {
+        setStatus({
+          success: false,
+          message: res.error || t('translation.inplaceError', { message: 'unknown error' }),
+        })
+      }
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'InplaceTranslation')
+      if (mountedRef.current)
+        setStatus({
+          success: false,
+          message: t('translation.inplaceError', { message: normalized.message }),
+        })
+    } finally {
+      activeTaskIdRef.current = null
+      if (mountedRef.current) setIsCancelling(false)
+      setIsTranslating(false)
+    }
+  }
+
+  /** Asks Main to cancel the running job; the sidecar stops between pages and writes no output file. */
+  const handleCancelInplaceTranslation = async () => {
+    const taskId = activeTaskIdRef.current
+    if (!taskId || !window.electronAPI?.cancelTask) return
+    setIsCancelling(true)
+    try {
+      const result = await window.electronAPI.cancelTask({ taskId })
+      if (!result.success) throw new Error(result.message || 'Cancellation request failed')
+    } catch (error) {
+      if (mountedRef.current && activeTaskIdRef.current === taskId) {
+        setStatus({ success: false, message: errorMessage(error) })
+        setIsCancelling(false)
+      }
+    }
+  }
+
+  return {
+    configuredModel: base.configuredModel,
+    documents: base.documents,
+    documentCollection: base.documentCollection,
+    fetchDocuments: base.fetchDocuments,
+    selectedDoc,
+    setSelectedDoc: base.setSelectedDoc,
+    sourceLang,
+    setSourceLang: base.setSourceLang,
+    targetLang,
+    setTargetLang: base.setTargetLang,
+    targetDir,
+    setTargetDir,
+    isTranslating,
+    otherJobRunning: base.otherJobRunning,
+    translateProgress,
+    status,
+    setStatus,
+    handleSwapLanguages: base.handleSwapLanguages,
+    handleSelectTargetDir,
+    handleStartInplaceTranslation,
+    isCancelling,
+    canCancel: isTranslating && Boolean(activeTaskIdRef.current),
+    handleCancelInplaceTranslation,
+  }
+}
+
+export type InplaceTranslationState = ReturnType<typeof useInplaceTranslation>

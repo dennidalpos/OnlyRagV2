@@ -1,0 +1,72 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { workspaceMetadataStatePath, workspaceMetadataTrackerPath } from '../infrastructure/filesystem/workspaceMetadataDirectory'
+
+vi.mock('../infrastructure/filesystem/projectRegistryRepository', () => ({
+  projectRegistryRepository: {
+    remove: vi.fn(),
+  },
+}))
+vi.mock('./sessionHistoryAppService', () => ({
+  sessionHistoryAppService: {
+    clearSessions: vi.fn().mockResolvedValue(true),
+  },
+}))
+vi.mock('./sidecarAppService', () => ({
+  sidecarAppService: {
+    removePromptHistoryForSessions: vi.fn().mockResolvedValue({ success: true }),
+  },
+}))
+
+import { projectRegistryAppService } from './projectRegistryAppService'
+import { projectRegistryRepository } from '../infrastructure/filesystem/projectRegistryRepository'
+import { sessionHistoryAppService } from './sessionHistoryAppService'
+import { sidecarAppService } from './sidecarAppService'
+
+describe('ProjectRegistryAppService project removal and purge fan-out', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('removeProject only unregisters the project', async () => {
+    vi.mocked(projectRegistryRepository.remove).mockResolvedValue(true)
+
+    const result = await projectRegistryAppService.removeProject('/repo/a')
+
+    expect(result).toBe(true)
+    expect(sessionHistoryAppService.clearSessions).not.toHaveBeenCalled()
+    expect(sidecarAppService.removePromptHistoryForSessions).not.toHaveBeenCalled()
+    expect(projectRegistryRepository.remove).toHaveBeenCalledWith('/repo/a')
+  })
+
+  it('removeProject keeps .onlyrag and user files for reopening', async () => {
+    vi.mocked(projectRegistryRepository.remove).mockResolvedValue(true)
+
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-proj-test-'))
+    const userFile = path.join(tempDir, 'App.tsx')
+    const onlyragDir = path.join(tempDir, '.onlyrag')
+    const sessionFile = workspaceMetadataStatePath(tempDir, 'chat-1')
+    const trackerFile = workspaceMetadataTrackerPath(tempDir, 'chat-1')
+
+    fs.writeFileSync(userFile, 'export default function App() {}', 'utf-8')
+    fs.mkdirSync(path.dirname(sessionFile), { recursive: true })
+    fs.writeFileSync(sessionFile, '{}', 'utf-8')
+    fs.writeFileSync(trackerFile, '# chat-1', 'utf-8')
+
+    expect(fs.existsSync(userFile)).toBe(true)
+    expect(fs.existsSync(onlyragDir)).toBe(true)
+
+    await projectRegistryAppService.removeProject(tempDir)
+
+    expect(fs.existsSync(onlyragDir)).toBe(true)
+    expect(fs.existsSync(sessionFile)).toBe(true)
+    expect(fs.readFileSync(workspaceMetadataTrackerPath(tempDir, 'chat-1'), 'utf-8')).toBe('# chat-1')
+    expect(fs.existsSync(userFile)).toBe(true)
+    expect(fs.existsSync(tempDir)).toBe(true)
+
+    // Cleanup tempDir
+    fs.rmSync(tempDir, { recursive: true, force: true })
+  })
+})

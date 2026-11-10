@@ -1,0 +1,45 @@
+const NATIVE_TOOL_CALLING_FAMILY_PREFIXES = [
+  'llama3.1',
+  'llama3.2',
+  'llama3.3',
+  'llama4',
+  'qwen2.5',
+  'qwen3',
+  'mistral-nemo',
+  'mistral-small',
+  'mistral-large',
+  'devstral',
+  'command-r',
+  'firefunction',
+  'granite',
+  'gpt-oss',
+]
+
+/** Vision variants share a prefix with a tool-calling text family but expose no `tools` capability of their own (`qwen2.5vl` would otherwise match the `qwen2.5` prefix). */
+const VISION_ONLY_FAMILY_PREFIXES = ['qwen2.5vl', 'qwen2vl', 'qwen3vl', 'llama3.2-vision']
+
+/** Map of installed model name -> capabilities array, as reported by /api/tags. */
+export type ModelCapabilitiesMap = Record<string, string[]>
+
+/**
+ * Allow-list fallback: does the model's family (name before the `:tag`)
+ * start with a known tool-calling-capable prefix?
+ */
+export function supportsNativeToolCallingByFamily(modelName: string): boolean {
+  if (!modelName || typeof modelName !== 'string') return false
+  const family = modelName.split(':')[0].toLowerCase().trim()
+  if (VISION_ONLY_FAMILY_PREFIXES.some((prefix) => family.startsWith(prefix))) return false
+  return NATIVE_TOOL_CALLING_FAMILY_PREFIXES.some((prefix) => family.startsWith(prefix))
+}
+
+/** Authoritative check: does Ollama itself report a "tools" capability for this model? */
+export function supportsNativeToolCalling(modelName: string, capabilities?: ModelCapabilitiesMap): boolean {
+  if (!modelName || typeof modelName !== 'string') return false
+
+  const reported = capabilities?.[modelName]
+  if (Array.isArray(reported)) {
+    return reported.includes('tools')
+  }
+
+  return supportsNativeToolCallingByFamily(modelName)
+}

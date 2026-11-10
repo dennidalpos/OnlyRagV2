@@ -1,0 +1,17 @@
+# Tabular fixtures
+
+`ragged.xls` is the genuine BIFF workbook from the [xlrd test corpus](https://github.com/python-excel/xlrd/blob/60c4cff7b003234ea88fe933cf98a86588e830fb/tests/samples/ragged.xls), revision `60c4cff7b003234ea88fe933cf98a86588e830fb`.
+SHA256: `a144c284163641c2cb7dfc17d0116006aeffc3dff2b4878f039d4dbab6e2b07e`.
+Its BSD license is retained in `xlrd-LICENSE.txt`.
+
+Sheet1 contains the source rows `a,b,c`, `d,e`, `f`, `g,h,I,j`, and `k,,,l`; Sheet2 and Sheet3 are empty. Tests assert first and last rows as well as trailing cells.
+XLSX fixtures are generated with openpyxl in pytest temporary directories. Expected cells include leading-zero codes, numeric amounts, literal `NA`, a second sheet, and a single-cell workbook. No fixture needs Microsoft Excel or a live model.
+
+`content-acceptance-it-en.json` is the version-1 synthetic content oracle frozen before local inference. It defines eight documents, twelve queries, eleven supporting passages, six labeled normalization pairs and two live normalization inputs. Generated originals and complete raw outputs from the retired campaigns remain in their isolated OnlyRag-Live evidence directories, rather than this fixture directory. No new campaign is implied; see the [local-development policy](../../../docs/local-development-policy-2026-10-20.md). [Acceptance policy and honest failed baseline](../../../docs/content-acceptance.md) distinguish fixture mechanics, real retrieval, independent source review and unqualified desktop/model roles. Do not change expected evidence to match generated answers.
+
+`normalization-whitespace-policy.json` records the explicit 2026-10-02 approval separately from the frozen semantic oracle. Faithful lexical repairs remain semantically safe labels but intentionally require review. The retained policy replay copied this overlay and reported both policy decisions and raw semantic false-rejection counts; older campaigns retain their original policy. These are frozen regressions and records, not instructions to resume inference.
+
+`translation-fidelity-it-en.json` freezes four complete source/expectation pairs before inference: scanned Italian postal instructions, native Italian refund/deadline clauses, English DOCX imperatives and native English storage conditions. The desktop collector retains complete source/output and PDF renders outside the repository. The independent review gate fails on lost or added meaning; export success alone is insufficient. [Translation verification](../../../docs/verification.md#translation-follow-up--2026-10-05).
+
+
+I casi di risorse XLS in `../_xls_fixtures.py` scrivono stream workbook BIFF8 autonomi in directory pytest temporanee: celle numeriche MulRk, ultima coordinata sparsa, LABEL su più fogli e SST/CONTINUE con riferimenti LABELSST. Sono fixture del parser xlrd e dei limiti Windows; non sono una qualifica di lettura in Microsoft Excel. Il fixture OLE/CFB `ragged.xls` rimane la regressione del normale container. Nessun nuovo pacchetto di generazione XLS.

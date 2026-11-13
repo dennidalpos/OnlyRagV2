@@ -87,7 +87,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.12",
     "@monaco-editor/react": "^4.7.0",
-    "@tailwindcss/vite": "^4.0.7",
+    "@tailwindcss/vite": "^4.3.5",
     "@tanstack/react-virtual": "^3.14.10",
     "@types/diff": "^7.0.2",
     "@types/js-yaml": "^4.0.9",

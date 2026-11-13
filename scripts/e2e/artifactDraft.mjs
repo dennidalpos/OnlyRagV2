@@ -11,6 +11,7 @@ const profile = path.join(evidence, 'profile')
 const workspace = path.join(evidence, 'synthetic-workspace')
 const auditPath = path.join(evidence, 'network-audit.jsonl')
 const report = { checks: [], passed: false }
+const draftContent = '<h1>Bozza distinta</h1><svg width="40" height="40"><rect width="40" height="40" fill="#d51a68"/></svg>'
 let application
 let page
 try {
@@ -41,8 +42,11 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [selected] })
   }, workspace)
   page = await application.firstWindow()
+  report.console = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') report.console.push(message.text())
+  })
   page.setDefaultTimeout(12000)
-  await page.setViewportSize({ width: 1400, height: 900 })
   const original = await page.evaluate(
     (workspacePath) =>
       window.electronAPI.saveArtifact({
@@ -68,21 +72,76 @@ try {
     const frame = await handle.contentFrame()
     assert.ok(frame)
     await frame.waitForFunction((expected) => document.querySelector('h1')?.textContent === expected, name)
+    return frame
   }
   await waitForHeading('Contenuto originale')
   await page.getByRole('button', { name: 'Nuovo', exact: true }).click()
   await page.getByRole('textbox', { name: 'Nome artefatto' }).fill('Secondo artefatto')
-  await page.getByRole('textbox', { name: 'Contenuto artefatto' }).fill('<h1>Bozza distinta</h1>')
+  await page.getByRole('textbox', { name: 'Contenuto artefatto' }).fill(draftContent)
   await page.locator('aside').getByRole('button', { name: 'Aggiorna', exact: true }).click()
-  await waitForHeading('Bozza distinta')
+  const frame = await waitForHeading('Bozza distinta')
+  report.raster = []
   for (const [width, height] of [
-    [1400, 900],
     [1024, 700],
+    [1400, 900],
   ]) {
-    await page.setViewportSize({ width, height })
-    const png = await application.evaluate(async ({ BrowserWindow }) => [...(await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG()])
-    fs.writeFileSync(path.join(evidence, `draft-${width}.png`), Buffer.from(png))
+    await application.evaluate(
+      ({ BrowserWindow }, { width, height }) => {
+        BrowserWindow.getAllWindows()[0].setContentSize(width, height)
+      },
+      { width, height },
+    )
+    await page.waitForFunction(({ width, height }) => innerWidth === width && innerHeight === height, { width, height })
+    await frame.waitForFunction(() => document.querySelector('h1 + svg')?.getBoundingClientRect().width === 40, undefined, { polling: 50 })
+    const frameBounds = await preview.boundingBox()
+    const localMarker = await frame.evaluate(() => {
+      const marker = document.querySelector('h1 + svg')
+      const { x, y, width, height } = marker.getBoundingClientRect()
+      return {
+        x,
+        y,
+        width,
+        height,
+        viewport: [innerWidth, innerHeight],
+        body: document.body.getBoundingClientRect().toJSON(),
+        visibility: document.visibilityState,
+        styles: [getComputedStyle(document.body).display, getComputedStyle(marker).display],
+      }
+    })
+    assert.ok(frameBounds)
+    assert.ok(localMarker.width > 0 && localMarker.height > 0, JSON.stringify({ frameBounds, localMarker }))
+    const marker = { ...localMarker, x: frameBounds.x + localMarker.x, y: frameBounds.y + localMarker.y }
+    const png = await page.screenshot({ path: path.join(evidence, `draft-${width}.png`), scale: 'css' })
+    const { nativePng, playwrightPixel, nativePixel } = await application.evaluate(
+      async ({ nativeImage, BrowserWindow }, { png, marker, width, height }) => {
+        const capture = await BrowserWindow.getAllWindows()[0].capturePage()
+        const sample = (buffer) => {
+          const image = nativeImage.createFromBuffer(buffer)
+          const size = image.getSize()
+          const x = Math.floor(((marker.x + marker.width / 2) * size.width) / width)
+          const y = Math.floor(((marker.y + marker.height / 2) * size.height) / height)
+          const offset = (y * size.width + x) * 4
+          const color = [...image.toBitmap().subarray(offset, offset + 4)]
+          return { ...size, x, y, color }
+        }
+        const nativePng = capture.toPNG()
+        return {
+          nativePng: nativePng.toString('base64'),
+          playwrightPixel: sample(Buffer.from(png, 'base64')),
+          nativePixel: sample(nativePng),
+        }
+      },
+      { png: png.toString('base64'), marker, width, height },
+    )
+    fs.writeFileSync(path.join(evidence, `native-${width}.png`), Buffer.from(nativePng, 'base64'))
+    report.raster.push({ width, height, playwrightPixel, nativePixel, frameBounds, marker })
+    fs.writeFileSync(path.join(evidence, `frame-${width}.html`), await frame.content())
+    for (const { color } of [playwrightPixel, nativePixel]) {
+      const [blue, green, red, alpha] = color
+      assert.ok(red > 175 && green < 65 && blue > 65 && blue < 140 && alpha === 255, `Artifact marker should be visible in the composited ${width}px capture`)
+    }
   }
+  report.checks.push('Sandboxed iframe marker is visible in composited screenshots at 1024 and 1400 CSS pixels')
   const save = page.getByRole('button', { name: 'Salva', exact: true })
   await save.click()
   await page
@@ -93,7 +152,7 @@ try {
   assert.equal(records.length, 2)
   const created = records.find((record) => record.name === 'Secondo artefatto')
   assert.ok(created && created.id !== original.id)
-  assert.equal(created.content, '<h1>Bozza distinta</h1>')
+  assert.equal(created.content, draftContent)
   assert.deepEqual(fs.readFileSync(originalFile), originalBytes)
   report.checks.push('New draft survives a refresh, persists under a distinct ID and preserves the original file bytes')
   await page

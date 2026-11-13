@@ -18,6 +18,24 @@ const pending = new Set()
 let chatCount = 0
 let fixtureError
 let application
+const report = { checks: [], passed: false }
+
+async function closeApplication() {
+  const owned = application
+  if (!owned) return
+  let timer
+  try {
+    await Promise.race([
+      owned.close(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Owned application close timed out')), 20000)
+      }),
+    ])
+    application = undefined
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 // Explicit loopback model fixture; the production Main, IPC, queue, transport and writer run.
 const server = http.createServer(async (request, response) => {
@@ -146,7 +164,12 @@ async function crash(run) {
 }
 
 async function restart() {
-  await application.close()
+  // Cancellation and persisted state were checked before this boundary. End the
+  // crashed instance explicitly: its renderer cannot answer the storage close guard.
+  const ownedProcess = application.process()
+  const exited = new Promise((resolve) => ownedProcess.once('exit', resolve))
+  await application.evaluate(({ app }) => app.exit(0))
+  await exited
   application = undefined
   const page = await launch()
   const status = await page.evaluate(() => window.electronAPI.getAgentQueueStatus())
@@ -202,6 +225,7 @@ try {
   const checkpoints = path.join(workspace, '.onlyrag', 'checkpoints')
   assert(fs.existsSync(checkpoints) && fs.readdirSync(checkpoints).length > 0, 'Owned edit checkpoint was not retained')
   console.log('PASS renderer crash: stream cancelled, queue removed, edit/checkpoint retained')
+  report.checks.push('Crash cancels the stream and queue, and restart preserves edits and checkpoints')
 
   const approvalRun = identity('crash-approval')
   behaviors.push({ filePath: 'forbidden.txt', content: 'Do not write without approval.' })
@@ -212,6 +236,7 @@ try {
   assert(!fs.existsSync(path.join(workspace, 'forbidden.txt')))
   assert.equal(await page.evaluate((run) => window.electronAPI.respondToAgentApproval({ identity: run, approved: true }), approvalRun), false)
   console.log('PASS renderer crash: approval denied and stale approval refused')
+  report.checks.push('Crash denies approvals and restart rejects stale responses')
 
   const quitRun = identity('quit-stream')
   const quitQueued = identity('quit-queued')
@@ -247,13 +272,22 @@ try {
   assert.equal(fs.readFileSync(path.join(workspace, 'retained.txt'), 'utf8'), 'Retain this owned edit.')
   if (fixtureError) throw fixtureError
   console.log('PASS repeated quit/restart: interrupted-state readback and no automatic resume')
+  report.checks.push('Repeated quit persists cancellation and a fresh instance has no automatically resumed work')
+  report.passed = true
+} catch (error) {
+  report.error = String(error)
+  throw error
 } finally {
-  if (application) await application.close()
-  for (const response of pending) response.destroy()
-  server.closeAllConnections()
-  await new Promise((resolve) => server.close(resolve))
-  const resolved = path.resolve(tempRoot)
-
-  assert(path.basename(resolved).startsWith('onlyrag-agent-lifecycle-'))
-  retainFixture(resolved)
+  try {
+    await closeApplication()
+  } finally {
+    for (const response of pending) response.destroy()
+    server.closeAllConnections()
+    await new Promise((resolve) => server.close(resolve))
+    const resolved = path.resolve(tempRoot)
+    assert(path.basename(resolved).startsWith('onlyrag-agent-lifecycle-'))
+    fs.writeFileSync(path.join(resolved, 'report.json'), JSON.stringify(report, null, 2))
+    retainFixture(resolved)
+    console.log(JSON.stringify({ ...report, evidence: resolved }, null, 2))
+  }
 }

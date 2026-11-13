@@ -6,6 +6,8 @@ export function registerSkillIpcHandlers() {
     return skillAppService.listInstalledSkills(payload?.workspaceRoot)
   })
 
+  ipcMain.handle('skills:list-uninstall-recoveries', (_event, payload) => skillAppService.listUninstallRecoveries(payload?.workspaceRoot))
+
   ipcMain.handle('skills:list-sources', async () => {
     return skillAppService.listHubSources()
   })

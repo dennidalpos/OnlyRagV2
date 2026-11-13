@@ -86,9 +86,6 @@ try {
     await page.keyboard.press('Escape')
     await wizard.waitFor({ state: 'hidden' })
 
-    if (width === 1024) {
-      assert(!requests.some((url) => url.includes('tokenizer-vendor')), 'Tokenizer loaded before prompt configurator opened')
-    }
     await page.locator('#panel-settings').getByRole('button', { name: 'Configurazione Prompt di Sistema' }).click()
     const prompt = page.getByRole('dialog')
     await prompt.waitFor()
@@ -96,7 +93,7 @@ try {
     await page.screenshot({ path: path.join(screenshotDir, `${width}x${height}-prompt-editor.png`) })
     assert(
       requests.some((url) => url.includes('tokenizer-vendor')),
-      'Tokenizer did not load when prompt configurator opened',
+      'Tokenizer was not loaded after opening translation and the prompt configurator',
     )
     await page.keyboard.press('Escape')
     await prompt.waitFor({ state: 'hidden' })

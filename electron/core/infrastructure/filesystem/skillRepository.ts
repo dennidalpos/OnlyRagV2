@@ -8,6 +8,7 @@ import { userDataRoot } from './userDataRoot'
 import { logger } from '../logging/logger'
 import { SkillDefinition, SkillMetadata, SkillOriginType } from '../../domain/skills/skillTypes'
 import { errorCode, errorMessage } from '../../../../shared/domain/errors/errorMessage'
+import type { SkillUninstallRecovery } from '../../../../shared/types'
 
 export function calculateSkillChecksum(content: string): string {
   const normalized = content.replace(/\r\n/g, '\n').trim()
@@ -231,12 +232,15 @@ export class SkillRepository {
     return path.join(path.dirname(this.getStateFilePath()), 'skill-uninstall-receipts', scope)
   }
 
-  private recoverStagedSkills(dir: string) {
-    if (!fs.existsSync(dir) || fs.lstatSync(dir).isSymbolicLink()) return
+  private recoverStagedSkills(dir: string, inspectOnly = false): SkillUninstallRecovery[] {
+    const issues: SkillUninstallRecovery[] = []
+    const skillsStat = fs.lstatSync(dir, { throwIfNoEntry: false })
+    if (skillsStat && !skillsStat.isDirectory()) return issues
     const receiptDir = this.removalReceiptDirectory(dir)
-    const receipts = fs.existsSync(receiptDir) ? fs.readdirSync(receiptDir).filter((name) => name.endsWith(REMOVAL_RECEIPT)) : []
+    const receiptDirectoryExists = fs.lstatSync(receiptDir, { throwIfNoEntry: false })?.isDirectory()
+    const receipts = receiptDirectoryExists ? fs.readdirSync(receiptDir).filter((name) => name.endsWith(REMOVAL_RECEIPT)) : []
     const stages = new Set(
-      [...fs.readdirSync(dir), ...receipts.map((name) => name.slice(0, -REMOVAL_RECEIPT.length))].filter((name) => STAGED_SKILL.test(name)),
+      [...(skillsStat ? fs.readdirSync(dir) : []), ...receipts.map((name) => name.slice(0, -REMOVAL_RECEIPT.length))].filter((name) => STAGED_SKILL.test(name)),
     )
     for (const name of stages) {
       const originalName = STAGED_SKILL.exec(name)?.[1]
@@ -245,10 +249,20 @@ export class SkillRepository {
       const staged = path.join(dir, name)
       if (activeRemovals.has(original)) continue
       const receipt = path.join(receiptDir, name + REMOVAL_RECEIPT)
+      const issue: SkillUninstallRecovery = { skillName: originalName, state: 'pending', inspectionDirectory: dir }
       try {
         const stagedStat = fs.lstatSync(staged, { throwIfNoEntry: false })
         const originalStat = fs.lstatSync(original, { throwIfNoEntry: false })
-        const receiptStat = fs.lstatSync(receipt, { throwIfNoEntry: false })
+        const receiptStat = receiptDirectoryExists ? fs.lstatSync(receipt, { throwIfNoEntry: false }) : undefined
+        if (stagedStat) issue.stagedPath = staged
+        if (receiptStat) {
+          issue.receiptPath = receipt
+          issue.inspectionDirectory = receiptDir
+        }
+        if (stagedStat && originalStat) {
+          issue.state = 'conflict'
+          throw new Error('Original and staged copy both exist')
+        }
         if (receiptStat && (!receiptStat.isFile() || receiptStat.isSymbolicLink())) throw new Error('Invalid uninstall receipt')
         const record: unknown = receiptStat ? JSON.parse(fs.readFileSync(receipt, 'utf8')) : null
         if (receiptStat) {
@@ -264,10 +278,12 @@ export class SkillRepository {
           ) {
             throw new Error('Invalid uninstall receipt')
           }
-          if (stagedStat && originalStat) throw new Error('Original and staged copy both exist')
           const remaining = stagedStat ? staged : originalStat ? original : null
           if (remaining) {
-            if (removalInventory(remaining) !== record.inventory) throw new Error('Uninstall copy has changed or is incomplete')
+            if (removalInventory(remaining) !== record.inventory) {
+              issue.state = 'incomplete'
+              throw new Error('Uninstall copy has changed or is incomplete')
+            }
             const skillPath = (stagedStat ?? originalStat)?.isDirectory() ? path.join(remaining, 'SKILL.md') : remaining
             const id = parseSkillFrontmatter(fs.readFileSync(skillPath, 'utf8')).metadata.name.toLowerCase()
             const fileId = originalName.replace(/\.md$/i, '').toLowerCase()
@@ -275,23 +291,44 @@ export class SkillRepository {
               throw new Error('Uninstall receipt refers to an unrelated skill')
             }
           }
+          if (inspectOnly) {
+            issues.push(issue)
+            continue
+          }
           if (stagedStat) fs.renameSync(staged, original)
           if (remaining && record.previouslyActive.length) this.setSkillsActive(record.previouslyActive, true)
           fs.unlinkSync(receipt)
         } else if (stagedStat) {
           // Older staging names have no activation receipt. Preserve the bytes and existing activation state.
-          if (originalStat) throw new Error('Original and staged copy both exist')
           if (stagedStat.isDirectory() ? !fs.existsSync(path.join(staged, 'SKILL.md')) : !originalName.toLowerCase().endsWith('.md')) {
             throw new Error('Unrecognized staged skill')
           }
           removalInventory(staged)
+          if (inspectOnly) {
+            issues.push(issue)
+            continue
+          }
           fs.renameSync(staged, original)
         }
-        logger.log('INFO', 'SkillRepo', `Reconciled interrupted uninstall: ${original}`)
+        if (!inspectOnly) logger.log('INFO', 'SkillRepo', `Reconciled interrupted uninstall: ${original}`)
       } catch (error) {
-        logger.log('WARN', 'SkillRepo', `Uninstall recovery needs attention at ${staged}: ${errorMessage(error)}`)
+        if (inspectOnly) {
+          if (issue.state === 'pending') issue.state = 'needsAttention'
+          issues.push(issue)
+        } else {
+          logger.log('WARN', 'SkillRepo', `Uninstall recovery needs attention at ${staged}: ${errorMessage(error)}`)
+        }
       }
     }
+    return issues
+  }
+
+  listUninstallRecoveries(workspaceRoot?: string | null): SkillUninstallRecovery[] {
+    const globalDir = path.join(userDataRoot(), 'skills')
+    const issues = this.recoverStagedSkills(globalDir, true)
+    if (!workspaceRoot) return issues
+    const workspaceDir = path.resolve(workspaceRoot, 'skills')
+    return path.relative(globalDir, workspaceDir) ? issues.concat(this.recoverStagedSkills(workspaceDir, true)) : issues
   }
 
   async listInstalledSkills(workspaceRoot?: string | null): Promise<SkillDefinition[]> {

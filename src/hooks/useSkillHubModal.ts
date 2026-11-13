@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { SkillDefinition, HubSkillItem, SkillHubSource, CustomHubInput, SkillSaveInput } from '../types'
+import { SkillDefinition, HubSkillItem, SkillHubSource, CustomHubInput, SkillSaveInput, SkillUninstallRecovery } from '../types'
 import { electronApi } from '../services/electronApi'
 import { logger } from '../lib/logger'
 import { useTranslation } from '../i18n'
@@ -18,6 +18,8 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingSources, setIsLoadingSources] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [recoveryState, setRecoveryState] = useState<{ workspace: string | null; issues: SkillUninstallRecovery[]; error?: string }>()
+  const [recoveryRevision, setRecoveryRevision] = useState(0)
   const [installingSkillId, setInstallingSkillId] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -92,6 +94,27 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
       setIsLoadingSources(false)
     }
   }, [isOpen, workspacePath])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setRecoveryState(undefined)
+      return
+    }
+    let current = true
+    void electronApi()
+      .listSkillUninstallRecoveries({ workspaceRoot: workspacePath || undefined })
+      .then(
+        (issues) => {
+          if (current) setRecoveryState({ workspace: workspacePath, issues })
+        },
+        (error: unknown) => {
+          if (current) setRecoveryState({ workspace: workspacePath, issues: [], error: errorMessage(error) })
+        },
+      )
+    return () => {
+      current = false
+    }
+  }, [isOpen, workspacePath, recoveryRevision])
 
   // ESC Key Listener for Accessibility
   useEffect(() => {
@@ -284,14 +307,27 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
       },
     )
 
-  const handleDeleteSkill = (skillId: string) =>
-    runSkillAction(
+  const handleDeleteSkill = async (skillId: string) => {
+    const generation = generationRef.current
+    await runSkillAction(
       () => electronApi().uninstallSkill({ skillId, workspaceRoot: workspacePath || undefined }),
       async () => {
         setActionMessage({ type: 'success', text: t('skills.msgDeleted', { name: skillId }) })
         await loadSourcesAndSkills(selectedSourceId)
       },
     )
+    if (isScopeCurrent(generation)) setRecoveryRevision((revision) => revision + 1)
+  }
+
+  const inspectRecovery = async (targetPath: string) => {
+    const generation = generationRef.current
+    try {
+      if (await electronApi().openPath({ targetPath })) return
+    } catch (error) {
+      logger.error('SkillHubModal', `Error opening uninstall recovery folder: ${errorMessage(error)}`)
+    }
+    if (isScopeCurrent(generation)) setActionMessage({ type: 'error', text: t('skills.recoveryOpenError') })
+  }
 
   const handleAddCustomHub = (input: CustomHubInput) =>
     runSkillAction(
@@ -325,6 +361,9 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
     isLoading,
     isLoadingSources,
     loadError,
+    recoveryState: recoveryState?.workspace === workspacePath ? recoveryState : undefined,
+    retryRecovery: () => setRecoveryRevision((revision) => revision + 1),
+    inspectRecovery,
     retryLoad: () => loadSourcesAndSkills(selectedSourceId),
     installingSkillId,
     actionMessage,

@@ -195,6 +195,7 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
   'artifacts:delete': artifactsDeletePayloadSchema,
   'skills:list-sources': null,
   'skills:list-installed': workspaceRootOnly,
+  'skills:list-uninstall-recoveries': workspaceRootOnly,
   'skills:add-custom-source': customHub,
   'skills:remove-custom-source': obj({ sourceId: short }),
   'skills:list-hub-by-source': obj({ sourceId: short, workspaceRoot: optionalPath, forceRefresh: optionalBoolean }),

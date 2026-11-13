@@ -41,6 +41,7 @@ const WorkspaceArtifactPanel: React.FC<ArtifactPreviewPanelProps> = ({ workspace
   const writing = useRef(false)
   const draft = editor ?? NEW_DRAFT
   const selectedId = draft.id
+  const source = previewSource(draft)
 
   useLayoutEffect(
     () => () => {
@@ -246,7 +247,18 @@ const WorkspaceArtifactPanel: React.FC<ArtifactPreviewPanelProps> = ({ workspace
                 aria-label={t('codingPanels.artifactContent')}
                 spellCheck={false}
               />
-              <iframe title={`Anteprima ${draft.name}`} sandbox="" srcDoc={previewSource(draft)} className="w-full h-full bg-white border-0" />
+              <iframe
+                title={`Anteprima ${draft.name}`}
+                sandbox=""
+                srcDoc={source}
+                onLoad={({ currentTarget: frame }) => {
+                  // Chromium can commit srcdoc without laying it out. Reattach its layout after navigation.
+                  frame.style.display = 'none'
+                  frame.getBoundingClientRect()
+                  frame.style.removeProperty('display')
+                }}
+                className="w-full h-full bg-white border-0"
+              />
             </div>
           </div>
         </div>

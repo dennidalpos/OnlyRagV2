@@ -17,6 +17,7 @@ it('preserves the displayed activation on failure and permits retry and reread',
   window.electronAPI = {
     listInstalledSkills: async () => [{ id: 'fixture', name: 'fixture', isActive: active } as SkillDefinition],
     listHubSources: async () => [],
+    listSkillUninstallRecoveries: async () => [],
     listHubSkillsAcrossSources: async () => [],
     toggleSkillActive: toggle,
   } as unknown as typeof window.electronAPI
@@ -67,6 +68,7 @@ it('keeps the skill listed on a failed uninstall, shows the error and allows ret
   window.electronAPI = {
     listInstalledSkills: async () => (installed ? [{ id: 'fixture', name: 'fixture', isActive: true } as SkillDefinition] : []),
     listHubSources: async () => [],
+    listSkillUninstallRecoveries: async () => [],
     listHubSkillsAcrossSources: async () => [],
     uninstallSkill: uninstall,
   } as unknown as typeof window.electronAPI

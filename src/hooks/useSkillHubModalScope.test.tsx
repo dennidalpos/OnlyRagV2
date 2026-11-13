@@ -29,6 +29,7 @@ describe('useSkillHubModal ownership of asynchronous results', () => {
   let state: ReturnType<typeof useSkillHubModal>
   const api = {
     listInstalledSkills: vi.fn(),
+    listSkillUninstallRecoveries: async () => [],
     listHubSources: vi.fn(),
     listHubSkillsAcrossSources: vi.fn(),
     listHubSkillsBySource: vi.fn(),

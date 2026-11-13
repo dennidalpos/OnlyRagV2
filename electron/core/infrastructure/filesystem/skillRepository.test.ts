@@ -340,7 +340,14 @@ Use asyncio.to_thread for blocking operations.`
         expect.stringContaining(`${staged}.receipt.json`),
       )
       expect(fs.readFileSync(path.join(dir, staged, 'SKILL.md'), 'utf8')).toBe(bytes)
-      expect((await new SkillRepository(tempDir).listInstalledSkills(tempDir)).some((skill) => skill.id === 'txn-skill')).toBe(false)
+      const restarted = new SkillRepository(tempDir)
+      const [issue] = restarted.listUninstallRecoveries(tempDir)
+      expect(issue).toMatchObject({ skillName: 'txn-skill', state: 'incomplete', stagedPath: path.join(dir, staged) })
+      expect(issue.receiptPath).toBe(path.join(issue.inspectionDirectory, `${staged}.receipt.json`))
+      const receiptBytes = fs.readFileSync(issue.receiptPath!)
+      expect((await restarted.listInstalledSkills(tempDir)).some((skill) => skill.id === 'txn-skill')).toBe(false)
+      expect(restarted.listUninstallRecoveries(tempDir)).toEqual([issue])
+      expect(fs.readFileSync(issue.receiptPath!)).toEqual(receiptBytes)
       expect(fs.readdirSync(dir)).toEqual(entries)
     })
 
@@ -352,6 +359,9 @@ Use asyncio.to_thread for blocking operations.`
       await repo.saveSkill('txn-skill', '# Replacement', tempDir)
       const replacement = fs.readFileSync(skillFile(), 'utf8')
       const restarted = new SkillRepository(tempDir)
+      expect(restarted.listUninstallRecoveries(tempDir)).toEqual([
+        { skillName: 'txn-skill', state: 'conflict', stagedPath: staged, inspectionDirectory: path.dirname(original) },
+      ])
       await restarted.listInstalledSkills(tempDir)
       expect(fs.readFileSync(skillFile(), 'utf8')).toBe(replacement)
       expect(fs.readFileSync(path.join(staged, 'SKILL.md'), 'utf8')).toBe(bytes)

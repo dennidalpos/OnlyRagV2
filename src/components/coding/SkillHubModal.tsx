@@ -28,6 +28,9 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     isLoading,
     isLoadingSources,
     loadError,
+    recoveryState,
+    retryRecovery,
+    inspectRecovery,
     retryLoad,
     installingSkillId,
     actionMessage,
@@ -135,6 +138,37 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6" aria-busy={isLoading}>
+          {recoveryState?.error && (
+            <div role="alert" className="space-y-2 text-sm text-rose-300">
+              <p className="break-words">{t('skills.recoveryLoadError', { error: recoveryState.error })}</p>
+              <button type="button" onClick={retryRecovery} className="rounded-md px-2 py-1 text-slate-100 hover:bg-slate-800 focus-ring">
+                {t('common.retry')}
+              </button>
+            </div>
+          )}
+          {!!recoveryState?.issues.length && (
+            <section aria-labelledby="skill-uninstall-recovery-title" className="space-y-2 rounded-lg border border-amber-500/30 p-3 text-sm text-slate-100">
+              <h3 id="skill-uninstall-recovery-title" className="font-semibold text-amber-200">
+                {t('skills.recoveryTitle')}
+              </h3>
+              <ul className="divide-y divide-slate-700">
+                {recoveryState.issues.map((issue) => (
+                  <li key={issue.receiptPath ?? issue.stagedPath} className="space-y-1 py-2">
+                    <p className="break-words font-medium">{t(`skills.recoveryState.${issue.state}`, { name: issue.skillName })}</p>
+                    {issue.receiptPath && <p className="break-all text-slate-300">{t('skills.recoveryReceipt', { path: issue.receiptPath })}</p>}
+                    {issue.stagedPath && <p className="break-all text-slate-300">{t('skills.recoveryCopy', { path: issue.stagedPath })}</p>}
+                    <button
+                      type="button"
+                      onClick={() => void inspectRecovery(issue.inspectionDirectory)}
+                      className="rounded-md px-2 py-1 text-cyan-300 hover:bg-slate-800 focus-ring"
+                    >
+                      {t('skills.recoveryInspect')}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {loadError ? (
             <div role="alert" className="space-y-3 text-sm text-rose-300">
               <p className="break-words">{loadError}</p>

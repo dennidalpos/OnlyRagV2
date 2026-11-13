@@ -10,6 +10,7 @@ describe('SkillHubModal source loading recovery', () => {
   const previous = window.electronAPI
   const api = {
     listInstalledSkills: vi.fn(),
+    listSkillUninstallRecoveries: async () => [],
     listHubSources: vi.fn(),
     listHubSkillsAcrossSources: vi.fn(),
     addCustomHubSource: vi.fn(),

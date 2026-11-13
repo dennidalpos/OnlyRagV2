@@ -497,6 +497,14 @@ export interface SkillInstallApprovalRequest extends AgentRunIdentity {
 
 export type SkillOriginType = 'local_custom' | 'hub_original' | 'hub_modified'
 
+export interface SkillUninstallRecovery {
+  skillName: string
+  state: 'pending' | 'conflict' | 'incomplete' | 'needsAttention'
+  stagedPath?: string
+  receiptPath?: string
+  inspectionDirectory: string
+}
+
 export interface SkillDefinition {
   id: string
   name: string

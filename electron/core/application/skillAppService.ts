@@ -55,6 +55,10 @@ export class SkillAppService {
     return skillRepository.listInstalledSkills(workspaceRoot)
   }
 
+  listUninstallRecoveries(workspaceRoot?: string) {
+    return skillRepository.listUninstallRecoveries(workspaceRoot)
+  }
+
   async listHubSources(): Promise<SkillHubSource[]> {
     return customHubRepository.listSources()
   }

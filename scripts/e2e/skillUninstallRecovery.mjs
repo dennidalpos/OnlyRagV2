@@ -42,7 +42,7 @@ const installed = (page, workspaceRoot) =>
     workspaceRoot,
   )
 
-async function openHub(page, local) {
+async function openHub(page, local, waitForSkill = true) {
   await page.locator('#tab-coding').click()
   if (local) {
     await page.getByRole('button', { name: /^Apri Workspace Explorer/ }).click()
@@ -54,7 +54,7 @@ async function openHub(page, local) {
     .first()
     .click()
   const hub = page.getByRole('dialog').filter({ has: page.locator('#skill-hub-modal-title') })
-  await hub.getByRole('button', { name: `Elimina ${name}`, exact: true }).waitFor()
+  if (waitForSkill) await hub.getByRole('button', { name: `Elimina ${name}`, exact: true }).waitFor()
   return hub
 }
 
@@ -140,6 +140,81 @@ try {
   assert.notDeepEqual(globalBytes, localBytes)
   assert.equal(fs.readFileSync(audit, 'utf8'), '')
   report.checks.push('Electron exits after staging, restarts to identical bytes and active state, then completes an explicit retry')
+
+  for (const conflict of [false, true]) {
+    assert.equal((await provision(undefined, '# Retained original')).success, true)
+    const current = await installed(page)
+    const originalDir = path.dirname(current.filePath)
+    const support = path.join(originalDir, 'support.md')
+    fs.writeFileSync(support, '# Support')
+    const original = fs.readFileSync(current.filePath)
+    await app.evaluate(
+      (_electron, { originalDir, conflict }) => {
+        const fs = process.getBuiltinModule('node:fs')
+        const path = process.getBuiltinModule('node:path')
+        const remove = fs.promises.rm.bind(fs.promises)
+        fs.promises.rm = async (target, options) => {
+          if (!target.startsWith(path.join(path.dirname(originalDir), '.uninstall-fixture.removing-'))) return remove(target, options)
+          fs.promises.rm = remove
+          if (conflict) {
+            fs.mkdirSync(originalDir)
+            fs.writeFileSync(path.join(originalDir, 'SKILL.md'), '# New occupant')
+          } else {
+            fs.unlinkSync(path.join(target, 'support.md'))
+          }
+          throw new Error('Synthetic interrupted uninstall')
+        }
+      },
+      { originalDir, conflict },
+    )
+    hub = await openHub(page, false)
+    await confirm(page, hub)
+    const status = conflict ? 'esistono sia l’originale sia la copia temporanea' : 'è incompleta o è stata modificata'
+    await hub.getByText(status, { exact: false }).waitFor()
+    const state = conflict ? 'conflict' : 'incomplete'
+    const readIssue = () =>
+      page.evaluate(async (state) => (await window.electronAPI.listSkillUninstallRecoveries({})).find((entry) => entry.state === state), state)
+    const issue = await readIssue()
+    const receipt = fs.readFileSync(issue.receiptPath)
+    await hub.getByText(`Ricevuta — ${issue.receiptPath}`, { exact: true }).waitFor()
+    await hub.getByText(`Copia temporanea — ${issue.stagedPath}`, { exact: true }).waitFor()
+    await app.close()
+    app = undefined
+    page = await launch()
+    hub = await openHub(page, false, false)
+    const recovery = hub.getByRole('listitem').filter({ hasText: issue.receiptPath })
+    await recovery.getByText(status, { exact: false }).waitFor()
+    const opened = path.join(evidence, `opened-${state}.txt`)
+    await app.evaluate(({ shell }, opened) => {
+      shell.openPath = async (target) => {
+        process.getBuiltinModule('node:fs').writeFileSync(opened, target, { flag: 'wx' })
+        return ''
+      }
+    }, opened)
+    await recovery.getByRole('button', { name: 'Apri cartella di recupero' }).click()
+    await app.evaluate(async (_electron, opened) => {
+      const fs = process.getBuiltinModule('node:fs')
+      for (let attempt = 0; attempt < 100 && !fs.existsSync(opened); attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+    }, opened)
+    assert.equal(fs.readFileSync(opened, 'utf8'), path.dirname(issue.receiptPath))
+    assert.deepEqual(await readIssue(), issue)
+    assert.deepEqual(fs.readFileSync(issue.receiptPath), receipt)
+    assert.deepEqual(fs.readFileSync(path.join(issue.stagedPath, 'SKILL.md')), original)
+    if (conflict) {
+      assert.equal(fs.readFileSync(current.filePath, 'utf8'), '# New occupant')
+      assert.equal(fs.readFileSync(path.join(issue.stagedPath, 'support.md'), 'utf8'), '# Support')
+    } else {
+      assert.equal(fs.existsSync(originalDir), false)
+    }
+    await page.screenshot({ path: path.join(evidence, `recovery-${state}.png`) })
+    report.checks.push(`Recovery for ${state} is visible immediately and after restart, opens the receipt folder and preserves retained bytes`)
+    await app.close()
+    app = undefined
+    page = await launch()
+  }
+  assert.equal(fs.readFileSync(audit, 'utf8'), '')
   report.passed = true
 } finally {
   if (app) await app.close()

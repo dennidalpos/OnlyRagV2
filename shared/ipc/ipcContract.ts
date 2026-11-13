@@ -55,6 +55,7 @@ import type {
   SkillHubSource,
   SkillInstallApprovalRequest,
   SkillSaveInput,
+  SkillUninstallRecovery,
   SourceLocation,
   SourceLocationRequest,
   TaskQueueStatus,
@@ -301,6 +302,7 @@ export interface IpcInvokeContract {
   /** Semantic search across every indexed project's prompt history. */
   'history:search': { payload: { query: string; topK?: number; projectPaths?: string[] }; result: PromptHistorySearchResult[] }
   'skills:list-installed': { payload: { workspaceRoot?: string }; result: SkillDefinition[] }
+  'skills:list-uninstall-recoveries': { payload: { workspaceRoot?: string }; result: SkillUninstallRecovery[] }
   'skills:list-sources': { payload: void; result: SkillHubSource[] }
   'skills:add-custom-source': { payload: CustomHubInput; result: { success: boolean; source?: SkillHubSource; error?: string } }
   'skills:remove-custom-source': { payload: { sourceId: string }; result: Success }
@@ -453,6 +455,7 @@ export const IPC_INVOKE_METHODS = {
   indexPromptHistory: 'history:index',
   searchPromptHistory: 'history:search',
   listInstalledSkills: 'skills:list-installed',
+  listSkillUninstallRecoveries: 'skills:list-uninstall-recoveries',
   listHubSources: 'skills:list-sources',
   addCustomHubSource: 'skills:add-custom-source',
   removeCustomHubSource: 'skills:remove-custom-source',

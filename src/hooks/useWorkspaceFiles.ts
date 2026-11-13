@@ -97,12 +97,16 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
     [replaceDraft],
   )
 
-  /** Drops file tree, tabs, editor buffer and pins; used when no workspace is attached. */
+  /** Detaches the view while retaining unsaved drafts by absolute file path for reopening. */
   const resetWorkspaceFiles = useCallback(() => {
+    listRequestRef.current += 1
+    latestListPathRef.current = null
     selectionRevisionRef.current += 1
     selectedPathRef.current = null
     selectedFileRef.current = null
-    draftsRef.current.clear()
+    for (const [path, draft] of draftsRef.current) {
+      if (draft.isSaved && !draft.conflict) draftsRef.current.delete(path)
+    }
     setFiles([])
     setOpenFiles([])
     setSelectedFile(null)
@@ -128,6 +132,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
         if (request !== listRequestRef.current || latestListPathRef.current !== targetPath || !isMountedRef.current) return
         setFiles(nextFiles)
       } catch (err: unknown) {
+        if (request !== listRequestRef.current || latestListPathRef.current !== targetPath || !isMountedRef.current) return
         logger.warn('useWorkspaceFiles', `Error loading workspace files: ${errorMessage(err)}`)
       }
     },
@@ -228,7 +233,10 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
         if (selectedPathRef.current === fileToClose.path) {
           if (next.length > 0) {
             const nextFile = next[next.length - 1]
-            queueMicrotask(() => handleOpenFile(nextFile))
+            const selectionRevision = selectionRevisionRef.current
+            queueMicrotask(() => {
+              if (isMountedRef.current && selectionRevisionRef.current === selectionRevision) void handleOpenFile(nextFile)
+            })
           } else {
             selectionRevisionRef.current += 1
             selectedPathRef.current = null
@@ -392,13 +400,17 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
       setOpenFiles((prev) => {
         const remaining = prev.filter((f) => !isInside(f.path))
         for (const path of draftsRef.current.keys()) {
-          if (isInside(path)) draftsRef.current.delete(path)
+          const draft = draftsRef.current.get(path)
+          if (isInside(path) && draft?.isSaved && !draft.conflict) draftsRef.current.delete(path)
         }
         const activeFile = selectedFileRef.current
         if (activeFile && isInside(activeFile.path)) {
           if (remaining.length > 0) {
             const nextFile = remaining[remaining.length - 1]
-            queueMicrotask(() => handleOpenFile(nextFile))
+            const selectionRevision = selectionRevisionRef.current
+            queueMicrotask(() => {
+              if (isMountedRef.current && selectionRevisionRef.current === selectionRevision) void handleOpenFile(nextFile)
+            })
           } else {
             selectionRevisionRef.current += 1
             selectedPathRef.current = null
@@ -497,6 +509,8 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
     return () => {
       isMountedRef.current = false
       selectionRevisionRef.current += 1
+      listRequestRef.current += 1
+      latestListPathRef.current = null
     }
   }, [])
 

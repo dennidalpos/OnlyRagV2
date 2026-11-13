@@ -1,13 +1,17 @@
+import { retainFixture, createFixtureDirectory } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import type { ChildProcess } from 'node:child_process'
 import http from 'node:http'
 
-const profileRoot = vi.hoisted(() => `${process.env.TEMP || process.env.TMPDIR || '/tmp'}/onlyrag-sidecar-state-${crypto.randomUUID()}`)
+const profileRoot = await vi.hoisted(async () => {
+  const { createFixtureDirectory } = await import('../../../../scripts/test/fixtureRuntime.mjs')
+  return createFixtureDirectory('onlyrag-sidecar-state-')
+})
 
 vi.mock('electron', () => ({
   app: {
@@ -20,17 +24,17 @@ vi.mock('electron', () => ({
 import { classifySidecarStderr, SidecarProcessManager } from './sidecarProcessManager'
 import { logger } from '../logging/logger'
 
-afterAll(() => fs.rmSync(profileRoot, { recursive: true, force: true }))
+afterAll(() => retainFixture(profileRoot))
 
 describe('Sidecar log privacy', () => {
   let logDir: string
   afterEach(() => {
     vi.restoreAllMocks()
-    if (logDir) fs.rmSync(logDir, { recursive: true, force: true })
+    if (logDir) retainFixture(logDir)
   })
 
   function isolatedManager() {
-    logDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-sidecar-log-'))
+    logDir = createFixtureDirectory('onlyrag-sidecar-log-')
     vi.spyOn(logger, 'getLogFilePath').mockReturnValue(path.join(logDir, 'app.log'))
     return new SidecarProcessManager() as unknown as {
       writeSidecarLog(level: 'INFO' | 'WARN', message: string): void

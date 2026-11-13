@@ -1,3 +1,4 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, expect, it, vi } from 'vitest'
 import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import { DEFAULT_APP_SETTINGS } from '../../../shared/domain/settings/appSettingsDefaults'
@@ -11,7 +12,7 @@ describe('handleUpdatePlanTool', () => {
     ['tasks', 'src/pages/TasksPage.tsx'],
     ['responsive styles', 'src/index.css'],
   ])('does not promote the %s milestone from file presence alone', async (_name, filePath) => {
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-premature-milestone-'))
+    const workspacePath = createFixtureDirectory('onlyrag-premature-milestone-')
     try {
       const absolute = path.join(workspacePath, filePath)
       fs.mkdirSync(path.dirname(absolute), { recursive: true })
@@ -34,7 +35,7 @@ describe('handleUpdatePlanTool', () => {
       expect(goalPlanner.findMilestone('m-1')?.status).toBe('in_progress')
       expect(goalPlanner.findMilestone('m-1')?.verificationEvidence).toBeUndefined()
     } finally {
-      fs.rmSync(workspacePath, { recursive: true, force: true })
+      retainFixture(workspacePath)
     }
   })
 
@@ -63,7 +64,7 @@ describe('handleUpdatePlanTool', () => {
   })
 
   it('refuses lint as the only proof when a TypeScript check is available', async () => {
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-lint-proof-'))
+    const workspacePath = createFixtureDirectory('onlyrag-lint-proof-')
     try {
       fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'vite build', lint: 'eslint .' } }))
       fs.writeFileSync(path.join(workspacePath, 'tsconfig.json'), '{}')
@@ -88,12 +89,12 @@ describe('handleUpdatePlanTool', () => {
       expect(goalPlanner.findMilestone('m-1')?.status).toBe('in_progress')
       expect(recordStep.mock.calls[0]?.[1]).toContain('Lint alone is insufficient')
     } finally {
-      fs.rmSync(workspacePath, { recursive: true, force: true })
+      retainFixture(workspacePath)
     }
   })
 
   it('promotes milestone without verificationCommand when workspace has a passing primary check', async () => {
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-primary-proof-'))
+    const workspacePath = createFixtureDirectory('onlyrag-primary-proof-')
     try {
       fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'vite build' } }))
       fs.mkdirSync(path.join(workspacePath, 'src'), { recursive: true })
@@ -121,12 +122,12 @@ describe('handleUpdatePlanTool', () => {
       expect(goalPlanner.findMilestone('m-1')?.status).toBe('verified')
       expect(goalPlanner.findMilestone('m-1')?.verificationEvidence?.command).toBe('npm run build')
     } finally {
-      fs.rmSync(workspacePath, { recursive: true, force: true })
+      retainFixture(workspacePath)
     }
   })
 
   it('keeps a styling milestone open when a build passes without a runnable browser preview', async () => {
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-visual-proof-'))
+    const workspacePath = createFixtureDirectory('onlyrag-visual-proof-')
     try {
       fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'vite build' } }))
       fs.mkdirSync(path.join(workspacePath, 'src'), { recursive: true })
@@ -155,7 +156,7 @@ describe('handleUpdatePlanTool', () => {
       expect(goalPlanner.findMilestone('m-1')?.status).toBe('in_progress')
       expect(recordStep.mock.calls[0]?.[1]).toContain('Browser verification did not pass')
     } finally {
-      fs.rmSync(workspacePath, { recursive: true, force: true })
+      retainFixture(workspacePath)
     }
   })
 
@@ -189,7 +190,7 @@ describe('handleUpdatePlanTool', () => {
   })
 
   it('rejects update with VERIFICATION FAILED when verification command fails, even if files exist on disk', async () => {
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-failing-verify-'))
+    const workspacePath = createFixtureDirectory('onlyrag-failing-verify-')
     try {
       fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'vite build' } }))
       fs.mkdirSync(path.join(workspacePath, 'src'), { recursive: true })
@@ -229,12 +230,12 @@ describe('handleUpdatePlanTool', () => {
       expect(feedback).toContain('module is not defined in ES module scope')
       expect(feedback).not.toContain('CONTRADICTED BY THE WORKSPACE')
     } finally {
-      fs.rmSync(workspacePath, { recursive: true, force: true })
+      retainFixture(workspacePath)
     }
   })
 
   it('passes package export diagnostics to the model when update_plan runs a failing build', async () => {
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-package-export-proof-'))
+    const workspacePath = createFixtureDirectory('onlyrag-package-export-proof-')
     try {
       fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'react-scripts build' } }))
       fs.mkdirSync(path.join(workspacePath, 'src'), { recursive: true })
@@ -273,10 +274,10 @@ describe('handleUpdatePlanTool', () => {
       expect(feedback).toContain('grep_search" with query "tailwindcss/tailwind.css"')
       expect(goalPlanner.findMilestone('m-1')?.status).toBe('in_progress')
     } finally {
-      fs.rmSync(workspacePath, { recursive: true, force: true })
+      retainFixture(workspacePath)
     }
   })
 })
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'

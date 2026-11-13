@@ -1,13 +1,14 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import http from 'node:http'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-native-ingestion-'))
+const tempRoot = createFixtureDirectory('onlyrag-native-ingestion-')
 const userData = path.join(tempRoot, 'user-data')
 const selections = ['first', 'second'].map((name) => ({ filePath: path.join(tempRoot, name, 'report.md'), content: `# ${name} native source\n` }))
 const received = []
@@ -186,9 +187,8 @@ require(${JSON.stringify(path.join(root, 'dist-electron', 'main.js'))})
     try {
       if (server.listening) await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
     } finally {
-      assert.equal(path.dirname(path.resolve(tempRoot)), path.resolve(os.tmpdir()))
       assert(path.basename(tempRoot).startsWith('onlyrag-native-ingestion-'), 'Refusing unexpected cleanup target')
-      fs.rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
+      retainFixture(tempRoot)
     }
   }
 }

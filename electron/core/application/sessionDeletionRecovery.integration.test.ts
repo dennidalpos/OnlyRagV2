@@ -1,6 +1,7 @@
+import { retainFixture, createFixtureDirectory } from '../../../scripts/test/fixtureRuntime.mjs'
 import { afterEach, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import type { CodingSession } from '../../../shared/types'
 
@@ -12,13 +13,13 @@ vi.mock('../infrastructure/filesystem/userDataRoot', () => ({
 let root: string | undefined
 afterEach(() => {
   vi.restoreAllMocks()
-  if (root) fs.rmSync(root, { recursive: true, force: true })
+  if (root) retainFixture(root)
   root = undefined
   delete process.env.ONLYRAG_TEST_RECOVERY_ROOT
 })
 
 it('refuses deletion while an agent run owns the conversation and fences a later run', async () => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-session-run-gate-'))
+  root = createFixtureDirectory('onlyrag-session-run-gate-')
   process.env.ONLYRAG_TEST_RECOVERY_ROOT = root
   vi.resetModules()
   const { SessionHistoryAppService } = await import('./sessionHistoryAppService')
@@ -46,7 +47,7 @@ it('refuses deletion while an agent run owns the conversation and fences a later
 })
 
 it('refuses clear while an unstored agent run owns the workspace', async () => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-session-clear-gate-'))
+  root = createFixtureDirectory('onlyrag-session-clear-gate-')
   process.env.ONLYRAG_TEST_RECOVERY_ROOT = root
   vi.resetModules()
   const { SessionHistoryAppService } = await import('./sessionHistoryAppService')
@@ -62,7 +63,7 @@ it('refuses clear while an unstored agent run owns the workspace', async () => {
 })
 
 it('retains both stores and owned assets through a refused fence, then retries after a fresh Main module load', async () => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-session-recovery-'))
+  root = createFixtureDirectory('onlyrag-session-recovery-')
   process.env.ONLYRAG_TEST_RECOVERY_ROOT = root
   vi.resetModules()
   const { SessionHistoryAppService } = await import('./sessionHistoryAppService')
@@ -131,7 +132,7 @@ it('retains both stores and owned assets through a refused fence, then retries a
 })
 
 it('restores exact retained assets and history after an interrupted synthetic cleanup, then exports the bundle', async () => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-session-restore-'))
+  root = createFixtureDirectory('onlyrag-session-restore-')
   process.env.ONLYRAG_TEST_RECOVERY_ROOT = root
   vi.resetModules()
   const { sessionDeletionJournal } = await import('../infrastructure/filesystem/sessionDeletionJournal')

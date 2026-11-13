@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { scanUndeclaredImports } from './undeclaredImportScanner'
 
@@ -9,11 +10,11 @@ import { scanUndeclaredImports } from './undeclaredImportScanner'
 let workspace: string
 
 beforeEach(() => {
-  workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-undeclared-'))
+  workspace = createFixtureDirectory('onlyrag-undeclared-')
 })
 
 afterEach(() => {
-  fs.rmSync(workspace, { recursive: true, force: true })
+  retainFixture(workspace)
 })
 
 function write(rel: string, body: string) {

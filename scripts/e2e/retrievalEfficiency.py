@@ -12,13 +12,13 @@ from pathlib import Path
 import platform
 import statistics
 import sys
-import tempfile
 import threading
 import time
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+from scripts.test.fixture_runtime import create_fixture_directory
 
 
 def digest(path):
@@ -90,7 +90,7 @@ def main():
     args = parser.parse_args()
     if sys.platform != "win32" or not 5 <= args.samples <= 100 or not 0 < args.p95_limit_ms <= 60_000:
         parser.error("Windows and 5..100 samples are required.")
-    scratch = Path(tempfile.mkdtemp(prefix=f"onlyrag-retrieval-{args.label}-"))
+    scratch = create_fixture_directory(f"onlyrag-retrieval-{args.label}-")
     print(f"Retained fixture: {scratch}", flush=True)
     os.environ["ONLYRAG_DATA_DIR"] = str(scratch / "profile")
     os.environ["OLLAMA_BASE_URL"] = "http://127.0.0.1:9"

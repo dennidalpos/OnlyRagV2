@@ -1,6 +1,7 @@
+import { createFixtureDirectory } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -10,7 +11,7 @@ import { _electron as electron } from 'playwright'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const require = createRequire(import.meta.url)
-const evidence = process.env.ONLYRAG_TOOLTIP_EVIDENCE || fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-tooltip-'))
+const evidence = createFixtureDirectory('onlyrag-tooltip-')
 fs.mkdirSync(evidence, { recursive: true })
 const fixtureWidth = Number(process.env.ONLYRAG_TOOLTIP_WIDTH || 1920)
 const fixtureHeight = Number(process.env.ONLYRAG_TOOLTIP_HEIGHT || 1080)

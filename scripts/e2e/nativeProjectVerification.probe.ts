@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { PersistentPowerShellSession } from '../../electron/core/infrastructure/process/persistentPowerShellSession'
@@ -10,7 +11,7 @@ import { withVerificationEnvironment } from '../../electron/core/infrastructure/
 
 vi.mock('../../electron/core/application/agentToolExecutorService', () => ({ agentToolExecutorService: { getOrCreateShellSession: vi.fn() } }))
 
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-native qualification-'))
+const root = createFixtureDirectory('onlyrag-native qualification-')
 const sessions = new Map<string, PersistentPowerShellSession>()
 const shellFor = (cwd: string) => {
   let shell = sessions.get(cwd)
@@ -37,7 +38,7 @@ afterAll(async () => {
   for (const shell of sessions.values()) shell.dispose()
   for (let attempt = 0; attempt < 40; attempt++) {
     try {
-      fs.rmSync(root, { recursive: true, force: true })
+      retainFixture(root)
       return
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 250))

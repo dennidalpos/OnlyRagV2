@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import depcheck from 'depcheck'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -13,14 +14,14 @@ vi.mock('../process/dependencyScanWorkerClient', () => ({ dependencyScanWorker: 
 describe('dependency scan failures', () => {
   let root: string
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-scan-failure-'))
+    root = createFixtureDirectory('onlyrag-scan-failure-')
     fs.writeFileSync(path.join(root, 'package.json'), '{"name":"fixture"}')
     vi.resetAllMocks()
     vi.mocked(dependencyScanWorker.scan).mockResolvedValue({ missing: {}, scanned: true })
   })
   afterEach(() => {
     vi.restoreAllMocks()
-    fs.rmSync(root, { recursive: true, force: true })
+    retainFixture(root)
   })
 
   it('refuses a result with inaccessible directories', async () => {

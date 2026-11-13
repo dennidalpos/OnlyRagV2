@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import http from 'node:http'
 import { execFile } from 'node:child_process'
@@ -24,12 +25,12 @@ describe('configured model functional smoke', () => {
   }
   const writeSettings = (settings: Record<string, unknown> = saved) => fs.writeFileSync(settingsFile, JSON.stringify({ version: 2, settings }))
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-smoke-tests-'))
+    root = createFixtureDirectory('onlyrag-smoke-tests-')
     settingsFile = path.join(root, 'settings.json')
     sessionDirectory = path.join(root, 'session')
     writeSettings()
   })
-  afterEach(() => fs.rmSync(root, { recursive: true, force: true }))
+  afterEach(() => retainFixture(root))
 
   it('uses exact manually saved role assignments, sampling, context and thinking without changing source bytes', async () => {
     const original = fs.readFileSync(settingsFile)

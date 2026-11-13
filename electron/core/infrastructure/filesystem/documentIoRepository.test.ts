@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { documentIoRepository } from './documentIoRepository'
 
@@ -8,12 +9,12 @@ describe('DocumentIoRepository — atomic writes', () => {
   let tmpDir: string
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-doc-io-'))
+    tmpDir = createFixtureDirectory('onlyrag-doc-io-')
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
-    fs.rmSync(tmpDir, { recursive: true, force: true })
+    retainFixture(tmpDir)
   })
 
   it.each(['Unicode città 漢 😀', Buffer.from([0, 1, 255])])('creates and reads back a new export without replacing prior files', (content) => {

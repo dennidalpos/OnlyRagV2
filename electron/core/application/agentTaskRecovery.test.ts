@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentTaskRequest } from '../../../shared/types'
@@ -23,14 +24,14 @@ describe('durable accepted agent tasks', () => {
     workspacePath: root,
   })
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-recovery-test-'))
+    root = createFixtureDirectory('onlyrag-recovery-test-')
     file = path.join(root, 'profile', 'agent-task-recovery.json')
     repository = new AgentTaskRecoveryRepository(() => file)
     vi.mocked(runAgentOrchestratorLoop).mockReset().mockResolvedValue({ success: true, summary: 'done' })
   })
   afterEach(() => {
     vi.restoreAllMocks()
-    fs.rmSync(root, { recursive: true, force: true })
+    retainFixture(root)
   })
 
   it('retains concurrent admissions across a fresh repository and refuses duplicate and terminal identities', async () => {

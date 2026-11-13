@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentToolExecutorService } from './agentToolExecutorService'
@@ -26,7 +27,7 @@ describe('project verification dependency evidence', () => {
   }
 
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-verification-scan-'))
+    root = createFixtureDirectory('onlyrag-verification-scan-')
     vi.resetAllMocks()
     execute.mockResolvedValue({ code: 0, stdout: '', stderr: '', timedOut: false })
     vi.mocked(agentToolExecutorService.getOrCreateShellSession).mockReturnValue({ execute } as never)
@@ -35,7 +36,7 @@ describe('project verification dependency evidence', () => {
   })
 
   afterEach(() => {
-    fs.rmSync(root, { recursive: true, force: true })
+    retainFixture(root)
   })
 
   it('keeps unavailable dependency evidence unverifiable even with a passing shell fixture', async () => {

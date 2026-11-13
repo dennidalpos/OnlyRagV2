@@ -1,3 +1,4 @@
+import { retainFixture, createFixtureDirectory } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, afterEach } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -15,13 +16,13 @@ const itWithPowerShell = it.skipIf(process.platform !== 'win32')
 async function removeWhenReleased(dir: string): Promise<void> {
   for (let attempt = 0; attempt < 40; attempt++) {
     try {
-      fs.rmSync(dir, { recursive: true, force: true })
+      retainFixture(dir)
       return
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
   }
-  fs.rmSync(dir, { recursive: true, force: true })
+  retainFixture(dir)
 }
 
 describe('PersistentPowerShellSession Unit Tests', () => {
@@ -73,7 +74,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
   })
 
   itWithPowerShell('binds verification to its root and restores cwd after failure or a script cd', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "onlyrag-verify root's-"))
+    const root = createFixtureDirectory("onlyrag-verify root's-")
     fs.mkdirSync(path.join(root, 'child'))
     try {
       session = new PersistentPowerShellSession(root)
@@ -101,7 +102,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
   itWithPowerShell(
     'runs available native npm/pnpm scripts or refuses absent tools without acquisition',
     async () => {
-      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-native-manager-'))
+      const root = createFixtureDirectory('onlyrag-native-manager-')
       let requests = 0
       const server = http.createServer((_, response) => {
         requests++
@@ -266,7 +267,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
   itWithPowerShell('reports the directory a cd left the shell in', async () => {
     // Compared resolved: a runner's TEMP may be an 8.3 short name (RUNNER~1), and the directory is
     // reported in the spelling of the workspace, here os.tmpdir().
-    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-shell-cwd-')))
+    const root = fs.realpathSync.native(createFixtureDirectory('onlyrag-shell-cwd-'))
     fs.mkdirSync(path.join(root, 'src'))
     try {
       // Started outside root: the shell process keeps its start directory until it exits, and
@@ -280,13 +281,13 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     } finally {
       session?.dispose()
       session = null
-      fs.rmSync(root, { recursive: true, force: true })
+      retainFixture(root)
     }
   })
 
   itWithPowerShell('spells the directory like a workspace opened through a junction', async () => {
     // Same mismatch as an 8.3 short-name workspace: the shell reports the resolved path, the workspace keeps its own spelling.
-    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-shell-alias-')))
+    const root = fs.realpathSync.native(createFixtureDirectory('onlyrag-shell-alias-'))
     const target = path.join(root, 'target')
     const workspace = path.join(root, 'workspace')
     fs.mkdirSync(path.join(target, 'src'), { recursive: true })

@@ -1,6 +1,7 @@
+import { retainFixture, createFixtureDirectory } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { afterEach, describe, expect, it } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { SessionDeletionJournal } from './sessionDeletionJournal'
@@ -10,11 +11,11 @@ import type { SessionHistoryCopy } from './sessionHistoryRepository'
 const created: string[] = []
 
 afterEach(() => {
-  for (const root of created.splice(0)) fs.rmSync(root, { recursive: true, force: true })
+  for (const root of created.splice(0)) retainFixture(root)
 })
 
 function fixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-deletion-journal-'))
+  const root = createFixtureDirectory('onlyrag-deletion-journal-')
   created.push(root)
   const workspace = path.join(root, 'workspace')
   fs.mkdirSync(workspace)

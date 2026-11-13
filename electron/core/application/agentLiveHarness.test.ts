@@ -1,5 +1,6 @@
+import { retainFixture, createFixtureDirectory } from '../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { snapshotLiveAuditLogs, UNREDACTED_AUDIT_SNAPSHOT_NAME } from '../../../scripts/live/agentLiveHarness'
@@ -7,12 +8,12 @@ import { snapshotLiveAuditLogs, UNREDACTED_AUDIT_SNAPSHOT_NAME } from '../../../
 const tempRoots: string[] = []
 
 afterEach(() => {
-  for (const root of tempRoots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
+  for (const root of tempRoots.splice(0)) retainFixture(root)
 })
 
 describe('snapshotLiveAuditLogs', () => {
   it('copies current and rotated audit logs into a timestamped run directory', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-live-snapshot-'))
+    const root = createFixtureDirectory('onlyrag-live-snapshot-')
     tempRoots.push(root)
     const sourceDir = path.join(root, 'logs')
     const destinationRoot = path.join(root, 'snapshots')
@@ -37,7 +38,7 @@ describe('snapshotLiveAuditLogs', () => {
   })
 
   it('moves the unredacted mirror into the snapshot and starts it afresh', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-live-snapshot-'))
+    const root = createFixtureDirectory('onlyrag-live-snapshot-')
     tempRoots.push(root)
     const sourceLogPath = path.join(root, 'coding_agent_audit.log')
     const unredactedLogPath = path.join(root, 'unredacted.log')
@@ -57,7 +58,7 @@ describe('snapshotLiveAuditLogs', () => {
   })
 
   it('fails clearly when neither audit-log generation exists', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-live-snapshot-'))
+    const root = createFixtureDirectory('onlyrag-live-snapshot-')
     tempRoots.push(root)
 
     expect(() =>

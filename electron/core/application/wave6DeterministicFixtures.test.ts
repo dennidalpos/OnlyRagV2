@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { AgentToolExecutorService } from './agentToolExecutorService'
 import { parseNativeToolCall } from '../domain/agent/toolParser'
@@ -18,7 +19,7 @@ describe('Wave 6 deterministic safety fixtures', () => {
   const settings = { allowTerminalExecution: true, allowFileModifications: true } as AppSettings
 
   beforeEach(() => {
-    fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-wave6-fixtures-'))
+    fixtureRoot = createFixtureDirectory('onlyrag-wave6-fixtures-')
     workspacePath = path.join(fixtureRoot, 'workspace')
     fs.mkdirSync(workspacePath)
     executor = new AgentToolExecutorService(new CapabilityPolicyAuditRepository(path.join(fixtureRoot, 'policy-audit.json')))
@@ -26,7 +27,7 @@ describe('Wave 6 deterministic safety fixtures', () => {
 
   afterEach(() => {
     executor.disposeShellSessions()
-    fs.rmSync(fixtureRoot, { recursive: true, force: true })
+    retainFixture(fixtureRoot)
   })
 
   it('blocks a filesystem target outside the workspace deterministically', async () => {

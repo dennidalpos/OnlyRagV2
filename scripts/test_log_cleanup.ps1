@@ -2,7 +2,8 @@
 param()
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('onlyrag-log-policy-' + [guid]::NewGuid().ToString('N'))
+. (Join-Path $PSScriptRoot 'test/fixture_runtime.ps1')
+$fixtureRoot = New-RetainedTestFixture 'onlyrag-log-policy-'
 $cases = 0
 function Write-Fixture([string]$Relative, [string]$Content = 'retained evidence') {
     $file = Join-Path $fixtureRoot $Relative
@@ -76,8 +77,5 @@ exit $LASTEXITCODE
     Invoke-Case 'Missing file reports refusal' @{ DisposablePaths = @($oldLog); ApplicationClosed = $true } 1
     Write-Output "PASS log cleanup: $cases isolated cases, actual selected-file deletion, retained byte hashes verified."
 } finally {
-    $absolute = [IO.Path]::GetFullPath($fixtureRoot)
-    $prefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
-    if (-not $absolute.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe fixture teardown path' }
-    if (Test-Path -LiteralPath $absolute) { Remove-Item -LiteralPath $absolute -Recurse -Force }
+    Complete-RetainedTestFixture $fixtureRoot
 }

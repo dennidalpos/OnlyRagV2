@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { scanCommandTouchedFiles } from './commandTouchedFilesScanner'
 
 /** mtime the scanner must treat as older than the command, beyond its clock tolerance. */
@@ -14,12 +15,12 @@ describe('scanCommandTouchedFiles', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-touched-test-'))
+    tempDir = createFixtureDirectory('onlyrag-touched-test-')
   })
 
   afterEach(() => {
     if (fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     }
   })
 
@@ -97,11 +98,11 @@ describe('scanCommandTouchedFiles — nested project directories', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-nested-test-'))
+    tempDir = createFixtureDirectory('onlyrag-nested-test-')
   })
 
   afterEach(() => {
-    if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true })
+    if (fs.existsSync(tempDir)) retainFixture(tempDir)
   })
 
   it('reports a project directory a generator created in the workspace root', () => {

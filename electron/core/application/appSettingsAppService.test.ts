@@ -1,7 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import fs from 'node:fs'
-import path from 'node:path'
-import os from 'node:os'
+
 import { AppSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
 import { AppSettingsAppService } from './appSettingsAppService'
 import { getDefaultAppSettings } from '../domain/settings/appSettingsDomain'
@@ -11,7 +10,7 @@ describe('AppSettingsAppService Unit Tests', () => {
   let service: AppSettingsAppService
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-settings-svc-test-'))
+    tmpDir = createFixtureDirectory('onlyrag-settings-svc-test-')
     const repo = new AppSettingsRepository(tmpDir)
     service = new AppSettingsAppService(repo, { getLaunchedOllamaHost: () => null, restartPythonSidecar: async () => true })
   })
@@ -20,7 +19,7 @@ describe('AppSettingsAppService Unit Tests', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
     try {
-      fs.rmSync(tmpDir, { recursive: true, force: true })
+      retainFixture(tmpDir)
     } catch {}
   })
 

@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StandaloneScratchWorkspace } from './standaloneScratchWorkspace'
@@ -12,14 +13,14 @@ describe('StandaloneScratchWorkspace', () => {
   let exportRoot: string
 
   beforeEach(() => {
-    basePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-scratch-test-'))
-    exportRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-scratch-export-'))
+    basePath = createFixtureDirectory('onlyrag-scratch-test-')
+    exportRoot = createFixtureDirectory('onlyrag-scratch-export-')
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
-    fs.rmSync(basePath, { recursive: true, force: true })
-    fs.rmSync(exportRoot, { recursive: true, force: true })
+    retainFixture(basePath)
+    retainFixture(exportRoot)
   })
 
   it('keeps one stable persistent path and exports its files', () => {

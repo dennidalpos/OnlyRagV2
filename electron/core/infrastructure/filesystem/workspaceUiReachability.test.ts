@@ -1,5 +1,6 @@
+import { retainFixture, createFixtureDirectory } from '../../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { missingAcceptanceDirectories, unreachableUiDeliverables } from './workspaceUiReachability'
@@ -7,11 +8,11 @@ import { missingAcceptanceDirectories, unreachableUiDeliverables } from './works
 describe('workspace UI reachability', () => {
   const roots: string[] = []
   afterEach(() => {
-    for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
+    for (const root of roots.splice(0)) retainFixture(root)
   })
 
   it('rejects an unused layout and duplicate page while accepting a unique reachable extension alias', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-reachability-'))
+    const root = createFixtureDirectory('onlyrag-reachability-')
     roots.push(root)
     const write = (relative: string, content: string) => {
       const target = path.join(root, relative)

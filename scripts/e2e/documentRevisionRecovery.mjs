@@ -1,12 +1,13 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-document-revision-'))
+const scratch = createFixtureDirectory('onlyrag-document-revision-')
 const userData = path.join(scratch, 'user-data')
 fs.mkdirSync(userData)
 fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify({ version: 2, settings: { language: 'en', hasCompletedInitialSetup: true } }))
@@ -106,8 +107,7 @@ try {
 } finally {
   if (application) await application.close()
   if (complete) {
-    assert.equal(path.dirname(path.resolve(scratch)), path.resolve(os.tmpdir()))
     assert(path.basename(scratch).startsWith('onlyrag-document-revision-'))
-    fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
+    retainFixture(scratch)
   } else console.error(`Retained failed document-revision fixture: ${scratch}`)
 }

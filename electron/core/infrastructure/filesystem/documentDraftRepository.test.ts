@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs/promises'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DocumentDraftRepository } from './documentDraftRepository'
@@ -9,11 +10,11 @@ describe('document draft archive', () => {
   let repo: DocumentDraftRepository
   const draft = { docId: 'a', content: 'Local edit', ingestedAt: 't1', markdown: 'Original' }
   beforeEach(async () => {
-    directory = await fs.mkdtemp(path.join(os.tmpdir(), 'onlyrag-drafts-'))
+    directory = await createFixtureDirectory('onlyrag-drafts-')
     repo = new DocumentDraftRepository(directory)
   })
   afterEach(async () => {
-    await fs.rm(directory, { recursive: true, force: true })
+    await retainFixture(directory)
   })
 
   it('reads back multiple drafts after restart with their original revisions and keeps the previous archive', async () => {

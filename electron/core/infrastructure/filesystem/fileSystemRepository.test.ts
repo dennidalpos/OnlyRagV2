@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { FileSystemRepository } from './fileSystemRepository'
 import { contentVersion } from './fileContentVersion'
 import { AtomicWorkspaceJournal } from './atomicWorkspaceJournal'
@@ -11,12 +12,12 @@ describe('FileSystemRepository Unit Tests', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-test-repo-'))
+    tempDir = createFixtureDirectory('onlyrag-test-repo-')
   })
 
   afterEach(() => {
     try {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     } catch {}
   })
 

@@ -1,9 +1,10 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
 import { createRequire } from 'node:module'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -21,7 +22,7 @@ assert.equal(got.defaults.options.cache, undefined, 'Got HTTP caching must remai
 assert.equal(config.electronDownload?.downloadOptions?.cache, undefined, 'Review any new HTTP cache configuration')
 assert.equal(config.electronDownload?.isVerifyChecksum, undefined, 'Default checksum validation must remain enabled')
 
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-download-policy-'))
+const tempRoot = createFixtureDirectory('onlyrag-download-policy-')
 const bytes = Buffer.from('Isolated download integrity fixture\n')
 const checksum = createHash('sha256').update(bytes).digest('hex')
 const requests = []
@@ -85,6 +86,6 @@ try {
   server.closeAllConnections()
   await new Promise((resolve, reject) => server.close((error) => (error && error.code !== 'ERR_SERVER_NOT_RUNNING' ? reject(error) : resolve())))
   const ownedPath = path.resolve(tempRoot)
-  assert.equal(path.dirname(ownedPath), path.resolve(os.tmpdir()))
-  fs.rmSync(ownedPath, { recursive: true, force: true })
+
+  retainFixture(ownedPath)
 }

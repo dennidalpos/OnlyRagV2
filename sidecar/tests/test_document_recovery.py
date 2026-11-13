@@ -18,7 +18,6 @@ def isolated_recovery(monkeypatch, tmp_path):
     monkeypatch.setattr(db, "_recovery_error", None)
     yield
     db._recovery_error = None
-    db._journal_path.unlink(missing_ok=True)
 
 
 def document(doc_id="one", text="old"):

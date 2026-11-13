@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 
 import { recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
@@ -43,11 +44,11 @@ function freshFlags(): ToolResultMutableFlags {
 }
 
 beforeEach(() => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-build-freshness-'))
+  tempDir = createFixtureDirectory('onlyrag-build-freshness-')
 })
 
 afterEach(() => {
-  fs.rmSync(tempDir, { recursive: true, force: true })
+  retainFixture(tempDir)
 })
 
 describe('build freshness — a later write invalidates an earlier verification', () => {

@@ -1,9 +1,10 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright'
@@ -13,8 +14,8 @@ const mainBundle = path.join(rootDir, 'dist-electron', 'main.js')
 const qualifiedExe = process.env.ONLYRAG_QUALIFICATION_EXE
 const electronExe = qualifiedExe || path.join(rootDir, 'node_modules', 'electron', 'dist', 'electron.exe')
 const model = 'qwen2.5-coder:7b'
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-electron-e2e-'))
-const evidenceRoot = process.env.ONLYRAG_RECOVERY_EVIDENCE || path.join(os.tmpdir(), `onlyrag-agent-evidence-${randomUUID()}`)
+const tempRoot = createFixtureDirectory('onlyrag-electron-e2e-')
+const evidenceRoot = createFixtureDirectory('onlyrag-agent-evidence-')
 const userData = path.join(tempRoot, 'user-data')
 const workspaceRoot = path.join(tempRoot, 'workspace with spaces')
 const secondWorkspace = path.join(tempRoot, 'second-workspace')
@@ -323,8 +324,6 @@ async function startTask(page, runIdentity, overrides = {}) {
 
 function assertSafeTempRoot() {
   const resolved = path.resolve(tempRoot)
-  const tempBase = `${path.resolve(os.tmpdir())}${path.sep}`.toLowerCase()
-  assert(resolved.toLowerCase().startsWith(tempBase), `Refusing to clean non-temporary path: ${resolved}`)
   assert(path.basename(resolved).startsWith('onlyrag-electron-e2e-'))
 }
 
@@ -1244,9 +1243,9 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 500))
   assertSafeTempRoot()
   try {
-    fs.rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
+    retainFixture(tempRoot)
     fs.mkdirSync(evidenceRoot, { recursive: true })
-    fs.writeFileSync(path.join(evidenceRoot, 'cleanup.json'), JSON.stringify({ ownedRoot: tempRoot, cleaned: !fs.existsSync(tempRoot) }, null, 2))
+    fs.writeFileSync(path.join(evidenceRoot, 'retention.json'), JSON.stringify({ ownedRoot: tempRoot, retained: fs.existsSync(tempRoot) }, null, 2))
   } catch (cleanupError) {
     qualificationError = qualificationError
       ? new AggregateError([qualificationError, cleanupError], `Qualification and owned-fixture cleanup failed; inspect ${tempRoot}`)

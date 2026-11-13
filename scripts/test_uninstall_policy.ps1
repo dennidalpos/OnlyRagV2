@@ -9,7 +9,8 @@ if (-not $Compiler) {
         Select-Object -First 1 -ExpandProperty FullName
 }
 if (-not $Compiler -or -not (Test-Path -LiteralPath $Compiler)) { throw 'NSIS compiler not found; run Windows packaging first.' }
-$fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('onlyrag-uninstall-' + [guid]::NewGuid().ToString('N'))
+. (Join-Path $PSScriptRoot 'test/fixture_runtime.ps1')
+$fixtureRoot = New-RetainedTestFixture 'onlyrag-uninstall-'
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 
 function Invoke-Fixture([string]$Executable, [string]$Arguments, [int]$ExpectedExit = 0) {
@@ -22,7 +23,7 @@ function Invoke-Fixture([string]$Executable, [string]$Arguments, [int]$ExpectedE
 }
 
 try {
-    New-Item -ItemType Directory -Path $fixtureRoot | Out-Null
+    # The shared allocator already created this empty, owned fixture directory.
     # Only shell-folder paths are redirected; the production macros and page compile unchanged.
     $include = [IO.File]::ReadAllText((Join-Path $repositoryRoot 'installer\installer.nsh'))
     $include = $include.Replace('$APPDATA', '$EXEDIR\fixtures\roaming').Replace('$LOCALAPPDATA', '$EXEDIR\fixtures\local').Replace('$PROFILE', '$EXEDIR\fixtures\profile')
@@ -97,8 +98,5 @@ SectionEnd
         Write-Host "[PASS] $($case.Name)"
     }
 } finally {
-    $resolved = [IO.Path]::GetFullPath($fixtureRoot)
-    $tempPrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\onlyrag-uninstall-'
-    if (-not $resolved.StartsWith($tempPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe fixture cleanup path.' }
-    if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }
+    Complete-RetainedTestFixture $fixtureRoot
 }

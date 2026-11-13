@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { parseSkillFrontmatter, serializeSkillContent, calculateSkillChecksum, SkillRepository } from './skillRepository'
 
 describe('SkillRepository Unit Tests', () => {
@@ -9,14 +10,14 @@ describe('SkillRepository Unit Tests', () => {
   let repo: SkillRepository
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-skills-test-'))
+    tempDir = createFixtureDirectory('onlyrag-skills-test-')
     repo = new SkillRepository(tempDir)
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
     try {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     } catch {}
   })
 

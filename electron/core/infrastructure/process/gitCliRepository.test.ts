@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { execFileSync } from 'node:child_process'
 import { gitCliRepository } from './gitCliRepository'
 
@@ -9,12 +10,12 @@ describe('GitCliRepository Unit Tests', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-git-test-'))
+    tempDir = createFixtureDirectory('onlyrag-git-test-')
   })
 
   afterEach(() => {
     try {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     } catch {
       // Ignore cleanup error
     }

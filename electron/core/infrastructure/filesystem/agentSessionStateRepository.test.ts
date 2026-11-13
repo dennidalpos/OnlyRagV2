@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { AgentSessionStateRepository, agentSessionStateRepository, SavedAgentSessionState } from './agentSessionStateRepository'
 import { workspaceMetadataStatePath, workspaceMetadataTrackerPath } from './workspaceMetadataDirectory'
@@ -10,13 +11,13 @@ describe('AgentSessionStateRepository Unit Tests', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-session-test-'))
+    tempDir = createFixtureDirectory('onlyrag-session-test-')
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
     if (fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     }
   })
 

@@ -1,6 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { skillAppService } from './skillAppService'
 import { skillRepository } from '../infrastructure/filesystem/skillRepository'
@@ -12,11 +12,11 @@ describe('skill editor payload through save-custom and back', () => {
   let workspace: string
 
   beforeEach(() => {
-    workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-skill-roundtrip-'))
+    workspace = createFixtureDirectory('onlyrag-skill-roundtrip-')
   })
 
   afterEach(() => {
-    fs.rmSync(workspace, { recursive: true, force: true })
+    retainFixture(workspace)
   })
 
   it('keeps lists, metadata and body unchanged when the payload is resubmitted untouched', async () => {

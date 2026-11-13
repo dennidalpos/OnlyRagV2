@@ -6,7 +6,6 @@ from pathlib import Path
 import subprocess
 import sys
 import threading
-import shutil
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pyarrow as pa
@@ -55,7 +54,7 @@ def store(tmp_path, monkeypatch):
     monkeypatch.setattr(service, "generate_embedding_batch", batch)
     yield root
     assert root.parent == tmp_path and root.name == "profile" and not root.is_junction() and not root.is_symlink()
-    shutil.rmtree(root)
+    # Preserve the synthetic store and its rebuild/recovery records for explicit review.
 
 
 def prepared(store):

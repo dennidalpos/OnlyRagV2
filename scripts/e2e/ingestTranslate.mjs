@@ -1,3 +1,4 @@
+import { createFixtureDirectory } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -23,7 +24,7 @@ const proxy = await startConfiguredSmokeProxy({ sessionDirectory: args[1], setti
 let application
 let tempRoot
 try {
-  tempRoot = fs.mkdtempSync(path.join(args[1], 'desktop-'))
+  tempRoot = createFixtureDirectory('desktop-')
   const userData = path.join(tempRoot, 'user-data')
   const outputDir = path.join(tempRoot, 'translated')
   const screenshotDir = path.join(tempRoot, 'screenshots')

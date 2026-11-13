@@ -1,8 +1,9 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import http from 'node:http'
 import net from 'node:net'
-import os from 'node:os'
+
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { canConnect, ManagedDevServerRepository } from './managedDevServerRepository'
@@ -25,8 +26,8 @@ function listeningRows(port: number): string[] {
 
 describe('managed dev server tools', () => {
   it('starts only the workspace dev script, probes loopback and stops only its owned process', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-managed-dev-'))
-    const other = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-other-dev-'))
+    const root = createFixtureDirectory('onlyrag-managed-dev-')
+    const other = createFixtureDirectory('onlyrag-other-dev-')
     const server = new ManagedDevServerRepository()
     try {
       fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { dev: 'node server.cjs' } }), 'utf-8')
@@ -57,8 +58,8 @@ describe('managed dev server tools', () => {
       expect(() => server.stop(root)).toThrow('No managed dev server')
     } finally {
       server.stopAll()
-      fs.rmSync(root, { recursive: true, force: true })
-      fs.rmSync(other, { recursive: true, force: true })
+      retainFixture(root)
+      retainFixture(other)
     }
   }, 20_000)
 
@@ -69,7 +70,7 @@ describe('managed dev server tools', () => {
   )(
     'starts a plain Vite dev script on the assigned loopback port: %s',
     async (allocation) => {
-      const root = fs.mkdtempSync(path.join(process.cwd(), 'node_modules', 'onlyrag-vite-preview-'))
+      const root = createFixtureDirectory('onlyrag-vite-preview-')
       const server = new ManagedDevServerRepository()
       const connections: object[] = []
       let ready = false
@@ -136,7 +137,7 @@ describe('managed dev server tools', () => {
       } finally {
         connectionSpy.mockRestore()
         server.stopAll()
-        if (passed) fs.rmSync(root, { recursive: true, force: true })
+        if (passed) retainFixture(root)
       }
     },
     30_000,
@@ -166,19 +167,19 @@ describe('managed dev server tools', () => {
   })
 
   it('rejects a workspace without a dev script', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-no-dev-'))
+    const root = createFixtureDirectory('onlyrag-no-dev-')
     try {
       fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { build: 'node build.js' } }), 'utf-8')
       await expect(new ManagedDevServerRepository().start(root)).rejects.toThrow('no dev script')
     } finally {
-      fs.rmSync(root, { recursive: true, force: true })
+      retainFixture(root)
     }
   })
 
   it.each(['0.0.0.0', '::'])(
     'rejects a dev script that ignores HOST and binds the assigned port on %s',
     async (host) => {
-      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-wildcard-dev-'))
+      const root = createFixtureDirectory('onlyrag-wildcard-dev-')
       const server = new ManagedDevServerRepository()
       try {
         fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { dev: 'node server.cjs' } }), 'utf-8')
@@ -195,14 +196,14 @@ describe('managed dev server tools', () => {
         expect(() => server.stop(root)).toThrow('No managed dev server')
       } finally {
         server.stopAll()
-        fs.rmSync(root, { recursive: true, force: true })
+        retainFixture(root)
       }
     },
     20_000,
   )
 
   it('rejects a dev script that ignores the assigned PORT', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-wrong-port-dev-'))
+    const root = createFixtureDirectory('onlyrag-wrong-port-dev-')
     const server = new ManagedDevServerRepository(1_000)
     try {
       fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { dev: 'node server.cjs' } }), 'utf-8')
@@ -210,7 +211,7 @@ describe('managed dev server tools', () => {
       await expect(server.start(root)).rejects.toThrow('did not listen')
     } finally {
       server.stopAll()
-      fs.rmSync(root, { recursive: true, force: true })
+      retainFixture(root)
     }
   }, 10_000)
 })

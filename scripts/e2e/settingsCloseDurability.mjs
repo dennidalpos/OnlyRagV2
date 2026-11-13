@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright'
@@ -8,7 +9,7 @@ import { execFileSync } from 'node:child_process'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const qualifiedExe = process.env.ONLYRAG_QUALIFICATION_EXE
-const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-settings-close-'))
+const scratch = createFixtureDirectory('onlyrag-settings-close-')
 const userData = path.join(scratch, 'user-data')
 const settingsPath = path.join(userData, 'settings.json')
 fs.mkdirSync(userData)
@@ -106,8 +107,7 @@ try {
 } finally {
   if (application) await application.close()
   if (complete) {
-    assert.equal(path.dirname(path.resolve(scratch)), path.resolve(os.tmpdir()))
     assert(path.basename(scratch).startsWith('onlyrag-settings-close-'))
-    fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
+    retainFixture(scratch)
   } else console.error(`Retained failed settings-close fixture: ${scratch}`)
 }

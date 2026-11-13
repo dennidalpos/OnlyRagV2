@@ -12,12 +12,11 @@ describe('CustomHubRepository integrity', () => {
 
   beforeEach(() => {
     repo = new CustomHubRepository()
-    fs.rmSync(hubFile(), { force: true })
+    if (fs.existsSync(hubFile())) fs.renameSync(hubFile(), `${hubFile()}.retained-${crypto.randomUUID()}`)
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
-    fs.rmSync(hubFile(), { force: true })
   })
 
   it('treats an absent file as an empty valid store', async () => {

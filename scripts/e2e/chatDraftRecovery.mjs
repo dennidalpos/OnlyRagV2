@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -9,7 +10,7 @@ import { _electron as electron } from 'playwright'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const qualifiedExe = process.env.ONLYRAG_QUALIFICATION_EXE
 async function verifyRecovery(width, height) {
-  const scratch = fs.mkdtempSync(path.join(process.env.ONLYRAG_RECOVERY_EVIDENCE || os.tmpdir(), 'onlyrag-chat-drafts-'))
+  const scratch = createFixtureDirectory('onlyrag-chat-drafts-')
   const userData = path.join(scratch, 'user-data')
   const archive = path.join(userData, 'document-drafts.json')
   fs.mkdirSync(userData)
@@ -327,11 +328,8 @@ async function verifyRecovery(width, height) {
         console.error(`Could not terminate owned fixture PID ${application.process().pid}:`, cleanupError)
       }
     }
-    if (complete && !process.env.ONLYRAG_RECOVERY_EVIDENCE) {
-      assert.equal(path.dirname(path.resolve(scratch)), path.resolve(os.tmpdir()))
-      assert(path.basename(scratch).startsWith('onlyrag-chat-drafts-'))
-      fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
-    } else if (!complete) console.error(`Retained failed chat/draft fixture: ${scratch}`)
+    retainFixture(scratch)
+    if (!complete) console.error(`Retained failed chat/draft fixture: ${scratch}`)
     else console.log(`Retained verified chat/draft evidence: ${scratch}`)
   }
 }

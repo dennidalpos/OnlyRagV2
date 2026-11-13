@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import http from 'node:http'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import crypto from 'node:crypto'
 import type { AddressInfo } from 'node:net'
@@ -17,7 +18,7 @@ afterEach(() => vi.restoreAllMocks())
 
 describe('export format routing', () => {
   it('recovers oversized Unicode as complete Markdown without conversion or replacing previous exports', async () => {
-    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-large-markdown-'))
+    const folder = createFixtureDirectory('onlyrag-large-markdown-')
     const content = '😀'.repeat(MAX_DOCUMENT_TEXT_UNITS / 2 + 1) + '\nLAST_SOURCE_LINE'
     const convert = vi.spyOn(sidecarHttpClient, 'exportDocument')
     const showItemInFolder = vi.fn()
@@ -42,12 +43,12 @@ describe('export format routing', () => {
       expect(convert).not.toHaveBeenCalled()
       expect(showItemInFolder).toHaveBeenCalledOnce()
     } finally {
-      fs.rmSync(folder, { recursive: true, force: true })
+      retainFixture(folder)
     }
   })
 
   it.each(['md', 'pdf', 'docx', 'html', 'htm'] as const)('preserves simultaneous %s exports in the configured folder', async (format) => {
-    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-export-'))
+    const folder = createFixtureDirectory('onlyrag-export-')
     vi.spyOn(Date, 'now').mockReturnValue(1792231201234)
     vi.spyOn(sidecarHttpClient, 'exportDocument').mockImplementation(async (content) => ({
       success: true,
@@ -61,7 +62,7 @@ describe('export format routing', () => {
       expect(new Set(results.map((result) => result.filePath)).size).toBe(2)
       results.forEach((result, i) => expect(fs.readFileSync(result.filePath!, 'utf8')).toBe(contents[i]))
     } finally {
-      fs.rmSync(folder, { recursive: true, force: true })
+      retainFixture(folder)
     }
   })
 
@@ -94,11 +95,11 @@ describe('export destination ownership', () => {
   const showSaveDialog = vi.fn<DesktopShellPort['showSaveDialog']>()
   const service = new SidecarAppService(undefined, { showItemInFolder, showSaveDialog } as unknown as DesktopShellPort)
   beforeEach(() => {
-    folder = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-export-ownership-'))
+    folder = createFixtureDirectory('onlyrag-export-ownership-')
     showItemInFolder.mockClear()
     showSaveDialog.mockReset()
   })
-  afterEach(() => fs.rmSync(folder, { recursive: true, force: true }))
+  afterEach(() => retainFixture(folder))
 
   it.each([1, 2, 3])('preserves colliding files and bounds retry after %i collisions', async (count) => {
     const identities = ['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000003'] as const

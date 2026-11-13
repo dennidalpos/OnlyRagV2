@@ -1,8 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import http from 'node:http'
 import https from 'node:https'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import EventEmitter from 'node:events'
 import { PassThrough } from 'node:stream'
@@ -163,7 +163,7 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
   })
 
   it('writes a completed download to disk', async () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-')
     try {
       const response = createMockResponse(200)
       response.pipe = <T extends NodeJS.WritableStream>(destination: T): T => {
@@ -181,14 +181,15 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       expect(result).toEqual({ success: true, downloadedBytes: 10 })
       expect(fs.readFileSync(path.join(tempRoot, 'archive.zip'), 'utf8')).toBe('downloaded')
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
   it('cancels fetch and download immediately when the signal is already aborted', async () => {
     const controller = new AbortController()
     controller.abort()
-    const cancelledPath = path.join(os.tmpdir(), `onlyrag-cancelled-${Date.now()}.zip`)
+    const cancelledRoot = createFixtureDirectory('onlyrag-cancelled-download-')
+    const cancelledPath = path.join(cancelledRoot, 'cancelled.zip')
 
     await expect(client.fetchWebContent('https://example.com', 16000, controller.signal)).resolves.toMatchObject({
       success: false,
@@ -199,6 +200,7 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       error: 'Download cancelled by AbortSignal',
     })
     expect(fs.existsSync(cancelledPath)).toBe(false)
+    retainFixture(cancelledRoot)
   })
 
   it('cancels an in-flight fetch and destroys the active request', async () => {
@@ -236,7 +238,7 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
   })
 
   it('cancels an in-flight download and removes the partial file', async () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-cancel-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-cancel-')
     const targetPath = path.join(tempRoot, 'partial.zip')
     try {
       const response = createMockResponse(200)
@@ -261,12 +263,12 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       expect(fs.existsSync(targetPath)).toBe(false)
       await new Promise((resolve) => setTimeout(resolve, 100))
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
   it('rejects executable MIME types before persisting a download', async () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-mime-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-mime-')
     const targetPath = path.join(tempRoot, 'payload.bin')
     try {
       const response = createMockResponse(200, { 'content-type': 'application/x-msdownload' })
@@ -281,12 +283,12 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       expect(fs.existsSync(targetPath)).toBe(false)
       await new Promise((resolve) => setTimeout(resolve, 100))
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
   it('stops following download redirects after the configured safety limit', async () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-redirect-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-redirect-')
     const targetPath = path.join(tempRoot, 'redirected.bin')
     try {
       const response = createMockResponse(302, { location: 'https://example.com/next' })
@@ -302,12 +304,12 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       expect(fs.existsSync(targetPath)).toBe(false)
       await new Promise((resolve) => setTimeout(resolve, 100))
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
   it('cleans up partial download file and reports error on HTTP 500 failure', async () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-err500-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-err500-')
     const targetPath = path.join(tempRoot, 'failed.bin')
     try {
       const response = createMockResponse(500, {}, 'Internal Server Error')
@@ -320,12 +322,12 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
       expect(fs.existsSync(targetPath)).toBe(false)
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
   it('returns an asynchronous file-open failure without an unhandled stream error', async () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-open-error-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-open-error-')
     const targetPath = path.join(tempRoot, 'failed.bin')
     const originalCreate = fs.createWriteStream
     let output: fs.WriteStream | undefined
@@ -351,12 +353,12 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       expect(request.destroy).toHaveBeenCalledTimes(1)
       expect(fs.existsSync(targetPath)).toBe(false)
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
   it('closes and removes a partially written file before returning a disk-write failure', async () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-write-error-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-write-error-')
     const targetPath = path.join(tempRoot, 'failed.bin')
     const originalCreate = fs.createWriteStream
     let output: fs.WriteStream | undefined
@@ -384,12 +386,12 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       expect(request.destroy).toHaveBeenCalledTimes(1)
       expect(fs.existsSync(targetPath)).toBe(false)
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
   it('waits for an outstanding write on abort and ignores late failures after a replacement is saved', async () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-abort-write-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-abort-write-')
     const targetPath = path.join(tempRoot, 'partial.bin')
     const originalCreate = fs.createWriteStream
     let output: fs.WriteStream | undefined
@@ -447,12 +449,12 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       await new Promise<void>((resolve) => setImmediate(resolve))
       expect(fs.readFileSync(targetPath, 'utf8')).toBe('replacement')
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
   it('discards a response arriving after cancellation without opening the target', async () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-late-response-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-late-response-')
     const targetPath = path.join(tempRoot, 'file.bin')
     const response = createDownloadResponse()
     const request = createMockRequest()
@@ -467,12 +469,12 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       expect(response.destroyed).toBe(true)
       expect(fs.existsSync(targetPath)).toBe(false)
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
   it('keeps the redirected file when retired requests fail or the completed signal is aborted', async () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-redirect-success-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-redirect-success-')
     const targetPath = path.join(tempRoot, 'file.bin')
     const redirect = createDownloadResponse(302, { location: '/final' })
     const response = createDownloadResponse()
@@ -517,12 +519,12 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       await new Promise<void>((resolve) => setImmediate(resolve))
       expect(fs.readFileSync(targetPath, 'utf8')).toBe('complete')
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
   it('cancels the active redirect hop and leaves no file when its response arrives late', async () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-redirect-abort-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-redirect-abort-')
     const targetPath = path.join(tempRoot, 'file.bin')
     const redirect = createDownloadResponse(302, { location: '/final' })
     const response = createDownloadResponse()
@@ -567,12 +569,12 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       expect(response.destroyed).toBe(true)
       expect(fs.existsSync(targetPath)).toBe(false)
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
   it.each(['error', 'aborted'] as const)('removes the partial file on a response %s before completion', async (event) => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-response-error-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-response-error-')
     const targetPath = path.join(tempRoot, 'file.bin')
     const response = createDownloadResponse()
     const request = createMockRequest()
@@ -591,7 +593,7 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       expect(request.destroy).toHaveBeenCalledTimes(1)
       expect(fs.existsSync(targetPath)).toBe(false)
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
@@ -600,7 +602,7 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
     ['file:///C:/private', 'Forbidden protocol'],
     ['http://[invalid', 'Invalid download redirect'],
   ])('rejects redirect %s without modifying the destination', async (location, error) => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-redirect-refused-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-redirect-refused-')
     const targetPath = path.join(tempRoot, 'existing.bin')
     fs.writeFileSync(targetPath, 'original')
     const create = vi.spyOn(fs, 'createWriteStream')
@@ -614,12 +616,12 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       expect(response.destroyed).toBe(true)
       expect(fs.readFileSync(targetPath, 'utf8')).toBe('original')
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 
   it.each(['complete', 'disconnect'] as const)('handles a real loopback HTTP redirect followed by %s', async (outcome) => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-local-http-'))
+    const tempRoot = createFixtureDirectory('onlyrag-webclient-local-http-')
     const targetPath = path.join(tempRoot, 'file.bin')
     let disconnect: () => void = () => {}
     const server = http.createServer((request, response) => {
@@ -656,7 +658,7 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
     } finally {
       server.closeAllConnections()
       await new Promise<void>((resolve) => server.close(() => resolve()))
-      fs.rmSync(tempRoot, { recursive: true, force: true })
+      retainFixture(tempRoot)
     }
   })
 })

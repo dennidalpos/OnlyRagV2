@@ -1,6 +1,7 @@
+import { retainFixture, createFixtureDirectory } from '../../../scripts/test/fixtureRuntime.mjs'
 import { afterEach, describe, expect, it } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { revalidateRestoredMilestones, selectSavedRunState } from './agentOrchestratorSessionState'
 import { captureMilestoneFileEvidence } from '../infrastructure/filesystem/workspaceDeliverableProbe'
@@ -32,10 +33,10 @@ function savedState(overrides: Partial<SavedAgentSessionState> = {}): SavedAgent
 
 describe('revalidateRestoredMilestones', () => {
   const dirs: string[] = []
-  afterEach(() => dirs.splice(0).forEach((dir) => fs.rmSync(dir, { recursive: true, force: true })))
+  afterEach(() => dirs.splice(0).forEach((dir) => retainFixture(dir)))
 
   it('keeps matching fingerprints and invalidates modified files, missing files, and commands', () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-resume-'))
+    const workspace = createFixtureDirectory('onlyrag-resume-')
     dirs.push(workspace)
     fs.writeFileSync(path.join(workspace, 'fresh.ts'), 'export const fresh = true')
     fs.writeFileSync(path.join(workspace, 'changed.ts'), 'export const changed = false')
@@ -61,7 +62,7 @@ describe('revalidateRestoredMilestones', () => {
   })
 
   it('invalidates legacy verified file evidence without a persisted fingerprint', () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-resume-'))
+    const workspace = createFixtureDirectory('onlyrag-resume-')
     dirs.push(workspace)
     fs.writeFileSync(path.join(workspace, 'legacy.ts'), 'export const legacy = true')
 

@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import crypto from 'node:crypto'
 import { AtomicWorkspaceJournal, JournalSnapshotError } from './atomicWorkspaceJournal'
 import { restoreAgentCheckpoint, saveAgentCheckpoint } from './agentCheckpointStore'
@@ -11,13 +12,13 @@ describe('AtomicWorkspaceJournal Unit Tests', () => {
   let journal: AtomicWorkspaceJournal
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-journal-test-'))
+    tempDir = createFixtureDirectory('onlyrag-journal-test-')
     journal = new AtomicWorkspaceJournal()
   })
 
   afterEach(() => {
     try {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     } catch {}
   })
 
@@ -195,12 +196,12 @@ describe('AtomicWorkspaceJournal destructive snapshot completeness', () => {
   }
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-journal-complete-'))
+    tempDir = createFixtureDirectory('onlyrag-journal-complete-')
     journal = new AtomicWorkspaceJournal()
   })
   afterEach(() => {
     vi.restoreAllMocks()
-    fs.rmSync(tempDir, { recursive: true, force: true })
+    retainFixture(tempDir)
   })
 
   it('refuses a directory with 2001 files without journalling any of it, and leaves the tree untouched', () => {

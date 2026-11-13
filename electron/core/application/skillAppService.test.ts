@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { skillAppService } from './skillAppService'
 import https from 'node:https'
 import http from 'node:http'
@@ -15,12 +16,12 @@ describe('SkillAppService Unit Tests', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-appservice-test-'))
+    tempDir = createFixtureDirectory('onlyrag-appservice-test-')
   })
 
   afterEach(() => {
     try {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     } catch {}
   })
 

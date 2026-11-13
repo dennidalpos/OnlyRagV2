@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { AppSettingsRepository } from './appSettingsRepository'
 import { getDefaultAppSettings } from '../../domain/settings/appSettingsDomain'
 
@@ -10,13 +11,13 @@ describe('AppSettingsRepository Unit Tests', () => {
   let repo: AppSettingsRepository
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-settings-test-'))
+    tmpDir = createFixtureDirectory('onlyrag-settings-test-')
     repo = new AppSettingsRepository(tmpDir)
   })
 
   afterEach(() => {
     try {
-      fs.rmSync(tmpDir, { recursive: true, force: true })
+      retainFixture(tmpDir)
     } catch {}
   })
 

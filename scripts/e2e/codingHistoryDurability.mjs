@@ -1,12 +1,13 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-coding-history-'))
+const scratch = createFixtureDirectory('onlyrag-coding-history-')
 const userData = path.join(scratch, 'user-data')
 const workspace = path.join(scratch, 'workspace')
 const historyFile = path.join(workspace, '.onlyrag', 'sessions', 'history.json')
@@ -135,7 +136,7 @@ try {
   if (complete) {
     for (let attempt = 0; attempt < 8; attempt++) {
       try {
-        fs.rmSync(scratch, { recursive: true })
+        retainFixture(scratch)
         break
       } catch (error) {
         if (attempt === 7) {

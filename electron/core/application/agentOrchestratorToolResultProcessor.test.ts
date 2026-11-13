@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, vi } from 'vitest'
 import { AgentProgressPolicy, PROGRESS_BUDGET } from '../domain/agent/agentProgressPolicy'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import {
   applyVersionedReadEvidence,
@@ -70,7 +71,7 @@ describe('structured tool outcomes', () => {
     { outcome: 'success' as const, stopped: false },
     { outcome: 'failure' as const, stopped: true },
   ])('counts a $outcome shell command that wrote a project file before the no-mutation guard', async ({ outcome, stopped }) => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-command-progress-'))
+    const workspace = createFixtureDirectory('onlyrag-command-progress-')
     try {
       const progress = new AgentProgressPolicy({}, { ...PROGRESS_BUDGET, stepsWithoutMutation: 2 })
       expect(progress.onStepExecuted(false)).toBeNull()
@@ -106,12 +107,12 @@ describe('structured tool outcomes', () => {
       if (stopped) expect(closeApplicationRun).toHaveBeenCalledWith(expect.objectContaining({ guard: 'no_mutation' }))
       else expect(progress.onStepExecuted(false)).toBeNull()
     } finally {
-      fs.rmSync(workspace, { recursive: true, force: true })
+      retainFixture(workspace)
     }
   })
 
   it('returns browser runtime errors after a green primary build even without a milestone command', async () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-visual-feedback-'))
+    const workspace = createFixtureDirectory('onlyrag-visual-feedback-')
     try {
       fs.writeFileSync(path.join(workspace, 'package.json'), JSON.stringify({ scripts: { build: 'vite build', dev: 'vite' } }))
       fs.writeFileSync(path.join(workspace, 'index.html'), '<script type="module" src="/src/main.jsx"></script>')
@@ -148,12 +149,12 @@ describe('structured tool outcomes', () => {
       expect(toolRes.outputForHistory).toContain('Button is not defined')
       expect(goalPlanner.getMilestones()[0].status).toBe('in_progress')
     } finally {
-      fs.rmSync(workspace, { recursive: true, force: true })
+      retainFixture(workspace)
     }
   })
 
   it('passes a tool result localization key to the timeline without reading its English text', async () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-tool-log-'))
+    const workspace = createFixtureDirectory('onlyrag-tool-log-')
     const emitted: { message: string; key?: string }[] = []
     try {
       await runToolResultProcessing({
@@ -188,7 +189,7 @@ describe('structured tool outcomes', () => {
       } as unknown as ToolResultProcessingContext)
       expect(emitted).toContainEqual({ message: 'Terminal Command Finished: npm test', key: 'toolCommandFinished' })
     } finally {
-      fs.rmSync(workspace, { recursive: true, force: true })
+      retainFixture(workspace)
     }
   })
 
@@ -298,7 +299,7 @@ describe('file version recovery', () => {
   })
 
   it('applies the last seen version to every later edit and still rejects an external modification', () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-version-recovery-'))
+    const tempDir = createFixtureDirectory('onlyrag-version-recovery-')
     try {
       const filePath = path.join(tempDir, 'App.tsx')
       fs.writeFileSync(filePath, 'export const value = 1\n')
@@ -332,12 +333,12 @@ describe('file version recovery', () => {
       expect(result.success).toBe(false)
       expect(fs.readFileSync(filePath, 'utf-8')).toBe('export const userValue = 3\n')
     } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     }
   })
 
   it('records the version its own successful edit left on disk, so the next edit of that file needs no read', () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-own-edit-version-'))
+    const tempDir = createFixtureDirectory('onlyrag-own-edit-version-')
     try {
       fs.mkdirSync(path.join(tempDir, 'src'))
       fs.writeFileSync(path.join(tempDir, 'src', 'App.jsx'), 'export default function App() { return null }\n')
@@ -356,7 +357,7 @@ describe('file version recovery', () => {
       const next = applyVersionedReadEvidence({ tool: 'write_file', parameters: { filePath: 'src\\App.jsx', content: 'x' } }, state)
       expect(next.toolCall.parameters.expectedContentHash).toBe(contentVersion('export default function App() { return null }\n'))
     } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     }
   })
 })
@@ -465,7 +466,7 @@ describe('plan follows a successful move_file', () => {
   }
 
   it('remaps milestones to the renamed file and persists the plan', async () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-move-remap-'))
+    const workspace = createFixtureDirectory('onlyrag-move-remap-')
     try {
       fs.mkdirSync(path.join(workspace, 'src'))
       fs.writeFileSync(path.join(workspace, 'src', 'App.jsx'), 'export default () => <div/>')
@@ -478,7 +479,7 @@ describe('plan follows a successful move_file', () => {
       expect(await processMove(workspace, planner, 'success')).toBeGreaterThan(0)
       expect(planner.getMilestones()[0].filePaths).toEqual(['src/App.jsx'])
     } finally {
-      fs.rmSync(workspace, { recursive: true, force: true })
+      retainFixture(workspace)
     }
   })
 })
@@ -513,7 +514,7 @@ describe('plan follows a write under another script extension', () => {
   }
 
   it('points milestones naming a missing src/App.js at the src/App.jsx the agent wrote', async () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-alias-remap-'))
+    const workspace = createFixtureDirectory('onlyrag-alias-remap-')
     try {
       fs.mkdirSync(path.join(workspace, 'src'))
       fs.writeFileSync(path.join(workspace, 'src', 'App.jsx'), 'export default function App() { return null }')
@@ -529,12 +530,12 @@ describe('plan follows a write under another script extension', () => {
       expect(planner.getMilestones().map((m) => m.filePaths)).toEqual([['src/App.jsx'], ['src/App.jsx'], ['src/App.test.jsx']])
       expect(logs.some((line) => line.includes('m-6, m-9') && line.includes('src/App.jsx'))).toBe(true)
     } finally {
-      fs.rmSync(workspace, { recursive: true, force: true })
+      retainFixture(workspace)
     }
   })
 
   it('leaves the plan alone when the named file exists too', async () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-alias-keep-'))
+    const workspace = createFixtureDirectory('onlyrag-alias-keep-')
     try {
       fs.mkdirSync(path.join(workspace, 'src'))
       fs.writeFileSync(path.join(workspace, 'src', 'App.js'), 'export default function App() { return null }')
@@ -546,7 +547,7 @@ describe('plan follows a write under another script extension', () => {
 
       expect(planner.getMilestones()[0].filePaths).toEqual(['src/App.js'])
     } finally {
-      fs.rmSync(workspace, { recursive: true, force: true })
+      retainFixture(workspace)
     }
   })
 })

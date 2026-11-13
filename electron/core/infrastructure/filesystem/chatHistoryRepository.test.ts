@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs/promises'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ChatHistoryRepository } from './chatHistoryRepository'
@@ -24,11 +25,11 @@ describe('Main-owned chat recovery', () => {
     ],
   }
   beforeEach(async () => {
-    directory = await fs.mkdtemp(path.join(os.tmpdir(), 'onlyrag-chat-recovery-'))
+    directory = await createFixtureDirectory('onlyrag-chat-recovery-')
     repo = new ChatHistoryRepository(directory)
   })
   afterEach(async () => {
-    await fs.rm(directory, { recursive: true, force: true })
+    await retainFixture(directory)
   })
   it('acknowledges a partial answer only after readback and recovers it with a fresh repository', async () => {
     const first = await repo.save({ revision: 'missing', state })

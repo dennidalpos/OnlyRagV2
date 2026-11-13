@@ -3,7 +3,8 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('onlyrag-cleanup-policy-' + [guid]::NewGuid().ToString('N'))
+. (Join-Path $PSScriptRoot 'test/fixture_runtime.ps1')
+$fixtureRoot = New-RetainedTestFixture 'onlyrag-cleanup-policy-'
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $failures = New-Object System.Collections.Generic.List[string]
 $cases = 0
@@ -120,8 +121,5 @@ exit $LASTEXITCODE
     if (-not (Test-Path -LiteralPath (Join-Path $repo 'dist-electron\main.js'))) { throw 'WhatIf modified fixture data.' }
     Write-Host "PASS cleanup policy: $cases isolated WhatIf cases; no cleanup or process termination."
 } finally {
-    $resolved = [IO.Path]::GetFullPath($fixtureRoot)
-    $tempPrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
-    if (-not $resolved.StartsWith($tempPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe fixture teardown path.' }
-    if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }
+    Complete-RetainedTestFixture $fixtureRoot
 }

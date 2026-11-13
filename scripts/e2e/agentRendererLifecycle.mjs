@@ -1,14 +1,15 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-agent-lifecycle-'))
+const tempRoot = createFixtureDirectory('onlyrag-agent-lifecycle-')
 const userData = path.join(tempRoot, 'user-data')
 const workspace = path.join(tempRoot, 'workspace with spaces')
 const model = 'qwen2.5-coder:7b'
@@ -252,7 +253,7 @@ try {
   server.closeAllConnections()
   await new Promise((resolve) => server.close(resolve))
   const resolved = path.resolve(tempRoot)
-  assert(resolved.toLowerCase().startsWith(`${path.resolve(os.tmpdir())}${path.sep}`.toLowerCase()))
+
   assert(path.basename(resolved).startsWith('onlyrag-agent-lifecycle-'))
-  fs.rmSync(resolved, { recursive: true, force: true })
+  retainFixture(resolved)
 }

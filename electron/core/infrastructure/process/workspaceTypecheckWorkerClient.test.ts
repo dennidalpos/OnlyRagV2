@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { WorkspaceTypecheckWorkerClient } from './workspaceTypecheckWorkerClient'
@@ -27,14 +28,14 @@ describe('WorkspaceTypecheckWorkerClient', () => {
   }
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-typecheck-worker-'))
+    tempDir = createFixtureDirectory('onlyrag-typecheck-worker-')
     workerScript = path.join(tempDir, 'typecheckWorker.cjs')
     fs.writeFileSync(workerScript, ECHO_WORKER, 'utf-8')
   })
 
   afterEach(() => {
     for (const client of clients.splice(0)) client.dispose()
-    fs.rmSync(tempDir, { recursive: true, force: true })
+    retainFixture(tempDir)
   })
 
   it('answers from the worker and keeps one worker across calls', async () => {

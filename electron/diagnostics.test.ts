@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { logger } from './core/infrastructure/logging/logger'
 import { CodingAgentLogger } from './core/infrastructure/logging/codingAgentLogger'
 import { userDataRoot } from './core/infrastructure/filesystem/userDataRoot'
@@ -15,7 +16,7 @@ describe('SystemDiagnosticsLogger Tests', () => {
   })
 
   it('preserves an unrelated working-directory log when clearing the active profile', () => {
-    const otherRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-other-log-'))
+    const otherRoot = createFixtureDirectory('onlyrag-other-log-')
     const otherLog = path.join(otherRoot, 'logs', 'app.log')
     fs.mkdirSync(path.dirname(otherLog))
     fs.writeFileSync(otherLog, 'retained diagnostic history')
@@ -26,7 +27,7 @@ describe('SystemDiagnosticsLogger Tests', () => {
       expect(fs.readFileSync(logger.getLogFilePath(), 'utf8')).toBe('')
     } finally {
       cwd.mockRestore()
-      fs.rmSync(otherRoot, { recursive: true, force: true })
+      retainFixture(otherRoot)
     }
   })
 

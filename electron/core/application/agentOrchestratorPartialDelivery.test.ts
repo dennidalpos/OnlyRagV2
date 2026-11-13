@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 
 import { recordMutationSideEffects } from './agentOrchestratorCircuitBreakerAndVerification'
@@ -42,12 +43,12 @@ function plannerWith(milestones: Array<{ id: string; title: string; status: 'pen
 }
 
 beforeEach(() => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-partial-delivery-'))
+  tempDir = createFixtureDirectory('onlyrag-partial-delivery-')
   recordedDirectives = []
 })
 
 afterEach(() => {
-  fs.rmSync(tempDir, { recursive: true, force: true })
+  retainFixture(tempDir)
 })
 
 describe('partial delivery — the model is told which file it still owes', () => {

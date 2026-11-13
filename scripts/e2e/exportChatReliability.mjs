@@ -1,14 +1,15 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import { spawn, execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-export-chat-'))
+const scratch = createFixtureDirectory('onlyrag-export-chat-')
 const userData = path.join(scratch, 'user-data')
 const output = path.join(scratch, 'exports')
 const python = path.join(root, '.venv/Scripts/python.exe')
@@ -251,9 +252,8 @@ require(${JSON.stringify(path.join(root, 'dist-electron/main.js'))})
     })
   }
   if (complete) {
-    assert.equal(path.dirname(path.resolve(scratch)), path.resolve(os.tmpdir()))
     assert(path.basename(scratch).startsWith('onlyrag-export-chat-'))
-    fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
+    retainFixture(scratch)
   } else {
     fs.writeFileSync(path.join(scratch, 'sidecar.log'), sidecarLog)
     console.error(`Retained failed export/chat fixture: ${scratch}`)

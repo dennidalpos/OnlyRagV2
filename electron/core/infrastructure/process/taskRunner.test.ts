@@ -1,9 +1,9 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TaskRunner } from './taskRunner'
 import { normalizePowerShellCommand } from './powerShellCommand'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
 
 /** Cases that spawn a real powershell.exe: it exists only on Windows, so other hosts report them as skipped. */
 const itWithPowerShell = it.skipIf(process.platform !== 'win32')
@@ -31,7 +31,7 @@ describe('TaskRunner Unit & Reliability Tests', () => {
   })
 
   it('should cancel an active task and clean only its temporary residue', () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-taskrunner-test-'))
+    const tempDir = createFixtureDirectory('onlyrag-taskrunner-test-')
     const sourceFile = path.join(tempDir, 'source.pdf')
     const tempFile = path.join(tempDir, 'partial.tmp')
     fs.writeFileSync(sourceFile, 'source document', 'utf-8')
@@ -49,7 +49,7 @@ describe('TaskRunner Unit & Reliability Tests', () => {
     expect(fs.existsSync(sourceFile)).toBe(true)
     expect(fs.existsSync(tempFile)).toBe(false)
 
-    fs.rmSync(tempDir, { recursive: true, force: true })
+    retainFixture(tempDir)
   })
 
   it.each(['ingestion', 'translation'] as const)('keeps %s cancellable until its owner confirms settlement', (type) => {
@@ -63,7 +63,7 @@ describe('TaskRunner Unit & Reliability Tests', () => {
   })
 
   it('should preserve sources during lifecycle cancellation and clean temporary residues', () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-taskrunner-lifecycle-test-'))
+    const tempDir = createFixtureDirectory('onlyrag-taskrunner-lifecycle-test-')
     const sourceFile = path.join(tempDir, 'source.docx')
     const tempFile = path.join(tempDir, 'partial.tmp')
     fs.writeFileSync(sourceFile, 'source document', 'utf-8')
@@ -83,7 +83,7 @@ describe('TaskRunner Unit & Reliability Tests', () => {
     expect(fs.existsSync(sourceFile)).toBe(true)
     expect(fs.existsSync(tempFile)).toBe(false)
 
-    fs.rmSync(tempDir, { recursive: true, force: true })
+    retainFixture(tempDir)
   })
 
   it('should normalize compound && commands to valid PowerShell conditional syntax', () => {

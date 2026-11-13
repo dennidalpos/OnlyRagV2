@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { workspaceAppService } from './workspaceAppService'
 import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
 import { webClient } from '../infrastructure/http/webClient'
@@ -11,14 +12,14 @@ describe('WorkspaceAppService File Deletion & Reference Purge Unit Tests', () =>
   let tmpDir: string
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-delete-test-'))
+    tmpDir = createFixtureDirectory('onlyrag-delete-test-')
     vi.spyOn(appSettingsRepository, 'loadSettingsOrThrow').mockResolvedValue(null)
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
     if (fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true, force: true })
+      retainFixture(tmpDir)
     }
   })
 
@@ -45,7 +46,7 @@ describe('WorkspaceAppService File Deletion & Reference Purge Unit Tests', () =>
   })
 
   it('fails closed with zero external adapter calls when the stored policy cannot be read, and recovers afterwards', async () => {
-    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-policy-read-'))
+    const stateDir = createFixtureDirectory('onlyrag-policy-read-')
     const settingsFile = path.join(stateDir, 'settings.json')
     const store = new (await import('../infrastructure/filesystem/appSettingsRepository')).AppSettingsRepository(stateDir)
     const search = vi.spyOn(webClient, 'searchWeb').mockResolvedValue({ success: true, results: [] } as never)
@@ -95,7 +96,7 @@ describe('WorkspaceAppService File Deletion & Reference Purge Unit Tests', () =>
       fs.rmSync(settingsFile)
       expect(await workspaceAppService.fetchWebContent('https://example.test')).toMatchObject({ success: true })
     } finally {
-      fs.rmSync(stateDir, { recursive: true, force: true })
+      retainFixture(stateDir)
     }
   })
 
@@ -149,7 +150,7 @@ describe('WorkspaceAppService File Deletion & Reference Purge Unit Tests', () =>
   })
 
   it('rejects editor writes through a junction outside the selected workspace', () => {
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-editor-outside-'))
+    const outside = createFixtureDirectory('onlyrag-editor-outside-')
     try {
       const link = path.join(tmpDir, 'escape')
       fs.symlinkSync(outside, link, process.platform === 'win32' ? 'junction' : 'dir')
@@ -159,7 +160,7 @@ describe('WorkspaceAppService File Deletion & Reference Purge Unit Tests', () =>
       expect(result).toMatchObject({ success: false, error: expect.stringContaining('Symlink or junction escape blocked') })
       expect(fs.existsSync(path.join(outside, 'leak.txt'))).toBe(false)
     } finally {
-      fs.rmSync(outside, { recursive: true, force: true })
+      retainFixture(outside)
     }
   })
 })

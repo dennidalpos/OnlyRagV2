@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { ProjectRegistryRepository } from './projectRegistryRepository'
 import * as writer from './safeAtomicFileWriter'
 
@@ -10,7 +11,7 @@ describe('ProjectRegistryRepository Unit Tests', () => {
   let repo: ProjectRegistryRepository
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-project-registry-test-'))
+    tempDir = createFixtureDirectory('onlyrag-project-registry-test-')
     repo = new ProjectRegistryRepository(tempDir)
   })
 
@@ -29,7 +30,7 @@ describe('ProjectRegistryRepository Unit Tests', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     try {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     } catch {}
   })
 

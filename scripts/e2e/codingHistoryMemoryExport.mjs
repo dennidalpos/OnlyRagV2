@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
@@ -9,7 +10,7 @@ import { _electron as electron } from 'playwright'
 import { build } from 'vite'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-memory-export-'))
+const scratch = createFixtureDirectory('onlyrag-memory-export-')
 const userData = path.join(scratch, 'user-data')
 const workspace = path.join(scratch, 'workspace with spaces')
 const destination = path.join(scratch, 'export with spaces')
@@ -144,7 +145,6 @@ try {
 } finally {
   if (application) await application.evaluate(({ app }) => app.exit()).catch(() => undefined)
   if (complete) {
-    assert.equal(path.dirname(path.resolve(scratch)), path.resolve(os.tmpdir()))
-    fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 })
+    retainFixture(scratch)
   } else console.error(`Retained failed probe profile: ${scratch}`)
 }

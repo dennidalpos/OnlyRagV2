@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
@@ -20,13 +21,13 @@ describe('application-owned agent closure', () => {
   let workspacePath: string
 
   beforeEach(() => {
-    workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-application-closure-'))
+    workspacePath = createFixtureDirectory('onlyrag-application-closure-')
     vi.mocked(runProjectVerification).mockReset()
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
-    fs.rmSync(workspacePath, { recursive: true, force: true })
+    retainFixture(workspacePath)
   })
 
   it.each(['snapshot', 'tracker'] as const)('never reports success before the final %s acknowledgement', async (failure) => {

@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { TransactionalExecutionGuard } from './transactionalExecutionGuard'
 
 describe('TransactionalExecutionGuard Unit Tests', () => {
@@ -9,13 +10,13 @@ describe('TransactionalExecutionGuard Unit Tests', () => {
   let guard: TransactionalExecutionGuard
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-guard-test-'))
+    tempDir = createFixtureDirectory('onlyrag-guard-test-')
     guard = new TransactionalExecutionGuard(tempDir)
   })
 
   afterEach(() => {
     try {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     } catch {}
   })
 

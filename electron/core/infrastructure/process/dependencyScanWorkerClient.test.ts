@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { setTimeout as nativeDelay } from 'node:timers/promises'
@@ -11,7 +12,7 @@ describe('owned dependency worker lifecycle', () => {
   let script: string
   let client: DependencyScanWorkerClient
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-scan-worker-'))
+    root = createFixtureDirectory('onlyrag-scan-worker-')
     script = path.join(root, 'fixture.cjs')
     // Declared transport fixture: synchronous work, process failure and response ownership.
     fs.writeFileSync(
@@ -34,7 +35,7 @@ parentPort.close()
     await client.shutdown()
     vi.useRealTimers()
     vi.restoreAllMocks()
-    fs.rmSync(root, { recursive: true, force: true })
+    retainFixture(root)
   })
 
   function request(name: string, deadline = 2000, signal?: AbortSignal) {

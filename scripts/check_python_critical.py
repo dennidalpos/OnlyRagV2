@@ -3,11 +3,12 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import tempfile
 import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from scripts.test.fixture_runtime import create_fixture_directory, retain_fixture  # noqa: E402
 CHECKS = (
     "sidecar/tests/test_document_limits.py::test_native_ingestion_boundaries_include_headings_and_preserve_existing_data",
     "sidecar/tests/test_document_limits.py::test_oversized_original_archive_is_refused_before_chunking_even_with_small_result",
@@ -34,26 +35,29 @@ def main() -> int:
     environment = os.environ.copy()
     # This gate always targets source fixtures, never a configured frozen/live server.
     for key in ("PYTEST_ADDOPTS", "PYTEST_PLUGINS", "PYTHONPATH", "ONLYRAG_TABULAR_TEST_URL",
-                "ONLYRAG_TABULAR_TEST_TOKEN", "ONLYRAG_SIDECAR_TOKEN"):
+            "ONLYRAG_TABULAR_TEST_TOKEN", "ONLYRAG_SIDECAR_TOKEN"):
         environment.pop(key, None)
     environment.update(PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTHONDONTWRITEBYTECODE="1",
-                       OLLAMA_BASE_URL="http://127.0.0.1:1")
+                   OLLAMA_BASE_URL="http://127.0.0.1:1")
+    temporary = create_fixture_directory("onlyrag-python-critical-")
+    print(f"Retained Python critical fixture: {temporary}", flush=True)
     try:
-        with tempfile.TemporaryDirectory(prefix="onlyrag-python-critical-") as temporary:
-            report = Path(temporary) / "pytest.xml"
-            command = [sys.executable, "-m", "pytest", "-c", str(ROOT / "pytest.ini"),
-                       "-o", "addopts=", "-p", "no:cacheprovider", "--strict-config", "--strict-markers",
-                       "--runxfail", "-q", f"--junitxml={report}",
-                       *(str(ROOT / node) for node in CHECKS)]
-            result = subprocess.run(command, cwd=temporary, env=environment, timeout=180, check=False)
-            if result.returncode:
-                return result.returncode
-            count = validate_report(report)
-            print(f"Python critical gate: {count} cases passed across {len(CHECKS)} required checks.", flush=True)
-            return 0
+        report = Path(temporary) / "pytest.xml"
+        command = [sys.executable, "-m", "pytest", "-c", str(ROOT / "pytest.ini"),
+                   "-o", "addopts=", "-p", "no:cacheprovider", "--strict-config", "--strict-markers",
+                   "--runxfail", "-q", f"--junitxml={report}",
+                   *(str(ROOT / node) for node in CHECKS)]
+        result = subprocess.run(command, cwd=temporary, env=environment, timeout=180, check=False)
+        if result.returncode:
+            return result.returncode
+        count = validate_report(report)
+        print(f"Python critical gate: {count} cases passed across {len(CHECKS)} required checks.", flush=True)
+        return 0
     except (OSError, ValueError, ET.ParseError, subprocess.TimeoutExpired) as error:
         print(f"Python critical gate failed: {error}", file=sys.stderr)
         return 1
+    finally:
+        retain_fixture(temporary)
 
 
 if __name__ == "__main__":

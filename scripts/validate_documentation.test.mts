@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from './test/fixtureRuntime.mjs'
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { validateDocumentation } from './validate_documentation.mjs'
 
@@ -8,12 +9,12 @@ describe('documentation validation', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-docs-'))
+    tempDir = createFixtureDirectory('onlyrag-docs-')
     fs.mkdirSync(path.join(tempDir, 'docs'))
     fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ scripts: { build: 'vite build' } }))
   })
 
-  afterEach(() => fs.rmSync(tempDir, { recursive: true, force: true }))
+  afterEach(() => retainFixture(tempDir))
 
   it('accepts existing local links and npm scripts', () => {
     fs.writeFileSync(path.join(tempDir, 'docs', 'index.md'), '[Architecture](architecture.md)\n`npm run build`')

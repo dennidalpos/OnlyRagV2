@@ -1,13 +1,14 @@
+import { createFixtureDirectory } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright'
 
 // Built Renderer, Main and Preload; deterministic IPC services, never a real model or personal profile.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const evidence = process.env.ONLYRAG_UX_EVIDENCE || fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-ux-'))
+const evidence = createFixtureDirectory('onlyrag-ux-')
 const userData = path.join(evidence, 'profile')
 fs.mkdirSync(userData, { recursive: true })
 const settingsFile = path.join(userData, 'settings.json')

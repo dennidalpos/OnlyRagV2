@@ -1,19 +1,20 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { safeAtomicWrite, pendingAtomicWritePathCount } from './safeAtomicFileWriter'
 
 describe('safeAtomicFileWriter Unit Tests', () => {
   let testDir: string
 
   beforeEach(() => {
-    testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-atomic-write-test-'))
+    testDir = createFixtureDirectory('onlyrag-atomic-write-test-')
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
-    fs.rmSync(testDir, { recursive: true, force: true })
+    retainFixture(testDir)
   })
 
   it('releases completed and failed paths without discarding a newer queued write', async () => {

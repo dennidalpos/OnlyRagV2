@@ -1,12 +1,13 @@
+import { createFixtureDirectory } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+
 import { createServer, version } from 'vite'
 
 assert.equal(process.platform, 'win32')
-const evidence = path.join(process.env.ONLYRAG_LIVE_ROOT || path.join(os.homedir(), 'OnlyRag-Live'), `vite-editor-${randomUUID()}`)
+const evidence = createFixtureDirectory('vite-editor-')
 fs.mkdirSync(evidence, { recursive: true })
 const receipt = path.join(evidence, 'editor.jsonl')
 const helper = path.join(evidence, 'editor.cjs')

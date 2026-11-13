@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { workspaceMetadataStatePath, workspaceMetadataTrackerPath } from '../infrastructure/filesystem/workspaceMetadataDirectory'
 
@@ -44,7 +45,7 @@ describe('ProjectRegistryAppService project removal and purge fan-out', () => {
   it('removeProject keeps .onlyrag and user files for reopening', async () => {
     vi.mocked(projectRegistryRepository.remove).mockResolvedValue(true)
 
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-proj-test-'))
+    const tempDir = createFixtureDirectory('onlyrag-proj-test-')
     const userFile = path.join(tempDir, 'App.tsx')
     const onlyragDir = path.join(tempDir, '.onlyrag')
     const sessionFile = workspaceMetadataStatePath(tempDir, 'chat-1')
@@ -67,6 +68,6 @@ describe('ProjectRegistryAppService project removal and purge fan-out', () => {
     expect(fs.existsSync(tempDir)).toBe(true)
 
     // Cleanup tempDir
-    fs.rmSync(tempDir, { recursive: true, force: true })
+    retainFixture(tempDir)
   })
 })

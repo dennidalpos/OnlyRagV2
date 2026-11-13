@@ -1,12 +1,13 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-bundle-ux-'))
+const tempRoot = createFixtureDirectory('onlyrag-bundle-ux-')
 const userData = path.join(tempRoot, 'user-data')
 const screenshotDir = process.env.ONLYRAG_E2E_SCREENSHOT_DIR || path.join(tempRoot, 'screenshots')
 fs.mkdirSync(userData)
@@ -103,5 +104,5 @@ try {
   console.log('[PASS] Initial bundle split and two-viewport tabs, wizard, prompt editor checks.')
 } finally {
   if (application) await application.close()
-  fs.rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
+  retainFixture(tempRoot)
 }

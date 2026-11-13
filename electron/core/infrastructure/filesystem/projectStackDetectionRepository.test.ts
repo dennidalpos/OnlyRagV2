@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { ProjectStackDetectionRepository } from './projectStackDetectionRepository'
 
 describe('ProjectStackDetectionRepository Unit Tests', () => {
@@ -9,11 +10,11 @@ describe('ProjectStackDetectionRepository Unit Tests', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-stack-test-'))
+    tempDir = createFixtureDirectory('onlyrag-stack-test-')
   })
 
   afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true })
+    retainFixture(tempDir)
   })
 
   it('should return an empty stack for a missing or unset workspace path', () => {

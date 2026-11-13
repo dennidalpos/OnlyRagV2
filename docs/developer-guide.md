@@ -76,7 +76,7 @@ Documentation-only changes need the relevant documentation/whitespace checks. do
 
 Additional checks are npm test, targeted Vitest, quality:python for required offline Python critical cases, and the full pytest/Sidecar wrapper when code warrants them. test:fast changes reporting, not test scope. Python critical quality rejects missing/skipped cases; exit0 alone is insufficient.
 
-Electron recovery/UX tests use owned deterministic profiles/services and have explicit evidence-output controls. ONLYRAG_RECOVERY_EVIDENCE and ONLYRAG_LIVE_ROOT are used by the corresponding runners; verify each runner's accepted options and retention. Do not run live model campaigns or spend historical inference budgets for this documentation task.
+Electron recovery/UX tests use owned deterministic profiles/services. Active runners retain success and failure fixtures under `test-results/fixtures/`; their former evidence-location environment overrides no longer relocate output. See [test storage and retention](./test-storage.md) for ownership, subprocess isolation and explicit cleanup. Retired model campaigns and historical inference budgets stay retired.
 
 ## Generated files and local candidates
 

@@ -1,5 +1,5 @@
+import { retainFixture, createFixtureDirectory } from '../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { resolveWorkspacePath, buildDefaultAgentSettings, buildAttachedContextBlock, buildPinnedFilesContextBlock } from './agentOrchestratorSessionSetup'
@@ -22,7 +22,7 @@ describe('agentOrchestratorSessionSetup', () => {
     for (const d of createdDirs) {
       try {
         if (fs.existsSync(d)) {
-          fs.rmSync(d, { recursive: true, force: true })
+          retainFixture(d)
         }
       } catch {}
     }
@@ -30,7 +30,7 @@ describe('agentOrchestratorSessionSetup', () => {
   })
 
   it('should resolve a valid workspace path and ensure directory exists', () => {
-    const tempDir = path.join(os.tmpdir(), `test_ws_${Date.now()}`)
+    const tempDir = createFixtureDirectory('test_ws_')
     createdDirs.push(tempDir)
 
     const resolved = resolveWorkspacePath({ workspacePath: tempDir, isStandaloneMode: false })
@@ -39,7 +39,7 @@ describe('agentOrchestratorSessionSetup', () => {
   })
 
   it('should reuse one persistent scratch workspace across standalone sessions', () => {
-    const stateDir = path.join(os.tmpdir(), `test_scratch_${Date.now()}`)
+    const stateDir = createFixtureDirectory('test_scratch_')
     createdDirs.push(stateDir)
     const scratch = new StandaloneScratchWorkspace(stateDir)
     const resolved = resolveWorkspacePath({ workspacePath: null, isStandaloneMode: true, sessionId: 'session-one' }, scratch)
@@ -62,7 +62,7 @@ describe('agentOrchestratorSessionSetup', () => {
 
   it('should fallback to the persistent scratch workspace in standalone mode with a protected workspace', () => {
     const sessionId = `sys-standalone-${Date.now()}`
-    const stateDir = path.join(os.tmpdir(), `test_scratch_protected_${Date.now()}`)
+    const stateDir = createFixtureDirectory('test_scratch_protected_')
     createdDirs.push(stateDir)
     const scratch = new StandaloneScratchWorkspace(stateDir)
     const resolved = resolveWorkspacePath(

@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { CapabilityPolicyAuditRepository } from './capabilityPolicyAuditRepository'
 
@@ -22,11 +23,11 @@ describe('CapabilityPolicyAuditRepository', () => {
   let repository: CapabilityPolicyAuditRepository
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-policy-audit-'))
+    tempDir = createFixtureDirectory('onlyrag-policy-audit-')
     repository = new CapabilityPolicyAuditRepository(path.join(tempDir, 'audit.json'))
   })
 
-  afterEach(() => fs.rmSync(tempDir, { recursive: true, force: true }))
+  afterEach(() => retainFixture(tempDir))
 
   it('persists validated and redacted audit events', async () => {
     expect(await repository.append(event(1))).toBe(true)

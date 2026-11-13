@@ -1,8 +1,9 @@
+import { createFixtureDirectory } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright'
@@ -24,10 +25,7 @@ assert.equal(captured.results.length, 4)
 assert.equal(captured.humanConfirmed, false)
 confirmed.forEach((ledger, index) => assert.equal(ledger.request, captured.results[index].draft.request))
 
-const evidence = path.join(
-  process.env.ONLYRAG_LIVE_ROOT || path.join(os.homedir(), 'OnlyRag-Live'),
-  `request-ledger-desktop-replay-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`,
-)
+const evidence = createFixtureDirectory('request-ledger-desktop-replay-')
 const profile = path.join(evidence, 'isolated-profile')
 const workspace = path.join(evidence, 'workspace with spaces')
 fs.mkdirSync(profile, { recursive: true })

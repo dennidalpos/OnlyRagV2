@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { validateWorkspaceRealpath } from './workspaceRealpathGuard'
@@ -10,7 +11,7 @@ describe('validateWorkspaceRealpath', () => {
   let outside: string
 
   beforeEach(() => {
-    baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-realpath-'))
+    baseDir = createFixtureDirectory('onlyrag-realpath-')
     workspace = path.join(baseDir, 'workspace with spaces')
     outside = path.join(baseDir, 'outside')
     fs.mkdirSync(workspace)
@@ -18,7 +19,7 @@ describe('validateWorkspaceRealpath', () => {
   })
 
   afterEach(() => {
-    fs.rmSync(baseDir, { recursive: true, force: true })
+    retainFixture(baseDir)
   })
 
   it('preserves valid spaces for new paths inside the workspace', () => {

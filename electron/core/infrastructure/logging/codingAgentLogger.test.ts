@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { CodingAgentLogger } from './codingAgentLogger'
 
@@ -10,13 +11,13 @@ describe('CodingAgentLogger Unit Tests', () => {
   let tempDir: string | undefined
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-audit-test-'))
+    tempDir = createFixtureDirectory('onlyrag-audit-test-')
     loggerInstance = new CodingAgentLogger({ logFilePath: path.join(tempDir, 'coding_agent_audit.log') })
     logPath = loggerInstance.getLogFilePath()
   })
 
   afterEach(() => {
-    if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true })
+    if (tempDir) retainFixture(tempDir)
     tempDir = undefined
   })
 
@@ -246,7 +247,7 @@ second run`,
   })
 
   it('mirrors entries with error details kept and credentials removed when a live run asks for it', () => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-audit-mirror-'))
+    tempDir = createFixtureDirectory('onlyrag-audit-mirror-')
     const mirrorPath = path.join(tempDir, 'audit', 'unredacted.log')
     const mirrored = new CodingAgentLogger({ logFilePath: path.join(tempDir, 'coding_agent_audit.log') })
     mirrored.mirrorUnredactedTo(mirrorPath)
@@ -273,7 +274,7 @@ second run`,
   })
 
   it('keeps only the configured number of audit-log generations', () => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-audit-retention-'))
+    tempDir = createFixtureDirectory('onlyrag-audit-retention-')
     const retainedPath = path.join(tempDir, 'coding_agent_audit.log')
     const retainedLogger = new CodingAgentLogger({ logFilePath: retainedPath, maxSizeBytes: 1, maxRetainedFiles: 2 })
 

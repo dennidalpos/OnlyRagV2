@@ -1,5 +1,6 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CodingSession } from '../../../../shared/types'
@@ -27,13 +28,13 @@ describe('coding history recovery journal', () => {
   let journal: SessionHistoryRecoveryJournal
 
   beforeEach(async () => {
-    root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'onlyrag-history-recovery-test-'))
+    root = await createFixtureDirectory('onlyrag-history-recovery-test-')
     journal = new SessionHistoryRecoveryJournal(root)
     vi.mocked(sessionHistoryRepository.listSessions).mockReset().mockResolvedValue([original])
   })
 
   afterEach(async () => {
-    await fs.promises.rm(root, { recursive: true, force: true })
+    await retainFixture(root)
   })
 
   it('retains the newest staged revision until that exact revision is saved', async () => {
@@ -52,14 +53,14 @@ describe('coding history recovery journal', () => {
 
   it('rejects a corrupt record and exports an intact retained snapshot with independent readback', async () => {
     const staged = await journal.stage({ ...original, title: 'Unsaved' })
-    const exportDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'onlyrag-history-export-test-'))
+    const exportDir = await createFixtureDirectory('onlyrag-history-export-test-')
     try {
       const exported = await journal.export(staged.recoveryId, exportDir)
       expect(JSON.parse(await fs.promises.readFile(exported, 'utf8')).session.title).toBe('Unsaved')
       await fs.promises.writeFile(path.join(root, `${staged.recoveryId}.json`), '{"version":1}')
       await expect(journal.read(staged.recoveryId)).rejects.toThrow('corrupt')
     } finally {
-      await fs.promises.rm(exportDir, { recursive: true, force: true })
+      await retainFixture(exportDir)
     }
   })
 
@@ -76,7 +77,7 @@ describe('coding history recovery journal', () => {
     await fs.promises.rm(root, { recursive: true })
     await fs.promises.writeFile(root, 'blocked recovery directory')
     vi.mocked(sessionHistoryRepository.listSessions).mockRejectedValue(new Error('Canonical history unavailable'))
-    const destination = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'onlyrag-memory-export-'))
+    const destination = await createFixtureDirectory('onlyrag-memory-export-')
     try {
       const snapshot = { ...original, title: 'Unsaved memory revision' }
       await expect(journal.stage(snapshot)).rejects.toThrow()
@@ -94,7 +95,7 @@ describe('coding history recovery journal', () => {
       await expect(journal.exportSnapshot(snapshot, root)).rejects.toThrow('not a directory')
       await expect(journal.exportSnapshot(snapshot, path.join(destination, 'missing'))).rejects.toThrow()
     } finally {
-      await fs.promises.rm(destination, { recursive: true, force: true })
+      await retainFixture(destination)
       await fs.promises.unlink(root)
     }
   })
@@ -111,7 +112,7 @@ describe('coding history recovery journal', () => {
 
   it('refuses invalid or occupied export targets without changing the staged snapshot', async () => {
     const staged = await journal.stage({ ...original, title: 'Unsaved' })
-    const exportDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'onlyrag-history-export-test-'))
+    const exportDir = await createFixtureDirectory('onlyrag-history-export-test-')
     try {
       await expect(journal.export('../outside', exportDir)).rejects.toThrow('Invalid coding history recovery identity')
       await expect(journal.export(staged.recoveryId, path.join(exportDir, 'missing'))).rejects.toThrow()
@@ -121,7 +122,7 @@ describe('coding history recovery journal', () => {
       expect(await fs.promises.readFile(target, 'utf8')).toBe('existing export')
       expect((await journal.read(staged.recoveryId)).session.title).toBe('Unsaved')
     } finally {
-      await fs.promises.rm(exportDir, { recursive: true, force: true })
+      await retainFixture(exportDir)
     }
   })
 })

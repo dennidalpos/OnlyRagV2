@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 
 import { resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
@@ -18,11 +19,11 @@ import type { ResponseInterpreterContext } from './agentOrchestratorRunContext'
 let tempDir: string
 
 beforeEach(() => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-closure-'))
+  tempDir = createFixtureDirectory('onlyrag-closure-')
 })
 
 afterEach(() => {
-  fs.rmSync(tempDir, { recursive: true, force: true })
+  retainFixture(tempDir)
 })
 
 function plannerWith(

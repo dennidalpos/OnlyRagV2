@@ -6,17 +6,53 @@ opt into a separately isolated frozen Sidecar.
 
 import atexit
 import os
-import shutil
 import tempfile
+import re
+import json
+from pathlib import Path
+from scripts.test.fixture_runtime import create_fixture_directory, retain_fixture
 
-_TEST_DATA_DIR = tempfile.mkdtemp(prefix="onlyrag-tests-")
-os.environ["ONLYRAG_DATA_DIR"] = _TEST_DATA_DIR
-atexit.register(lambda: shutil.rmtree(_TEST_DATA_DIR, ignore_errors=True))
+_TEST_DATA_DIR = create_fixture_directory("onlyrag-tests-")
+os.environ["ONLYRAG_DATA_DIR"] = str(_TEST_DATA_DIR)
+atexit.register(retain_fixture, _TEST_DATA_DIR)
 
 import pytest  # noqa: E402  (import order is load-bearing, see module docstring)
 import httpx  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 import sidecar.infrastructure.embeddings as embeddings_module  # noqa: E402
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_configure(config):
+    if config.pluginmanager.hasplugin("junitxml") and not config.option.xmlpath:
+        config.option.xmlpath = str(_TEST_DATA_DIR / "pytest.xml")
+
+
+class RetainedTempFactory:
+    def getbasetemp(self):
+        return _TEST_DATA_DIR / "cases"
+
+    def mktemp(self, basename, numbered=True):
+        if not basename or Path(basename).name != basename or basename in (".", ".."):
+            raise ValueError("Temporary fixture name must be a single component")
+        parent = self.getbasetemp()
+        parent.mkdir(exist_ok=True)
+        if numbered:
+            return Path(tempfile.mkdtemp(prefix=basename + "-", dir=parent))
+        directory = parent / basename
+        directory.mkdir()
+        return directory
+
+
+@pytest.fixture(scope="session")
+def tmp_path_factory():
+    return RetainedTempFactory()
+
+
+@pytest.fixture
+def tmp_path(tmp_path_factory, request):
+    # Keep room for native database/version paths on Windows; case.json keeps the full node ID.
+    return tmp_path_factory.mktemp(re.sub(r'[\x00-\x1f/\\<>:"|?*]', '_', request.node.name)[:24])
 
 
 @pytest.fixture
@@ -52,21 +88,19 @@ def fast_fallback_embeddings(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def isolated_lancedb_tables():
+def isolated_lancedb_tables(tmp_path, tmp_path_factory, monkeypatch, request):
     """
-    Drops every LanceDB table between tests.
-
-    The connection is process-wide, so without this a document ingested by one test stays
-    visible to the next one — and a table written under one schema makes a later ingest with a
-    different schema fail outright.
+    Bind the process-wide connection to a new retained database for every test.
+    This isolates schemas and documents without deleting the previous test's tables.
     """
     import lancedb
-    from sidecar.config import LANCEDB_DIR
-    from sidecar.infrastructure.db import get_existing_tables, lance_db
+    from sidecar import config
+    from sidecar.infrastructure import db
 
-    # A fresh native session prevents cached indexes surviving drop/recreate at the same URI.
-    lance_db.__init__(LANCEDB_DIR, session=lancedb.Session())
-    yield
-
-    for table_name in get_existing_tables():
-        lance_db.drop_table(table_name)
+    database_root = tmp_path_factory.mktemp("database")
+    directory = database_root / "lancedb_store"
+    (database_root / "case.json").write_text(json.dumps({"nodeId": request.node.nodeid, "scenario": str(tmp_path)}), encoding="utf-8")
+    monkeypatch.setattr(config, "LANCEDB_DIR", str(directory))
+    monkeypatch.setattr(db, "LANCEDB_DIR", str(directory))
+    monkeypatch.setattr(db, "_journal_path", database_root / "document-recovery.json")
+    db.lance_db.__init__(str(directory), session=lancedb.Session())

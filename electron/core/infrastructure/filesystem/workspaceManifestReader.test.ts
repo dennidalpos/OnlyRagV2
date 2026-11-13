@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 
 import { readWorkspaceManifest } from './workspaceManifestReader'
@@ -9,11 +10,11 @@ import { resolveVerificationCommands } from '../../domain/agent/projectVerificat
 let tempDir: string
 
 beforeEach(() => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-manifest-'))
+  tempDir = createFixtureDirectory('onlyrag-manifest-')
 })
 
 afterEach(() => {
-  fs.rmSync(tempDir, { recursive: true, force: true })
+  retainFixture(tempDir)
 })
 
 describe('readWorkspaceManifest', () => {

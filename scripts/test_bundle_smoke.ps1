@@ -30,7 +30,8 @@ if (Test-Path Variable:\PSNativeCommandUseErrorActionPreference) {
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$smokeUserData = Join-Path ([System.IO.Path]::GetTempPath()) ("onlyrag-smoke-" + [guid]::NewGuid().ToString("N"))
+. (Join-Path $PSScriptRoot 'test/fixture_runtime.ps1')
+$smokeUserData = New-RetainedTestFixture 'onlyrag-smoke-'
 
 try {
     $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
@@ -128,7 +129,5 @@ try {
     exit 1
 } finally {
     Pop-Location
-    if (Test-Path -LiteralPath $smokeUserData) {
-        Remove-Item -LiteralPath $smokeUserData -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    Complete-RetainedTestFixture $smokeUserData
 }

@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import fs from 'node:fs'
 import http from 'node:http'
-import os from 'node:os'
 import path from 'node:path'
 import { AgentBrowserService, readAgentBrowserScreenshot } from '../../electron/core/infrastructure/process/agentBrowserService'
 import { managedDevServerRepository } from '../../electron/core/infrastructure/process/managedDevServerRepository'
 import { VisualValidationRunner } from '../../electron/core/application/visualValidationRunner'
 
-const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-browser-e2e-'))
+const workspacePath = createFixtureDirectory('onlyrag-browser-e2e-')
 const browser = new AgentBrowserService()
 let external: http.Server
 let externalPort = 0
@@ -64,7 +64,7 @@ describe('Agent Coding Playwright browser against a managed local app', () => {
     await browser.closeAll()
     if (managedDevServerRepository.runningPort(workspacePath)) managedDevServerRepository.stop(workspacePath)
     await closeServer(external)
-    fs.rmSync(workspacePath, { recursive: true, force: true })
+    retainFixture(workspacePath)
   })
 
   it('navigates, clicks, fills, captures a private screenshot, and blocks external traffic', async () => {

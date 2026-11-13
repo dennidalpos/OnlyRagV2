@@ -1,6 +1,7 @@
+import { createFixtureDirectory } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -10,7 +11,7 @@ import { monacoSanitizerPlugin } from '../monacoSanitizerPlugin.mts'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const require = createRequire(import.meta.url)
-const evidence = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-monaco-sanitizer-'))
+const evidence = createFixtureDirectory('onlyrag-monaco-sanitizer-')
 const modulePath = (relative) => JSON.stringify(path.join(root, relative).replace(/\\/g, '/'))
 const entry = `
 import purify from ${modulePath('node_modules/dompurify/dist/purify.es.mjs')};

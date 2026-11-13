@@ -1,5 +1,6 @@
+import { retainFixture, createFixtureDirectory } from '../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
@@ -25,7 +26,7 @@ describe('TaskQueueAppService serial execution invariant', () => {
   })
 
   afterEach(() => {
-    while (workspaces.length) fs.rmSync(workspaces.pop()!, { recursive: true, force: true })
+    while (workspaces.length) retainFixture(workspaces.pop()!)
   })
 
   it('should run agent tasks strictly one at a time and expose no way to raise the limit', () => {
@@ -51,7 +52,7 @@ describe('TaskQueueAppService serial execution invariant', () => {
     )
     const owned = { isAvailable: () => true, send: vi.fn() }
     const other = { isAvailable: () => true, send: vi.fn() }
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-owned-queue-'))
+    const workspacePath = createFixtureDirectory('onlyrag-owned-queue-')
     workspaces.push(workspacePath)
     const schedule = (id: string, events: typeof owned) =>
       service.scheduleAgentTask(
@@ -86,7 +87,7 @@ describe('TaskQueueAppService serial execution invariant', () => {
           release = () => resolve({ success: false, summary: 'cancelled' })
         }),
     )
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-shutdown-queue-'))
+    const workspacePath = createFixtureDirectory('onlyrag-shutdown-queue-')
     workspaces.push(workspacePath)
     const payload = { sessionId: 'active', userTask: 'Inspect', agentMode: 'ask' as const, workspacePath }
     await service.scheduleAgentTask(payload, noRenderer)
@@ -103,7 +104,7 @@ describe('TaskQueueAppService serial execution invariant', () => {
   })
 
   it('refuses an unavailable renderer before creating workspace metadata', async () => {
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-missing-renderer-'))
+    const workspacePath = createFixtureDirectory('onlyrag-missing-renderer-')
     workspaces.push(workspacePath)
     await expect(
       new TaskQueueAppService().scheduleAgentTask({ userTask: 'Inspect', agentMode: 'ask', workspacePath }, { isAvailable: () => false, send: () => {} }),
@@ -120,7 +121,7 @@ describe('TaskQueueAppService serial execution invariant', () => {
       planRevisionId: 'plan-1:v1',
       workspaceId: 'workspace:D:\\repo',
     }
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-queue-workspace-'))
+    const workspacePath = createFixtureDirectory('onlyrag-queue-workspace-')
     workspaces.push(workspacePath)
 
     await expect(
@@ -147,7 +148,7 @@ describe('TaskQueueAppService serial execution invariant', () => {
   })
 
   it('initializes metadata before a new project run and keeps generated files outside it', async () => {
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-new-project-'))
+    const workspacePath = createFixtureDirectory('onlyrag-new-project-')
     workspaces.push(workspacePath)
     execFileSync('git', ['init', '-q', workspacePath])
     vi.mocked(runAgentOrchestratorLoop).mockImplementationOnce(async () => {
@@ -175,8 +176,8 @@ describe('TaskQueueAppService serial execution invariant', () => {
           releaseFirst = () => resolve({ success: true, summary: 'first complete' })
         }),
     )
-    const firstWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-queue-first-'))
-    const secondWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-queue-second-'))
+    const firstWorkspace = createFixtureDirectory('onlyrag-queue-first-')
+    const secondWorkspace = createFixtureDirectory('onlyrag-queue-second-')
     workspaces.push(firstWorkspace, secondWorkspace)
     const first = {
       runId: 'run-first',
@@ -203,7 +204,7 @@ describe('TaskQueueAppService serial execution invariant', () => {
   })
 
   it('binds standalone runs to the authoritative scratch workspace, never the supplied installation path', async () => {
-    const scratchPath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-queue-scratch-'))
+    const scratchPath = createFixtureDirectory('onlyrag-queue-scratch-')
     workspaces.push(scratchPath)
     const service = new TaskQueueAppService(() => scratchPath)
     const identity = {

@@ -1,3 +1,4 @@
+import { retainFixture, createFixtureDirectory } from '../../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -9,12 +10,12 @@ const repository = new ArtifactRepository()
 
 afterEach(() => {
   vi.restoreAllMocks()
-  if (workspacePath) fs.rmSync(workspacePath, { recursive: true, force: true })
+  if (workspacePath) retainFixture(workspacePath)
   workspacePath = undefined
 })
 
 function workspace(): string {
-  workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-artifacts-'))
+  workspacePath = createFixtureDirectory('onlyrag-artifacts-')
   return workspacePath
 }
 

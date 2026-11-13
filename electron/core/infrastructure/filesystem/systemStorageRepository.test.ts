@@ -1,7 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
-import path from 'node:path'
-import os from 'node:os'
+
 import { SystemStorageRepository } from './systemStorageRepository'
 
 describe('model storage volume measurement', () => {
@@ -52,15 +52,14 @@ describe('model storage volume measurement', () => {
   })
 
   it('measures the filesystem containing a real selected directory', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-disk-probe-'))
-    if (path.dirname(dir) !== os.tmpdir() || !path.basename(dir).startsWith('onlyrag-disk-probe-')) throw new Error('Invalid cleanup target')
+    const dir = createFixtureDirectory('onlyrag-disk-probe-')
     try {
       vi.stubEnv('OLLAMA_MODELS', dir)
       const native = fs.statfsSync(dir)
       expect(repo.getDiskFreeSpace(repo.getOllamaStoragePath())).toEqual({ freeBytes: native.bavail * native.bsize, totalBytes: native.blocks * native.bsize })
     } finally {
-      // This test owns this exact direct child of the native temporary root.
-      fs.rmdirSync(dir)
+      // Preserve the selected synthetic directory after native measurement.
+      retainFixture(dir)
     }
   })
 })

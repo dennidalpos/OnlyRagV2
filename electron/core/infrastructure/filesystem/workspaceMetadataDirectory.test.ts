@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ensureWorkspaceMetadataDirectory, workspaceMetadataStatePath, workspaceMetadataTrackerPath } from './workspaceMetadataDirectory'
@@ -8,13 +9,13 @@ import { ensureWorkspaceMetadataDirectory, workspaceMetadataStatePath, workspace
 const workspaces: string[] = []
 
 function workspace(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-layout-'))
+  const root = createFixtureDirectory('onlyrag-layout-')
   workspaces.push(root)
   return root
 }
 
 afterEach(() => {
-  for (const root of workspaces.splice(0)) fs.rmSync(root, { recursive: true, force: true })
+  for (const root of workspaces.splice(0)) retainFixture(root)
 })
 
 describe('workspace metadata layout', () => {

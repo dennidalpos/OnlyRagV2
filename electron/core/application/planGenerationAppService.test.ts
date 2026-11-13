@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { planGenerationAppService, type PlanGenerationRequest } from './planGenerationAppService'
 import { ollamaAppService } from './ollamaAppService'
@@ -804,11 +805,11 @@ describe('PlanGenerationAppService', () => {
     let workspacePath: string
 
     beforeEach(() => {
-      workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-plan-'))
+      workspacePath = createFixtureDirectory('onlyrag-plan-')
       vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([intervention('m-1', 'The dashboard renders', 'src/Dashboard.tsx')]))
     })
 
-    afterEach(() => fs.rmSync(workspacePath, { recursive: true, force: true }))
+    afterEach(() => retainFixture(workspacePath))
 
     it('passes declared commands and keeps configured context', async () => {
       fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'vite build', dev: 'vite' } }))

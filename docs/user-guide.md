@@ -71,7 +71,7 @@ After a crash, reopen the original conversation/workspace and explicitly Resume 
 
 Inspect final evidence, modified files, Monaco diff and terminal output. Passed, Failed and Unavailable verification are different outcomes; an assistant's statement is not a command result.
 
-Manual editor save checks disk revisions. Reload/Merge/Overwrite resolve a detected conflict only after review. Known outstanding issue: switching workspaces can lose unsaved code-editor drafts; save/export them before switching.
+Manual editor save checks disk revisions. Reload/Merge/Overwrite resolve a detected conflict only after review. Unsaved code-editor drafts and detected conflicts remain in memory when switching workspaces, entering standalone mode, closing a file tab or removing a project from the registry. Return to the folder and reopen the file to recover its draft. Save checks the retained disk revision before writing. These drafts do not survive closing the app; save them before exiting.
 
 Stop retains edits already performed. Restore Previous State covers only the checkpoint's attributed files and can remove files created by the run. It is not a complete snapshot guarantee and does not reverse shell commands, installations or external changes, especially with Full Access. Inspect coverage and preserve needed files before restoring.
 

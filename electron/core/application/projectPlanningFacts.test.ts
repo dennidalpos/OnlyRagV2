@@ -1,14 +1,15 @@
+import { retainFixture, createFixtureDirectory } from '../../../scripts/test/fixtureRuntime.mjs'
 import { afterEach, describe, expect, it } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { collectProjectPlanningFacts } from './projectPlanningFacts'
 
 const roots: string[] = []
-afterEach(() => roots.splice(0).forEach((root) => fs.rmSync(root, { recursive: true, force: true })))
+afterEach(() => roots.splice(0).forEach((root) => retainFixture(root)))
 
 function workspace(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-planning-facts-'))
+  const root = createFixtureDirectory('onlyrag-planning-facts-')
   roots.push(root)
   return root
 }

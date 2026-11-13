@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 
 import { scanDependencyFiles } from './dependencyScanFiles'
@@ -15,12 +16,12 @@ function write(relativePath: string, content: string) {
 }
 
 beforeEach(() => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-depscan-'))
+  tempDir = createFixtureDirectory('onlyrag-depscan-')
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
-  fs.rmSync(tempDir, { recursive: true, force: true })
+  retainFixture(tempDir)
 })
 
 describe('worker dependency file scanning', () => {

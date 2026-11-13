@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
@@ -16,7 +17,7 @@ const packageRequire = createRequire(builderRequire.resolve(`${builderDependency
 const asarDependency = Object.keys(packageRequire('./package.json').dependencies).find((name) => name === '@electron/asar')
 assert(asarDependency)
 const { createPackage } = packageRequire(asarDependency)
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-scanner-isolation-'))
+const tempRoot = createFixtureDirectory('onlyrag-scanner-isolation-')
 const entry = path.join(root, 'dist-electron', 'dependencyScanWorker.js')
 const resourceLimits = { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 32, stackSizeMb: 4 }
 
@@ -144,6 +145,5 @@ app.whenReady().then(async () => {
   assert(native.stdout.includes('PASS Electron'))
   console.log(native.stdout.trim())
 } finally {
-  assert(path.resolve(tempRoot).startsWith(path.resolve(os.tmpdir()) + path.sep))
-  fs.rmSync(tempRoot, { recursive: true, force: true })
+  retainFixture(tempRoot)
 }

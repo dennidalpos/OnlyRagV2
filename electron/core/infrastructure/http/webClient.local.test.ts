@@ -1,8 +1,9 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { createHash } from 'node:crypto'
 import { getEventListeners } from 'node:events'
 import fs from 'node:fs'
 import http from 'node:http'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WebClient } from './webClient'
@@ -19,7 +20,7 @@ describe('agent network against owned HTTP services', () => {
   let started: () => void
   const client = new WebClient()
   beforeEach(async () => {
-    directory = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-network-local-'))
+    directory = createFixtureDirectory('onlyrag-network-local-')
     slowStarted = new Promise((resolve) => {
       started = resolve
     })
@@ -108,7 +109,7 @@ describe('agent network against owned HTTP services', () => {
     vi.restoreAllMocks()
     server.closeAllConnections()
     await new Promise<void>((resolve) => server.close(() => resolve()))
-    fs.rmSync(directory, { recursive: true, force: true })
+    retainFixture(directory)
   })
 
   it('follows redirects and records the requested URL and exact artifact hash through the agent service', async () => {

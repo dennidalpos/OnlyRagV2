@@ -2,7 +2,7 @@
 
 La [verifica locale del writer del 21 ottobre](./verification-tracker-completion-2026-10-21.md) comprende 24 interruzioni Node/Electron e readback in processi nuovi. I temporanei completi precedenti alla sostituzione restano separati dal canonico confermato; non sono promossi o eliminati automaticamente dopo un crash.
 
-`node scripts/e2e/viteEditorWindows.mjs` verifica Vite ed editor Windows con server loopback e un editor sintetico posseduti. `ONLYRAG_LIVE_ROOT` sceglie la radice delle evidenze. Per conservare i profili di `chatDraftRecovery.mjs` impostare `ONLYRAG_RECOVERY_EVIDENCE` su una directory esistente dedicata; senza questa opzione le fixture riuscite vengono pulite. Nessuno dei due runner usa modelli reali.
+`node scripts/e2e/viteEditorWindows.mjs` verifica Vite ed editor Windows con server loopback e un editor sintetico posseduti. Questo runner e `chatDraftRecovery.mjs` conservano sempre le fixture sotto `test-results/fixtures/`, anche dopo successo; le precedenti variabili di rilocazione non cambiano piu la destinazione. Nessuno dei due runner usa modelli reali. Contratto di ownership, subprocess e conservazione: [test storage](./test-storage.md).
 
 Durante l'avvio di sviluppo il Sidecar mostra `Verifica...` finché preparazione Python e readiness non terminano. Con `.venv` assente il primo avvio può installare le dipendenze runtime; un fallimento concluso resta `Offline`. Dopo modifiche al Main process chiudere e riavviare `npm run dev`. [Diagnosi, correzione e prove native del 20 ottobre](./verification-sidecar-dev-startup-2026-10-20.md).
 
@@ -64,7 +64,7 @@ Il comando **Avvia / Installa Ollama** tenta di avviare `ollama.exe` locale. Se 
 
 ## Recupero agente e ricevute
 
-Le ricevute dei task agente sono in `agent-task-recovery.json` sotto il `userData` effettivo. Non modificare l'archivio per forzare una ripresa: una ricevuta terminale impedisce il replay e un esito di azione ignoto richiede riconciliazione. Le richieste pendenti mantengono il contesto originale; le ricevute concluse conservano solo identità e data di accettazione. Archivi oltre 10.000 identità o 64 MiB rifiutano nuove ammissioni, senza scarti automatici. Le evidenze della suite Electron sono esterne al checkout, nel percorso stampato dalla prova; `ONLYRAG_RECOVERY_EVIDENCE` può sceglierlo esplicitamente. Lo scenario completo simula anche l'HTTP Sidecar, senza usare un eventuale servizio personale sulla porta ordinaria.
+Le ricevute dei task agente sono in `agent-task-recovery.json` sotto il `userData` effettivo. Non modificare l'archivio per forzare una ripresa: una ricevuta terminale impedisce il replay e un esito di azione ignoto richiede riconciliazione. Le richieste pendenti mantengono il contesto originale; le ricevute concluse conservano solo identità e data di accettazione. Archivi oltre 10.000 identità o 64 MiB rifiutano nuove ammissioni, senza scarti automatici. Le evidenze della suite Electron restano nel checkout sotto `test-results/fixtures/`, nel percorso stampato dalla prova, fino a pulizia esplicita. Lo scenario completo simula anche l'HTTP Sidecar, senza usare un eventuale servizio personale sulla porta ordinaria.
 
 ## Offline embedding store maintenance — 2026-10-10
 

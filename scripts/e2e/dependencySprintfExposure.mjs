@@ -1,8 +1,9 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import http from 'node:http'
 import { createRequire } from 'node:module'
-import os from 'node:os'
+
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -17,7 +18,7 @@ assert(builderDependency, 'electron-builder must declare app-builder-lib')
 const precision = '%.101f'
 
 if (process.argv[2] === 'scanner') {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-sprintf-'))
+  const workspace = createFixtureDirectory('onlyrag-sprintf-')
   try {
     fs.writeFileSync(path.join(workspace, 'package.json'), JSON.stringify({ name: 'fixture', scripts: { test: `echo ${precision}` } }))
     fs.writeFileSync(path.join(workspace, 'index.js'), "require('undeclared-package')\n")
@@ -32,8 +33,7 @@ if (process.argv[2] === 'scanner') {
     assert(!Object.keys(require.cache).some((filename) => /[\\/](argparse|sprintf-js)[\\/]/.test(filename)))
     console.log('PASS scanner: real YAML/script parsing does not load argparse or sprintf-js; missing imports remain visible')
   } finally {
-    assert(path.dirname(workspace) === path.resolve(os.tmpdir()))
-    fs.rmSync(workspace, { recursive: true })
+    retainFixture(workspace)
   }
 } else if (process.argv[2] === 'proxy') {
   // Bootstrap changes global agents only inside this isolated child.

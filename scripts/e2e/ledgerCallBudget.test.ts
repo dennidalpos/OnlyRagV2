@@ -1,5 +1,6 @@
+import { retainFixture, createFixtureDirectory } from '../test/fixtureRuntime.mjs'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { LedgerCallBudget } from './ledgerCallBudget'
@@ -7,13 +8,12 @@ import { LedgerCallBudget } from './ledgerCallBudget'
 const roots: string[] = []
 afterEach(() => {
   for (const root of roots.splice(0)) {
-    expect(path.dirname(path.resolve(root))).toBe(path.resolve(os.tmpdir()))
     expect(path.basename(root)).toMatch(/^onlyrag-budget-unit-/)
-    fs.rmSync(root, { recursive: true, force: true })
+    retainFixture(root)
   }
 })
 function fixture() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-budget-unit-'))
+  const directory = createFixtureDirectory('onlyrag-budget-unit-')
   roots.push(directory)
   return { directory, budget: new LedgerCallBudget(directory) }
 }

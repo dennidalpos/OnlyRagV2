@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import net from 'node:net'
@@ -15,7 +16,7 @@ const rounds = Number(process.argv[2] ?? 5)
 assert(Number.isInteger(rounds) && rounds >= 1 && rounds <= 20, 'Expected 1..20 rounds.')
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const require = createRequire(import.meta.url)
-const evidence = path.join(process.env.ONLYRAG_LIVE_ROOT || path.join(os.homedir(), 'OnlyRag-Live'), `managed-dev-diagnostics-${randomUUID()}`)
+const evidence = createFixtureDirectory('managed-dev-diagnostics-')
 fs.mkdirSync(evidence, { recursive: true })
 const relative = 'electron/core/infrastructure/process/managedDevServerRepository.ts'
 const source = fs.readFileSync(path.join(root, relative))
@@ -59,7 +60,7 @@ console.log(`Evidence: ${evidence}`)
 try {
   for (let round = 0; round < rounds; round++) {
     for (const mode of ['vite', 'forced-self-connect', 'single-readiness', 'wildcard-ipv4', 'wildcard-ipv6']) {
-      const workspace = fs.mkdtempSync(path.join(root, 'node_modules/onlyrag-managed-diagnostic-'))
+      const workspace = createFixtureDirectory('node_modules/onlyrag-managed-diagnostic-')
       const repository = new ManagedDevServerRepository()
       const startedAt = performance.now()
       const receipt = { round, mode, workspace, sockets: [], passed: false }
@@ -169,9 +170,9 @@ try {
               return { path: name, sha256 }
             })
           const resolved = fs.realpathSync.native(workspace)
-          assert.equal(path.dirname(resolved).toLowerCase(), fs.realpathSync.native(path.join(root, 'node_modules')).toLowerCase())
+
           assert(path.basename(resolved).startsWith('onlyrag-managed-diagnostic-'))
-          if (receipt.passed) fs.rmSync(resolved, { recursive: true })
+          if (receipt.passed) retainFixture(resolved)
           receipt.retainedWorkspace = destination
         } catch (error) {
           receipt.cleanupError = String(error)

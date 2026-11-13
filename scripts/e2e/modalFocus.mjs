@@ -1,8 +1,9 @@
+import { createFixtureDirectory } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -10,10 +11,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { chromium } from 'playwright'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const evidence = path.join(
-  process.env.ONLYRAG_LIVE_ROOT || path.join(os.homedir(), 'OnlyRag-Live'),
-  `modal-focus-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`,
-)
+const evidence = createFixtureDirectory('modal-focus-')
 fs.mkdirSync(evidence, { recursive: true })
 const result = await build({
   configFile: false,

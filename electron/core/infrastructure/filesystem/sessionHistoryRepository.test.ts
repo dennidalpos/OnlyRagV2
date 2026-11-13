@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { SessionHistoryRepository, sessionHistoryRepository } from './sessionHistoryRepository'
 import type { CodingSession } from '../../../../shared/types'
 import * as atomicWriter from './safeAtomicFileWriter'
@@ -25,13 +26,13 @@ describe('SessionHistoryRepository Unit Tests', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-history-test-'))
+    tempDir = createFixtureDirectory('onlyrag-history-test-')
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
     try {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     } catch {}
   })
 
@@ -254,12 +255,12 @@ describe('SessionHistoryRepository Unit Tests', () => {
     const standalone = await sessionHistoryRepository.saveSession(buildSession('session-standalone', null))
     expect(standalone).not.toBeNull()
 
-    const unrelatedWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-history-other-'))
+    const unrelatedWorkspace = createFixtureDirectory('onlyrag-history-other-')
     try {
       expect(await sessionHistoryRepository.deleteSession('session-standalone', unrelatedWorkspace)).toBe(true)
       expect((await sessionHistoryRepository.listSessions(null)).find((s) => s.id === 'session-standalone')).toBeUndefined()
     } finally {
-      fs.rmSync(unrelatedWorkspace, { recursive: true, force: true })
+      retainFixture(unrelatedWorkspace)
     }
   })
 

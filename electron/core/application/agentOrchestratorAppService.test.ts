@@ -1,7 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
 import { execFileSync } from 'node:child_process'
 import type { RendererEventSink } from '../domain/ports/rendererEventSink'
 import {
@@ -28,16 +28,14 @@ import { sessionDeletionRunGate } from './sessionDeletionRunGate'
 import { sessionDeletionJournal } from '../infrastructure/filesystem/sessionDeletionJournal'
 
 const fallbackProfile = await vi.hoisted(async () => {
-  const fs = await import('node:fs')
-  const os = await import('node:os')
-  const path = await import('node:path')
-  return { root: fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-orchestrator-profile-')), sessions: '' }
+  const { createFixtureDirectory } = await import('../../../scripts/test/fixtureRuntime.mjs')
+  return { root: createFixtureDirectory('onlyrag-orchestrator-profile-'), sessions: '' }
 })
 vi.mock('../infrastructure/filesystem/userDataRoot', () => ({
   userDataRoot: () => fallbackProfile.root,
   userDataSessionsDir: () => fallbackProfile.sessions,
 }))
-afterAll(() => fs.rmSync(fallbackProfile.root, { recursive: true, force: true }))
+afterAll(() => retainFixture(fallbackProfile.root))
 
 // The production fallback is fail-closed; these loop tests exercise tool execution, so they opt in.
 const TOOL_ENABLED_SETTINGS: AppSettings = {
@@ -218,7 +216,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-orchestrator-test-'))
+    tempDir = createFixtureDirectory('onlyrag-orchestrator-test-')
     fallbackProfile.sessions = path.join(tempDir, 'fallback', 'sessions')
     pendingWrites = []
     vi.spyOn(agentSessionStateRepository, 'saveSessionState').mockImplementation((state) => {
@@ -243,7 +241,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     await Promise.all(pendingWrites)
     vi.restoreAllMocks()
     try {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     } catch {}
   })
 

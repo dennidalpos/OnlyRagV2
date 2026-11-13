@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { AgentInterviewAppService } from './agentInterviewAppService'
 import { ollamaAppService } from './ollamaAppService'
@@ -111,7 +112,7 @@ describe('AgentInterviewAppService', () => {
   })
 
   it('drops questions already answered by fresh workspace facts', async () => {
-    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-interview-facts-'))
+    const workspacePath = createFixtureDirectory('onlyrag-interview-facts-')
     fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ packageManager: 'pnpm@10.0.0' }))
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
       status: 'complete',
@@ -130,7 +131,7 @@ describe('AgentInterviewAppService', () => {
         questions: [],
       })
     } finally {
-      fs.rmSync(workspacePath, { recursive: true, force: true })
+      retainFixture(workspacePath)
     }
   })
 

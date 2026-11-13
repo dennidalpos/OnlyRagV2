@@ -1,8 +1,9 @@
+import { createFixtureDirectory } from '../test/fixtureRuntime.mjs'
 import assert from 'node:assert/strict'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { createRequire } from 'node:module'
 import { execFileSync, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -28,7 +29,7 @@ if (process.argv[2] === 'child') {
   process.send({ phase: 'acknowledged' })
   setInterval(() => {}, 1000)
 } else {
-  const evidence = path.join(process.env.ONLYRAG_LIVE_ROOT || path.join(os.homedir(), 'OnlyRag-Live'), `state-writer-crash-${randomUUID()}`)
+  const evidence = createFixtureDirectory('state-writer-crash-')
   fs.mkdirSync(evidence, { recursive: true })
   const ts = require('typescript')
   const sources = ['electron/core/infrastructure/filesystem/safeAtomicFileWriter.ts', 'shared/domain/errors/errorMessage.ts']

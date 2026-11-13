@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { AgentToolFileRepository } from './agentToolFileRepository'
 
 describe('AgentToolFileRepository Unit Tests', () => {
@@ -9,11 +10,11 @@ describe('AgentToolFileRepository Unit Tests', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-tool-file-repo-test-'))
+    tempDir = createFixtureDirectory('onlyrag-tool-file-repo-test-')
   })
 
   afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true })
+    retainFixture(tempDir)
   })
 
   it('readIfExists returns file content or an empty string when the file is missing', () => {
@@ -107,12 +108,12 @@ describe('AgentToolFileRepository Unit Tests', () => {
     fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ scripts: { test: 'vitest run' } }), 'utf-8')
     expect(repo.readPackageJsonScripts(tempDir)).toEqual({ test: 'vitest run' })
 
-    const malformedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-tool-file-repo-malformed-'))
+    const malformedDir = createFixtureDirectory('onlyrag-tool-file-repo-malformed-')
     try {
       fs.writeFileSync(path.join(malformedDir, 'package.json'), '{ not valid', 'utf-8')
       expect(repo.readPackageJsonScripts(malformedDir)).toBeNull()
     } finally {
-      fs.rmSync(malformedDir, { recursive: true, force: true })
+      retainFixture(malformedDir)
     }
   })
 

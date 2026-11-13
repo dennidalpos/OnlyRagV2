@@ -1,6 +1,5 @@
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LobeHubAdapter } from './hubAdapters/lobeHubAdapter'
 import { skillHubClient } from './skillHubClient'
@@ -38,7 +37,7 @@ describe('LobeHub catalog entries with YAML-hostile metadata', () => {
   let workspace: string
 
   beforeEach(() => {
-    workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-lobe-'))
+    workspace = createFixtureDirectory('onlyrag-lobe-')
     vi.mocked(webClient.fetchWebContent).mockImplementation(async (url) => {
       if (url === LOBE_URL) {
         return {
@@ -53,7 +52,7 @@ describe('LobeHub catalog entries with YAML-hostile metadata', () => {
   })
 
   afterEach(() => {
-    fs.rmSync(workspace, { recursive: true, force: true })
+    retainFixture(workspace)
   })
 
   it('generates frontmatter that parses back to the exact catalog values', async () => {

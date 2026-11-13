@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 
 import { promoteMilestonesProvenBy, selectMilestonesAwaitingVerification } from './agentOrchestratorCircuitBreakerAndVerification'
@@ -87,11 +88,11 @@ function makeDeps(plan: PlanMilestone[], logs: string[] = []) {
 
 describe('milestone promotion on the live-full-task workspace', () => {
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-budget-exhaustion-'))
+    tempDir = createFixtureDirectory('onlyrag-budget-exhaustion-')
   })
 
   afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true })
+    retainFixture(tempDir)
   })
 
   it('uses the application-owned check for milestones without a dedicated command', () => {

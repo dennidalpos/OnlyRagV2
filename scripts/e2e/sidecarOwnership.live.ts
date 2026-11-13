@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../test/fixtureRuntime.mjs'
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
 import fs from 'node:fs'
 import net from 'node:net'
-import os from 'node:os'
+
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -11,7 +12,7 @@ vi.mock('electron', () => ({ app: { getPath: () => context.userData, isPackaged:
 import { SidecarProcessManager } from '../../electron/core/infrastructure/process/sidecarProcessManager'
 import type { SidecarOwnershipMarker } from '../../electron/core/infrastructure/process/orphanPortReclaim'
 
-const root = process.platform === 'win32' ? fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-sidecar-ownership-')) : ''
+const root = process.platform === 'win32' ? createFixtureDirectory('onlyrag-sidecar-ownership-') : ''
 context.userData = root
 const children: ChildProcess[] = []
 const manager = new SidecarProcessManager()
@@ -56,7 +57,7 @@ describe.skipIf(process.platform !== 'win32')('Windows Sidecar ownership integra
 
   afterAll(() => {
     for (const child of children) stopOwnedProcess(child)
-    fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
+    retainFixture(root)
   })
 
   it('keeps an unknown listener and a reused PID safe, then reclaims the exact owned process', async () => {

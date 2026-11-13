@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { execSync } from 'node:child_process'
 import { AgentToolExecutorService } from './agentToolExecutorService'
 import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
@@ -34,7 +35,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
   }
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-executor-test-'))
+    tempDir = createFixtureDirectory('onlyrag-executor-test-')
     agentToolExecutorService = new AgentToolExecutorService(new CapabilityPolicyAuditRepository(path.join(tempDir, 'policy-audit.json')))
     npmRegistryClient.clearCache()
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
@@ -43,7 +44,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     try {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      retainFixture(tempDir)
     } catch {}
   })
 
@@ -75,7 +76,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
   })
 
   it('uses Full access for file tools outside the workspace without changing restricted runs', async () => {
-    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-full-access-'))
+    const outsideDir = createFixtureDirectory('onlyrag-full-access-')
     const outsidePath = path.join(outsideDir, '.env')
     try {
       const call = { tool: 'write_file' as const, parameters: { filePath: outsidePath, content: 'dummy=value' } }
@@ -99,7 +100,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
       expect(deleteResult.outcome).toBe('success')
       expect(fs.existsSync(outsidePath)).toBe(false)
     } finally {
-      fs.rmSync(outsideDir, { recursive: true, force: true })
+      retainFixture(outsideDir)
     }
   })
 
@@ -1220,7 +1221,7 @@ async def async_handler():
   })
 
   it('blocks file mutations through a workspace junction that resolves outside', async () => {
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-outside-'))
+    const outside = createFixtureDirectory('onlyrag-outside-')
     try {
       const link = path.join(tempDir, 'escape')
       fs.symlinkSync(outside, link, process.platform === 'win32' ? 'junction' : 'dir')
@@ -1235,7 +1236,7 @@ async def async_handler():
       expect(res.outputForHistory).toContain('Symlink or junction escape blocked')
       expect(fs.existsSync(path.join(outside, 'leak.txt'))).toBe(false)
     } finally {
-      fs.rmSync(outside, { recursive: true, force: true })
+      retainFixture(outside)
     }
   })
 

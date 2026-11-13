@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from './test/fixtureRuntime.mjs'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import net from 'node:net'
-import os from 'node:os'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -51,7 +52,7 @@ describe.runIf(process.platform === 'win32')('Sidecar test wrapper', () => {
   let invocationLog: string
 
   beforeAll(() => {
-    fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-sidecar-wrapper-'))
+    fixture = createFixtureDirectory('onlyrag-sidecar-wrapper-')
     fakePython = path.join(fixture, 'python.cmd')
     fs.writeFileSync(
       fakePython,
@@ -73,7 +74,7 @@ describe.runIf(process.platform === 'win32')('Sidecar test wrapper', () => {
   afterAll(() => {
     const directory = fs.realpathSync.native(fixture)
     if (!path.basename(directory).startsWith('onlyrag-sidecar-wrapper-')) throw new Error('Refusing cleanup outside the owned fixture')
-    fs.rmSync(directory, { recursive: true, force: true })
+    retainFixture(directory)
   })
 
   beforeEach(() => {
@@ -81,7 +82,7 @@ describe.runIf(process.platform === 'win32')('Sidecar test wrapper', () => {
   })
 
   afterEach(() => {
-    fs.rmSync(invocationLog, { force: true })
+    // Each case has its own log; preserve subprocess arguments and diagnostics.
   })
 
   const invocations = () => (fs.existsSync(invocationLog) ? fs.readFileSync(invocationLog, 'utf8').trim().split(/\r?\n/) : [])

@@ -1,7 +1,8 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as childProcess from 'node:child_process'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { devToolProbeRepository } from './devToolProbeRepository'
 
@@ -47,7 +48,7 @@ describe('native tool version probes', () => {
   })
 
   it.skipIf(process.platform !== 'win32').each(['npm', 'pnpm'])('resolves a %s.cmd shim under a path with spaces and propagates failure', (binary) => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag probe spaces '))
+    const directory = createFixtureDirectory('onlyrag probe spaces ')
     const shim = path.join(directory, `${binary}.cmd`)
     const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') || 'PATH'
     vi.stubEnv(pathKey, `${directory}${path.delimiter}${process.env[pathKey] || ''}`)
@@ -57,7 +58,7 @@ describe('native tool version probes', () => {
       fs.writeFileSync(shim, '@echo off\r\nexit /b 7\r\n', 'utf8')
       expect(devToolProbeRepository.probeVersion(binary, ['--version'])).toBeNull()
     } finally {
-      fs.rmSync(directory, { recursive: true, force: true })
+      retainFixture(directory)
     }
   })
 })

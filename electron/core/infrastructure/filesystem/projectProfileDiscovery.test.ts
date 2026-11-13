@@ -1,17 +1,18 @@
+import { retainFixture, createFixtureDirectory } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, expect, it, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+
 import { discoverProjectProfile } from './projectProfileDiscovery'
 
 describe('project profile discovery', () => {
   const roots: string[] = []
   afterEach(() => {
-    for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
+    for (const root of roots.splice(0)) retainFixture(root)
   })
 
   it('classifies an empty workspace without inventing a project', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-empty-'))
+    const root = createFixtureDirectory('onlyrag-profile-empty-')
     roots.push(root)
     expect(discoverProjectProfile(root)).toMatchObject({ classification: 'empty', projects: [] })
   })
@@ -20,7 +21,7 @@ describe('project profile discovery', () => {
     ['setup.cfg', '[tool:pytest]'],
     ['tox.ini', '[pytest]'],
   ])('discovers standalone and nested Python projects configured only through %s', (name, section) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-python-'))
+    const root = createFixtureDirectory('onlyrag-profile-python-')
     roots.push(root)
     fs.writeFileSync(path.join(root, name), `${section}\ntestpaths = tests\n`)
     const standalone = discoverProjectProfile(root)
@@ -36,7 +37,7 @@ describe('project profile discovery', () => {
   })
 
   it.each(['setup.cfg', 'tox.ini'])('ignores unrelated configuration in %s', (name) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-unrelated-'))
+    const root = createFixtureDirectory('onlyrag-profile-unrelated-')
     roots.push(root)
     fs.writeFileSync(path.join(root, name), '[metadata]\nname = unrelated\n')
     expect(discoverProjectProfile(root)).toMatchObject({ classification: 'empty', projects: [] })
@@ -45,7 +46,7 @@ describe('project profile discovery', () => {
   })
 
   it.each(['npm', 'pnpm', 'yarn'])('keeps declared %s discovery and commands consistent', (manager) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-manager-'))
+    const root = createFixtureDirectory('onlyrag-profile-manager-')
     roots.push(root)
     fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ packageManager: `${manager}@1.2.3`, scripts: { test: 'node verify.cjs' } }))
     const project = discoverProjectProfile(root).projects[0]
@@ -58,7 +59,7 @@ describe('project profile discovery', () => {
   })
 
   it('keeps a workspace without any manifest classified as empty', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-no-manifest-'))
+    const root = createFixtureDirectory('onlyrag-profile-no-manifest-')
     roots.push(root)
     fs.mkdirSync(path.join(root, 'src'))
     fs.writeFileSync(path.join(root, 'README.md'), '# not a project manifest')
@@ -67,7 +68,7 @@ describe('project profile discovery', () => {
   })
 
   it('ignores pytest cache directories while discovering projects', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-pytest-cache-'))
+    const root = createFixtureDirectory('onlyrag-profile-pytest-cache-')
     roots.push(root)
     fs.mkdirSync(path.join(root, '.pytest_cache'))
     fs.writeFileSync(path.join(root, '.pytest_cache', 'package.json'), '{"name":"cache"}')
@@ -76,7 +77,7 @@ describe('project profile discovery', () => {
   })
 
   it('discovers root manifest and lockfile for an existing project', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-existing-'))
+    const root = createFixtureDirectory('onlyrag-profile-existing-')
     roots.push(root)
     fs.writeFileSync(path.join(root, 'package.json'), '{"name":"app"}')
     fs.writeFileSync(path.join(root, 'package-lock.json'), '{}')
@@ -86,7 +87,7 @@ describe('project profile discovery', () => {
   })
 
   it('discovers languages, package manager, test framework, build tool and scripts', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-toolchain-'))
+    const root = createFixtureDirectory('onlyrag-profile-toolchain-')
     roots.push(root)
     fs.writeFileSync(
       path.join(root, 'package.json'),
@@ -111,7 +112,7 @@ describe('project profile discovery', () => {
   })
 
   it('records no test command for a project that has no test script or framework', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-no-test-'))
+    const root = createFixtureDirectory('onlyrag-profile-no-test-')
     roots.push(root)
     fs.writeFileSync(
       path.join(root, 'package.json'),
@@ -130,7 +131,7 @@ describe('project profile discovery', () => {
   })
 
   it('resolves verification commands independently for each discovered project', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-checks-'))
+    const root = createFixtureDirectory('onlyrag-profile-checks-')
     roots.push(root)
     fs.mkdirSync(path.join(root, 'web'))
     fs.mkdirSync(path.join(root, 'api'))
@@ -147,14 +148,14 @@ describe('project profile discovery', () => {
   })
 
   it('distinguishes a workspace monorepo from independent multi-project roots', () => {
-    const monorepo = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-mono-'))
+    const monorepo = createFixtureDirectory('onlyrag-profile-mono-')
     roots.push(monorepo)
     fs.writeFileSync(path.join(monorepo, 'package.json'), '{"workspaces":["packages/*"]}')
     fs.mkdirSync(path.join(monorepo, 'packages', 'web'), { recursive: true })
     fs.writeFileSync(path.join(monorepo, 'packages', 'web', 'package.json'), '{}')
     expect(discoverProjectProfile(monorepo).classification).toBe('monorepo')
 
-    const multi = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-profile-multi-'))
+    const multi = createFixtureDirectory('onlyrag-profile-multi-')
     roots.push(multi)
     for (const name of ['one', 'two']) {
       fs.mkdirSync(path.join(multi, name))

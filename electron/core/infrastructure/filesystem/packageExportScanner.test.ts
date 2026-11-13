@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 
 import {
@@ -17,11 +18,11 @@ import {
 let tempDir: string
 
 beforeEach(() => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-exports-'))
+  tempDir = createFixtureDirectory('onlyrag-exports-')
 })
 
 afterEach(() => {
-  fs.rmSync(tempDir, { recursive: true, force: true })
+  retainFixture(tempDir)
 })
 
 function installPackage(name: string, files: Record<string, string>) {
@@ -120,7 +121,7 @@ describe('readLocalModuleExports', () => {
 
 describe('packageHasStyleEntry / toWorkspaceRelativePath', () => {
   it('reads the style field and the exports "." style condition', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-style-entry-'))
+    const root = createFixtureDirectory('onlyrag-style-entry-')
     try {
       const write = (name: string, manifest: object) => {
         fs.mkdirSync(path.join(root, 'node_modules', name), { recursive: true })
@@ -137,14 +138,14 @@ describe('packageHasStyleEntry / toWorkspaceRelativePath', () => {
       expect(toWorkspaceRelativePath(root, path.join(root, 'src', 'index.css'))).toBe('src/index.css')
       expect(toWorkspaceRelativePath(root, 'src/index.css')).toBe('src/index.css')
     } finally {
-      fs.rmSync(root, { recursive: true, force: true })
+      retainFixture(root)
     }
   })
 })
 
 describe('isBinaryInstalled', () => {
   it('finds node_modules/.bin entries, with or without the Windows shim', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-bin-'))
+    const root = createFixtureDirectory('onlyrag-bin-')
     try {
       fs.mkdirSync(path.join(root, 'node_modules', '.bin'), { recursive: true })
       fs.writeFileSync(path.join(root, 'node_modules', '.bin', 'vite'), '')
@@ -155,7 +156,7 @@ describe('isBinaryInstalled', () => {
       expect(isBinaryInstalled(root, 'react-scripts')).toBe(false)
       expect(isBinaryInstalled(root, '../vite')).toBe(false)
     } finally {
-      fs.rmSync(root, { recursive: true, force: true })
+      retainFixture(root)
     }
   })
 })

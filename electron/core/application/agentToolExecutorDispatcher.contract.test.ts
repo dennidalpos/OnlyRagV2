@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 import { AgentToolExecutorService } from './agentToolExecutorService'
 import type { AppSettings } from '../../../shared/types'
@@ -14,7 +15,7 @@ describe('AgentToolExecutorService dispatcher contract', () => {
   const settings = { allowTerminalExecution: true, allowFileModifications: true } as AppSettings
 
   beforeEach(() => {
-    fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-dispatcher-contract-'))
+    fixtureRoot = createFixtureDirectory('onlyrag-dispatcher-contract-')
     workspacePath = path.join(fixtureRoot, 'workspace')
     fs.mkdirSync(workspacePath)
     executor = new AgentToolExecutorService(new CapabilityPolicyAuditRepository(path.join(fixtureRoot, 'policy-audit.json')))
@@ -22,7 +23,7 @@ describe('AgentToolExecutorService dispatcher contract', () => {
 
   afterEach(() => {
     executor.disposeShellSessions()
-    fs.rmSync(fixtureRoot, { recursive: true, force: true })
+    retainFixture(fixtureRoot)
   })
 
   it('routes representative filesystem, diagnostic, and git tools through one result contract', async () => {

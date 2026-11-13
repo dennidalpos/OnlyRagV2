@@ -1,6 +1,7 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
-import os from 'node:os'
+
 import path from 'node:path'
 
 vi.mock('../infrastructure/logging/logger', () => ({ logger: { log: vi.fn() } }))
@@ -22,11 +23,11 @@ import { DEFAULT_APP_SETTINGS } from '../../../shared/domain/settings/appSetting
 let tempDir: string
 
 beforeEach(() => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-turnfiles-'))
+  tempDir = createFixtureDirectory('onlyrag-turnfiles-')
 })
 
 afterEach(() => {
-  fs.rmSync(tempDir, { recursive: true, force: true })
+  retainFixture(tempDir)
 })
 
 function ctxWith(active?: string | { title: string; filePaths: string[] }): TurnDispatchContext {

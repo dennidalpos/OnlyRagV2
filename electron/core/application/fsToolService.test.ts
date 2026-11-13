@@ -1,3 +1,4 @@
+import { createFixtureDirectory, retainFixture } from '../../../scripts/test/fixtureRuntime.mjs'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -24,21 +25,21 @@ function createService(journal: AtomicWorkspaceJournal): FsToolService {
 }
 
 function makeWorkspace(): string {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-fs-tool-'))
+  const workspace = createFixtureDirectory('onlyrag-fs-tool-')
   temporaryDirectories.push(workspace)
   return workspace
 }
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
-    fs.rmSync(directory, { recursive: true, force: true })
+    retainFixture(directory)
   }
 })
 
 describe('FsToolService copy_file', () => {
   it('rejects a source outside the workspace before touching the target', () => {
     const workspace = makeWorkspace()
-    const outsideSource = path.join(os.tmpdir(), `onlyrag-outside-${Date.now()}.txt`)
+    const outsideSource = path.join(makeWorkspace(), 'outside-source.txt')
     const target = path.join(workspace, 'copied.txt')
     fs.writeFileSync(outsideSource, 'secret', 'utf8')
 
@@ -48,7 +49,7 @@ describe('FsToolService copy_file', () => {
       expect(result.outputForHistory).toContain('Security Violation')
       expect(fs.existsSync(target)).toBe(false)
     } finally {
-      fs.rmSync(outsideSource, { force: true })
+      // makeWorkspace retains this separate source fixture.
     }
   })
 
@@ -74,7 +75,7 @@ describe('FsToolService move_file', () => {
   it('rejects a target outside the workspace before moving the source', () => {
     const workspace = makeWorkspace()
     const source = path.join(workspace, 'source.txt')
-    const outsideTarget = path.join(os.tmpdir(), `onlyrag-outside-target-${Date.now()}.txt`)
+    const outsideTarget = path.join(makeWorkspace(), 'outside-target.txt')
     fs.writeFileSync(source, 'source text', 'utf8')
 
     const result = createService(new AtomicWorkspaceJournal()).executeMoveFile({ sourcePath: source, targetPath: outsideTarget }, workspace, true)

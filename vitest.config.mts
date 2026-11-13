@@ -3,8 +3,10 @@ import path from 'node:path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dependencyVersions } from './scripts/dependencyVersions.mts'
+import { createFixtureDirectory } from './scripts/test/fixtureRuntime.mjs'
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
+const reportDirectory = createFixtureDirectory('onlyrag-vitest-report-')
 
 // Application identity injected from package.json — consumed by src/constants/appMetadata.ts.
 // The About dialog needs the real version/author, not the i18n field labels.
@@ -31,6 +33,8 @@ const nodeTestGlobs = [
 export default defineConfig({
   define: appDefines,
   test: {
+    reporters: ['default', 'json'],
+    outputFile: { json: path.join(reportDirectory, 'vitest.json') },
     globals: true,
     // Main-process, shared and pure-service tests run in Node; only renderer UI tests get a DOM.
     // (environmentMatchGlobs was removed in Vitest 4 and silently ignored, putting everything in happy-dom.)

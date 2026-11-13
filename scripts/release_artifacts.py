@@ -34,7 +34,20 @@ def is_gpu_library(path):
 
 
 def is_notice_file(path):
-    return any(path.name.lower().startswith(token) for token in ('license', 'licence', 'copying', 'notice', 'copyright'))
+    return any(path.name.lower().startswith(token) for token in ('license', 'licence', 'copying', 'notice', 'copyright', 'thirdpartynotice'))
+
+
+def copy_application_notices(licenses, entries):
+    """Carry project terms and the exact Monaco font's separate attribution into a candidate."""
+    font = ROOT / 'node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.ttf'
+    if sha256(font) != 'cc2472e239e17062e7760af87f8f5997720cc0d94aa014a615c418baaf6333a8':
+        raise RuntimeError('Codicons font changed; verify its exact package license before packaging.')
+    font_license = ROOT / 'docs/licenses/current/texts/af5e030844efddbc7ab00dcfea8b019703753d4d9f5172d727c533a492aec665.txt'
+    if sha256(font_license) != 'af5e030844efddbc7ab00dcfea8b019703753d4d9f5172d727c533a492aec665':
+        raise RuntimeError('Codicons license text changed; verify the retained upstream notice.')
+    for filename in ('LICENSE', 'DISTRIBUTION-LICENSE.md', 'CREDITS.md'):
+        copy_notice(ROOT / filename, licenses / filename, entries, 'OnlyRag')
+    copy_notice(font_license, licenses / 'Codicons-LICENSE.txt', entries, 'Codicons 0.0.46-21 (exact font bytes verified)')
 
 
 UPSTREAM_PYTHON_NOTICES = {
@@ -255,8 +268,7 @@ def prepare(release):
     for filename in ('AGPL-3.0.txt', 'Apache-2.0.txt', 'CC-BY-SA-4.0.txt', 'wordfreq-3.1.1-code-license.txt',
                      'wordfreq-3.1.1-data-attribution.txt', 'OFL-NotoSans.txt', 'OFL-NotoSansCJK.txt'):
         copy_notice(packet / filename, licenses / filename, notices, 'prepared terms/attribution')
-    for filename in ('LICENSE', 'DISTRIBUTION-LICENSE.md'):
-        copy_notice(ROOT / filename, licenses / filename, notices, 'OnlyRag')
+    copy_application_notices(licenses, notices)
     fonts = font_notices(licenses)
     copy_notice(Path(sys.base_prefix) / 'LICENSE.txt', licenses / 'Python-LICENSE.txt', notices, 'CPython runtime')
     freeze = subprocess.check_output([sys.executable, '-m', 'pip', 'freeze', '--all']).decode('utf-8')
@@ -377,7 +389,7 @@ def prepare(release):
     (licenses / 'NOTICE.txt').write_text(
         'OnlyRag CPU distribution candidate\nCopyright (c) 2026 Danny Perondi\nGNU AGPL version 3; no warranty. Redistribution and modification are permitted under its full terms.\n'
         'Original project code retains MIT permissions. Component grants/copyrights remain in the accompanying files.\n'
-        'See DISTRIBUTION-LICENSE.md, AGPL-3.0.txt, wordfreq attribution, review-notice-draft.md, python/ and node/.\n'
+        'See CREDITS.md, Codicons-LICENSE.txt, DISTRIBUTION-LICENSE.md, AGPL-3.0.txt, wordfreq attribution, review-notice-draft.md, python/ and node/.\n'
         'component-manifest.json records the installed build environment and unresolved source/notice qualification.\n', encoding='utf-8')
     package = json.loads((ROOT / 'package.json').read_text(encoding='utf-8'))
     config = package['build']

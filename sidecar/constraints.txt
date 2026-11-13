@@ -13,7 +13,7 @@ nvidia-cublas==13.7.0.27
 nvidia-cuda-nvrtc==13.4.59
 nvidia-cuda-runtime==13.4.49
 nvidia-cudnn-cu13==9.26.0.51
-nvidia-cufft==12.4.0.34
+nvidia-cufft==12.5.0.14
 nvidia-curand==10.4.4.49
 nvidia-nvjitlink==13.4.52
 opencv-python==5.0.0.93

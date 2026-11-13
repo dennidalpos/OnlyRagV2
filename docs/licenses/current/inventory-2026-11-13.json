@@ -13,7 +13,7 @@
     "sidecar/requirements-release.txt": "1524104159b3017255421159529251c4be2055765c090f44da85406daa20ad3a",
     "sidecar/constraints.txt": "2f329398e736dd054eeacad93e1e2feaa41542b022373862a3c1990444f854d2",
     "sidecar.spec": "4d1f03df53fa701811545efef0bda862d650ae19301ed00ef23f847928d68a4a",
-    "scripts/release_artifacts.py": "564111e128230330a233e488193843765cb498eea1a567f3b88dfff4f312949c"
+    "scripts/release_artifacts.py": "9421aafc6fd1bdfd1d7052b4d58c0d5224776149d2a19397b11a919b038479a3"
   },
   "components": [
     {
@@ -69,7 +69,7 @@
         }
       ],
       "copyright": [
-        "© 2014-2021 Adobe (http://www.adobe.com/)."
+        "Â© 2014-2021 Adobe (http://www.adobe.com/)."
       ],
       "status": "embedded copyright/version/license read; local hash recorded",
       "scope": "Sidecar font bundled by sidecar.spec",
@@ -90,7 +90,7 @@
         }
       ],
       "copyright": [
-        "© 2014-2021 Adobe (http://www.adobe.com/)."
+        "Â© 2014-2021 Adobe (http://www.adobe.com/)."
       ],
       "status": "embedded copyright/version/license read; local hash recorded",
       "scope": "Sidecar font bundled by sidecar.spec",
@@ -111,7 +111,7 @@
         }
       ],
       "copyright": [
-        "© 2014-2021 Adobe (http://www.adobe.com/)."
+        "Â© 2014-2021 Adobe (http://www.adobe.com/)."
       ],
       "status": "embedded copyright/version/license read; local hash recorded",
       "scope": "Sidecar font bundled by sidecar.spec",
@@ -132,7 +132,7 @@
         }
       ],
       "copyright": [
-        "© 2014-2021 Adobe (http://www.adobe.com/)."
+        "Â© 2014-2021 Adobe (http://www.adobe.com/)."
       ],
       "status": "embedded copyright/version/license read; local hash recorded",
       "scope": "Sidecar font bundled by sidecar.spec",

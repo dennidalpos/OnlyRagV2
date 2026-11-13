@@ -67,19 +67,30 @@ describe('SkillEditorModal lossless update', () => {
     expect(payload.author).toBe(skill.author)
   })
 
-  it('lets an explicit edit replace a list one item per line without splitting on commas or changing case', async () => {
-    await type('#skill-triggers-input', ['Keep, Me', ' Second Item ', '', 'Third'].join(NL))
+  it('edits one multiline entry and keeps its neighbors intact', async () => {
+    const fields = document.querySelectorAll('fieldset')[0]
+    const item = fields.querySelectorAll('textarea')[2]
+    await type(`[id="${item.id}"]`, ['Keep, Me', 'Second Line'].join(NL))
     await submit()
     const payload = onSave.mock.calls[0][0]
-    expect(payload.triggers).toEqual(['Keep, Me', 'Second Item', 'Third'])
+    expect(payload.triggers).toEqual(['Mixed Case', 'comma,value', 'Keep, Me\nSecond Line', 'C:\\temp\\repo'])
     expect(payload.tags).toEqual(skill.tags)
     expect(payload.content).toBe(skill.content)
   })
 
+  it('adds and removes individual entries and focuses the newly added field', async () => {
+    const tags = document.querySelectorAll('fieldset')[1]
+    await act(async () => tags.querySelector('button')!.click())
+    await act(async () => [...tags.querySelectorAll('button')].at(-1)!.click())
+    const added = [...tags.querySelectorAll('textarea')].at(-1)!
+    expect(document.activeElement).toBe(added)
+    await type(`[id="${added.id}"]`, 'Added\nTag')
+    await submit()
+    expect(onSave.mock.calls[0][0].tags).toEqual(['a,b', 'false', 'Added\nTag'])
+  })
+
   it('does not save on cancel', async () => {
-    const cancel = [...document.querySelectorAll('button')].find(
-      (b) => b.getAttribute('type') === 'button' && !b.getAttribute('aria-label'),
-    ) as HTMLButtonElement
+    const cancel = [...document.querySelectorAll('button')].find((b) => /^(Annulla|Cancel)$/.test(b.textContent?.trim() || '')) as HTMLButtonElement
     await act(async () => cancel.click())
     expect(onClose).toHaveBeenCalled()
     expect(onSave).not.toHaveBeenCalled()

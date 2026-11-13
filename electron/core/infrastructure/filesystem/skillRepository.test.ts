@@ -2,8 +2,10 @@ import { createFixtureDirectory, retainFixture } from '../../../../scripts/test/
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 import { parseSkillFrontmatter, serializeSkillContent, calculateSkillChecksum, SkillRepository } from './skillRepository'
+import { userDataRoot } from './userDataRoot'
 
 describe('SkillRepository Unit Tests', () => {
   let tempDir: string
@@ -305,8 +307,8 @@ Use asyncio.to_thread for blocking operations.`
       expect(fs.readdirSync(path.join(tempDir, 'skills')).filter((n) => n.includes('.removing-'))).toEqual([])
     })
 
-    it('reports a recoverable staged copy when rollback also fails and never lists it', async () => {
-      await installActive()
+    it('reports a recoverable staged copy when rollback fails and restores it on restart', async () => {
+      const bytes = await installActive()
       vi.spyOn(fs.promises, 'rm').mockRejectedValueOnce(denied('remove denied'))
       const realRename = fs.promises.rename.bind(fs.promises)
       vi.spyOn(fs.promises, 'rename').mockImplementationOnce(realRename).mockRejectedValueOnce(denied('rollback denied'))
@@ -315,7 +317,67 @@ Use asyncio.to_thread for blocking operations.`
       expect(failed.error).toContain('.removing-')
       const staged = fs.readdirSync(path.join(tempDir, 'skills')).filter((n) => n.includes('.removing-'))
       expect(staged).toHaveLength(1)
-      expect((await repo.listInstalledSkills(tempDir)).some((s) => s.name.includes('txn-skill'))).toBe(false)
+      const restarted = new SkillRepository(tempDir)
+      expect(await restarted.listInstalledSkills(tempDir)).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'txn-skill', isActive: true })]))
+      expect(fs.readFileSync(skillFile(), 'utf8')).toBe(bytes)
+      expect(fs.readdirSync(path.join(tempDir, 'skills'))).toEqual(['txn-skill'])
+    })
+
+    it('retains the receipt and surviving bytes when recursive removal is incomplete', async () => {
+      const bytes = await installActive()
+      fs.writeFileSync(path.join(path.dirname(skillFile()), 'support.md'), 'support')
+      vi.spyOn(fs.promises, 'rm').mockImplementationOnce(async (staged) => {
+        fs.unlinkSync(path.join(String(staged), 'support.md'))
+        throw denied('partial removal')
+      })
+      const result = await repo.deleteSkill('txn-skill', tempDir)
+      expect(result).toMatchObject({ success: false, error: expect.stringContaining('receipt retained') })
+      const dir = path.join(tempDir, 'skills')
+      const entries = fs.readdirSync(dir)
+      expect(entries).toHaveLength(1)
+      const [staged] = entries
+      expect(fs.readdirSync(path.join(tempDir, 'skill-uninstall-receipts'), { recursive: true })).toContainEqual(
+        expect.stringContaining(`${staged}.receipt.json`),
+      )
+      expect(fs.readFileSync(path.join(dir, staged, 'SKILL.md'), 'utf8')).toBe(bytes)
+      expect((await new SkillRepository(tempDir).listInstalledSkills(tempDir)).some((skill) => skill.id === 'txn-skill')).toBe(false)
+      expect(fs.readdirSync(dir)).toEqual(entries)
+    })
+
+    it('restores a legacy staged copy only when its original path is free', async () => {
+      const bytes = await installActive()
+      const original = path.dirname(skillFile())
+      const staged = path.join(path.dirname(original), `.txn-skill.removing-${randomUUID()}`)
+      fs.renameSync(original, staged)
+      await repo.saveSkill('txn-skill', '# Replacement', tempDir)
+      const replacement = fs.readFileSync(skillFile(), 'utf8')
+      const restarted = new SkillRepository(tempDir)
+      await restarted.listInstalledSkills(tempDir)
+      expect(fs.readFileSync(skillFile(), 'utf8')).toBe(replacement)
+      expect(fs.readFileSync(path.join(staged, 'SKILL.md'), 'utf8')).toBe(bytes)
+      fs.renameSync(original, path.join(tempDir, 'retained-replacement'))
+      await restarted.listInstalledSkills(tempDir)
+      expect(fs.readFileSync(skillFile(), 'utf8')).toBe(bytes)
+      expect(fs.existsSync(staged)).toBe(false)
+    })
+
+    it('uninstalls a hub workspace override and leaves the active global skill and its bytes intact', async () => {
+      const name = 'hub-override-removal'
+      const originHub = 'synthetic-hub'
+      const global = await repo.saveSkill(name, '# Global', undefined, { originHub })
+      const local = await repo.saveSkill(name, '# Workspace', tempDir, { originHub })
+      expect(global.success && local.success).toBe(true)
+      const bytes = fs.readFileSync(global.filePath!)
+      repo.setSkillActive(name, true)
+      expect((await repo.listInstalledSkills(tempDir)).find((skill) => skill.id === name)).toMatchObject({ isWorkspaceLocal: true, originHub })
+      expect(await repo.deleteSkill(name, tempDir)).toEqual({ success: true })
+      expect(fs.existsSync(local.filePath!)).toBe(false)
+      expect(fs.readFileSync(global.filePath!)).toEqual(bytes)
+      const restarted = new SkillRepository(tempDir)
+      expect((await restarted.listInstalledSkills(tempDir)).find((skill) => skill.id === name)).toMatchObject({ isWorkspaceLocal: false, isActive: true })
+      expect(await restarted.deleteSkill(name)).toEqual({ success: true })
+      expect(fs.existsSync(path.join(userDataRoot(), 'skills', name))).toBe(false)
+      expect(new SkillRepository(tempDir).isSkillActive(name)).toBe(false)
     })
 
     it('removes a single-file skill and its active state in one transaction', async () => {

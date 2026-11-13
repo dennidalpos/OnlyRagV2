@@ -1,3 +1,4 @@
+import { isLoopbackHostname } from '../../../../shared/domain/loopbackHost'
 import {
   capabilityPolicyDecisionSchema,
   capabilityPolicyRequestSchema,
@@ -6,12 +7,10 @@ import {
 } from './capabilityPolicyContract'
 import { shellCommandHasEgress } from './offlineStrictPolicy'
 
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
-
 export function isLoopbackTarget(target: string): boolean {
   try {
     const url = new URL(target)
-    return LOOPBACK_HOSTS.has(url.hostname.toLowerCase())
+    return isLoopbackHostname(url.hostname)
   } catch {
     return false
   }

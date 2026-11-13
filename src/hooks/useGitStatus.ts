@@ -19,14 +19,12 @@ export function useGitStatus(workspacePath: string | null) {
 
   const generationRef = useRef(0)
   const readRef = useRef(0)
-  const inflightRef = useRef(0)
 
   useEffect(() => {
     setGitStatusLines([])
     setGitDiffText('')
     setIsGitRepo(true)
     setGitDataWorkspace(null)
-    inflightRef.current = 0
     setIsFetchingGit(false)
     return () => {
       generationRef.current += 1
@@ -38,7 +36,6 @@ export function useGitStatus(workspacePath: string | null) {
     const generation = generationRef.current
     const token = ++readRef.current
     const ownsRead = () => generation === generationRef.current && token === readRef.current
-    inflightRef.current += 1
     setIsFetchingGit(true)
     try {
       if (window.electronAPI.getGitStatusAndDiff) {
@@ -61,30 +58,29 @@ export function useGitStatus(workspacePath: string | null) {
       setGitDiffText(`Git error: ${errorMessage(err) || String(err)}`)
       setGitDataWorkspace(workspacePath)
     } finally {
-      if (generation === generationRef.current) {
-        inflightRef.current = Math.max(0, inflightRef.current - 1)
-        setIsFetchingGit(inflightRef.current > 0)
-      }
+      if (ownsRead()) setIsFetchingGit(false)
     }
   }, [workspacePath])
 
   const initGit = useCallback(async () => {
     if (!window.electronAPI?.initGitRepository) return
     const generation = generationRef.current
-    inflightRef.current += 1
+    const token = ++readRef.current
+    const ownsRead = () => generation === generationRef.current && token === readRef.current
     setIsFetchingGit(true)
     try {
-      await window.electronAPI.initGitRepository({ workspaceRoot: workspacePath || undefined })
-      if (generation !== generationRef.current) return
+      const result = await window.electronAPI.initGitRepository({ workspaceRoot: workspacePath || undefined })
+      if (!ownsRead()) return
+      if (!result.success) {
+        setGitDiffText(`Git error: ${result.message}`)
+        return
+      }
       await fetchGitStatusAndDiff()
     } catch (err: unknown) {
-      if (generation !== generationRef.current) return
+      if (!ownsRead()) return
       setGitDiffText(`Git error: ${errorMessage(err) || String(err)}`)
     } finally {
-      if (generation === generationRef.current) {
-        inflightRef.current = Math.max(0, inflightRef.current - 1)
-        setIsFetchingGit(inflightRef.current > 0)
-      }
+      if (ownsRead()) setIsFetchingGit(false)
     }
   }, [workspacePath, fetchGitStatusAndDiff])
 

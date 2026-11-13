@@ -26,12 +26,17 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     sources,
     selectedSourceId,
     isLoading,
+    isLoadingSources,
+    loadError,
+    retryLoad,
     installingSkillId,
     actionMessage,
     isEditorOpen,
     setIsEditorOpen,
     editingSkill,
     setEditingSkill,
+    editorSaveError,
+    clearEditorSaveError,
     isGuideOpen,
     setIsGuideOpen,
     isAddHubOpen,
@@ -90,6 +95,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
               aria-selected={activeTab === 'installed'}
               id="skill-tab-installed"
               aria-controls="skill-panel-installed"
+              disabled={isLoadingSources || !!loadError}
               onClick={() => handleTabChange('installed')}
               className={`py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 focus-ring ${
                 activeTab === 'installed' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-slate-300'
@@ -103,6 +109,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
               aria-selected={activeTab === 'hub'}
               id="skill-tab-hub"
               aria-controls="skill-panel-hub"
+              disabled={isLoadingSources || !!loadError}
               onClick={() => handleTabChange('hub')}
               className={`py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 focus-ring ${
                 activeTab === 'hub' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-slate-300'
@@ -127,23 +134,39 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
         )}
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {activeTab === 'installed' ? (
+        <div className="flex-1 overflow-y-auto p-6 space-y-6" aria-busy={isLoading}>
+          {loadError ? (
+            <div role="alert" className="space-y-3 text-sm text-rose-300">
+              <p className="break-words">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => void retryLoad()}
+                disabled={isLoading}
+                className="px-3 py-2 rounded-lg border border-slate-600 text-slate-100 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-wait focus-ring"
+              >
+                {t(isLoading ? 'common.loading' : 'common.retry')}
+              </button>
+            </div>
+          ) : activeTab === 'installed' ? (
             <div id="skill-panel-installed" role="tabpanel" aria-labelledby="skill-tab-installed">
               <InstalledSkillsList
                 skills={installedSkills}
                 onToggleActive={handleToggleActive}
                 onEditSkill={(skill) => {
+                  clearEditorSaveError()
                   setEditingSkill(skill)
                   setIsEditorOpen(true)
                 }}
                 onResetSkill={handleResetSkill}
                 onDeleteSkill={handleDeleteSkill}
                 onOpenCreateModal={() => {
+                  clearEditorSaveError()
                   setEditingSkill(null)
                   setIsEditorOpen(true)
                 }}
-                onSwitchToHub={() => handleTabChange('hub')}
+                onSwitchToHub={() => {
+                  if (!isLoadingSources) void handleTabChange('hub')
+                }}
               />
             </div>
           ) : (
@@ -151,7 +174,9 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
               <SkillHubSourceSelector
                 sources={sources}
                 selectedSourceId={selectedSourceId}
-                onSelectSource={handleSourceChange}
+                onSelectSource={(sourceId) => {
+                  if (!isLoadingSources) void handleSourceChange(sourceId)
+                }}
                 onOpenAddHubModal={() => setIsAddHubOpen(true)}
                 onOpenGuideModal={() => setIsGuideOpen(true)}
                 onRemoveCustomSource={handleRemoveCustomHub}
@@ -182,6 +207,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
         onSave={handleSaveCustomSkill}
         initialSkill={editingSkill}
         isLoading={isLoading}
+        saveError={editorSaveError}
       />
 
       <CustomHubGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />

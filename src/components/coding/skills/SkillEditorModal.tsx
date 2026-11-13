@@ -1,7 +1,7 @@
 import { Tooltip } from '../../common/Tooltip'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useId } from 'react'
 import { Modal } from '../../common/Modal'
-import { X, Save, Sparkles, FileText, AlertCircle } from 'lucide-react'
+import { X, Save, Sparkles, FileText, AlertCircle, Plus } from 'lucide-react'
 import { SkillDefinition, SkillSaveInput } from '../../../types'
 import { useTranslation } from '../../../i18n'
 
@@ -11,23 +11,86 @@ interface SkillEditorModalProps {
   onSave: (input: SkillSaveInput) => Promise<void>
   initialSkill?: SkillDefinition | null
   isLoading: boolean
+  saveError?: string
 }
 
-const LIST_SEPARATOR = String.fromCharCode(10)
+type ListEntry = { id: number; value: string; original?: string }
 
-/** Lists are edited one item per line, so commas, quotes and backslashes inside an item are never ambiguous. */
-function formatList(items: readonly string[] | undefined): string {
-  return (items || []).join(LIST_SEPARATOR)
+function listEntries(values: readonly string[]): ListEntry[] {
+  return values.map((value, id) => ({ id, value, original: value }))
 }
 
-/** Untouched text returns the original array byte for byte; edited text is split per line and trimmed, nothing else. */
-function resolveList(text: string, initial: readonly string[] | undefined, fallback: string[]): string[] {
-  if (initial && text === formatList(initial)) return [...initial]
-  const parsed = text
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-  return parsed.length > 0 ? parsed : fallback
+function resolveList(entries: ListEntry[], fallback: string[]): string[] {
+  const values = entries.flatMap(({ value, original }) => {
+    if (value === original) return [value]
+    const edited = value.trim()
+    return edited ? [edited] : []
+  })
+  return values.length ? values : fallback
+}
+
+function SkillListFields({
+  label,
+  entries,
+  onChange,
+  disabled,
+}: {
+  label: string
+  entries: ListEntry[]
+  onChange: (entries: ListEntry[]) => void
+  disabled: boolean
+}) {
+  const { t } = useTranslation()
+  const groupId = useId()
+  const nextId = useRef(0)
+  const focusId = useRef<number | null>(null)
+  useEffect(() => {
+    if (focusId.current === null) return
+    document.getElementById(`${groupId}-${focusId.current}`)?.focus()
+    focusId.current = null
+  }, [entries, groupId])
+
+  return (
+    <fieldset disabled={disabled} aria-describedby="skill-list-hint" className="min-w-0 space-y-2">
+      <legend className="text-xs font-semibold text-slate-300 mb-1">{label}</legend>
+      {entries.map((entry, index) => {
+        const entryLabel = `${label} ${index + 1}`
+        return (
+          <div key={entry.id} className="flex items-start gap-2">
+            <textarea
+              id={`${groupId}-${entry.id}`}
+              rows={2}
+              aria-label={entryLabel}
+              value={entry.value}
+              onChange={(event) => onChange(entries.map((item) => (item.id === entry.id ? { ...item, value: event.target.value } : item)))}
+              className="min-w-0 flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus-ring font-mono resize-y"
+            />
+            <button
+              type="button"
+              aria-label={`${t('common.delete')} ${entryLabel}`}
+              onClick={() => onChange(entries.filter((item) => item.id !== entry.id))}
+              className="p-2 rounded-lg text-slate-400 hover:text-slate-200 focus-ring"
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        )
+      })}
+      <button
+        type="button"
+        aria-label={`${t('skills.addListEntry')} · ${label}`}
+        onClick={() => {
+          const id = Math.max(nextId.current, (entries.at(-1)?.id ?? -1) + 1)
+          nextId.current = id + 1
+          focusId.current = id
+          onChange([...entries, { id, value: '' }])
+        }}
+        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-cyan-300 hover:bg-slate-800 focus-ring"
+      >
+        <Plus className="w-3.5 h-3.5" aria-hidden="true" /> {t('skills.addListEntry')}
+      </button>
+    </fieldset>
+  )
 }
 
 /** Untouched text keeps the stored value as is; only edited text is trimmed. */
@@ -36,14 +99,14 @@ function resolveText(text: string, initial: string | undefined, fallback: string
   return text.trim() || fallback
 }
 
-export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({ isOpen, onClose, onSave, initialSkill, isLoading }) => {
+export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({ isOpen, onClose, onSave, initialSkill, isLoading, saveError }) => {
   const { t } = useTranslation()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [version, setVersion] = useState('1.0.0')
   const [author, setAuthor] = useState('Local')
-  const [triggers, setTriggers] = useState('')
-  const [tags, setTags] = useState('')
+  const [triggers, setTriggers] = useState<ListEntry[]>([])
+  const [tags, setTags] = useState<ListEntry[]>([])
   const [content, setContent] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
 
@@ -53,16 +116,16 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({ isOpen, onCl
       setDescription(initialSkill.description)
       setVersion(initialSkill.version || '1.0.0')
       setAuthor(initialSkill.author || 'Local')
-      setTriggers(formatList(initialSkill.triggers))
-      setTags(formatList(initialSkill.tags))
+      setTriggers(listEntries(initialSkill.triggers ?? []))
+      setTags(listEntries(initialSkill.tags ?? []))
       setContent(initialSkill.content || '')
     } else {
       setName('')
       setDescription('')
       setVersion('1.0.0')
       setAuthor('Local')
-      setTriggers('')
-      setTags(['custom', 'coding'].join(LIST_SEPARATOR))
+      setTriggers([{ id: 0, value: '' }])
+      setTags(listEntries(['custom', 'coding']))
       setContent('# Skill Guidelines\n\n## 1. Directives\n- Enter instructions and rules for the AI Agent here.')
     }
     setValidationError(null)
@@ -87,8 +150,8 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({ isOpen, onCl
       description: resolveText(description, initialSkill?.description, `Skill ${name.trim()}`),
       version: resolveText(version, initialSkill?.version, '1.0.0'),
       author: resolveText(author, initialSkill?.author, 'Local'),
-      triggers: resolveList(triggers, initialSkill?.triggers, [name.trim().toLowerCase()]),
-      tags: resolveList(tags, initialSkill?.tags, ['custom']),
+      triggers: resolveList(triggers, [name.trim().toLowerCase()]),
+      tags: resolveList(tags, ['custom']),
       content,
       originHub: initialSkill?.originHub,
       originHubId: initialSkill?.originHubId,
@@ -130,10 +193,10 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({ isOpen, onCl
         </button>
       </div>
 
-      {validationError && (
-        <div className="px-6 py-2 bg-rose-500/10 border-b border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+      {(validationError || saveError) && (
+        <div role="alert" className="px-6 py-2 bg-rose-500/10 border-b border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{validationError}</span>
+          <span className="min-w-0 break-words">{validationError || saveError}</span>
         </div>
       )}
 
@@ -185,38 +248,11 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({ isOpen, onCl
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="skill-triggers-input" className="block text-xs font-semibold text-slate-300 mb-1">
-              {t('skills.skillTriggers')}
-            </label>
-            <textarea
-              id="skill-triggers-input"
-              rows={3}
-              value={triggers}
-              onChange={(e) => setTriggers(e.target.value)}
-              placeholder={t('skills.skillTriggersPlaceholder')}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus-ring font-mono placeholder:text-slate-400"
-              aria-describedby="skill-list-hint"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="skill-tags-input" className="block text-xs font-semibold text-slate-300 mb-1">
-              Tags
-            </label>
-            <textarea
-              id="skill-tags-input"
-              rows={3}
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder={t('skills.skillTagsPlaceholder')}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus-ring font-mono placeholder:text-slate-400"
-              aria-describedby="skill-list-hint"
-            />
-          </div>
+          <SkillListFields label={t('skills.skillTriggers')} entries={triggers} onChange={setTriggers} disabled={isLoading} />
+          <SkillListFields label="Tags" entries={tags} onChange={setTags} disabled={isLoading} />
         </div>
         <p id="skill-list-hint" className="-mt-2 text-[11px] text-slate-400">
-          {t('skills.listOnePerLine')}
+          {t('skills.listEntryHint')}
         </p>
 
         <div>

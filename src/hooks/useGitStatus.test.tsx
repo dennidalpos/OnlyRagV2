@@ -132,7 +132,7 @@ describe('useGitStatus ownership of asynchronous reads', () => {
     await act(async () => fast.resolve({ ...result('A'), diffText: 'newest' }))
     await second.pending
     expect(text('diff')).toBe('newest')
-    expect(text('loading')).toBe('true')
+    expect(text('loading')).toBe('false')
 
     await act(async () => slow.resolve({ ...result('A'), diffText: 'older' }))
     await first.pending
@@ -140,28 +140,28 @@ describe('useGitStatus ownership of asynchronous reads', () => {
     expect(text('loading')).toBe('false')
   })
 
-  it('does not update state after unmount', async () => {
-    const late = deferred<GitResult>()
-    api.getGitStatusAndDiff.mockReturnValue(late.promise)
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('does not let a stale same-workspace failure change the current data or loading state', async () => {
+    const stale = deferred<GitResult>()
+    api.getGitStatusAndDiff.mockReturnValueOnce(stale.promise).mockResolvedValueOnce(result('current'))
     await render('A')
-    const started = await begin(() => state.fetchGitStatusAndDiff())
-    await act(async () => root.unmount())
-    await act(async () => late.resolve(result('A')))
-    await started.pending
-    expect(errors).not.toHaveBeenCalled()
-    errors.mockRestore()
-    root = createRoot(container)
+    const first = await begin(() => state.fetchGitStatusAndDiff())
+    await run(() => state.fetchGitStatusAndDiff())
+    expect(text('loading')).toBe('false')
+    await act(async () => stale.reject(new Error('stale failure')))
+    await first.pending
+    expect(text('diff')).toBe('diff of current')
+    expect(text('loading')).toBe('false')
   })
 
   it('refreshes after initGit, reports a failed init and succeeds on retry', async () => {
-    api.initGitRepository.mockRejectedValueOnce(new Error('init denied')).mockResolvedValueOnce({ success: true })
+    api.initGitRepository.mockResolvedValueOnce({ success: false, message: 'init denied' }).mockResolvedValueOnce({ success: true })
     api.getGitStatusAndDiff.mockResolvedValue(result('A'))
     await render('A')
 
     await run(() => state.initGit())
     expect(text('diff')).toContain('init denied')
     expect(text('loading')).toBe('false')
+    expect(api.getGitStatusAndDiff).not.toHaveBeenCalled()
 
     await run(() => state.initGit())
     expect(text('diff')).toBe('diff of A')

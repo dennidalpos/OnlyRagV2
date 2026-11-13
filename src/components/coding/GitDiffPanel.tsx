@@ -136,6 +136,11 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
             <GitBranch className="w-8 h-8 opacity-80" />
           </div>
           <div className="font-bold text-slate-200 text-sm">{t('codingWorkspace.notGitRepo')}</div>
+          {cleanDiffText.startsWith('Git error: ') && (
+            <p role="alert" className="max-w-full break-words text-xs text-rose-300">
+              {cleanDiffText}
+            </p>
+          )}
           <Tooltip helpKey="codingWorkspace_notGitRepoDescription" />
           {onInitGit && (
             <button

@@ -1,3 +1,5 @@
+import { isLoopbackHostname } from './loopbackHost'
+
 /** Endpoint of a local Ollama install; the single source for every default-host fallback. */
 export const DEFAULT_OLLAMA_HOST = 'http://127.0.0.1:11434'
 
@@ -10,7 +12,7 @@ export function normalizeOllamaHost(host?: string): string {
 /** Local diagnostics apply only to a loopback endpoint. */
 export function isLocalOllamaHost(host?: string): boolean {
   try {
-    return ['localhost', '127.0.0.1', '[::1]'].includes(new URL(normalizeOllamaHost(host)).hostname)
+    return isLoopbackHostname(new URL(normalizeOllamaHost(host)).hostname)
   } catch {
     return false
   }

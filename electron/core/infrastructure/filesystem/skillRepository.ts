@@ -119,6 +119,28 @@ export function serializeSkillContent(body: string, metadata: Partial<SkillMetad
 
 /** Marks content staged for removal; listing ignores it and it is only ever a recoverable remainder. */
 const REMOVAL_MARKER = '.removing-'
+const STAGED_SKILL = /^\.(.+)\.removing-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
+const REMOVAL_RECEIPT = '.receipt.json'
+const activeRemovals = new Set<string>()
+
+function removalInventory(target: string): string {
+  const inventory: unknown[] = []
+  const visit = (name: string) => {
+    const file = path.join(target, name)
+    const stat = fs.lstatSync(file)
+    if (stat.isSymbolicLink()) throw new Error('Cannot stage a skill containing a symbolic link')
+    if (stat.isDirectory()) {
+      inventory.push([name, 'directory'])
+      for (const child of fs.readdirSync(file).sort()) visit(path.join(name, child))
+    } else if (stat.isFile()) {
+      inventory.push([name, crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')])
+    } else {
+      throw new Error('Cannot stage an unsupported skill file')
+    }
+  }
+  visit('')
+  return crypto.createHash('sha256').update(JSON.stringify(inventory)).digest('hex')
+}
 
 export class SkillRepository {
   private activeSkillIds = new Set<string>()
@@ -200,6 +222,78 @@ export class SkillRepository {
     return this.activeSkillIds.has(skillId.toLowerCase())
   }
 
+  private removalReceiptDirectory(dir: string): string {
+    const resolved = path.resolve(dir)
+    const scope = crypto
+      .createHash('sha256')
+      .update(process.platform === 'win32' ? resolved.toLowerCase() : resolved)
+      .digest('hex')
+    return path.join(path.dirname(this.getStateFilePath()), 'skill-uninstall-receipts', scope)
+  }
+
+  private recoverStagedSkills(dir: string) {
+    if (!fs.existsSync(dir) || fs.lstatSync(dir).isSymbolicLink()) return
+    const receiptDir = this.removalReceiptDirectory(dir)
+    const receipts = fs.existsSync(receiptDir) ? fs.readdirSync(receiptDir).filter((name) => name.endsWith(REMOVAL_RECEIPT)) : []
+    const stages = new Set(
+      [...fs.readdirSync(dir), ...receipts.map((name) => name.slice(0, -REMOVAL_RECEIPT.length))].filter((name) => STAGED_SKILL.test(name)),
+    )
+    for (const name of stages) {
+      const originalName = STAGED_SKILL.exec(name)?.[1]
+      if (!originalName || originalName === '.' || originalName === '..') continue
+      const original = path.resolve(dir, originalName)
+      const staged = path.join(dir, name)
+      if (activeRemovals.has(original)) continue
+      const receipt = path.join(receiptDir, name + REMOVAL_RECEIPT)
+      try {
+        const stagedStat = fs.lstatSync(staged, { throwIfNoEntry: false })
+        const originalStat = fs.lstatSync(original, { throwIfNoEntry: false })
+        const receiptStat = fs.lstatSync(receipt, { throwIfNoEntry: false })
+        if (receiptStat && (!receiptStat.isFile() || receiptStat.isSymbolicLink())) throw new Error('Invalid uninstall receipt')
+        const record: unknown = receiptStat ? JSON.parse(fs.readFileSync(receipt, 'utf8')) : null
+        if (receiptStat) {
+          if (
+            !record ||
+            typeof record !== 'object' ||
+            !('inventory' in record) ||
+            typeof record.inventory !== 'string' ||
+            !/^[a-f0-9]{64}$/.test(record.inventory) ||
+            !('previouslyActive' in record) ||
+            !Array.isArray(record.previouslyActive) ||
+            record.previouslyActive.some((id) => typeof id !== 'string' || !id || id.length > 256)
+          ) {
+            throw new Error('Invalid uninstall receipt')
+          }
+          if (stagedStat && originalStat) throw new Error('Original and staged copy both exist')
+          const remaining = stagedStat ? staged : originalStat ? original : null
+          if (remaining) {
+            if (removalInventory(remaining) !== record.inventory) throw new Error('Uninstall copy has changed or is incomplete')
+            const skillPath = (stagedStat ?? originalStat)?.isDirectory() ? path.join(remaining, 'SKILL.md') : remaining
+            const id = parseSkillFrontmatter(fs.readFileSync(skillPath, 'utf8')).metadata.name.toLowerCase()
+            const fileId = originalName.replace(/\.md$/i, '').toLowerCase()
+            if (record.previouslyActive.some((entry) => entry.toLowerCase() !== id && entry.toLowerCase() !== fileId)) {
+              throw new Error('Uninstall receipt refers to an unrelated skill')
+            }
+          }
+          if (stagedStat) fs.renameSync(staged, original)
+          if (remaining && record.previouslyActive.length) this.setSkillsActive(record.previouslyActive, true)
+          fs.unlinkSync(receipt)
+        } else if (stagedStat) {
+          // Older staging names have no activation receipt. Preserve the bytes and existing activation state.
+          if (originalStat) throw new Error('Original and staged copy both exist')
+          if (stagedStat.isDirectory() ? !fs.existsSync(path.join(staged, 'SKILL.md')) : !originalName.toLowerCase().endsWith('.md')) {
+            throw new Error('Unrecognized staged skill')
+          }
+          removalInventory(staged)
+          fs.renameSync(staged, original)
+        }
+        logger.log('INFO', 'SkillRepo', `Reconciled interrupted uninstall: ${original}`)
+      } catch (error) {
+        logger.log('WARN', 'SkillRepo', `Uninstall recovery needs attention at ${staged}: ${errorMessage(error)}`)
+      }
+    }
+  }
+
   async listInstalledSkills(workspaceRoot?: string | null): Promise<SkillDefinition[]> {
     this.loadActiveSkills()
     const skillsMap = new Map<string, SkillDefinition>()
@@ -225,6 +319,7 @@ export class SkillRepository {
 
     for (const { dir, isWorkspace } of scannedDirs) {
       try {
+        this.recoverStagedSkills(dir)
         const entries = await fs.promises.readdir(dir, { withFileTypes: true })
         for (const entry of entries) {
           if (entry.name.includes(REMOVAL_MARKER)) continue
@@ -318,6 +413,7 @@ export class SkillRepository {
     const cleanName = normalizeSkillName(name)
     const baseDir =
       workspaceRoot !== undefined && workspaceRoot !== null ? path.join(workspaceRoot, 'skills', cleanName) : path.join(userDataRoot(), 'skills', cleanName)
+    if (activeRemovals.has(path.resolve(baseDir))) return { success: false, error: 'Skill uninstall already in progress' }
 
     try {
       await fs.promises.mkdir(baseDir, { recursive: true })
@@ -352,54 +448,56 @@ export class SkillRepository {
     }
 
     const targetDir = path.dirname(target.filePath)
-    const isFolderSkill = path.basename(targetDir).toLowerCase() === target.name.toLowerCase()
-    const contentPath = isFolderSkill ? targetDir : target.filePath
+    const isFolderSkill =
+      path.basename(target.filePath) === 'SKILL.md' && path.dirname(targetDir) !== targetDir && path.basename(path.dirname(targetDir)) === 'skills'
+    const contentPath = path.resolve(isFolderSkill ? targetDir : target.filePath)
+    const contentParent = path.dirname(contentPath)
+    if (path.basename(contentParent) !== 'skills' || fs.lstatSync(contentParent).isSymbolicLink()) {
+      return { success: false, error: 'Cannot uninstall from an unsafe skill directory' }
+    }
     const stagedPath = path.join(path.dirname(contentPath), `.${path.basename(contentPath)}${REMOVAL_MARKER}${crypto.randomUUID()}`)
-    const ids = [skillId, target.name]
-    const previouslyActive = ids.filter((id) => this.isSkillActive(id))
-
-    // 1. Deactivate first with a single persisted write: a failure here leaves the content untouched.
+    const receiptDir = this.removalReceiptDirectory(contentParent)
+    const receipt = path.join(receiptDir, path.basename(stagedPath) + REMOVAL_RECEIPT)
+    const globalReplacement = target.isWorkspaceLocal && (await this.listInstalledSkills()).some((skill) => skill.id.toLowerCase() === target.id.toLowerCase())
+    const ids = globalReplacement ? [] : [...new Set([skillId, target.name, path.basename(contentPath).replace(/\.md$/i, '')])]
+    const previouslyActive = [...new Set(ids.filter((id) => this.isSkillActive(id)))]
+    if (activeRemovals.has(contentPath)) return { success: false, error: 'Skill uninstall already in progress' }
+    activeRemovals.add(contentPath)
+    let staged = false
+    let removed = false
+    let recorded = false
     try {
-      this.setSkillsActive(ids, false)
-    } catch (err: unknown) {
-      logger.log('ERROR', 'SkillRepo', `Skill ${skillId} not removed, active state could not be saved: ${errorMessage(err)}`)
-      return { success: false, error: errorMessage(err) }
-    }
-
-    const restoreState = (): string | null => {
-      try {
-        if (previouslyActive.length) this.setSkillsActive(previouslyActive, true)
-        return null
-      } catch (err: unknown) {
-        return errorMessage(err)
-      }
-    }
-
-    // 2. Stage the content with an atomic rename; it stays recoverable until the final removal succeeds.
-    try {
+      const inventory = removalInventory(contentPath)
+      fs.mkdirSync(receiptDir, { recursive: true })
+      fs.writeFileSync(receipt, JSON.stringify({ inventory, previouslyActive }), { flag: 'wx', flush: true })
+      recorded = true
+      if (ids.length) this.setSkillsActive(ids, false)
       await fs.promises.rename(contentPath, stagedPath)
-    } catch (err: unknown) {
-      const stateFailure = restoreState()
-      logger.log('ERROR', 'SkillRepo', `Skill ${skillId} not removed, staging failed: ${errorMessage(err)}`)
-      return { success: false, error: stateFailure ? `${errorMessage(err)}; active state not restored: ${stateFailure}` : errorMessage(err) }
-    }
-
-    // 3. Remove the staged copy; on failure put the content and state back.
-    try {
+      staged = true
       await fs.promises.rm(stagedPath, { recursive: true, force: true })
-    } catch (err: unknown) {
+      removed = true
+      fs.unlinkSync(receipt)
+      return { success: true }
+    } catch (error) {
+      if (!recorded) return { success: false, error: errorMessage(error) }
       try {
-        await fs.promises.rename(stagedPath, contentPath)
-      } catch (rollbackErr: unknown) {
-        logger.log('ERROR', 'SkillRepo', `Skill ${skillId} left staged at ${stagedPath}: ${errorMessage(rollbackErr)}`)
-        return { success: false, error: `${errorMessage(err)}; content kept recoverable at ${stagedPath}` }
+        if (removed) throw new Error('Skill removed, but receipt cleanup failed')
+        if (staged) {
+          const { inventory } = JSON.parse(fs.readFileSync(receipt, 'utf8'))
+          if (removalInventory(stagedPath) !== inventory || fs.lstatSync(contentPath, { throwIfNoEntry: false })) {
+            throw new Error('Staged skill is incomplete or the original path is occupied')
+          }
+          await fs.promises.rename(stagedPath, contentPath)
+        }
+        if (previouslyActive.some((id) => !this.isSkillActive(id))) this.setSkillsActive(previouslyActive, true)
+        fs.unlinkSync(receipt)
+      } catch (rollbackError) {
+        return { success: false, error: `${errorMessage(error)}; uninstall receipt retained at ${receipt}: ${errorMessage(rollbackError)}` }
       }
-      const stateFailure = restoreState()
-      logger.log('ERROR', 'SkillRepo', `Error deleting skill ${skillId}: ${errorMessage(err)}`)
-      return { success: false, error: stateFailure ? `${errorMessage(err)}; active state not restored: ${stateFailure}` : errorMessage(err) }
+      return { success: false, error: errorMessage(error) }
+    } finally {
+      activeRemovals.delete(contentPath)
     }
-    logger.log('INFO', 'SkillRepo', `Deleted skill '${skillId}'`)
-    return { success: true }
   }
 }
 

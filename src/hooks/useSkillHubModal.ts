@@ -16,12 +16,15 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   const [sources, setSources] = useState<SkillHubSource[]>([])
   const [selectedSourceId, setSelectedSourceId] = useState<string>(ALL_SKILL_SOURCES)
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingSources, setIsLoadingSources] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [installingSkillId, setInstallingSkillId] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   // Sub-modal states
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [editingSkill, setEditingSkill] = useState<SkillDefinition | null>(null)
+  const [editorSaveError, setEditorSaveError] = useState<string>()
   const [isGuideOpen, setIsGuideOpen] = useState(false)
   const [isAddHubOpen, setIsAddHubOpen] = useState(false)
 
@@ -30,14 +33,17 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   const generationRef = useRef(0)
   const installedReadRef = useRef(0)
   const hubReadRef = useRef(0)
+  const foregroundReadRef = useRef(0)
   const isScopeCurrent = (generation: number) => generation === generationRef.current
 
   const loadSourcesAndSkills = async (sourceIdToUse?: string) => {
     const generation = generationRef.current
     const installedToken = ++installedReadRef.current
     const hubToken = ++hubReadRef.current
+    const foregroundToken = ++foregroundReadRef.current
     const ownsHub = () => isScopeCurrent(generation) && hubToken === hubReadRef.current
     setIsLoading(true)
+    setIsLoadingSources(true)
     try {
       const [installed, sourcesList] = await Promise.all([
         electronApi().listInstalledSkills({ workspaceRoot: workspacePath || undefined }),
@@ -45,21 +51,26 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
       ])
       if (!isScopeCurrent(generation)) return
       if (installedToken === installedReadRef.current) setInstalledSkills(installed)
+      if (!ownsHub()) return
       setSources(sourcesList)
 
       const activeSourceId = sourceIdToUse || selectedSourceId || ALL_SKILL_SOURCES
-      if (ownsHub()) setSelectedSourceId(activeSourceId)
+      setSelectedSourceId(activeSourceId)
 
       const hub =
         activeSourceId === ALL_SKILL_SOURCES
           ? await electronApi().listHubSkillsAcrossSources({ workspaceRoot: workspacePath || undefined })
           : await electronApi().listHubSkillsBySource({ sourceId: activeSourceId, workspaceRoot: workspacePath || undefined })
-      if (ownsHub()) setHubSkills(hub)
+      if (ownsHub()) {
+        setHubSkills(hub)
+        setLoadError(null)
+      }
     } catch (err: unknown) {
       logger.error('SkillHubModal', `Error loading skills/sources: ${errorMessage(err)}`)
-      if (ownsHub()) setActionMessage({ type: 'error', text: errorMessage(err) })
+      if (ownsHub()) setLoadError(errorMessage(err))
     } finally {
-      if (ownsHub()) setIsLoading(false)
+      if (isScopeCurrent(generation) && foregroundToken === foregroundReadRef.current) setIsLoading(false)
+      if (ownsHub()) setIsLoadingSources(false)
     }
   }
 
@@ -69,11 +80,16 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
     setHubSkills([])
     setInstallingSkillId(null)
     setActionMessage(null)
+    setLoadError(null)
+    setEditorSaveError(undefined)
+    setIsEditorOpen(false)
+    setEditingSkill(null)
     void loadSourcesAndSkills()
     return () => {
       // Closing or switching workspace invalidates every request still in flight.
       generationRef.current += 1
       setIsLoading(false)
+      setIsLoadingSources(false)
     }
   }, [isOpen, workspacePath])
 
@@ -93,6 +109,7 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   const handleSourceChange = async (newSourceId: string, forceRefresh = false) => {
     const generation = generationRef.current
     const hubToken = ++hubReadRef.current
+    const foregroundToken = ++foregroundReadRef.current
     const ownsHub = () => isScopeCurrent(generation) && hubToken === hubReadRef.current
     setSelectedSourceId(newSourceId)
     setIsLoading(true)
@@ -102,11 +119,18 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
         newSourceId === ALL_SKILL_SOURCES
           ? await electronApi().listHubSkillsAcrossSources({ workspaceRoot: workspacePath || undefined, forceRefresh })
           : await electronApi().listHubSkillsBySource({ sourceId: newSourceId, workspaceRoot: workspacePath || undefined, forceRefresh })
-      if (ownsHub()) setHubSkills(hub)
+      if (ownsHub()) {
+        setHubSkills(hub)
+        setLoadError(null)
+      }
     } catch (err: unknown) {
       logger.error('SkillHubModal', `Error changing source: ${errorMessage(err)}`)
+      if (ownsHub()) setLoadError(errorMessage(err))
     } finally {
-      if (ownsHub()) setIsLoading(false)
+      if (ownsHub()) {
+        setIsLoadingSources(false)
+        if (foregroundToken === foregroundReadRef.current) setIsLoading(false)
+      }
     }
   }
 
@@ -114,28 +138,40 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   const handleTabChange = async (tab: 'installed' | 'hub') => {
     setActiveTab(tab)
     const generation = generationRef.current
+    // A tab switch supersedes both lists and owns loading until its own read completes.
+    const hubToken = ++hubReadRef.current
+    const installedToken = ++installedReadRef.current
+    const foregroundToken = ++foregroundReadRef.current
+    const ownsTab = () => isScopeCurrent(generation) && foregroundToken === foregroundReadRef.current
+    setIsLoading(true)
     if (tab === 'hub') {
-      const hubToken = ++hubReadRef.current
-      const ownsHub = () => isScopeCurrent(generation) && hubToken === hubReadRef.current
-      setIsLoading(true)
       try {
         const hub =
           selectedSourceId === ALL_SKILL_SOURCES
             ? await electronApi().listHubSkillsAcrossSources({ workspaceRoot: workspacePath || undefined })
             : await electronApi().listHubSkillsBySource({ sourceId: selectedSourceId, workspaceRoot: workspacePath || undefined })
-        if (ownsHub()) setHubSkills(hub)
+        if (ownsTab() && hubToken === hubReadRef.current) {
+          setHubSkills(hub)
+          setLoadError(null)
+        }
       } catch (err: unknown) {
         logger.error('SkillHubModal', `Error fetching hub skills on tab switch: ${errorMessage(err)}`)
+        if (ownsTab() && hubToken === hubReadRef.current) setLoadError(errorMessage(err))
       } finally {
-        if (ownsHub()) setIsLoading(false)
+        if (ownsTab()) setIsLoading(false)
       }
     } else {
-      const installedToken = ++installedReadRef.current
       try {
         const installed = await electronApi().listInstalledSkills({ workspaceRoot: workspacePath || undefined })
-        if (isScopeCurrent(generation) && installedToken === installedReadRef.current) setInstalledSkills(installed)
+        if (ownsTab() && installedToken === installedReadRef.current) {
+          setInstalledSkills(installed)
+          setLoadError(null)
+        }
       } catch (err: unknown) {
         logger.error('SkillHubModal', `Error fetching installed skills on tab switch: ${errorMessage(err)}`)
+        if (ownsTab() && installedToken === installedReadRef.current) setLoadError(errorMessage(err))
+      } finally {
+        if (ownsTab()) setIsLoading(false)
       }
     }
   }
@@ -183,19 +219,23 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   }
 
   /** Runs one skill or hub mutation behind the loading state and reports its failure, returned or thrown. */
-  const runSkillAction = async <T extends { success: boolean; error?: string }>(action: () => Promise<T>, onSuccess: (res: T) => Promise<void> | void) => {
+  const runSkillAction = async <T extends { success: boolean; error?: string }>(
+    action: () => Promise<T>,
+    onSuccess: (res: T, isCurrent: () => boolean) => Promise<void> | void,
+  ) => {
     const generation = generationRef.current
     setIsLoading(true)
+    const foregroundToken = ++foregroundReadRef.current
     try {
       const res = await action()
       // The mutation ran against the workspace it was issued for; only the UI update is dropped when the scope changed.
       if (!isScopeCurrent(generation)) return
-      if (res.success) await onSuccess(res)
+      if (res.success) await onSuccess(res, () => isScopeCurrent(generation))
       else setActionMessage({ type: 'error', text: res.error || t('common.error') })
     } catch (err: unknown) {
       if (isScopeCurrent(generation)) setActionMessage({ type: 'error', text: errorMessage(err) || t('common.error') })
     } finally {
-      if (isScopeCurrent(generation)) setIsLoading(false)
+      if (isScopeCurrent(generation) && foregroundToken === foregroundReadRef.current) setIsLoading(false)
     }
   }
 
@@ -203,25 +243,37 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
     setActionMessage(null)
     await runSkillAction(
       () => electronApi().installSkillFromUrl({ url, workspaceRoot: workspacePath || undefined, customName }),
-      async () => {
+      async (_res, isCurrent) => {
         setActionMessage({ type: 'success', text: t('skills.msgUrlImported') })
         await loadSourcesAndSkills(selectedSourceId)
-        setActiveTab('installed')
+        if (isCurrent()) setActiveTab('installed')
       },
     )
   }
 
-  const handleSaveCustomSkill = (input: SkillSaveInput) =>
-    runSkillAction(
-      () => electronApi().saveCustomSkill({ input, workspaceRoot: workspacePath || undefined }),
+  const handleSaveCustomSkill = (input: SkillSaveInput) => {
+    setEditorSaveError(undefined)
+    return runSkillAction(
       async () => {
+        const generation = generationRef.current
+        try {
+          const result = await electronApi().saveCustomSkill({ input, workspaceRoot: workspacePath || undefined })
+          if (!result.success && isScopeCurrent(generation)) setEditorSaveError(result.error || t('common.error'))
+          return result
+        } catch (error) {
+          if (isScopeCurrent(generation)) setEditorSaveError(errorMessage(error))
+          throw error
+        }
+      },
+      async (_res, isCurrent) => {
         setActionMessage({ type: 'success', text: t('skills.msgSaved', { name: input.name }) })
         setIsEditorOpen(false)
         setEditingSkill(null)
         await loadSourcesAndSkills(selectedSourceId)
-        setActiveTab('installed')
+        if (isCurrent()) setActiveTab('installed')
       },
     )
+  }
 
   const handleResetSkill = (skillId: string) =>
     runSkillAction(
@@ -271,12 +323,17 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
     sources,
     selectedSourceId,
     isLoading,
+    isLoadingSources,
+    loadError,
+    retryLoad: () => loadSourcesAndSkills(selectedSourceId),
     installingSkillId,
     actionMessage,
     isEditorOpen,
     setIsEditorOpen,
     editingSkill,
     setEditingSkill,
+    editorSaveError,
+    clearEditorSaveError: () => setEditorSaveError(undefined),
     isGuideOpen,
     setIsGuideOpen,
     isAddHubOpen,

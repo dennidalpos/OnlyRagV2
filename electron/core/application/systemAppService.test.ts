@@ -127,6 +127,9 @@ describe('SystemAppService Unit Tests', () => {
 
       expect(await customService.openExternal('http://127.0.0.1:8000/health')).toBe(true)
       expect(openedUrls).toContain('http://127.0.0.1:8000/health')
+      expect(await customService.openExternal('http://[::1]:8000/health')).toBe(true)
+      expect(openedUrls).toContain('http://[::1]:8000/health')
+      expect(await customService.openExternal('http://[::ffff:127.0.0.1]:8000/health')).toBe(false)
     })
 
     it('should allow external URLs when policy is permissive or default', async () => {

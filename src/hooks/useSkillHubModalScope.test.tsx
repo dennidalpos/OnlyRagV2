@@ -2,7 +2,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSkillHubModal } from './useSkillHubModal'
-import type { HubSkillItem, SkillDefinition } from '../types'
+import type { HubSkillItem, SkillDefinition, SkillSaveInput } from '../types'
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -33,6 +33,9 @@ describe('useSkillHubModal ownership of asynchronous results', () => {
     listHubSkillsAcrossSources: vi.fn(),
     listHubSkillsBySource: vi.fn(),
     installSkillFromHub: vi.fn(),
+    uninstallSkill: vi.fn(),
+    saveCustomSkill: vi.fn(),
+    resetSkillToOriginal: vi.fn(),
   }
 
   function Harness({ open, workspace }: { open: boolean; workspace: string | null }) {
@@ -44,19 +47,149 @@ describe('useSkillHubModal ownership of asynchronous results', () => {
         <p id="loading">{String(state.isLoading)}</p>
         <p id="installing">{String(state.installingSkillId)}</p>
         <p id="message">{state.actionMessage ? `${state.actionMessage.type}:${state.actionMessage.text}` : ''}</p>
+        <p id="error">{state.loadError}</p>
       </div>
     )
   }
   const text = (id: string) => container.querySelector(`#${id}`)!.textContent
   const render = (open: boolean, workspace: string | null) => act(async () => root.render(<Harness open={open} workspace={workspace} />))
+  const begin = async (action: () => Promise<void>) => {
+    let pending!: Promise<void>
+    await act(async () => {
+      pending = action()
+    })
+    return { pending }
+  }
+  const saveInput: SkillSaveInput = { name: 'fixture', description: 'fixture', triggers: [], tags: [], content: 'fixture' }
+  const mutations = [
+    { name: 'uninstall', mock: api.uninstallSkill, run: () => state.handleDeleteSkill('fixture') },
+    { name: 'save', mock: api.saveCustomSkill, run: () => state.handleSaveCustomSkill(saveInput) },
+    { name: 'reset', mock: api.resetSkillToOriginal, run: () => state.handleResetSkill('fixture') },
+  ]
 
   beforeEach(() => {
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     api.listHubSources.mockResolvedValue([])
     Object.assign(window, { electronAPI: api })
+  })
+
+  it.each(mutations)('keeps $name on its origin workspace and drops its late UI result', async ({ mock, run }) => {
+    const mutation = deferred<{ success: boolean }>()
+    mock.mockReturnValue(mutation.promise)
+    api.listInstalledSkills.mockImplementation(({ workspaceRoot }: { workspaceRoot?: string }) => Promise.resolve(installed(workspaceRoot || 'none')))
+    api.listHubSkillsAcrossSources.mockResolvedValue([])
+    await render(true, 'A')
+    const started = await begin(run)
+    expect(mock).toHaveBeenCalledWith(expect.objectContaining({ workspaceRoot: 'A' }))
+    await render(true, 'B')
+    const reads = api.listInstalledSkills.mock.calls.length
+    await act(async () => mutation.resolve({ success: true }))
+    await started.pending
+    expect(text('installed')).toBe('B')
+    expect(text('message')).toBe('')
+    expect(text('loading')).toBe('false')
+    expect(api.listInstalledSkills).toHaveBeenCalledTimes(reads)
+  })
+
+  it.each(mutations)('does not notify after closing during $name, and rereads effective state on reopening', async ({ mock, run }) => {
+    let effective = 'before'
+    const mutation = deferred<{ success: boolean }>()
+    mock.mockReturnValue(mutation.promise)
+    api.listInstalledSkills.mockImplementation(async () => installed(effective))
+    api.listHubSkillsAcrossSources.mockResolvedValue([])
+    await render(true, 'A')
+    const started = await begin(run)
+    await render(false, 'A')
+    effective = 'after'
+    const reads = api.listInstalledSkills.mock.calls.length
+    await act(async () => mutation.resolve({ success: true }))
+    await started.pending
+    expect(text('message')).toBe('')
+    expect(api.listInstalledSkills).toHaveBeenCalledTimes(reads)
+    await render(true, 'A')
+    expect(text('installed')).toBe('after')
+    expect(text('message')).toBe('')
+    expect(mock).toHaveBeenCalledTimes(1)
+    expect(mock).toHaveBeenCalledWith(expect.objectContaining({ workspaceRoot: 'A' }))
+  })
+
+  it.each(mutations)('ignores a late $name failure while the new workspace is still loading', async ({ mock, run }) => {
+    const mutation = deferred<{ success: boolean }>()
+    const loadingB = deferred<SkillDefinition[]>()
+    mock.mockReturnValue(mutation.promise)
+    api.listInstalledSkills.mockImplementation(({ workspaceRoot }: { workspaceRoot?: string }) =>
+      workspaceRoot === 'B' ? loadingB.promise : Promise.resolve(installed('A')),
+    )
+    api.listHubSkillsAcrossSources.mockResolvedValue([])
+    await render(true, 'A')
+    const started = await begin(run)
+    await render(true, 'B')
+    await act(async () => mutation.reject(new Error('A mutation failed late')))
+    await started.pending
+    expect(text('message')).toBe('')
+    expect(text('loading')).toBe('true')
+    await act(async () => loadingB.resolve(installed('B')))
+    expect(text('installed')).toBe('B')
+    expect(text('loading')).toBe('false')
+  })
+
+  it('does not switch the new workspace tab when a successful save finishes reloading the old one', async () => {
+    api.saveCustomSkill.mockResolvedValue({ success: true })
+    api.listInstalledSkills.mockResolvedValue(installed('initial'))
+    api.listHubSkillsAcrossSources.mockResolvedValue([])
+    await render(true, 'A')
+    const refreshA = deferred<SkillDefinition[]>()
+    api.listInstalledSkills.mockReturnValueOnce(refreshA.promise)
+    const started = await begin(() => state.handleSaveCustomSkill(saveInput))
+    await render(true, 'B')
+    await act(async () => state.handleTabChange('hub'))
+    expect(state.activeTab).toBe('hub')
+    await act(async () => refreshA.resolve(installed('old A')))
+    await started.pending
+    expect(state.activeTab).toBe('hub')
+    expect(text('installed')).toBe('initial')
+    expect(text('message')).toBe('')
+  })
+
+  it.each(['hub', 'installed'] as const)('invalidates the earlier %s tab read, including its loading and failure', async (tab) => {
+    api.listInstalledSkills.mockResolvedValue(installed('initial'))
+    api.listHubSkillsAcrossSources.mockResolvedValue(hub('initial'))
+    await render(true, 'A')
+    const stale = deferred<Array<SkillDefinition | HubSkillItem>>()
+    const latest = deferred<Array<SkillDefinition | HubSkillItem>>()
+    const read = tab === 'hub' ? api.listHubSkillsAcrossSources : api.listInstalledSkills
+    read.mockReturnValueOnce(stale.promise).mockReturnValueOnce(latest.promise)
+    const first = await begin(() => state.handleTabChange(tab))
+    await act(async () => state.handleTabChange(tab === 'hub' ? 'installed' : 'hub'))
+    const second = await begin(() => state.handleTabChange(tab))
+    expect(text('loading')).toBe('true')
+    await act(async () => stale.reject(new Error('outdated tab failure')))
+    await first.pending
+    expect(text('loading')).toBe('true')
+    expect(text('error')).toBe('')
+    await act(async () => latest.resolve(tab === 'hub' ? hub('current') : installed('current')))
+    await second.pending
+    expect(text(tab)).toBe('current')
+    expect(text('loading')).toBe('false')
+  })
+
+  it('discards an old tab success that finishes after the current tab read', async () => {
+    api.listInstalledSkills.mockResolvedValue(installed('initial'))
+    api.listHubSkillsAcrossSources.mockResolvedValue(hub('initial'))
+    await render(true, 'A')
+    const stale = deferred<HubSkillItem[]>()
+    api.listHubSkillsAcrossSources.mockReturnValueOnce(stale.promise)
+    const first = await begin(() => state.handleTabChange('hub'))
+    await act(async () => state.handleTabChange('installed'))
+    expect(text('loading')).toBe('false')
+    await act(async () => stale.resolve(hub('stale')))
+    await first.pending
+    expect(text('hub')).toBe('initial')
+    expect(text('installed')).toBe('initial')
+    expect(text('loading')).toBe('false')
   })
 
   afterEach(async () => {

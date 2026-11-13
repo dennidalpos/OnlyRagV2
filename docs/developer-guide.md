@@ -63,6 +63,8 @@ The native project verifier resolves actual manifests/configuration for Python, 
 
 Ordinary profiles validate filesystem, commands, network/installations and approvals. Full Access takes a different broader path and must not be attributed the limited profile's exclusions. Skill installation, activation, editing and uninstall have separate ownership/hash/transaction boundaries; external content is untrusted input.
 
+The skill editor uses one multiline field per trigger or tag. When an uninstall is interrupted, the next listing checks the staged skill against its receipt in the application profile. An intact copy can be restored to a free original path with its previous activation. If the original path is occupied or the staged copy is incomplete, the repository keeps the remaining files and receipt and logs the recovery path.
+
 ## Current checks
 
 ~~~powershell

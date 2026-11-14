@@ -6,6 +6,9 @@ const artifactName = z.string().trim().min(1).max(200)
 const artifactKind = z.enum(['html', 'svg', 'markdown'])
 
 export const artifactsListPayloadSchema = z.object({ workspacePath }).strict()
+export const artifactsRebindPayloadSchema = z
+  .object({ workspacePath, previousWorkspacePath: workspacePath, revision: z.string().regex(/^[a-f0-9]{64}$/) })
+  .strict()
 export const artifactsGetPayloadSchema = z.object({ workspacePath, artifactId }).strict()
 export const artifactsDeletePayloadSchema = z.object({ workspacePath, artifactId }).strict()
 export const artifactsSavePayloadSchema = z

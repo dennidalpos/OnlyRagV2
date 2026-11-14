@@ -1,6 +1,6 @@
 # RAG, OCR e traduzione
 
-Questa pagina mantiene i collegamenti storici. Per il comportamento attuale leggere [ingestion](./ingestion.md), [ricerca](./retrieval.md) e [traduzione](./translation.md). Il [contratto REST](./api-rest.md) descrive la superficie implementata; [decisioni approvate](./local-development-policy-2026-10-20.md) e tracker (SecondBrain: `02-areas/products/OnlyRagV2/tracker.json`) distinguono requisiti e stato operativo dai risultati datati.
+Questa pagina mantiene i collegamenti storici. Per il comportamento attuale leggere [ingestion](./ingestion.md), [ricerca](./retrieval.md) e [traduzione](./translation.md). Il [contratto REST](./api-rest.md) descrive la superficie implementata; [decisioni approvate](./local-development-policy-2026-10-20.md) e tracker (dossier SecondBrain) distinguono requisiti e stato operativo dai risultati datati.
 
 ## Indice delle evidenze precedenti
 

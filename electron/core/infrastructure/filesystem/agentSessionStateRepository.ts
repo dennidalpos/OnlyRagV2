@@ -95,7 +95,7 @@ const savedStateSchema = z
     version: z.never().optional(),
     sessionId: z.string().min(1),
     workspacePath: z.string().nullable(),
-    agentMode: z.string().optional(),
+    agentMode: z.enum(['ask', 'guided', 'auto']),
     stepCount: counter,
     maxSteps: counter,
     episodes: z.array(
@@ -202,11 +202,8 @@ function decodeSessionState(raw: unknown, sessionId: string, workspacePath?: str
   ) {
     throw new Error('Invalid retained agent session state')
   }
-  // Validation must not strip retained fields or rewrite compatible legacy modes on read.
-  const record = raw as Record<string, unknown>
-  const mode = record.agentMode
-  const agentMode: AgentMode = mode === 'ask' || mode === 'guided' || mode === 'auto' ? mode : 'guided'
-  return { ...record, agentMode } as SavedAgentSessionState
+  // Preserve validated current fields byte-for-byte at the persistence boundary.
+  return raw as SavedAgentSessionState
 }
 
 export class AgentSessionStateRepository {

@@ -1,6 +1,6 @@
 # OnlyRag V2 documentation
 
-Start with the [English user guide](user-guide.md) for the app's26 workflows or the [English developer/operations guide](developer-guide.md) for setup, architecture, contracts, tests and recovery. The [root README](../README.md) gives the quick start, existing screenshots and product limits.
+Start with the [English user guide](user-guide.md) for the app's 26 workflows or the [English developer/operations guide](developer-guide.md) for setup, architecture, contracts, tests and recovery. The [root README](../README.md) gives the quick start, existing screenshots and product limits.
 
 ## Coverage map
 
@@ -8,7 +8,8 @@ The English guides consolidate the maintained operational subjects below. Origin
 
 | Retained source | English coverage |
 |---|---|
-| [Visual user flows00–25](guida-utente.md) | [User guide](user-guide.md): orientation, services, ingestion02–07, chat08–10, translation11–13, coding14–20 and settings21–25 |
+| [Visual user flows 00–25](guida-utente.md) | [User guide](user-guide.md): orientation, services, ingestion 02–07, chat 08–10, translation 11–13, coding 14–20 and settings 21–25 |
+| [Test storage](test-storage.md) | Developer guide: product-local outputs, fixture ownership, retained evidence and cleanup limits |
 | [Operations](operations.md) | [Developer guide](developer-guide.md): prerequisites, setup/check commands, generated files, recovery, embedding maintenance and cleanup limits |
 | [Architecture](architecture.md) | Developer guide: process boundaries and storage/acknowledgement model |
 | [Renderer](frontend.md) | User guide: settings/chat/document/agent persistence and recovery; developer guide: Renderer/Preload boundary |

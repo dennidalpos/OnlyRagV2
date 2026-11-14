@@ -10,6 +10,10 @@ Main carica le impostazioni, registra IPC e avvia il Sidecar locale. Il listener
 
 Impostazioni, registro progetti, sessioni e stato agente usano scritture serializzate con staging nello stesso percorso, flush del file e rename. Un file illeggibile o una scrittura non confermata blocca le operazioni dipendenti. Lo staging completo anteriore alla sostituzione non viene promosso automaticamente dopo un crash; i temporanei di scritture fallite seguono il cleanup posseduto del writer, non una conservazione indiscriminata. `STATE-WRITER-CRASH-DURABILITY-01` è [concluso con 24 interruzioni Node/Electron e readback](./verification-tracker-completion-2026-10-21.md#state-writer-crash-durability-01--completato). Flush della directory e perdita di alimentazione restano fuori dalle prove.
 
+## Formati correnti del workspace
+
+La creazione inizializza il layout metadata 2. Layout precedenti o non versionati, storico senza versione o privo dei record richiesti e checkpoint v1 vengono rifiutati con diagnostica: originali e backup non sono convertiti o cancellati. L’apertura Standalone rifiuta lo storico standalone precedente anziché trasferirlo. La ripresa usa identità di run e revisione del piano; modalità agente sconosciute non diventano implicitamente Guided.
+
 ## Session deletion recovery — 2026-10-12
 
 Eliminazione e Clear hanno stati `refused`, `pending` e `complete`. Main conserva il journal delle operazioni incomplete, la cronologia e i checkpoint; il Renderer offre retry, ripristino o export secondo il contratto IPC. Al riavvio una fase `.preparing-<operationId>` viene pubblicata soltanto dopo verifica del manifest completo e rilettura di tutti gli asset conservati. Le preparazioni incomplete o in conflitto restano esportabili senza autorizzare cancellazione/ripristino né bloccare sessioni estranee. La [qualifica dello staging](./verification.md#session-deletion-staging-and-cleanup-recovery---2026-10-15) conserva il lavoro concluso; non è una voce ancora aperta del tracker e non certifica perdita di alimentazione.
@@ -24,6 +28,6 @@ Main legge store workspace e fallback prima di eliminare, conserva l'unione dei 
 
 ## Session deletion recovery proposal — 2026-10-06
 
-La proposta storica precede il journal attuale; stato e limiti correnti sono sopra e nel `tracker` (SecondBrain: `02-areas/products/OnlyRagV2/tracker.json`).
+La proposta storica precede il journal attuale; stato e limiti correnti sono sopra e nel `tracker` (dossier SecondBrain).
 
 Verifica datata e tagli isolati: [`verification-history-2026-10-13.md`](./verification-history-2026-10-13.md).

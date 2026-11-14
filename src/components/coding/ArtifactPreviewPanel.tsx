@@ -1,7 +1,7 @@
 import { AppSelect } from '../common/AppSelect'
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Code2, Eye, Plus, RefreshCw, Save, Trash2 } from 'lucide-react'
-import type { ArtifactKind, ArtifactRecord, ArtifactSaveInput } from '../../types'
+import type { ArtifactInspection, ArtifactKind, ArtifactRecord, ArtifactSaveInput } from '../../types'
 import { useTranslation } from '../../i18n'
 import { errorMessage } from '../../../shared/domain/errors/errorMessage'
 
@@ -30,12 +30,14 @@ export const ArtifactPreviewPanel: React.FC<ArtifactPreviewPanelProps> = ({ work
 const WorkspaceArtifactPanel: React.FC<ArtifactPreviewPanelProps> = ({ workspacePath }) => {
   const { t } = useTranslation()
   const [artifacts, setArtifacts] = useState<ArtifactRecord[]>([])
+  const [recovery, setRecovery] = useState<Pick<ArtifactInspection, 'moved' | 'rejected'>>({ moved: [], rejected: [] })
+  const [confirmation, setConfirmation] = useState<string | null>(null)
   // null allows the initial load to select the first record. A draft without an ID is an explicit choice.
   const [editor, setEditor] = useState<ArtifactSaveInput | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isWriting, setIsWriting] = useState(false)
   const [readError, setReadError] = useState<string | null>(null)
-  const [writeError, setWriteError] = useState<{ action: 'save' | 'remove'; message: string } | null>(null)
+  const [writeError, setWriteError] = useState<{ action: 'save' | 'remove' | 'recovery'; message: string } | null>(null)
   const scope = useRef(0)
   const read = useRef(0)
   const writing = useRef(false)
@@ -51,17 +53,19 @@ const WorkspaceArtifactPanel: React.FC<ArtifactPreviewPanelProps> = ({ workspace
   )
 
   const loadArtifacts = useCallback(async () => {
-    if (!workspacePath || !window.electronAPI?.listArtifacts || writing.current) return
+    if (!workspacePath || !window.electronAPI?.inspectArtifacts || writing.current) return
     const generation = scope.current
     const request = ++read.current
     const isCurrent = () => generation === scope.current && request === read.current
     setIsLoading(true)
+    setConfirmation(null)
     try {
-      const next = await window.electronAPI.listArtifacts({ workspacePath })
+      const { records, moved, rejected } = await window.electronAPI.inspectArtifacts({ workspacePath })
       if (!isCurrent()) return
       setReadError(null)
-      setArtifacts(next)
-      setEditor((current) => current ?? next[0] ?? NEW_DRAFT)
+      setArtifacts(records)
+      setRecovery({ moved, rejected })
+      setEditor((current) => current ?? records[0] ?? NEW_DRAFT)
     } catch (err: unknown) {
       if (isCurrent()) setReadError(errorMessage(err))
     } finally {
@@ -87,7 +91,7 @@ const WorkspaceArtifactPanel: React.FC<ArtifactPreviewPanelProps> = ({ workspace
     setEditor((current) => ({ ...(current ?? NEW_DRAFT), ...changes }))
   }
 
-  const writeArtifact = async (action: 'save' | 'remove', write: (isCurrent: () => boolean) => Promise<void>) => {
+  const writeArtifact = async (action: 'save' | 'remove' | 'recovery', write: (isCurrent: () => boolean) => Promise<void>) => {
     if (writing.current) return
     const generation = scope.current
     const isCurrent = () => generation === scope.current
@@ -129,7 +133,35 @@ const WorkspaceArtifactPanel: React.FC<ArtifactPreviewPanelProps> = ({ workspace
       createArtifact()
     })
   }
-  const retry = writeError?.action === 'save' ? save : writeError?.action === 'remove' ? remove : () => void loadArtifacts()
+
+  const rebind = async ({ previousWorkspacePath, revision }: ArtifactInspection['moved'][number]) => {
+    const api = window.electronAPI
+    if (!workspacePath || !api || confirmation !== revision) return
+    const generation = scope.current
+    setConfirmation(null)
+    await writeArtifact('recovery', async () => {
+      await api.rebindArtifacts({ workspacePath, previousWorkspacePath, revision })
+    })
+    if (generation === scope.current) await loadArtifacts()
+  }
+
+  const exportRejected = (artifactId: string) => {
+    const api = window.electronAPI
+    if (!workspacePath || !api) return
+    void writeArtifact('recovery', async () => {
+      await api.exportRejectedArtifact({ workspacePath, artifactId })
+    })
+  }
+
+  const retry =
+    writeError?.action === 'save'
+      ? save
+      : writeError?.action === 'remove'
+        ? remove
+        : () => {
+            setWriteError(null)
+            void loadArtifacts()
+          }
   const storeError = writeError?.message ?? readError
 
   return (
@@ -170,9 +202,9 @@ const WorkspaceArtifactPanel: React.FC<ArtifactPreviewPanelProps> = ({ workspace
       {!workspacePath ? (
         <div className="p-6 text-sm text-slate-400">{t('uiShell.artifactsNeedWorkspace')}</div>
       ) : (
-        <div className="relative flex-1 min-h-0 flex">
+        <div className="flex-1 min-h-0 flex flex-col">
           {storeError && (
-            <div role="alert" className="absolute inset-x-0 top-12 z-10 flex items-center gap-2 bg-red-950/80 px-4 py-2 text-xs text-red-200">
+            <div role="alert" className="flex shrink-0 items-center gap-2 bg-red-950/80 px-4 py-2 text-xs text-red-200">
               <span className="flex-1 min-w-0 break-words">
                 {t('uiShell.artifactsError')} {storeError}
               </span>
@@ -182,83 +214,140 @@ const WorkspaceArtifactPanel: React.FC<ArtifactPreviewPanelProps> = ({ workspace
                 disabled={isWriting || isLoading || (writeError?.action === 'save' && !draft.name.trim())}
                 className="px-2 py-1 rounded border border-red-700 hover:text-white disabled:opacity-40 focus-ring"
               >
-                {t('uiShell.artifactsRetry')}
+                {t(writeError?.action === 'recovery' ? 'common.refresh' : 'uiShell.artifactsRetry')}
               </button>
             </div>
           )}
-          <aside aria-busy={isLoading} className="w-[28%] max-w-56 shrink-0 border-r border-slate-800 p-2 overflow-y-auto">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="min-w-0 truncate text-[10px] uppercase tracking-wider text-slate-500">{t('codingPanels.artifacts')}</div>
-              <button
-                type="button"
-                onClick={() => void loadArtifacts()}
-                disabled={isWriting || isLoading}
-                aria-label={t('common.refresh')}
-                title={t('common.refresh')}
-                className="p-1 rounded text-slate-400 hover:text-white disabled:opacity-40 focus-ring"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            {artifacts.length === 0 && !readError && <div className="text-xs text-slate-500">{t(isLoading ? 'common.loading' : 'uiShell.noArtifacts')}</div>}
-            {artifacts.map((artifact) => (
-              <button
-                key={artifact.id}
-                type="button"
-                disabled={isWriting}
-                aria-pressed={artifact.id === selectedId}
-                onClick={() => selectArtifact(artifact)}
-                className={`w-full text-left rounded px-2 py-2 mb-1 text-xs ${artifact.id === selectedId ? 'bg-cyan-950/60 text-cyan-200' : 'text-slate-400 hover:bg-slate-900'}`}
-              >
-                <Code2 className="w-3 h-3 inline mr-1" />
-                {artifact.name}
-                <span className="block pl-4 text-[10px] text-slate-500">{artifact.kind}</span>
-              </button>
-            ))}
-          </aside>
-          <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-            <div className="p-2 border-b border-slate-800 grid grid-cols-[minmax(0,1fr)_minmax(0,6.5rem)] gap-2">
-              <input
-                value={draft.name}
-                readOnly={isWriting}
-                onChange={(event) => updateDraft({ name: event.target.value })}
-                className="min-w-0 flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs"
-                aria-label={t('codingPanels.artifactName')}
-              />
-              <AppSelect
-                compact
-                value={draft.kind}
-                disabled={isWriting}
-                onChange={(event) => updateDraft({ kind: event.target.value as ArtifactKind })}
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs"
-                aria-label={t('codingPanels.artifactKind')}
-              >
-                <option value="html">HTML</option>
-                <option value="svg">SVG</option>
-                <option value="markdown">Markdown</option>
-              </AppSelect>
-            </div>
-            <div className="flex-1 min-h-0 grid grid-cols-2 gap-px bg-slate-800">
-              <textarea
-                value={draft.content}
-                readOnly={isWriting}
-                onChange={(event) => updateDraft({ content: event.target.value })}
-                className="min-w-0 min-h-0 resize-none bg-slate-950 p-3 font-mono text-xs text-slate-300 focus-ring"
-                aria-label={t('codingPanels.artifactContent')}
-                spellCheck={false}
-              />
-              <iframe
-                title={`Anteprima ${draft.name}`}
-                sandbox=""
-                srcDoc={source}
-                onLoad={({ currentTarget: frame }) => {
-                  // Chromium can commit srcdoc without laying it out. Reattach its layout after navigation.
-                  frame.style.display = 'none'
-                  frame.getBoundingClientRect()
-                  frame.style.removeProperty('display')
-                }}
-                className="w-full h-full bg-white border-0"
-              />
+          {(recovery.moved.length > 0 || recovery.rejected.length > 0) && (
+            <section aria-label={t('uiShell.artifactsRecovery')} className="max-h-[40%] shrink-0 overflow-y-auto border-b border-slate-800 px-3 py-2 text-sm">
+              <h2 className="font-medium">{t('uiShell.artifactsRecovery')}</h2>
+              {recovery.moved.map((group) => (
+                <div key={group.revision} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1">
+                  <div className="min-w-0 flex-1 basis-48 break-all text-slate-300">
+                    {t('uiShell.artifactsPreviousWorkspace')} {group.previousWorkspacePath} ({group.count})
+                  </div>
+                  {confirmation === group.revision ? (
+                    <>
+                      <button
+                        type="button"
+                        className="focus-ring rounded bg-cyan-600 px-2 py-1 text-slate-950"
+                        disabled={isWriting || isLoading}
+                        onClick={() => void rebind(group)}
+                      >
+                        {t('uiShell.artifactsConfirmRebind')}
+                      </button>
+                      <button type="button" className="focus-ring rounded border border-slate-700 px-2 py-1" onClick={() => setConfirmation(null)}>
+                        {t('common.cancel')}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="focus-ring rounded border border-slate-700 px-2 py-1"
+                      disabled={isWriting || isLoading}
+                      onClick={() => setConfirmation(group.revision)}
+                    >
+                      {t('uiShell.artifactsRebind')}
+                    </button>
+                  )}
+                </div>
+              ))}
+              {recovery.rejected.map(({ fileName, message, exportId }) => (
+                <div key={fileName} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1">
+                  <div className="min-w-0 flex-1 basis-48 break-words text-slate-300">
+                    <strong>{fileName}</strong> · {message}
+                  </div>
+                  {exportId && (
+                    <button
+                      type="button"
+                      className="focus-ring rounded border border-slate-700 px-2 py-1"
+                      disabled={isWriting || isLoading}
+                      onClick={() => exportRejected(exportId)}
+                    >
+                      {t('uiShell.artifactsExportOriginal')}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
+          <div className="flex flex-1 min-h-0">
+            <aside aria-busy={isLoading} className="w-[28%] max-w-56 shrink-0 border-r border-slate-800 p-2 overflow-y-auto">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="min-w-0 truncate text-[10px] uppercase tracking-wider text-slate-500">{t('codingPanels.artifacts')}</div>
+                <button
+                  type="button"
+                  onClick={() => void loadArtifacts()}
+                  disabled={isWriting || isLoading}
+                  aria-label={t('common.refresh')}
+                  title={t('common.refresh')}
+                  className="p-1 rounded text-slate-400 hover:text-white disabled:opacity-40 focus-ring"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {artifacts.length === 0 && !readError && recovery.moved.length === 0 && recovery.rejected.length === 0 && (
+                <div className="text-xs text-slate-500">{t(isLoading ? 'common.loading' : 'uiShell.noArtifacts')}</div>
+              )}
+              {artifacts.map((artifact) => (
+                <button
+                  key={artifact.id}
+                  type="button"
+                  disabled={isWriting}
+                  aria-pressed={artifact.id === selectedId}
+                  onClick={() => selectArtifact(artifact)}
+                  className={`w-full text-left rounded px-2 py-2 mb-1 text-xs ${artifact.id === selectedId ? 'bg-cyan-950/60 text-cyan-200' : 'text-slate-400 hover:bg-slate-900'}`}
+                >
+                  <Code2 className="w-3 h-3 inline mr-1" />
+                  {artifact.name}
+                  <span className="block pl-4 text-[10px] text-slate-500">{artifact.kind}</span>
+                </button>
+              ))}
+            </aside>
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+              <div className="p-2 border-b border-slate-800 grid grid-cols-[minmax(0,1fr)_minmax(0,6.5rem)] gap-2">
+                <input
+                  value={draft.name}
+                  readOnly={isWriting}
+                  onChange={(event) => updateDraft({ name: event.target.value })}
+                  className="min-w-0 flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs"
+                  aria-label={t('codingPanels.artifactName')}
+                />
+                <AppSelect
+                  compact
+                  value={draft.kind}
+                  disabled={isWriting}
+                  onChange={(event) => updateDraft({ kind: event.target.value as ArtifactKind })}
+                  className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs"
+                  aria-label={t('codingPanels.artifactKind')}
+                >
+                  <option value="html">HTML</option>
+                  <option value="svg">SVG</option>
+                  <option value="markdown">Markdown</option>
+                </AppSelect>
+              </div>
+              <div className="flex-1 min-h-0 grid grid-cols-2 gap-px bg-slate-800">
+                <textarea
+                  value={draft.content}
+                  readOnly={isWriting}
+                  onChange={(event) => updateDraft({ content: event.target.value })}
+                  className="min-w-0 min-h-0 resize-none bg-slate-950 p-3 font-mono text-xs text-slate-300 focus-ring"
+                  aria-label={t('codingPanels.artifactContent')}
+                  spellCheck={false}
+                />
+                <iframe
+                  title={`Anteprima ${draft.name}`}
+                  sandbox=""
+                  srcDoc={source}
+                  onLoad={({ currentTarget: frame }) => {
+                    // Chromium can commit srcdoc without laying it out. Reattach its layout after navigation.
+                    frame.style.display = 'none'
+                    frame.getBoundingClientRect()
+                    frame.style.removeProperty('display')
+                  }}
+                  className="w-full h-full bg-white border-0"
+                />
+              </div>
             </div>
           </div>
         </div>

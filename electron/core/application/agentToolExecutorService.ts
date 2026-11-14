@@ -505,6 +505,7 @@ export class AgentToolExecutorService {
     browserRunId = policySessionId,
   ): Promise<ToolExecutionResult> {
     const { tool, parameters } = parsedTool
+    this.journal.setWorkspaceRoot(workspacePath)
 
     const fullAccess = settings.fullAccess === true
 

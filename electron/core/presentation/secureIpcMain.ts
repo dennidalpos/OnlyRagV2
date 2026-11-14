@@ -20,7 +20,13 @@ import {
   workspaceReadFilePayloadSchema,
   workspaceWriteFilePayloadSchema,
 } from '../domain/workspaceContract'
-import { artifactsDeletePayloadSchema, artifactsGetPayloadSchema, artifactsListPayloadSchema, artifactsSavePayloadSchema } from '../domain/artifactContract'
+import {
+  artifactsDeletePayloadSchema,
+  artifactsGetPayloadSchema,
+  artifactsListPayloadSchema,
+  artifactsRebindPayloadSchema,
+  artifactsSavePayloadSchema,
+} from '../domain/artifactContract'
 import { agentPlanSchema, agentTaskRequestSchema, planMilestoneSchema } from '../domain/agent/agentTaskContract'
 import type { IpcInvokeChannel, IpcReceivedPayload, IpcResult, IpcSendChannel, IpcSendContract } from '../../../shared/ipc/ipcContract'
 
@@ -190,6 +196,9 @@ const payloadSchemas: Record<IpcInvokeChannel | IpcSendChannel, z.ZodType | null
     destinationDirectory: path.optional(),
   }),
   'artifacts:list': artifactsListPayloadSchema,
+  'artifacts:inspect': artifactsListPayloadSchema,
+  'artifacts:rebind': artifactsRebindPayloadSchema,
+  'artifacts:exportRejected': artifactsGetPayloadSchema,
   'artifacts:get': artifactsGetPayloadSchema,
   'artifacts:save': artifactsSavePayloadSchema,
   'artifacts:delete': artifactsDeletePayloadSchema,

@@ -1,5 +1,7 @@
 # Verifica corrente per ambito
 
+Le guide operative descrivono i sorgenti correnti: formati workspace senza migrazioni automatiche, checkpoint con directory vuote e collegamenti interni verificabili, bozze codice conservate in memoria e campi skill separati. Per i passaggi usare [guida utente](./user-guide.md) e [guida sviluppatori](./developer-guide.md). Le ricevute datate sotto conservano il proprio esito; non certificano automaticamente modifiche successive, un nuovo installer o modelli reali.
+
 Contenuto datato trasferito nel dossier SecondBrain: `02-areas/products/OnlyRagV2/history/imported/docs/verification-current.md`. Originale e SHA-256 nel rapporto di migrazione; questa voce conserva i riferimenti esistenti e non autorizza nuovi interventi.
 
 ## Evidenze applicative più recenti

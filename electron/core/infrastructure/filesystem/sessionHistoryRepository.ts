@@ -92,10 +92,17 @@ export class SessionHistoryRepository {
     try {
       const raw = await fs.promises.readFile(filePath, 'utf-8')
       const parsed = JSON.parse(raw) as SessionHistoryStore
-      if (!parsed || (parsed.version !== undefined && parsed.version !== STORE_VERSION) || !Array.isArray(parsed.sessions)) {
+      if (!parsed || parsed.version !== STORE_VERSION || !Array.isArray(parsed.sessions)) {
         throw new Error('Unsupported session history envelope')
       }
       const sessions = parsed.sessions.map((session) => {
+        if (
+          !Array.isArray(session.actionLogs) ||
+          !Array.isArray(session.executedPrompts) ||
+          !Number.isFinite(Date.parse(session.createdAt)) ||
+          !Number.isFinite(Date.parse(session.updatedAt))
+        )
+          throw new Error('Unsupported previous session format')
         const normalized = normalizeSession(session)
         if (!normalized) throw new Error('Invalid retained session')
         for (const key of ['actionLogs', 'executedPrompts', 'plans', 'promptQueue', 'pinnedFilePaths'] as const) {
@@ -173,27 +180,9 @@ export class SessionHistoryRepository {
     }
   }
 
-  public async migrateStandaloneSessions(workspacePath: string): Promise<number> {
-    return this.runExclusive(async () => {
-      const fallbackDir = this.getFallbackDir()
-      const legacySessions = await this.readStoreAtDir(fallbackDir)
-      const standaloneSessions = legacySessions.filter((session) => !session.workspacePath)
-      if (standaloneSessions.length === 0) return 0
-
-      const targetDir = this.getStorageDir(workspacePath)
-      const targetSessions = await this.readStoreAtDir(targetDir)
-      const targetIds = new Set(targetSessions.map((session) => session.id))
-      const migrated = standaloneSessions.filter((session) => !targetIds.has(session.id)).map((session) => ({ ...session, workspacePath }))
-      const targetSaved = await this.writeStoreAtDir(targetDir, sortSessionsByRecency([...targetSessions, ...migrated]))
-      if (!targetSaved) return 0
-
-      const standaloneIds = new Set(standaloneSessions.map((session) => session.id))
-      const fallbackSaved = await this.writeStoreAtDir(
-        fallbackDir,
-        legacySessions.filter((session) => !standaloneIds.has(session.id)),
-      )
-      return fallbackSaved ? migrated.length : 0
-    })
+  public async assertNoStandaloneHistory(): Promise<void> {
+    const sessions = await this.readStoreAtDir(this.getFallbackDir())
+    if (sessions.some((session) => !session.workspacePath)) throw new Error('Unsupported previous standalone history; originals preserved')
   }
 
   public async saveSession(session: CodingSession): Promise<CodingSession | null> {

@@ -74,6 +74,9 @@ describe('revalidateRestoredMilestones', () => {
 })
 
 describe('selectSavedRunState', () => {
+  it('refuses previous interrupted state without a run identity', () => {
+    expect(() => selectSavedRunState(savedState({ stepCount: 0, episodes: [] }), runIdentity)).toThrow('Unsupported previous agent run state')
+  })
   it('restores only an interrupted state for the matching run', () => {
     const state = savedState({ runIdentity })
     const selection = selectSavedRunState(state, runIdentity)

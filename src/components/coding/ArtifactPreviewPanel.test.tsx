@@ -2,7 +2,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ArtifactPreviewPanel } from './ArtifactPreviewPanel'
-import type { ArtifactRecord } from '../../types'
+import type { ArtifactInspection, ArtifactRecord } from '../../types'
 import { I18nProvider } from '../../i18n'
 
 const record: ArtifactRecord = {
@@ -13,6 +13,10 @@ const record: ArtifactRecord = {
   content: '<p>ok</p>',
   createdAt: '2026-11-07T00:00:00.000Z',
   updatedAt: '2026-11-07T00:00:00.000Z',
+}
+
+function inspection(records: ArtifactRecord[]): ArtifactInspection {
+  return { records, moved: [], rejected: [] }
 }
 
 function deferred<T>() {
@@ -28,7 +32,7 @@ function deferred<T>() {
 describe('ArtifactPreviewPanel selection and storage', () => {
   let container: HTMLDivElement
   let root: Root
-  const api = { listArtifacts: vi.fn(), saveArtifact: vi.fn(), deleteArtifact: vi.fn() }
+  const api = { inspectArtifacts: vi.fn(), saveArtifact: vi.fn(), deleteArtifact: vi.fn(), rebindArtifacts: vi.fn(), exportRejectedArtifact: vi.fn() }
   const previous = window.electronAPI
   const render = (workspacePath = record.workspacePath) =>
     act(async () =>
@@ -65,7 +69,7 @@ describe('ArtifactPreviewPanel selection and storage', () => {
   })
 
   it('shows the load error instead of an empty list and recovers on retry', async () => {
-    api.listArtifacts.mockRejectedValueOnce(new Error('Artifact record is not valid JSON')).mockResolvedValue([record])
+    api.inspectArtifacts.mockRejectedValueOnce(new Error('Artifact record is not valid JSON')).mockResolvedValue(inspection([record]))
     await render()
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('not valid JSON')
@@ -75,11 +79,36 @@ describe('ArtifactPreviewPanel selection and storage', () => {
     await act(async () => retry.click())
     expect(container.querySelector('[role="alert"]')).toBeNull()
     expect(container.textContent).toContain('Recovered')
-    expect(api.listArtifacts.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(api.inspectArtifacts.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('requires confirmation for the reviewed group and exports a rejected record separately', async () => {
+    const group = { previousWorkspacePath: 'C:/old', count: 2, revision: 'a'.repeat(64) }
+    const rejected = [{ fileName: 'broken.json', message: 'Invalid JSON', exportId: 'broken' }]
+    api.inspectArtifacts.mockResolvedValueOnce({ records: [], moved: [group], rejected }).mockResolvedValue({ records: [record], moved: [], rejected })
+    api.exportRejectedArtifact.mockResolvedValue(true)
+    await render()
+
+    expect(container.textContent).toContain('C:/old (2)')
+    await click('Export original')
+    expect(api.exportRejectedArtifact).toHaveBeenCalledWith({ workspacePath: record.workspacePath, artifactId: 'broken' })
+    await click('Review realignment')
+    await click('Cancel')
+    expect(api.rebindArtifacts).not.toHaveBeenCalled()
+    await click('Review realignment')
+    await click('Move records to this workspace')
+    expect(api.rebindArtifacts).toHaveBeenCalledWith({
+      workspacePath: record.workspacePath,
+      previousWorkspacePath: group.previousWorkspacePath,
+      revision: group.revision,
+    })
+    expect(container.textContent).toContain('Recovered')
+    expect(container.textContent).not.toContain('C:/old')
+    expect(container.textContent).toContain('broken.json')
   })
 
   it('retries the write with the same unsaved draft and clears its error on success', async () => {
-    api.listArtifacts.mockResolvedValue([record])
+    api.inspectArtifacts.mockResolvedValue(inspection([record]))
     api.saveArtifact.mockRejectedValueOnce(new Error('write denied')).mockResolvedValue({ ...record, id: 'new', content: '<p>kept</p>' })
     await render()
     await click('New')
@@ -95,8 +124,8 @@ describe('ArtifactPreviewPanel selection and storage', () => {
   })
 
   it('keeps a distinct new draft through a pending refresh and saves with a new ID', async () => {
-    const refresh = deferred<ArtifactRecord[]>()
-    api.listArtifacts.mockResolvedValueOnce([record]).mockReturnValueOnce(refresh.promise)
+    const refresh = deferred<ArtifactInspection>()
+    api.inspectArtifacts.mockResolvedValueOnce(inspection([record])).mockReturnValueOnce(refresh.promise)
     api.saveArtifact.mockResolvedValue({ ...record, id: 'new', name: 'Created', content: '<h1>new</h1>' })
     await render()
     expect(content().value).toBe(record.content)
@@ -105,7 +134,7 @@ describe('ArtifactPreviewPanel selection and storage', () => {
     await click('Refresh')
     await click('New')
     await edit('<h1>new</h1>')
-    await act(async () => refresh.resolve([record]))
+    await act(async () => refresh.resolve(inspection([record])))
     expect(preview()).toBe('<h1>new</h1>')
     expect(container.querySelector('[aria-pressed="true"]')).toBeNull()
     await click('Save')
@@ -116,33 +145,33 @@ describe('ArtifactPreviewPanel selection and storage', () => {
     expect(container.querySelector('[aria-pressed="true"]')?.textContent).toContain('Created')
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-pressed="false"]')!.click())
     expect(content().value).toBe(record.content)
-    expect(api.listArtifacts).toHaveBeenCalledTimes(2)
+    expect(api.inspectArtifacts).toHaveBeenCalledTimes(2)
   })
 
   it('keeps edits started while the initial empty list is loading and refreshes the preview', async () => {
-    const pending = deferred<ArtifactRecord[]>()
-    api.listArtifacts.mockReturnValueOnce(pending.promise)
+    const pending = deferred<ArtifactInspection>()
+    api.inspectArtifacts.mockReturnValueOnce(pending.promise)
     await render()
     await edit('<p>empty workspace draft</p>')
-    await act(async () => pending.resolve([]))
+    await act(async () => pending.resolve(inspection([])))
     expect(content().value).toBe('<p>empty workspace draft</p>')
     expect(preview()).toBe('<p>empty workspace draft</p>')
     expect(button('Save').disabled).toBe(false)
   })
 
   it.each(['late read', 'late save', 'late error'] as const)('isolates a workspace switch from %s', async (scenario) => {
-    const pendingList = deferred<ArtifactRecord[]>()
+    const pendingList = deferred<ArtifactInspection>()
     const pendingSave = deferred<ArtifactRecord>()
     const other = { ...record, id: 'other', workspacePath: 'C:/other', content: '<p>other</p>' }
-    api.listArtifacts.mockResolvedValueOnce([record])
-    if (scenario !== 'late save') api.listArtifacts.mockReturnValueOnce(pendingList.promise)
-    api.listArtifacts.mockResolvedValueOnce([other])
+    api.inspectArtifacts.mockResolvedValueOnce(inspection([record]))
+    if (scenario !== 'late save') api.inspectArtifacts.mockReturnValueOnce(pendingList.promise)
+    api.inspectArtifacts.mockResolvedValueOnce(inspection([other]))
     api.saveArtifact.mockReturnValueOnce(pendingSave.promise)
     await render()
     await click(scenario === 'late save' ? 'Save' : 'Refresh')
     await render(other.workspacePath)
     await act(async () => {
-      if (scenario === 'late read') pendingList.resolve([record])
+      if (scenario === 'late read') pendingList.resolve(inspection([record]))
       if (scenario === 'late save') pendingSave.resolve(record)
       if (scenario === 'late error') pendingList.reject(new Error('old workspace failed'))
     })

@@ -34,7 +34,7 @@ Il payload `ingest:file` richiede `taskId` anche nel contratto TypeScript, coere
 
 `system:open-distribution-licenses` non riceve un percorso dal Renderer; Main apre la directory di notice scelta per l'ambiente. Stato della distribuzione in [`distribution.md`](./distribution.md).
 
-La superficie REST separata è in [`api-rest.md`](./api-rest.md); i residui di persistenza, cancellazione e qualifica sono nel `tracker` (SecondBrain: `02-areas/products/OnlyRagV2/tracker.json`).
+La superficie REST separata è in [`api-rest.md`](./api-rest.md); i residui di persistenza, cancellazione e qualifica sono nel `tracker` (dossier SecondBrain).
 
 ## Bozze documentali — 2026-10-16
 

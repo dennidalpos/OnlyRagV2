@@ -306,9 +306,19 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       tempDir,
       [{ id: 'm-1', title: 'Document the project', status: 'verified', notes: 'Documentation checked.' }],
       'Document the project',
+      'test-plan',
     )
 
-    const result = await runAgentOrchestratorLoop({ userTask: 'Document the project', agentMode: 'auto', workspacePath: tempDir, sessionId }, null)
+    const result = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Document the project',
+        agentMode: 'auto',
+        workspacePath: tempDir,
+        sessionId,
+        identity: createAgentRunIdentity({ conversationId: sessionId, workspacePath: tempDir, planRevisionId: 'test-plan' }),
+      },
+      null,
+    )
 
     expect(AgentStreamTransport.streamCompletion).toHaveBeenCalled()
     expect(result.completionStatus).toBe('blocked')
@@ -323,6 +333,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       tempDir,
       [{ id: 'm-1', title: 'Create `index.html`', filePaths: ['index.html'], status: 'pending', verificationCommand: 'npm run lint' }],
       'Create the page',
+      'test-plan',
     )
     vi.mocked(runProjectVerification)
       .mockResolvedValueOnce({ hasVerificationCommand: true, status: 'failed', passed: false, command: 'npm run lint', failureDetail: 'Build entry missing' })
@@ -339,7 +350,16 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       .mockResolvedValueOnce(toolTurn('update_plan', { milestoneId: 'm-1', status: 'verified' }))
       .mockResolvedValueOnce(toolTurn('finish', { summary: 'Corrected.' }))
 
-    const result = await runAgentOrchestratorLoop({ userTask: 'Create the page', agentMode: 'auto', workspacePath: tempDir, sessionId }, null)
+    const result = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Create the page',
+        agentMode: 'auto',
+        workspacePath: tempDir,
+        sessionId,
+        identity: createAgentRunIdentity({ conversationId: sessionId, workspacePath: tempDir, planRevisionId: 'test-plan' }),
+      },
+      null,
+    )
 
     expect(runProjectVerification).toHaveBeenCalledTimes(2)
     expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(3)
@@ -357,12 +377,22 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         { id: 'm-2', title: 'Create `src/app.ts`', filePaths: ['src/app.ts'], status: 'pending' },
       ],
       'Complete the remaining work',
+      'test-plan',
     )
     vi.mocked(AgentStreamTransport.streamCompletion)
       .mockResolvedValueOnce(toolTurn('update_plan', { milestoneId: 'm-1', status: 'verified', notes: 'Reviewed.' }))
       .mockResolvedValueOnce(toolTurn('finish', { summary: 'Done.' }))
 
-    await runAgentOrchestratorLoop({ userTask: 'Complete the remaining work', agentMode: 'auto', workspacePath: tempDir, sessionId }, null)
+    await runAgentOrchestratorLoop(
+      {
+        userTask: 'Complete the remaining work',
+        agentMode: 'auto',
+        workspacePath: tempDir,
+        sessionId,
+        identity: createAgentRunIdentity({ conversationId: sessionId, workspacePath: tempDir, planRevisionId: 'test-plan' }),
+      },
+      null,
+    )
 
     const calls = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls
     expect(calls[0][0].messages.at(-1)?.content).not.toContain('completed_tasks:')
@@ -624,9 +654,24 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const sessionId = 'ask-recovery-terminal-closure'
     const askTurn = (attempt: number) => toolTurn('ask', { question: `What should we do next? Attempt ${attempt}` })
     vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(askTurn(1)).mockResolvedValueOnce(askTurn(2)).mockResolvedValueOnce(askTurn(3))
-    await agentSessionStateRepository.seedPlanMilestones(sessionId, tempDir, [{ id: 'm-ask', title: 'Fix app.ts', status: 'pending' }], 'Fix app.ts')
+    await agentSessionStateRepository.seedPlanMilestones(
+      sessionId,
+      tempDir,
+      [{ id: 'm-ask', title: 'Fix app.ts', status: 'pending' }],
+      'Fix app.ts',
+      'test-plan',
+    )
 
-    const res = await runAgentOrchestratorLoop({ userTask: 'Fix app.ts', agentMode: 'auto', workspacePath: tempDir, sessionId }, null)
+    const res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Fix app.ts',
+        agentMode: 'auto',
+        workspacePath: tempDir,
+        sessionId,
+        identity: createAgentRunIdentity({ conversationId: sessionId, workspacePath: tempDir, planRevisionId: 'test-plan' }),
+      },
+      null,
+    )
     const saved = JSON.parse(fs.readFileSync(workspaceMetadataStatePath(tempDir, sessionId), 'utf-8'))
 
     expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(3)

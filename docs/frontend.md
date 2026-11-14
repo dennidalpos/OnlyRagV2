@@ -35,6 +35,8 @@ Il punteggio mostrato ordina i passaggi recuperati e non è una probabilità o u
 
 [`useWorkspaceFiles.ts`](../src/hooks/useWorkspaceFiles.ts) lega letture e salvataggi alla selezione e revisione correnti. [`documentMarkdown.ts`](../src/services/documentMarkdown.ts) carica il testo su richiesta. Le responsabilità di chat, ingestion, traduzione e agente sono nelle guide di ambito.
 
+Le bozze codice dirty o in conflitto sono conservate in memoria per percorso assoluto anche cambiando workspace, chiudendo una scheda o rimuovendo il progetto dal registro. Riaprire lo stesso percorso recupera la bozza; la chiusura dell’app non la conserva. Il distacco invalida anche la lista file pendente.
+
 ## Componenti tecnici
 
 Monaco e tokenizer sono caricati quando servono; le chiamate privilegiate restano nel Preload/Main. L'upload risolve il `File` nativo tramite il bridge locale, senza fallback al nome.

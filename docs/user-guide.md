@@ -59,6 +59,8 @@ DOCX supports body, nested tables, hyperlinks and headers/footers; unsupported f
 
 The Coding Agent is experimental. Attach a workspace and verify Active Project, or use Standalone for its separate free-work folder. Canceling the picker does not select a project. Pin files or attach ingested documents deliberately.
 
+New workspaces initialize the current metadata layout directly. Previous or unversioned layouts, versionless session history and v1 checkpoints are refused with an error; original files and backups remain untouched. Opening Standalone also refuses existing standalone history instead of transferring it automatically. Interrupted runs require their recorded run identity; historical log messages are not converted into executed prompts.
+
 Ask is read-only analysis without file changes or command execution. Guided reviews changing actions; Auto acts within the selected run profile. Mode and permissions are distinct.
 
 Describe the objective, constraints and verification. Start Task executes according to the mode; Plan in Guided/Auto prepares decisions first. Answer structured questions, review scope/assumptions/files/checks/permissions, edit and save revisions, then Approve & Execute. A failed/incomplete preparation is not an approved running plan. New requests during a run can be queued; remove obsolete ones before execution.
@@ -71,9 +73,13 @@ After a crash, reopen the original conversation/workspace and explicitly Resume 
 
 Inspect final evidence, modified files, Monaco diff and terminal output. Passed, Failed and Unavailable verification are different outcomes; an assistant's statement is not a command result.
 
-Manual editor save checks disk revisions. Reload/Merge/Overwrite resolve a detected conflict only after review. Unsaved code-editor drafts and detected conflicts remain in memory when switching workspaces, entering standalone mode, closing a file tab or removing a project from the registry. Return to the folder and reopen the file to recover its draft. Save checks the retained disk revision before writing. These drafts do not survive closing the app; save them before exiting.
+Manual editor save checks disk revisions. Reload/Merge/Overwrite resolve a detected conflict only after review. Unsaved code-editor drafts and detected conflicts remain in memory when switching workspaces, entering standalone mode, closing a file tab or removing a project from the registry. Return to the folder and reopen the file to recover its draft. Save checks the retained disk revision before writing. These drafts do not survive closing the app; save them before exiting. A file list that arrives after leaving a workspace is ignored.
+
+After moving or renaming a workspace, open **Artifacts** and check the previous path and record count under **Artifact recovery**. Choose **Review realignment**, then **Move records to this workspace** to update the workspace path of that group. If recovery is interrupted, refresh to review any records still pending. For a damaged record with **Export original**, choose a new file in the save dialog to copy its exact bytes for inspection. The damaged record stays in the workspace.
 
 Stop retains edits already performed. Restore Previous State covers only the checkpoint's attributed files and can remove files created by the run. It is not a complete snapshot guarantee and does not reverse shell commands, installations or external changes, especially with Full Access. Inspect coverage and preserve needed files before restoring.
+
+Journaled directory changes also retain empty directories and links whose targets can be verified inside the workspace. External or unverifiable links refuse the change before deletion. Restore rechecks link targets and reports an error if they are no longer safe. Directory snapshots refuse more than 2,000 files or 10,000 entries.
 
 Project sessions and prompt history can be reopened/searched; review old requests before rerunning. Removing a project from the list does not delete its on-disk folder. Deleting session/history is separate from restoring workspace files.
 
@@ -87,7 +93,9 @@ Skill Hub can inspect/copy/edit installed instructions, restore an available ori
 
 Agent discovery may propose an installation; Install/Reject are explicit choices. Installed does not mean active in every run: inspect Active Skills. Failed activation retains the earlier visible value; a successful skill write with failed activation is not a completed operation.
 
-The current skill form lowercases comma-separated triggers/tags and trims outer body whitespace. Even an otherwise unchanged save can alter these values. Copy instructions and inspect the result; serializer tests do not prove lossless form editing.
+The skill editor gives each trigger and tag a separate multiline field. Add or remove entries with their own controls; commas and line breaks belong to that entry. Unchanged values retain their case and spacing; edited list values and metadata are trimmed, while body text is preserved. An edited empty list receives a fallback value. Review the saved result.
+
+After an interrupted uninstall, reopening the hub checks the retained copy and receipt. An intact copy can return to its free original path with its prior activation. Conflicts or incomplete copies remain visible with receipt/copy paths and an inspection action; inspect them instead of deleting files to hide the warning. Retry if recovery listing fails.
 
 ## Settings, models and permissions (flows 21–24)
 

@@ -14,9 +14,11 @@ FastAPI/Pydantic espongono REST, LanceDB/Arrow conservano dati e vettori, pandas
 
 L'[audit critico del 21 ottobre](./critical-application-audit-2026-10-21.md) conserva la qualifica di Electron 43.8.3/Pillow 13.0.0 e inventari/PyPI/OSV datati. Il lotto del 25 ottobre riguarda le advisory npm correnti; non ripete lo scan delle advisory Python e non garantisce assenza di vulnerabilità. Gli alert remoti e gli installer conservati hanno stato distinto dal checkout.
 
-## Residui attuali
+## Manutenzione e limiti correnti
 
-Il tracker (SecondBrain: `02-areas/products/OnlyRagV2/tracker.json`) mantiene la futura sostituzione del fork `braces` con upstream idoneo (`npm view braces version` ancora `3.0.3` al 25 ottobre), l'attribuzione del rifiuto storico dev-server e gli altri difetti applicativi dell'audit. La fixture pnpm e il provider OCR sono conclusi nel [lotto del 24 ottobre](./verification-tracker-lot-2026-10-24.md); la successiva correzione del wrapper pnpm è documentata nel lotto del 25 ottobre. Il [rimedio locale del 16 ottobre](./dependency-remediation-2026-10-16.md) rimuove `sprintf-js` e conserva patch/provenienza del fork: non risultano task upstream `sprintf-js` o sanitizer Monaco ancora aperti. Il worker di scansione e la cache HTTP Got disabilitata mantengono i propri confini; una mitigazione non prova la risoluzione upstream.
+Il setup da zero del **14 novembre 2026** ha completato l'installazione, ma `npm ci` ha segnalato 12 advisory di gravità moderata. Questo esito distingue avvio riuscito e stato di sicurezza delle dipendenze; non aggiorna i pacchetti né rinnova gli audit datati sotto. Il riesame documentale non esegue `npm audit fix` o sostituzioni di dipendenze.
+
+Il tracker (dossier SecondBrain) mantiene la futura sostituzione del fork `braces` con upstream idoneo (`npm view braces version` ancora `3.0.3` al 25 ottobre), l'attribuzione del rifiuto storico dev-server e i residui di verifica registrati. Avvisi npm originali e provenienza di pesi OCR/immagini richiedono verifiche distinte; la presenza di uno SPDX non prova tutta la catena di attribuzione. La fixture pnpm e il provider OCR sono conclusi nel [lotto del 24 ottobre](./verification-tracker-lot-2026-10-24.md); la successiva correzione del wrapper pnpm è documentata nel lotto del 25 ottobre. Il [rimedio locale del 16 ottobre](./dependency-remediation-2026-10-16.md) rimuove `sprintf-js` e conserva patch/provenienza del fork: non risultano task upstream `sprintf-js` o sanitizer Monaco ancora aperti. Il worker di scansione e la cache HTTP Got disabilitata mantengono i propri confini; una mitigazione non prova la risoluzione upstream.
 
 ## Evidenze datate e ancoraggi conservati
 

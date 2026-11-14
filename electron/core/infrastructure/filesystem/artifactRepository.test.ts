@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ArtifactRepository, ArtifactStoreError } from './artifactRepository'
+import { ensureWorkspaceMetadataDirectory } from './workspaceMetadataDirectory'
 
 let workspacePath: string | undefined
 const repository = new ArtifactRepository()
@@ -16,6 +17,7 @@ afterEach(() => {
 
 function workspace(): string {
   workspacePath = createFixtureDirectory('onlyrag-artifacts-')
+  ensureWorkspaceMetadataDirectory(workspacePath)
   return workspacePath
 }
 
@@ -54,6 +56,43 @@ describe('ArtifactRepository', () => {
       fs.writeFileSync(artifactFile(root, id), bytes, 'utf-8')
     }
     const full = { name: 'n', kind: 'html', content: 'x', createdAt: 'a', updatedAt: 'b' }
+
+    it('groups moved records, requires a current review, and exports rejected bytes without overwriting', async () => {
+      const root = workspace()
+      await repository.save(root, { id: 'current', name: 'Current', kind: 'html', content: 'local' })
+      const previous = path.join(root, 'previous')
+      const other = path.join(root, 'other')
+      plant(root, 'one', JSON.stringify({ ...full, id: 'one', workspacePath: previous }))
+      plant(root, 'two', JSON.stringify({ ...full, id: 'two', workspacePath: previous }))
+      plant(root, 'foreign', JSON.stringify({ ...full, id: 'foreign', workspacePath: other }))
+      const damaged = Buffer.from([0x7b, 0xff, 0x7d])
+      fs.writeFileSync(artifactFile(root, 'broken'), damaged)
+
+      const first = await repository.inspect(root)
+      expect(first.records.map(({ id }) => id)).toEqual(['current'])
+      const group = first.moved.find((entry) => entry.previousWorkspacePath === previous)!
+      expect(group.count).toBe(2)
+      expect(first.rejected).toEqual([expect.objectContaining({ fileName: 'broken.json', exportId: 'broken' })])
+      await expect(repository.get(root, 'one')).rejects.toThrow('another workspace')
+      await expect(repository.delete(root, 'broken')).rejects.toBeInstanceOf(ArtifactStoreError)
+
+      const modified = JSON.stringify({ ...full, id: 'two', workspacePath: previous, content: 'updated externally', extra: 'retained' })
+      plant(root, 'two', modified)
+      await expect(repository.rebind(root, previous, group.revision)).rejects.toThrow('changed since review')
+      expect(fs.readFileSync(artifactFile(root, 'two'), 'utf-8')).toBe(modified)
+      const refreshed = (await repository.inspect(root)).moved.find((entry) => entry.previousWorkspacePath === previous)!
+      await repository.rebind(root, previous, refreshed.revision)
+      expect(await repository.get(root, 'two')).toEqual({ ...full, id: 'two', workspacePath: root, content: 'updated externally', extra: 'retained' })
+      const final = await repository.inspect(root)
+      expect(final.records.map(({ id }) => id).sort()).toEqual(['current', 'one', 'two'])
+      expect(final.moved.map(({ previousWorkspacePath }) => previousWorkspacePath)).toEqual([other])
+
+      const destination = path.join(root, 'broken-export.json')
+      await repository.exportRejected(root, 'broken', destination)
+      expect(fs.readFileSync(destination)).toEqual(damaged)
+      await expect(repository.exportRejected(root, 'broken', destination)).rejects.toMatchObject({ code: 'EEXIST' })
+      expect(fs.readFileSync(artifactFile(root, 'broken'))).toEqual(damaged)
+    })
 
     it('rejects get, list and save on a truncated record and preserves its bytes', async () => {
       const root = workspace()

@@ -1,9 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { validateWorkspaceRealpath } from './workspaceRealpathGuard'
+import { isPathWithinRoot } from '../../domain/agent/pathContainment'
 import { logger } from '../logging/logger'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 
 export interface FileBackupEntry {
+  kind?: 'directory' | 'symlink'
+  linkTarget?: string
+  linkType?: 'file' | 'dir' | 'junction'
   /** Bytes before the first change; null if the file was created during the session. Buffers keep binary files intact. */
   originalContent: Buffer | string | null
   modifiedTimestamp: number
@@ -30,6 +35,30 @@ export interface RollbackResult {
  * granularity (rollbackAll) and single-step granularity (rollbackLastStep).
  */
 export class AtomicWorkspaceJournal {
+  constructor(private workspaceRoot?: string) {}
+
+  public setWorkspaceRoot(root: string | null | undefined): void {
+    this.workspaceRoot = root || undefined
+  }
+
+  private linkEntry(full: string): FileBackupEntry {
+    if (!this.workspaceRoot) throw new Error('Workspace required to verify symbolic link')
+    const target = fs.readlinkSync(full)
+    const absolute = path.resolve(path.dirname(full), target)
+    if (
+      !validateWorkspaceRealpath(full, this.workspaceRoot).safePath ||
+      !validateWorkspaceRealpath(absolute, this.workspaceRoot).safePath ||
+      !fs.existsSync(absolute)
+    )
+      throw new Error('Symbolic link target is external or unverifiable')
+    return {
+      kind: 'symlink',
+      originalContent: null,
+      linkTarget: target,
+      linkType: fs.statSync(full).isDirectory() ? (process.platform === 'win32' ? 'junction' : 'dir') : 'file',
+      modifiedTimestamp: Date.now(),
+    }
+  }
   /** Session-wide baseline: first-ever snapshot of each file touched this session. */
   private backupMap = new Map<string, FileBackupEntry>()
   /** Pre-step snapshots accumulated since the last endStep() call. */
@@ -41,8 +70,12 @@ export class AtomicWorkspaceJournal {
   public recordBeforeModification(filePath: string): void {
     if (!filePath || typeof filePath !== 'string') return
     const resolved = path.resolve(filePath)
-    this.snapshotInto(this.backupMap, resolved)
-    this.snapshotInto(this.currentStepBackup, resolved)
+    const session = new Map(this.backupMap)
+    const step = new Map(this.currentStepBackup)
+    this.snapshotInto(session, resolved)
+    this.snapshotInto(step, resolved)
+    this.backupMap = session
+    this.currentStepBackup = step
   }
 
   public recordOriginalState(filePath: string, originalContent: string | null): void {
@@ -58,7 +91,7 @@ export class AtomicWorkspaceJournal {
 
   /**
    * Captures the pre-change state of a path into the map. All-or-nothing: if any original cannot be captured
-   * completely (unreadable file, symlink or special entry under a directory, more files than the limit) it
+   * completely (unreadable file, unverifiable link, special entry or excessive entry count) it
    * throws JournalSnapshotError and leaves the map untouched, so the caller can refuse before mutating.
    */
   private snapshotInto(map: Map<string, FileBackupEntry>, resolved: string): void {
@@ -67,9 +100,11 @@ export class AtomicWorkspaceJournal {
     }
     try {
       const staged = new Map<string, FileBackupEntry>()
-      if (fs.existsSync(resolved)) {
-        const st = fs.statSync(resolved)
-        if (st.isFile()) {
+      if (fs.existsSync(resolved) || fs.lstatSync(resolved, { throwIfNoEntry: false })?.isSymbolicLink()) {
+        const st = fs.lstatSync(resolved)
+        if (st.isSymbolicLink()) {
+          staged.set(resolved, this.linkEntry(resolved))
+        } else if (st.isFile()) {
           staged.set(resolved, { originalContent: fs.readFileSync(resolved), modifiedTimestamp: Date.now() })
         } else if (st.isDirectory()) {
           // A directory about to be deleted: every file under it is part of the baseline, so the
@@ -93,11 +128,15 @@ export class AtomicWorkspaceJournal {
     const pending = [directory]
     let files = 0
     while (pending.length > 0) {
+      if (staged.size + pending.length > 10000) throw new Error('Too many snapshot entries')
       const current = pending.pop() as string
+      if (!existing.has(current)) staged.set(current, { kind: 'directory', originalContent: null, modifiedTimestamp: Date.now() })
       for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+        if (staged.size + pending.length >= 10000) throw new Error('Too many snapshot entries')
         const full = path.join(current, entry.name)
-        if (entry.isSymbolicLink()) throw new Error(`${full} is a symbolic link`)
-        if (entry.isDirectory()) {
+        if (entry.isSymbolicLink()) {
+          if (!existing.has(full)) staged.set(full, this.linkEntry(full))
+        } else if (entry.isDirectory()) {
           pending.push(full)
         } else if (entry.isFile()) {
           if (existing.has(full)) continue
@@ -125,9 +164,40 @@ export class AtomicWorkspaceJournal {
     let restoredCount = 0
     const errors: string[] = []
 
-    for (const [filePath, entry] of entries.entries()) {
+    const ordered = [...entries].filter(([, entry]) => entry.kind !== 'symlink')
+    let links = [...entries].filter(([, entry]) => entry.kind === 'symlink')
+    while (links.length > 0) {
+      const ready = links.filter(
+        ([file, entry]) => !links.some(([other]) => other !== file && isPathWithinRoot(other, path.resolve(path.dirname(file), entry.linkTarget || ''))),
+      )
+      if (ready.length === 0) {
+        ordered.push(...links)
+        break
+      }
+      ordered.push(...ready)
+      const restored = new Set(ready.map(([file]) => file))
+      links = links.filter(([file]) => !restored.has(file))
+    }
+    for (const [filePath, entry] of ordered) {
       try {
-        if (entry.originalContent === null) {
+        if (
+          this.workspaceRoot &&
+          isPathWithinRoot(path.resolve(this.workspaceRoot), filePath) &&
+          !validateWorkspaceRealpath(filePath, this.workspaceRoot).safePath
+        )
+          throw new Error('Unsafe restore path')
+        if (entry.kind === 'directory') {
+          if (fs.lstatSync(filePath, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error('Restore directory replaced by a link')
+          fs.mkdirSync(filePath, { recursive: true })
+        } else if (entry.kind === 'symlink') {
+          if (!this.workspaceRoot || !entry.linkTarget) throw new Error('Unverifiable symbolic link')
+          const target = path.resolve(path.dirname(filePath), entry.linkTarget)
+          if (!validateWorkspaceRealpath(target, this.workspaceRoot).safePath || !fs.existsSync(target)) throw new Error('Unsafe symbolic link target')
+          fs.mkdirSync(path.dirname(filePath), { recursive: true })
+          if (fs.existsSync(filePath)) {
+            if (!fs.lstatSync(filePath).isSymbolicLink() || fs.readlinkSync(filePath) !== entry.linkTarget) throw new Error('Restore target occupied')
+          } else fs.symlinkSync(entry.linkTarget, filePath, entry.linkType)
+        } else if (entry.originalContent === null) {
           if (fs.existsSync(filePath)) {
             const st = fs.statSync(filePath)
             if (st.isDirectory()) {
@@ -137,6 +207,7 @@ export class AtomicWorkspaceJournal {
             }
           }
         } else {
+          if (fs.lstatSync(filePath, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error('Restore file replaced by a link')
           const parentDir = path.dirname(filePath)
           if (!fs.existsSync(parentDir)) {
             fs.mkdirSync(parentDir, { recursive: true })
@@ -154,6 +225,10 @@ export class AtomicWorkspaceJournal {
     }
 
     return { restoredCount, errors }
+  }
+
+  public restoreBaseline(entries: Map<string, FileBackupEntry>): RollbackResult {
+    return this.restoreEntries(entries)
   }
 
   /**

@@ -8,7 +8,7 @@ Durante l'avvio di sviluppo il Sidecar mostra `Verifica...` finché preparazione
 
 Eseguire i comandi da PowerShell nella radice del repository. Node `>=24.19.0 <25` e npm `>=11 <12` sono gli intervalli in [`package.json`](../package.json); [`.nvmrc`](../.nvmrc) indica Node 24.19.0 e [`.python-version`](../.python-version) Python 3.13.15. Il setup accetta Python 3.13.x. Ollama serve alle funzioni modello, non ai test deterministici; l'endpoint locale predefinito è `http://127.0.0.1:11434`.
 
-`setup:dev` usa `npm ci`, prepara Electron e installa `sidecar/requirements-dev.txt` nel `.venv`; può ricreare un venv incompatibile. L'auto-preparazione del Sidecar all'avvio installa invece i requisiti runtime: non garantisce che `pytest` sia disponibile. Per test Python verificare `.venv\Scripts\python.exe -m pytest --version`; se manca, completare il setup di sviluppo prima di dichiarare il gate eseguito.
+`setup:dev` usa `npm ci`, prepara Electron e installa `sidecar/requirements-dev.txt` nel `.venv`, incluse le librerie GPU; può ricreare un venv incompatibile. Controlla anche `npm --version`: il setup verifica Node/Python, ma non impone separatamente l'intervallo npm. L'auto-preparazione del Sidecar all'avvio installa invece i requisiti runtime: non garantisce che `pytest` sia disponibile. Per test Python verificare `.venv\Scripts\python.exe -m pytest --version`; se manca, completare il setup di sviluppo prima di dichiarare il gate eseguito.
 
 ## Comandi
 
@@ -36,8 +36,8 @@ Il setup richiede rete per le dipendenze mancanti e può ricreare un `.venv` inc
 
 | Scopo | Comando | Effetto e stato |
 | --- | --- | --- |
-| Setup | `npm run setup:dev` | Installa dipendenze e runtime di sviluppo; comando documentato dal manifest, non rieseguito in questa revisione. |
-| Avvio | `npm run dev` | Avvia Vite/Electron e il Sidecar; può leggere il profilo di sviluppo. Non rieseguito qui. |
+| Setup | `npm run setup:dev` | Installa dipendenze e runtime di sviluppo; richiede rete se le dipendenze non sono già disponibili. |
+| Avvio | `npm run dev` | Avvia Vite/Electron e il Sidecar; usa il profilo applicativo ordinario. Per prove distruttive usare i runner con profilo sintetico, non il profilo personale. |
 | Documentazione | `npm run docs:check`; `npm run format:check` | Controllano link locali, ancoraggi, nomi degli script, struttura dei flowchart Mermaid supportati e whitespace del diff. Non eseguono rendering né provano comportamento o URL remoti. Il [riesame documentale](./documentation-audit-2026-10-21.md) conserva il riferimento storico. |
 | Tipi/statico | `npm run typecheck`, `npm run quality:static` | Controlli sorgente; eseguire se cambiano contratti o codice. Non necessari per sole pagine Markdown. |
 | Percorsi Python critici | `npm run quality:python` | 15 casi offline su ammissione, ricerca e persistenza. Esegue regressioni native esistenti in un subprocess isolato; errori, casi mancanti o saltati fanno fallire il gate. Incluso nel lint seriale anche con `-SkipTests`. [Qualifica e limiti](./verification-python-critical-2026-10-19.md). |

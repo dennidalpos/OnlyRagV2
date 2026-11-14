@@ -78,17 +78,9 @@ export function selectSavedRunState(savedState: SavedAgentSessionState | null, r
     }
   }
 
-  // Compatibility for an untouched pre-run seed saved before run identities existed.
-  const isLegacyPlanSeed =
-    savedState.status === 'IN_PROGRESS' &&
-    !savedState.runIdentity &&
-    savedState.stepCount === 0 &&
-    savedState.episodes.length === 0 &&
-    !savedState.recoveryFailures?.schema &&
-    !savedState.recoveryFailures?.execution
-  return isLegacyPlanSeed
-    ? { executionState: null, planSeed: savedState.planMilestones, initialUserTask: savedState.initialUserTask || savedState.userTask }
-    : { executionState: null, planSeed: [] }
+  if (!savedState.runIdentity && !savedState.pendingPlanRevisionId && savedState.status === 'IN_PROGRESS')
+    throw new Error('Unsupported previous agent run state; original state preserved')
+  return { executionState: null, planSeed: [] }
 }
 
 /** Rechecks persisted evidence before a resumed intervention can remain verified. */

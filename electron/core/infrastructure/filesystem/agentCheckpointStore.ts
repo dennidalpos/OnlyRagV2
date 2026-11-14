@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import { workspaceMetadataChildPath } from './workspaceMetadataDirectory'
 import path from 'node:path'
 import { isPathWithinRoot } from '../../domain/agent/pathContainment'
-import type { FileBackupEntry } from './atomicWorkspaceJournal'
+import { AtomicWorkspaceJournal, type FileBackupEntry } from './atomicWorkspaceJournal'
 import { validateWorkspaceRealpath } from './workspaceRealpathGuard'
 import { logger } from '../logging/logger'
 import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
@@ -11,12 +11,12 @@ import { errorMessage } from '../../../../shared/domain/errors/errorMessage'
 const MAX_CHECKPOINTS = 10
 
 interface CheckpointManifest {
-  version: 1 | 2
+  version: 2
   checkpointId: string
   conversationId?: string
   createdAt: string
   /** Workspace-relative paths with their pre-run state: a blob file name, or null for a file the run created. */
-  files: { path: string; blob: string | null }[]
+  files: { path: string; blob: string | null; kind?: 'directory' | 'symlink'; linkTarget?: string; linkType?: 'file' | 'dir' | 'junction' }[]
 }
 
 export interface CheckpointRestoreResult {
@@ -38,6 +38,7 @@ function checkpointRelativePath(workspacePath: string, absolute: string): string
   const resolved = path.resolve(absolute)
   if (!isPathWithinRoot(root, resolved)) return null
   const relative = path.relative(root, resolved).replace(/\\/g, '/')
+  if (!relative) return null
   return relative.toLowerCase().startsWith('.onlyrag/') ? null : relative
 }
 
@@ -104,6 +105,10 @@ export function saveAgentCheckpoint(
       if (relative === null) continue
       // A resumed run keeps the first pre-change bytes, including files it created before the crash.
       if (retainedPaths.has(relative.toLowerCase())) continue
+      if (entry.kind) {
+        files.push({ path: relative, blob: null, kind: entry.kind, linkTarget: entry.linkTarget, linkType: entry.linkType })
+        continue
+      }
       if (entry.originalContent === null) {
         files.push({ path: relative, blob: null })
         continue
@@ -133,7 +138,7 @@ export function saveAgentCheckpoint(
   }
 }
 
-/** Finds checkpoints owned by a conversation, including referenced v1 checkpoints. */
+/** Finds checkpoints owned by a conversation, without accepting previous checkpoint formats. */
 export function listConversationCheckpointPaths(workspacePath: string, conversationId: string, referencedIds: readonly string[]): string[] {
   const root = checkpointsRoot(workspacePath)
   if (!fs.existsSync(root)) return []
@@ -151,7 +156,7 @@ export function listConversationCheckpointPaths(workspacePath: string, conversat
       continue
     }
     if (referenced.has(entry.name)) {
-      if (manifest.version !== 1 && (manifest.version !== 2 || manifest.conversationId !== conversationId)) {
+      if (manifest.version !== 2 || manifest.conversationId !== conversationId) {
         throw new Error(`Referenced checkpoint has a different or unsupported owner: ${entry.name}`)
       }
       owned.push(directory)
@@ -162,7 +167,7 @@ export function listConversationCheckpointPaths(workspacePath: string, conversat
   return owned
 }
 
-/** Removes checkpoints owned by a deleted conversation, including referenced v1 checkpoints. */
+/** Removes checkpoints owned by a deleted conversation, without accepting previous checkpoint formats. */
 export function deleteConversationCheckpoints(workspacePath: string, conversationId: string, referencedIds: readonly string[]): void {
   for (const directory of listConversationCheckpointPaths(workspacePath, conversationId, referencedIds)) {
     fs.rmSync(directory, { recursive: true, force: true })
@@ -178,36 +183,52 @@ export function restoreAgentCheckpoint(workspacePath: string, checkpointId: stri
   let manifest: CheckpointManifest
   try {
     manifest = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf-8')) as CheckpointManifest
+    if (manifest.version !== 2 || manifest.checkpointId !== id || !Array.isArray(manifest.files))
+      throw new Error('Unsupported checkpoint format; original data preserved')
   } catch (error: unknown) {
     return { success: false, restoredCount: 0, errors: [`Checkpoint not found: ${errorMessage(error)}`] }
   }
 
   const errors: string[] = []
   let restoredCount = 0
+  const baseline = new Map<string, FileBackupEntry>()
   for (const file of Array.isArray(manifest.files) ? manifest.files : []) {
     // The manifest lives in the workspace, so it is validated like any untrusted path.
     const check = typeof file?.path === 'string' ? validateWorkspaceRealpath(file.path, root) : { safePath: null, error: 'Invalid entry' }
     const internal =
       check.safePath &&
-      path
-        .relative(root, check.safePath)
-        .split(path.sep)
-        .some((segment) => segment.toLowerCase() === '.onlyrag')
+      (check.safePath === root ||
+        path
+          .relative(root, check.safePath)
+          .split(path.sep)
+          .some((segment) => segment.toLowerCase() === '.onlyrag'))
     if (!check.safePath || internal || (file.blob !== null && !/^\d+\.bin$/.test(String(file.blob)))) {
       errors.push(`Skipped ${String(file?.path)}: ${internal ? 'application-owned metadata' : check.error || 'invalid blob reference'}`)
       continue
     }
     try {
-      if (file.blob === null) {
-        if (fs.existsSync(check.safePath) && fs.statSync(check.safePath).isFile()) fs.unlinkSync(check.safePath)
-      } else {
-        fs.mkdirSync(path.dirname(check.safePath), { recursive: true })
-        fs.writeFileSync(check.safePath, fs.readFileSync(path.join(directory, file.blob)))
+      if (file.kind !== undefined) {
+        if (file.blob !== null || !['directory', 'symlink'].includes(file.kind)) throw new Error('Invalid entry kind')
+        if (
+          file.kind === 'symlink' &&
+          (typeof file.linkTarget !== 'string' ||
+            !['file', 'dir', 'junction'].includes(String(file.linkType)) ||
+            !validateWorkspaceRealpath(path.resolve(path.dirname(check.safePath), file.linkTarget), root).safePath)
+        )
+          throw new Error('Unsafe symbolic link')
+        baseline.set(check.safePath, { originalContent: null, modifiedTimestamp: 0, kind: file.kind, linkTarget: file.linkTarget, linkType: file.linkType })
+        continue
       }
-      restoredCount++
+      baseline.set(check.safePath, { originalContent: file.blob === null ? null : fs.readFileSync(path.join(directory, file.blob)), modifiedTimestamp: 0 })
     } catch (error: unknown) {
       errors.push(`Failed restoring ${file.path}: ${errorMessage(error)}`)
     }
+  }
+  // Refuse malformed checkpoints before touching the workspace.
+  if (errors.length === 0) {
+    const result = new AtomicWorkspaceJournal(root).restoreBaseline(baseline)
+    restoredCount = result.restoredCount
+    errors.push(...result.errors)
   }
   return { success: errors.length === 0, restoredCount, errors }
 }

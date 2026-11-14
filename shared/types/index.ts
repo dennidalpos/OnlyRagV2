@@ -211,6 +211,12 @@ export interface WorkspaceFile {
 
 export type ArtifactKind = 'html' | 'svg' | 'markdown'
 
+export interface ArtifactInspection {
+  records: ArtifactRecord[]
+  moved: { previousWorkspacePath: string; count: number; revision: string }[]
+  rejected: { fileName: string; message: string; exportId?: string }[]
+}
+
 export interface ArtifactRecord {
   id: string
   workspacePath: string
@@ -758,7 +764,7 @@ export interface UserInterviewAnswer {
   questionText: string
   selectedOption: string
   isCustom?: boolean
-  /** How this decision entered the plan; omitted legacy values are explicit answers. */
+  /** How this decision entered the plan; missing provenance requires confirmation. */
   provenance?: 'explicit' | 'accepted_recommendation' | 'unconfirmed_assumption'
 }
 

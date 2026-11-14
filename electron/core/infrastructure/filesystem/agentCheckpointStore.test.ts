@@ -18,6 +18,7 @@ describe('agent checkpoints', () => {
 
   beforeEach(() => {
     workspace = createFixtureDirectory('onlyrag-checkpoint-')
+    ensureWorkspaceMetadataDirectory(workspace)
   })
 
   afterEach(() => {
@@ -131,7 +132,7 @@ describe('agent checkpoints', () => {
     fs.writeFileSync(path.join(directory, '0.bin'), 'payload')
     fs.writeFileSync(
       path.join(directory, 'manifest.json'),
-      JSON.stringify({ version: 1, checkpointId: 'evil', createdAt: '', files: [{ path: '../outside.txt', blob: '0.bin' }] }),
+      JSON.stringify({ version: 2, checkpointId: 'evil', createdAt: '', files: [{ path: '../outside.txt', blob: '0.bin' }] }),
     )
 
     const result = restoreAgentCheckpoint(workspace, 'evil')
@@ -145,7 +146,10 @@ describe('agent checkpoints', () => {
     const directory = path.join(workspace, '.onlyrag', 'checkpoints', 'internal')
     fs.mkdirSync(directory, { recursive: true })
     fs.writeFileSync(path.join(directory, '0.bin'), 'changed')
-    fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify({ version: 1, files: [{ path: '.onlyrag/layout.json', blob: '0.bin' }] }))
+    fs.writeFileSync(
+      path.join(directory, 'manifest.json'),
+      JSON.stringify({ version: 2, checkpointId: 'internal', files: [{ path: '.onlyrag/layout.json', blob: '0.bin' }] }),
+    )
     const layout = path.join(workspace, '.onlyrag', 'layout.json')
     const before = fs.readFileSync(layout, 'utf-8')
 
@@ -155,6 +159,32 @@ describe('agent checkpoints', () => {
 
   it('rejects an id that could escape the checkpoints folder', () => {
     expect(restoreAgentCheckpoint(workspace, '../x').success).toBe(false)
+  })
+
+  it('refuses a checkpoint entry targeting the workspace root without removing data', () => {
+    const directory = path.join(workspace, '.onlyrag', 'checkpoints', 'root-target')
+    fs.mkdirSync(directory, { recursive: true })
+    const keep = path.join(workspace, 'keep.txt')
+    fs.writeFileSync(keep, 'keep')
+    fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify({ version: 2, checkpointId: 'root-target', files: [{ path: '.', blob: null }] }))
+    expect(restoreAgentCheckpoint(workspace, 'root-target')).toMatchObject({ success: false, restoredCount: 0 })
+    expect(fs.readFileSync(keep, 'utf8')).toBe('keep')
+  })
+
+  it('refuses an external checkpoint link before restoring any other entry', () => {
+    const journal = new AtomicWorkspaceJournal(workspace)
+    const file = path.join(workspace, 'keep.txt')
+    fs.writeFileSync(file, 'before')
+    journal.recordBeforeModification(file)
+    saveAgentCheckpoint(workspace, 'tampered-link', journal.sessionBaseline)
+    fs.writeFileSync(file, 'after')
+    const manifestPath = path.join(workspace, '.onlyrag', 'checkpoints', 'tampered-link', 'manifest.json')
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+    manifest.files.push({ path: 'link', blob: null, kind: 'symlink', linkType: 'junction', linkTarget: path.dirname(workspace) })
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest))
+    expect(restoreAgentCheckpoint(workspace, 'tampered-link')).toMatchObject({ success: false, restoredCount: 0 })
+    expect(fs.readFileSync(file, 'utf8')).toBe('after')
+    expect(fs.existsSync(path.join(workspace, 'link'))).toBe(false)
   })
 
   it('deletes only checkpoints owned or referenced by the deleted conversation', () => {
@@ -168,10 +198,14 @@ describe('agent checkpoints', () => {
     fs.mkdirSync(legacy)
     fs.writeFileSync(path.join(legacy, 'manifest.json'), JSON.stringify({ version: 1, checkpointId: 'legacy', files: [] }))
 
-    deleteConversationCheckpoints(workspace, 'chat-a', ['legacy'])
+    const before = fs.readFileSync(path.join(legacy, 'manifest.json'))
+    expect(() => deleteConversationCheckpoints(workspace, 'chat-a', ['legacy'])).toThrow('unsupported owner')
+    expect(restoreAgentCheckpoint(workspace, 'legacy').success).toBe(false)
+    expect(fs.readFileSync(path.join(legacy, 'manifest.json'))).toEqual(before)
+    deleteConversationCheckpoints(workspace, 'chat-a', [])
 
     expect(fs.existsSync(path.join(workspace, '.onlyrag', 'checkpoints', 'owned'))).toBe(false)
-    expect(fs.existsSync(legacy)).toBe(false)
+    expect(fs.existsSync(legacy)).toBe(true)
     expect(fs.existsSync(path.join(workspace, '.onlyrag', 'checkpoints', 'other'))).toBe(true)
   })
 })

@@ -20,8 +20,8 @@ La diagnostica produce `DiagnosticAdvice`; il risultato di un tool lo presenta c
 
 ## Compare-and-swap e integrità file
 
-Una modifica a un file esistente richiede l'hash della versione letta. Un edit esterno fa rifiutare la scrittura finché il file non viene riletto. I checkpoint sono limitati ai file attribuiti alla run; `.onlyrag` non è un deliverable ripristinabile.
+Una modifica a un file esistente richiede l'hash della versione letta. Un edit esterno fa rifiutare la scrittura finché il file non viene riletto. I checkpoint sono limitati ai file attribuiti alla run; `.onlyrag` e la radice del workspace non sono destinazioni ammesse nel ripristino da checkpoint. Directory vuote e collegamenti interni verificabili vengono conservati; collegamenti esterni o non verificabili fanno rifiutare lo snapshot. Il ripristino ricontrolla i bersagli e rifiuta file o directory sostituiti da link.
 
 ## Sicurezza comandi e filesystem
 
-Il profilo ordinario applica controlli di percorso, comando, rete, installazione e approvazione. `fullAccess` in Guided/Auto salta i gate contestuali dell'app e amplia i percorsi ammessi; Ask rimane sola lettura. Il ramo `fullAccess` passa prima di `checkCommandSecurity`, quindi non attribuirgli le esclusioni dei comandi del profilo ordinario; restano i limiti del sistema operativo e dei singoli tool. Risultati e limiti di qualifica sono in [`coding-agent.md`](./coding-agent.md) e nel `tracker` (SecondBrain: `02-areas/products/OnlyRagV2/tracker.json`).
+Il profilo ordinario applica controlli di percorso, comando, rete, installazione e approvazione. `fullAccess` in Guided/Auto salta i gate contestuali dell'app e amplia i percorsi ammessi; Ask rimane sola lettura. Il ramo `fullAccess` passa prima di `checkCommandSecurity`, quindi non attribuirgli le esclusioni dei comandi del profilo ordinario; restano i limiti del sistema operativo e dei singoli tool. Risultati e limiti di qualifica sono in [`coding-agent.md`](./coding-agent.md) e nel `tracker` (dossier SecondBrain).

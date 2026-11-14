@@ -21,6 +21,7 @@ import type {
   AgentTaskRecovery,
   AgentTaskInspection,
   AppSettings,
+  ArtifactInspection,
   ArtifactRecord,
   ArtifactSaveInput,
   CodingSession,
@@ -198,6 +199,9 @@ export interface IpcInvokeContract {
     result: { success: boolean; output: string; error?: string }
   }
   'artifacts:list': { payload: { workspacePath: string }; result: ArtifactRecord[] }
+  'artifacts:inspect': { payload: { workspacePath: string }; result: ArtifactInspection }
+  'artifacts:rebind': { payload: { workspacePath: string; previousWorkspacePath: string; revision: string }; result: void }
+  'artifacts:exportRejected': { payload: { workspacePath: string; artifactId: string }; result: boolean }
   'artifacts:get': { payload: { workspacePath: string; artifactId: string }; result: ArtifactRecord | null }
   'artifacts:save': { payload: { workspacePath: string; input: ArtifactSaveInput }; result: ArtifactRecord }
   'artifacts:delete': { payload: { workspacePath: string; artifactId: string }; result: boolean }
@@ -409,6 +413,9 @@ export const IPC_INVOKE_METHODS = {
   inspectGuestOsEnvironment: 'workspace:inspect-guest-os',
   executePowerShellCommand: 'workspace:execute-powershell',
   listArtifacts: 'artifacts:list',
+  inspectArtifacts: 'artifacts:inspect',
+  rebindArtifacts: 'artifacts:rebind',
+  exportRejectedArtifact: 'artifacts:exportRejected',
   getArtifact: 'artifacts:get',
   saveArtifact: 'artifacts:save',
   deleteArtifact: 'artifacts:delete',

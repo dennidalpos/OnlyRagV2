@@ -56,7 +56,7 @@ npm run setup:dev
 npm run dev
 ```
 
-`setup:dev` installs npm dependencies from the lockfile, prepares Electron, and installs Python development requirements in `.venv`. It needs network access for missing dependencies and can recreate an incompatible `.venv`; review existing local environments first. This documentation update checks the command definitions without rerunning installation or starting your application profile.
+`setup:dev` installs npm dependencies from the lockfile, prepares Electron, and installs Python development requirements in `.venv`. It needs network access for missing dependencies, including GPU runtime libraries, and can recreate an incompatible `.venv`; review existing local environments first. Verify `node --version`, `npm --version` and `py -3.13 --version` before setup. The setup script checks Node/Python but does not separately enforce the npm range.
 
 On first launch:
 
@@ -104,7 +104,8 @@ The diagram shows the successful path; [ingestion](./docs/ingestion.md), [retrie
 - **Network policy:** the agent exposes `offline-strict`, `local-only`, and `network-approved` profiles. The settings default is `network-approved`; inspect the active profile and permissions before running a task. See [agent guards](./docs/agent-guards.md).
 - **Document fidelity:** extraction, translation, and generated answers require review. Ranking scores are not confidence probabilities. DOCX preview represents extracted content, and translated layout is not qualified for every document.
 - **Stored originals:** removing a document from the index retains its archived original. Deletion from the index is not a purge; see [source archive lifecycle](./docs/retrieval.md#ciclo-di-vita-degli-archivi-originali).
-- **Agent changes:** checkpoints and verification results do not guarantee a complete rollback of every action. Stop leaves existing edits in place; inspect diffs and recovery evidence before resuming or restoring.
+- **Agent changes:** Stop leaves existing edits in place. Checkpoints retain attributed files, empty directories and verified internal links, with snapshot limits; they do not reverse every shell action or external effect. Inspect diffs and recovery evidence before restoring. Unsaved code-editor drafts survive workspace switches in memory, but not app exit.
+- **Workspace formats:** new code workspaces initialize the current metadata layout. Previous/unversioned layouts and v1 checkpoints are refused with originals retained; Standalone does not automatically transfer previous standalone history. See [workspace and recovery behavior](./docs/user-guide.md#coding-agent-workspaces-and-plans-flows-1416).
 - **Platform and release:** Windows desktop is the target. Historical test and installer results apply to their recorded revisions; they do not certify the current checkout or a new installer.
 
 ## Documentation

@@ -26,7 +26,7 @@ export function composeInterviewDecisionPrompt(originalPrompt: string, answers: 
 
   const formattedDecisions = answers
     .map((answer) => {
-      const provenance = answer.provenance || 'explicit'
+      const provenance = answer.provenance || 'unconfirmed_assumption'
       const customLabel = answer.isCustom ? ' (Custom)' : ''
       return `- [${DECISION_LABELS[provenance]}] ${answer.questionText}: ${answer.selectedOption}${customLabel}`
     })

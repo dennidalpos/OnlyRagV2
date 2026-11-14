@@ -26,8 +26,8 @@ export class WorkspaceAppService {
   }
 
   async getStandaloneScratchWorkspace() {
+    await sessionHistoryRepository.assertNoStandaloneHistory()
     const scratchPath = standaloneScratchWorkspace.getPath()
-    await sessionHistoryRepository.migrateStandaloneSessions(scratchPath)
     return { path: scratchPath }
   }
 

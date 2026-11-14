@@ -7,7 +7,7 @@ Per iniziare dall'app segui la [guida utente](./guida-utente.md); per preparare 
 | Per chi / obiettivo | Documento |
 | --- | --- |
 | Utilizzatori: scelte e flussi desktop | [Guida utente](./guida-utente.md) |
-| Manutentore: setup, comandi, profili e recupero | [Operazioni](./operations.md) |
+| Manutentore: setup, comandi, profili e recupero | [Guida sviluppatori in inglese](./developer-guide.md), [operazioni](./operations.md), [conservazione dei test](./test-storage.md) |
 | Architettura e responsabilità | [Architettura](./architecture.md), [Renderer](./frontend.md), [Main](./electron-main.md) |
 | Contratti tra processi | [IPC](./api-ipc.md), [REST](./api-rest.md) |
 | Documenti, ricerca e lingue | [Ingestion/OCR](./ingestion.md), [embedding e fonti](./retrieval.md), [traduzione](./translation.md) |

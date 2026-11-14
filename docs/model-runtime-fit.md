@@ -1,6 +1,6 @@
 # Model/runtime fit
 
-La stima informativa descritta sotto è implementata; proposte, misure e replay del 2 ottobre sono evidenze datate. Le campagne di qualifica sono ritirate dalla [politica locale](./local-development-policy-2026-10-20.md); lo stato aperto è nel tracker (SecondBrain: `02-areas/products/OnlyRagV2/tracker.json`).
+La stima informativa descritta sotto è implementata; proposte, misure e replay del 2 ottobre sono evidenze datate. Le campagne di qualifica sono ritirate dalla [politica locale](./local-development-policy-2026-10-20.md); lo stato aperto è nel tracker (dossier SecondBrain).
 
 ## Boundary proposal — 2026-10-02
 

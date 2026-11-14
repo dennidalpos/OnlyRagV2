@@ -158,9 +158,9 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(loadedAfterClear).toBeNull()
   })
 
-  it('falls back to guided for an unknown persisted mode', async () => {
-    const stateDir = path.join(tempDir, '.onlyrag', 'sessions')
-    fs.mkdirSync(stateDir, { recursive: true })
+  it('refuses an unknown persisted mode and preserves the original', async () => {
+    const source = workspaceMetadataStatePath(tempDir, 'unknown-mode')
+    fs.mkdirSync(path.dirname(source), { recursive: true })
     const base = {
       workspacePath: tempDir,
       stepCount: 0,
@@ -171,9 +171,11 @@ describe('AgentSessionStateRepository Unit Tests', () => {
       userTask: 'Resume',
       updatedAt: new Date().toISOString(),
     }
-    fs.writeFileSync(path.join(stateDir, '.agent_state_unknown-mode.json'), JSON.stringify({ ...base, sessionId: 'unknown-mode', agentMode: 'plan' }))
+    fs.writeFileSync(source, JSON.stringify({ ...base, sessionId: 'unknown-mode', agentMode: 'plan' }))
 
-    await expect(agentSessionStateRepository.loadSessionState('unknown-mode', tempDir)).resolves.toMatchObject({ agentMode: 'guided' })
+    const before = fs.readFileSync(source)
+    await expect(agentSessionStateRepository.loadSessionState('unknown-mode', tempDir)).rejects.toThrow('original data is preserved')
+    expect(fs.readFileSync(source)).toEqual(before)
   })
 
   it('persists the terminal reason as structured state rather than requiring summary parsing', async () => {

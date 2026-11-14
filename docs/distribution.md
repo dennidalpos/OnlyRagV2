@@ -1,6 +1,6 @@
 # Candidati Windows locali
 
-La fase corrente è lo [sviluppo locale approvato](./local-development-policy-2026-10-20.md). La distribuzione pubblica e le relative qualifiche sono ritirate dal backlog: i vecchi gate non sono attività aperte nel tracker (SecondBrain: `02-areas/products/OnlyRagV2/tracker.json`). Le decisioni di licenza e le evidenze degli artefatti rimangono conservate.
+La fase corrente è lo [sviluppo locale approvato](./local-development-policy-2026-10-20.md). La distribuzione pubblica e le relative qualifiche sono ritirate dal backlog: i vecchi gate non sono attività aperte nel tracker (dossier SecondBrain). Le decisioni di licenza e le evidenze degli artefatti rimangono conservate.
 
 ## Costruire un candidato
 

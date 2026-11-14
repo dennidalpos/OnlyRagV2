@@ -24,28 +24,10 @@ describe('SessionHistoryDomain Unit Tests', () => {
     expect(normalizeSession({ id: 'named', title: 'Sprint 42', actionLogs: [] })?.title).toBe('Sprint 42')
   })
 
-  it('should migrate a legacy session: ISO timestamps, prompts rebuilt from logs, derived title', () => {
-    const normalized = normalizeSession({
-      id: 'session-legacy-1',
-      workspacePath: 'D:/projects/demo',
-      title: '',
-      createdAt: '14:32',
-      updatedAt: '14:40',
-      actionLogs: [
-        { id: '1', timestamp: '14:32', type: 'info', message: 'User Prompt: Refactor the ingestion service' },
-        { id: '2', timestamp: '14:33', type: 'tool_call', message: '[ToolCall: read_file] ingest_service.py' },
-        { id: '3', timestamp: '14:39', type: 'info', message: 'User Prompt: Add unit tests' },
-      ],
-    })
-
-    expect(normalized).not.toBeNull()
-    expect(Number.isNaN(Date.parse(normalized!.createdAt))).toBe(false)
-    expect(Number.isNaN(Date.parse(normalized!.updatedAt))).toBe(false)
-    expect(normalized!.executedPrompts).toHaveLength(2)
-    expect(normalized!.executedPrompts[0].prompt).toBe('Refactor the ingestion service')
-    expect(normalized!.executedPrompts[0].outcome).toBe('unknown')
-    expect(normalized!.executedPrompts[1].sessionId).toBe('session-legacy-1')
-    expect(normalized!.title).toBe('Refactor the ingestion service')
+  it('does not reconstruct executed prompts from historical log messages', () => {
+    const normalized = normalizeSession({ id: 'old-log', actionLogs: [{ message: 'User Prompt: Old prompt' }] })
+    expect(normalized?.executedPrompts).toEqual([])
+    expect(normalized?.title).toBe('')
   })
 
   it('should preserve a user-defined title and already recorded executed prompts', () => {

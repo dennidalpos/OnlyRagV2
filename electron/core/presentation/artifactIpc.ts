@@ -6,6 +6,16 @@ export function registerArtifactIpcHandlers() {
     return artifactAppService.listArtifacts(workspacePath)
   })
 
+  ipcMain.handle('artifacts:inspect', async (_event, { workspacePath }) => artifactAppService.inspectArtifacts(workspacePath))
+
+  ipcMain.handle('artifacts:rebind', async (_event, { workspacePath, previousWorkspacePath, revision }) =>
+    artifactAppService.rebindArtifacts(workspacePath, previousWorkspacePath, revision),
+  )
+
+  ipcMain.handle('artifacts:exportRejected', async (_event, { workspacePath, artifactId }) =>
+    artifactAppService.exportRejectedArtifact(workspacePath, artifactId),
+  )
+
   ipcMain.handle('artifacts:get', async (_event, { workspacePath, artifactId }) => {
     return artifactAppService.getArtifact(workspacePath, artifactId)
   })

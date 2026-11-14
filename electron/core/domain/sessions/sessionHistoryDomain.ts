@@ -1,9 +1,6 @@
 import type { AgentActionLog, AgentPlan, CodingSession, ExecutedPrompt } from '../../../../shared/types'
 import { resolveAgentCapabilityProfile } from '../../../../shared/domain/agent/agentCapabilityProfile'
 
-/** Prefix used by the agent action log for the entry that records the user prompt. */
-export const USER_PROMPT_LOG_PREFIX = 'User Prompt: '
-
 const MAX_TITLE_LENGTH = 48
 
 /** Converts a persisted timestamp to ISO 8601. */
@@ -20,24 +17,6 @@ export function deriveSessionTitle(prompt: string): string {
   const clean = prompt.replace(/\s+/g, ' ').trim()
   if (!clean) return ''
   return clean.length > MAX_TITLE_LENGTH ? `${clean.slice(0, MAX_TITLE_LENGTH)}...` : clean
-}
-
-/** Rebuilds ExecutedPrompt records from an action log. */
-export function extractExecutedPromptsFromLogs(sessionId: string, logs: AgentActionLog[], fallbackTimestamp: string): ExecutedPrompt[] {
-  return logs
-    .filter((log) => typeof log?.message === 'string' && log.message.startsWith(USER_PROMPT_LOG_PREFIX))
-    .map((log, index) => ({
-      id: `${sessionId}-migrated-${index}`,
-      sessionId,
-      prompt: log.message.slice(USER_PROMPT_LOG_PREFIX.length).trim(),
-      startedAt: toIsoTimestamp(log.timestamp, fallbackTimestamp),
-      agentMode: 'guided' as const,
-      outcome: 'unknown' as const,
-      totalSteps: 0,
-      filesTouched: 0,
-      additions: 0,
-      deletions: 0,
-    }))
 }
 
 const PLAN_STATUSES: AgentPlan['status'][] = ['idle', 'generating', 'ready', 'approved', 'rejected', 'error', 'cancelled']
@@ -158,7 +137,7 @@ function normalizeContextBudget(value: unknown): CodingSession['contextBudget'] 
     : undefined
 }
 
-/** Normalizes any persisted or migrated record into a valid CodingSession: ISO 8601 timestamps, an always-present executedPrompts list (rebuilt from the action log when the record predates the entity) and a title derived from the first executed prompt when the us */
+/** Normalizes current session records without reconstructing historical prompts. */
 export function normalizeSession(value: unknown): CodingSession | null {
   const raw = asRecord(value)
   if (!raw || typeof raw.id !== 'string' || !raw.id) return null
@@ -177,7 +156,7 @@ export function normalizeSession(value: unknown): CodingSession | null {
   const executedPrompts =
     Array.isArray(raw.executedPrompts) && raw.executedPrompts.length > 0
       ? raw.executedPrompts.map((p) => normalizeExecutedPrompt(p, sessionId, createdAt)).filter((p): p is ExecutedPrompt => p !== null)
-      : extractExecutedPromptsFromLogs(sessionId, actionLogs, createdAt)
+      : []
 
   const plans = Array.isArray(raw.plans)
     ? raw.plans.map((plan) => normalizePlan(plan, createdAt)).filter((plan): plan is AgentPlan => plan !== null)

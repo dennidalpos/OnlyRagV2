@@ -4,7 +4,7 @@
 
 Guida confrontata con viste, hook, testi italiani e decisioni approvate il **22 ottobre 2026**. I percorsi derivano dall'esame del codice; le prove native già eseguite hanno date e limiti propri nello [stato delle verifiche](./verification-current.md). La guida non certifica la qualità dei modelli o ogni build installata.
 
-Il riesame documentale del **1 novembre 2026** precisa i limiti del recupero file e del salvataggio nell'editor skill nei percorsi 17 e 20; i diagrammi dei percorsi restano quelli esistenti. Per prerequisiti e avvio dal checkout consulta [setup e operazioni](./operations.md#comandi).
+Il riesame documentale del **14 novembre 2026** aggiorna formati correnti, recupero file, bozze codice ed editor skill; i diagrammi dei 26 percorsi restano gli originali esistenti. Per prerequisiti e avvio dal checkout consulta [setup e operazioni](./operations.md#comandi).
 
 ## Indice
 
@@ -422,6 +422,8 @@ flowchart TD
 
 **Da sapere.** Il Coding Agent è indicato come sperimentale. Modalità e permessi sono scelte distinte: “Full access e installazioni libere” amplia fortemente i poteri della run, come spiegato in 24; non presumere sempre le protezioni del profilo limitato.
 
+I nuovi workspace inizializzano direttamente il formato corrente. Layout precedenti o senza versione, storico sessioni senza versione e checkpoint v1 vengono rifiutati con un errore, conservando originali e backup. Standalone rifiuta lo storico standalone già presente invece di trasferirlo automaticamente. La ripresa richiede l’identità della run registrata; i vecchi log non vengono convertiti in prompt eseguiti.
+
 ### 15 Pianificare oppure eseguire
 
 **Prerequisiti.** Progetto o Standalone, modello, modalità e contesto scelti in 14. Pianifica è disponibile in Guidata e Auto; in Chiedi usa Avvia Task per l’analisi.
@@ -504,6 +506,10 @@ flowchart TD
 4. Dopo il ripristino controlla conferma, errori ed effetti residui. Se conservi le modifiche, verifica il risultato prima di inviare un’altra richiesta.
 
 **Da sapere.** **Arresta non ripristina automaticamente le modifiche.** Checkpoint e ripristino non garantiscono uno snapshot completo né l’annullamento di comandi shell, installazioni o modifiche esterne al workspace, in particolare con Full access. Verifica i file effettivamente coperti e conserva separatamente quelli necessari prima di un'azione distruttiva.
+
+Le directory registrate nel journal conservano anche le sottodirectory vuote e i collegamenti con bersaglio verificabile interno al workspace. Collegamenti esterni o non verificabili fanno rifiutare la modifica prima della cancellazione. Il ripristino ricontrolla i bersagli e segnala quelli non più sicuri. Lo snapshot rifiuta directory con oltre 2.000 file o 10.000 voci.
+
+Le bozze codice non salvate o in conflitto restano in memoria cambiando workspace, chiudendo la scheda o rimuovendo il progetto dal registro. Riapri lo stesso percorso per recuperarle e salva prima di chiudere l'app. Il distacco ignora anche una lista file arrivata in ritardo; non riapre automaticamente il workspace precedente.
 
 ### 18 Gestire sessioni e storico progetto
 
@@ -589,7 +595,7 @@ flowchart TD
 
 **Da sapere.** Le skill contengono istruzioni per l’agente, non una certificazione del risultato. La presenza di una skill installata non significa che sia attiva in ogni task: controlla **Skill Attive**. Se il cambio di attivazione fallisce, il valore precedente resta visibile: correggi la causa e riprova. Un errore che indica skill salvata ma attivazione non salvata richiede una riprova prima di considerare conclusa l'operazione.
 
-L'editor corrente separa trigger e tag con virgole, li converte in minuscolo e rimuove gli spazi esterni del corpo. Anche un salvataggio senza modifiche manuali può alterare quei valori: copia le istruzioni prima di intervenire e controlla il risultato. La verifica del serializer del servizio non certifica la conservazione integrale del form.
+L'editor usa un campo multilinea per ciascun trigger e tag: virgole e nuove righe fanno parte del singolo elemento. I valori invariati conservano grafia e spazi; elementi e metadati modificati vengono rifilati, mentre il corpo viene conservato. Una lista modificata lasciata vuota riceve un valore di ripiego. Controlla il risultato dopo il salvataggio. Dopo una disinstallazione interrotta il nuovo elenco controlla copia e ricevuta: se il ripristino automatico non è possibile, il pannello mostra i percorsi conservati e consente di ispezionarli. Un errore di lettura offre Riprova.
 
 ## Impostazioni
 

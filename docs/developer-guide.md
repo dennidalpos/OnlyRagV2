@@ -1,19 +1,25 @@
 # Development, contracts and operations
 
-The [user guide](user-guide.md) covers all 26 operational flows. This English guide covers the maintained technical subjects; the [index](README.md) maps retained Italian detail and historical originals. No historical receipt is requalified simply by translating it.
+This guide helps Windows contributors prepare a development checkout, run checks, and diagnose storage or service failures. For the app's 26 operational flows, use the [user guide](user-guide.md). The [index](README.md) maps technical detail and dated evidence.
 
 ## Toolchain and startup
 
-package.json pins Node >=24.19.0 <25 and npm >=11 <12; .nvmrc specifies24.19.0. Python must be3.13.x (.python-version pins3.13.15). Use the supported Windows toolchain. Ollama is required for model work, not deterministic source checks; its default local endpoint is127.0.0.1:11434.
+[package.json](../package.json) requires Node `>=24.19.0 <25` and npm `>=11 <12`; [`.nvmrc`](../.nvmrc) pins `24.19.0`. Python must be 3.13.x ([`.python-version`](../.python-version) pins `3.13.15`). Run the commands from the checkout root in PowerShell. Ollama is required for generation and embeddings, but not deterministic source checks; its default endpoint is `http://127.0.0.1:11434`.
 
 ~~~powershell
+node --version
+npm --version
+py -3.13 --version
 npm run setup:dev
+# Continue only when setup exits successfully.
 npm run dev
 ~~~
 
 Setup uses npm ci, prepares Electron and installs Python development requirements in .venv. It can recreate an incompatible environment, so review existing work first. Runtime auto-preparation installs runtime requirements and does not guarantee pytest is present. Main-process changes require restarting development; Renderer hot reload alone is insufficient.
 
-Use a synthetic isolated application profile and managed SecondBrain runtime for builds/tests. Verify tool-specific output paths; an environment variable alone is not evidence every artifact is redirected. Do not stop an unknown process occupying Sidecar's port.
+The setup script accepts Python through `py -3.13`, or `python` when the launcher is absent. It checks Node, but does not enforce the npm range separately: check both versions above. If Node 26 is first in PATH, select a supported Node 24 installation for this shell before running setup; do not change the repository pins to match the host.
+
+Build outputs and repository-managed caches stay in the checkout's ignored folders. Setup can also populate npm/pip's usual download caches outside the checkout; fixture storage does not redirect those caches. Test runners use synthetic profiles and retained fixtures under `test-results/fixtures/`; see [test storage](test-storage.md). Ordinary `npm run dev` uses the normal application profile and can start local services. Do not use a personal profile for destructive test scenarios or stop an unknown process occupying Sidecar's port.
 
 ## Architecture and contracts
 
@@ -21,7 +27,7 @@ Renderer React uses window.electronAPI through context-isolated Electron Preload
 
 shared/ipc/ipcContract.ts is authoritative for IPC channels, payloads/results and events. electron/preload.ts derives its API and secureIpcMain validates dispatch. Static registration checks are not field-level behavioral proof.
 
-sidecar/main.py and schemas.py define REST. The generated OpenAPI snapshot is sidecar/contracts/openapi-2.5.0.json, not a hand-edit target. The Sidecar normally binds127.0.0.1:8000; configured X-OnlyRag-Token protects requests except health/preflight. CORS is separate from token authentication. Use typed transport/cancellation handling rather than inferring success from stream closure.
+`sidecar/main.py` and `sidecar/schemas.py` define REST. The generated OpenAPI snapshot is `sidecar/contracts/openapi-2.5.0.json`, not a hand-edit target. The Sidecar normally binds `127.0.0.1:8000`; configured `X-OnlyRag-Token` protects requests except health/preflight. CORS is separate from token authentication. Use typed transport/cancellation handling rather than inferring success from stream closure.
 
 Settings bootstrap/persistence, document/chat drafts, request ledgers, agent history and revision-bound recovery have different stores and acknowledgement boundaries. Failed reads must preserve originals; a journal or export does not by itself acknowledge a canonical save. Main policy consumers (external launch, web fetch/search/download) read settings with `loadSettingsOrThrow` and fail closed when the file is unreadable or unsupported; only a missing file means first launch.
 
@@ -55,7 +61,9 @@ The model proposes actions/plans; Main arbitrates order and tool gates. Diagnost
 
 Identical failed verification without changed inputs is blocked; a justified retry after a change is distinct. Forced closure cannot become verified based on model prose. Stop/rejection does not automatically roll back files.
 
-Writes to existing files require the read revision/hash. Checkpoints cover run-attributed files, not .onlyrag metadata or arbitrary external effects. A destructive or overwriting change is refused, with nothing mutated, when the journal cannot capture the originals completely (unreadable file, symbolic link or special entry under a directory, more than 2000 files); empty subdirectories are not journalled.
+Writes to existing files require the read revision/hash. Checkpoints cover run-attributed files, directories and verified internal links, including empty subdirectories. They exclude `.onlyrag` metadata and arbitrary external effects. Snapshot refusal precedes mutation when an original is unreadable, a link is external or unverifiable, an entry type is unsupported, or a directory exceeds 2,000 files or 10,000 entries. Restore rechecks paths and link targets; a changed target can make restoration fail.
+
+New workspace metadata initializes layout 2 directly. Previous or unversioned layouts, versionless session envelopes, old session records and v1 checkpoints are refused without conversion or deletion of originals/backups. Opening Standalone refuses previous standalone history instead of transferring it. Interrupted execution requires its run identity; an approved pending seed belongs to its plan revision. Old log messages are not reconstructed into executed prompts, and missing answer provenance is not treated as explicit consent.
 
 Ollama model pulls succeed only on a terminal `success` status after a clean HTTP 200 stream; empty, malformed, interrupted or error streams fail, and layer progress never completes a model. One pull owns the lock at a time (same model included), released only by its own token, so a cancelled pull cannot release its successor.
 
@@ -67,6 +75,8 @@ The skill editor uses one multiline field per trigger or tag. When an uninstall 
 
 ## Current checks
 
+The 14 November 2026 review exercised setup in a fresh detached checkout, then applied the current uncommitted source changes for build/startup verification. Node 24.22.1, npm 11.20.0 and Python 3.13.17 satisfy the supported ranges; the repository pins remain unchanged. Electron opened with a synthetic profile and its native Sidecar reached health readiness. A separate `npm run dev` probe used the E2E profile switch, which skips automatic Sidecar startup. No generation, model download or installer test was part of these startup checks. Setup reported npm advisories; see [dependency limits](libraries.md#manutenzione-e-limiti-correnti).
+
 ~~~powershell
 npm run docs:check
 npm run format:check
@@ -76,13 +86,13 @@ npm run quality:static
 
 Documentation-only changes need the relevant documentation/whitespace checks. docs:check validates local paths/anchors, npm command names and supported Mermaid flowchart structure; it does not render diagrams, check remote URLs or qualify runtime behavior.
 
-Additional checks are npm test, targeted Vitest, quality:python for required offline Python critical cases, and the full pytest/Sidecar wrapper when code warrants them. test:fast changes reporting, not test scope. Python critical quality rejects missing/skipped cases; exit0 alone is insufficient.
+Additional checks are `npm test`, targeted Vitest, `npm run quality:python` for required offline Python critical cases, and the full pytest/Sidecar wrapper when code warrants them. `test:fast` changes reporting, not test scope. Python critical quality rejects missing/skipped cases; exit 0 alone is insufficient.
 
 Electron recovery/UX tests use owned deterministic profiles/services. Active runners retain success and failure fixtures under `test-results/fixtures/`; their former evidence-location environment overrides no longer relocate output. See [test storage and retention](./test-storage.md) for ownership, subprocess isolation and explicit cleanup. Retired model campaigns and historical inference budgets stay retired.
 
 ## Generated files and local candidates
 
-npm run generate:openapi rewrites the snapshot from Python application/schemas. assets:check verifies app assets; assets:generate writes them. The26 original user-flow SVGs do not have a maintained generator in this repository. Preserve them with their original text and never claim they were regenerated without a verified method.
+`npm run generate:openapi` rewrites the snapshot from Python application/schemas. `npm run assets:check` verifies app assets; `npm run assets:generate` writes them. The 26 original user-flow SVGs do not have a maintained generator in this repository. Preserve them with their original text and never claim they were regenerated without a verified method.
 
 package:win builds a local Windows CPU candidate and can provision release dependencies. The active phase does not promise public installer delivery, CI execution, general model qualification or a new licensing decision. Keep historical distribution proposals, inventories, licenses/notices and frozen corpora unchanged. Package versions/provenance come from the manifest/lockfiles and generated dependency baseline; they do not identify external services.
 
@@ -92,4 +102,8 @@ Agent-task recovery records are bound to the original run/context; terminal rece
 
 Cleanup commands are destructive and require an explicit reviewed scope, closed application and accepted disposable paths. Do not classify old scratch, checkpoints, .onlyrag, profiles, logs, backups or evidence as removable by name. Retain fixtures and reports; no cleanup is part of this documentation revision.
 
-Current unresolved topics include settings fail-closed behavior, destructive checkpoint completeness, editor drafts on workspace switch, pending file-list invalidation, store/skill lifecycle integrity and separate publication review. Their tracker entries and evidence are reviewed in the runtime audit report; this guide does not close them. Installed-app, power-loss, SMB, native model quality and real provider qualification remain outside static or synthetic checks.
+Artifact recovery groups current-format records by previous workspace path and checks the group's file hashes again after confirmation. Each record is written atomically. An interrupted batch can be reviewed again for the remaining records. Rejected regular records can be exported byte for byte to a new file. The Electron artifact draft scenario covers the confirmation and export through IPC with synthetic data.
+
+Remaining native-runner prerequisites, component attribution and publication review have separate work and evidence. Settings read refusal, code drafts across workspace switches, stale file-list invalidation, skill editing and checkpoint directory coverage are implemented behavior, not an undifferentiated list of open defects. Installed-app, power-loss, SMB, native model quality and real provider qualification remain outside static or synthetic checks.
+
+For help, record the revision, tool versions, exact command and sanitized error. Consult [operations](operations.md) and [agent diagnostics](agent-diagnostics.md), then use the repository's [issue tracker](https://github.com/dennidalpos/OnlyRagV2/issues). Logs can contain document text, prompts and local paths; inspect them before sharing.

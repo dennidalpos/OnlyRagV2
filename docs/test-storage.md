@@ -1,6 +1,6 @@
 # Local test storage and retention
 
-Builds and tool caches stay in the product's ignored output directories: `dist/`, `dist-electron/`, `build/`, `release/`, `node_modules/`, and the cache directories listed in `.gitignore`. Build and packaging still consume these paths. This policy does not move existing outputs or personal profiles.
+Build outputs and repository-managed tool caches stay in the product's ignored directories: `dist/`, `dist-electron/`, `build/`, `release/`, `node_modules/`, and the cache directories listed in `.gitignore`. Build and packaging still consume these paths. Package-manager download caches are separate: setup can use npm/pip's normal external caches, and the fixture allocator does not relocate them. This policy does not move existing outputs or personal profiles.
 
 Synthetic Node, Python, PowerShell and Electron fixtures use:
 

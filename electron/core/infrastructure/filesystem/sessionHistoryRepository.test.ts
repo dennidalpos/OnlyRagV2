@@ -70,12 +70,12 @@ describe('SessionHistoryRepository Unit Tests', () => {
     expect((await repo.listSessions(null)).map((item) => item.id)).toEqual(expect.arrayContaining(['retained', 'new']))
   })
 
-  it('still reads versionless legacy sessions without rewriting on load', async () => {
+  it('refuses versionless previous sessions without rewriting on load', async () => {
     const repo = new SessionHistoryRepository(tempDir)
     const raw = JSON.stringify({ sessions: [{ id: 'legacy', actionLogs: [], title: 'Kept' }] })
     const file = path.join(tempDir, 'session_history.json')
     fs.writeFileSync(file, raw)
-    expect(await repo.listSessions(null)).toEqual([expect.objectContaining({ id: 'legacy', title: 'Kept' })])
+    await expect(repo.listSessions(null)).rejects.toThrow('original data is preserved')
     expect(fs.readFileSync(file, 'utf8')).toBe(raw)
   })
 
@@ -281,18 +281,14 @@ describe('SessionHistoryRepository Unit Tests', () => {
     await sessionHistoryRepository.deleteSession('session-standalone-keep', null)
   })
 
-  it('migrates legacy standalone sessions into the persistent scratch workspace', async () => {
+  it('refuses previous standalone history without moving or changing its original bytes', async () => {
     const fallbackDir = path.join(tempDir, 'fallback')
-    const scratchPath = path.join(tempDir, 'agent-scratch')
-    fs.mkdirSync(scratchPath)
     const repository = new SessionHistoryRepository(fallbackDir)
-    await repository.saveSession(buildSession('legacy-standalone', null, { title: 'Chat precedente' }))
-
-    expect(await repository.migrateStandaloneSessions(scratchPath)).toBe(1)
-    expect(await repository.listSessions(null)).toEqual([])
-    expect(await repository.listSessions(scratchPath)).toEqual([
-      expect.objectContaining({ id: 'legacy-standalone', workspacePath: scratchPath, title: 'Chat precedente' }),
-    ])
-    expect(await repository.migrateStandaloneSessions(scratchPath)).toBe(0)
+    await expect(repository.assertNoStandaloneHistory()).resolves.toBeUndefined()
+    await repository.saveSession(buildSession('previous-standalone', null))
+    const source = path.join(fallbackDir, 'session_history.json')
+    const before = fs.readFileSync(source)
+    await expect(repository.assertNoStandaloneHistory()).rejects.toThrow('Unsupported previous standalone history')
+    expect(fs.readFileSync(source)).toEqual(before)
   })
 })

@@ -271,7 +271,7 @@ def get_stored_document(doc_id: str) -> Optional[Dict[str, Any]]:
     if DOCS_TABLE_NAME not in get_existing_tables():
         return None
     tbl = lance_db.open_table(DOCS_TABLE_NAME)
-    records = tbl.search().where(f'id = "{safe_id}"', prefilter=True).limit(1).to_list()
+    records = tbl.search().where(f"id = '{safe_id}'", prefilter=True).limit(1).to_list()
     if not records:
         return None
     record = records[0]

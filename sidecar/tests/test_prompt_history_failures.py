@@ -201,7 +201,7 @@ def test_history_score_uses_native_squared_l2(monkeypatch, cosine, expected_scor
          "vector": [1.0, 0.0], **SPACE.metadata()},
     ])
     table = db.lance_db.open_table(PROMPT_HISTORY_TABLE_NAME)
-    rows = table.search([1.0, 0.0]).where('id = "selected"', prefilter=True).to_list()
+    rows = table.search([1.0, 0.0]).where("id = 'selected'", prefilter=True).to_list()
     assert rows[0]["_distance"] == pytest.approx(2.0 * (1.0 - cosine))
     monkeypatch.setattr(service, "_history_embedding", lambda *_: ([1.0, 0.0], SPACE))
     with TestClient(main.app) as client:

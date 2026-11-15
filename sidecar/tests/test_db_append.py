@@ -75,7 +75,7 @@ def test_delete_where_replaces_only_the_targeted_row():
     append_records(TABLE, _row("a"))
     append_records(TABLE, _row("b"))
 
-    append_records(TABLE, _row("b", title="second write"), delete_where='id = "b"')
+    append_records(TABLE, _row("b", title="second write"), delete_where="id = 'b'")
 
     rows = lance_db.open_table(TABLE).search().limit(10).to_list()
     assert sorted(r["id"] for r in rows) == ["a", "b"]

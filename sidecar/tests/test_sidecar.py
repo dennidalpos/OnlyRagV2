@@ -930,7 +930,7 @@ def test_get_document_endpoint_returns_markdown_on_demand(monkeypatch):
             self.rows = []
 
         def where(self, clause, prefilter=True):
-            doc_id = clause.split('"')[1]
+            doc_id = clause.split("'")[1]
             self.rows = [stored[doc_id]] if doc_id in stored else []
             return self
 

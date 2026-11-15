@@ -18,7 +18,7 @@ SESSION_LIFECYCLE_TABLE = "prompt_session_lifecycle"
 def _session_lifecycle(session_id: str) -> dict | None:
     if SESSION_LIFECYCLE_TABLE not in get_existing_tables():
         return None
-    rows = lance_db.open_table(SESSION_LIFECYCLE_TABLE).search().where(f'session_id = "{session_id}"').limit(2).to_list()
+    rows = lance_db.open_table(SESSION_LIFECYCLE_TABLE).search().where(f"session_id = '{session_id}'").limit(2).to_list()
     if not rows:
         return None
     if len(rows) != 1:
@@ -41,7 +41,7 @@ def _write_session_lifecycle(session_id: str, operation_id: str, generation: int
         "operation_id": operation_id,
         "generation": generation,
         "state": state,
-    }], delete_where=f'session_id = "{session_id}"', match_key="session_id")
+    }], delete_where=f"session_id = '{session_id}'", match_key="session_id")
 
 
 @database_operation
@@ -49,7 +49,7 @@ def _index_if_current(session_id: str, generation: int, record: list[dict]) -> N
     current = _session_lifecycle(session_id)
     if (current["generation"] if current else 0) != generation or (current and current["state"] != "active"):
         raise ValueError("Prompt session was deleted or changed during indexing")
-    append_records(PROMPT_HISTORY_TABLE_NAME, record, delete_where=f'id = "{record[0]["id"]}"')
+    append_records(PROMPT_HISTORY_TABLE_NAME, record, delete_where=f"id = '{record[0]['id']}'")
 
 
 @database_operation
@@ -72,7 +72,7 @@ def _fenced_session_change(session_ids: list[str], operation_id: str, restore: b
     if not restore and PROMPT_HISTORY_TABLE_NAME in get_existing_tables():
         table = lance_db.open_table(PROMPT_HISTORY_TABLE_NAME)
         for session_id in session_ids:
-            table.delete(f'session_id = "{session_id}"')
+            table.delete(f"session_id = '{session_id}'")
     return {"success": True}
 
 
@@ -191,7 +191,7 @@ def _search_prompt_index(req: PromptHistorySearchRequest, query_vec: List[float]
     if req.project_paths:
         allowed_project_ids = {compute_project_id(p) for p in req.project_paths if p}
         if allowed_project_ids:
-            where_clause = " OR ".join([f'project_id = "{pid}"' for pid in allowed_project_ids])
+            where_clause = " OR ".join([f"project_id = '{pid}'" for pid in allowed_project_ids])
             search_builder = search_builder.where(where_clause, prefilter=True)
 
     raw_results = search_builder.limit(fetch_limit).to_list()
@@ -248,10 +248,10 @@ def remove_prompt_history(req: PromptHistoryRemoveRequest) -> Dict[str, bool]:
     try:
         tbl = lance_db.open_table(PROMPT_HISTORY_TABLE_NAME)
         if safe_ids:
-            where_clause = " OR ".join([f'session_id = "{sid}"' for sid in safe_ids])
+            where_clause = " OR ".join([f"session_id = '{sid}'" for sid in safe_ids])
             tbl.delete(where_clause)
         if req.project_path:
-            tbl.delete(f'project_id = "{compute_project_id(req.project_path)}"')
+            tbl.delete(f"project_id = '{compute_project_id(req.project_path)}'")
     except Exception as error:
         logger.warning("Prompt history removal failed (%s)", type(error).__name__)
         return {"success": False}

@@ -116,7 +116,7 @@ def test_untrusted_existing_history_is_preserved_before_any_encoding(monkeypatch
 def test_concurrent_history_change_during_encoding_is_not_overwritten(monkeypatch, operation):
     seed()
     def encode(*args, **kwargs):
-        db.lance_db.open_table(PROMPT_HISTORY_TABLE_NAME).update(where='id = "prompt"', values={"prompt": "Concurrent edit"})
+        db.lance_db.open_table(PROMPT_HISTORY_TABLE_NAME).update(where="id = 'prompt'", values={"prompt": "Concurrent edit"})
         return EmbeddingBatch([[1.0, 0.0]], SPACE)
     monkeypatch.setattr(service, "generate_embedding_batch", encode)
     with pytest.raises(db.DatabaseConflictError, match="changed during"):

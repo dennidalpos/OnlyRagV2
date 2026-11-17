@@ -9,11 +9,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 const context = vi.hoisted(() => ({ userData: '' }))
 vi.mock('electron', () => ({ app: { getPath: () => context.userData, isPackaged: false } }))
 
-import { SidecarProcessManager } from '../../electron/core/infrastructure/process/sidecarProcessManager'
 import type { SidecarOwnershipMarker } from '../../electron/core/infrastructure/process/orphanPortReclaim'
 
 const root = process.platform === 'win32' ? createFixtureDirectory('onlyrag-sidecar-ownership-') : ''
 context.userData = root
+const { SidecarProcessManager } = await import('../../electron/core/infrastructure/process/sidecarProcessManager')
 const children: ChildProcess[] = []
 const manager = new SidecarProcessManager()
 /** The private ownership checks this scenario drives directly against real processes. */
@@ -82,8 +82,15 @@ describe.skipIf(process.platform !== 'win32')('Windows Sidecar ownership integra
   })
 
   it('reclaims a packaged sidecar.exe only with its exact process identity', async () => {
-    const exe = path.resolve('sidecar_dist/sidecar/sidecar.exe')
-    expect(fs.existsSync(exe)).toBe(true)
+    const configuredExe = process.env.ONLYRAG_TEST_PACKAGED_SIDECAR
+    if (configuredExe !== undefined) {
+      expect(path.isAbsolute(configuredExe), 'ONLYRAG_TEST_PACKAGED_SIDECAR must be an absolute path').toBe(true)
+    }
+    const candidate = configuredExe ?? path.resolve('sidecar_dist/sidecar/sidecar.exe')
+    expect(fs.existsSync(candidate), 'Build the Sidecar or set ONLYRAG_TEST_PACKAGED_SIDECAR to its executable').toBe(true)
+    const exe = fs.realpathSync(candidate)
+    expect(path.basename(exe).toLowerCase()).toBe('sidecar.exe')
+    expect(fs.statSync(exe).isFile()).toBe(true)
     const child = spawn(exe, [], {
       cwd: path.dirname(exe),
       env: { ...process.env, ONLYRAG_DATA_DIR: root },
@@ -95,7 +102,11 @@ describe.skipIf(process.platform !== 'win32')('Windows Sidecar ownership integra
     const identity = await ownership.readProcessIdentity(child.pid)
     expect(identity?.pid).toBe(child.pid)
     expect(identity?.executablePath.toLowerCase()).toBe(exe.toLowerCase())
+    fs.writeFileSync(markerPath, JSON.stringify({ ...identity, startedAt: '2000-01-01T00:00:00.000Z' }))
+    expect(await ownership.reclaimOrphanSidecarPort()).toBe(false)
+    expect(child.exitCode).toBeNull()
     fs.writeFileSync(markerPath, JSON.stringify(identity))
     expect(await ownership.reclaimOrphanSidecarPort()).toBe(true)
+    expect(fs.statSync(path.join(root, 'data', 'lancedb_store')).isDirectory()).toBe(true)
   })
 })

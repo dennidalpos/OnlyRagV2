@@ -371,7 +371,7 @@ def prepare(release):
     onnx_source = github_source('microsoft', 'onnxruntime', 'v1.29.0', source_dir)
     native_sources = [onnx_source, *onnx_submodule_sources(onnx_source, source_dir),
                       official_mupdf_source(pymupdf.VersionFitz, source_dir),
-                      github_source('lancedb', 'lancedb', 'v0.37.1', source_dir)]
+                      github_source('lancedb', 'lancedb', f"v{environment['packages']['lancedb']}", source_dir)]
     native_notice_records = native_notices(source_dir, native_sources, licenses)
     residuals.extend([
         f'Bind MuPDF {pymupdf.VersionFitz} build settings used by PyMuPDF {pymupdf.VersionBind} to the official full source tarball.',

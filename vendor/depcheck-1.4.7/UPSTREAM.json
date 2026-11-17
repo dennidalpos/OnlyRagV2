@@ -1,0 +1,589 @@
+{
+  "sourcePackage": "depcheck",
+  "sourceVersion": "1.4.7",
+  "sourceRepository": "https://github.com/depcheck/depcheck/tree/b180e2ec82a7c1413bc29df260561076030b1734",
+  "registryTarball": "https://registry.npmjs.org/depcheck/-/depcheck-1.4.7.tgz",
+  "registryIntegrity": "sha512-1lklS/bV5chOxwNKA/2XUUk/hPORp8zihZsXflr8x0kLwmcZ9Y9BsS6Hs3ssvA+2wUVbG0U2Ciqvm1SokNjPkA==",
+  "modifiedFiles": [
+    "package.json",
+    "src/check.js",
+    "dist/check.js"
+  ],
+  "originalFiles": [
+    {
+      "origin": "npm",
+      "path": "bin/depcheck.js",
+      "sha256": "0b44127286c13a1f88f7dc4f23656157a84c0e2d2490bfbb60dda70f9a0fff1f"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/check.js",
+      "sha256": "b6725f697398e32c57d50ddfe5500507fec34b7c495bfb08376ebabef6e7f541"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/cli.js",
+      "sha256": "b67b3fdd4b0006d0d87d71aefad6b3e820b7aee4fc9c2e3bbdb843ce09ecdaae"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/component.json",
+      "sha256": "e294824ff4ad5ba20bcfa9073a3aaeed271f8cc042bc7bcb21d669e535d679f2"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/constants.js",
+      "sha256": "e590d698033b36e191b2a8f41c96c782b5810345712a9e6c7b3a8c9c2ea6022d"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/detector/exportDeclaration.js",
+      "sha256": "14f80e382ffd247b1bc43c3cef99e934c731c59c281acca1f8a7c86529d80904"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/detector/expressViewEngine.js",
+      "sha256": "86bfc4e9bfaa056c8325656b16587e7a3d2491918692d8118bb587c9e008bf74"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/detector/extract.js",
+      "sha256": "02f835f6e800aef15d12af5143578a7cc0dcf71799373749067f2d5c4e1ff38a"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/detector/gruntLoadTaskCallExpression.js",
+      "sha256": "cf7671348df383cca0c3712bc7489f2eb4998dff6a6f40258ff73d074c34b62d"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/detector/importCallExpression.js",
+      "sha256": "d8434e6e3e9b6302edc4e72b7bb5d6d5d634c31f3a5ea81743e85f4d9c1ade7a"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/detector/importDeclaration.js",
+      "sha256": "f6d0cbba6b1cab9655792004333f7cb808faf0906049984bc378befc3dca285c"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/detector/requireCallExpression.js",
+      "sha256": "09238807c3640fa3b6c952025446f5c8f6514721a38a59f23db267fff28af18b"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/detector/requireResolveCallExpression.js",
+      "sha256": "77bb8cef48545ce53e71be0a1ab4d6d0445da32dad5e1d5bdd99f594e300c2a0"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/detector/typescriptImportEqualsDeclaration.js",
+      "sha256": "27852d755d289292af385efdda265c815192f77a2b9e0da8daa4e71631894c2c"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/detector/typescriptImportType.js",
+      "sha256": "d7c12dd0baa60db5719d65f735d0d425b560a76160156487b57d627bf1bc4cca"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/index.d.ts",
+      "sha256": "93efe6be92b57cd8dccd5f91a3664a690bae7fa81a257bdf2d820bb8fa3fe1f1"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/index.js",
+      "sha256": "04501629cb5ae01d459337746d444b5bcd9c59a81d6f6d6751d0ea9b998ccde3"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/parser/coffee.js",
+      "sha256": "5dfe78e1d6884680bdf7c8ea351489841850d1ca20d7ab6b11e8ba3be77c4f6f"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/parser/es6.js",
+      "sha256": "5ba848be3813d34d09373ca7d9b7178708fb4c59edd13ba24bde9c6ec4bc8d14"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/parser/es7.js",
+      "sha256": "8582039d870c5f5e475df4936c9174b811438f85049ce3a8a8a281b3d27ccda1"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/parser/graphql.js",
+      "sha256": "623124898061148d920ef05aab2a621fbf4ee77748d4283f2a8c8bdbccc954ef"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/parser/jsx.js",
+      "sha256": "f39b16a1f238e14ec73e042eb41d8dcaa8c7e28d3ef78a7c5c58cdd12b59ffa6"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/parser/sass.js",
+      "sha256": "116da2bf741fb4c320004efeb32f9aca3d6558f24bc9e2de79be5fa94cb733e7"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/parser/storybook.js",
+      "sha256": "a1355aac3bc243f65ba8f2c87a3d797fea805224d1f294bfe6cb95b38e1ceb98"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/parser/svelte.js",
+      "sha256": "145c5b2417d1b792deb9ff2329ab6c43b420f5e2c85f2cd315fa1ae0ec446940"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/parser/tsconfig.js",
+      "sha256": "62c831f3fb0b172e5b1e12b22c6d5049d0337d979b7cec682247219e957320e5"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/parser/typescript.js",
+      "sha256": "0347aa6d625973b37766dce9d4a89a205169eaf2a53e878507e59bdcbe6f7b85"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/parser/vue.js",
+      "sha256": "b26bfb6e986f04d7fbdbbaf0bc26182895309566ac63060cecfcfa78fb516aef"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/babel.js",
+      "sha256": "aa0e7b92b92d587a536c7082cee429b4d264f00af1b3ca5350659e6caae9ba7c"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/bin.js",
+      "sha256": "71483c3cc2af8d2444ecfdc62c686d11e669d183c545d56b01cd02d884125cc3"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/commitizen.js",
+      "sha256": "8cd8d417c541d9a4563ea348c7ed6ab9ab3a101b86f87feb36c8f27aa7d4853c"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/eslint.js",
+      "sha256": "9309afa78574c8a13091d6409ff6dcf4c9088c644b10467338d2ce78d73ac2cf"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/feross-standard.js",
+      "sha256": "eaaf27bfd16d8b2c7a7f0b43536aca0f6a1deeaedc3c1fb83337e2f60df001be"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/gatsby.js",
+      "sha256": "8b1625a257d2bc94094ec721e1b9529f68ecf9e94df3c60c731b9f492d92601c"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/gulp-load-plugins.js",
+      "sha256": "0f1b5ddee900dc8079233566510a8bf4387d37e445fbf8a963d9b4b5d2109c1a"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/husky.js",
+      "sha256": "cc921431cfee120515921fb546700b5d12b76415156276bdd799a464e2846bd8"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/istanbul.js",
+      "sha256": "11aacaaf7e905021243ab50c7b7d17f850d2a4692b568fdef192e1e0e7ff2235"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/jest.js",
+      "sha256": "32a39723f53d82cd4302066ad055f3cfe0d8bd3c0ecbc4fb132607ac089bdce6"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/karma.js",
+      "sha256": "2909a87cc2075df7f3f8452a9f8b9dc26985fd0c6b49088d67317b51d32064f0"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/lint-staged.js",
+      "sha256": "7cef56dacbdce7f942b5ea9435c15a5ac218f1b37aa8821a4b56b820f81fd993"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/mocha.js",
+      "sha256": "daf906bd891f826e322fcb59793ff5e1a22c01d986baaaf3b0e52b60abeb4de5"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/prettier.js",
+      "sha256": "614b0f97fc9c1e96ef98cf88a84a0f7691b87828d2ba9c84eaca94406646afcc"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/react17.js",
+      "sha256": "c5345d6eef1202fadb3c19e15076b254f9293867cf8e3b2854633d8628796941"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/serverless.js",
+      "sha256": "1d759160fab6bcac51c83c07762f25625647da106134c463558809bc97ed8436"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/tslint.js",
+      "sha256": "59c2b37e5103ea8eeea94fa703b74c045a5caf0e6c0ddd85f4573be92e9c7df9"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/ttypescript.js",
+      "sha256": "51aacd1720d2f244cdd2d93fadadc966c784e0a79569514fe7b1c5fc5f9366ee"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/special/webpack.js",
+      "sha256": "6eacfa5ce513abcc802e97b8398f4724ca6ba606b1e0fc70fd0b1eccaebf4ba2"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/utils/cli-tools.js",
+      "sha256": "264102278c8dcd93ee79084260c8bab654aba1db575a9dab18a3d93022a01899"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/utils/configuration-reader.js",
+      "sha256": "c9e6beb146fd4a3cc504e3803e3a6be2eb49a488bf1213cff0c9f3f30c087c74"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/utils/exceptions/configuration-parsing-exception.js",
+      "sha256": "9fcea73a1cdd25afbacc50eff090e7043cbce31fd53d8921a4db4d5fcb1798a2"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/utils/file.js",
+      "sha256": "ddfddf3e78559c4316c98a6952e9f78bfdffab1eb14d9e03c405bd4492b3e7e5"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/utils/get-scripts.js",
+      "sha256": "5cc928984a753cdb622fec19f7ee9a3ef54a2eefdd161236b65ae2b84ec567a3"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/utils/index.js",
+      "sha256": "09013c322705541abeb7d8d2fcaffa123d5090a287f5205f18965e20ba3f0fe1"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/utils/module-root.js",
+      "sha256": "ba94b3fbba65f73a80933a7dc6c76d675f542dac29ad940cffe60d70b1118c5d"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/utils/parser.js",
+      "sha256": "68b426a89a997bf829f8fc10ceafbe5bc943a8c95fea496966fe82bf4ca0e76c"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/utils/typescript.js",
+      "sha256": "0c82e19f311f9647c6984a3e258a5fff6941d8ecb70d28ac46d7f93464b96bfd"
+    },
+    {
+      "origin": "npm",
+      "path": "dist/utils/webpack.js",
+      "sha256": "2e30b4d1b79ec95256f0c8ac3e57cc3d4815c8ecef7c821817731297f987564d"
+    },
+    {
+      "origin": "npm",
+      "path": "LICENSE",
+      "sha256": "b358e54f2acf533bd817a2f6d31dc4e815bc2a0b960a1895dba0238bd2ede2e7"
+    },
+    {
+      "origin": "npm",
+      "path": "package.json",
+      "sha256": "893a58578f2a4e966facd1630a5673bde10b23d3d73500cbe2783a6abab43e02"
+    },
+    {
+      "origin": "npm",
+      "path": "README.md",
+      "sha256": "a04677a4cdc1493109824280e0c1e8d5785e6a6b6fea8c36f5d43a84e3006e8f"
+    },
+    {
+      "origin": "github",
+      "path": "src/check.js",
+      "sha256": "3ab52d190067aaedced1af8414f057ee0fe23b29689487a8aabfddd69b918ebe"
+    },
+    {
+      "origin": "github",
+      "path": "src/cli.js",
+      "sha256": "22374d7ff1272f08c1707050471b47d28be57a5186841b936b29de8a3fbb11a1"
+    },
+    {
+      "origin": "github",
+      "path": "src/component.json",
+      "sha256": "24037441080ba194040c8efb1bc8867092da944b24ea5c228cf82013c40957cb"
+    },
+    {
+      "origin": "github",
+      "path": "src/constants.js",
+      "sha256": "f644f2818256a07eb21974df8bbee74db44b3d78882067affde3120b5171b6c6"
+    },
+    {
+      "origin": "github",
+      "path": "src/detector/exportDeclaration.js",
+      "sha256": "0ec40d27f87bc005263f4f79481d9153e32354ea1a0eddf96bf0e2e3d486cd62"
+    },
+    {
+      "origin": "github",
+      "path": "src/detector/expressViewEngine.js",
+      "sha256": "ea1c33b3163bed9c5820b860a42b4e3b0e20daf2bdcd2c50936bc9308395fe19"
+    },
+    {
+      "origin": "github",
+      "path": "src/detector/extract.js",
+      "sha256": "b6d0789ea8427412ebb6e7bbe07cd37546dfa02ca95aeb03ad01533c49f77a63"
+    },
+    {
+      "origin": "github",
+      "path": "src/detector/gruntLoadTaskCallExpression.js",
+      "sha256": "a0731f8cb30ba4e28d1ac25cb056cbafea4a10be9913156c56380590eba0f431"
+    },
+    {
+      "origin": "github",
+      "path": "src/detector/importCallExpression.js",
+      "sha256": "7b35f7d68ec186284cc47ce61d8804188fcc7a5bf8f2844a47946632ba5495ed"
+    },
+    {
+      "origin": "github",
+      "path": "src/detector/importDeclaration.js",
+      "sha256": "9d819a30fe871c05ea9a365ec2bb892d1c7b90d926dc15a973e71180ec59f511"
+    },
+    {
+      "origin": "github",
+      "path": "src/detector/requireCallExpression.js",
+      "sha256": "958d8fbbea78fa4babb425ff8435a385d9b0c9957c790d4d8ad6a164476b73de"
+    },
+    {
+      "origin": "github",
+      "path": "src/detector/requireResolveCallExpression.js",
+      "sha256": "207b62b5f9e6bc06256e9cb489158cbd769cbb199cbaff308669afb855bec653"
+    },
+    {
+      "origin": "github",
+      "path": "src/detector/typescriptImportEqualsDeclaration.js",
+      "sha256": "e09ef73f3e806b69728ef702ab14056bf57130bb32c08073da19db4516ccd1ad"
+    },
+    {
+      "origin": "github",
+      "path": "src/detector/typescriptImportType.js",
+      "sha256": "e40ffeb6111e00aee6cbbd8d58a0055864d0999032198b290b0eb4d5087ce6f2"
+    },
+    {
+      "origin": "github",
+      "path": "src/index.js",
+      "sha256": "c14fae9d30eb6a10ad962c3131480a6c5bc055914e592dad0c937654cdb13546"
+    },
+    {
+      "origin": "github",
+      "path": "src/parser/coffee.js",
+      "sha256": "01501f1908a659e688f5c5991a55f4bf000a7cdb83fede65ded20088c4e4f8eb"
+    },
+    {
+      "origin": "github",
+      "path": "src/parser/es6.js",
+      "sha256": "e4f0fc4f6f37162a08cde8303b6591ccaa2e7fbcbbee0474cabacec81a100bd4"
+    },
+    {
+      "origin": "github",
+      "path": "src/parser/es7.js",
+      "sha256": "88b50351e2c62465ea3828da862958d4c492a69404cd4a401a49b9ef34043ced"
+    },
+    {
+      "origin": "github",
+      "path": "src/parser/graphql.js",
+      "sha256": "da64e22a23a481d53b4959dabe0b9334f5e0f4666b4e9b7b661442b5cbd767c1"
+    },
+    {
+      "origin": "github",
+      "path": "src/parser/jsx.js",
+      "sha256": "69e25b153493a590aeeae239d39ec03f2b96567cb98c15dec9942969e4cab830"
+    },
+    {
+      "origin": "github",
+      "path": "src/parser/sass.js",
+      "sha256": "bb13b6331ff5fcea28b9ce06d51ce3571875e6de7c9f41b8909074a269515c96"
+    },
+    {
+      "origin": "github",
+      "path": "src/parser/storybook.js",
+      "sha256": "91594988a9238e0c4a11d6ea53fa942c96b64ad14cc7c37289233e63f846cd61"
+    },
+    {
+      "origin": "github",
+      "path": "src/parser/svelte.js",
+      "sha256": "91e2eccffb01a0406ec78728d678fddacf0238ab7c745b5a93f3d7ca8fe63418"
+    },
+    {
+      "origin": "github",
+      "path": "src/parser/tsconfig.js",
+      "sha256": "3316b155a065075d360e4981e3a81fd7cd60d9d394b4e106101963caa4ac4602"
+    },
+    {
+      "origin": "github",
+      "path": "src/parser/typescript.js",
+      "sha256": "fc08ad836cbf3e111b15f23e46faad964497c620f5673dd0414a88c0da70eb08"
+    },
+    {
+      "origin": "github",
+      "path": "src/parser/vue.js",
+      "sha256": "425d00348dae74aed9b106b38cb731a645912896632cd51bc4ef525f5ec7fc88"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/babel.js",
+      "sha256": "8448d477f443f15c4bb07faaf9195eeb951de89e49866c1d0685102bcee8ba56"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/bin.js",
+      "sha256": "892320cc5c8adae374b6124f432b1710b23beaf8b002bbb37aba89706f4b2746"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/commitizen.js",
+      "sha256": "b62d4fa3de08a048424e1e3f1e5c661874806af5c0c3be78a2bbc625293f2fa0"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/eslint.js",
+      "sha256": "0f0d63d9c21d9049ca99632fbe2eeb0203c9eafc2a060fbef5a8ae5f6e60d466"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/feross-standard.js",
+      "sha256": "d1544b921a84c57577ac113d18c36b9c6ab29f548c4ac5e1e1a09dcb7a48f4f7"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/gatsby.js",
+      "sha256": "e235660f4cae313565a94efd846ad06cfbc2aaa2c95d32e24d4b7cf438dad71b"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/gulp-load-plugins.js",
+      "sha256": "467f5ac2c792870fa2d1295d2c8fa77093e8ed03369f4052197d0ddefacb42a2"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/husky.js",
+      "sha256": "6f6535246ed42d6f4ee6abe3a525241a52fd7c229618e4ea1cdb2dcafb7f9eb8"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/istanbul.js",
+      "sha256": "7c56f30a59485aae1876d060462a1fa4dfba2becacd1ff8ddd57eeadfd9b87b4"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/jest.js",
+      "sha256": "e8a2fae0f5abf5b313972900eddc33d3775d3677b13adc0afe0ea26b0b9ffa95"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/karma.js",
+      "sha256": "1f37e52e39563c95db94cbe0c4738bc3e8630d74b5d998c999e5edfa4b168e21"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/lint-staged.js",
+      "sha256": "bce4fe7fe28a583a1a964d0291dd3fe585c922cbf8508b9e7cea72b2e8107b96"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/mocha.js",
+      "sha256": "5802c9877d0f07878d42363837b7df2b7b1b1bab53d91899d0c809b932f8805b"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/prettier.js",
+      "sha256": "19374b929b91797470cc297a09bb3a0b265524ae25315a898bf0e64987022280"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/react17.js",
+      "sha256": "e324ba5a46ea6bc5fbd42ecd8c4ff24d64a402a7769a16ae2ea8143601eee194"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/serverless.js",
+      "sha256": "5e0f6bd98a573fb0602699f5c29bb5bdce768988efc10946359e8c844aaeee3e"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/tslint.js",
+      "sha256": "80da1f6d0ee46a3ce48c9edbb361da1617f343701e6f24781a5f4f5d312d8b2e"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/ttypescript.js",
+      "sha256": "737d95d1d9d133531abfcbf277d9e3ea22a272a152f1faa23598b98da2c403e7"
+    },
+    {
+      "origin": "github",
+      "path": "src/special/webpack.js",
+      "sha256": "9b9c785e5035d80f89b34f2105f4f92770e9b8bea0a988d6bc8cabfd47d07378"
+    },
+    {
+      "origin": "github",
+      "path": "src/utils/cli-tools.js",
+      "sha256": "8379989349214b8b2f2ee98d1c2b713f25c9de73c32cc3525c2b01c14beca046"
+    },
+    {
+      "origin": "github",
+      "path": "src/utils/configuration-reader.js",
+      "sha256": "c909c5623baf93113372045680d4bd4867f602bade294c3491a3eb84d98d73f4"
+    },
+    {
+      "origin": "github",
+      "path": "src/utils/exceptions/configuration-parsing-exception.js",
+      "sha256": "45528d3b4bd128b9f2d9804b8df92fc3ba5d73a2960c154e9b5323af236bc80f"
+    },
+    {
+      "origin": "github",
+      "path": "src/utils/file.js",
+      "sha256": "5009b068f0145e75ab80791909f283d3922916c67ff34a6bbc55b94bec6df200"
+    },
+    {
+      "origin": "github",
+      "path": "src/utils/get-scripts.js",
+      "sha256": "ec69bf0f4be490f2fecdbfcd95e2219c220f729e8ea95b487cdbc419e4e69630"
+    },
+    {
+      "origin": "github",
+      "path": "src/utils/index.js",
+      "sha256": "caaf1a22f545973a8e3c3623ea1f0cdbfc70fe22804914f41223a61dc4003bb5"
+    },
+    {
+      "origin": "github",
+      "path": "src/utils/module-root.js",
+      "sha256": "8d35586e5594c0d69ab91820fbd771901578f7d1e065dc4fd0c3d5770ecc1f76"
+    },
+    {
+      "origin": "github",
+      "path": "src/utils/parser.js",
+      "sha256": "8be8c09a463025cc85d4b87cb8a7574c90a34758eaaf7c89f1d25cf287d6210f"
+    },
+    {
+      "origin": "github",
+      "path": "src/utils/typescript.js",
+      "sha256": "1e6eebe99acf158a2abcb372da510a3842d486ddf4c2ba7de2811f35f3aeff9f"
+    },
+    {
+      "origin": "github",
+      "path": "src/utils/webpack.js",
+      "sha256": "41f6146314d5fc94ba5ecfa7825873607f485464bfb0f5d1ac78441ce93d6e42"
+    }
+  ]
+}

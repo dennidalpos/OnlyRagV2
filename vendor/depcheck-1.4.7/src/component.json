@@ -1,0 +1,27 @@
+{
+  "notice": "This file is for debugging and testing only, the production one is built from `build/component.js` script.",
+  "parser": [
+    "coffee",
+    "es6",
+    "es7",
+    "graphql",
+    "jsx",
+    "sass",
+    "storybook",
+    "tsconfig",
+    "typescript",
+    "vue",
+    "svelte"
+  ],
+  "detector": [
+    "exportDeclaration",
+    "expressViewEngine",
+    "gruntLoadTaskCallExpression",
+    "importCallExpression",
+    "importDeclaration",
+    "requireCallExpression",
+    "requireResolveCallExpression",
+    "typescriptImportEqualsDeclaration"
+  ],
+  "special": ["eslint", "mocha"]
+}

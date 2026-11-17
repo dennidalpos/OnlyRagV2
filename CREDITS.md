@@ -21,6 +21,7 @@ Links in this source document use the repository layout, also intended for the c
 | Component | Version / identity | License / attribution | Status and obligation |
 | --- | --- | --- | --- |
 | Local braces fork | 3.0.4+onlyrag.1, based on upstream 3.0.3 | MIT; Copyright (c) 2014-present, Jon Schlinkert | Preserve [original terms](vendor/braces-3.0.4/LICENSE) and local modification provenance. |
+| Local depcheck fork | 1.4.7+onlyrag.1, based on upstream 1.4.7 | MIT, Copyright 2015 Djordje Lukic, Junle Li | Preserve the [original license](vendor/depcheck-1.4.7/LICENSE) and [upstream provenance](vendor/depcheck-1.4.7/UPSTREAM.json) for the named minimatch import change. |
 | PyMuPDF / MuPDF | PyMuPDF 1.28.2 | AGPL-3.0 or separate Artifex commercial terms | No commercial grant is asserted. Preserve full AGPL/notices and assess corresponding source under the existing distribution policy. Exact native correspondence remains open. |
 | wordfreq code | 3.1.1 | Apache-2.0; Copyright 2022 Robyn Speer | Preserve the code notice and Apache terms. |
 | wordfreq frequency data | 3.1.1 | CC-BY-SA-4.0 | Preserve [exact-release dataset attribution](docs/licenses/agpl-route-2026-10-10/wordfreq-3.1.1-data-attribution.txt), [terms](docs/licenses/agpl-route-2026-10-10/CC-BY-SA-4.0.txt) and applicable change/share-alike notices. Code and data have separate terms. |

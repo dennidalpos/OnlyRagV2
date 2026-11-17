@@ -29,6 +29,20 @@ it('resolves the security fork through the real depcheck dependency chain', () =
   expect(fs.readFileSync(matchRequire.resolve('braces'), 'utf8')).toBe(fs.readFileSync(path.join(root, 'vendor/braces-3.0.4/index.js'), 'utf8'))
 })
 
+it('resolves the same vendored depcheck runtime from the scanner and skott', () => {
+  const skottRequire = createRequire(require.resolve('skott'))
+  expect(skottRequire.resolve('depcheck')).toBe(require.resolve('depcheck'))
+  expect(depcheckRequire('../package.json').version).toBe('1.4.7+onlyrag.1')
+  expect(typeof require('depcheck')).toBe('function')
+  expect(typeof depcheckRequire('minimatch').minimatch).toBe('function')
+
+  const fork = path.join(root, 'vendor/depcheck-1.4.7')
+  const installed = path.dirname(depcheckRequire.resolve('../package.json'))
+  for (const file of ['dist/check.js', 'LICENSE']) {
+    expect(fs.readFileSync(path.join(installed, file))).toEqual(fs.readFileSync(path.join(fork, file)))
+  }
+})
+
 it('retains upstream bytes for the unchanged entry point, utilities, constants and license', () => {
   const provenance = JSON.parse(fs.readFileSync(path.join(root, 'vendor/braces-3.0.4/UPSTREAM.json'), 'utf8')) as {
     originalFiles: { path: string; sha256: string }[]

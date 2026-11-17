@@ -10,6 +10,8 @@ pnpm-debug.log*
 # Node / Frontend Build Outputs
 node_modules/
 dist/
+# This directory contains the depcheck fork runtime shipped from the npm distribution.
+!/vendor/depcheck-1.4.7/dist/
 dist-electron/
 out/
 release/

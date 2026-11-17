@@ -3,3 +3,6 @@
 
 # Preserve original third-party notice bytes and whitespace: inventory SHA-256 values bind these exact files.
 docs/licenses/current/texts/*.txt -text -whitespace
+
+# Preserve the generated declaration bytes from the depcheck npm tarball.
+vendor/depcheck-1.4.7/dist/index.d.ts -text -whitespace

@@ -77,7 +77,7 @@ try {
     if ($cpuOnnxRuntime -eq 'True') {
         & $venvPython -m pip uninstall --yes onnxruntime
         if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Rimozione del runtime ONNX CPU fallita.' }
-        & $venvPython -m pip install --upgrade --force-reinstall --constraint (Join-Path $rootDir 'sidecar/constraints.txt') 'onnxruntime-gpu[cuda,cudnn]==1.29.0'
+        & $venvPython -m pip install --upgrade --force-reinstall --constraint (Join-Path $rootDir 'sidecar/constraints.txt') 'onnxruntime-gpu[cuda,cudnn]'
         if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Installazione del runtime ONNX GPU fallita.' }
     }
     # Environments set up before 2026-09-26 also carry opencv-python-headless. Both builds install

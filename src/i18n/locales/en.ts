@@ -8,6 +8,8 @@ export const en: TranslationSchema = {
     retry: 'Retry',
     modelRequired: 'No model is configured for this module. Choose one from the selector; if none are installed, open Settings.',
     chooseModel: 'Choose model',
+    modelMissing: 'Ollama does not list {model} as installed.',
+    manageOllamaModels: 'Manage Ollama models',
     copyFailed: 'Copy failed. Retry using the Copy button.',
     greeting: 'Hello! I am your local RAG assistant. Mention `@document_name` or select documents in the Context panel to chat with them.',
     documentOne: '{count} PDF/DOCX document',
@@ -694,6 +696,7 @@ export const en: TranslationSchema = {
     executionLimitsSection: 'Agent Execution Limits',
     ollamaManagement: 'Ollama Model Management',
     downloadModel: 'Download Model',
+    modelInventoryUnavailable: 'The installed model list is unavailable. Check the Ollama connection and refresh the list.',
 
     ollamaLibrary: 'Ollama library',
     modelNamePlaceholder: 'model-name',
@@ -1650,7 +1653,7 @@ export const en: TranslationSchema = {
     done: 'Ingestion and indexing completed successfully!',
   },
   help: {
-    settings_ollamaLibraryHint: 'To choose other models, browse the Ollama library and run ollama pull <model>.',
+    settings_ollamaLibraryHint: 'Paste a model name from the Ollama library or a Hugging Face reference such as hf.co/owner/repository:quantization.',
     modelBadges_compatibleTooltip: 'Ollama reports native tool calling. Capabilities are reported by the runtime.',
     modelBadges_unsupportedTooltip: 'The native Agent Coding path cannot use this model because tool calling is absent or the model is an encoder.',
     modelBadges_unknownTooltip: 'Ollama has not reported this model’s capabilities yet.',

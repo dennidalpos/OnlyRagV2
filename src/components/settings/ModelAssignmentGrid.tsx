@@ -6,7 +6,7 @@ import { useTranslation } from '../../i18n'
 import { resolveModelRuntimeStatus } from '../../../shared/domain/agent/codingModelQualification'
 import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
 import { extractHardwareFacts } from '../../services/hardwareRecommendationEngine'
-import { findInstalledOllamaOption } from '../../services/ollamaModelOptions'
+import { buildOllamaModelOptions, findInstalledOllamaOption } from '../../services/ollamaModelOptions'
 import { resolveMaxContextTokens, resolveAgentContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
 import { ModelBadgeStrip } from './ModelBadgeStrip'
 import { ModelContextControl } from './ModelContextControl'
@@ -40,7 +40,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({ diagno
     return <ModelBadgeStrip status={status} metrics={metrics[modelName]} className="pt-0.5" />
   }
 
-  const buildModelOptions = () => [...new Set(models)]
+  const buildModelOptions = () => buildOllamaModelOptions(models)
   const unavailable = (name: string) => (name && !installedOption(name) ? name : undefined)
 
   const renderOption = (name: string) => {

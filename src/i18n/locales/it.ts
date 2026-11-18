@@ -8,6 +8,8 @@ export const it = {
     retry: 'Riprova',
     modelRequired: 'Nessun modello configurato per questo modulo. Scegli un modello dal selettore; se non ne sono installati, apri Impostazioni.',
     chooseModel: 'Scegli modello',
+    modelMissing: 'Il modello {model} non risulta installato sul server Ollama.',
+    manageOllamaModels: 'Gestisci modelli Ollama',
     copyFailed: 'Copia non riuscita. Riprova dal pulsante Copia.',
     greeting: 'Ciao! Sono il tuo assistente RAG locale. Menziona `@nome_documento` o seleziona i documenti nel pannello Contesto per interrogarli.',
     documentOne: '{count} documento PDF/DOCX',
@@ -699,6 +701,7 @@ export const it = {
     executionLimitsSection: 'Limiti Esecuzione Agente',
     ollamaManagement: 'Gestione Modelli Ollama',
     downloadModel: 'Scarica Modello',
+    modelInventoryUnavailable: 'L’elenco dei modelli installati non è disponibile. Verifica la connessione a Ollama e aggiorna l’elenco.',
 
     ollamaLibrary: 'Libreria Ollama',
     modelNamePlaceholder: 'nome-modello',
@@ -1435,7 +1438,7 @@ export const it = {
     done: 'Ingestione e indicizzazione completate con successo!',
   },
   help: {
-    settings_ollamaLibraryHint: 'Per scegliere altri modelli, consulta la libreria Ollama e usa ollama pull <modello>.',
+    settings_ollamaLibraryHint: 'Incolla un nome dalla libreria Ollama o un riferimento Hugging Face come hf.co/utente/repository:quantizzazione.',
     modelBadges_compatibleTooltip: 'Ollama dichiara il tool calling nativo. Le capacità sono rilevate dal runtime.',
     modelBadges_unsupportedTooltip: 'Il percorso nativo di Agent Coding non può usare questo modello: mancano i tool oppure il modello è un encoder.',
     modelBadges_unknownTooltip: 'Ollama non ha ancora fornito le capacità di questo modello.',

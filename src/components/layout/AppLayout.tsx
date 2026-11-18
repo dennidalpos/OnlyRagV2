@@ -156,6 +156,12 @@ export const AppLayout: React.FC = () => {
     notifyTabChanged(tab)
   }
 
+  const [ollamaModelManagementRequest, setOllamaModelManagementRequest] = useState(0)
+  const handleManageOllamaModels = () => {
+    handleSelectTab('settings')
+    setOllamaModelManagementRequest((request) => request + 1)
+  }
+
   const toggleLanguage = () => {
     const nextLang: Language = language === 'it' ? 'en' : 'it'
     setLanguage(nextLang)
@@ -519,7 +525,13 @@ export const AppLayout: React.FC = () => {
         >
           {visitedTabs.has('chat') && (
             <Suspense fallback={<ViewChunkFallback />}>
-              <ChatView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} isActive={activeTab === 'chat'} />
+              <ChatView
+                settings={settings}
+                diagnostics={diagnostics}
+                onUpdateSettings={handleUpdateSettings}
+                onManageOllamaModels={handleManageOllamaModels}
+                isActive={activeTab === 'chat'}
+              />
             </Suspense>
           )}
         </div>
@@ -562,6 +574,7 @@ export const AppLayout: React.FC = () => {
                 onRefreshDiagnostics={runDiagnosticsScan}
                 onOpenAboutModal={handleOpenAboutModal}
                 onOpenWizard={handleOpenWizard}
+                ollamaModelManagementRequest={ollamaModelManagementRequest}
                 isActive={activeTab === 'settings'}
               />
             </Suspense>

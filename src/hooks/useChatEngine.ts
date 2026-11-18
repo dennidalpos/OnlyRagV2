@@ -26,6 +26,7 @@ import { errorMessage } from '../../shared/domain/errors/errorMessage'
 import { useChatHistory } from './useChatHistory'
 import { citationForSuppliedPassage, resolveAnswerReferences } from '../services/chatSourceReferences'
 import type { ChatContextCoverage } from '../../shared/domain/chatContextCoverage'
+import { findInstalledOllamaOption } from '../services/ollamaModelOptions'
 
 interface ChatRun {
   id: string
@@ -96,6 +97,11 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const { documents, documentCollection, refetchDocuments: fetchDocuments } = useIngestedDocuments()
 
   const [input, setInput] = useState('')
+  const routingResult = useMemo(() => evaluateDomainIntent(input.trim(), settings), [input, settings])
+  const requestedModel = input.trim() ? routingResult.modelName : selectedModel
+  const missingModel = requestedModel && diagnostics?.ollama.status === 'online' && !findInstalledOllamaOption(diagnostics.ollama.models, requestedModel)
+    ? requestedModel
+    : ''
   const [isGenerating, setIsGenerating] = useState(false)
   const { generationState, trackOperation } = useOllamaGenerationState()
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null)
@@ -336,7 +342,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault()
     }
-    if (!historyReady || !input.trim() || isGeneratingRef.current) return
+    if (!historyReady || !input.trim() || isGeneratingRef.current || missingModel) return
 
     const userText = input.trim()
     const operationId = crypto.randomUUID()
@@ -394,7 +400,6 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
     try {
       // Capture the routed model and its window before any asynchronous work in this turn.
-      const routingResult = evaluateDomainIntent(userText, settings)
       const modelToUse = routingResult.modelName
       let budget = budgetForModel(modelToUse)
       const think = chosenThinkValue(resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics))
@@ -769,6 +774,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     messages,
     setMessages,
     input,
+    missingModel,
     setInput,
     isGenerating,
     generationState,

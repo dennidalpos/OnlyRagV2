@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
+from urllib.error import HTTPError
 import urllib.request
 import zipfile
 
@@ -81,6 +83,8 @@ UPSTREAM_FONTS = {
                                   'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf', None),
 }
 
+ONNX_REVISION = '2e2543fbe9fae542f921d47a72d21d5a4ef0b710'
+ONNX_SOURCE_SHA256 = '00a7483d894037b23e5f2a7d9b18c4026e3585e2636b316cd2870b6e1bc660cb'
 ONNX_SUBMODULES = (
     ('cmake/external/onnx', 'onnx', 'onnx', '2bb50465112feca9003e1ed654d77f01ff1415ca',
      'fc8cd173cd3a942eb30cb04a95b10d91d9d7d86f6d34222cb931021129075d03'),
@@ -147,6 +151,32 @@ def github_source(owner, repository, tag, directory):
     return record
 
 
+def onnx_runtime_source(directory):
+    url = f'https://codeload.github.com/microsoft/onnxruntime/tar.gz/{ONNX_REVISION}'
+    mirror = f'https://codeload.github.com/NVIDIA/onnxruntime/tar.gz/{ONNX_REVISION}'
+    cache = ROOT / 'build/release-cpu/source-cache'
+    target = cache / f'onnxruntime-v1.29.0-{ONNX_REVISION}.tar.gz'
+    if target.exists():
+        if sha256(target) != ONNX_SOURCE_SHA256:
+            raise RuntimeError(f'Changed retained source archive: {target}')
+    else:
+        with tempfile.TemporaryDirectory(dir=cache) as staging:
+            archive = Path(staging) / target.name
+            try:
+                download(url, archive, ONNX_SOURCE_SHA256)
+            except HTTPError as error:
+                if error.code not in (404, 410):
+                    raise
+                print(f'ONNX Runtime upstream returned HTTP {error.code}; trying the NVIDIA fork.', flush=True)
+                download(mirror, archive, ONNX_SOURCE_SHA256)
+            archive.replace(target)
+    shutil.copyfile(target, directory / target.name)
+    return {'path': target.name, 'url': url, 'mirrorUrl': mirror, 'sha256': ONNX_SOURCE_SHA256,
+            'revision': ONNX_REVISION,
+            'scope': 'Official repository archive verified against the retained SHA-256; '
+                     'submodule/vendored completeness and exact native-wheel build correspondence require review.'}
+
+
 def official_mupdf_source(version, directory):
     if version != '1.28.2':
         raise RuntimeError(f'Unreviewed MuPDF source version: {version}')
@@ -168,7 +198,7 @@ def official_mupdf_source(version, directory):
 
 
 def onnx_submodule_sources(parent, directory):
-    if parent['revision'] != '2e2543fbe9fae542f921d47a72d21d5a4ef0b710':
+    if parent['revision'] != ONNX_REVISION:
         raise RuntimeError('ONNX Runtime source revision differs from pinned submodule tree')
     records = []
     cache = ROOT / 'build/release-cpu/source-cache'
@@ -368,7 +398,7 @@ def prepare(release):
         shutil.copyfile(source, licenses / f'Electron-{filename}')
 
     import pymupdf
-    onnx_source = github_source('microsoft', 'onnxruntime', 'v1.29.0', source_dir)
+    onnx_source = onnx_runtime_source(source_dir)
     native_sources = [onnx_source, *onnx_submodule_sources(onnx_source, source_dir),
                       official_mupdf_source(pymupdf.VersionFitz, source_dir),
                       github_source('lancedb', 'lancedb', f"v{environment['packages']['lancedb']}", source_dir)]
@@ -470,8 +500,10 @@ def main():
         print(json.dumps(check_environment()))
         return
     release = args.release_root.resolve() if args.release_root else None
-    if release is None or not release.is_relative_to(ROOT / 'release') or release == ROOT / 'release':
-        parser.error('An explicit child of the repository release directory is required.')
+    runs = ROOT / 'build/release-cpu/runs'
+    if release is None or not (release.parent == ROOT / 'release' or
+                               (release.name == 'candidate' and release.parent.parent == runs)):
+        parser.error('Expected a child of release/ or a CPU build staging directory.')
     if not release.is_dir() or release.is_symlink():
         parser.error('Release root must be an existing plain directory.')
     {'prepare': prepare, 'finalize': finalize}[args.command](release)

@@ -40,11 +40,12 @@ interface ChatViewProps {
   settings: AppSettings
   diagnostics: DiagnosticsData | null
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
+  onManageOllamaModels?: () => void
   isActive?: boolean
 }
 
 export const ChatView: React.FC<ChatViewProps> = React.memo(
-  ({ settings, diagnostics, onUpdateSettings, isActive = true }) => {
+  ({ settings, diagnostics, onUpdateSettings, onManageOllamaModels, isActive = true }) => {
     const { t } = useTranslation()
     const c = useChatEngine(settings, diagnostics)
     const unavailableSelections =
@@ -163,7 +164,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
 
     return (
       <div className="flex-1 min-w-0 min-h-0 h-full flex flex-col bg-slate-950 overflow-y-auto select-text">
-        <ModelRequiredNotice model={activeChatModel} selectorId="model-selector-chat" />
+        <ModelRequiredNotice model={activeChatModel} selectorId="model-selector-chat" missingModel={c.missingModel} onManageModels={onManageOllamaModels} />
         {/* Header */}
         <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex flex-wrap items-center justify-between gap-2 z-10 shrink-0">
           <div className="flex items-center gap-3">
@@ -190,7 +191,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
             {/* Quick Chat Model Selector */}
             <QuickModelSelector
               id="model-selector-chat"
-              currentModel={settings.chatModel || settings.defaultModel || ''}
+              currentModel={activeChatModel}
               installedModels={diagnostics?.ollama?.models || []}
               onSelectModel={(newModel) => {
                 onUpdateSettings?.({
@@ -651,7 +652,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                 )}
                 <form
                   onSubmit={(event) => {
-                    if (!activeChatModel) {
+                    if (!activeChatModel || c.missingModel || isCurrentChatModelUpdating) {
                       event.preventDefault()
                       return
                     }
@@ -855,7 +856,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(
                       ) : (
                         <button
                           type="submit"
-                          disabled={!c.historyReady || !activeChatModel || !c.input.trim() || isCurrentChatModelUpdating}
+                          disabled={!c.historyReady || !activeChatModel || Boolean(c.missingModel) || !c.input.trim() || isCurrentChatModelUpdating}
                           aria-label={t('chat.send')}
                           title={isCurrentChatModelUpdating ? t('settings.modelUpdatingBlocked') : t('chat.send')}
                           className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95"

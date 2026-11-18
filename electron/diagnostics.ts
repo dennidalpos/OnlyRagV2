@@ -1,55 +1,16 @@
 import type { DiagnosticsData, SystemRequirementsCheck, UntrustedJson } from '../shared/types'
-import fs from 'node:fs'
-import path from 'node:path'
 import os from 'node:os'
 import http from 'node:http'
+import https from 'node:https'
 import { exec } from 'node:child_process'
 import { logger } from './core/infrastructure/logging/logger'
-import { DEFAULT_OLLAMA_HOST } from '../shared/domain/ollamaHost'
+import { DEFAULT_OLLAMA_HOST, normalizeOllamaHost } from '../shared/domain/ollamaHost'
 import { errorMessage } from '../shared/domain/errors/errorMessage'
-
-function getLocalManifestModels(): string[] {
-  const possibleRoots: string[] = []
-  if (process.env.OLLAMA_MODELS) {
-    possibleRoots.push(path.join(process.env.OLLAMA_MODELS, 'manifests'))
-    possibleRoots.push(process.env.OLLAMA_MODELS)
-  }
-  possibleRoots.push(path.join(os.homedir(), '.ollama', 'models', 'manifests'))
-
-  const models: string[] = []
-  for (const manifestsRoot of possibleRoots) {
-    if (!fs.existsSync(manifestsRoot)) continue
-    try {
-      const walk = (dir: string) => {
-        const entries = fs.readdirSync(dir, { withFileTypes: true })
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name)
-          if (entry.isDirectory()) {
-            walk(fullPath)
-          } else if (entry.isFile()) {
-            const rel = path.relative(manifestsRoot, fullPath).replace(/\\/g, '/')
-            const parts = rel.split('/')
-            if (parts.length >= 3) {
-              const namespace = parts[1]
-              const model = parts[2]
-              const tag = parts.slice(3).join(':') || 'latest'
-              const modelName = namespace === 'library' ? `${model}:${tag}` : `${namespace}/${model}:${tag}`
-              models.push(modelName)
-            }
-          }
-        }
-      }
-      walk(manifestsRoot)
-    } catch {
-      // Ignore filesystem errors
-    }
-  }
-  return models
-}
 
 function fetchJsonEndpoint(urlStr: string, timeoutMs = 4500): Promise<UntrustedJson> {
   return new Promise((resolve, reject) => {
-    const req = http.get(urlStr, { timeout: timeoutMs }, (res) => {
+    const transport = urlStr.startsWith('https:') ? https : http
+    const req = transport.get(urlStr, { timeout: timeoutMs }, (res) => {
       let data = ''
       res.on('data', (chunk) => {
         data += chunk
@@ -77,21 +38,20 @@ function fetchJsonEndpoint(urlStr: string, timeoutMs = 4500): Promise<UntrustedJ
 let lastOllamaSignature: string | null = null
 
 export async function checkOllamaStatus(hostUrl = DEFAULT_OLLAMA_HOST): Promise<DiagnosticsData['ollama']> {
-  const effectiveHost = hostUrl.replace('localhost', '127.0.0.1')
-  const isLocal = effectiveHost.includes('127.0.0.1') || effectiveHost.includes('0.0.0.0') || effectiveHost.includes('localhost')
-
-  const [tagsRes, v1Res] = await Promise.allSettled([
-    fetchJsonEndpoint(`${effectiveHost}/api/tags`, 4500),
-    fetchJsonEndpoint(`${effectiveHost}/v1/models`, 4500),
-  ])
-
-  const isOnline = tagsRes.status === 'fulfilled' || v1Res.status === 'fulfilled'
-  if (!isOnline) {
-    const err = tagsRes.status === 'rejected' ? tagsRes.reason?.message : v1Res.status === 'rejected' ? v1Res.reason?.message : 'Ollama unreachable'
+  const url = normalizeOllamaHost(hostUrl)
+  let tags: UntrustedJson[]
+  try {
+    const endpoint = new URL(`${url}/api/tags`)
+    if (endpoint.hostname === 'localhost') endpoint.hostname = '127.0.0.1'
+    const response = await fetchJsonEndpoint(endpoint.href)
+    if (!Array.isArray(response?.models)) throw new Error('Ollama did not return a model list')
+    tags = response.models
+  } catch (error) {
+    const err = errorMessage(error)
     logger.log('WARN', 'Ollama', `Ollama offline or unreachable at ${hostUrl}: ${err}`)
     return {
       status: 'offline',
-      url: hostUrl,
+      url,
       modelsCount: 0,
       models: [],
       error: err,
@@ -104,32 +64,14 @@ export async function checkOllamaStatus(hostUrl = DEFAULT_OLLAMA_HOST): Promise<
     { parent_model?: string; format?: string; family?: string; families?: string[]; parameter_size?: string; quantization_level?: string }
   > = {}
 
-  // 1.
-  if (tagsRes.status === 'fulfilled' && tagsRes.value?.models && Array.isArray(tagsRes.value.models)) {
-    for (const m of tagsRes.value.models) {
-      const name = m.name || m.model
-      if (name && typeof name === 'string') {
-        const trimmed = name.trim()
-        modelSet.add(trimmed)
-        if (m.details && typeof m.details === 'object') {
-          modelDetails[trimmed] = m.details
-        }
-      }
-    }
-  }
-
-  // 2. Ingest models from /v1/models (OpenAI-compatible Ollama endpoint)
-  if (v1Res.status === 'fulfilled' && v1Res.value?.data && Array.isArray(v1Res.value.data)) {
-    for (const item of v1Res.value.data) {
-      if (item.id && typeof item.id === 'string') modelSet.add(item.id.trim())
-    }
-  }
-
-  // 3. If running locally, discover installed models from disk manifests
-  if (isLocal) {
-    const localModels = getLocalManifestModels()
-    for (const m of localModels) {
-      modelSet.add(m)
+  // Only the native server inventory provides valid names for Ollama generation.
+  for (const model of tags) {
+    const name = model?.name || model?.model
+    if (typeof name !== 'string' || !name.trim()) continue
+    const trimmed = name.trim()
+    modelSet.add(trimmed)
+    if (model.details && typeof model.details === 'object') {
+      modelDetails[trimmed] = model.details
     }
   }
 
@@ -140,7 +82,7 @@ export async function checkOllamaStatus(hostUrl = DEFAULT_OLLAMA_HOST): Promise<
   }
   return {
     status: 'online',
-    url: hostUrl,
+    url,
     modelsCount: models.length,
     models,
     modelDetails: Object.keys(modelDetails).length > 0 ? modelDetails : undefined,

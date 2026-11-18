@@ -2,11 +2,13 @@ import { createFixtureDirectory, retainFixture } from '../scripts/test/fixtureRu
 import { describe, it, expect, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
+import { createServer } from 'node:http'
 
 import { logger } from './core/infrastructure/logging/logger'
 import { CodingAgentLogger } from './core/infrastructure/logging/codingAgentLogger'
 import { userDataRoot } from './core/infrastructure/filesystem/userDataRoot'
 import { redactSecrets, sanitizeLogMessage } from './logRedactor'
+import { checkOllamaStatus } from './diagnostics'
 
 describe('SystemDiagnosticsLogger Tests', () => {
   it('keeps default operational and audit logs in the owned user-data profile', () => {
@@ -87,4 +89,33 @@ describe('SystemDiagnosticsLogger Tests', () => {
     expect(fs.readFileSync(logger.getLogFilePath(), 'utf-8')).toContain('Detached console pipe')
     consoleSpy.mockRestore()
   })
+})
+
+it('lists only native Ollama tags and reports when that inventory is unavailable', async () => {
+  const paths: string[] = []
+  const model = 'hf.co/owner/repo:q4_k_m'
+  let tagsAvailable = true
+  const server = createServer((request, response) => {
+    paths.push(request.url ?? '')
+    if (request.url === '/api/tags') {
+      response.writeHead(tagsAvailable ? 200 : 404, { 'Content-Type': 'application/json' })
+      response.end(JSON.stringify({ models: [{ name: model, details: { format: 'gguf' } }, { model }] }))
+      return
+    }
+    response.end(JSON.stringify({ data: [{ id: 'owner/repo:q4_k_m' }, { id: 'llamacpp:hash' }] }))
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('Expected a TCP listener')
+    const host = `http://127.0.0.1:${address.port}`
+    expect(await checkOllamaStatus(host)).toMatchObject({
+      status: 'online', models: [model], modelsCount: 1, modelDetails: { [model]: { format: 'gguf' } },
+    })
+    tagsAvailable = false
+    expect(await checkOllamaStatus(host)).toMatchObject({ status: 'offline', models: [], modelsCount: 0 })
+    expect(paths).toEqual(['/api/tags', '/api/tags'])
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+  }
 })

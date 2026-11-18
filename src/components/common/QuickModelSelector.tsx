@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { ChevronDown, Check, Sparkles, Loader2 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
-import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
+import { buildOllamaModelOptions, findInstalledOllamaOption } from '../../services/ollamaModelOptions'
 
 export interface QuickModelSelectorProps {
   id?: string
@@ -37,7 +37,8 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null)
   const downloadProgress = useModelDownloadProgress()
 
-  const isInstalled = isOllamaModelInstalled(currentModel, installedModels)
+  const selectedOption = findInstalledOllamaOption(installedModels, currentModel)
+  const isInstalled = selectedOption !== null
   const isCurrentModelUpdating = downloadProgress.isDownloading && downloadProgress.modelName === currentModel
 
   // Close on outside click or Escape key
@@ -62,7 +63,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
     }
   }, [isOpen])
 
-  const allCandidateModels = [...new Set(installedModels)]
+  const allCandidateModels = buildOllamaModelOptions(installedModels)
 
   return (
     <div className={`relative inline-block text-left ${className}`} ref={dropdownRef}>
@@ -111,7 +112,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
           <div className="px-3 py-1.5 text-[11px] font-sans text-slate-400 flex items-center justify-between">
             <span className="font-bold text-slate-200">{featureLabel}</span>
             <span className="text-[10px] text-slate-500 font-mono">
-              {installedModels.length} {t('common.ready').toLowerCase()}
+              {allCandidateModels.length} {t('common.ready').toLowerCase()}
             </span>
           </div>
 
@@ -125,7 +126,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
           <div className="max-h-60 overflow-y-auto py-1 space-y-0.5 custom-scrollbar">
             {allCandidateModels.length === 0 && <p className="px-3 py-2 text-xs text-slate-400">{t('uiShell.noOllamaModels')}</p>}
             {allCandidateModels.map((modelName) => {
-              const isSelected = modelName === currentModel
+              const isSelected = modelName === selectedOption
               const isOptionUpdating = downloadProgress.isDownloading && downloadProgress.modelName === modelName
 
               return (

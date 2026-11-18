@@ -1,7 +1,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppSettings, IngestedDocument, IngestedDocumentContent, VectorSearchResult } from '../types'
+import type { AppSettings, DiagnosticsData, IngestedDocument, IngestedDocumentContent, VectorSearchResult } from '../types'
 import { I18nProvider } from '../i18n'
 import { DEFAULT_APP_SETTINGS } from '../../shared/domain/settings/appSettingsDefaults'
 import { primeDocumentMarkdown, clearDocumentMarkdownCache } from '../services/documentMarkdown'
@@ -34,6 +34,7 @@ describe('chat document grounding', () => {
   let root: Root
   let chat: ReturnType<typeof useChatEngine>
   let settingsOverride: Partial<AppSettings> = {}
+  let diagnostics: DiagnosticsData | null = null
   let recovery: import('../../shared/domain/chatHistory').ChatHistoryRecovery
   const getIngestedDocuments = vi.fn(async () => documentStore.documents as IngestedDocument[] | null)
   const getIngestedDocument = vi.fn(
@@ -50,7 +51,7 @@ describe('chat document grounding', () => {
   const cancelOllamaStream = vi.fn(async () => ({ success: true }))
 
   function Harness() {
-    chat = useChatEngine({ ...DEFAULT_APP_SETTINGS, defaultModel: 'fixture-model', ...settingsOverride }, null)
+    chat = useChatEngine({ ...DEFAULT_APP_SETTINGS, defaultModel: 'fixture-model', ...settingsOverride }, diagnostics)
     return (
       <div>
         {chat.messages.map((message) => (
@@ -81,6 +82,7 @@ describe('chat document grounding', () => {
     vi.useFakeTimers()
     vi.resetAllMocks()
     settingsOverride = {}
+    diagnostics = null
     metricStore.metrics = {}
     recovery = { revision: 'missing', state: null }
     documentStore.documents = [docA, docB]
@@ -112,6 +114,28 @@ describe('chat document grounding', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
     localStorage.clear()
+  })
+
+  it('keeps the draft when the routed model is not installed under its configured name', async () => {
+    diagnostics = {
+      ollama: { status: 'online', models: ['fixture-model:latest', 'hf.co/owner/repo:q4_k_m'] },
+      gpu: { hasNvidiaGpu: false },
+      memory: { totalRAMGB: 8 },
+      system: { cpusCount: 4 },
+    } as DiagnosticsData
+    settingsOverride = { medicalModel: 'owner/repo:q4_k_m' }
+    const query = 'Antibiotic therapy for pneumonia'
+    await act(async () => chat.setInput(query))
+    expect(chat.missingModel).toBe('owner/repo:q4_k_m')
+    await act(async () => chat.handleSendMessage())
+    expect(generateOllamaStream).not.toHaveBeenCalled()
+    expect(chat.input).toBe(query)
+
+    settingsOverride = { medicalModel: 'hf.co/owner/repo:q4_k_m' }
+    await act(async () => root.render(<I18nProvider initialLanguage="en"><Harness /></I18nProvider>))
+    expect(chat.missingModel).toBe('')
+    await act(async () => chat.handleSendMessage())
+    expect(generateOllamaStream.mock.calls[0][0]).toMatchObject({ model: 'hf.co/owner/repo:q4_k_m' })
   })
 
   it('stops generation after retrieval failure even when all document text loads', async () => {

@@ -4,6 +4,7 @@ import { electronApi } from '../services/electronApi'
 import { logger } from '../lib/logger'
 import { DOCUMENTS_CHANGED_EVENT, notifyDocumentsChanged } from './useIngestedDocuments'
 import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import { normalizeOllamaHost } from '../../shared/domain/ollamaHost'
 
 export const DIAGNOSTICS_STARTUP_RETRY_MS = 1000
 
@@ -12,19 +13,21 @@ export function getDiagnosticsPollDelay(sidecarStatus: DiagnosticsData['sidecar'
 }
 
 export function useDiagnostics(settings: AppSettings, settingsReady: boolean, intervalMs: number = 10000) {
-  const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null)
+  const [snapshot, setSnapshot] = useState<{ host: string; data: DiagnosticsData } | null>(null)
   const [isScanning, setIsScanning] = useState<boolean>(false)
   const prevSidecarStatusRef = useRef<string | null>(null)
   const prevDocsCountRef = useRef<number | null>(null)
+  const scanId = useRef(0)
   // Set while this hook dispatches documents-changed itself, so its own listener does not rescan for it.
   const notifyingRef = useRef(false)
 
   const runDiagnosticsScan = useCallback(async () => {
+    const id = ++scanId.current
     setIsScanning(true)
     try {
       const data = await electronApi().runDiagnostics({ host: settings.ollamaHost })
-      if (data) {
-        setDiagnostics(data)
+      if (data && id === scanId.current) {
+        setSnapshot({ host: normalizeOllamaHost(settings.ollamaHost), data })
 
         // Notify document list observers when sidecar comes online or document count changes
         const currentStatus = data.sidecar?.status || 'offline'
@@ -50,7 +53,7 @@ export function useDiagnostics(settings: AppSettings, settingsReady: boolean, in
       logger.error('useDiagnostics', `Scan failed: ${errorMessage(err)}`)
       return null
     } finally {
-      setIsScanning(false)
+      if (id === scanId.current) setIsScanning(false)
     }
   }, [settings.ollamaHost])
 
@@ -82,5 +85,6 @@ export function useDiagnostics(settings: AppSettings, settingsReady: boolean, in
     return () => window.removeEventListener(DOCUMENTS_CHANGED_EVENT, onDocumentsChanged)
   }, [runDiagnosticsScan, settingsReady])
 
+  const diagnostics = snapshot?.host === normalizeOllamaHost(settings.ollamaHost) ? snapshot.data : null
   return { diagnostics, isScanning, refreshDiagnostics: runDiagnosticsScan }
 }

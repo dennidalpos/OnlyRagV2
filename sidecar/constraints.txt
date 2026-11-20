@@ -1,7 +1,7 @@
 # Reproducible direct-dependency baseline for Python 3.13.15 (validated 2026-10-02).
 # Update intentionally after validating the sidecar suite and PyInstaller build.
 chevron==0.14.0
-fastapi==0.141.1
+fastapi==0.163.1
 ftfy==6.3.1
 httpx==0.28.1
 lancedb==0.41.0

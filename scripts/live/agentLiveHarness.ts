@@ -1,0 +1,261 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import type { AgentCompletionStatus, AppSettings, InterviewQuestion, UserInterviewAnswer } from '../../src/types'
+import type { PlanMilestone } from '../../shared/domain/agent/planAndSolveGraph'
+import { shouldRunPlanInterview } from '../../shared/domain/agent/planInterviewPolicy'
+import type { SavedAgentSessionState } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
+import { planGenerationAppService } from '../../electron/core/application/planGenerationAppService'
+import { agentInterviewAppService } from '../../electron/core/application/agentInterviewAppService'
+import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
+import { workspaceMetadataStatePath } from '../../electron/core/infrastructure/filesystem/workspaceMetadataDirectory'
+import { codingAgentLogger } from '../../electron/core/infrastructure/logging/codingAgentLogger'
+
+/** One dedicated folder for every live workspace and snapshot, so runs never scatter directories on the Desktop. */
+export const LIVE_RUN_ROOT = process.env.ONLYRAG_LIVE_ROOT || path.join(os.homedir(), 'OnlyRag-Live')
+export const LIVE_CODING_MODEL = '' // Historical callers are disabled by retiredCampaign.
+const LIVE_RUN_SNAPSHOT_ROOT = path.join(LIVE_RUN_ROOT, 'snapshots')
+/** Audit entries with paths, URLs and error details kept (credentials still removed); local live runs only. */
+export const UNREDACTED_AUDIT_SNAPSHOT_NAME = 'coding_agent_audit.unredacted.log'
+
+/** The workspace a live scenario owns inside {@link LIVE_RUN_ROOT}. */
+export function liveWorkspacePath(name: string): string {
+  return path.join(LIVE_RUN_ROOT, name)
+}
+
+/**
+ * Copies both audit-log generations before a later run or workspace cleanup can remove them, and
+ * moves the unredacted mirror into the snapshot so the next run starts a fresh one.
+ */
+export function snapshotLiveAuditLogs(args: {
+  sessionId: string
+  label: string
+  sourceLogPath?: string
+  destinationRoot?: string
+  unredactedLogPath?: string | null
+}): string {
+  const sourceLogPath = args.sourceLogPath || codingAgentLogger.getLogFilePath()
+  const unredactedLogPath = args.unredactedLogPath === undefined ? codingAgentLogger.getUnredactedMirrorPath() : args.unredactedLogPath
+  const sourceDir = path.dirname(sourceLogPath)
+  const sourceFiles = [sourceLogPath, path.join(sourceDir, 'coding_agent_audit.1.log')].filter((filePath) => fs.existsSync(filePath))
+  if (sourceFiles.length === 0) {
+    throw new Error(`No coding agent audit log found for live run ${args.sessionId} at ${sourceDir}`)
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const safeLabel = args.label.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'run'
+  const runDir = path.join(args.destinationRoot || LIVE_RUN_SNAPSHOT_ROOT, `${timestamp}_${args.sessionId}_${safeLabel}`)
+  fs.mkdirSync(runDir, { recursive: true })
+  for (const sourceFile of sourceFiles) fs.copyFileSync(sourceFile, path.join(runDir, path.basename(sourceFile)))
+  if (unredactedLogPath && fs.existsSync(unredactedLogPath)) {
+    fs.copyFileSync(unredactedLogPath, path.join(runDir, UNREDACTED_AUDIT_SNAPSHOT_NAME))
+    fs.writeFileSync(unredactedLogPath, '', 'utf-8')
+  }
+  fs.writeFileSync(
+    path.join(runDir, 'manifest.json'),
+    JSON.stringify({ sessionId: args.sessionId, label: args.label, capturedAt: new Date().toISOString() }, null, 2),
+    'utf-8',
+  )
+  return runDir
+}
+
+/** Load the packaged app settings while selecting the live model only for this process. */
+export function loadRealSettings(_overrides: Omit<Partial<AppSettings>, 'codingModel'> = {}): AppSettings {
+  throw new Error('Historical model campaigns are retired. Use npm run test:models:smoke with the shared session directory.')
+}
+
+/** Empties a workspace directory without deleting the directory itself (it may be open elsewhere). */
+export function resetWorkspace(workspacePath: string): void {
+  fs.mkdirSync(workspacePath, { recursive: true })
+  for (const entry of fs.readdirSync(workspacePath)) {
+    fs.rmSync(path.join(workspacePath, entry), { recursive: true, force: true })
+  }
+}
+
+/** How the harness answers the clarification interview, since no human is present. */
+export type InterviewPolicy = 'recommended' | 'skip'
+
+export interface SeededPlan {
+  milestones: PlanMilestone[]
+  /** The prompt the planner actually saw: the original, plus any confirmed decisions. */
+  effectivePrompt: string
+  questions: InterviewQuestion[]
+  answers: UserInterviewAnswer[]
+}
+
+/** Reproduces the UI's plan flow END TO END, which is four steps and not two. */
+export async function seedGeneratedPlan(args: {
+  sessionId: string
+  workspacePath: string
+  userTask: string
+  settings: AppSettings
+  /** Defaults to 'recommended': the flow a user actually walks through. */
+  interviewPolicy?: InterviewPolicy
+  confirmedCoverage?: import('../../shared/domain/agent/requestCoverageLedger').RequestCoverageLedger
+}): Promise<SeededPlan> {
+  const policy = args.interviewPolicy || 'recommended'
+  const model = args.settings.codingModel
+
+  let questions: InterviewQuestion[] = []
+  let answers: UserInterviewAnswer[] = []
+  let effectivePrompt = args.userTask
+
+  if (policy !== 'skip' && shouldRunPlanInterview(args.userTask)) {
+    const interview = await agentInterviewAppService.conductInterview(args.userTask, model, args.settings)
+    if (interview.status === 'error') {
+      throw new Error(`Pre-plan interview failed: ${interview.error || 'unknown error'}`)
+    }
+    questions = interview.questions
+    answers = questions.map((q) => ({
+      questionId: q.id,
+      questionText: q.question,
+      selectedOption: q.options[q.recommendedIndex],
+      provenance: 'accepted_recommendation',
+    }))
+    effectivePrompt = agentInterviewAppService.enrichPromptWithAnswers(args.userTask, answers, questions)
+  }
+
+  const plan = await planGenerationAppService.generatePlanText({
+    prompt: effectivePrompt,
+    confirmedCoverage: args.confirmedCoverage,
+    model,
+    settings: args.settings,
+    workspacePath: args.workspacePath,
+  })
+  if (plan.status !== 'success') {
+    if (plan.status === 'scope_confirmation_required') throw new Error('Request scope requires explicit reviewed confirmation before live plan seeding')
+    throw new Error(`Plan generation failed: ${plan.error || 'unknown error'}`)
+  }
+
+  // The ENRICHED prompt is seeded as the session's task, not the original: the orchestrator replays it every turn, and a plan drafted against decisions the agent never sees would have it re-deciding them mid-run.
+  await agentSessionStateRepository.seedPlanMilestones(args.sessionId, args.workspacePath, plan.milestones, effectivePrompt)
+
+  return { milestones: plan.milestones, effectivePrompt, questions, answers }
+}
+
+/** Every file in the workspace with its size, excluding the noise directories. */
+export function listWorkspaceFiles(workspacePath: string): string[] {
+  const out: string[] = []
+  const walk = (dir: string) => {
+    if (!fs.existsSync(dir)) return
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === '.git' || entry.name === 'node_modules') continue
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) walk(full)
+      else out.push(`${path.relative(workspacePath, full).replace(/\\/g, '/')} (${fs.statSync(full).size}b)`)
+    }
+  }
+  walk(workspacePath)
+  return out.sort()
+}
+
+/** The state the orchestrator itself persisted for this run. */
+function readSessionState(workspacePath: string, sessionId: string): Partial<SavedAgentSessionState> {
+  const statePath = workspaceMetadataStatePath(workspacePath, sessionId)
+  if (!fs.existsSync(statePath)) return {}
+  try {
+    return JSON.parse(fs.readFileSync(statePath, 'utf-8')) as Partial<SavedAgentSessionState>
+  } catch {
+    // A half-written file means the run died mid-persist; an empty state reports as 0/0 and
+    // fails any scenario that asserts delivery, which is the honest outcome.
+    return {}
+  }
+}
+
+/** What a run actually delivered: milestone evidence and the application-owned completion status, plus the context needed to read a red run. */
+export interface LiveRunMetrics {
+  stepsUsed: number
+  maxSteps: number
+  /** The 50-step ceiling reached with nothing delivered is the failure shape of 2026-08-25. */
+  hitStepCeiling: boolean
+  milestones: PlanMilestone[]
+  verified: number
+  failed: number
+  pending: number
+  /** 0 when the run has no plan at all, so an empty plan can never read as 100%. */
+  verifiedRatio: number
+  completionStatus?: AgentCompletionStatus
+  /** `run_command` calls, in order, as `[step N] STATUS command`. */
+  commands: string[]
+  toolCalls: number
+  failedToolCalls: number
+  runtimeProfile?: SavedAgentSessionState['ollamaRuntimeProfile']
+  generations: NonNullable<SavedAgentSessionState['ollamaGenerationTelemetry']>
+  /** Every guard that fired, oldest first; the stopping guard, if any, is `terminationGuard`. */
+  guardEvents: NonNullable<SavedAgentSessionState['guardEvents']>
+  terminationReason?: SavedAgentSessionState['terminationReason']
+  terminationGuard?: SavedAgentSessionState['terminationGuard']
+}
+
+/** Reads milestone delivery and the application-owned terminal status plus their context. */
+export function readRunMetrics(args: { workspacePath: string; sessionId: string; success: boolean; summary?: string }): LiveRunMetrics {
+  const state = readSessionState(args.workspacePath, args.sessionId)
+  const milestones = state.planMilestones || []
+  // Capped at 100 entries by EpisodicMemoryCompactor.recordStep; the step ceiling these
+  // scenarios run under is 50, so nothing observed here has been evicted yet.
+  const episodes = state.episodes || []
+  const verified = milestones.filter((m) => m.status === 'verified').length
+  const failed = milestones.filter((m) => m.status === 'failed').length
+  const stepsUsed = state.stepCount || 0
+  const maxSteps = state.maxSteps || 0
+
+  return {
+    stepsUsed,
+    maxSteps,
+    hitStepCeiling: maxSteps > 0 && stepsUsed >= maxSteps,
+    milestones,
+    verified,
+    failed,
+    pending: milestones.length - verified - failed,
+    verifiedRatio: milestones.length > 0 ? verified / milestones.length : 0,
+    completionStatus: state.completionStatus,
+    commands: episodes.filter((e) => e.tool === 'run_command').map((e) => `[step ${e.step}] ${e.status} ${e.target || '(no command recorded)'}`),
+    toolCalls: episodes.length,
+    failedToolCalls: episodes.filter((e) => e.status === 'FAILURE' || e.status === 'BLOCKED').length,
+    runtimeProfile: state.ollamaRuntimeProfile,
+    generations: state.ollamaGenerationTelemetry || [],
+    guardEvents: state.guardEvents || [],
+    terminationReason: state.terminationReason,
+    terminationGuard: state.terminationGuard,
+  }
+}
+
+/** One-line-per-fact dump, so a scenario's console output is diffable between runs. */
+export function reportRun(args: { label: string; workspacePath: string; sessionId: string; success: boolean; summary?: string }): LiveRunMetrics {
+  const metrics = readRunMetrics(args)
+  console.log(`\n===== ${args.label} =====`)
+  console.log(`success: ${args.success}`)
+  console.log(`milestones verified: ${metrics.verified}/${metrics.milestones.length}`)
+  console.log(`summary: ${String(args.summary || '').slice(0, 800)}`)
+  console.log('milestones:')
+  for (const m of metrics.milestones) console.log(`  ${m.id} | ${m.status} | ${(m.notes || '').slice(0, 90)}`)
+  console.log('files:')
+  for (const f of listWorkspaceFiles(args.workspacePath)) console.log(`  ${f}`)
+
+  console.log(`\n----- ${args.label}: run metrics -----`)
+  console.log(`steps: ${metrics.stepsUsed}/${metrics.maxSteps}${metrics.hitStepCeiling ? ' (CEILING REACHED)' : ''}`)
+  console.log(
+    `milestones: ${metrics.verified} verified / ${metrics.failed} failed / ${metrics.pending} pending ` +
+      `of ${metrics.milestones.length} (${Math.round(metrics.verifiedRatio * 100)}%)`,
+  )
+  console.log(
+    `application closure: ${metrics.completionStatus || 'not persisted'} (${metrics.terminationReason || 'no reason'}${metrics.terminationGuard ? `, guard ${metrics.terminationGuard}` : ''})`,
+  )
+  console.log(`guards: ${metrics.guardEvents.map((event) => `${event.guard}:${event.action}@${event.step}`).join(' ') || 'none'}`)
+  console.log(`tool calls: ${metrics.toolCalls} (${metrics.failedToolCalls} failed or blocked)`)
+  console.log(`runtime: ${JSON.stringify(metrics.runtimeProfile || null)}`)
+  console.log(`generations: ${metrics.generations.length}`)
+  console.log(`commands executed: ${metrics.commands.length}`)
+  for (const c of metrics.commands) console.log(`  ${c}`)
+
+  const snapshotDir = snapshotLiveAuditLogs({ sessionId: args.sessionId, label: args.label })
+  fs.writeFileSync(
+    path.join(snapshotDir, 'metrics.json'),
+    JSON.stringify({ label: args.label, capturedAt: new Date().toISOString(), ...metrics }, null, 2),
+    'utf-8',
+  )
+  console.log(`audit snapshot: ${snapshotDir}`)
+
+  console.log('\nThe audit log for this run is logs/coding_agent_audit.log; the guards line above lists every safeguard that fired.')
+  return metrics
+}

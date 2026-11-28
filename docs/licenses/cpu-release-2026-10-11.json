@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-11",
+  "kind": "local-cpu-release-qualification-record",
+  "releaseRoot": "release/cpu-20261010-221255-760103bf",
+  "gitBase": "f4fcefd8cbd07c437fd228e0cff12700172cadcb",
+  "branch": "master",
+  "workingTreeSnapshot": true,
+  "scope": "Actual source CPU OCR; frozen startup/auth/Unicode PDF. No full desktop/RAG or frozen OCR certification.",
+  "installer": {
+    "path": "OnlyRag V2 Setup 1.0.0.exe",
+    "sha256": "2ba7b03e2fc69e9a40f32538ef93af0c36f902fafef553d01f5b91c78aaf62bb",
+    "bytes": 416792773,
+    "authenticodeStatus": "NotSigned"
+  },
+  "source": {
+    "path": "OnlyRag-1.0.0-source.zip",
+    "sha256": "32c6a70fdb7e8f76f8f36221e251bebfbc7ec95da542f7375b52ee33a9c96d59",
+    "bytes": 848539334
+  },
+  "installed": {
+    "files": 3461,
+    "bytes": 1245162970,
+    "gpuLibraryScan": "passed"
+  },
+  "manifests": {
+    "release-manifest.json": "0de93dbdf846da544fc6a5d8767f01b782421e8dcd072318a93c0bb40eca470a",
+    "source-delivery.json": "2153af3657e056b85fc98005dcf15832dc18f32c88c1f0c46220c31b2a96a0a0",
+    "project-source-manifest.json": "4dd07c5f4ae8598942413f97e90d855215094d196630171fbed5764a1858b418",
+    "release-python-lock.txt": "f0d54b26e0f23c01edc1e765ea71ff2f05202dd771ac243d0f882afae0a6b823",
+    "licenses/component-manifest.json": "62d1faec525e7f8f9e4c1e4552cdc7c0fca95d9a7d5a62f85f2fae343ff1625d"
+  },
+  "nativeSourceArchives": [
+    {
+      "path": "onnxruntime-v1.29.0-2e2543fbe9fae542f921d47a72d21d5a4ef0b710.tar.gz",
+      "url": "https://codeload.github.com/microsoft/onnxruntime/tar.gz/2e2543fbe9fae542f921d47a72d21d5a4ef0b710",
+      "sha256": "00a7483d894037b23e5f2a7d9b18c4026e3585e2636b316cd2870b6e1bc660cb",
+      "revision": "2e2543fbe9fae542f921d47a72d21d5a4ef0b710",
+      "scope": "Official repository archive; submodule/vendored completeness and exact native-wheel build correspondence require review."
+    },
+    {
+      "path": "mupdf-1.28.2-fe374accd98a43174a328fa7980d7675e06d5b0d.tar.gz",
+      "url": "https://codeload.github.com/ArtifexSoftware/mupdf/tar.gz/fe374accd98a43174a328fa7980d7675e06d5b0d",
+      "sha256": "132ac1fc0a1f4f6796bc82a972121c67abb522a63b3e61df9073a968ac9573aa",
+      "revision": "fe374accd98a43174a328fa7980d7675e06d5b0d",
+      "scope": "Official repository archive; submodule/vendored completeness and exact native-wheel build correspondence require review."
+    },
+    {
+      "path": "lancedb-v0.37.1-b89f87f206abd79a069833cee01f0c029ddb1397.tar.gz",
+      "url": "https://codeload.github.com/lancedb/lancedb/tar.gz/b89f87f206abd79a069833cee01f0c029ddb1397",
+      "sha256": "f62b34166052059ada2b610a4453abdeb657174e01b27dda83dd34e84593567c",
+      "revision": "b89f87f206abd79a069833cee01f0c029ddb1397",
+      "scope": "Official repository archive; submodule/vendored completeness and exact native-wheel build correspondence require review."
+    }
+  ],
+  "nativeNoticeCount": 18,
+  "runtimeDroidFallbackSha256": "ee38813ea00c3e32add4268fff7fff9e39417b4913cb13be2415164a47807cc2",
+  "qualification": {
+    "path": "release/cpu-20261010-221255-760103bf/qualification-920c97df/result.json",
+    "sha256": "355061e0666f44e65fee49a6f5689cc531a68e288a076eb3ab0985756f43c868",
+    "status": "passed",
+    "sourceProviders": [
+      "AzureExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "sourceOcrOutput": "ONLYRAG CPU 12345",
+    "ocrInputSha256": "a0dd94eab4be9709345f0cb8fa8b82ff9d961e9afefbd55ce4b098a79d38ff94",
+    "frozenOcrHealthProvider": "CPUExecutionProvider",
+    "documentsAtStartup": 0,
+    "unauthenticatedExportStatus": 401,
+    "pdfText": "ONLYRAG CPU 12345\n日本語\n",
+    "pdfSha256": "825319b45423407bd1e8e4697e699c6c43d890c589c3b62b6a46b28dd32fe8f7",
+    "frozenSidecarSha256": "23eb81008fdb321eec211066856ad0a28694d664bf1c9ccd64a2519b95429dcf",
+    "ollamaCalls": 0,
+    "ownedProcessStopped": true
+  },
+  "footprintComparison": {
+    "legacyInstallerBytes": 1561938087,
+    "legacyInstallerSha256": "60edf16f38eb77c34aff94955b2ab372a9b35cff5e4c0b891d186aff82738aa6",
+    "legacyInstalledFiles": 2509,
+    "legacyInstalledBytes": 3031696569,
+    "installerReductionPercent": 73.32,
+    "installedLogicalBytesReductionPercent": 58.93,
+    "scope": "Logical file-byte sums; excludes source archive from installer and installed measurements. Not disk allocation or performance parity."
+  },
+  "preservation": {
+    "legacySidecarSha256": "7961d0ce37ea06886b9975f65af877b605b8c2bdd5fb7848b2813b5d509b1eb1",
+    "legacyAsarSha256": "bde6dcaba8e5361679f04b2e258eead2021eb806e5d63de64379477cb1e115f3",
+    "frozenDevelopmentPairsReadBack": 91
+  },
+  "verification": {
+    "pythonTargetedTests": 63,
+    "vitestTargetedTests": 21,
+    "vitestFiles": 3,
+    "docsChecked": 36,
+    "staticFiles": 813,
+    "secureIpcHandlers": 93,
+    "packagingExitCode": 0
+  },
+  "publicDistributionQualified": false,
+  "residuals": [
+    "flatbuffers 25.12.19: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+    "lancedb 0.37.1: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+    "onnxruntime 1.29.0: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+    "rapidocr 3.9.2: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+    "Bind complete native MuPDF 1.28.2 sources/build settings used by PyMuPDF 1.28.2.",
+    "Verify native/transitive source completeness (including vendored code and native wheel build settings); sdists alone are not certification.",
+    "Review upstream font provenance and complete RapidOCR/model/sample-network attribution; exact binary font copyright/version notices are included.",
+    "Review actual bundled Renderer/Main/native inventory against the installed-build-environment notice superset.",
+    "Public equivalent-access source delivery remains pending; no publication is authorized."
+  ]
+}

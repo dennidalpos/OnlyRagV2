@@ -1,0 +1,228 @@
+import { describe, it, expect } from 'vitest'
+import { matchSkillsForTask, matchHubSkillsForTask, compileSkillsContextBlock } from './skillMatcher'
+import { SkillDefinition, HubSkillItem } from './skillTypes'
+
+describe('SkillMatcher Domain Tests', () => {
+  it('scores preserved case, whitespace and duplicate list values as a single normalized term', () => {
+    const base = {
+      id: 'a',
+      name: 'a',
+      description: '',
+      content: '# Rule',
+      filePath: 'a',
+      isActive: true,
+      isWorkspaceLocal: true,
+      originType: 'local_custom' as const,
+      triggers: ['react'],
+      tags: ['frontend'],
+    }
+    const stronger = { ...base, id: 'b', name: 'b', triggers: ['react', 'hooks'] }
+    const repeated = { ...base, triggers: [' React ', 'react', 'REACT'], tags: ['frontend', 'FRONTEND', ' frontend '] }
+    const context = { userTask: 'react hooks frontend', projectStack: ['react', 'frontend'], activeFilePath: 'react/frontend.ts' }
+    expect(matchSkillsForTask(context, [repeated, stronger]).map((s) => s.id)).toEqual(matchSkillsForTask(context, [base, stronger]).map((s) => s.id))
+    expect(matchSkillsForTask(context, [repeated, stronger])[0].id).toBe('b')
+  })
+
+  const mockSkills: SkillDefinition[] = [
+    {
+      id: 'react19',
+      name: 'react19-guidelines',
+      description: 'Best practices for React 19, Server Actions, useActionState, and hooks.',
+      content: '# React 19 Guidelines\nAlways use useActionState for form handling.',
+      filePath: 'skills/react19/SKILL.md',
+      isActive: true,
+      isWorkspaceLocal: true,
+      triggers: ['react', 'react 19', 'useactionstate', 'hook'],
+      tags: ['react', 'frontend', 'hooks'],
+      originType: 'local_custom',
+    },
+    {
+      id: 'fastapi',
+      name: 'fastapi-python',
+      description: 'FastAPI standards, async endpoints, Pydantic v2 schemas.',
+      content: '# FastAPI Guidelines\nUse dependency injection for db sessions.',
+      filePath: 'skills/fastapi/SKILL.md',
+      isActive: true,
+      isWorkspaceLocal: true,
+      triggers: ['fastapi', 'python', 'pydantic'],
+      tags: ['python', 'backend', 'api'],
+      originType: 'local_custom',
+    },
+    {
+      id: 'security',
+      name: 'security-guardrails',
+      description: 'AppSec sandboxing, path traversal prevention, secret masking.',
+      content: '# Security Guardrails\nNever leak tokens or secrets.',
+      filePath: 'skills/security/SKILL.md',
+      isActive: true, // explicitly active
+      isWorkspaceLocal: true,
+      triggers: ['security', 'appsec'],
+      tags: ['security'],
+      originType: 'local_custom',
+    },
+  ]
+
+  it('should not match skills that are deactivated (isActive === false)', () => {
+    const disabledSkill: SkillDefinition = {
+      id: 'disabled-skill',
+      name: 'react19-guidelines',
+      description: 'React 19 guidelines',
+      content: '# React 19',
+      filePath: 'skills/react19/SKILL.md',
+      isActive: false,
+      isWorkspaceLocal: true,
+      triggers: ['react', 'react 19'],
+      tags: ['react'],
+      originType: 'local_custom',
+    }
+
+    const matched = matchSkillsForTask('Optimize React 19 form', [disabledSkill])
+    expect(matched.length).toBe(0)
+  })
+
+  it('should match relevant skills based on user prompt triggers', () => {
+    const matched = matchSkillsForTask('Optimize the React 19 form using useActionState with appsec security guardrails', mockSkills)
+    expect(matched.length).toBeGreaterThan(0)
+    expect(matched.some((s) => s.id === 'react19')).toBe(true)
+    expect(matched.some((s) => s.id === 'security')).toBe(true)
+    // unrelated skill is not top scored or excluded
+    expect(matched.some((s) => s.id === 'fastapi')).toBe(false)
+  })
+
+  it('should compile formatted markdown context block bounded by char limit', () => {
+    const block = compileSkillsContextBlock(mockSkills.slice(0, 2), 500)
+    expect(block).toContain('## CONTEXTUAL SKILLS & DOMAIN GUIDELINES')
+    expect(block).toContain('react19-guidelines')
+    expect(block.length).toBeLessThanOrEqual(700)
+  })
+
+  it('should not match short triggers as substrings inside unrelated words', () => {
+    const skillsWithShortTriggers: SkillDefinition[] = [
+      {
+        id: 'ts-strict',
+        name: 'typescript-strict',
+        description: 'TypeScript clean typing rules.',
+        content: '# TypeScript rules',
+        filePath: 'skills/ts/SKILL.md',
+        isActive: true,
+        isWorkspaceLocal: true,
+        triggers: ['ts'],
+        tags: ['ts'],
+        originType: 'local_custom',
+      },
+    ]
+
+    // "run unit tests" has "ts" inside "tests", but should NOT match isolated "ts" trigger
+    const matched = matchSkillsForTask('run unit tests and check results', skillsWithShortTriggers)
+    expect(matched.length).toBe(0)
+
+    // "compile ts files" has isolated "ts" word, should match
+    const matchedValid = matchSkillsForTask('compile ts files for release', skillsWithShortTriggers)
+    expect(matchedValid.length).toBe(1)
+  })
+
+  it('should match skills based on attached code file extensions and workspace metadata in SkillMatchContext', () => {
+    // User task prompt is generic, but active file is a Python FastAPI file
+    const matched = matchSkillsForTask(
+      {
+        userTask: 'Refactor this router endpoint to use dependency injection',
+        activeFilePath: 'src/routers/auth.py',
+        activeFileContent: 'from fastapi import APIRouter, Depends\nfrom pydantic import BaseModel',
+        workspacePath: 'D:/Projects/fastapi-backend',
+      },
+      mockSkills,
+    )
+
+    expect(matched.some((s) => s.id === 'fastapi')).toBe(true)
+  })
+
+  it('should match skills based on projectStack in context even with generic prompt', () => {
+    const matched = matchSkillsForTask(
+      {
+        userTask: 'Fix button responsive layout',
+        projectStack: ['react', 'tailwindcss', 'vite'],
+      },
+      mockSkills,
+    )
+
+    expect(matched.some((s) => s.id === 'react19')).toBe(true)
+    expect(matched.some((s) => s.id === 'fastapi')).toBe(false)
+  })
+
+  it('should prioritize skills matching both projectStack and prompt triggers (synergy bonus)', () => {
+    const matched = matchSkillsForTask(
+      {
+        userTask: 'Refactor useActionState and hooks in form',
+        projectStack: ['react', 'typescript'],
+      },
+      mockSkills,
+      1,
+    )
+
+    expect(matched.length).toBe(1)
+    expect(matched[0].id).toBe('react19')
+  })
+
+  it('should skip installed and hub skills written for another major of a declared package', () => {
+    const tailwindV4: SkillDefinition = {
+      id: 'tailwind-css-v4',
+      name: 'tailwind-css-v4',
+      description: 'Tailwind CSS v4 guidelines.',
+      content: 'Use @import "tailwindcss".',
+      filePath: 'skills/tailwind-css-v4/SKILL.md',
+      isActive: true,
+      isWorkspaceLocal: true,
+      triggers: ['tailwind', 'css'],
+      tags: ['tailwind'],
+      originType: 'hub_original',
+    }
+    const task = 'Build a dashboard styled with Tailwind CSS'
+    expect(matchSkillsForTask({ userTask: task }, [tailwindV4]).map((s) => s.id)).toEqual(['tailwind-css-v4'])
+    expect(matchSkillsForTask({ userTask: task, declaredDependencies: { tailwindcss: '^3.4.1' } }, [tailwindV4])).toEqual([])
+    expect(matchSkillsForTask({ userTask: task, declaredDependencies: { tailwindcss: '^4.1.0' } }, [tailwindV4])).toHaveLength(1)
+
+    const hubItem: HubSkillItem = { ...tailwindV4, category: 'frontend', version: '1.0.0', author: 'Official', isInstalled: false }
+    expect(matchHubSkillsForTask({ userTask: task }, [hubItem], 8)).toHaveLength(1)
+    expect(matchHubSkillsForTask({ userTask: task, declaredDependencies: { tailwindcss: '^3.4.1' } }, [hubItem], 8)).toEqual([])
+  })
+
+  it('should auto-discover high confidence uninstalled hub skills when score exceeds threshold', () => {
+    const hubSkills: HubSkillItem[] = [
+      {
+        id: 'bigquery-sql',
+        name: 'bigquery-sql',
+        description: 'BigQuery SQL optimization and query best practices.',
+        category: 'database',
+        tags: ['bigquery', 'sql', 'database'],
+        triggers: ['bigquery', 'bq'],
+        version: '1.0.0',
+        author: 'Official',
+        isInstalled: false,
+      },
+      {
+        id: 'unrelated-hub-skill',
+        name: 'docker-container',
+        description: 'Docker build guidelines.',
+        category: 'devops',
+        tags: ['docker'],
+        triggers: ['docker'],
+        version: '1.0.0',
+        author: 'Official',
+        isInstalled: false,
+      },
+    ]
+
+    const matches = matchHubSkillsForTask(
+      {
+        userTask: 'Optimize BigQuery SQL queries for data analytics',
+        projectStack: ['python', 'bigquery'],
+      },
+      hubSkills,
+      8.0,
+    )
+
+    expect(matches.length).toBe(1)
+    expect(matches[0].item.id).toBe('bigquery-sql')
+    expect(matches[0].score).toBeGreaterThanOrEqual(8.0)
+  })
+})

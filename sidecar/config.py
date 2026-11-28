@@ -1,0 +1,46 @@
+import os
+import sys
+import logging
+from typing import List
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] [PythonSidecar]: %(message)s")
+logger = logging.getLogger("PythonSidecar")
+
+ALLOWED_ORIGINS: List[str] = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "app://-",
+    "vscode-webview://"
+]
+
+# Persistent User Data Storage directory
+USER_DATA = os.environ.get("ONLYRAG_DATA_DIR")
+if not USER_DATA:
+    if sys.platform == "win32":
+        USER_DATA = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "OnlyRagV2")
+    else:
+        USER_DATA = os.path.join(os.path.expanduser("~"), ".onlyragv2")
+
+DATA_DIR = os.path.join(USER_DATA, "data")
+LANCEDB_DIR = os.path.join(DATA_DIR, "lancedb_store")
+EXPORT_DIR = os.path.join(DATA_DIR, "exports")
+
+DOCS_TABLE_NAME: str = "documents"
+CHUNKS_TABLE_NAME: str = "chunks"
+PROMPT_HISTORY_TABLE_NAME: str = "prompt_history"
+OLLAMA_BASE_URL: str = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+# Shared secret set by the Electron main process at launch. When present, every route except
+# /health requires it, so other local processes and web pages cannot drive the API.
+SIDECAR_AUTH_TOKEN: str = os.environ.get("ONLYRAG_SIDECAR_TOKEN", "")
+SIDECAR_AUTH_HEADER: str = "X-OnlyRag-Token"
+
+# Configurable table ingestion truncation limits
+TABULAR_MAX_ROWS: int = int(os.environ.get("ONLYRAG_TABULAR_MAX_ROWS", 300))
+EXCEL_MAX_ROWS_PER_SHEET: int = int(os.environ.get("ONLYRAG_EXCEL_MAX_ROWS_PER_SHEET", 150))
+EXCEL_MAX_SHEETS: int = int(os.environ.get("ONLYRAG_EXCEL_MAX_SHEETS", 10))
+
+import httpx
+
+httpx_client = httpx.Client(timeout=15.0)
+

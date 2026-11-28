@@ -1,0 +1,116 @@
+# OnlyRag V2 — Social Media Posts & Practical Feature Guide
+
+Below is a set of promotional posts and a practical, non-technical feature overview for OnlyRag V2, ready for publication on LinkedIn, Facebook, Instagram, X (Twitter), and Reddit, in both Italian and English.
+
+---
+
+## Guida Pratica per l'Utente Finale (Pronta per la Pubblicazione Social)
+
+**Cos'è OnlyRag V2?**
+È l'applicazione desktop locale per Windows che trasforma i tuoi documenti (PDF, Word, fogli di calcolo, scansioni e immagini) in un assistente intelligente privato al 100%. Funziona completamente offline sul tuo computer sfruttando modelli AI locali (tramite Ollama) e un archivio vettoriale veloce (LanceDB): nessun abbonamento cloud, nessun dato personale inviato su internet e massima riservatezza aziendale.
+
+### 🖥️ Prima Pagina — Ingestione Doc & OCR (Il tuo archivio documentale)
+Appena apri **OnlyRag V2**, la schermata **Ingestione Doc** ti accoglie come un vero tavolo da lavoro per i tuoi documenti:
+- **Trascina e rilascia con un gesto:** puoi trascinare all'istante file PDF, contratti DOCX, fogli Excel o immagini scansionate per farli elaborare subito al motore OCR ad accelerazione hardware (GPU).
+- **Elenco chiaro dei documenti vettorizzati:** sulla sinistra vedi l'archivio completo dei file importati con nome, numero di pagine, frammenti vettoriali indicizzati e dimensione.
+- **Anteprima e modifica affiancata:** al centro puoi sfogliare il documento originale pagina per pagina, mentre sulla destra hai un editor Markdown modificabile che ti mostra il testo estratto e ti permette di perfezionarlo prima di salvarlo.
+- **Ispettore Vettoriale LanceDB (Pulsante "Apri Inspector Vettoriale"):** un comodo strumento di collaudo con cui puoi digitare qualsiasi domanda o concetto per vedere in tempo reale quali frammenti di testo vengono individuati dal database vettoriale e con quale punteggio di pertinenza.
+
+### ✨ Le Funzioni Chiave
+
+1. **⚙️ Setup Wizard Hardware & Modelli**
+   Non serve essere esperti di intelligenza artificiale: al primo avvio (o dalle Impostazioni), la procedura guidata scansiona la scheda video e la memoria del tuo computer, calcola la quantità di memoria sicura da usare per non rallentare Windows e ti consiglia i modelli ideali da scaricare con un solo clic.
+
+2. **🔍 Ricerca Vettoriale & LanceDB Inspector**
+   Trova subito le risposte che cerchi senza dover ricordare il nome del file o la parola esatta. La ricerca semantica capisce il significato della tua richiesta (ad esempio "penali di ritardo" o "condizioni di recesso") e ti mostra immediatamente gli articoli rilevanti estratti dai contratti.
+
+3. **💬 RAG & Chat Documentale con Fonti Verificate**
+   Fai domande dirette ai tuoi documenti: l'assistente risponde citando in modo trasparente gli estratti da cui ha tratto le informazioni (con etichette `[S1]`, `[S2]`, ecc.). Ogni estratto riporta il punteggio di affidabilità e il pulsante *"Apri posizione originale"* per verificare il testo nel documento sorgente.
+
+4. **🌐 Traduzione Testo & Markdown Affiancata (Split View)**
+   Traduci lunghi documenti tecnici e contratti in oltre 9 lingue (dall'Italiano all'Inglese, Tedesco, Francese, Spagnolo e altre). L'editor bilingue affiancato offre scorrimento sincronizzato in tempo reale, streaming del testo e pulsanti per esportare il risultato finale in PDF, Word (DOCX) o Markdown.
+
+5. **📄 Traduzione Geometrica con Layout Preservato (PDF & DOCX)**
+   Devi tradurre un contratto o una brochure senza perdere tabelle, intestazioni, colonne e immagini? La modalità "Layout Preservato" estrae la geometria originale della pagina, traduce i testi e ricostruisce un nuovo file PDF o DOCX identico all'originale per impaginazione e formattazione.
+
+6. **💻 AI Coding Agent Studio**
+   Uno studio di sviluppo locale integrato per programmatori e professionisti. Collega una cartella di progetto, descrivi la modifica che vuoi apportare e lascia che l'agente autonomo analizzi il codice, pianifichi le modifiche, esegua i comandi nel terminale locale e mostri le differenze (Git Diff) con Monaco Editor, sempre sotto il tuo controllo.
+
+7. **🛡️ Impostazioni, Modelli Dedicati e Privacy Locale**
+   Assegna un modello di intelligenza artificiale dedicato a ciascun ruolo (Chat, Traduzione, Coding, Visione OCR) in base alle tue preferenze. Passa in qualsiasi momento tra Italiano e Inglese, personalizza i percorsi di salvataggio e monitora memoria RAM e VRAM della GPU dalla barra laterale.
+
+---
+
+## Post Social in Italiano
+
+### Post 1: Presentazione Completa (LinkedIn / Facebook / Instagram)
+**Hook:** Un'intelligenza artificiale potente per i tuoi documenti aziendali, ma senza inviare un singolo byte nel cloud? Esiste: scopri **OnlyRag V2**! 📄🔒⚡
+
+Quante volte avresti voluto interrogare contratti, manuali tecnici o relazioni riservate con l'AI, ma i criteri di privacy o i costi delle API cloud ti hanno fermato?
+
+**OnlyRag V2** è l'applicazione desktop Windows, gratuita e open source, che porta l'intero studio di AI documentale direttamente sul tuo computer:
+
+- 📥 **Ingestione & OCR Hardware (Prima pagina):** trascina PDF, DOCX, scansioni e immagini. L'OCR estrae il testo e lo indicizza localmente nel database vettoriale LanceDB.
+- 💬 **RAG & Chat con Citazioni:** ottieni risposte immediate con riferimenti esatti alla pagina e all'articolo del documento originale.
+- 🌐 **Traduzione Intelligente (anche con Layout Preservato):** traduci testi tecnici mantenendo tabelle, colonne e impaginazione intatte.
+- 💻 **AI Coding Agent Studio:** sviluppa e fai refactoring dei tuoi progetti software con un agente autonomo locale e terminale integrato.
+- ⚙️ **Setup Wizard in 1 Clic:** rileva automaticamente processore, RAM e scheda video per configurare i modelli Ollama ottimali per il tuo hardware.
+- 🛡️ **Zero Cloud, 100% Locale:** tutti i documenti e le chat restano archiviati esclusivamente sul tuo disco fisso.
+
+Scarica o compila il progetto su GitHub:
+👉 https://github.com/dennidalpos/OnlyRagV2
+
+#IntelligenzaArtificiale #Windows #Privacy #RAG #LocalAI #Ollama #LanceDB #OpenSource #OnlyRagV2
+
+### Post 2: Breve e Diretto (X / Threads)
+**Hook:** Chatta con i tuoi documenti in totale privacy, 100% offline su Windows. 🚀📄
+
+Con **OnlyRag V2** hai:
+📥 Ingestione immediata di PDF, DOCX e immagini con OCR GPU
+🔍 Ricerca vettoriale ultra-rapida con LanceDB
+💬 Chat RAG con citazioni verificabili alle fonti originali
+🌐 Traduzione documenti con impaginazione preservata
+💻 Coding Agent autonomo per sviluppatori
+
+Nessun dato nel cloud. Tutto sul tuo PC:
+👉 https://github.com/dennidalpos/OnlyRagV2
+
+#LocalAI #AI #Windows11 #Productivity #OnlyRagV2
+
+---
+
+## English Social Posts
+
+### Post 1: Complete Showcase (LinkedIn / Facebook / Reddit)
+**Hook:** Stop uploading sensitive documents to cloud AI services. Meet **OnlyRag V2** — your private, offline AI document studio for Windows. 📄🔒⚡
+
+Need to query contracts, technical manuals, or company policies with modern AI, but confidentiality policies or API costs hold you back?
+
+**OnlyRag V2** is a free, open-source desktop application that runs entirely on your local hardware:
+
+- 📥 **First Page: Document Ingestion & Hardware OCR:** drag and drop PDFs, Word files, spreadsheets, and scanned images. Accelerated OCR extracts and indexes content into an embedded LanceDB vector database.
+- 💬 **RAG Chat with Verifiable Sources:** ask complex questions across multiple documents and receive answers with precise citations, similarity scores, and one-click source inspection.
+- 🌐 **Bilingual Translation Studio:** side-by-side Markdown translation with real-time token streaming and geometric layout-preserving translation for PDFs and DOCX files.
+- 💻 **AI Coding Agent Studio:** an autonomous local developer workspace with project explorer, interactive planning, and Monaco diff editor.
+- ⚙️ **Hardware Setup Wizard:** automatically inspects your GPU, VRAM, and RAM to select and launch the optimal local Ollama models.
+- 🛡️ **100% Offline & Private:** zero telemetry, no subscriptions, and absolute data sovereignty.
+
+Explore the repository on GitHub:
+👉 https://github.com/dennidalpos/OnlyRagV2
+
+#LocalAI #OpenSource #Windows11 #RAG #DocumentAI #Ollama #LanceDB #DataPrivacy #OnlyRagV2
+
+### Post 2: Short & Catchy (X / Threads)
+**Hook:** Your documents. Your AI. Zero cloud leakage. 🚀
+
+Meet **OnlyRag V2** for Windows:
+📥 Local PDF/DOCX ingestion with GPU-accelerated OCR
+🔍 LanceDB vector semantic search
+💬 Multi-document chat with verifiable citations
+🌐 Layout-preserving document translation
+💻 Autonomous local coding agent
+
+100% offline. Free and open source:
+👉 https://github.com/dennidalpos/OnlyRagV2
+
+#LocalAI #Ollama #Windows #Productivity #OnlyRagV2

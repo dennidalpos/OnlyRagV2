@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-25",
+  "base": "2ccffda3f5adec79a452c8ec4abf58fd1b65b495",
+  "completed": [
+    "DOCUMENT-SOURCE-REVISION-BINDING-01",
+    "INGESTION-DOCX-FAIL-CLOSED-01"
+  ],
+  "new_regressions": 50,
+  "baseline_negative_regressions": 14,
+  "typescript": {
+    "passed": 3050,
+    "files": 331,
+    "seconds": 206.85
+  },
+  "python": {
+    "passed": 749,
+    "host_skip": 1,
+    "seconds": 205.08
+  },
+  "critical": {
+    "passed": 15,
+    "required_checks": 8,
+    "skipped": 0
+  },
+  "source_files": 1258,
+  "node_dependencies": "shared junction; Vitest cache disabled",
+  "python_environment": "checkout interpreter with existing external pytest overlay; critical uses external prepared interpreter; checkout quality:python missing pytest",
+  "protected_files": 68,
+  "open_autonomous": [
+    "DEPENDENCY-BRACES-UPSTREAM-01",
+    "DEVSERVER-LOOPBACK-PROBE-STABILITY-01",
+    "INGESTION-TIFF-ROUTING-01",
+    "INGESTION-DOCX-TEXT-COVERAGE-01",
+    "TRANSLATION-MARKDOWN-CHUNK-BOUNDARIES-01",
+    "SKILLS-PERSISTENCE-INTEGRITY-01",
+    "SETUP-DISK-SPACE-UNKNOWN-01",
+    "SHELL-QUOTED-CHAIN-NORMALIZATION-01"
+  ],
+  "open_owner_required": [
+    "DIAGNOSTICS-LOG-HISTORY-RECOVERY-01"
+  ],
+  "new_application_residues": [],
+  "evidence_root": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-source-lot-20261025",
+  "logs_sha256": {
+    "negative-before.log": "415a0ae6c09fc77eb25be7ff087e8ff8ad8144f1299798d2f4c38403a9452708",
+    "targeted-after.log": "d12314d038a40cf25d8a23437b54c34c3d248003342d0079bf2c7ebc324d627a",
+    "python-full.log": "85dca2eaa6c9fe787e0660dcb52355a6bf02e1330531e547c991ea5f187d528e",
+    "python-full.xml": "f9aeb77f11e73451c9ea103a5fcd74cd38d796d087bb064f5d5af98545f1423e",
+    "typescript-full.log": "704febbf4db34cbe5ff7ff916f96ee85671be83137d5ec49cbc31410ee52feb4",
+    "python-critical.log": "d605789804fd20459661cd3cfefce6c8e0347aad2360d10e99b734e249fb33e3",
+    "typecheck.log": "48cd202d357b7a7f96725958f65fb546b3779a87f41cf73c4a8bcdce39ae1168",
+    "static.log": "1520f3098ee1a2af96d89ab44ae112b93d00ef1fd0a2d4eac1571e3c3cc7a721",
+    "tested-source.json": "01c88ffe486799fa9e3dcbbd5c7bd90bdbb45d308496e4e4be605144aa36ddd1",
+    "protected-before.json": "984f7aab4d73ceab4c8a0b7b469bae674bb607edcc57648f49dfb531b1dc21af",
+    "targeted-final.log": "2e29f12e265b4c16f9ef5663ee1b6811dca0ebc5aaec6208836362f70e6bed2a",
+    "targeted-final.xml": "b4eb4f61ea72c5f99afe75a81599f127396efa2ed7aa47feb97fe17dcb70ae9d",
+    "targeted-final-source.json": "86b998cf29a6954112014828c9bd3f7114f3e5e5360eda2d10816f7ea5668f2b",
+    "import-cleanup-ast-check.json": "eecf5826c2f6beb2029f5656b01babcc7cb3781b36d9a4921dc726f626a193fe",
+    "cleanup-rejection.json": "494df75ad191342195ed1df6b1f247b42fba551b10e1e4306a28e25089f45ad6",
+    "secondbrain-sync-final.log": "69162d0b81f867713207725ba3914430f9d7071d8a8cdc154a6d888d5d2c08ca",
+    "secondbrain-check-final.log": "69162d0b81f867713207725ba3914430f9d7071d8a8cdc154a6d888d5d2c08ca"
+  },
+  "commit": false,
+  "push": false,
+  "real_models": false,
+  "docs_checked": 134,
+  "secondbrain": {
+    "sync_exit": 0,
+    "check_exit": 0,
+    "repositories": 23,
+    "findings": 0
+  },
+  "source_runtime_tests_match": true,
+  "tested_source_archive_sha256": "1c0ebc87858dbb8f7970e2b3a74c7a44f116129b678a639353e8c7daaa972a05",
+  "cleanup": {
+    "automatic_review_rejected": true,
+    "reason": "blocked by policy",
+    "executed": false,
+    "retained": [
+      "source",
+      "source/node_modules junction",
+      "tested-source.zip"
+    ],
+    "alternative_deletion_attempted": false
+  },
+  "final_targeted": {
+    "passed": 280,
+    "host_skip": 1,
+    "seconds": 45.19,
+    "only_post_full_runtime_change": "removed unused DOCS_TABLE_NAME import",
+    "ast_equivalent_after_import_removal": true
+  }
+}

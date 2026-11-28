@@ -1,0 +1,752 @@
+import type { editor } from 'monaco-editor'
+import { errorMessage } from '../../shared/domain/errors/errorMessage'
+import { MAX_DOCUMENT_TEXT_UNITS } from '../../shared/domain/documentLimits'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useDocumentDrafts } from './useDocumentDrafts'
+import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
+import { resolveModelContextLength } from '../../shared/domain/settings/modelContextPreference'
+import { resolveNodeTemplate } from '../constants/promptConfig'
+import { type TranslationKey, useTranslation as useI18n } from '../i18n'
+import { normalizeError } from '../lib/errors/errorNormalizer'
+import { logger } from '../lib/logger'
+import { type NativeOcrProvider, resolveNativeOcrProvider } from '../lib/ocrProvider'
+import { peekDocumentMarkdown, primeDocumentMarkdown } from '../services/documentMarkdown'
+import { electronApi } from '../services/electronApi'
+import { acquireGlobalTaskLock, peekGlobalTaskLock, releaseGlobalTaskLock } from '../services/globalTaskLock'
+import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
+import { AppSettings, DiagnosticsData, IngestedDocument, IngestionStreamProgressPayload, NormalizationReview } from '../types'
+import { useDocumentMarkdown } from './useDocumentMarkdown'
+import { notifyDocumentsChanged, useIngestedDocuments } from './useIngestedDocuments'
+import { useOllamaModelMetrics } from './useOllamaModelMetrics'
+
+/** The `images:analysis` template that goes on the wire, or `undefined` to stay on local RapidOCR. */
+export function resolveVisionOcrPrompt(settings?: AppSettings): string | undefined {
+  if (settings?.ocrEngine !== 'vision_model') return undefined
+  return resolveNodeTemplate('images:analysis', settings).template || undefined
+}
+
+const NATIVE_OCR_PROVIDER_LABELS: Record<NativeOcrProvider, TranslationKey> = {
+  cuda: 'ingestion.ocrProviderCuda',
+  cpu: 'ingestion.ocrProviderCpu',
+  unknown: 'ingestion.ocrProviderUnknown',
+}
+
+export interface IngestionProgressState {
+  taskId?: string
+  active: boolean
+  fileName: string
+  step: string
+  percent: number
+  pipeline?: string
+  modelName?: string
+  ocrTechnology?: string
+  fileCategory?: string
+}
+
+export function getPageLineNumber(content: string, targetPage: number): number {
+  if (!content || targetPage <= 1) return 1
+  const lines = content.split('\n')
+  let pageIndex = 1
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (/^##\s+(?:Page\s+\d+|Image)/i.test(line)) {
+      if (pageIndex === targetPage) {
+        return i + 1
+      }
+      pageIndex++
+    }
+  }
+  if (pageIndex === 1) {
+    let hrIndex = 1
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim() === '---') {
+        hrIndex++
+        if (hrIndex === targetPage) {
+          return i + 2
+        }
+      }
+    }
+  }
+  return 1
+}
+
+export function getTotalLines(content: string): number {
+  return content ? content.split('\n').length : 1
+}
+
+export async function runDocumentDeletion(
+  id: string,
+  onFailure: (message?: string) => void,
+  onSuccess: () => void,
+  deleteDocument: (docId: string) => Promise<{ success: boolean; error?: string }> = (docId) => electronApi().deleteIngestedDocument({ docId }),
+): Promise<boolean> {
+  const result = await deleteDocument(id)
+  if (!result.success) {
+    onFailure(result.error)
+    return false
+  }
+  onSuccess()
+  return true
+}
+
+/** The Sidecar's locale-neutral progress code in the UI language, or its English fallback text. */
+export function sidecarStepText(
+  payload: Pick<IngestionStreamProgressPayload, 'step' | 'step_code' | 'step_params'>,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string,
+): string {
+  if (payload.step_code) {
+    const key = `ingestionSteps.${payload.step_code}` as TranslationKey
+    const translated = t(key, payload.step_params)
+    if (translated !== key) return translated
+  }
+  return payload.step || ''
+}
+
+export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
+  const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics || null))
+  const { metrics: modelMetrics } = useOllamaModelMetrics(settings?.ollamaHost)
+  const { t } = useI18n()
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
+  const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
+  const [markdownContent, updateMarkdownContent] = useState<string>('')
+  const [isUploading, setIsUploading] = useState<boolean>(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [normalizationReview, setNormalizationReview] = useState<NormalizationReview | null>(null)
+  const [syncScroll, setSyncScroll] = useState<boolean>(true)
+  const [isSaving, setIsSaving] = useState<boolean>(false)
+  const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string } | null>(null)
+  const { draftsRef, ready: draftsReady, error: draftStorageError, changeDraft, retry: retryDraftStorage } = useDocumentDrafts()
+  const markdownRef = useRef('')
+  const selectedDocRef = useRef<IngestedDocument | null>(null)
+  const savingRef = useRef<{ docId: string; content: string } | null>(null)
+  const selectionEpochRef = useRef(0)
+  const mountedRef = useRef(true)
+  const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current)
+    }
+  }, [])
+
+  // Mirrors this module's busy state (upload/ingest pipeline) into the cross-module task lock
+  // so the coding agent/translation module can block starting their own task while ingestion is mid-flight.
+  const isIngestionBusy = isUploading
+  useEffect(() => {
+    if (!isIngestionBusy) return
+    acquireGlobalTaskLock('ingestion')
+    return () => releaseGlobalTaskLock('ingestion')
+  }, [isIngestionBusy])
+
+  // The document list carries metadata only: the selected document's Markdown is loaded on demand
+  // and copied into the editor once per document version (see editorSourceRef below).
+  const { markdown: loadedMarkdown } = useDocumentMarkdown(selectedDoc)
+  const isDirty = selectedDoc !== null && loadedMarkdown !== null && markdownContent !== loadedMarkdown
+  const documentTextTooLarge = markdownContent.length > MAX_DOCUMENT_TEXT_UNITS
+
+  // Keep drafts for this mounted view; saving never replaces a newer edit.
+  const editorSourceRef = useRef<{ id: string; ingestedAt: string; markdown: string } | null>(null)
+  const setMarkdownContent = useCallback(
+    (content: string) => {
+      if (!draftsReady) return
+      markdownRef.current = content
+      const doc = selectedDocRef.current
+      const source = editorSourceRef.current
+      const pending = savingRef.current
+      if (doc) {
+        const pendingChangesText = pending?.docId === doc.id && pending.content !== content
+        if (source?.id === doc.id && content === source.markdown && !pendingChangesText) changeDraft(doc.id, null)
+        // A legacy oversized base remains readable in its canonical store; persist its revision, not an invalid duplicate.
+        else if (source?.id === doc.id)
+          changeDraft(doc.id, { content, ingestedAt: source.ingestedAt, markdown: source.markdown.length <= MAX_DOCUMENT_TEXT_UNITS ? source.markdown : null })
+        else changeDraft(doc.id, { content, ingestedAt: doc.ingestedAt, markdown: null })
+      }
+      updateMarkdownContent(content)
+    },
+    [changeDraft, draftsReady],
+  )
+  const selectedDocId = selectedDoc?.id
+  const selectedDocVersion = selectedDoc?.ingestedAt
+  useEffect(() => {
+    if (!draftsReady || !selectedDocId || selectedDocVersion === undefined || loadedMarkdown === null) return
+    const source = editorSourceRef.current
+    if (source?.id === selectedDocId && source.ingestedAt === selectedDocVersion) return
+    const draft = draftsRef.current.get(selectedDocId)
+    editorSourceRef.current = { id: selectedDocId, ingestedAt: draft?.ingestedAt ?? selectedDocVersion, markdown: draft?.markdown ?? loadedMarkdown }
+    const content = draft?.content ?? loadedMarkdown
+    markdownRef.current = content
+    updateMarkdownContent(content)
+  }, [selectedDocId, selectedDocVersion, loadedMarkdown, draftsReady])
+
+  // Restore local drafts; unloaded documents cannot be saved.
+  const showDocument = useCallback((doc: IngestedDocument | null) => {
+    if (selectedDocRef.current?.id !== doc?.id) {
+      selectionEpochRef.current++
+      setSaveStatus(null)
+      if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current)
+    }
+    selectedDocRef.current = doc
+    setSelectedDoc(doc)
+    if (doc && editorSourceRef.current?.id === doc.id) return
+    editorSourceRef.current = null
+    const content = doc ? (draftsRef.current.get(doc.id)?.content ?? peekDocumentMarkdown(doc) ?? '') : ''
+    markdownRef.current = content
+    updateMarkdownContent(content)
+  }, [])
+
+  const [ingestionProgress, setIngestionProgress] = useState<IngestionProgressState>({
+    active: false,
+    fileName: '',
+    step: '',
+    percent: 0,
+  })
+
+  const activeTaskIdRef = useRef<string | null>(null)
+
+  const handleDocUpdateCallback = useCallback(
+    (docs: IngestedDocument[]) => {
+      const prev = selectedDocRef.current
+      // A deleted selection falls back to the first document, as does an empty one.
+      showDocument((prev && docs.find((d) => d.id === prev.id)) || docs[0] || null)
+    },
+    [showDocument],
+  )
+
+  const {
+    documents,
+    documentCollection,
+    refetchDocuments: fetchDocuments,
+  } = useIngestedDocuments({
+    onDocsUpdated: handleDocUpdateCallback,
+  })
+
+  const handleCancelIngestion = async () => {
+    const taskId = activeTaskIdRef.current
+    if (!taskId) return
+    if (window.electronAPI?.cancelTask) {
+      try {
+        const result = await window.electronAPI.cancelTask({ taskId })
+        if (!result.success) setUploadError(result.message || t('ingestion.failedUnknown'))
+      } catch (error) {
+        setUploadError(normalizeError(error, 'Ingestion cancellation').message)
+      }
+    }
+  }
+
+  // Real-time streaming progress subscription from Electron/FastAPI sidecar
+  useEffect(() => {
+    if (!window.electronAPI?.onIngestStreamProgress) return
+
+    const unsubscribe = window.electronAPI.onIngestStreamProgress((payload) => {
+      if (payload.taskId !== activeTaskIdRef.current) return
+      if (payload.type === 'progress') {
+        setIngestionProgress((prev) => ({
+          ...prev,
+          active: true,
+          fileName: payload.fileName || prev.fileName,
+          step: sidecarStepText(payload, t) || prev.step,
+          percent: typeof payload.percent === 'number' ? payload.percent : prev.percent,
+          pipeline: payload.pipeline || prev.pipeline,
+          modelName: payload.modelName || prev.modelName,
+          ocrTechnology: payload.ocrTechnology || prev.ocrTechnology,
+        }))
+      } else if (payload.type === 'done') {
+        setIngestionProgress((prev) => ({
+          ...prev,
+          active: true,
+          fileName: payload.fileName || prev.fileName,
+          step: t('ingestion.stepCompleted'),
+          percent: 100,
+          pipeline: t('ingestion.pipelineCompleted'),
+        }))
+      }
+    })
+
+    return () => {
+      if (unsubscribe) unsubscribe()
+    }
+  }, [])
+
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [viewMode, setViewMode] = useState<'page' | 'all'>('page')
+  const [zoomLevel, setZoomLevel] = useState<number>(100)
+
+  const [exportStatus, setExportStatus] = useState<{ active: boolean; message: string; isError?: boolean } | null>(null)
+  const leftPaneRef = useRef<HTMLDivElement>(null)
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const isSyncingScrollRef = useRef<boolean>(false)
+  const scrollRafRef = useRef<number | null>(null)
+
+  const scrollToPage = useCallback(
+    (targetPage: number) => {
+      setCurrentPage(targetPage)
+
+      if (editorRef.current && markdownContent) {
+        const targetLine = getPageLineNumber(markdownContent, targetPage)
+        editorRef.current.revealLineNearTop(targetLine)
+        editorRef.current.setPosition({ lineNumber: targetLine, column: 1 })
+      }
+
+      if (viewMode === 'page' && leftPaneRef.current) {
+        leftPaneRef.current.scrollTop = 0
+      } else if (viewMode === 'all' && leftPaneRef.current) {
+        // Match by data-page-number (set by every page card, image-backed or text-fallback alike) rather than a fixed id -- SourcePagePreview only renders a `rendered-page-N` id for the no-scanned-image fallback case, so an id lookup silently no-ops for image-backed pag
+        const targetElem = leftPaneRef.current.querySelector<HTMLElement>(`[data-page-number="${targetPage}"]`)
+        if (targetElem) {
+          const offset = targetElem.offsetTop - leftPaneRef.current.offsetTop
+          leftPaneRef.current.scrollTo({ top: Math.max(0, offset - 10), behavior: 'smooth' })
+        }
+      }
+    },
+    [markdownContent, viewMode],
+  )
+
+  const handleLeftPaneScroll = () => {
+    if (!syncScroll || isSyncingScrollRef.current || !leftPaneRef.current || !editorRef.current) return
+    if (scrollRafRef.current !== null) return
+
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null
+      if (!syncScroll || !leftPaneRef.current || !editorRef.current) return
+      isSyncingScrollRef.current = true
+
+      const { scrollTop, scrollHeight, clientHeight } = leftPaneRef.current
+      const maxScroll = scrollHeight - clientHeight
+
+      if (viewMode === 'all') {
+        // Scroll spy: identify visible page card with single parentRect query and early exit
+        const pageElements = leftPaneRef.current.querySelectorAll('[data-page-number]')
+        const parentRect = leftPaneRef.current.getBoundingClientRect()
+        for (let i = 0; i < pageElements.length; i++) {
+          const el = pageElements[i]
+          const rect = el.getBoundingClientRect()
+          if (rect.top <= parentRect.top + 100 && rect.bottom >= parentRect.top + 100) {
+            const pageNum = Number(el.getAttribute('data-page-number'))
+            if (pageNum && pageNum !== currentPage) {
+              setCurrentPage(pageNum)
+            }
+            break
+          }
+        }
+
+        if (maxScroll > 0) {
+          const scrollPercent = scrollTop / maxScroll
+          const editorScrollHeight = editorRef.current.getScrollHeight()
+          const editorLayout = editorRef.current.getLayoutInfo()
+          const editorClientHeight = editorLayout ? editorLayout.height : 0
+          const maxEditorScroll = editorScrollHeight - editorClientHeight
+          if (maxEditorScroll > 0) {
+            editorRef.current.setScrollTop(scrollPercent * maxEditorScroll)
+          }
+        }
+      } else {
+        // Single Page Mode: scroll proportionally within current page line span
+        if (maxScroll > 0) {
+          const scrollPercent = scrollTop / maxScroll
+          const startLine = getPageLineNumber(markdownContent, currentPage)
+          const nextLine = getPageLineNumber(markdownContent, currentPage + 1)
+          const endLine = nextLine > startLine ? nextLine : getTotalLines(markdownContent)
+
+          const startTop = editorRef.current.getTopForLineNumber(startLine) || 0
+          const endTop = editorRef.current.getTopForLineNumber(endLine) || startTop
+          const span = Math.max(0, endTop - startTop)
+
+          editorRef.current.setScrollTop(startTop + scrollPercent * span)
+        }
+      }
+
+      requestAnimationFrame(() => {
+        isSyncingScrollRef.current = false
+      })
+    })
+  }
+
+  const handleEditorDidMount = (mounted: editor.IStandaloneCodeEditor) => {
+    editorRef.current = mounted
+    mounted.onDidScrollChange((e) => {
+      if (!syncScroll || isSyncingScrollRef.current || !leftPaneRef.current) return
+      if (!e.scrollTopChanged) return
+
+      isSyncingScrollRef.current = true
+      const editorScrollHeight = mounted.getScrollHeight()
+      const editorLayout = mounted.getLayoutInfo()
+      const editorClientHeight = editorLayout ? editorLayout.height : 0
+      const maxEditorScroll = editorScrollHeight - editorClientHeight
+
+      if (maxEditorScroll > 0) {
+        const scrollPercent = e.scrollTop / maxEditorScroll
+        const { scrollHeight, clientHeight } = leftPaneRef.current
+        const maxScroll = scrollHeight - clientHeight
+        if (maxScroll > 0) {
+          leftPaneRef.current.scrollTop = scrollPercent * maxScroll
+        }
+      }
+
+      requestAnimationFrame(() => {
+        isSyncingScrollRef.current = false
+      })
+    })
+  }
+
+  const exportMarkdownContent = async (content: string, format: 'pdf' | 'md') => {
+    if (format !== 'md' && content.length > MAX_DOCUMENT_TEXT_UNITS) {
+      setExportStatus({ active: false, message: t('ingestion.documentTextTooLarge'), isError: true })
+      return
+    }
+    setExportStatus({ active: true, message: t('ingestion.exportPreparing', { format: format.toUpperCase() }) })
+    try {
+      const res = await electronApi().exportDocument({ markdownContent: content, format })
+      if (res.success) {
+        setExportStatus({ active: false, message: res.message || t('ingestion.exportSuccess', { format: format.toUpperCase() }) })
+      } else {
+        setExportStatus({ active: false, message: res.error || res.message || t('ingestion.exportCancelled'), isError: true })
+      }
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'Ingestion')
+      setExportStatus({ active: false, message: t('ingestion.exportError', { message: normalized.message }), isError: true })
+    } finally {
+      setTimeout(() => {
+        setExportStatus(null)
+      }, 5000)
+    }
+  }
+
+  const handleExportMarkdown = async (format: 'pdf' | 'md' = 'pdf') => {
+    if (selectedDoc && markdownContent) await exportMarkdownContent(markdownContent, format)
+  }
+
+  const handleExportNormalizationReview = async () => {
+    if (normalizationReview) await exportMarkdownContent(normalizationReview.originalMarkdown, 'md')
+  }
+
+  const handleSelectDoc = (doc: IngestedDocument) => {
+    showDocument(doc)
+    setCurrentPage(1)
+    setExportStatus(null)
+  }
+
+  const handleDeleteDoc = async (id: string, filename?: string) => {
+    try {
+      const deleted = await runDocumentDeletion(
+        id,
+        (message) => setUploadError(t('ingestion.deleteError', { message: message || t('ingestion.deleteUnknownError') })),
+        () => setUploadError(null),
+      )
+      if (!deleted) return
+      changeDraft(id, null)
+      notifyDocumentsChanged()
+      if (selectedDocRef.current?.id === id) {
+        const remaining = documents.filter((d) => d.id !== id)
+        if (remaining.length > 0) {
+          handleSelectDoc(remaining[0])
+        } else {
+          showDocument(null)
+        }
+      }
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'Ingestion')
+      logger.error('IngestionView', `Error deleting document ${filename || id}: ${normalized.message}`)
+      setUploadError(t('ingestion.deleteError', { message: normalized.message }))
+    }
+  }
+
+  const handleIngestPath = async (targetFilePath: string, displayName?: string) => {
+    if (!targetFilePath || !targetFilePath.trim()) return
+
+    const busyModule = peekGlobalTaskLock()
+    if (busyModule && busyModule !== 'ingestion') {
+      const message =
+        busyModule === 'coding'
+          ? t('common.crossModuleTaskBlocked', { module: t('common.moduleNameCoding') })
+          : t('common.crossModuleTaskBlocked', { module: t('common.moduleNameTranslation') })
+      setUploadError(message)
+      return
+    }
+
+    const taskId = crypto.randomUUID()
+    activeTaskIdRef.current = taskId
+    setIsUploading(true)
+    setUploadError(null)
+
+    const baseName = displayName || targetFilePath.split(/[/\\]/).pop() || targetFilePath
+    const ext = baseName.includes('.') ? baseName.split('.').pop()!.toLowerCase() : 'text'
+
+    const visionPrompt = resolveVisionOcrPrompt(settings)
+    const useVisionOcr = visionPrompt !== undefined
+    const visionModelName = settings?.visionModel || 'llama3.2-vision'
+    const nativeOcrLabel = t(NATIVE_OCR_PROVIDER_LABELS[resolveNativeOcrProvider(diagnostics)])
+
+    let detectedCategory = t('ingestion.categoryText')
+    let initialPipeline = 'Fast-Router: Pre-analisi & Classificazione'
+    let ocrTech = 'PyMuPDF Text Extraction'
+
+    if (ext === 'pdf') {
+      detectedCategory = t('ingestion.categoryPdf')
+      initialPipeline = 'Pipeline: PDF Fast-Router & Layout Extraction'
+      ocrTech = useVisionOcr ? `PyMuPDF / Vision LLM OCR (${visionModelName}) + RapidOCR fallback` : `PyMuPDF / RapidOCR (${nativeOcrLabel})`
+    } else if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) {
+      detectedCategory = t('ingestion.categoryImage')
+      initialPipeline = useVisionOcr ? 'Pipeline: Multimodal Vision & OCR' : 'Pipeline: RapidOCR Layout'
+      ocrTech = useVisionOcr ? `Vision LLM OCR (${visionModelName}) + RapidOCR fallback` : `RapidOCR (${nativeOcrLabel})`
+    } else if (ext === 'docx') {
+      detectedCategory = t('ingestion.categoryWord')
+      initialPipeline = 'Pipeline: DOCX Structured XML Parser'
+      ocrTech = 'Structured Table & Heading Extraction'
+    } else if (['csv', 'tsv', 'json'].includes(ext)) {
+      detectedCategory = t('ingestion.categoryTabular')
+      initialPipeline = 'Pipeline: Tabular Markdown Transformer'
+      ocrTech = 'Structured Matrix & JSON Parser'
+    } else {
+      detectedCategory = t('ingestion.categorySource')
+      initialPipeline = 'Pipeline: Direct Stream Sanitizer (NFC/UTF-8)'
+      ocrTech = 'UTF-8 Control Character Sanitizer'
+    }
+
+    setIngestionProgress({
+      active: true,
+      taskId,
+      fileName: baseName,
+      fileCategory: detectedCategory,
+      pipeline: initialPipeline,
+      modelName: useVisionOcr ? visionModelName : 'RapidOCR PP-OCRv4',
+      ocrTechnology: ocrTech,
+      step: t('ingestion.stepPreprocessing'),
+      percent: 20,
+    })
+
+    try {
+      if (activeTaskIdRef.current !== taskId) return
+      setIngestionProgress((p) => ({
+        ...p,
+        step: t('ingestion.stepExtracting', { technology: ocrTech }),
+        percent: 55,
+      }))
+
+      const res = await electronApi().ingestFile({
+        filePath: targetFilePath,
+        visionModel: settings?.visionModel,
+        visionPrompt,
+        normalizeWithLlm: false,
+        numCtx: resolveModelContextLength(visionModelName, settings?.modelContextLengths, hardwareDefault, modelMetrics[visionModelName]?.contextLength),
+        taskId,
+        normalizationThink: false,
+        allowFullExcelFormat: settings?.allowFullExcelFormat === true,
+      })
+
+      if (activeTaskIdRef.current !== taskId) return
+
+      if (!res.success) {
+        if (res.cancelled) {
+          setUploadError(t('ingestion.cancelledByUser'))
+        } else if (res.normalizationReview) {
+          setNormalizationReview(res.normalizationReview)
+          setUploadError(null)
+        } else {
+          setUploadError(res.error || t('ingestion.failedUnknown'))
+        }
+        setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 })
+        return
+      }
+
+      setIngestionProgress((p) => ({
+        ...p,
+        pipeline: 'Pipeline: Vettorizzazione & Semantic Chunks LanceDB',
+        modelName: settings?.embeddingModel || 'nomic-embed-text',
+        step: t('ingestion.stepEmbedding', { model: settings?.embeddingModel || 'nomic-embed-text' }),
+        percent: 85,
+      }))
+
+      notifyDocumentsChanged()
+      await fetchDocuments()
+      if (activeTaskIdRef.current !== taskId) return
+      if (res.data) {
+        primeDocumentMarkdown(res.data)
+        handleSelectDoc(res.data)
+      }
+
+      setIngestionProgress({
+        active: true,
+        fileName: baseName,
+        fileCategory: detectedCategory,
+        pipeline: 'Pipeline: Ingestione & Re-indexing Completati',
+        modelName: settings?.embeddingModel || 'nomic-embed-text',
+        ocrTechnology: ocrTech,
+        step: t('ingestion.stepCompleted'),
+        percent: 100,
+      })
+      setTimeout(() => setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 }), 2000)
+    } catch (err: unknown) {
+      if (activeTaskIdRef.current === taskId) {
+        const normalized = normalizeError(err, 'Ingestion')
+        setUploadError(normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message)
+        setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 })
+      }
+    } finally {
+      if (activeTaskIdRef.current === taskId) {
+        activeTaskIdRef.current = null
+        setIsUploading(false)
+      }
+    }
+  }
+
+  const handleSelectFileNative = async () => {
+    try {
+      const selected = await electronApi().openFileDialog({
+        title: t('ingestion.selectFileTitle'),
+        filters: [
+          { name: t('ingestion.supportedDocuments'), extensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'bmp', 'docx', 'txt', 'md'] },
+          { name: t('ingestion.allFiles'), extensions: ['*'] },
+        ],
+      })
+      if (selected && selected.length > 0) {
+        for (const filePath of selected) {
+          await handleIngestPath(filePath)
+        }
+      }
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'Native Dialog')
+      logger.error('IngestionView', `Native file dialog error: ${normalized.message}`)
+    }
+  }
+
+  const handleFileUpload = async (file: File) => {
+    let filePath: string
+    try {
+      filePath = electronApi().resolveNativeFilePath({ file })
+    } catch (err) {
+      logger.error('IngestionView', normalizeError(err, 'Native File Path').message)
+      setUploadError(t('ingestion.fileWithoutDiskPath'))
+      return
+    }
+    if (!filePath) {
+      setUploadError(t('ingestion.fileWithoutDiskPath'))
+      return
+    }
+    await handleIngestPath(filePath, file.name)
+  }
+
+  const handleSaveDocument = async () => {
+    const doc = selectedDocRef.current
+    const source = editorSourceRef.current
+    if (!doc || !source || source.id !== doc.id || savingRef.current) return
+    const content = markdownRef.current
+    if (content.length > MAX_DOCUMENT_TEXT_UNITS) {
+      setSaveStatus({ success: false, message: t('ingestion.documentTextTooLarge') })
+      return
+    }
+    const epoch = selectionEpochRef.current
+    savingRef.current = { docId: doc.id, content }
+    let confirmedMarkdown = source.markdown
+    setIsSaving(true)
+    setSaveStatus(null)
+    let succeeded = false
+    if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current)
+    const ownsStatus = () => mountedRef.current && selectionEpochRef.current === epoch
+
+    try {
+      const res = await electronApi().updateIngestedDocument({ docId: doc.id, markdownContent: content, expectedRevision: source.ingestedAt })
+      if (res.success && res.data) {
+        succeeded = true
+        confirmedMarkdown = res.data.extractedMarkdown
+        primeDocumentMarkdown(res.data)
+        const draft = draftsRef.current.get(doc.id)
+        if (draft?.content === content) changeDraft(doc.id, null)
+        else if (draft) changeDraft(doc.id, { ...draft, ingestedAt: res.data.ingestedAt, markdown: res.data.extractedMarkdown })
+        const current = selectedDocRef.current
+        if (mountedRef.current && current?.id === doc.id && current.ingestedAt === doc.ingestedAt) {
+          editorSourceRef.current = { id: res.data.id, ingestedAt: res.data.ingestedAt, markdown: res.data.extractedMarkdown }
+          selectedDocRef.current = { ...current, ...res.data }
+          setSelectedDoc(selectedDocRef.current)
+          setMarkdownContent(markdownRef.current === content ? res.data.extractedMarkdown : markdownRef.current)
+        }
+        if (ownsStatus()) setSaveStatus({ success: true, message: t('ingestion.saveSuccess') })
+        notifyDocumentsChanged()
+        if (mountedRef.current) await fetchDocuments()
+      } else {
+        if (ownsStatus()) setSaveStatus({ success: false, message: res.error || t('ingestion.saveFailed') })
+      }
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'Ingestion Save')
+      if (ownsStatus())
+        setSaveStatus({ success: false, message: normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message })
+    } finally {
+      savingRef.current = null
+      if (draftsRef.current.get(doc.id)?.content === confirmedMarkdown) changeDraft(doc.id, null)
+      if (mountedRef.current) setIsSaving(false)
+      if (ownsStatus() && succeeded) saveStatusTimerRef.current = setTimeout(() => setSaveStatus(null), 4000)
+    }
+  }
+
+  /** Explicit discard after UI confirmation; a failed read or newer typing keeps the draft. */
+  const handleReloadDocument = async () => {
+    const doc = selectedDocRef.current
+    if (!doc || savingRef.current) return
+    const content = markdownRef.current
+    const epoch = selectionEpochRef.current
+    savingRef.current = { docId: doc.id, content }
+    setIsSaving(true)
+    try {
+      const latest = await electronApi().getIngestedDocument({ docId: doc.id })
+      if (!latest || latest.id !== doc.id) throw new Error(t('common.documentLoadFailed'))
+      if (!mountedRef.current || epoch !== selectionEpochRef.current || content !== markdownRef.current) return
+      primeDocumentMarkdown(latest)
+      changeDraft(doc.id, null)
+      editorSourceRef.current = null
+      showDocument(latest)
+      setSaveStatus(null)
+      notifyDocumentsChanged()
+    } catch (error) {
+      if (mountedRef.current && epoch === selectionEpochRef.current) setSaveStatus({ success: false, message: errorMessage(error) })
+    } finally {
+      savingRef.current = null
+      if (mountedRef.current) setIsSaving(false)
+    }
+  }
+
+  return {
+    documentTextTooLarge,
+    draftsReady,
+    draftStorageError,
+    retryDraftStorage,
+    isPromptModalOpen,
+    setIsPromptModalOpen,
+    documents,
+    documentCollection,
+    selectedDoc,
+    markdownContent,
+    setMarkdownContent,
+    isDirty,
+    isSaving,
+    saveStatus,
+    handleSaveDocument,
+    handleReloadDocument,
+    isUploading,
+    uploadError,
+    setUploadError,
+    normalizationReview,
+    dismissNormalizationReview: () => setNormalizationReview(null),
+    handleExportNormalizationReview,
+    syncScroll,
+    setSyncScroll,
+    ingestionProgress,
+    handleCancelIngestion,
+    currentPage,
+    scrollToPage,
+    viewMode,
+    setViewMode,
+    zoomLevel,
+    setZoomLevel,
+    exportStatus,
+    leftPaneRef,
+    handleLeftPaneScroll,
+    handleEditorDidMount,
+    fetchDocuments,
+    handleSelectDoc,
+    handleDeleteDoc,
+    handleFileUpload,
+    handleIngestPath,
+    handleSelectFileNative,
+    handleExportMarkdown,
+  }
+}

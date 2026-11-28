@@ -1,0 +1,56 @@
+import type { AgentToolCall } from '../../agentTypes'
+import { validatePathSafety } from '../../contextFilter'
+import { MAX_RECURSIVE_LIST_ITEMS } from '../../ioLimits'
+import type { ToolExecutionResult } from '../toolExecutionContracts'
+import { toolLog } from '../toolExecutionContracts'
+
+const IGNORED_DIRECTORIES = new Set(['node_modules', '.git', 'dist', '.venv', 'build', '.next', 'out', 'coverage', '.pytest_cache'])
+
+export interface RecursiveListingRepository {
+  exists(absolutePath: string): boolean
+  listRecursive(rootPath: string, maxDepth: number, ignoreDirs: Set<string>): string[]
+}
+
+export function executeListFilesRecursiveTool(
+  parameters: AgentToolCall['parameters'],
+  workspacePath: string | null | undefined,
+  repository: RecursiveListingRepository,
+  fullAccess = false,
+): ToolExecutionResult {
+  const dirPath = parameters.dirPath || workspacePath || '.'
+  const maxDepth = Math.max(1, Math.min(6, parameters.maxDepth || 3))
+  const pathCheck = validatePathSafety(dirPath, workspacePath, fullAccess)
+  if (!pathCheck.safePath) {
+    return {
+      outcome: 'rejected',
+      outputForHistory: `Security Violation: ${pathCheck.error}`,
+      ...toolLog('toolEditPathRejected', { tool: 'list_files_recursive', error: String(pathCheck.error) }),
+    }
+  }
+
+  try {
+    if (!repository.exists(pathCheck.safePath)) {
+      return {
+        outcome: 'failure',
+        outputForHistory: `Directory not found: ${dirPath}`,
+        ...toolLog('toolDirNotFound', { path: String(dirPath) }),
+      }
+    }
+
+    const discovered = repository.listRecursive(pathCheck.safePath, maxDepth, IGNORED_DIRECTORIES)
+    const output = `Recursive Directory Structure for [${dirPath}] (depth <= ${maxDepth}, ${discovered.length} items):\n${discovered.slice(0, MAX_RECURSIVE_LIST_ITEMS).join('\n')}`
+    return {
+      outcome: 'success',
+      outputForHistory: output,
+      ...toolLog('toolListRecursiveDone', { count: discovered.length, path: String(dirPath) }),
+      logDetail: output.slice(0, 800),
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      outcome: 'failure',
+      outputForHistory: `Error listing files recursively: ${message}`,
+      ...toolLog('toolListRecursiveError', { error: message }),
+    }
+  }
+}

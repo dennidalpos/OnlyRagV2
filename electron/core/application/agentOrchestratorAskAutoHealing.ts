@@ -1,0 +1,145 @@
+import type { AgentToolCall, AgentTaskResult } from '../domain/agent/agentTypes'
+import { type EmitLog, emitLocalizedLog } from './agentOrchestratorTypes'
+import type { AgentExecutionMode, AgentGuardEvent, AppSettings } from '../../../shared/types'
+import { recordGuardEvent } from '../domain/agent/agentGuardEvents'
+import { isVersionQuestion } from '../domain/agent/versionQuestion'
+import type { AgentProgressPolicy } from '../domain/agent/agentProgressPolicy'
+import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
+
+export interface AskToolContext {
+  parsedTool: AgentToolCall
+  agentMode: AgentExecutionMode
+  stepCount: number
+  maxSteps: number
+  sessionId: string
+  settings: AppSettings
+  hasRecentToolFailure: boolean
+  errorCountInHistory: number
+  compiledHistoryBlock: string
+  /** Shared with the loop guard: redirects and loop blocks draw on the same streak, so a model can't dodge an exhausted write-loop budget by asking. */
+  progress: AgentProgressPolicy
+  guardEvents: AgentGuardEvent[]
+  episodicCompactor: EpisodicMemoryCompactor
+  emitLog: EmitLog
+  emitDone: (success: boolean, summary: string) => void
+  persistCurrentState: () => Promise<void>
+  finalizeSession: () => void
+  closeApplicationRun: (request: ApplicationClosureRequest) => Promise<ApplicationClosureOutcome>
+  /** Registry-backed answer to a dependency version question. */
+  answerVersionQuestion: (question: string) => Promise<string>
+}
+
+export type AskToolOutcome = { outcome: 'continue' } | { outcome: 'return'; result: AgentTaskResult }
+
+/** In Auto mode, answers version questions from the registry, intercepts vague clarification after a failure and redirects the model to recovery. */
+export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome> {
+  const { parsedTool } = ctx
+  const question = parsedTool.parameters?.question || parsedTool.parameters?.query || parsedTool.explanation || 'Clarification requested from user.'
+
+  // Shares the redirect budget, so a model that keeps asking about versions still reaches the ask_redirect closure.
+  if (ctx.agentMode === 'auto' && isVersionQuestion(question) && ctx.stepCount < ctx.maxSteps && ctx.progress.tryAskRedirect()) {
+    const answer = await ctx.answerVersionQuestion(question)
+    recordGuardEvent(ctx.guardEvents, 'ask_redirect', 'advise', ctx.stepCount)
+    ctx.episodicCompactor.recordStep(
+      {
+        step: ctx.stepCount,
+        tool: 'ask',
+        status: 'BLOCKED',
+        summary: 'Version question answered from the npm registry in AUTO mode',
+      },
+      answer,
+    )
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'versionQuestionAnswered', params: { question } }, answer)
+    if (ctx.settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'ask', answer)
+    }
+    return { outcome: 'continue' }
+  }
+
+  const historyText = ctx.compiledHistoryBlock.toLowerCase()
+  const hasCancellationInHistory = historyText.includes('cancelled') || historyText.includes('canceled') || historyText.includes('interrupted')
+
+  const PERMISSION_REGEX =
+    /\b(proceed|procedere|start|iniziare|cominciare|confirm|conferma|shall we|should we|can we|do you want|would you like|vuoi che|posso)\b/i
+  const TRIVIAL_PREFERENCE_REGEX =
+    /\b(which (library|framework|styling|animation)|what (library|framework)|quale (libreria|framework)|quali (librerie|framework)|preferisci|prefer to|prefer)\b/i
+  const VAGUE_WHAT_NEXT_REGEX = /\b(what next|what should (?:we|i) do|how should (?:we|i) proceed|what to do next|how to proceed|interrupted)\b/i
+
+  // Things only the user can provide: network access, credentials, accounts, licences. After a user or
+  // policy denial the question is the only way forward too. Redirecting these produced a deadlock in
+  // the gpt-oss tracker run (network question answered "proceed", then every write refused).
+  const BLOCKER_REGEX =
+    /\b(network|internet|offline|connectivity|rete|connessione|credentials?|credenziali|api[ _-]?keys?|secrets?|tokens?|passwords?|accounts?|login|licen[cs]es?|licenz[ae])\b/i
+  const recentDenial = ctx.episodicCompactor
+    .getEpisodes()
+    .slice(-3)
+    .some((episode) => episode.status === 'BLOCKED' && /user denied|policy|safety denied/i.test(episode.summary || ''))
+  const isGenuineBlocker = BLOCKER_REGEX.test(question) || recentDenial
+
+  const isPermissionOrProceedQuestion = PERMISSION_REGEX.test(question)
+  const isTrivialPreferenceQuestion = isPermissionOrProceedQuestion || TRIVIAL_PREFERENCE_REGEX.test(question)
+
+  const isVagueClarification =
+    !isGenuineBlocker &&
+    (ctx.hasRecentToolFailure ||
+      ctx.errorCountInHistory > 0 ||
+      hasCancellationInHistory ||
+      isTrivialPreferenceQuestion ||
+      ctx.stepCount === 1 ||
+      VAGUE_WHAT_NEXT_REGEX.test(question))
+
+  if (ctx.agentMode === 'auto' && isVagueClarification && ctx.stepCount < ctx.maxSteps && ctx.progress.tryAskRedirect()) {
+    const feedback =
+      isPermissionOrProceedQuestion || ctx.stepCount === 1
+        ? `[AUTONOMOUS EXECUTION DIRECTIVE: DO NOT ASK FOR PERMISSION TO PROCEED]\nYou are operating in AUTO mode. The task is authorized for trusted local execution.\nDO NOT ask for confirmation to start. Proceed with the first milestone.`
+        : isTrivialPreferenceQuestion
+          ? `[AUTONOMOUS TECHNICAL DECISION DIRECTIVE: DO NOT STALL FOR TECHNICAL CHOICES]\nIn AUTO mode, select sensible standard technologies and implement directly. Ask only for a genuine business decision.`
+          : hasCancellationInHistory
+            ? `[PROACTIVE AUTO-HEALING DIRECTIVE: CLI GENERATOR CANCELLED]\nYour previous command was interrupted. In AUTO mode, change strategy and continue without asking what to do next.`
+            : historyText.includes('ast validation error') || historyText.includes('ast syntax error')
+              ? `[PROACTIVE AUTO-HEALING DIRECTIVE: FIX AST SYNTAX ERROR]\nInspect the reported syntax error and issue a corrected edit in AUTO mode.`
+              : `[PROACTIVE AUTO-HEALING DIRECTIVE: DO NOT ASK LAZY QUESTIONS]\nInspect the failure, change strategy, and issue a corrective tool call in AUTO mode.`
+    recordGuardEvent(ctx.guardEvents, 'ask_redirect', 'advise', ctx.stepCount)
+    ctx.episodicCompactor.recordStep(
+      {
+        step: ctx.stepCount,
+        tool: 'ask',
+        status: 'BLOCKED',
+        summary: 'Auto-Healing Interception: intercepted a redundant clarification in AUTO mode',
+      },
+      feedback,
+    )
+    emitLocalizedLog(ctx.emitLog, 'info', { key: 'redundantAskIntercepted' })
+    if (ctx.settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'ask', feedback)
+    }
+    return { outcome: 'continue' }
+  }
+
+  // A vague clarification that ran out of redirect budget is the model giving up after being
+  // stuck, not a genuine question -- the session must not be recorded as a success.
+  const gaveUpWhileStuck = isVagueClarification && ctx.progress.askRedirectsExhausted()
+  ctx.emitLog('info', `❓ AI Agent Question: ${question}`, undefined, {
+    category: 'agent_question',
+  })
+  if (ctx.agentMode === 'auto') {
+    const closure = await ctx.closeApplicationRun({
+      trigger: 'guard_stop',
+      ...(gaveUpWhileStuck ? { guard: 'ask_redirect' as const } : {}),
+      reason: gaveUpWhileStuck ? { key: 'reasonAskGaveUp' } : { key: 'reasonAskDecision' },
+      modelSummary: question,
+    })
+    return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
+  }
+
+  ctx.emitDone(!gaveUpWhileStuck, question)
+  if (ctx.settings.enableCodingAgentDebugLog) {
+    codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, 'ask', parsedTool.parameters, parsedTool.explanation)
+    codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, !gaveUpWhileStuck, question)
+  }
+  await ctx.persistCurrentState()
+  ctx.finalizeSession()
+  return { outcome: 'return', result: { success: !gaveUpWhileStuck, summary: question } }
+}

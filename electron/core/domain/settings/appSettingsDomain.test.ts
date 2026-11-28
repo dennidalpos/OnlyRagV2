@@ -1,0 +1,185 @@
+import { describe, it, expect } from 'vitest'
+import { getDefaultAppSettings, sanitizeAppSettings, sanitizeModelThinkingPreferences } from './appSettingsDomain'
+
+describe('AppSettingsDomain Unit Tests', () => {
+  it('should return valid default settings', () => {
+    const defaults = getDefaultAppSettings()
+    expect(defaults.defaultModel).toBe('')
+    expect(defaults.ocrEngine).toBe('native_cuda')
+    expect(defaults.language).toBe('it')
+    expect(defaults.autoInstallHubSkills).toBe('disabled')
+    expect(defaults.enableSkillRouter).toBe(false)
+    expect(defaults.maxToolCallSteps).toBe(25)
+    expect(defaults.allowFileModifications).toBe(true)
+    expect(defaults.allowTerminalExecution).toBe(true)
+    expect(defaults.capabilityPolicyMode).toBe('network-approved')
+    expect(defaults.fullAccess).toBe(false)
+    expect(defaults.allowFullExcelFormat).toBe(false)
+    expect(defaults.modelThinkingPreferences).toEqual({})
+  })
+
+  it('should sanitize empty or corrupted input to defaults', () => {
+    expect(sanitizeAppSettings(null)).toEqual(getDefaultAppSettings())
+    expect(sanitizeAppSettings(undefined)).toEqual(getDefaultAppSettings())
+    expect(sanitizeAppSettings('corrupted')).toEqual(getDefaultAppSettings())
+  })
+
+  it('preserves a valid capability policy mode and drops invalid values', () => {
+    expect(sanitizeAppSettings({ capabilityPolicyMode: 'offline-strict' }).capabilityPolicyMode).toBe('offline-strict')
+    expect(sanitizeAppSettings({ capabilityPolicyMode: 'auto' }).capabilityPolicyMode).toBe('network-approved')
+  })
+
+  it('requires an explicit boolean to enable full access', () => {
+    expect(sanitizeAppSettings({ fullAccess: true }).fullAccess).toBe(true)
+    expect(sanitizeAppSettings({ fullAccess: 'true' }).fullAccess).toBe(false)
+    expect(sanitizeAppSettings({}).fullAccess).toBe(false)
+  })
+
+  it('requires an explicit boolean to enable full Excel format ingestion', () => {
+    expect(sanitizeAppSettings({ allowFullExcelFormat: true }).allowFullExcelFormat).toBe(true)
+    expect(sanitizeAppSettings({ allowFullExcelFormat: 'true' }).allowFullExcelFormat).toBe(false)
+    expect(sanitizeAppSettings({}).allowFullExcelFormat).toBe(false)
+  })
+
+  it('sanitizes independent per-model thinking preferences', () => {
+    expect(
+      sanitizeModelThinkingPreferences({
+        ' qwen3:4b ': true,
+        'gpt-oss:20b': false,
+        'qwen3.8:27b': ' low ',
+        invalid: 'not a level!',
+        '': true,
+      }),
+    ).toEqual({ 'qwen3:4b': true, 'gpt-oss:20b': false, 'qwen3.8:27b': 'low' })
+
+    expect(
+      sanitizeAppSettings({
+        modelThinkingPreferences: { 'qwen3:4b': true, invalid: 1 },
+      }).modelThinkingPreferences,
+    ).toEqual({ 'qwen3:4b': true })
+  })
+
+  it('drops the retired payload preference', () => {
+    const settings = sanitizeAppSettings({
+      enableCodingAgentDebugLog: false,
+      includeCodingAgentDebugPayloads: true,
+    } as Record<string, unknown>)
+    expect(settings).not.toHaveProperty('includeCodingAgentDebugPayloads')
+    expect(settings.enableCodingAgentDebugLog).toBe(false)
+  })
+
+  it('retires the legacy automatic skill-install mode to disabled', () => {
+    expect(sanitizeAppSettings({ autoInstallHubSkills: 'auto' }).autoInstallHubSkills).toBe('disabled')
+  })
+
+  it('drops the retired Plan auto-proceed preferences during settings migration', () => {
+    const sanitized = sanitizeAppSettings({
+      requirePlanApproval: false,
+      autoProceedPlan: true,
+      autoProceedDelaySeconds: 3,
+    }) as unknown as Record<string, unknown>
+
+    expect(sanitized.requirePlanApproval).toBeUndefined()
+    expect(sanitized.autoProceedPlan).toBeUndefined()
+    expect(sanitized.autoProceedDelaySeconds).toBeUndefined()
+  })
+
+  it('should preserve valid custom settings and trim strings', () => {
+    const custom = {
+      defaultModel: '  qwen2.5-coder:7b  ',
+      chatModel: 'llama3.2:3b',
+      ocrEngine: 'vision_model',
+      ollamaHost: 'http://localhost:11434',
+      language: 'en',
+      hasCompletedInitialSetup: true,
+      customPromptOverrides: { 'coding:master': 'custom prompt' },
+    }
+
+    const sanitized = sanitizeAppSettings(custom)
+    expect(sanitized.defaultModel).toBe('qwen2.5-coder:7b')
+    expect(sanitized.chatModel).toBe('llama3.2:3b')
+    expect(sanitized.ocrEngine).toBe('vision_model')
+    expect(sanitized.language).toBe('en')
+    expect(sanitized.hasCompletedInitialSetup).toBe(true)
+    expect(sanitized.customPromptOverrides).toEqual({ 'coding:master': 'custom prompt' })
+  })
+
+  it('should preserve maxToolCallSteps: 0 for unlimited execution and valid numeric ranges', () => {
+    const unlimited = sanitizeAppSettings({ maxToolCallSteps: 0 })
+    expect(unlimited.maxToolCallSteps).toBe(0)
+
+    const customSteps = sanitizeAppSettings({ maxToolCallSteps: 120 })
+    expect(customSteps.maxToolCallSteps).toBe(120)
+
+    const invalidNegative = sanitizeAppSettings({ maxToolCallSteps: -5 })
+    expect(invalidNegative.maxToolCallSteps).toBe(10)
+
+    const invalidTooHigh = sanitizeAppSettings({ maxToolCallSteps: 9999 })
+    expect(invalidTooHigh.maxToolCallSteps).toBe(200)
+  })
+
+  it('drops prompt override keys that do not name a prompt node', () => {
+    // Leftovers from the retired per-model-family scheme address prompts that no longer exist;
+    // keeping them would silently do nothing while still looking like saved customisation.
+    const sanitized = sanitizeAppSettings({
+      customPromptOverrides: {
+        'coding:qwen': 'legacy family prompt',
+        vision: 'legacy module prompt',
+        chat: 'still a real node',
+        'coding:directives': 'also real',
+        // The text-protocol tool catalogue node was retired on 2026-09-26.
+        'coding:tools': 'retired node',
+        'chat:llama': 'legacy',
+      },
+    })
+
+    expect(sanitized.customPromptOverrides).toEqual({
+      chat: 'still a real node',
+      'coding:directives': 'also real',
+    })
+  })
+
+  it('drops non-string prompt override values', () => {
+    const sanitized = sanitizeAppSettings({
+      customPromptOverrides: { chat: 42 as unknown as string, translation: 'ok' },
+    })
+    expect(sanitized.customPromptOverrides).toEqual({ translation: 'ok' })
+  })
+
+  it('sanitizes per-model context preferences with a 2048-token floor', () => {
+    const sanitized = sanitizeAppSettings({
+      modelContextLengths: {
+        ' qwen2.5-coder:7b ': 8192.9,
+        tooSmall: 2048,
+        invalid: Number.NaN,
+      },
+    })
+    expect(sanitized.modelContextLengths).toEqual({ 'qwen2.5-coder:7b': 8192, tooSmall: 2048 })
+  })
+
+  it('preserves verifyBeforeFinish, enablePrePlanInterview and bounds-checks agentSessionTimeoutMinutes', () => {
+    const valid = sanitizeAppSettings({
+      verifyBeforeFinish: false,
+      enablePrePlanInterview: false,
+      agentSessionTimeoutMinutes: 60,
+    })
+    expect(valid.verifyBeforeFinish).toBe(false)
+    expect(valid.enablePrePlanInterview).toBe(false)
+    expect(valid.agentSessionTimeoutMinutes).toBe(60)
+
+    const invalidTimeout = sanitizeAppSettings({
+      agentSessionTimeoutMinutes: 2, // below min 5
+    })
+    expect(invalidTimeout.agentSessionTimeoutMinutes).toBeUndefined()
+
+    const tooHighTimeout = sanitizeAppSettings({
+      agentSessionTimeoutMinutes: 300, // above max 240
+    })
+    expect(tooHighTimeout.agentSessionTimeoutMinutes).toBeUndefined()
+
+    const floatTimeout = sanitizeAppSettings({
+      agentSessionTimeoutMinutes: 45.8,
+    })
+    expect(floatTimeout.agentSessionTimeoutMinutes).toBe(45)
+  })
+})

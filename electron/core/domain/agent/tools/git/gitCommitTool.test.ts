@@ -1,0 +1,94 @@
+import { describe, expect, it, vi } from 'vitest'
+import { executeGitDiff, executeGitStatus, performGitCommit } from './gitCommitTool'
+
+describe('git commit tool', () => {
+  it('rejects a blank commit message without executing git', () => {
+    const commit = vi.fn()
+    expect(performGitCommit('workspace', '  ', ['app.ts'], 'hash', commit)).toMatchObject({ success: false })
+    expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('trims the message and formats a successful commit', () => {
+    expect(performGitCommit('workspace', '  Add feature  ', ['app.ts'], 'hash', () => 'created commit')).toMatchObject({
+      success: true,
+      output: expect.stringContaining('created commit'),
+    })
+  })
+
+  it('preserves git stdout and stderr when the command fails', () => {
+    expect(
+      performGitCommit('workspace', 'Add feature', ['app.ts'], 'hash', () => {
+        throw { stdout: { toString: () => 'nothing to commit' }, stderr: { toString: () => 'hook failed' } }
+      }),
+    ).toMatchObject({ success: false, output: 'Git Commit Error: nothing to commit\nhook failed' })
+  })
+})
+
+describe('git inspection tools', () => {
+  it('formats a clean status through the injected git runner', () => {
+    const run = vi.fn(() => '')
+    expect(executeGitStatus('workspace', run)).toMatchObject({
+      outputForHistory: expect.stringContaining('Working tree clean'),
+    })
+    expect(run).toHaveBeenCalledWith('workspace', ['status', '--short'], 10000)
+  })
+
+  it('blocks a diff outside the validated workspace path', () => {
+    const run = vi.fn()
+    const result = executeGitDiff('workspace', '../secret.txt', false, { error: 'outside workspace' }, run)
+    expect(result.outputForHistory).toContain('Security Violation: outside workspace')
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('formats a staged file diff through the injected git runner', () => {
+    const run = vi.fn(() => 'diff --git a/app.ts b/app.ts')
+    const result = executeGitDiff('workspace', 'app.ts', true, { safePath: 'workspace/app.ts' }, run)
+    expect(result.outputForHistory).toContain('[GIT DIFF (staged): app.ts]')
+    expect(run).toHaveBeenCalledWith('workspace', ['diff', '--staged', '--', 'workspace/app.ts'], 15000)
+  })
+
+  it('keeps the first part of a diff that overflows the process buffer and says it was cut', () => {
+    const run = vi.fn(() => {
+      throw Object.assign(new Error('spawnSync git ENOBUFS'), { code: 'ENOBUFS', stdout: `diff --git a/big.ts b/big.ts\n${'+x\n'.repeat(5000)}` })
+    })
+    const result = executeGitDiff('workspace', undefined, false, null, run)
+    expect(result.outcome).toBe('success')
+    expect(result.outputForHistory).toContain('diff --git a/big.ts b/big.ts')
+    expect(result.outputForHistory).toContain('[DIFF TRUNCATED')
+    expect(result.outputForHistory.length).toBeLessThan(8500)
+  })
+
+  it('still reports other git failures', () => {
+    const run = vi.fn(() => {
+      throw Object.assign(new Error('not a git repository'), { code: 128 })
+    })
+    expect(executeGitDiff('workspace', undefined, false, null, run)).toMatchObject({
+      outcome: 'failure',
+      outputForHistory: 'Git Diff Error: not a git repository',
+    })
+  })
+
+  it('lists the untracked files an unstaged diff cannot show', () => {
+    const run = vi.fn((_cwd: string, args: readonly string[]) => (args[0] === 'ls-files' ? 'src/new.ts\nsrc/other.ts\n' : ''))
+    const result = executeGitDiff('workspace', undefined, false, null, run)
+
+    expect(run).toHaveBeenCalledWith('workspace', ['ls-files', '--others', '--exclude-standard'], 15000)
+    expect(result.outputForHistory).toContain('No differences in tracked files.')
+    expect(result.outputForHistory).toContain('[UNTRACKED FILES')
+    expect(result.outputForHistory).toContain('- src/new.ts')
+    expect(result.outputForHistory).toContain('- src/other.ts')
+  })
+
+  it('does not list untracked files for a staged diff', () => {
+    const run = vi.fn(() => 'diff --git a/app.ts b/app.ts')
+    executeGitDiff('workspace', undefined, true, null, run)
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes shell metacharacters in a path as one literal argument', () => {
+    const run = vi.fn(() => '')
+    const hostile = 'workspace/a" & calc & ".ts'
+    executeGitDiff('workspace', hostile, false, { safePath: hostile }, run)
+    expect(run).toHaveBeenCalledWith('workspace', ['diff', '--', hostile], 15000)
+  })
+})

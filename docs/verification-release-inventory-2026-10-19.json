@@ -1,0 +1,529 @@
+{
+  "task": "RELEASE-CANDIDATE-EVIDENCE-EXTRACTION-01",
+  "date": "2026-10-19",
+  "scope": "Read-only inventory of all retained candidate directories; no installer execution, installation or protected-data disposal.",
+  "candidates": [
+    {
+      "candidate": "cpu-20261014-205040-fae7d51b",
+      "path": "release/cpu-20261014-205040-fae7d51b",
+      "manifestSha256": "1ea628ce17055c9f1287c96e5b57ed5bc549ff5d7087c5006fb41b865971cc4c",
+      "publicDistributionQualified": false,
+      "qualificationResiduals": [
+        "flatbuffers 25.12.19: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+        "lancedb 0.37.1: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+        "onnxruntime 1.29.0: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+        "rapidocr 3.9.2: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+        "boolbase 1.0.0: provisional standard license text and package-author attribution; confirm original copyright holder/year upstream before public distribution.",
+        "callsite 1.0.0: provisional standard license text and package-author attribution; confirm original copyright holder/year upstream before public distribution.",
+        "deps-regex 0.2.0: provisional standard license text and package-author attribution; confirm original copyright holder/year upstream before public distribution.",
+        "Bind MuPDF 1.28.2 build settings used by PyMuPDF 1.28.2 to the official full source tarball.",
+        "Verify native/transitive source completeness (including vendored code and native wheel build settings); sdists alone are not certification.",
+        "Review upstream font provenance and complete RapidOCR/model/sample-network attribution; exact binary font copyright/version notices are included.",
+        "Review actual bundled Renderer/Main/native inventory against the installed-build-environment notice superset.",
+        "Public equivalent-access source delivery remains pending; no publication is authorized."
+      ],
+      "installer": {
+        "path": "OnlyRag V2 Setup 1.0.0.exe",
+        "bytes": 415543920,
+        "sha256": "091b5e9b6fa57a9b0b01b23c315762dacd982d1d28cbb13125538f12497faf49",
+        "matchesRecordedHash": true
+      },
+      "source": {
+        "path": "OnlyRag-1.0.0-source.zip",
+        "bytes": 878338861,
+        "sha256": "9778f9e650c2cf6594e4e8ad5dbea0cb7ba1ddda3e2be387d7857485dacba3b5",
+        "matchesRecordedHash": true
+      },
+      "payload": {
+        "records": 3554,
+        "bytes": 1238549680,
+        "checked": true
+      },
+      "sources": {
+        "projectRecords": 1013,
+        "archiveMembers": 33222,
+        "dependencyArchives": 72,
+        "nodePackageSourceFiles": 32134,
+        "manifestSha256": "3583140dbec8657cb587eb9a103c4c6e940154239ed2841cce5286a689fe84a7"
+      },
+      "sourceDelivery": {
+        "matchesSourceRecord": true,
+        "receiptSha256": "d6e61285d133a844f52163312a26b8a8a3395ff79ac32ee1cb0128dea0dfc56c"
+      },
+      "comparisonToCurrentCheckout": {
+        "archivedRuntimeRecords": 533,
+        "differentOrMissing": 59,
+        "paths": [
+          "electron/core/application/agentOrchestratorVerificationRunner.ts",
+          "electron/core/application/sessionHistoryAppService.ts",
+          "electron/core/application/sidecarAppService.ts",
+          "electron/core/domain/agent/projectProfileVerificationResolver.ts",
+          "electron/core/domain/agent/projectVerificationResolver.ts",
+          "electron/core/domain/sidecarContract.ts",
+          "electron/core/infrastructure/filesystem/documentIoRepository.ts",
+          "electron/core/infrastructure/filesystem/projectProfileDiscovery.ts",
+          "electron/core/infrastructure/filesystem/sessionDeletionJournal.ts",
+          "electron/core/infrastructure/filesystem/workspaceManifestReader.ts",
+          "electron/core/infrastructure/http/networkAddressPolicy.ts",
+          "electron/core/infrastructure/http/sidecarHttpClient.ts",
+          "electron/core/infrastructure/http/webClient.ts",
+          "electron/core/infrastructure/logging/codingAgentLogger.ts",
+          "electron/core/infrastructure/process/managedDevServerRepository.ts",
+          "electron/core/infrastructure/process/powerShellCommand.ts",
+          "electron/core/infrastructure/process/taskRunner.ts",
+          "electron/core/presentation/secureIpcMain.ts",
+          "electron/core/presentation/sessionHistoryIpc.ts",
+          "electron/core/presentation/settingsIpc.ts",
+          "electron/core/presentation/sidecarIpc.ts",
+          "electron/main.ts",
+          "shared/ipc/ipcContract.ts",
+          "shared/types/index.ts",
+          "sidecar/contracts/openapi-2.5.0.json",
+          "sidecar/domain/exporter.py",
+          "sidecar/domain/ingestion.py",
+          "sidecar/domain/llm_normalizer.py",
+          "sidecar/infrastructure/db.py",
+          "sidecar/infrastructure/source_provenance.py",
+          "sidecar/main.py",
+          "sidecar/schemas.py",
+          "sidecar/services/ingest_service.py",
+          "sidecar/services/search_service.py",
+          "sidecar/tests/fixtures/README.md",
+          "sidecar/tests/test_contracts.py",
+          "sidecar/tests/test_document_recovery.py",
+          "sidecar/tests/test_embedding_space_storage.py",
+          "sidecar/tests/test_sidecar.py",
+          "sidecar/tests/test_source_provenance.py",
+          "src/components/chat/ChatMessageItem.tsx",
+          "src/components/chat/ChatView.tsx",
+          "src/components/coding/CodingAgentView.tsx",
+          "src/components/coding/SessionDeletionRecoveryBanner.tsx",
+          "src/components/ingestion/IngestionMarkdownEditor.tsx",
+          "src/components/ingestion/IngestionView.tsx",
+          "src/components/layout/AppLayout.tsx",
+          "src/hooks/useChatEngine.ts",
+          "src/hooks/useChatHistory.ts",
+          "src/hooks/useCodingAgent.ts",
+          "src/hooks/useIngestion.ts",
+          "src/hooks/useSessionHistory.ts",
+          "src/hooks/useTranslation.ts",
+          "src/i18n/locales/en.ts",
+          "src/i18n/locales/it.ts",
+          "src/services/chatContextBudget.ts",
+          "src/services/chatContextCompactor.ts",
+          "src/services/chatHistoryStorage.ts",
+          "src/services/documentMarkdown.ts"
+        ],
+        "meaning": "Comparison to current local files only; not a mapping of binaries to a Git commit."
+      },
+      "failures": [],
+      "status": "recorded-hashes-verified",
+      "independentInstallerExtraction": "Not established by this inventory; only recorded installer hash, unpacked payload and source ZIP records were read back.",
+      "installedDesktopAndModels": "Not qualified by this inventory.",
+      "metadata": [
+        {
+          "path": "builder-debug.yml",
+          "bytes": 7778,
+          "sha256": "1b3b471eacaecd54a5809694a4f8349ed445afd442b5d96c62f74e2a6d7f500e"
+        },
+        {
+          "path": "builder-effective-config.yaml",
+          "bytes": 1079,
+          "sha256": "63d37b543aff7e92b852cbbeb2df409e873866bd214a12e0e94b5ad0c07c3d5d"
+        },
+        {
+          "path": "electron-builder.json",
+          "bytes": 1395,
+          "sha256": "1e8f9b7534567117ae8da1e6b1ac5e06af7cf5e4da6ccae1dff1dff8a877fc9a"
+        },
+        {
+          "path": "project-source-manifest.json",
+          "bytes": 157580,
+          "sha256": "3583140dbec8657cb587eb9a103c4c6e940154239ed2841cce5286a689fe84a7"
+        },
+        {
+          "path": "release-manifest.json",
+          "bytes": 755571,
+          "sha256": "1ea628ce17055c9f1287c96e5b57ed5bc549ff5d7087c5006fb41b865971cc4c"
+        },
+        {
+          "path": "release-python-lock.txt",
+          "bytes": 1368,
+          "sha256": "f0d54b26e0f23c01edc1e765ea71ff2f05202dd771ac243d0f882afae0a6b823"
+        },
+        {
+          "path": "source-delivery.json",
+          "bytes": 125,
+          "sha256": "d6e61285d133a844f52163312a26b8a8a3395ff79ac32ee1cb0128dea0dfc56c"
+        }
+      ]
+    },
+    {
+      "candidate": "cpu-20261018-220641-87a891b9",
+      "path": "release/cpu-20261018-220641-87a891b9",
+      "manifestSha256": "fbf37559a7475e1924b38396d4a5ce5c0e8954b228309a006ce74b3d767f0f41",
+      "publicDistributionQualified": false,
+      "qualificationResiduals": [
+        "flatbuffers 25.12.19: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+        "lancedb 0.37.1: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+        "onnxruntime 1.29.0: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+        "rapidocr 3.9.2: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+        "boolbase 1.0.0: provisional standard license text and package-author attribution; confirm original copyright holder/year upstream before public distribution.",
+        "callsite 1.0.0: provisional standard license text and package-author attribution; confirm original copyright holder/year upstream before public distribution.",
+        "deps-regex 0.2.0: provisional standard license text and package-author attribution; confirm original copyright holder/year upstream before public distribution.",
+        "Bind MuPDF 1.28.2 build settings used by PyMuPDF 1.28.2 to the official full source tarball.",
+        "Verify native/transitive source completeness (including vendored code and native wheel build settings); sdists alone are not certification.",
+        "Review upstream font provenance and complete RapidOCR/model/sample-network attribution; exact binary font copyright/version notices are included.",
+        "Review actual bundled Renderer/Main/native inventory against the installed-build-environment notice superset.",
+        "Public equivalent-access source delivery remains pending; no publication is authorized."
+      ],
+      "status": "reused-previous-qualification",
+      "receipt": "docs/verification-current-source-2026-10-19.json",
+      "receiptSha256": "b4b562a5ea1ccfc46771d404a5acc4c4ffea883161906266c1ebf39de3ea0013",
+      "installer": {
+        "path": "OnlyRag V2 Setup 1.0.0.exe",
+        "sha256": "fd4e5f176cc1f5f8262025f8bff11382130775a172e194c5b61449543b7b708e",
+        "bytes": 416382368
+      },
+      "source": {
+        "path": "OnlyRag-1.0.0-source.zip",
+        "sha256": "6cf5a7ff133c83572689b2e5460a6af80a9e2ce0a3daa9f1c69bec16e6f4e1c3"
+      },
+      "verified": {
+        "projectSourceRecords": 1111,
+        "dependencySourceFiles": 72,
+        "payloadFiles": 3589,
+        "noticeFiles": 914,
+        "pythonDistributions": 69,
+        "nodeBuildEnvironmentPackages": 711,
+        "frozenProjectModules": [
+          "sidecar.config",
+          "sidecar.domain.document_limits",
+          "sidecar.domain.exporter",
+          "sidecar.domain.ingestion",
+          "sidecar.domain.llm_normalizer",
+          "sidecar.domain.router",
+          "sidecar.domain.sanitizer",
+          "sidecar.domain.tabular",
+          "sidecar.domain.translation_terms",
+          "sidecar.domain.translator",
+          "sidecar.domain.vision_prompt",
+          "sidecar.domain.word_segmenter",
+          "sidecar.domain.xls_reader",
+          "sidecar.infrastructure.chunk_storage",
+          "sidecar.infrastructure.db",
+          "sidecar.infrastructure.document_recovery",
+          "sidecar.infrastructure.embeddings",
+          "sidecar.infrastructure.ocr",
+          "sidecar.infrastructure.reranker",
+          "sidecar.infrastructure.source_provenance",
+          "sidecar.infrastructure.store_control",
+          "sidecar.infrastructure.store_rebuild_manifest",
+          "sidecar.infrastructure.xls_process",
+          "sidecar.schemas",
+          "sidecar.services.ingest_service",
+          "sidecar.services.prompt_history_service",
+          "sidecar.services.search_service",
+          "sidecar.services.task_cancellation",
+          "sidecar.services.vocab_service",
+          "sidecar.xls_worker"
+        ],
+        "frozenEntrypoint": "main",
+        "sidecarSha256": "49df4d42498a9eb3723b958b702de42939ffd514b18ab12821a9c6c4ba83bac4"
+      },
+      "retainedEvidence": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6",
+      "evidenceHashes": {
+        "package.log": "50667ef555e51fb6803b989caf2dbd25aaeeea883f75c84798f44e1ebb34e062",
+        "verify_correspondence.py": "6dc2815108e2f45982b2c6bc55a807a654c303549e3e1eb5567a35519d2431b9",
+        "correspondence.json": "3cd12c6dbd0ce8ecfca4fbad9fc0708205aff126401a9e7de9ca0e6cdf7f598c",
+        "verify_asar.cjs": "7ca799f03d42856c1790c9cf4b3fa9d85fff55abfd87d49b619ce6bb844c4983",
+        "asar-readback.json": "06892c8d97beec5198f57788729b40fa87cdc15784895c0b5cc5fe7b3cff4fb8",
+        "packagedChatDraftRecovery.mjs": "847c3a11d8a9e3c58e8fc3ef2b22d3e56eb443e76752dbb15af4479027f0d04b",
+        "packaged-recovery.log": "566870f488036fc5e71f16ed0f0ba2478d79e097c7ff4d919bc70f50ca4568d3",
+        "cpu-probe.log": "ad87bd15dee117eea0951f7501427be3c39700d21c6d88bcd89433380a573ecd",
+        "signature.json": "446242c643ddbf4202e1e667c18c17f9c57919806c816706aedcb9bd9ce51174",
+        "vitest.log": "41f8e4653ebf41f129154a99e94dba78744e8187045f4ba22ab5f9853c18a103",
+        "pytest.log": "03f8ab81d7db8a72f815e02755986079062dee7d6f24635cef56aff1f436a73c",
+        "frozen_parser.py": "af5d338c70ea21de8dd0d66c06f4dca1770844dc4b48556136b8403f4b8039d4",
+        "frozen_owner_crash.py": "90838ad1ab2992488321349da368772190784b35a9edea5e21cfcfdd7ff73b73",
+        "_packaged_normalization_fixture.py": "7e46abde16eb237b61378fa1c4d3d1cb5aebb919018a1bc6bb8608c694206bd9",
+        "packaged_native_flow.py": "ff5f629e2f1cfd25929ba98a25e6910b76d1010d0d44354359b737810d0d1962",
+        "packaged_native_flow.mjs": "3cd68d9c6772c700b902ab805a45485710c837b14b2433ce3f467cddc5562a0b",
+        "_packaged_flow_fixture.py": "8cb54900ec6bb4e608ade25efa2f08187d6bb5e0983066a1f5b673e6fc1e0f2c",
+        "frozen-parser-verified/result.json": "31d822bf2c6da2f32d0c958231dd46ffc4aedd300769381108e5d091095a916a",
+        "frozen-parser-verified/http-pytest.log": "cfe0bba11c4f43b43a77b2ae6785184a5e331d6297d24a1ab220cf1af03103f8",
+        "frozen-owner-crash/result.json": "a6f1ed02738b98d527602621eb31cab821c194b8ddf7e8a6a4fee11d7975b244",
+        "packaged-native-flow-verified/result.json": "c57d1b517e8d47f646e63ed777c7783ed268f22cc1bca90de4c9ca1c1a3b5192",
+        "packaged-native-flow-verified/fixture-requests.json": "ab650367966946227139284bf7b768e75fb59a2076d5903c6ff23bc1f81787a7",
+        "frozen-parser-verified.log": "1d2317335acecc617d374882c4490b01d776fa1524ba01088724eb222a6d05e7",
+        "frozen-owner-crash.log": "a6f1ed02738b98d527602621eb31cab821c194b8ddf7e8a6a4fee11d7975b244",
+        "packaged-native-flow-verified.log": "5323894b81c6c3d442373f455b0e4e9362475a926c94c385ce2744b2433d6874",
+        "frozen-parser/result.json": "d9e045dbecc6648b5500b283e67d0a63d896978f46dd79b2e218f16a1a021875",
+        "frozen-parser-final/result.json": "ffa297a394d47b3fbd421fe1ef164d9b1d6454b20fd5c6745ab70803a44c7d3a",
+        "packaged-native-flow/result.json": "5571c1a2de4ce005abca06a88933e2b4dc5626eb53a986957abd8bd30a1c58d4",
+        "final-artifact-readback.json": "db6d861458978fb8646daeb13bd06bd4239ad87be9fcc5d495d4b3678c0e4689"
+      },
+      "priorEvidenceReadback": [
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\package.log",
+          "status": "matched",
+          "sha256": "50667ef555e51fb6803b989caf2dbd25aaeeea883f75c84798f44e1ebb34e062"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\verify_correspondence.py",
+          "status": "matched",
+          "sha256": "6dc2815108e2f45982b2c6bc55a807a654c303549e3e1eb5567a35519d2431b9"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\correspondence.json",
+          "status": "matched",
+          "sha256": "3cd12c6dbd0ce8ecfca4fbad9fc0708205aff126401a9e7de9ca0e6cdf7f598c"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\verify_asar.cjs",
+          "status": "matched",
+          "sha256": "7ca799f03d42856c1790c9cf4b3fa9d85fff55abfd87d49b619ce6bb844c4983"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\asar-readback.json",
+          "status": "matched",
+          "sha256": "06892c8d97beec5198f57788729b40fa87cdc15784895c0b5cc5fe7b3cff4fb8"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\packagedChatDraftRecovery.mjs",
+          "status": "matched",
+          "sha256": "847c3a11d8a9e3c58e8fc3ef2b22d3e56eb443e76752dbb15af4479027f0d04b"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\packaged-recovery.log",
+          "status": "matched",
+          "sha256": "566870f488036fc5e71f16ed0f0ba2478d79e097c7ff4d919bc70f50ca4568d3"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\cpu-probe.log",
+          "status": "matched",
+          "sha256": "ad87bd15dee117eea0951f7501427be3c39700d21c6d88bcd89433380a573ecd"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\signature.json",
+          "status": "matched",
+          "sha256": "446242c643ddbf4202e1e667c18c17f9c57919806c816706aedcb9bd9ce51174"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\vitest.log",
+          "status": "matched",
+          "sha256": "41f8e4653ebf41f129154a99e94dba78744e8187045f4ba22ab5f9853c18a103"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\pytest.log",
+          "status": "matched",
+          "sha256": "03f8ab81d7db8a72f815e02755986079062dee7d6f24635cef56aff1f436a73c"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\frozen_parser.py",
+          "status": "matched",
+          "sha256": "af5d338c70ea21de8dd0d66c06f4dca1770844dc4b48556136b8403f4b8039d4"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\frozen_owner_crash.py",
+          "status": "matched",
+          "sha256": "90838ad1ab2992488321349da368772190784b35a9edea5e21cfcfdd7ff73b73"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\_packaged_normalization_fixture.py",
+          "status": "matched",
+          "sha256": "7e46abde16eb237b61378fa1c4d3d1cb5aebb919018a1bc6bb8608c694206bd9"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\packaged_native_flow.py",
+          "status": "matched",
+          "sha256": "ff5f629e2f1cfd25929ba98a25e6910b76d1010d0d44354359b737810d0d1962"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\packaged_native_flow.mjs",
+          "status": "matched",
+          "sha256": "3cd68d9c6772c700b902ab805a45485710c837b14b2433ce3f467cddc5562a0b"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\_packaged_flow_fixture.py",
+          "status": "matched",
+          "sha256": "8cb54900ec6bb4e608ade25efa2f08187d6bb5e0983066a1f5b673e6fc1e0f2c"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\frozen-parser-verified\\result.json",
+          "status": "matched",
+          "sha256": "31d822bf2c6da2f32d0c958231dd46ffc4aedd300769381108e5d091095a916a"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\frozen-parser-verified\\http-pytest.log",
+          "status": "matched",
+          "sha256": "cfe0bba11c4f43b43a77b2ae6785184a5e331d6297d24a1ab220cf1af03103f8"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\frozen-owner-crash\\result.json",
+          "status": "matched",
+          "sha256": "a6f1ed02738b98d527602621eb31cab821c194b8ddf7e8a6a4fee11d7975b244"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\packaged-native-flow-verified\\result.json",
+          "status": "matched",
+          "sha256": "c57d1b517e8d47f646e63ed777c7783ed268f22cc1bca90de4c9ca1c1a3b5192"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\packaged-native-flow-verified\\fixture-requests.json",
+          "status": "matched",
+          "sha256": "ab650367966946227139284bf7b768e75fb59a2076d5903c6ff23bc1f81787a7"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\frozen-parser-verified.log",
+          "status": "matched",
+          "sha256": "1d2317335acecc617d374882c4490b01d776fa1524ba01088724eb222a6d05e7"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\frozen-owner-crash.log",
+          "status": "matched",
+          "sha256": "a6f1ed02738b98d527602621eb31cab821c194b8ddf7e8a6a4fee11d7975b244"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\packaged-native-flow-verified.log",
+          "status": "matched",
+          "sha256": "5323894b81c6c3d442373f455b0e4e9362475a926c94c385ce2744b2433d6874"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\frozen-parser\\result.json",
+          "status": "matched",
+          "sha256": "d9e045dbecc6648b5500b283e67d0a63d896978f46dd79b2e218f16a1a021875"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\frozen-parser-final\\result.json",
+          "status": "matched",
+          "sha256": "ffa297a394d47b3fbd421fe1ef164d9b1d6454b20fd5c6745ab70803a44c7d3a"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\packaged-native-flow\\result.json",
+          "status": "matched",
+          "sha256": "5571c1a2de4ce005abca06a88933e2b4dc5626eb53a986957abd8bd30a1c58d4"
+        },
+        {
+          "path": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-p03-source-519e4b2946c648bfb6bca92e06452ec6\\final-artifact-readback.json",
+          "status": "matched",
+          "sha256": "db6d861458978fb8646daeb13bd06bd4239ad87be9fcc5d495d4b3678c0e4689"
+        }
+      ]
+    },
+    {
+      "candidate": "cpu-20261019-092848-b9054e25",
+      "path": "release/cpu-20261019-092848-b9054e25",
+      "manifestSha256": "6b3f751c3fe3d35887f8ba253e315e32064e8a570e919834b2be5aba09e2c626",
+      "publicDistributionQualified": false,
+      "qualificationResiduals": [
+        "flatbuffers 25.12.19: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+        "lancedb 0.37.1: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+        "onnxruntime 1.29.0: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+        "rapidocr 3.9.2: installed source/assets captured without a PyPI sdist; review upstream provenance and any native build correspondence.",
+        "boolbase 1.0.0: provisional standard license text and package-author attribution; confirm original copyright holder/year upstream before public distribution.",
+        "callsite 1.0.0: provisional standard license text and package-author attribution; confirm original copyright holder/year upstream before public distribution.",
+        "deps-regex 0.2.0: provisional standard license text and package-author attribution; confirm original copyright holder/year upstream before public distribution.",
+        "Bind MuPDF 1.28.2 build settings used by PyMuPDF 1.28.2 to the official full source tarball.",
+        "Verify native/transitive source completeness (including vendored code and native wheel build settings); sdists alone are not certification.",
+        "Review upstream font provenance and complete RapidOCR/model/sample-network attribution; exact binary font copyright/version notices are included.",
+        "Review actual bundled Renderer/Main/native inventory against the installed-build-environment notice superset.",
+        "Public equivalent-access source delivery remains pending; no publication is authorized."
+      ],
+      "installer": {
+        "path": "OnlyRag V2 Setup 1.0.0.exe",
+        "bytes": 415544286,
+        "sha256": "7308a34ccd2e99e5de53ea996367393d7e135fb2119ca65b98635e397304ccc6",
+        "matchesRecordedHash": true
+      },
+      "source": {
+        "path": "OnlyRag-1.0.0-source.zip",
+        "bytes": 878544655,
+        "sha256": "aac23358bfb354e2170a2380412cd2bb2957bf2d5a33ae7aa3fb66229d4ac097",
+        "matchesRecordedHash": true
+      },
+      "payload": {
+        "records": 3545,
+        "bytes": 1238460914,
+        "checked": true
+      },
+      "sources": {
+        "projectRecords": 1113,
+        "archiveMembers": 33432,
+        "dependencyArchives": 72,
+        "nodePackageSourceFiles": 32244,
+        "manifestSha256": "922ba2742bf1fd262e79a4a4daeee7bb1cba85d6627bac1448837c4702d86081"
+      },
+      "sourceDelivery": {
+        "matchesSourceRecord": true,
+        "receiptSha256": "f3f8e67f016b28b6e23bf5ccbe0a2f59e9afaa01817688fea0dbac14c8266f8a"
+      },
+      "comparisonToCurrentCheckout": {
+        "archivedRuntimeRecords": 557,
+        "differentOrMissing": 12,
+        "paths": [
+          "electron/core/application/agentOrchestratorVerificationRunner.ts",
+          "electron/core/domain/agent/projectProfileVerificationResolver.ts",
+          "electron/core/domain/agent/projectVerificationResolver.ts",
+          "electron/core/infrastructure/filesystem/projectProfileDiscovery.ts",
+          "electron/core/infrastructure/filesystem/workspaceManifestReader.ts",
+          "electron/core/infrastructure/process/powerShellCommand.ts",
+          "shared/domain/chatHistory.ts",
+          "shared/types/index.ts",
+          "src/components/chat/ChatMessageItem.tsx",
+          "src/hooks/useChatEngine.ts",
+          "src/i18n/locales/en.ts",
+          "src/i18n/locales/it.ts"
+        ],
+        "meaning": "Comparison to current local files only; not a mapping of binaries to a Git commit."
+      },
+      "failures": [],
+      "status": "recorded-hashes-verified",
+      "independentInstallerExtraction": "Not established by this inventory; only recorded installer hash, unpacked payload and source ZIP records were read back.",
+      "installedDesktopAndModels": "Not qualified by this inventory.",
+      "metadata": [
+        {
+          "path": "builder-debug.yml",
+          "bytes": 7778,
+          "sha256": "3be438f0f6ebc891e0ff00dfe2df831951511530bca8816c564867301ee9d211"
+        },
+        {
+          "path": "builder-effective-config.yaml",
+          "bytes": 1079,
+          "sha256": "2875764b643c2bde0b179d46a136e8b23512b308910b4ffd94f192030597571a"
+        },
+        {
+          "path": "electron-builder.json",
+          "bytes": 1395,
+          "sha256": "9e53530e11db5e691ca0997084c22c3fbd509b96c0def763e90eed7f07746c77"
+        },
+        {
+          "path": "project-source-manifest.json",
+          "bytes": 172990,
+          "sha256": "922ba2742bf1fd262e79a4a4daeee7bb1cba85d6627bac1448837c4702d86081"
+        },
+        {
+          "path": "release-manifest.json",
+          "bytes": 753761,
+          "sha256": "6b3f751c3fe3d35887f8ba253e315e32064e8a570e919834b2be5aba09e2c626"
+        },
+        {
+          "path": "release-python-lock.txt",
+          "bytes": 1368,
+          "sha256": "f0d54b26e0f23c01edc1e765ea71ff2f05202dd771ac243d0f882afae0a6b823"
+        },
+        {
+          "path": "source-delivery.json",
+          "bytes": 125,
+          "sha256": "f3f8e67f016b28b6e23bf5ccbe0a2f59e9afaa01817688fea0dbac14c8266f8a"
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Hash correspondence is not installed-desktop, parser/model, rights or full corresponding-source qualification.",
+    "The October 18 installer extraction and frozen probes are reused from the existing receipt, not repeated.",
+    "Source ZIP members are streamed and hashed without writing their contents to disk."
+  ],
+  "finishedAtUtc": "2026-10-19T21:14:03.965751+00:00"
+}

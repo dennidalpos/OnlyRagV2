@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "scope": "Synthetic IT/EN content acceptance; independent expected evidence frozen before inference.",
+  "documents": [
+    {
+      "id": "supply-it",
+      "format": "txt",
+      "pages": ["Il fornitore Ada Neri deve consegnare il componente TX-417 entro 14 giorni lavorativi dalla conferma dell'ordine. Il difetto deve essere segnalato entro 48 ore dalla scoperta. Il rimborso e dovuto solo dopo la ricezione di una diffida scritta; senza diffida non e dovuto alcun rimborso. La disdetta puo essere inviata tramite PEC oppure raccomandata con ricevuta di ritorno. Il contratto non specifica una penale giornaliera."],
+      "required_extraction": ["Ada Neri", "TX-417", "14 giorni lavorativi", "48 ore", "senza diffida", "PEC oppure raccomandata", "non specifica una penale"]
+    },
+    {
+      "id": "policy-a",
+      "format": "pdf",
+      "pages": ["Invoice handling policy A. The introduction contains no payment deadline.", "Policy A: payment is due within 21 days after invoice receipt. No policy precedence is established.", "La disdetta annuale richiede un preavviso di 60 giorni tramite raccomandata con ricevuta di ritorno."],
+      "required_extraction": ["21 days after invoice receipt", "60 giorni", "ricevuta di ritorno"]
+    },
+    {
+      "id": "policy-b",
+      "format": "txt",
+      "pages": ["Policy B: payment is due within 45 days after invoice receipt. Neither Policy A nor Policy B establishes precedence."],
+      "required_extraction": ["45 days", "Neither Policy A nor Policy B establishes precedence"]
+    },
+    {
+      "id": "inventory",
+      "format": "xlsx",
+      "sheets": [
+        {"name": "Warehouse", "rows": [["Code", "Quantity", "Unit price EUR"], ["TX-417", 7, 12.5], ["GX-008", 0, 4.25]]},
+        {"name": "Returns", "rows": [["Code", "Quantity", "Disposition"], ["RET-009", 3, "Inspection required"]]}
+      ],
+      "required_extraction": ["Code", "Quantity", "Unit price EUR", "TX-417", "12.5", "GX-008", "RET-009", "Inspection required"]
+    },
+    {
+      "id": "shipping",
+      "format": "csv",
+      "rows": [["Order", "Route", "Status"], ["0007", "North", "NA"], ["0008", "South", "Ready"]],
+      "required_extraction": ["0007", "North", "NA", "0008", "Ready"]
+    },
+    {
+      "id": "code-guide",
+      "format": "md",
+      "pages": ["# Exact error handling\n\nError E_CONN_42 means the connection was refused. Retry only after the operator confirms the local service is running.\n\n```python\nif status == 'E_CONN_42':\n    raise ConnectionError('Local service unavailable')\n```\n\nNever replace this error with a successful empty result."],
+      "required_extraction": ["E_CONN_42", "raise ConnectionError", "Never replace this error"]
+    },
+    {
+      "id": "pump-handbook",
+      "format": "pdf",
+      "repeat_intro_pages": 8,
+      "pages": [
+        "Pump maintenance handbook. Page 1 is an introduction. General inspection checks the casing, mounting bolts and external wiring. No storage exception is defined on this page.",
+        "Page 2: inspect the mounting bolts before each shift. Record observations in the maintenance log. This section does not define a storage temperature.",
+        "Page 3: inspect wiring insulation. Record the inspection date and operator. This section does not define a storage temperature.",
+        "Page 4: clean the housing with a dry cloth. Disconnect power before cleaning. This section does not define a storage temperature.",
+        "Page 5: report vibration to the maintenance team. The introductory checklist ends here. This section does not define a storage temperature.",
+        "Page 6: EXCEPTION PX-900. Store the spare pump between 2 and 8 degrees Celsius. Do not freeze it. If frost is observed, quarantine the pump and contact Ada Neri; do not install it."
+      ],
+      "required_extraction": ["EXCEPTION PX-900", "2 and 8 degrees Celsius", "Do not freeze", "quarantine", "Ada Neri", "do not install"]
+    },
+    {
+      "id": "unrelated",
+      "format": "txt",
+      "pages": ["Water the cactus once a month. Keep the pot in sunlight. This gardening note contains no invoice, contract, penalty or payment terms."],
+      "required_extraction": ["cactus", "once a month", "no invoice"]
+    }
+  ],
+  "queries": [
+    {"id": "exact-code", "language": "en", "kind": "exact-code/table", "text": "What quantity and unit price does the Warehouse sheet list for TX-417?", "selected": ["inventory"], "evidence": [{"document": "inventory", "contains": ["TX-417", "12.5"]}], "expected": "Warehouse TX-417 has quantity 7 and unit price EUR 12.50. Keep quantity distinct from price and cite that row."},
+    {"id": "later-sheet", "language": "it", "kind": "table/later-sheet", "text": "Quale quantita e destinazione riporta il foglio Returns per RET-009?", "selected": ["inventory"], "evidence": [{"document": "inventory", "contains": ["RET-009", "Inspection required"]}], "expected": "RET-009 has quantity 3 and requires inspection; cite Returns, not Warehouse."},
+    {"id": "literal-csv", "language": "en", "kind": "table/exact-code", "text": "Which route and literal status are recorded for order 0007?", "selected": ["shipping"], "evidence": [{"document": "shipping", "contains": ["0007", "North", "NA"]}], "expected": "Order 0007 uses route North and literal status NA. Preserve the leading zeros and NA; cite the row."},
+    {"id": "paraphrase-cross-language", "language": "en", "kind": "paraphrase/cross-language", "text": "How long do I have to report a newly discovered fault?", "selected": ["supply-it"], "evidence": [{"document": "supply-it", "contains": ["48 ore", "scoperta"]}], "expected": "48 hours after discovery, in English, with the discovery trigger and citation."},
+    {"id": "cross-language-notice", "language": "en", "kind": "cross-language/late-page", "text": "What advance notice and delivery method are required for annual cancellation?", "selected": ["policy-a"], "evidence": [{"document": "policy-a", "contains": ["60 giorni", "ricevuta di ritorno"], "page": 3}], "expected": "60 days notice by registered mail with acknowledgement of receipt, in English, citing original page 3."},
+    {"id": "late-page", "language": "en", "kind": "late-page/negation/condition", "text": "For exception PX-900, what storage range applies and what must happen if frost is observed?", "selected": ["pump-handbook"], "evidence": [{"document": "pump-handbook", "contains": ["PX-900", "quarantine", "do not install"], "page": 6}], "expected": "2-8 degrees Celsius; do not freeze; if frost occurs quarantine, contact Ada Neri and do not install. Cite original page 6 and preserve every condition."},
+    {"id": "contradiction", "language": "en", "kind": "contradiction/multi-document", "text": "Across Policy A and Policy B, which single payment deadline is authoritative?", "selected": ["policy-a", "policy-b"], "evidence": [{"document": "policy-a", "contains": ["21 days"], "page": 2}, {"document": "policy-b", "contains": ["45 days", "precedence"]}], "expected": "Identify 21 versus 45 days after invoice receipt and unresolved precedence. Abstain from selecting one authoritative deadline. Cite both passages beside the conflicting claims."},
+    {"id": "absent-penalty", "language": "it", "kind": "absent-answer", "text": "Qual e l'importo della penale giornaliera per consegna tardiva?", "selected": ["supply-it"], "evidence": [], "expected": "State in Italian that the contract specifies no daily penalty amount. Do not invent any number or import a delivery deadline as an amount."},
+    {"id": "conditional-refund", "language": "it", "kind": "negation/condition", "text": "Il rimborso e dovuto anche senza diffida scritta?", "selected": ["supply-it"], "evidence": [{"document": "supply-it", "contains": ["senza diffida", "non e dovuto"]}], "expected": "No refund without written notice; preserve the written-notice receipt condition and cite it."},
+    {"id": "alternatives", "language": "it", "kind": "alternatives", "text": "Quali sono entrambe le modalita ammesse per inviare la disdetta?", "selected": ["supply-it"], "evidence": [{"document": "supply-it", "contains": ["PEC oppure raccomandata", "ricevuta di ritorno"]}], "expected": "Both PEC and registered mail with acknowledgement of receipt. Do not drop either alternative or the acknowledgement; cite the clause."},
+    {"id": "exact-code-block", "language": "en", "kind": "code/negation", "text": "For E_CONN_42, what Python exception is raised, and may the error become a successful empty result?", "selected": ["code-guide"], "evidence": [{"document": "code-guide", "contains": ["raise ConnectionError", "Never replace"]}], "expected": "ConnectionError('Local service unavailable'); no successful empty result. Preserve exact code/string and cite supporting code/prose."},
+    {"id": "unrelated-absent", "language": "en", "kind": "absent-answer/unrelated", "text": "What invoice payment deadline is specified in the gardening note?", "selected": ["unrelated"], "evidence": [], "expected": "Answer in English that no invoice payment deadline is specified. Do not mistake monthly watering for payment terms."}
+  ],
+  "normalization_pairs": [
+    {"id": "safe-wrap", "source": "The complete con-\ntract AB123 preserves every original clause.", "candidate": "The complete contract AB123 preserves every original clause.", "safe": true, "reason": "Repair an ordinary line-wrap hyphen without changing a clause or identifier."},
+    {"id": "safe-spacing", "source": "Il pre sente modulo deve essere inviato via e-mail ad Ada Neri.", "candidate": "Il presente modulo deve essere inviato via e-mail ad Ada Neri.", "safe": true, "reason": "Repair the known OCR split in presente; preserve recipient and delivery method."},
+    {"id": "lost-negation", "source": "Payment is not due without written notice. Delivery requires consent.", "candidate": "Payment is due without written notice. Delivery requires consent.", "safe": false, "reason": "Removing not reverses the obligation."},
+    {"id": "changed-entity", "source": "Ada Neri must receive order TX-417 within 14 working days.", "candidate": "Ada Neri must receive order TX-417 within 41 working days.", "safe": false, "reason": "The deadline is changed."},
+    {"id": "punctuation-scope", "source": "The inspector said: the contractor is liable. Ada denied it.", "candidate": "The inspector, said the contractor, is liable. Ada denied it.", "safe": false, "reason": "Punctuation and segmentation reassign the quoted speaker and liable person despite identical ordered letters."},
+    {"id": "word-boundary", "source": "The therapist contacted Ada Neri about the complete report.", "candidate": "The the rapist contacted Ada Neri about the complete report.", "safe": false, "reason": "Word splitting changes the subject rather than repairing layout."}
+  ],
+  "normalization_live": [
+    {"id": "live-it", "source": "Il pre sente modulo deve essere inviato via PEC oppure raccomandata con ricevuta di ritorno ad Ada Neri entro 14 giorni. Senza diffida scritta non e dovuto alcun rimborso.", "expected": "Repair presente; preserve both delivery alternatives, acknowledgement, Ada Neri, 14 days and the no-refund condition."},
+    {"id": "live-en", "source": "The complete con-\ntract AB123 requires notice within 48 hours after discovering a defect. Without written notice no refund is due. Do not omit either condition.", "expected": "Repair contract; preserve AB123, 48 hours after discovery, the no-refund condition and all source text without added commentary."}
+  ]
+}

@@ -1,0 +1,540 @@
+import os
+import base64
+import subprocess
+import sys
+import threading
+from typing import Dict, Any, Optional, List
+from sidecar.config import OLLAMA_BASE_URL, httpx_client, logger
+from sidecar.domain.word_segmenter import normalize_ocr_token_spacing
+
+_GPU_INFO_CACHE: Optional[Dict[str, Any]] = None
+_RAPIDOCR_ENGINE: Any = None
+# PDF pages are rendered on a thread pool; the first pages must not each build their own engine.
+_RAPIDOCR_ENGINE_LOCK = threading.Lock()
+_INSTALLED_OLLAMA_MODELS_CACHE: Optional[set] = None
+_CUDA_DLL_PATH_CONFIGURED = False
+
+
+def _configure_cuda_dll_path() -> None:
+    """Makes bundled CUDA and cuDNN DLLs available before ONNX Runtime loads its CUDA provider."""
+    global _CUDA_DLL_PATH_CONFIGURED
+    if _CUDA_DLL_PATH_CONFIGURED or os.name != "nt":
+        return
+
+    runtime_root = getattr(sys, "_MEIPASS", os.path.join(sys.prefix, "Lib", "site-packages"))
+    dll_dirs = [
+        os.path.join(runtime_root, "nvidia", "cu13", "bin", "x86_64"),
+        os.path.join(runtime_root, "nvidia", "cudnn", "bin"),
+    ]
+    available_dirs = [path for path in dll_dirs if os.path.isdir(path)]
+    if available_dirs:
+        os.environ["PATH"] = os.pathsep.join([*available_dirs, os.environ.get("PATH", "")])
+    _CUDA_DLL_PATH_CONFIGURED = True
+
+
+def _get_installed_ollama_model_names(ollama_url: str) -> Optional[set]:
+    """Lists locally installed Ollama model names (both with and without their ":tag" suffix, so
+    a caller can match either form), cached for the sidecar process's lifetime -- installed models
+    don't change mid-session. Returns None (not an empty set) if the listing itself failed, so
+    callers can tell "confirmed nothing installed" apart from "couldn't check" and fall back to
+    trying candidates blindly rather than skipping OCR entirely."""
+    global _INSTALLED_OLLAMA_MODELS_CACHE
+    if _INSTALLED_OLLAMA_MODELS_CACHE is not None:
+        return _INSTALLED_OLLAMA_MODELS_CACHE
+    try:
+        res = httpx_client.get(f"{ollama_url}/api/tags", timeout=5.0)
+        if res.status_code == 200:
+            names = set()
+            for entry in res.json().get("models", []):
+                name = entry.get("name", "")
+                if name:
+                    names.add(name)
+                    names.add(name.split(":")[0])
+            _INSTALLED_OLLAMA_MODELS_CACHE = names
+            return names
+    except Exception as err:
+        logger.debug(f"Could not list installed Ollama models: {err}")
+    return None
+
+def compute_deskew_angle(image_np: Any) -> float:
+    """Computes skew angle (in degrees) of a text document image using morphological filtering
+    and minimum bounding area of text contours. Returns angle in [-45, 45]."""
+    try:
+        import cv2
+        import numpy as np
+
+        if len(image_np.shape) == 3:
+            gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = image_np
+
+        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
+
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (30, 5))
+        dilated = cv2.dilate(thresh, kernel, iterations=2)
+
+        contours, _ = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        angles = []
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area < 1000:
+                continue
+            rect = cv2.minAreaRect(c)
+            angle = rect[-1]
+            if angle < -45:
+                angle = -(90 + angle)
+            elif angle > 45:
+                angle = 90 - angle
+            angles.append(angle)
+
+        if not angles:
+            return 0.0
+
+        median_angle = float(np.median(angles))
+        return median_angle
+    except Exception as e:
+        logger.debug(f"Deskew angle computation skipped: {e}")
+        return 0.0
+
+
+def deskew_image(image_bytes: bytes) -> bytes:
+    """Deskews an input document image bytes if skew exceeds 0.2 degrees, returning deskewed PNG bytes."""
+    try:
+        import cv2
+        import numpy as np
+
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            return image_bytes
+
+        angle = compute_deskew_angle(img)
+        if abs(angle) < 0.2 or abs(angle) > 45.0:
+            return image_bytes
+
+        h, w = img.shape[:2]
+        center = (w // 2, h // 2)
+        rot_mat = cv2.getRotationMatrix2D(center, angle, 1.0)
+        deskewed = cv2.warpAffine(img, rot_mat, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+
+        is_success, buffer = cv2.imencode(".png", deskewed)
+        if is_success:
+            logger.info(f"Scanned document deskewed by {angle:.2f} degrees.")
+            return buffer.tobytes()
+    except Exception as err:
+        logger.debug(f"Deskewing failed: {err}")
+    return image_bytes
+
+
+
+def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560, allow_deskew: bool = True, enhance: bool = True) -> bytes:
+    """Prepares image for OCR, normalizing color channels, applying CLAHE luminance enhancement, deskewing (optional), and downscaling only if exceeding max_dim."""
+    try:
+        if allow_deskew:
+            try:
+                image_bytes = deskew_image(image_bytes)
+            except Exception as deskew_err:
+                logger.debug(f"Deskewing step failed in _prepare_image_for_ocr: {deskew_err}")
+
+        if enhance:
+            try:
+                import cv2
+                import numpy as np
+                nparr = np.frombuffer(image_bytes, np.uint8)
+                cv_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if cv_img is not None:
+                    lab = cv2.cvtColor(cv_img, cv2.COLOR_BGR2LAB)
+                    l, a, b = cv2.split(lab)
+                    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                    cl = clahe.apply(l)
+                    gaussian = cv2.GaussianBlur(cl, (0, 0), 2.0)
+                    unsharp = cv2.addWeighted(cl, 1.25, gaussian, -0.25, 0)
+                    merged = cv2.merge((unsharp, a, b))
+                    enhanced_bgr = cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
+                    success, enc_buf = cv2.imencode(".png", enhanced_bgr)
+                    if success:
+                        image_bytes = enc_buf.tobytes()
+            except Exception as cv_err:
+                logger.debug(f"OpenCV CLAHE enhancement skipped: {cv_err}")
+
+        from PIL import Image, ImageOps
+        import io
+        Image.MAX_IMAGE_PIXELS = 60_000_000
+        img = Image.open(io.BytesIO(image_bytes))
+
+        try:
+            img = ImageOps.exif_transpose(img)
+        except Exception:
+            pass
+
+        if img.mode in ("RGBA", "P", "LA"):
+            img = img.convert("RGB")
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+
+        width, height = img.size
+        if width > max_dim or height > max_dim:
+            if width > height:
+                new_w = max_dim
+                new_h = max(1, int(height * (max_dim / width)))
+            else:
+                new_h = max_dim
+                new_w = max(1, int(width * (max_dim / height)))
+            img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+        out_buf = io.BytesIO()
+        img.save(out_buf, format="PNG")
+        return out_buf.getvalue()
+    except Exception as e:
+        logger.debug(f"Image preprocessing skipped: {e}")
+    return image_bytes
+
+def _rapidocr_cuda_available() -> bool:
+    """Checks whether onnxruntime itself (not just the system GPU) exposes CUDAExecutionProvider.
+    RapidOCR runs on onnxruntime, so this is the accurate signal for its GPU path -- a CUDA GPU
+    detected via PyTorch elsewhere doesn't guarantee onnxruntime-gpu is the installed variant."""
+    try:
+        _configure_cuda_dll_path()
+        import onnxruntime as ort
+        return "CUDAExecutionProvider" in ort.get_available_providers()
+    except ImportError:
+        return False
+
+def _ocr_items(output: Any) -> List[Any]:
+    """Pairs each detected box with its text from a rapidocr RapidOCROutput (boxes/txts are None
+    when nothing was recognised), in the (points, text) shape the layout reconstruction reads."""
+    boxes = getattr(output, "boxes", None)
+    txts = getattr(output, "txts", None)
+    if boxes is None or txts is None:
+        return []
+    return list(zip(boxes, txts))
+
+def _reconstruct_layout_from_ocr_boxes(raw_results: Any) -> str:
+    """Groups detected OCR bounding boxes into visual lines and paragraphs in reading order with multi-column support via vectorized NumPy."""
+    if not raw_results:
+        return ""
+
+    import numpy as np
+
+    extracted = []
+    for item in raw_results:
+        if not item or len(item) < 2:
+            continue
+        pts, text = item[0], str(item[1]).strip()
+        if not text:
+            continue
+        pts_arr = np.array(pts, dtype=np.float32)
+        x0, y0 = float(pts_arr[:, 0].min()), float(pts_arr[:, 1].min())
+        x1, y1 = float(pts_arr[:, 0].max()), float(pts_arr[:, 1].max())
+        h = max(1.0, y1 - y0)
+        cy = (y0 + y1) / 2.0
+        extracted.append({
+            "x0": x0, "y0": y0, "x1": x1, "y1": y1,
+            "h": h, "cy": cy, "text": text
+        })
+
+    if not extracted:
+        return ""
+
+    extracted.sort(key=lambda b: (b["y0"], b["x0"]))
+
+    lines: List[Dict[str, Any]] = []
+    for b in extracted:
+        matched_line = None
+        for line in lines:
+            line_cy = line["cy"]
+            line_h = line["h"]
+            vert_match = abs(b["cy"] - line_cy) <= line_h * 0.5 or (min(b["y1"], line["y1"]) - max(b["y0"], line["y0"]) > 0.4 * min(b["h"], line_h))
+            if vert_match:
+                # Keep separate form columns from becoming one OCR line.
+                horiz_gap = b["x0"] - line["x1"] if b["x0"] >= line["x1"] else line["x0"] - b["x1"]
+                if horiz_gap <= max(16.0, line_h * 0.85):
+                    matched_line = line
+                    break
+
+        if matched_line is not None:
+            matched_line["boxes"].append(b)
+            matched_line["x0"] = min(matched_line["x0"], b["x0"])
+            matched_line["y0"] = min(matched_line["y0"], b["y0"])
+            matched_line["x1"] = max(matched_line["x1"], b["x1"])
+            matched_line["y1"] = max(matched_line["y1"], b["y1"])
+            matched_line["cy"] = (matched_line["y0"] + matched_line["y1"]) / 2.0
+            matched_line["h"] = matched_line["y1"] - matched_line["y0"]
+        else:
+            lines.append({
+                "y0": b["y0"], "y1": b["y1"], "x0": b["x0"], "x1": b["x1"],
+                "cy": b["cy"], "h": b["h"],
+                "boxes": [b]
+            })
+
+    lines.sort(key=lambda l: l["y0"])
+
+    formatted_paragraphs: List[str] = []
+    current_para: List[str] = []
+    prev_line = None
+
+    for line in lines:
+        line["boxes"].sort(key=lambda b: b["x0"])
+        raw_line_text = " ".join(b["text"] for b in line["boxes"])
+        line_text = normalize_ocr_token_spacing(raw_line_text)
+
+        if prev_line is not None:
+            gap = line["y0"] - prev_line["y1"]
+            if gap > prev_line["h"] * 1.3:
+                if current_para:
+                    formatted_paragraphs.append("\n".join(current_para))
+                    current_para = []
+        current_para.append(line_text)
+        prev_line = line
+
+    if current_para:
+        formatted_paragraphs.append("\n".join(current_para))
+
+    return "\n\n".join(formatted_paragraphs).strip()
+
+def _get_rapidocr_engine():
+    """Initializes once (thread-safe) or returns the cached RapidOCR engine with high-resolution detection parameters."""
+    global _RAPIDOCR_ENGINE
+    engine = _RAPIDOCR_ENGINE
+    if engine is not None:
+        return engine
+
+    with _RAPIDOCR_ENGINE_LOCK:
+        if _RAPIDOCR_ENGINE is not None:
+            return _RAPIDOCR_ENGINE
+
+        from rapidocr import RapidOCR
+
+        use_cuda = _rapidocr_cuda_available()
+        # The models ship inside the rapidocr wheel (and PyInstaller's collect_all), so the default
+        # config and model directory resolve next to the package and nothing is downloaded.
+        # limit_type "max" caps the long side at 2500: rapidocr 3's "min" upscales the short side to
+        # that length, which on a 400x100 crop left the detector with an empty result.
+        ocr_params: Dict[str, Any] = {
+            "Global.log_level": "warning",
+            "EngineConfig.onnxruntime.use_cuda": use_cuda,
+            "Det.limit_side_len": 2500,
+            "Det.limit_type": "max",
+            "Det.unclip_ratio": 1.6,
+            "Det.box_thresh": 0.5,
+        }
+
+        try:
+            _RAPIDOCR_ENGINE = RapidOCR(params=ocr_params)
+        except Exception as init_err:
+            if use_cuda:
+                logger.warning(f"RapidOCR CUDA initialization failed ({init_err}), falling back to CPU execution.")
+                ocr_params["EngineConfig.onnxruntime.use_cuda"] = False
+                _RAPIDOCR_ENGINE = RapidOCR(params=ocr_params)
+            else:
+                raise init_err
+
+        return _RAPIDOCR_ENGINE
+
+def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
+    """Returns individual OCR regions and confidence, mapped to the original image.
+    Layout translation keeps the original contrast and geometry; uncertain colored marks remain graphics."""
+    import io
+    import numpy as np
+    from PIL import Image
+
+    engine = _get_rapidocr_engine()
+    prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560, allow_deskew=False, enhance=False)
+    with Image.open(io.BytesIO(image_bytes)) as original, Image.open(io.BytesIO(prepared_bytes)) as prepared:
+        scale_x = original.width / prepared.width
+        scale_y = original.height / prepared.height
+        pixels = np.asarray(prepared.convert("RGB"))
+    output = engine(prepared_bytes)
+    result = _ocr_items(output)
+    if not result:
+        return []
+
+    boxes: List[Dict[str, Any]] = []
+    for index, item in enumerate(result):
+        if not item or len(item) < 2:
+            continue
+        pts, text = item[0], str(item[1]).strip()
+        if not text:
+            continue
+        x0 = float(min(p[0] for p in pts))
+        y0 = float(min(p[1] for p in pts))
+        x1 = float(max(p[0] for p in pts))
+        y1 = float(max(p[1] for p in pts))
+        score = float(output.scores[index])
+        crop = pixels[max(0, int(y0)):min(pixels.shape[0], int(y1) + 1), max(0, int(x0)):min(pixels.shape[1], int(x1) + 1)].astype(np.int16)
+        dark = crop.min(axis=2) < 180
+        colored = (crop.max(axis=2) - crop.min(axis=2) > 45) & dark
+        is_graphic = score < 0.8 and colored.sum() > max(1, dark.sum()) * 0.5
+        protected_bbox = None
+        if is_graphic:
+            ys, xs = np.where(colored)
+            protected_bbox = ((max(0, int(x0)) + int(xs.min())) * scale_x,
+                              (max(0, int(y0)) + int(ys.min())) * scale_y,
+                              (max(0, int(x0)) + int(xs.max()) + 1) * scale_x,
+                              (max(0, int(y0)) + int(ys.max()) + 1) * scale_y)
+        boxes.append({
+            "bbox": (x0 * scale_x, y0 * scale_y, x1 * scale_x, y1 * scale_y),
+            "text": text if not is_graphic else "",
+            "score": score,
+            "is_graphic": bool(is_graphic),
+            "protected_bbox": protected_bbox,
+        })
+    return sorted(boxes, key=lambda box: (box["bbox"][1], box["bbox"][0]))
+
+def run_rapid_ocr(image_bytes: bytes) -> str:
+    """Fast local text-recognition OCR via RapidOCR (PP-OCR models exported to ONNX).
+    Executes on CUDA when available, and automatically falls back to CPU execution on minimal/CPU-only hardware."""
+    engine = _get_rapidocr_engine()
+    prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560)
+    return _reconstruct_layout_from_ocr_boxes(_ocr_items(engine(prepared_bytes)))
+
+def run_layout_ocr(image_bytes: bytes) -> str:
+    """High-fidelity local OCR engine via RapidOCR.
+    Extracts verbatim text lines, numbers, and layout without multimodal LLM hallucination or network latency."""
+    prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560)
+    try:
+        text_out = run_rapid_ocr(prepared_bytes)
+        if text_out:
+            logger.info("OCR successfully performed via RapidOCR.")
+            return text_out
+    except Exception as rapid_err:
+        logger.warning(f"RapidOCR processing failed: {rapid_err}")
+
+    return ""
+
+def run_vision_ocr(
+    image_bytes: bytes,
+    prompt: str = "Extract all text, tables, and key structure from this document image in clean Markdown format.",
+    ollama_url: str = OLLAMA_BASE_URL,
+    model: str = "llama3.2-vision",
+    num_ctx: Optional[int] = None
+) -> str:
+    """Uses Ollama Vision model for OCR and document vision parsing with adaptive timeout for CPU/GPU hosts."""
+    is_cuda_avail = _rapidocr_cuda_available() or detect_gpu_acceleration().get("has_cuda", False)
+    # Bound CPU-only vision tokenization and latency.
+    vision_max_dim = 1536 if is_cuda_avail else 1024
+    vision_timeout = 25.0 if is_cuda_avail else 60.0
+
+    candidate_models = list(dict.fromkeys(m for m in [model, "llama3.2-vision", "minicpm-v", "moondream", "llava"] if m))
+
+    installed = _get_installed_ollama_model_names(ollama_url)
+    if installed:
+        filtered = [m for m in candidate_models if m in installed or m.split(":")[0] in installed]
+        if filtered:
+            candidate_models = filtered
+
+    try:
+        prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=vision_max_dim)
+        b64_img = base64.b64encode(prepared_bytes).decode("utf-8")
+        for v_model in candidate_models:
+            payload = {
+                "model": v_model,
+                "prompt": prompt,
+                "images": [b64_img],
+                "stream": False,
+                "keep_alive": 0
+            }
+            if num_ctx is not None:
+                payload["options"] = {"num_ctx": num_ctx}
+            try:
+                res = httpx_client.post(f"{ollama_url}/api/generate", json=payload, timeout=vision_timeout)
+                if res.status_code == 200:
+                    text_resp = res.json().get("response", "").strip()
+                    if text_resp:
+                        return text_resp
+            except Exception as candidate_err:
+                logger.debug(f"Vision OCR with model {v_model} failed: {candidate_err}")
+                continue
+    except Exception as err:
+        logger.warning(f"Ollama Vision OCR call skipped or timed out: {err}")
+
+    return ""
+
+def detect_gpu_acceleration() -> Dict[str, Any]:
+    """Detects NVIDIA GPU CUDA availability via torch/onnxruntime or nvidia-smi execution."""
+    global _GPU_INFO_CACHE
+    if _GPU_INFO_CACHE is not None:
+        return _GPU_INFO_CACHE
+
+    info: Dict[str, Any] = {
+        "has_cuda": False,
+        "device_name": "CPU Only",
+        "vram_total_mb": 0,
+        "vram_free_mb": 0,
+        "cuda_version": None,
+        "backend": "cpu"
+    }
+
+    try:
+        import torch
+        if torch.cuda.is_available():
+            info["has_cuda"] = True
+            info["device_name"] = torch.cuda.get_device_name(0)
+            info["vram_total_mb"] = round(torch.cuda.get_device_properties(0).total_memory / (1024 * 1024))
+            info["cuda_version"] = torch.version.cuda
+            info["backend"] = "pytorch_cuda"
+            _GPU_INFO_CACHE = info
+            logger.info(f"CUDA GPU detected via PyTorch: {info['device_name']} ({info['vram_total_mb']} MB VRAM)")
+            return info
+    except ImportError:
+        pass
+
+    try:
+        _configure_cuda_dll_path()
+        import onnxruntime as ort
+        if "CUDAExecutionProvider" in ort.get_available_providers():
+            info["has_cuda"] = True
+            info["device_name"] = "CUDA Execution Provider (ONNX)"
+            info["backend"] = "onnx_cuda"
+            _GPU_INFO_CACHE = info
+            logger.info("CUDA Execution Provider detected via ONNX Runtime.")
+            return info
+    except ImportError:
+        pass
+
+    try:
+        res = subprocess.run(
+            ["nvidia-smi", "--query-gpu=gpu_name,memory.total,memory.free,driver_version", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            timeout=3
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            parts = [p.strip() for p in res.stdout.strip().split(",")]
+            if len(parts) >= 3:
+                info["has_cuda"] = True
+                info["device_name"] = parts[0]
+                info["vram_total_mb"] = int(parts[1])
+                info["vram_free_mb"] = int(parts[2])
+                info["backend"] = "nvidia_smi"
+                logger.info(f"NVIDIA GPU detected via nvidia-smi: {parts[0]}")
+    except Exception:
+        pass
+
+    _GPU_INFO_CACHE = info
+    return info
+
+
+def get_ocr_runtime_info() -> Dict[str, Any]:
+    """Reads initialized ONNX sessions without constructing an engine or claiming GPU availability is use."""
+    provider = "unknown"
+    engine = _RAPIDOCR_ENGINE  # Published only after construction succeeds; health never waits on its lock.
+    if engine is not None:
+        try:
+            primary_providers = [
+                getattr(engine, component).session.session.get_providers()[0]
+                for component in ("text_det", "text_cls", "text_rec")
+            ]
+            first = primary_providers[0]
+            if first in ("CUDAExecutionProvider", "CPUExecutionProvider") and all(
+                current == first for current in primary_providers
+            ):
+                provider = first
+        except Exception:
+            # Missing/unreadable sessions cannot establish the effective provider.
+            pass
+    gpu_info = detect_gpu_acceleration()
+    return {
+        "provider": provider,
+        "host_has_gpu": bool(gpu_info.get("has_cuda", False)),
+    }

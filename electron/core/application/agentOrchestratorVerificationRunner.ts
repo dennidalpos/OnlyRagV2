@@ -1,0 +1,205 @@
+import { agentToolExecutorService } from './agentToolExecutorService'
+import { checkCommandSecurity } from '../domain/agent/commandSecurity'
+import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
+import { scanWorkspaceDependencies } from '../infrastructure/filesystem/dependencyScanner'
+import { evaluateDependencyIntegrity } from '../domain/agent/dependencyIntegrityGate'
+import { resolveProfileVerificationTargets, resolveRequiredProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
+import { classifyProjectVerification, type ProjectVerificationStatus } from '../domain/agent/projectVerificationStatus'
+import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
+import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
+import { requiresBehaviorEvidence, WEB_UI_SMOKE_VERIFICATION } from '../domain/agent/milestoneVerificationPromotion'
+import { parseTestRunOutput } from '../domain/agent/testResultParser'
+import { verifyWebUi } from '../infrastructure/process/webUiSmokeVerifier'
+import { withVerificationEnvironment } from '../infrastructure/process/powerShellCommand'
+
+/** Long enough for a cold `npm run build` on a small project, short enough to not hang a turn. */
+const VERIFICATION_TIMEOUT_MS = 180_000
+const OUTPUT_TAIL_CHARS = 2000
+
+export interface VerificationRunResult {
+  /** False when the project offers no command capable of proving it works. */
+  hasVerificationCommand: boolean
+  /** Explicit evidence state; missing checks are never reported as verified. */
+  status: ProjectVerificationStatus
+  /** Undefined when nothing could be run. */
+  passed?: boolean
+  command?: string
+  /** Exact commands that passed; command above is a human-readable project label. */
+  verifiedCommands?: readonly string[]
+  /** Failure detail for the model: the dependency directive, or the command's output tail. */
+  failureDetail?: string
+  /** A passing build/typecheck/lint is structural evidence, not end-to-end behaviour. */
+  evidenceLevel?: 'structural' | 'behavioral'
+}
+
+export async function runProjectVerification(
+  workspacePath: string | null,
+  onOutput?: (chunk: string) => void,
+  signal?: AbortSignal,
+  fullAccess = false,
+  milestones: readonly PlanMilestone[] = [],
+): Promise<VerificationRunResult> {
+  if (!workspacePath) return { hasVerificationCommand: false, status: 'unverifiable' }
+  if (signal?.aborted) return { hasVerificationCommand: false, status: 'unverifiable' }
+
+  const profile = discoverProjectProfile(workspacePath)
+  const verifications = resolveRequiredProfileVerificationTargets(profile)
+  const requiredBehaviorCommands = new Set(
+    milestones
+      .filter((milestone) => milestone.status !== 'failed' && requiresBehaviorEvidence(milestone))
+      .map((milestone) => (milestone.verificationCommand || milestone.proposedVerificationCommand)!.trim().toLowerCase()),
+  )
+  for (const target of resolveProfileVerificationTargets(profile)) {
+    if (
+      target.kind === 'test' &&
+      requiredBehaviorCommands.has(target.command.trim().toLowerCase()) &&
+      !verifications.some((current) => current.projectId === target.projectId && current.command === target.command)
+    )
+      verifications.push(target)
+  }
+  const verificationLabel = verifications.map((target) => `${target.projectRelativePath}: ${target.command}`).join(' && ')
+  let evidenceLevel: 'structural' | 'behavioral' = 'structural'
+  const behavioralTargets = new Set<string>()
+  const interrupted: VerificationRunResult = { hasVerificationCommand: verifications.length > 0, status: 'unverifiable' }
+  const nativeChecks: Record<string, RegExp> = { python: / -m pytest /, go: /^go /, rust: /^cargo /, java: /^(mvn|gradle) /, php: /^composer / }
+  const uncheckedProject = profile.projects.find(
+    (project) =>
+      !verifications.some((target) => target.projectId === project.id) ||
+      project.toolchain.languages.some(
+        (language) => nativeChecks[language] && !project.verificationCommands.some((command) => nativeChecks[language].test(command.command)),
+      ),
+  )
+  if (uncheckedProject) {
+    return {
+      ...interrupted,
+      command: verificationLabel || undefined,
+      failureDetail: `No terminating verification command is available for project ${uncheckedProject.relativePath}. This project cannot be certified by another project's checks.`,
+      evidenceLevel,
+    }
+  }
+
+  // Every discovered package needs complete dependency evidence before commands run.
+  for (const project of profile.projects.filter((project) => project.manifestFiles.includes('package.json'))) {
+    if (signal?.aborted) return interrupted
+    const scan = await scanWorkspaceDependencies(project.rootPath, undefined, signal)
+    if (signal?.aborted) return interrupted
+    if (!scan.scanned) {
+      return {
+        hasVerificationCommand: verifications.length > 0,
+        status: 'unverifiable',
+        command: verificationLabel || 'dependency integrity scan',
+        failureDetail: `The dependency integrity scan is unavailable for project ${project.relativePath}. Retry after resolving the scan failure; incomplete evidence cannot verify this project.`,
+        evidenceLevel,
+      }
+    }
+    const integrity = evaluateDependencyIntegrity(scan.missing, project.rootPath, scan.peerProviders)
+    if (!integrity.ok) {
+      const result: VerificationRunResult = {
+        hasVerificationCommand: true,
+        passed: false,
+        status: 'failed',
+        command: verificationLabel || 'dependency integrity scan',
+        failureDetail: `Project: ${project.relativePath}\n${integrity.directive}`,
+        evidenceLevel,
+      }
+      return { ...result, status: classifyProjectVerification(result) }
+    }
+  }
+
+  if (verifications.length === 0) return { hasVerificationCommand: false, status: 'unverifiable' }
+
+  for (const verification of verifications) {
+    if (signal?.aborted) return interrupted
+    const security = fullAccess
+      ? { isAllowed: true, requiresApproval: false, sanitizedCommand: verification.command }
+      : checkCommandSecurity(verification.command, verification.projectRootPath)
+    if (!security.isAllowed || security.requiresApproval) {
+      const result: VerificationRunResult = {
+        hasVerificationCommand: true,
+        passed: false,
+        status: 'failed',
+        command: verificationLabel,
+        failureDetail: `Verification command blocked for project ${verification.projectRelativePath}: ${security.blockedReason || 'Verification commands must be read-only.'}`,
+        evidenceLevel,
+      }
+      return { ...result, status: classifyProjectVerification(result) }
+    }
+
+    const shell = agentToolExecutorService.getOrCreateShellSession(verification.projectRootPath)
+    const command = withVerificationEnvironment(security.sanitizedCommand, verification.projectRootPath)
+    const res = await shell.execute(command, (chunk) => onOutput?.(chunk.trim()), undefined, VERIFICATION_TIMEOUT_MS, signal)
+    if (signal?.aborted) return interrupted
+    if (res.code === 127 && res.stderr.includes('VERIFICATION_TOOL_UNAVAILABLE:')) {
+      return {
+        ...interrupted,
+        command: verificationLabel,
+        failureDetail: `Verification tool is unavailable for project ${verification.projectRelativePath}. ${res.stderr}`,
+        evidenceLevel,
+      }
+    }
+    if (res.code !== 0 || res.timedOut) {
+      const result: VerificationRunResult = {
+        hasVerificationCommand: true,
+        passed: false,
+        status: 'failed',
+        command: verificationLabel,
+        failureDetail:
+          `Project: ${verification.projectRelativePath}\nCommand: ${verification.command} (from ${verification.source})\n` +
+          `Exit code: ${res.code}${res.timedOut ? ' (timed out)' : ''}\n` +
+          `${
+            verification.kind === 'lint'
+              ? DiagnosticOutputReducer.summarizeLintFailure(DiagnosticOutputReducer.composeCommandOutput(res.stdout, res.stderr, res.code))
+              : DiagnosticOutputReducer.keepHeadAndTail(DiagnosticOutputReducer.composeCommandOutput(res.stdout, res.stderr, res.code), OUTPUT_TAIL_CHARS)
+          }`,
+        evidenceLevel,
+      }
+      return { ...result, status: classifyProjectVerification(result) }
+    }
+    if (verification.kind === 'test') {
+      const tests = parseTestRunOutput(`${res.stdout}\n${res.stderr}`, res.code)
+      const nativeFrameworkMatches = verification.command.startsWith('go ')
+        ? tests.framework === 'go'
+        : verification.command.startsWith('cargo ')
+          ? tests.framework === 'rust'
+          : / -m pytest /.test(verification.command)
+            ? tests.framework === 'pytest'
+            : true
+      if (nativeFrameworkMatches && tests.success && (tests.passed ?? 0) > 0) behavioralTargets.add(`${verification.projectId}\0${verification.command}`)
+    }
+  }
+
+  evidenceLevel = verifications.every((target) => behavioralTargets.has(`${target.projectId}\0${target.command}`)) ? 'behavioral' : 'structural'
+  for (const required of requiredBehaviorCommands) {
+    const matching = verifications.filter((target) => target.command.trim().toLowerCase() === required)
+    if (!matching.length || matching.some((target) => !behavioralTargets.has(`${target.projectId}\0${target.command}`))) {
+      return {
+        ...interrupted,
+        command: verificationLabel,
+        failureDetail: `No successful executed tests were observed for the required behavioral check: ${required}. Empty, skipped or unrecognized output cannot certify this milestone.`,
+        evidenceLevel,
+      }
+    }
+  }
+
+  const webUi = await verifyWebUi(workspacePath, milestones, signal)
+  if (signal?.aborted) return interrupted
+  if (webUi.status === 'failed' || webUi.status === 'unavailable') {
+    return {
+      hasVerificationCommand: true,
+      passed: false,
+      status: webUi.status === 'failed' ? 'failed' : 'unverifiable',
+      command: WEB_UI_SMOKE_VERIFICATION,
+      failureDetail: webUi.detail,
+      evidenceLevel,
+    }
+  }
+
+  return {
+    hasVerificationCommand: true,
+    passed: true,
+    status: 'verified',
+    command: verificationLabel,
+    verifiedCommands: [...verifications.map((verification) => verification.command), ...(webUi.status === 'passed' ? [WEB_UI_SMOKE_VERIFICATION] : [])],
+    evidenceLevel,
+  }
+}

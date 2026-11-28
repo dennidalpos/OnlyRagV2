@@ -1,0 +1,162 @@
+import { describe, expect, expectTypeOf, it } from 'vitest'
+import type { IpcInvokeContract } from '../../../shared/ipc/ipcContract'
+import { MAX_DOCUMENT_TEXT_UNITS } from '../../../shared/domain/documentLimits'
+import { documentDraftsSchema } from '../../../shared/domain/documentDraft'
+import {
+  parseNormalizationReview,
+  sidecarExportPayloadSchema,
+  sidecarDocumentRecordSchema,
+  sidecarIngestResultSchema,
+  sidecarUpdateDocumentPayloadSchema,
+  sidecarIngestFilePayloadSchema,
+  sidecarSearchPayloadSchema,
+  sidecarTranslatePayloadSchema,
+  toIngestionProgressPayload,
+  toTranslateProgressPayload,
+} from './sidecarContract'
+
+describe('document size admission and recovery', () => {
+  it.each(['ASCII', 'astral Unicode'] as const)('agrees at either side of the UTF-16 boundary for %s', (kind) => {
+    const fields = {
+      id: 'doc',
+      filename: 'a.md',
+      file_size: 1,
+      num_pages: 1,
+      num_chunks: 1,
+      ingested_at: 't1',
+      file_type: 'md',
+      status: 'indexed',
+      file_path: 'a.md',
+    }
+    for (const delta of [-1, 0, 1]) {
+      const units = MAX_DOCUMENT_TEXT_UNITS + delta
+      const text = kind === 'ASCII' ? 'A'.repeat(units) : '😀'.repeat(Math.floor(units / 2)) + (units % 2 ? 'A' : '')
+      const admitted = delta <= 0
+      expect(text.length).toBe(units)
+      expect(sidecarIngestResultSchema.safeParse({ ...fields, extracted_markdown: text }).success).toBe(admitted)
+      expect(sidecarUpdateDocumentPayloadSchema.safeParse({ docId: 'doc', markdownContent: text, expectedRevision: 't1' }).success).toBe(admitted)
+      expect(documentDraftsSchema.safeParse([{ docId: 'doc', content: text, markdown: text, ingestedAt: 't1' }]).success).toBe(admitted)
+      expect(parseNormalizationReview({ original_markdown: text, issues: [{ page: 1, reason: 'truncated' }] }) !== null).toBe(admitted)
+      for (const format of ['pdf', 'docx', 'html', 'htm'] as const) {
+        expect(sidecarExportPayloadSchema.safeParse({ markdownContent: text, format }).success).toBe(admitted)
+      }
+      // Existing canonical text stays readable and recoverable even when new admission is refused.
+      expect(sidecarDocumentRecordSchema.safeParse({ ...fields, extracted_markdown: text }).success).toBe(true)
+      expect(sidecarExportPayloadSchema.safeParse({ markdownContent: text, format: 'md' }).success).toBe(true)
+    }
+  })
+})
+
+describe('normalization review contract', () => {
+  it.each(['context_missing', 'context_budget_exceeded'] as const)('retains source-preserving context refusal: %s', (reason) => {
+    expect(parseNormalizationReview({ original_markdown: '# Complete original', issues: [{ page: 1, reason }] })).toEqual({
+      originalMarkdown: '# Complete original',
+      issues: [{ page: 1, reason }],
+    })
+  })
+  it('retains the original Markdown verbatim with typed page issues', () => {
+    expect(parseNormalizationReview({ original_markdown: '  # Original\n\nAB123\n', issues: [{ page: 2, reason: 'truncated' }] })).toEqual({
+      originalMarkdown: '  # Original\n\nAB123\n',
+      issues: [{ page: 2, reason: 'truncated' }],
+    })
+  })
+
+  it.each([
+    { original_markdown: '', issues: [{ page: 1, reason: 'truncated' }] },
+    { original_markdown: '# A', issues: [] },
+    { original_markdown: '# A', issues: [{ page: 0, reason: 'truncated' }] },
+    { original_markdown: '# A', issues: [{ page: 1, reason: 'verified' }] },
+    { original_markdown: '# A', issues: [{ page: 1, reason: 'truncated', extra: true }] },
+    { original_markdown: '# A', issues: [{ page: 1, reason: 'truncated' }], indexed: true },
+    { original_markdown: 'A'.repeat(10_000_001), issues: [{ page: 1, reason: 'truncated' }] },
+  ])('rejects invalid or excessive review data: %#', (value) => {
+    expect(parseNormalizationReview(value)).toBeNull()
+  })
+})
+
+describe('sidecar IPC contract', () => {
+  it('accepts bounded ingestion and translation payloads', () => {
+    expectTypeOf<Pick<IpcInvokeContract['ingest:file']['payload'], 'taskId'>>().toEqualTypeOf<{ taskId: string }>()
+    expect(sidecarIngestFilePayloadSchema.parse({ filePath: 'D:/docs/a.pdf', numCtx: 8192, taskId: 'ingest-1' })).toMatchObject({
+      numCtx: 8192,
+      taskId: 'ingest-1',
+    })
+    expect(sidecarTranslatePayloadSchema.parse({ docId: 'doc-1', sourceLang: 'it', targetLang: 'en', taskId: 'translation-1' })).toMatchObject({
+      docId: 'doc-1',
+    })
+    // A vision model trained on 2k tokens (moondream) gets num_ctx 2048 from resolveModelContextLength.
+    expect(sidecarIngestFilePayloadSchema.parse({ filePath: 'a.pdf', numCtx: 2048, taskId: 'ingest-1' })).toMatchObject({ numCtx: 2048 })
+    expect(sidecarIngestFilePayloadSchema.parse({ filePath: 'a.xlsx', taskId: 'ingest-2', allowFullExcelFormat: true })).toMatchObject({
+      allowFullExcelFormat: true,
+    })
+    // A reasoning level chosen in Settings travels as itself, not as `true`.
+    expect(sidecarTranslatePayloadSchema.parse({ docId: 'doc-1', sourceLang: 'it', targetLang: 'en', taskId: 'translation-1', think: 'low' })).toMatchObject({
+      think: 'low',
+    })
+  })
+
+  it('rejects unsafe or oversized payloads before the HTTP adapter', () => {
+    expect(() => sidecarIngestFilePayloadSchema.parse({ filePath: ' ' })).toThrow()
+    expect(() => sidecarIngestFilePayloadSchema.parse({ filePath: 'a.pdf', numCtx: 128, taskId: 'ingest-1' })).toThrow()
+    expect(() => sidecarIngestFilePayloadSchema.parse({ filePath: 'a.pdf' })).toThrow()
+    expect(() => sidecarTranslatePayloadSchema.parse({ docId: 'x', sourceLang: ' ', targetLang: 'en' })).toThrow()
+    expect(() => sidecarSearchPayloadSchema.parse({ query: 'x', topK: 101 })).toThrow()
+    expect(() => sidecarExportPayloadSchema.parse({ markdownContent: '# x', format: 'txt' })).toThrow()
+  })
+})
+
+describe('sidecar progress events', () => {
+  it('relays ingestion events without the document record the done event carries', () => {
+    const done = {
+      type: 'done',
+      percent: 100,
+      step: 'Ingestion and indexing completed successfully!',
+      step_code: 'done',
+      pipeline: 'Completed',
+      fileName: 'a.pdf',
+      data: { id: 'doc-1', extracted_markdown: '# A' },
+    }
+    expect(toIngestionProgressPayload(done, 'ingest-1')).toEqual({
+      type: 'done',
+      percent: 100,
+      step: 'Ingestion and indexing completed successfully!',
+      step_code: 'done',
+      pipeline: 'Completed',
+      fileName: 'a.pdf',
+      taskId: 'ingest-1',
+    })
+    expect(
+      toIngestionProgressPayload({ type: 'progress', percent: 10, step_code: 'pdf_pages', step_params: { pages: 3 }, page: 1, total_pages: 3 }, 't'),
+    ).toMatchObject({
+      step_params: { pages: 3 },
+    })
+  })
+
+  it('accepts the cancelled and error ingestion events and rejects unknown shapes', () => {
+    expect(toIngestionProgressPayload({ type: 'cancelled', task_id: 'ingest-1', fileName: 'a.pdf' }, 'ingest-1')).toEqual({
+      type: 'cancelled',
+      fileName: 'a.pdf',
+      taskId: 'ingest-1',
+    })
+    expect(toIngestionProgressPayload({ type: 'error', step: 'failed', error: 'boom', fileName: 'a.pdf' }, 'ingest-1')).toMatchObject({ error: 'boom' })
+    expect(toIngestionProgressPayload({ type: 'finished' }, 'ingest-1')).toBeNull()
+    expect(toIngestionProgressPayload({ type: 'progress', percent: 140 }, 'ingest-1')).toBeNull()
+    expect(toIngestionProgressPayload('not an event', 'ingest-1')).toBeNull()
+  })
+
+  it('relays translation phases and drops the translated record', () => {
+    expect(toTranslateProgressPayload({ type: 'progress', page: 2, total_pages: 4, phase: 'translating_blocks', percent: 37 }, 'translate-1')).toEqual({
+      type: 'progress',
+      page: 2,
+      total_pages: 4,
+      phase: 'translating_blocks',
+      percent: 37,
+      taskId: 'translate-1',
+    })
+    expect(toTranslateProgressPayload({ type: 'done', data: { id: 'doc-1', status: 'translated' } }, 'translate-1')).toEqual({
+      type: 'done',
+      taskId: 'translate-1',
+    })
+    expect(toTranslateProgressPayload({ type: 'progress', phase: 'uploading' }, 'translate-1')).toBeNull()
+  })
+})

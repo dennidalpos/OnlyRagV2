@@ -1,0 +1,118 @@
+{
+  "date": "2026-10-25",
+  "base": "beda8eb8a9064455865f17543ae895b2c345c468",
+  "status": "accepted",
+  "acceptance_scope": "two named tasks only; global suite remains not all green",
+  "completed": [
+    "TRANSLATION-MARKDOWN-CHUNK-BOUNDARIES-01",
+    "SHELL-QUOTED-CHAIN-NORMALIZATION-01"
+  ],
+  "new_regressions": 98,
+  "baseline_negative_regressions": 25,
+  "typescript": {
+    "passed": 3144,
+    "failed": 4,
+    "total": 3148,
+    "files": 334,
+    "skipped": 0,
+    "all_green": false,
+    "failed_suite": "electron/core/infrastructure/process/managedDevServerRepository.test.ts",
+    "runner_timeout_ms": 120000,
+    "hook_timeout_ms": 120000
+  },
+  "targeted": {
+    "translation_ipc": 77,
+    "helper_shell": 75,
+    "native_cases": 46,
+    "persistent_session": 15,
+    "task_runner": 10
+  },
+  "checks": {
+    "types": "passed",
+    "static": {
+      "files": 897,
+      "ipc_handlers": 107
+    },
+    "build": "passed",
+    "knip": "normal and production passed",
+    "documentation": {
+      "markdown": 137,
+      "status": "passed"
+    },
+    "secondbrain": {
+      "warnings": 0,
+      "sync": "passed",
+      "check": "passed",
+      "repositories": 23
+    }
+  },
+  "python": "not rerun; no Python source changes; no pre-commit requested",
+  "source_files": 1272,
+  "node_dependencies": "shared junction; Vitest cache disabled",
+  "initial_archive_eol_differences": 36,
+  "final_copy": "exact SHA256 checked against checkout; only documentation/tracker finalized after runtime gates",
+  "protected_files": 68,
+  "open_autonomous": [
+    "DEPENDENCY-BRACES-UPSTREAM-01",
+    "DEVSERVER-LOOPBACK-PROBE-STABILITY-01",
+    "SKILLS-PERSISTENCE-INTEGRITY-01",
+    "SETUP-DISK-SPACE-UNKNOWN-01",
+    "TEST-SKILL-HUB-NETWORK-ISOLATION-01"
+  ],
+  "open_owner_required": [
+    "DIAGNOSTICS-LOG-HISTORY-RECOVERY-01"
+  ],
+  "new_application_residues": [
+    "TEST-SKILL-HUB-NETWORK-ISOLATION-01"
+  ],
+  "enriched_existing_residues": [
+    "DEVSERVER-LOOPBACK-PROBE-STABILITY-01"
+  ],
+  "evidence_root": "C:\\Users\\Utente\\AppData\\Local\\Temp\\onlyrag-translation-shell-20261025",
+  "logs_sha256": {
+    "translation-accepted.log": "1d2080b9c708f12a1bdb7fba30e0501ead4efb60c35912df865b288eeae8ea95",
+    "translation-accepted.xml": "cbe40d9c4ae943c8d01461cbd152ead15682a821d7ea9d202b530d0fdc5b6677",
+    "native-final.log": "4a1076635d932b623658a210b3cda6443584b5fb191d911dd2cbd6e52302ef4b",
+    "native-final.xml": "011eb036938dd11d58f4e88d78ebdc1dc42d57d185308b725e0876b1fd6c4d85",
+    "session-accepted.log": "75b8e44b5140dd3e08b76f4adb7e954591497839e0dae2454dbf81a14997ebed",
+    "session-accepted.xml": "441623b98a9bbe0269550515d1785e508d8b94242d98469b44d1e4b7847191d2",
+    "shell-regressions.log": "61ba4fbb70f7f7ec3e3d8fd24b3c481524e2b9ae0b39b4bd98154d93da4aee55",
+    "shell-regressions.xml": "298ff4f472dc1cf3663f5f58fbd3a5774b2248fc0a0e113b2b01479042427c69",
+    "typescript-full.log": "733c45f29d3cfbaece23442d0d73f1cce62e4e877fbad650f73609c95a5fb7cd",
+    "typescript-default-timeout.log": "9d2b9a7d2b6cc7d64af04f3adbce1604a048a3bed2dc78201fd9bd608e6afdf8",
+    "agent-executor-diagnostic.log": "9e2b12240aa9ef0f7e9d15786b592e3ebd5e554a8b18b79cbf6dd2c0dd8c002b",
+    "typescript-accepted.log": "8c362dd350796459b9c79c10f5b92d2aecd1aa69ff1de891d154d4a0da4fdaec",
+    "typescript-accepted.xml": "a3ea278590808db904708c6bae15a2d7b73df1ea0ecb1e6bb536227a261bd755",
+    "typecheck-last.log": "48cd202d357b7a7f96725958f65fb546b3779a87f41cf73c4a8bcdce39ae1168",
+    "typecheck-last.json": "19e7f8d10d15c4ce7f959200a8b4684fd44afd670a786180be83ae76fb0636de",
+    "static-last.log": "892578881a538c104424b57615f1b379ea21725cac1d9cbb7d4aed28a495da83",
+    "static-last.json": "edd88cfa9ddfeb708843ecdaa9a55431730807d7263e0af86531e2676b34df0d",
+    "build.log": "e2a66d186acb5a25d32cf973dc249fa5559c4f167499e23275a50b78cfdb46ca",
+    "knip-last.log": "3605c2abfcab472c068ecb316edd0e4ce0db7e7e987f9a5307ceac7a5e769fd2",
+    "knip-last.json": "b587283987e07894275a1b8528d9984d462c165ebcc5ae8a00f32936f56c3f30",
+    "negative-final.log": "e1680c174fa01a6cbb9048d9d05955bb8c11487977970ca089889796ec71d759",
+    "negative-final.xml": "f7198ad8b9a63f8f35e503c9bdb0b4fb3075a8fc2f367852ae3cb26ad280a76e",
+    "hub-network-audit.json": "e46caf2032d469107f06908dd7ec6e052ac58f7938ab6bc1c5c9dcaddffbc967",
+    "hub-network-audit-final.log": "84d7a57015f57113cc682550d7bf9fcce3250caa233a9b859544ffba7bc40842",
+    "skill-hub-network-audit.test.ts": "2213d24d3e37a3d9c07074f35d05dbeb17fa63458281c98ea658e9b9775c7747",
+    "negative-before.log": "eef915314393c393c7cbac35b7c8db1517f1c00fa1b3568ef85dfa3f7b01307e",
+    "negative-fence-final.log": "d3dffeabcf9599ff3be3129601bc0ca351ec973f5064e20815c8a82ec07dc150",
+    "negative-pages.log": "fc6529a20b10fb69f11a72e5fb98d4e941c499054190eb377a1d5a6cc3cd7cc4",
+    "protected-before.json": "7e23c3fb3dddddacaf0572e3464052430e29b6ed6b5b45d7ae6ae9b8e6ea3cbb",
+    "archive-eol-differences.json": "ff8c1d29e6e2f8ef545b91f9981dbcc2501b1187e4bff5123b6a656f03ac8824",
+    "format-and-protected.json": "6ba7cd4e0993ea621ab3c23b32c954ddf0da8a9af3ecb0fd157c492e1dff07c4",
+    "runtime-source.json": "b586fd373e8dec8187b9e5780eae663e8e2ed817266d65b087085cdbbd8c5e57",
+    "docs-final.log": "ce776a8bcc7e4a11e67b1c9395bb9d1b6ce92a6289e09e89f282443d6691e15e",
+    "failed-fixtures-preserved.json": "02a2503ff899f5a0ba22f8bf81a0033aa3c407f215093898a50931b4505a0162",
+    "secondbrain-sync.log": "69162d0b81f867713207725ba3914430f9d7071d8a8cdc154a6d888d5d2c08ca",
+    "secondbrain-check.log": "69162d0b81f867713207725ba3914430f9d7071d8a8cdc154a6d888d5d2c08ca"
+  },
+  "commit": false,
+  "push": false,
+  "real_models": false,
+  "source_manifest_scope": "runtime-source.json excludes post-gate Markdown/tracker/receipt metadata; final delivery manifest is external",
+  "retained_failed_fixtures": [
+    "managed-failed-fixture",
+    "hub-audit-interrupted-profile"
+  ]
+}

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="1359" viewBox="0 0 360 1359" role="img" aria-labelledby="title desc" xml:lang="it">
+<title id="title">22 · Scegliere e collegare Ollama</title>
+<desc id="desc">In Server Ollama (Locale o Rete) scegli Sullo stesso PC (Locale) oppure Server in Rete Remoto e inserisci il relativo indirizzo. Nel percorso locale Avvia / Installa Ollama tenta l’avvio del processo. Se apre la pagina ufficiale, completa manualmente download e installazione nel browser; poi ripeti il controllo. Premi Test Connessione Server. Con esito positivo passa a 23; se non raggiungibile controlla servizio, indirizzo e accessibilità della porta, quindi riprova. In modalità remota puoi anche usare Riprova server o Configura server nella barra laterale.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1 1 L 9 5 L 1 9 Z" fill="#526779"/></marker></defs>
+<rect width="360" height="1359" fill="#ffffff"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="24" y="25" font-size="14" letter-spacing="0.5" fill="#526779">ONLYRAG V2 / GUIDA UTENTE</text>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="600" fill="#183249"><tspan x="180" y="53">22 · Scegliere e collegare Ollama</tspan></text>
+<g id="n0" data-node="s">
+<rect x="46" y="101" width="268" height="70" rx="30" fill="#183249" stroke="#183249" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#ffffff"><tspan x="180" y="125.5">Apri Server Ollama (Locale</tspan><tspan x="180" y="146.5">o Rete)</tspan></text>
+</g>
+<g id="n1" data-node="q">
+<polygon points="180,227 296,293 180,359 64,293" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="282.5">Usare lo stesso</tspan><tspan x="180" y="303.5">PC?</tspan></text>
+</g>
+<g id="n2" data-node="a">
+<rect x="46" y="415" width="268" height="91" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="439.5">Sullo stesso PC (Locale);</tspan><tspan x="180" y="460.5">Avvia / Installa Ollama se</tspan><tspan x="180" y="481.5">serve</tspan></text>
+</g>
+<g id="n3" data-node="a">
+<rect x="46" y="562" width="268" height="64" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="594">Test Connessione Server</tspan></text>
+</g>
+<g id="n4" data-node="q">
+<polygon points="180,682 296,748 180,814 64,748" fill="#fff3d6" stroke="#976400" stroke-width="1.4"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="400" fill="#183249"><tspan x="180" y="737.5">Connessione</tspan><tspan x="180" y="758.5">riuscita?</tspan></text>
+</g>
+<g id="n5" data-node="t">
+<rect x="46" y="870" width="268" height="64" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="902">Configura i modelli → 23</tspan></text>
+</g>
+<g id="n6" data-node="t">
+<rect x="46" y="990" width="268" height="70" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1014.5">Controlla servizio o</tspan><tspan x="180" y="1035.5">indirizzo e riprova</tspan></text>
+</g>
+<g id="n7" data-node="a">
+<rect x="46" y="1116" width="268" height="70" rx="0" fill="#edf4fb" stroke="#527b9c" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1140.5">Server in Rete Remoto:</tspan><tspan x="180" y="1161.5">inserisci indirizzo</tspan></text>
+</g>
+<g id="n8" data-node="t">
+<rect x="46" y="1242" width="268" height="91" rx="30" fill="#e7f3ed" stroke="#366650" stroke-width="1.3"/>
+<text text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="400" fill="#183249"><tspan x="180" y="1266.5">Esegui Test Connessione</tspan><tspan x="180" y="1287.5">Server; poi → 23 oppure</tspan><tspan x="180" y="1308.5">correggi</tspan></text>
+</g>
+<path data-edge="0-1" d="M 180 173 V 224" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="1-2" d="M 180 361 V 412" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="1-2"><rect x="183" y="376" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="386">Sì</tspan></text></g>
+<path data-edge="1-7" d="M 298 293 H 346 V 1088 H 180 V 1113" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="1-7"><rect x="300" y="264.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="321" y="274">No</tspan></text></g>
+<path data-edge="2-3" d="M 180 508 V 559" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="3-4" d="M 180 628 V 679" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path data-edge="4-5" d="M 180 816 V 867" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="4-5"><rect x="183" y="831" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="204" y="841">Sì</tspan></text></g>
+<path data-edge="4-6" d="M 62 748 H 14 V 962 H 180 V 987" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g data-branch="4-6"><rect x="18" y="719.0" width="42" height="20" fill="#ffffff"/><text text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="400" fill="#183249"><tspan x="39" y="729">No</tspan></text></g>
+<path data-edge="7-8" d="M 180 1188 V 1239" fill="none" stroke="#526779" stroke-width="1.5" marker-end="url(#arrow)"/>
+</g>
+</svg>

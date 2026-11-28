@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "scope": "Frozen synthetic layout-translation comparisons; every clause requires independent review.",
+  "cases": [
+    {
+      "id": "postal-scanned",
+      "format": "scanned-pdf",
+      "source_lang": "Italian",
+      "target_lang": "English",
+      "paragraphs": ["Inviare il modulo per raccomandata a.r. oppure via PEC.", "Non restituire il dispositivo prima della conferma scritta."],
+      "expected": "Send the form by registered mail with advice/acknowledgement of delivery/receipt OR PEC. Do not return the device before written confirmation. Expand a.r.; preserve both alternatives and the prohibition."
+    },
+    {
+      "id": "conditional-native",
+      "format": "pdf",
+      "source_lang": "Italian",
+      "target_lang": "English",
+      "paragraphs": ["Il rimborso non e dovuto senza diffida scritta.", "Segnalare il difetto entro 48 ore dalla scoperta a help@example.com."],
+      "expected": "No refund is due without written notice. Report the defect within 48 hours AFTER DISCOVERY to help@example.com. Preserve negation, condition, trigger, deadline and literal contact."
+    },
+    {
+      "id": "conditions-docx",
+      "format": "docx",
+      "source_lang": "English",
+      "target_lang": "Italian",
+      "paragraphs": ["Return order TX-417 within 14 working days after written confirmation.", "Do not return it without consent. Send notice by email or registered mail."],
+      "expected": "Return TX-417 within 14 WORKING days AFTER WRITTEN confirmation. Do not return without consent. Notice may use email OR registered mail. Preserve all conditions and alternatives, without adding proof-of-receipt requirements."
+    },
+    {
+      "id": "storage-native",
+      "format": "pdf",
+      "source_lang": "English",
+      "target_lang": "Italian",
+      "paragraphs": ["Store the pump between 2 and 8 degrees Celsius. Do not freeze it.", "If frost is observed, quarantine the pump; do not install it."],
+      "expected": "Store between 2 and 8 degrees Celsius; do not freeze. IF frost is observed, quarantine the pump and do not install. Preserve both prohibitions and the condition."
+    }
+  ]
+}

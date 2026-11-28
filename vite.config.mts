@@ -1,0 +1,133 @@
+import { defineConfig } from 'vite'
+import path from 'node:path'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { monacoSanitizerPlugin } from './scripts/monacoSanitizerPlugin.mts'
+import { dependencyVersions } from './scripts/dependencyVersions.mts'
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url))
+
+// Application identity injected from package.json — consumed by src/constants/appMetadata.ts.
+// The About dialog needs the real version/author, not the i18n field labels.
+const pkg = JSON.parse(readFileSync(path.resolve(rootDir, 'package.json'), 'utf-8'))
+const authorName = String(pkg.author || '').replace(/\s*<[^>]*>\s*/g, '').trim()
+const authorUrl = (String(pkg.author || '').match(/<([^>]+)>/) || [])[1] || ''
+const appDefines = {
+  __DEPENDENCY_VERSIONS__: JSON.stringify(dependencyVersions(rootDir)),
+  __APP_VERSION__: JSON.stringify(pkg.version || '0.0.0'),
+  __APP_AUTHOR__: JSON.stringify(authorName || 'OnlyRag Contributors'),
+  __APP_REPOSITORY_URL__: JSON.stringify(
+    authorUrl.startsWith('http') ? `${authorUrl.replace(/\/$/, '')}/OnlyRagV2` : 'https://github.com/dennidalpos/OnlyRagV2'
+  ),
+}
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+import electron from 'vite-plugin-electron/simple'
+import type { Plugin } from 'vite'
+
+/**
+ * Monaco languages the renderer actually opens (markdown everywhere, the coding editor's
+ * getLanguageFromExtension set). Every other language definition and every language service
+ * except JSON resolves to an empty module, so the build no longer ships the 6.9 MB TypeScript
+ * worker (nor the CSS/HTML workers); TypeScript, CSS and HTML keep Monarch syntax highlighting.
+ */
+const MONACO_LANGUAGES = new Set(['markdown', 'typescript', 'javascript', 'css', 'html', 'python'])
+const MONACO_LANGUAGE_SERVICES = new Set(['json'])
+const MONACO_DISABLED_MODULE = '\0onlyrag-monaco-disabled'
+
+function monacoLanguageSubset(): Plugin {
+  return {
+    name: 'onlyrag-monaco-language-subset',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (!importer?.replace(/\\/g, '/').includes('/monaco-editor/')) return null
+      const definition = source.match(/languages\/definitions\/([\w-]+)\/register\.js$/)
+      if (definition && !MONACO_LANGUAGES.has(definition[1])) return MONACO_DISABLED_MODULE
+      const feature = source.match(/languages\/features\/([\w-]+)\/register\.js$/)
+      if (feature && !MONACO_LANGUAGE_SERVICES.has(feature[1])) return MONACO_DISABLED_MODULE
+      return null
+    },
+    load(id) {
+      return id === MONACO_DISABLED_MODULE ? 'export {}' : null
+    },
+  }
+}
+
+export default defineConfig({
+  define: appDefines,
+  plugins: [
+    monacoSanitizerPlugin(),
+    monacoLanguageSubset(),
+    react(),
+    tailwindcss(),
+    electron({
+      main: {
+        // Worker entries load beside main.js; shared modules become chunks.
+        entry: { main: 'electron/main.ts', typecheckWorker: 'electron/typecheckWorker.ts', dependencyScanWorker: 'electron/dependencyScanWorker.ts' },
+        vite: {
+          build: {
+            // Keep compression while preserving names: Oxc's default mangling
+            // collided with a TypeScript compiler helper at Electron startup.
+            minify: 'oxc',
+            // `rolldownOptions`, not `rollupOptions`: Vite 8 reads the former, and
+            // vite-plugin-electron resolves `build.rolldownOptions || build.rollupOptions`
+            // after merging its own defaults — which already set `rolldownOptions`. A
+            // `rollupOptions` block here would be silently dropped, and the only symptom
+            // would be a bundle of exactly the same size as before.
+            rolldownOptions: {
+              output: {
+                minify: { compress: true, mangle: false, codegen: true },
+              },
+              // depcheck loads ./parser/<name> dynamically. Keep it external so those
+              // paths resolve inside its installed package, including app.asar.
+              // Playwright resolves browser protocol helpers dynamically. Keeping it in the
+              // Electron main bundle makes Rolldown resolve an optional chromium-bidi import
+              // that is only needed by one runtime path; the package must remain external so
+              // its own Node resolution and browser installation contract stay intact.
+              external: ['depcheck', 'playwright', 'playwright-core', 'chromium-bidi'],
+            },
+          },
+        },
+      },
+      preload: {
+        input: 'electron/preload.ts',
+      },
+      renderer: {},
+    }),
+  ],
+  resolve: {
+    alias: {
+      '@': path.resolve(rootDir, 'src'),
+    },
+  },
+  build: {
+    // dist/ holds only the renderer build (electron-builder writes to release/), so it is safe to
+    // wipe: keeping old hashed chunks shipped every previous build's assets inside app.asar.
+    emptyOutDir: true,
+    chunkSizeWarningLimit: 3000,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@monaco-editor') || id.includes('monaco-editor')) {
+              return undefined
+            }
+            if (id.includes('gpt-tokenizer')) {
+              return 'tokenizer-vendor'
+            }
+            if (id.includes('@tanstack')) {
+              return 'virtual-vendor'
+            }
+            if (id.includes('lucide-react')) {
+              return 'icons-vendor'
+            }
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'react-vendor'
+            }
+            return 'vendor'
+          }
+        },
+      },
+    },
+  },
+})

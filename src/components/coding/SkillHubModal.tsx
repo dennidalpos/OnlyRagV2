@@ -1,0 +1,252 @@
+import { Tooltip } from '../common/Tooltip'
+import React from 'react'
+import { Modal } from '../common/Modal'
+import { X, Sparkles, Download, CheckCircle } from 'lucide-react'
+import { SkillHubSourceSelector } from './skills/SkillHubSourceSelector'
+import { InstalledSkillsList } from './skills/InstalledSkillsList'
+import { MarketplaceSkillsList } from './skills/MarketplaceSkillsList'
+import { SkillEditorModal } from './skills/SkillEditorModal'
+import { CustomHubGuideModal } from './skills/CustomHubGuideModal'
+import { AddCustomHubModal } from './skills/AddCustomHubModal'
+import { useTranslation } from '../../i18n'
+import { useSkillHubModal } from '../../hooks/useSkillHubModal'
+
+interface SkillHubModalProps {
+  isOpen: boolean
+  onClose: () => void
+  workspacePath: string | null
+}
+
+export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, workspacePath }) => {
+  const { t } = useTranslation()
+  const {
+    activeTab,
+    installedSkills,
+    hubSkills,
+    sources,
+    selectedSourceId,
+    isLoading,
+    isLoadingSources,
+    loadError,
+    recoveryState,
+    retryRecovery,
+    inspectRecovery,
+    retryLoad,
+    installingSkillId,
+    actionMessage,
+    isEditorOpen,
+    setIsEditorOpen,
+    editingSkill,
+    setEditingSkill,
+    editorSaveError,
+    clearEditorSaveError,
+    isGuideOpen,
+    setIsGuideOpen,
+    isAddHubOpen,
+    setIsAddHubOpen,
+    handleSourceChange,
+    handleTabChange,
+    handleToggleActive,
+    handleInstallFromHub,
+    handleInstallFromUrl,
+    handleSaveCustomSkill,
+    handleResetSkill,
+    handleDeleteSkill,
+    handleAddCustomHub,
+    handleRemoveCustomHub,
+  } = useSkillHubModal(isOpen, workspacePath, onClose)
+
+  if (!isOpen) return null
+
+  return (
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        labelledById="skill-hub-modal-title"
+        panelClassName="relative max-w-4xl max-h-[85vh] flex flex-col bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden select-text"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/60">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 id="skill-hub-modal-title" className="text-base font-bold text-slate-100 flex items-center gap-2">
+                {t('skills.hubTitle')}
+                <Tooltip helpKey="skills_hubSubtitle" />
+              </h2>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('common.close')}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all focus-ring"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex items-center justify-between px-6 border-b border-slate-800 bg-slate-950/30" role="tablist" aria-label={t('skills.hubTitle')}>
+          <div className="flex gap-4">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'installed'}
+              id="skill-tab-installed"
+              aria-controls="skill-panel-installed"
+              disabled={isLoadingSources || !!loadError}
+              onClick={() => handleTabChange('installed')}
+              className={`py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 focus-ring ${
+                activeTab === 'installed' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              <CheckCircle className="w-3.5 h-3.5" /> {t('skills.installedTab')} ({installedSkills.length})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'hub'}
+              id="skill-tab-hub"
+              aria-controls="skill-panel-hub"
+              disabled={isLoadingSources || !!loadError}
+              onClick={() => handleTabChange('hub')}
+              className={`py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 focus-ring ${
+                activeTab === 'hub' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              <Download className="w-3.5 h-3.5" /> {t('skills.marketplaceTab')}
+            </button>
+          </div>
+        </div>
+
+        {/* Action Status Banner */}
+        {actionMessage && (
+          <div
+            role={actionMessage.type === 'error' ? 'alert' : 'status'}
+            aria-live="polite"
+            className={`px-6 py-2 text-xs font-medium border-b ${
+              actionMessage.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+            }`}
+          >
+            {actionMessage.text}
+          </div>
+        )}
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6" aria-busy={isLoading}>
+          {recoveryState?.error && (
+            <div role="alert" className="space-y-2 text-sm text-rose-300">
+              <p className="break-words">{t('skills.recoveryLoadError', { error: recoveryState.error })}</p>
+              <button type="button" onClick={retryRecovery} className="rounded-md px-2 py-1 text-slate-100 hover:bg-slate-800 focus-ring">
+                {t('common.retry')}
+              </button>
+            </div>
+          )}
+          {!!recoveryState?.issues.length && (
+            <section aria-labelledby="skill-uninstall-recovery-title" className="space-y-2 rounded-lg border border-amber-500/30 p-3 text-sm text-slate-100">
+              <h3 id="skill-uninstall-recovery-title" className="font-semibold text-amber-200">
+                {t('skills.recoveryTitle')}
+              </h3>
+              <ul className="divide-y divide-slate-700">
+                {recoveryState.issues.map((issue) => (
+                  <li key={issue.receiptPath ?? issue.stagedPath} className="space-y-1 py-2">
+                    <p className="break-words font-medium">{t(`skills.recoveryState.${issue.state}`, { name: issue.skillName })}</p>
+                    {issue.receiptPath && <p className="break-all text-slate-300">{t('skills.recoveryReceipt', { path: issue.receiptPath })}</p>}
+                    {issue.stagedPath && <p className="break-all text-slate-300">{t('skills.recoveryCopy', { path: issue.stagedPath })}</p>}
+                    <button
+                      type="button"
+                      onClick={() => void inspectRecovery(issue.inspectionDirectory)}
+                      className="rounded-md px-2 py-1 text-cyan-300 hover:bg-slate-800 focus-ring"
+                    >
+                      {t('skills.recoveryInspect')}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {loadError ? (
+            <div role="alert" className="space-y-3 text-sm text-rose-300">
+              <p className="break-words">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => void retryLoad()}
+                disabled={isLoading}
+                className="px-3 py-2 rounded-lg border border-slate-600 text-slate-100 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-wait focus-ring"
+              >
+                {t(isLoading ? 'common.loading' : 'common.retry')}
+              </button>
+            </div>
+          ) : activeTab === 'installed' ? (
+            <div id="skill-panel-installed" role="tabpanel" aria-labelledby="skill-tab-installed">
+              <InstalledSkillsList
+                skills={installedSkills}
+                onToggleActive={handleToggleActive}
+                onEditSkill={(skill) => {
+                  clearEditorSaveError()
+                  setEditingSkill(skill)
+                  setIsEditorOpen(true)
+                }}
+                onResetSkill={handleResetSkill}
+                onDeleteSkill={handleDeleteSkill}
+                onOpenCreateModal={() => {
+                  clearEditorSaveError()
+                  setEditingSkill(null)
+                  setIsEditorOpen(true)
+                }}
+                onSwitchToHub={() => {
+                  if (!isLoadingSources) void handleTabChange('hub')
+                }}
+              />
+            </div>
+          ) : (
+            <div id="skill-panel-hub" role="tabpanel" aria-labelledby="skill-tab-hub" className="space-y-6">
+              <SkillHubSourceSelector
+                sources={sources}
+                selectedSourceId={selectedSourceId}
+                onSelectSource={(sourceId) => {
+                  if (!isLoadingSources) void handleSourceChange(sourceId)
+                }}
+                onOpenAddHubModal={() => setIsAddHubOpen(true)}
+                onOpenGuideModal={() => setIsGuideOpen(true)}
+                onRemoveCustomSource={handleRemoveCustomHub}
+                onRefresh={() => handleSourceChange(selectedSourceId, true)}
+                isLoading={isLoading}
+              />
+
+              <MarketplaceSkillsList
+                hubSkills={hubSkills}
+                isLoading={isLoading}
+                installingSkillId={installingSkillId}
+                onInstallSkill={handleInstallFromHub}
+                onInstallFromUrl={handleInstallFromUrl}
+              />
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Sub-modals. Siblings, not children: each renders through its own portal on the
+          `nested` layer, so they stack above this dialog instead of inside its panel. */}
+      <SkillEditorModal
+        isOpen={isEditorOpen}
+        onClose={() => {
+          setIsEditorOpen(false)
+          setEditingSkill(null)
+        }}
+        onSave={handleSaveCustomSkill}
+        initialSkill={editingSkill}
+        isLoading={isLoading}
+        saveError={editorSaveError}
+      />
+
+      <CustomHubGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+
+      <AddCustomHubModal isOpen={isAddHubOpen} onClose={() => setIsAddHubOpen(false)} onAdd={handleAddCustomHub} isLoading={isLoading} />
+    </>
+  )
+}
